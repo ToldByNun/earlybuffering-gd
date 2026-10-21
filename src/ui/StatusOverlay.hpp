@@ -8,7 +8,7 @@ namespace frire {
 class StatusOverlay {
 public:
     static void attach(PlayLayer* playLayer);
-    static void detach();
+    static void detach(bool layerDying = false);
     static void update(std::string const& text);
     static void setVisible(bool visible);
 

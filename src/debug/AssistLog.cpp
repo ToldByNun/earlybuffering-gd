@@ -45,8 +45,14 @@ void AssistLog::printBanner() {
         );
     }
     log::info(
-        "[{}] Press F6 in-level to cycle presets: Tight -> Normal -> Wide -> Max -> OFF",
+        "[{}] F6: presets  |  Ctrl+Shift+M: modes  |  Ctrl+Shift+T: trajectory  |  Ctrl+Shift+L: learning",
         modTag()
+    );
+    log::info(
+        "[{}] Assist mode: {} ({})",
+        modTag(),
+        StageConfig::assistModeName(StageConfig::assistMode()),
+        StageConfig::assistModeHint(StageConfig::assistMode())
     );
     log::info("======================");
 }

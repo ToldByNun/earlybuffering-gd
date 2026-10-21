@@ -22,7 +22,8 @@ enum class GameModeKind {
 enum class AssistMode {
     Live = 0,
     Replay,
-    Hybrid
+    Hybrid,
+    BruteForce // mode 3: precomputed exhaustive bake only
 };
 
 struct StageInfo {
@@ -62,6 +63,7 @@ public:
     static void toggleAutoTune();
     static void cycleAssistMode();
     static void setAssistMode(AssistMode mode);
+    static void toggleShowTrajectory();
 
     static bool isApplying();
     // Remember the last preset we applied so load-time listener spam can't wipe custom ticks.
@@ -72,12 +74,14 @@ public:
     static bool debugLogging();
     static bool safeMode();
     static bool showOverlay();
+    static bool showTrajectory();
     static bool assistPress();
     static bool assistRelease();
     static bool swallowHopeless();
     static bool autoTune();
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
+    static char const* assistModeHint(AssistMode mode);
     static int simBudgetUs();
     static int bakeRadius();
     static int ticksAll();

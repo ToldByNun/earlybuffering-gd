@@ -6,6 +6,8 @@
 #include <Geode/utils/file.hpp>
 #include <algorithm>
 #include <cmath>
+#include <thread>
+#include <limits>
 
 using namespace geode::prelude;
 
@@ -28,6 +30,29 @@ int nextJumpFrame(std::vector<ReplayEvent> const& ev, int fromIndex, bool player
         if (ev[i].down) return ev[i].frame;
     }
     return -1;
+}
+
+struct JumpJob {
+    int eventIndex = 0;
+    int frame = 0;
+    bool down = true;
+    bool player2 = false;
+    int until = 0;
+};
+
+int resolveRadius(int bakeRadius, BakeMethod method) {
+    if (bakeRadius > 0) return bakeRadius;
+    int base = StageConfig::ticksAll();
+    if (method == BakeMethod::BruteForce) {
+        return std::max(32, base * 4);
+    }
+    return std::max(8, base);
+}
+
+unsigned workerCount() {
+    unsigned n = std::thread::hardware_concurrency();
+    if (n == 0) n = 4;
+    return std::max(1u, n);
 }
 
 }
@@ -65,8 +90,8 @@ void BakeMap::loadForLevel(GJGameLevel* level) {
     auto res = readFile();
     if (res.isOk()) {
         AssistLog::debug(fmt::format(
-            "BAKE: loaded map {} ({} clicks, {})",
-            m_data.levelKey, m_data.clicks.size(), m_data.sourceReplay
+            "BAKE: loaded map {} ({} clicks, {}, {})",
+            m_data.levelKey, m_data.clicks.size(), m_data.sourceReplay, m_data.method
         ));
     }
 }
@@ -76,7 +101,8 @@ void BakeMap::save() const {
     auto res = writeFile();
     if (res.isOk()) {
         AssistLog::debug(fmt::format(
-            "BAKE: saved {} ({} clicks)", m_data.levelKey, m_data.clicks.size()
+            "BAKE: saved {} ({} clicks, {})",
+            m_data.levelKey, m_data.clicks.size(), m_data.method
         ));
     }
     else {
@@ -85,12 +111,45 @@ void BakeMap::save() const {
 }
 
 std::string BakeMap::statusLine() const {
-    if (m_hasReplay && !m_data.clicks.empty()) {
-        return fmt::format("replay {} | bake {} clicks", m_replay.sourceName, m_data.clicks.size());
+    if (m_progress.running.load()) {
+        return fmt::format(
+            "baking {}/{} ({:.0f}%)",
+            m_progress.done.load(),
+            m_progress.total.load(),
+            m_progress.fraction() * 100.f
+        );
     }
-    if (m_hasReplay) return fmt::format("replay {} | no bake", m_replay.sourceName);
-    if (!m_data.clicks.empty()) return fmt::format("bake {} clicks ({})", m_data.clicks.size(), m_data.sourceReplay);
+    if (m_hasReplay && !m_data.clicks.empty()) {
+        return fmt::format(
+            "{} | {} {} clicks",
+            m_replay.sourceName, m_data.method, m_data.clicks.size()
+        );
+    }
+    if (m_hasReplay) return fmt::format("{} | no bake", m_replay.sourceName);
+    if (!m_data.clicks.empty()) {
+        return fmt::format(
+            "{} {} clicks ({})",
+            m_data.method, m_data.clicks.size(), m_data.sourceReplay
+        );
+    }
     return "no bake";
+}
+
+std::string BakeMap::pauseStatusLine() const {
+    std::string line = statusLine();
+    if (m_hasReplay) {
+        line = fmt::format(
+            "Replay: {} ({} ev @ {:.0f} tps)\n{}",
+            m_replay.sourceName, m_replay.events.size(), m_replay.tps, line
+        );
+    }
+    else {
+        line = fmt::format(
+            "Replay: (none) — Brute Bake needs none\n{}",
+            line
+        );
+    }
+    return line;
 }
 
 BakedClick const* BakeMap::findNear(
@@ -102,7 +161,6 @@ BakedClick const* BakeMap::findNear(
         if (c.down != down || c.player2 != player2) continue;
         float dx = std::fabs(c.x - playerX);
         if (dx > LOOKUP_X_TOL) continue;
-        // Prefer clicks not far behind the estimated frame
         if (approxFrame >= 0 && c.nominalFrame + 240 < approxFrame) continue;
         if (dx < bestDx) {
             bestDx = dx;
@@ -132,16 +190,41 @@ bool BakeMap::testShiftedClick(
     return !r.died;
 }
 
-Result<int> BakeMap::bake(PlayLayer* layer, int startSnapshotSlot, int bakeRadius) {
+Result<int> BakeMap::bake(
+    PlayLayer* layer, int startSnapshotSlot, int bakeRadius, BakeMethod method
+) {
+    if (m_progress.running.exchange(true)) {
+        return Err("Bake already running");
+    }
+    m_progress.cancel = false;
+    m_progress.done = 0;
+    m_progress.total = 0;
+    m_progress.setStatus("starting…");
+
+    auto finish = [&](Result<int> r) -> Result<int> {
+        m_progress.running = false;
+        m_progress.setStatus(r.isOk()
+            ? fmt::format("done: {} clicks", r.unwrap())
+            : fmt::format("failed: {}", r.unwrapErr()));
+        return r;
+    };
+
+    if (method == BakeMethod::BruteForce) {
+        return finish(bakeBrute(layer, startSnapshotSlot, bakeRadius));
+    }
+    return finish(bakeReplay(layer, startSnapshotSlot, bakeRadius));
+}
+
+Result<int> BakeMap::bakeReplay(
+    PlayLayer* layer, int startSnapshotSlot, int bakeRadius
+) {
     if (!layer) return Err("No PlayLayer");
     if (!m_hasReplay || m_replay.events.empty()) return Err("No replay loaded");
     if (startSnapshotSlot < 0) return Err("No start snapshot (reset once, then bake)");
 
+    bakeRadius = resolveRadius(bakeRadius, BakeMethod::Replay);
     double tps = m_replay.tps > 0.0 ? m_replay.tps : 240.0;
     float dt = static_cast<float>(1.0 / tps);
-    if (bakeRadius <= 0) {
-        bakeRadius = std::max(8, StageConfig::ticksAll());
-    }
 
     BakeMapData out;
     out.levelKey = m_data.levelKey.empty() && layer->m_level
@@ -150,75 +233,88 @@ Result<int> BakeMap::bake(PlayLayer* layer, int startSnapshotSlot, int bakeRadiu
     if (out.levelKey.empty()) out.levelKey = "unknown";
     out.sourceReplay = m_replay.sourceName;
     out.tps = tps;
+    out.method = "replay";
 
     auto const& ev = m_replay.events;
     bool const doRelease = StageConfig::assistRelease();
 
+    std::vector<JumpJob> jobs;
     for (int i = 0; i < static_cast<int>(ev.size()); ++i) {
         auto const& e = ev[static_cast<size_t>(i)];
-        if (e.button != 1) continue; // jump only
+        if (e.button != 1) continue;
         if (!e.down && !doRelease) continue;
-
-        int const F = e.frame;
+        int F = e.frame;
         int next = nextJumpFrame(ev, i, e.player2);
         int horizon = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll()).cap;
         int until = next > 0 ? std::min(next, F + horizon) : F + horizon;
         until = std::max(until, F + 1);
+        jobs.push_back(JumpJob{ i, F, e.down, e.player2, until });
+    }
 
-        // Sample X / mode at nominal frame
+    m_progress.total = static_cast<int>(jobs.size());
+    m_progress.setStatus(fmt::format("replay bake · {} clicks · radius {}", jobs.size(), bakeRadius));
+    AssistLog::info(fmt::format(
+        "BAKE replay: {} jobs, radius {}, 1 thread (binary search)",
+        jobs.size(), bakeRadius
+    ));
+
+    for (auto const& job : jobs) {
+        if (m_progress.cancel.load()) return Err("Bake cancelled");
+
+        std::lock_guard lock(m_simMutex);
         auto sample = ShadowSimulator::get().runBakeTimeline(
-            layer, startSnapshotSlot, ev, dt, F, F
+            layer, startSnapshotSlot, ev, dt, job.frame, job.frame
         );
         float x = sample.sampled ? sample.xAtSample : 0.f;
         auto mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
 
-        // Nominal must itself survive (otherwise skip)
-        if (!testShiftedClick(layer, startSnapshotSlot, ev, i, F, until, dt)) {
-            AssistLog::debug(fmt::format("BAKE: skip click @{} (nominal dies)", F));
+        if (!testShiftedClick(layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt)) {
+            AssistLog::debug(fmt::format("BAKE: skip click @{} (nominal dies)", job.frame));
+            m_progress.done.fetch_add(1);
             continue;
         }
 
-        int earliest = F;
-        int lo = std::max(0, F - bakeRadius);
-        int hi = F;
+        int lo = std::max(0, job.frame - bakeRadius);
+        int hi = job.frame;
         while (lo < hi) {
             int mid = lo + (hi - lo) / 2;
-            if (testShiftedClick(layer, startSnapshotSlot, ev, i, mid, until, dt)) {
+            if (testShiftedClick(layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt)) {
                 hi = mid;
             }
             else {
                 lo = mid + 1;
             }
         }
-        earliest = lo;
+        int earliest = lo;
 
-        int latest = F;
-        lo = F;
-        hi = F + bakeRadius;
+        lo = job.frame;
+        hi = job.frame + bakeRadius;
         while (lo < hi) {
             int mid = lo + (hi - lo + 1) / 2;
-            if (testShiftedClick(layer, startSnapshotSlot, ev, i, mid, until, dt)) {
+            if (testShiftedClick(layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt)) {
                 lo = mid;
             }
             else {
                 hi = mid - 1;
             }
         }
-        latest = lo;
+        int latest = lo;
 
         BakedClick c;
-        c.nominalFrame = F;
+        c.nominalFrame = job.frame;
         c.earliest = earliest;
         c.latest = latest;
-        c.down = e.down;
-        c.player2 = e.player2;
+        c.down = job.down;
+        c.player2 = job.player2;
         c.x = x;
         c.mode = mode;
         out.clicks.push_back(c);
 
-        AssistLog::debug(fmt::format(
-            "BAKE: {} @{} window [{},{}] x={:.1f}",
-            e.down ? "press" : "release", F, earliest, latest, x
+        m_progress.done.fetch_add(1);
+        m_progress.setStatus(fmt::format(
+            "replay {}/{} · @{} → [{},{}]",
+            m_progress.done.load(), m_progress.total.load(),
+            job.frame, earliest, latest
         ));
     }
 
@@ -226,8 +322,327 @@ Result<int> BakeMap::bake(PlayLayer* layer, int startSnapshotSlot, int bakeRadiu
     m_loaded = true;
     save();
     AssistLog::info(fmt::format(
-        "BAKE: {} clicks from {} @ {:.0f} tps",
+        "BAKE: {} clicks from {} @ {:.0f} tps (replay)",
         m_data.clicks.size(), m_data.sourceReplay, m_data.tps
+    ));
+    return Ok(static_cast<int>(m_data.clicks.size()));
+}
+
+Result<int> BakeMap::bakeBrute(
+    PlayLayer* layer, int startSnapshotSlot, int bakeRadius
+) {
+    // Pure brute: no replay. Drive forward from start; at each death, exhaustively
+    // try press/release timings in [death-radius, death] and keep windows that
+    // don't die (progress further). Parallel job queue; GD physics mutexed.
+    if (!layer) return Err("No PlayLayer");
+    if (startSnapshotSlot < 0) return Err("No start snapshot (reset once, then Brute Bake)");
+    if (!layer->m_player1) return Err("No player");
+
+    bakeRadius = resolveRadius(bakeRadius, BakeMethod::BruteForce);
+    double const tps = 240.0;
+    float const dt = static_cast<float>(1.0 / tps);
+    int const maxFrames = static_cast<int>(tps * 180.0); // 3 min physics cap
+    int const maxClicks = 400;
+    int const horizon = ShadowSimulator::modelFor(
+        layer->m_player1, StageConfig::ticksAll()
+    ).cap;
+    bool const doRelease = StageConfig::assistRelease();
+    auto const model = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll());
+
+    BakeMapData out;
+    out.levelKey = m_data.levelKey.empty() && layer->m_level
+        ? LevelProfile::makeKey(layer->m_level)
+        : m_data.levelKey;
+    if (out.levelKey.empty()) out.levelKey = "unknown";
+    out.sourceReplay = "(brute)";
+    out.tps = tps;
+    out.method = "brute";
+
+    unsigned const threads = workerCount();
+    m_progress.total = maxClicks;
+    m_progress.done = 0;
+    m_progress.setStatus(fmt::format(
+        "brute (no replay) · radius {} · {} threads", bakeRadius, threads
+    ));
+    AssistLog::info(fmt::format(
+        "BAKE brute: death-driven search, radius {}, horizon {}, {} threads — no replay",
+        bakeRadius, horizon, threads
+    ));
+
+    auto holdingAtEnd = [](std::vector<ReplayEvent> const& tl) {
+        bool held = false;
+        for (auto const& e : tl) {
+            if (e.button == 1) held = e.down;
+        }
+        return held;
+    };
+
+    auto runUntil = [&](std::vector<ReplayEvent> const& tl, int until, int sampleFrame)
+        -> ShadowSimulator::BakeRunResult {
+        std::lock_guard lock(m_simMutex);
+        return ShadowSimulator::get().runBakeTimeline(
+            layer, startSnapshotSlot, tl, dt, until, sampleFrame
+        );
+    };
+
+    struct Trial {
+        int actionFrame = 0;
+        bool down = true;
+        int releaseFrame = -1; // optional follow-up release
+        int surviveUntil = -1; // death frame, or until if survived
+        bool survived = false;
+        float x = 0.f;
+        GameModeKind mode = GameModeKind::Cube;
+    };
+
+    std::vector<ReplayEvent> committed;
+    int lastDeath = -1;
+    int stuck = 0;
+
+    for (int step = 0; step < maxClicks; ++step) {
+        if (m_progress.cancel.load()) return Err("Bake cancelled");
+
+        auto baseline = runUntil(committed, maxFrames, -1);
+        if (!baseline.died) {
+            m_progress.setStatus(fmt::format(
+                "brute done — survived {}f with {} clicks",
+                maxFrames, out.clicks.size()
+            ));
+            AssistLog::info(fmt::format(
+                "BAKE brute: cleared horizon ({} frames) with {} clicks",
+                maxFrames, out.clicks.size()
+            ));
+            break;
+        }
+
+        int const D = baseline.deathFrame;
+        if (D < 0) break;
+        if (D == lastDeath) {
+            if (++stuck >= 2) {
+                AssistLog::info(fmt::format(
+                    "BAKE brute: stuck at death frame {} — stopping ({} clicks so far)",
+                    D, out.clicks.size()
+                ));
+                break;
+            }
+        }
+        else {
+            stuck = 0;
+            lastDeath = D;
+        }
+
+        bool const held = holdingAtEnd(committed);
+        int const lo = std::max(0, D - bakeRadius);
+        int const hi = D;
+        int const untilProbe = std::min(maxFrames, D + std::max(horizon, 16));
+
+        // Build candidate action list: (frame, down, optional release)
+        struct ActionSpec {
+            int frame;
+            bool down;
+            int releaseFrame;
+        };
+        std::vector<ActionSpec> specs;
+        specs.reserve(static_cast<size_t>((hi - lo + 1) * 4));
+
+        for (int t = lo; t <= hi; ++t) {
+            if (!held) {
+                // Press (hold)
+                specs.push_back({ t, true, -1 });
+                // Tap variants for cube-like modes
+                if (model.tapRelease || !model.continuous) {
+                    for (int rel : { 1, 2, 3, 4, 6, 8 }) {
+                        specs.push_back({ t, true, t + rel });
+                    }
+                }
+            }
+            if (held || doRelease) {
+                // Release if currently holding (or always probe release for assist-release)
+                if (held) {
+                    specs.push_back({ t, false, -1 });
+                }
+            }
+        }
+
+        if (specs.empty()) {
+            AssistLog::info(fmt::format("BAKE brute: no actions to try at death {}", D));
+            break;
+        }
+
+        m_progress.setStatus(fmt::format(
+            "brute death @{} · probing {} combos · clicks {}",
+            D, specs.size(), out.clicks.size()
+        ));
+
+        std::vector<Trial> trials(specs.size());
+        std::atomic<size_t> nextSpec{0};
+
+        auto processSpec = [&](size_t idx) {
+            if (m_progress.cancel.load()) return;
+            auto const& sp = specs[idx];
+            auto tl = committed;
+            tl.push_back(ReplayEvent{ sp.frame, 1, false, sp.down });
+            if (sp.releaseFrame >= 0) {
+                tl.push_back(ReplayEvent{ sp.releaseFrame, 1, false, false });
+            }
+            std::stable_sort(tl.begin(), tl.end(), [](auto const& a, auto const& b) {
+                return a.frame < b.frame;
+            });
+
+            Trial tr;
+            tr.actionFrame = sp.frame;
+            tr.down = sp.down;
+            tr.releaseFrame = sp.releaseFrame;
+
+            {
+                std::lock_guard lock(m_simMutex);
+                if (m_progress.cancel.load()) return;
+                auto sample = ShadowSimulator::get().runBakeTimeline(
+                    layer, startSnapshotSlot, tl, dt, sp.frame, sp.frame
+                );
+                tr.x = sample.sampled ? sample.xAtSample : 0.f;
+                tr.mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
+
+                auto r = ShadowSimulator::get().runBakeTimeline(
+                    layer, startSnapshotSlot, tl, dt, untilProbe, -1
+                );
+                if (r.died) {
+                    tr.surviveUntil = r.deathFrame;
+                    tr.survived = r.deathFrame > D;
+                }
+                else {
+                    tr.surviveUntil = untilProbe;
+                    tr.survived = true;
+                }
+            }
+            trials[idx] = tr;
+            m_progress.done.fetch_add(1);
+        };
+
+        // Inflate total roughly so the % bar moves during probes
+        m_progress.total = std::max(
+            m_progress.total.load(),
+            m_progress.done.load() + static_cast<int>(specs.size()) + (maxClicks - step)
+        );
+
+        std::vector<std::thread> pool;
+        pool.reserve(threads);
+        for (unsigned t = 0; t < threads; ++t) {
+            pool.emplace_back([&]() {
+                while (!m_progress.cancel.load()) {
+                    size_t idx = nextSpec.fetch_add(1);
+                    if (idx >= specs.size()) break;
+                    processSpec(idx);
+                }
+            });
+        }
+        for (auto& th : pool) th.join();
+        if (m_progress.cancel.load()) return Err("Bake cancelled");
+
+        // Best survival past current death
+        int bestUntil = D;
+        for (auto const& tr : trials) {
+            if (tr.surviveUntil > bestUntil) bestUntil = tr.surviveUntil;
+        }
+        if (bestUntil <= D) {
+            AssistLog::info(fmt::format(
+                "BAKE brute: no combo survives past death {} — stopping", D
+            ));
+            break;
+        }
+
+        // Prefer press-downs that reach bestUntil (within 2 frames slack)
+        int const slack = 2;
+        std::vector<Trial const*> winners;
+        for (auto const& tr : trials) {
+            if (tr.surviveUntil + slack >= bestUntil && tr.surviveUntil > D) {
+                winners.push_back(&tr);
+            }
+        }
+        if (winners.empty()) break;
+
+        // Split by down vs release — prefer whichever group has more / better
+        Trial const* pick = winners.front();
+        int earliest = pick->actionFrame;
+        int latest = pick->actionFrame;
+        bool pickDown = pick->down;
+        int pickRel = pick->releaseFrame;
+
+        // Prefer down actions if any winner is a down
+        bool anyDown = false;
+        for (auto* w : winners) {
+            if (w->down) { anyDown = true; break; }
+        }
+        earliest = std::numeric_limits<int>::max();
+        latest = -1;
+        for (auto* w : winners) {
+            if (anyDown && !w->down) continue;
+            if (w->actionFrame < earliest) {
+                earliest = w->actionFrame;
+                pick = w;
+                pickDown = w->down;
+                pickRel = w->releaseFrame;
+            }
+            if (w->actionFrame > latest) latest = w->actionFrame;
+        }
+        if (latest < earliest) break;
+
+        int const nominal = pick->actionFrame;
+        float const x = pick->x;
+        auto const mode = pick->mode;
+
+        BakedClick c;
+        c.nominalFrame = nominal;
+        c.earliest = earliest;
+        c.latest = latest;
+        c.down = pickDown;
+        c.player2 = false;
+        c.x = x;
+        c.mode = mode;
+        out.clicks.push_back(c);
+
+        // Also bake release window if we committed a tap-release
+        if (pickRel >= 0 && doRelease) {
+            BakedClick rel;
+            rel.nominalFrame = pickRel;
+            rel.earliest = pickRel;
+            rel.latest = pickRel;
+            rel.down = false;
+            rel.player2 = false;
+            rel.x = x;
+            rel.mode = mode;
+            out.clicks.push_back(rel);
+        }
+
+        committed.push_back(ReplayEvent{ nominal, 1, false, pickDown });
+        if (pickRel >= 0) {
+            committed.push_back(ReplayEvent{ pickRel, 1, false, false });
+        }
+        std::stable_sort(committed.begin(), committed.end(), [](auto const& a, auto const& b) {
+            return a.frame < b.frame;
+        });
+
+        AssistLog::debug(fmt::format(
+            "BAKE brute: {} @{} window [{},{}] survives→{} (was death {})",
+            pickDown ? "press" : "release", nominal, earliest, latest, bestUntil, D
+        ));
+        m_progress.setStatus(fmt::format(
+            "brute click #{} · {} @{} [{},{}] · next death hunt",
+            out.clicks.size(), pickDown ? "press" : "release",
+            nominal, earliest, latest
+        ));
+    }
+
+    if (out.clicks.empty()) {
+        return Err("Brute found no safe clicks (died immediately / unsolvable from start)");
+    }
+
+    m_data = std::move(out);
+    m_loaded = true;
+    save();
+    AssistLog::info(fmt::format(
+        "BAKE: {} clicks (brute, no replay) @ {:.0f} tps, {} threads",
+        m_data.clicks.size(), m_data.tps, threads
     ));
     return Ok(static_cast<int>(m_data.clicks.size()));
 }
@@ -239,6 +654,7 @@ Result<> BakeMap::writeFile() const {
     root["key"] = m_data.levelKey;
     root["source"] = m_data.sourceReplay;
     root["tps"] = m_data.tps;
+    root["method"] = m_data.method;
 
     std::vector<matjson::Value> arr;
     arr.reserve(m_data.clicks.size());
@@ -264,6 +680,7 @@ Result<> BakeMap::readFile() {
 
     if (root.contains("source")) m_data.sourceReplay = root["source"].asString().unwrapOr("");
     if (root.contains("tps")) m_data.tps = root["tps"].asDouble().unwrapOr(240.0);
+    if (root.contains("method")) m_data.method = root["method"].asString().unwrapOr("replay");
     m_data.clicks.clear();
     if (!root.contains("clicks") || !root["clicks"].isArray()) return Ok();
 

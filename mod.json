@@ -58,6 +58,12 @@
 			"description": "Log SAVED lines and planner decisions to the Geode console.",
 			"default": true
 		},
+		"show-trajectory": {
+			"type": "bool",
+			"name": "Trajectory Visualizer",
+			"description": "Draw predicted paths: gray=no click, green=earliest window, yellow=nominal, red=latest. Shows how big the click window is. Toggle: Ctrl+Shift+T.",
+			"default": false
+		},
 
 		"title-window": {
 			"type": "title",
@@ -115,17 +121,17 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Live = trajectory each click. Replay = only Bake Map windows. Hybrid = Bake when available, else Live.",
-			"one-of": ["Live", "Replay", "Hybrid"],
+			"description": "Live = plan each click. Replay = windows from imported macro. Hybrid = bake if near, else live. BruteForce = use Brute Bake map (no replay — explores safe click timings through the level).",
+			"one-of": ["Live", "Replay", "Hybrid", "BruteForce"],
 			"default": "Hybrid"
 		},
 		"bake-radius": {
 			"type": "int",
 			"name": "Bake Radius",
-			"description": "Max frames to shift each replay click when baking. 0 = auto (max of ticks-all and 8).",
+			"description": "Max frames to shift each click when baking. 0 = auto (Replay/Hybrid: max(ticks,8); BruteForce: max(ticks*4,32)).",
 			"default": 0,
 			"min": 0,
-			"max": 64
+			"max": 128
 		},
 		"sim-budget-us": {
 			"type": "int",
@@ -498,8 +504,15 @@
 		"hotkey-assist-mode": {
 			"type": "keybind",
 			"name": "Cycle Assist Mode",
-			"description": "Cycle Live → Replay → Hybrid.",
+			"description": "Cycle Live → Replay → Hybrid → BruteForce.",
 			"default": "Ctrl+Shift+M",
+			"category": "gameplay"
+		},
+		"hotkey-trajectory": {
+			"type": "keybind",
+			"name": "Toggle Trajectory Viz",
+			"description": "Show/hide debug trajectories and click-window paths (green earliest … red latest).",
+			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
 		}
 	}

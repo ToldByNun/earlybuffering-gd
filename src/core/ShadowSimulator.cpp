@@ -43,17 +43,34 @@ void ShadowSimulator::attach(PlayLayer* layer) {
     m_nextSnapshot = 0;
 }
 
-void ShadowSimulator::detach() {
-    auto kill = [](PlayerObject*& p) {
+void ShadowSimulator::detach(bool layerDying) {
+    // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
+    m_simulating = false;
+    m_applyingRing = false;
+    m_dead = false;
+    m_jumped = false;
+    m_unknown = false;
+    m_deathObject = nullptr;
+    m_saved.clear();
+    m_savedActivatedIDs = {};
+
+    auto kill = [layerDying](PlayerObject*& p) {
         if (!p) return;
-        p->removeFromParent();
+        // Mid-level reattach: remove from tree. On quit: PlayerObject::removeFromParent
+        // during teardown is a common crash source — drop our retain and let
+        // PlayLayer::onQuit destroy the remaining child retain.
+        if (!layerDying) {
+            if (p->getParent()) p->removeFromParent();
+        }
+        else {
+            // Hide so a half-frame of quit doesn't flash ghosts
+            p->setVisible(false);
+        }
         p->release();
         p = nullptr;
     };
     kill(m_shadow);
     for (auto& s : m_snapshots) kill(s);
-    m_simulating = false;
-    m_saved.clear();
 }
 
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {
@@ -837,6 +854,58 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
         }
 
         stepPhysics(layer, s, dt, dt);
+        if (m_dead || m_unknown) {
+            out.died = true;
+            out.deathFrame = frame;
+            break;
+        }
+    }
+
+    restoreCapture(layer);
+    m_simulating = false;
+    return out;
+}
+
+ShadowSimulator::PathSample ShadowSimulator::samplePath(
+    PlayLayer* layer,
+    int slot,
+    std::vector<ReplayEvent> const& events,
+    float dt,
+    int untilFrame
+) {
+    PathSample out;
+    auto* snap = this->snapshotSlot(slot);
+    if (!layer || !snap || !m_shadow || dt <= 0.f || untilFrame < 0) return out;
+
+    copyPlayerState(m_shadow, snap);
+    m_dead = false;
+    m_jumped = false;
+    m_unknown = false;
+    m_deathObject = nullptr;
+
+    auto* s = m_shadow;
+    size_t nextEv = 0;
+    out.points.reserve(static_cast<size_t>(untilFrame) + 2);
+
+    auto applyEv = [&](ReplayEvent const& ev) {
+        auto btn = PlayerButton::Jump;
+        if (ev.button == 2) btn = PlayerButton::Left;
+        else if (ev.button == 3) btn = PlayerButton::Right;
+        if (ev.down) s->pushButton(btn);
+        else s->releaseButton(btn);
+    };
+
+    m_simulating = true;
+    beginCapture(layer);
+
+    out.points.push_back(s->getPosition());
+    for (int frame = 0; frame <= untilFrame; ++frame) {
+        while (nextEv < events.size() && events[nextEv].frame == frame) {
+            applyEv(events[nextEv]);
+            ++nextEv;
+        }
+        stepPhysics(layer, s, dt, dt);
+        out.points.push_back(s->getPosition());
         if (m_dead || m_unknown) {
             out.died = true;
             out.deathFrame = frame;

@@ -56,7 +56,9 @@ public:
 
     // Bake map: capture at attempt start; run offline bake from pause UI.
     int startSnapshotSlot() const { return m_startSnapshotSlot; }
-    geode::Result<int> runBakeMap(PlayLayer* layer);
+    geode::Result<int> runBakeMap(PlayLayer* layer, bool bruteForce = false);
+    // Ensure start snapshot exists (call before bake).
+    geode::Result<> ensureStartSnapshot(PlayLayer* layer);
 
     bool isInjecting() const;
     BufferedInput const& buffer() const;

@@ -54,7 +54,8 @@ public:
     static ShadowSimulator& get();
 
     void attach(PlayLayer* layer);
-    void detach();
+    // layerDying: PlayLayer is quitting — don't removeFromParent (tree is being destroyed).
+    void detach(bool layerDying = false);
 
     bool isSimulating() const { return m_simulating; }
     bool isShadow(PlayerObject* p) const { return p && p == m_shadow; }
@@ -121,6 +122,20 @@ public:
         float dt,
         int untilFrame,
         int sampleFrame = -1
+    );
+
+    // Record shadow positions each frame (for debug trajectory viz).
+    struct PathSample {
+        std::vector<cocos2d::CCPoint> points;
+        int deathFrame = -1;
+        bool died = false;
+    };
+    PathSample samplePath(
+        PlayLayer* layer,
+        int snapshotSlot,
+        std::vector<ReplayEvent> const& events,
+        float dt,
+        int untilFrame
     );
 
     struct Model {

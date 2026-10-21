@@ -5,6 +5,7 @@
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../ui/StatusOverlay.hpp"
+#include "../ui/TrajectoryVisualizer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -78,6 +79,8 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     resetAttempt(playLayer);
     ShadowSimulator::get().attach(playLayer);
     StatusOverlay::attach(playLayer);
+    TrajectoryVisualizer::get().setEnabled(StageConfig::showTrajectory());
+    TrajectoryVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
         BakeMap::get().loadForLevel(playLayer->m_level);
@@ -86,27 +89,51 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 }
 
 void AssistController::onLevelQuit() {
+    // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
+    // layerDying=true: do not removeFromParent (avoids UAF during quit).
+    TrajectoryVisualizer::get().detach(true);
+    StatusOverlay::detach(true);
+    ShadowSimulator::get().detach(true);
+
     LevelProfile::get().save();
     BakeMap::get().save();
-    ShadowSimulator::get().detach();
-    StatusOverlay::detach();
     LevelProfile::get().clear();
-    resetAttempt();
+
+    // Quiet reset — overlay already detached
+    clearBuffer();
+    m_pendingRelease = false;
+    m_attemptTick = 0;
+    m_inRealUpdate = false;
+    m_subDtSeen = 0.f;
+    m_modeKnown = false;
+    m_startSnapshotTaken = false;
+    m_startSnapshotSlot = -1;
+    m_lastBakeHint.clear();
+    m_log.clear();
+    m_userHolding[0] = m_userHolding[1] = false;
 }
 
-geode::Result<int> AssistController::runBakeMap(PlayLayer* layer) {
+geode::Result<> AssistController::ensureStartSnapshot(PlayLayer* layer) {
     if (!layer) return geode::Err("No layer");
     if (!m_startSnapshotTaken || m_startSnapshotSlot < 0) {
-        // Capture current player as start if near the beginning of an attempt.
         if (layer->m_player1 && m_attemptTick <= 5) {
             m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(layer->m_player1);
             m_startSnapshotTaken = m_startSnapshotSlot >= 0;
         }
     }
     if (!m_startSnapshotTaken) {
-        return geode::Err("Reset the level once (start snapshot), then Bake Map");
+        return geode::Err("Reset the level once (start snapshot), then bake");
     }
-    return BakeMap::get().bake(layer, m_startSnapshotSlot, StageConfig::bakeRadius());
+    return geode::Ok();
+}
+
+geode::Result<int> AssistController::runBakeMap(PlayLayer* layer, bool bruteForce) {
+    auto snap = ensureStartSnapshot(layer);
+    if (snap.isErr()) return geode::Err(snap.unwrapErr());
+    auto method = bruteForce ? BakeMethod::BruteForce : BakeMethod::Replay;
+    return BakeMap::get().bake(
+        layer, m_startSnapshotSlot, StageConfig::bakeRadius(), method
+    );
 }
 
 void AssistController::resetLevelProfile() {
@@ -157,9 +184,14 @@ void AssistController::updateOverlay() {
         int left = 0;
         if (m_buffer.state == BufferState::Buffered) left = m_buffer.fireTick - m_attemptTick;
 
-        auto const* modeName = StageConfig::assistModeName(StageConfig::assistMode());
+        auto mode = StageConfig::assistMode();
+        auto const* modeName = StageConfig::assistModeName(mode);
         std::string learnBit;
-        if (StageConfig::autoTune()) {
+        // Learning only applies to Live / Hybrid fallback — not bake windows.
+        if (mode == AssistMode::Replay || mode == AssistMode::BruteForce) {
+            learnBit = "learn n/a";
+        }
+        else if (StageConfig::autoTune()) {
             auto spot = LevelProfile::get().overlaySpot(m_lastMode, m_lastPlayerX);
             learnBit = fmt::format("learn bias{:+d} t{:.1f}", roundBias(spot.bias), spot.trust);
         }
@@ -167,15 +199,30 @@ void AssistController::updateOverlay() {
             learnBit = "learn OFF";
         }
         std::string bakeBit = m_lastBakeHint.empty() ? BakeMap::get().statusLine() : m_lastBakeHint;
-        m_overlayText = fmt::format(
-            "frirecracker: {} | {} | {} left={} | {} | {}",
-            StageConfig::stageLabel(stage),
-            modeName,
-            state,
-            left,
-            learnBit,
-            bakeBit
-        );
+        std::string trajBit = TrajectoryVisualizer::get().statusHint();
+        if (!trajBit.empty()) {
+            m_overlayText = fmt::format(
+                "frire {} | mode {} | {} left={} | {} | {} | {}",
+                StageConfig::stageLabel(stage),
+                modeName,
+                state,
+                left,
+                learnBit,
+                bakeBit,
+                trajBit
+            );
+        }
+        else {
+            m_overlayText = fmt::format(
+                "frire {} | mode {} | {} left={} | {} | {}",
+                StageConfig::stageLabel(stage),
+                modeName,
+                state,
+                left,
+                learnBit,
+                bakeBit
+            );
+        }
     }
     StatusOverlay::update(m_overlayText);
 }
@@ -433,6 +480,8 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         tickLearning(playLayer, p1);
     }
 
+    TrajectoryVisualizer::get().onPhysicsTick(playLayer, dt);
+
     if (m_buffer.state == BufferState::Idle) {
         updateOverlay();
         return;
@@ -465,11 +514,14 @@ bool AssistController::tryBakeAssist(
     auto mode = StageConfig::assistMode();
     if (mode == AssistMode::Live) return true;
 
+    bool const bakeOnly =
+        mode == AssistMode::Replay || mode == AssistMode::BruteForce;
+
     auto const& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) {
-        if (mode == AssistMode::Replay) {
+        if (bakeOnly) {
             handled = true;
-            m_lastBakeHint = "bake missing";
+            m_lastBakeHint = mode == AssistMode::BruteForce ? "brute missing" : "bake missing";
             return true; // pass through — nothing to assist with
         }
         return true; // Hybrid → live
@@ -479,7 +531,7 @@ bool AssistController::tryBakeAssist(
     int approxFrame = static_cast<int>(std::lround(m_attemptTick * (tps * m_simDt)));
     auto const* win = bake.findNear(player->getPositionX(), approxFrame, down, !player1);
     if (!win) {
-        if (mode == AssistMode::Replay) {
+        if (bakeOnly) {
             handled = true;
             m_lastBakeHint = "no window";
             return true;
@@ -516,7 +568,7 @@ bool AssistController::tryBakeAssist(
             handled = false; // try live
             return true;
         }
-        return true;
+        return true; // Replay / BruteForce: pass
     }
 
     // Too early → buffer until earliest

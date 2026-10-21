@@ -55,6 +55,7 @@ std::array<ModeParams, StageConfig::MODE_COUNT> g_cachedModes{};
 bool g_cachedDebug = true;
 bool g_cachedSafeMode = false;
 bool g_cachedShowOverlay = true;
+bool g_cachedShowTrajectory = false;
 bool g_cachedAssistPress = true;
 bool g_cachedAssistRelease = true;
 bool g_cachedSwallow = false;
@@ -114,18 +115,20 @@ void StageConfig::refreshCache() {
     g_cachedDebug = mod->getSettingValue<bool>("debug-logging");
     g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
+    g_cachedShowTrajectory = readBool(mod, "show-trajectory", false);
     g_cachedAssistPress = readBool(mod, "assist-press", true);
     g_cachedAssistRelease = readBool(mod, "assist-release", true);
     g_cachedSwallow = readBool(mod, "swallow-hopeless", false);
     g_cachedAutoTune = readBool(mod, "auto-tune", true);
     g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
-    g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 64);
+    g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 128);
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
     try {
         auto modeStr = mod->getSettingValue<std::string>("assist-mode");
         if (modeStr == "Live") g_cachedAssistMode = AssistMode::Live;
         else if (modeStr == "Replay") g_cachedAssistMode = AssistMode::Replay;
+        else if (modeStr == "BruteForce") g_cachedAssistMode = AssistMode::BruteForce;
         else g_cachedAssistMode = AssistMode::Hybrid;
     }
     catch (...) {
@@ -244,8 +247,19 @@ char const* StageConfig::assistModeName(AssistMode mode) {
         case AssistMode::Live: return "Live";
         case AssistMode::Replay: return "Replay";
         case AssistMode::Hybrid: return "Hybrid";
+        case AssistMode::BruteForce: return "BruteForce";
     }
     return "Hybrid";
+}
+
+char const* StageConfig::assistModeHint(AssistMode mode) {
+    switch (mode) {
+        case AssistMode::Live: return "live plan each click";
+        case AssistMode::Replay: return "bake windows only";
+        case AssistMode::Hybrid: return "bake if near, else live";
+        case AssistMode::BruteForce: return "pre-baked safe clicks (no replay)";
+    }
+    return "";
 }
 
 void StageConfig::setAssistMode(AssistMode mode) {
@@ -256,8 +270,14 @@ void StageConfig::setAssistMode(AssistMode mode) {
 
 void StageConfig::cycleAssistMode() {
     ensureCache();
-    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 3;
+    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 4;
     setAssistMode(static_cast<AssistMode>(next));
+}
+
+void StageConfig::toggleShowTrajectory() {
+    ensureCache();
+    g_cachedShowTrajectory = !g_cachedShowTrajectory;
+    Mod::get()->setSettingValue<bool>("show-trajectory", g_cachedShowTrajectory);
 }
 
 bool StageConfig::isApplying() { return g_applying; }
@@ -271,6 +291,7 @@ bool StageConfig::isEnabled() { ensureCache(); return g_cachedStage.enabled; }
 bool StageConfig::debugLogging() { ensureCache(); return g_cachedDebug; }
 bool StageConfig::safeMode() { ensureCache(); return g_cachedSafeMode; }
 bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
+bool StageConfig::showTrajectory() { ensureCache(); return g_cachedShowTrajectory; }
 bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
 bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
 bool StageConfig::swallowHopeless() { ensureCache(); return g_cachedSwallow; }

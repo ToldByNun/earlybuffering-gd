@@ -3,6 +3,7 @@
 #include "core/BakeMap.hpp"
 #include "debug/AssistLog.hpp"
 #include "ui/StatusOverlay.hpp"
+#include "ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -56,9 +57,26 @@ $on_mod(Loaded) {
     listenForKeybindSettingPresses("hotkey-assist-mode", [](Keybind const&, bool down, bool repeat, double) {
         if (!down || repeat) return;
         StageConfig::cycleAssistMode();
+        auto mode = StageConfig::assistMode();
         AssistLog::info(fmt::format(
-            "ASSIST MODE: {}", StageConfig::assistModeName(StageConfig::assistMode())
+            "ASSIST MODE: {} — {}",
+            StageConfig::assistModeName(mode),
+            StageConfig::assistModeHint(mode)
         ));
+        AssistController::get().updateOverlay();
+    });
+
+    listenForKeybindSettingPresses("hotkey-trajectory", [](Keybind const&, bool down, bool repeat, double) {
+        if (!down || repeat) return;
+        StageConfig::toggleShowTrajectory();
+        bool const on = StageConfig::showTrajectory();
+        TrajectoryVisualizer::get().setEnabled(on);
+        if (on) {
+            if (auto* pl = PlayLayer::get()) {
+                TrajectoryVisualizer::get().attach(pl);
+            }
+        }
+        AssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
         AssistController::get().updateOverlay();
     });
 
@@ -100,6 +118,19 @@ $on_mod(Loaded) {
     watchInt("look-ahead-cap");
     watchBool("debug-logging");
     watchBool("safe-mode");
+
+    listenForSettingChanges<bool>("show-trajectory", [](bool value) {
+        if (StageConfig::isApplying()) return;
+        StageConfig::refreshCache();
+        TrajectoryVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get()) TrajectoryVisualizer::get().attach(pl);
+        }
+        else {
+            TrajectoryVisualizer::get().clear();
+        }
+        AssistController::get().updateOverlay();
+    });
     watchBool("swallow-hopeless");
     watchBool("auto-tune");
     watchInt("sim-budget-us");
