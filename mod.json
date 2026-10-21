@@ -1,0 +1,484 @@
+{
+	"geode": "5.11.1",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "audesign.frirecracker",
+	"name": "frirecracker",
+	"version": "v1.0.0",
+	"developer": "Audesign",
+	"description": "Input forgiveness assist: buffers early jumps and fires on the first valid tick.",
+	"dependencies": {
+		"geode.node-ids": ">=v1.23.3"
+	},
+	"settings": {
+		"title-general": {
+			"type": "title",
+			"name": "General"
+		},
+		"enabled": {
+			"type": "bool",
+			"name": "Enabled",
+			"description": "Master toggle. Also cycled to OFF by the preset hotkey.",
+			"default": true
+		},
+		"preset": {
+			"type": "string",
+			"name": "Preset",
+			"description": "Fills the default window / slack / look-ahead. Per-mode overwrites are kept. Cycle in-game with the hotkey (F6).",
+			"one-of": ["Tight", "Normal", "Wide", "Max", "Off"],
+			"default": "Tight"
+		},
+		"stage-index": {
+			"type": "int",
+			"name": "Preset Index",
+			"description": "Internal preset index (0=Tight … 3=Max, 4=Off). Prefer the Preset dropdown.",
+			"default": 0,
+			"min": 0,
+			"max": 4
+		},
+		"safe-mode": {
+			"type": "bool",
+			"name": "Safe Mode",
+			"description": "Do not save progress / bests / percentage while the assist is enabled.",
+			"default": true
+		},
+		"show-overlay": {
+			"type": "bool",
+			"name": "In-Level Overlay",
+			"description": "Small on-screen status label while playing.",
+			"default": true
+		},
+		"debug-logging": {
+			"type": "bool",
+			"name": "Debug Logging",
+			"description": "Log SAVED lines and planner decisions to the Geode console.",
+			"default": true
+		},
+
+		"title-window": {
+			"type": "title",
+			"name": "Default Window"
+		},
+		"ticks-all": {
+			"type": "int",
+			"name": "Ticks (Default)",
+			"description": "Max delay in physics ticks (~240/s, so 4 ticks ≈ 1 frame at 60fps) for every mode without an overwrite. Wave uses 'Ticks (Wave)' below.",
+			"default": 2,
+			"min": 0,
+			"max": 32
+		},
+		"ticks-wave": {
+			"type": "int",
+			"name": "Ticks (Wave default)",
+			"description": "Default window for wave when Wave → Overwrite is off.",
+			"default": 2,
+			"min": 0,
+			"max": 32
+		},
+
+		"title-algorithm": {
+			"type": "title",
+			"name": "Algorithm"
+		},
+		"death-slack": {
+			"type": "int",
+			"name": "Death Slack",
+			"description": "Deaths this many ticks apart count as the SAME obstacle (later unrelated spikes won't steal the click). 0 = strict. 2 is the recommended default.",
+			"default": 2,
+			"min": 0,
+			"max": 16
+		},
+		"look-ahead-cap": {
+			"type": "int",
+			"name": "Look-Ahead Cap",
+			"description": "How many physics ticks each candidate is simulated. 0 = automatic (jump modes ~96, hold modes ~6× window). Higher = sees bigger gaps, more CPU.",
+			"default": 0,
+			"min": 0,
+			"max": 240
+		},
+		"swallow-hopeless": {
+			"type": "bool",
+			"name": "Swallow If Hopeless (unused)",
+			"description": "Deprecated — the mod never blocks your clicks. Kept so old configs still load.",
+			"default": false
+		},
+		"auto-tune": {
+			"type": "bool",
+			"name": "Auto-Tune Per Level",
+			"description": "Learn bias / trust / look-ahead per level and spot as you play. The window (ticks) is never changed. Profiles save under the mod's save folder.",
+			"default": true
+		},
+		"sim-budget-us": {
+			"type": "int",
+			"name": "Sim Budget (µs)",
+			"description": "Max microseconds the planner may spend per click. On hit it shortens branches then the horizon. 0 = unlimited. 1500 ≈ 1.5ms.",
+			"default": 1500,
+			"min": 0,
+			"max": 10000
+		},
+		"assist-press": {
+			"type": "bool",
+			"name": "Assist Presses",
+			"description": "Delay or swallow jump presses.",
+			"default": true
+		},
+		"assist-release": {
+			"type": "bool",
+			"name": "Assist Releases",
+			"description": "Delay or swallow jump releases (wave / ship / robot short-hops).",
+			"default": true
+		},
+
+		"title-cube": {
+			"type": "title",
+			"name": "Cube"
+		},
+		"cube-enable": {
+			"type": "bool",
+			"name": "Enable Cube",
+			"default": true
+		},
+		"cube-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Cube",
+			"description": "Use the Cube values below instead of the preset / defaults.",
+			"default": false
+		},
+		"cube-ticks": {
+			"type": "int",
+			"name": "Cube Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "cube-overwrite"
+		},
+		"cube-cap": {
+			"type": "int",
+			"name": "Cube Look-Ahead",
+			"description": "0 = use the global look-ahead (or auto).",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "cube-overwrite"
+		},
+		"cube-slack": {
+			"type": "int",
+			"name": "Cube Slack",
+			"description": "-1 = use global Death Slack.",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "cube-overwrite"
+		},
+
+		"title-ship": {
+			"type": "title",
+			"name": "Ship"
+		},
+		"ship-enable": {
+			"type": "bool",
+			"name": "Enable Ship",
+			"default": true
+		},
+		"ship-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Ship",
+			"default": false
+		},
+		"ship-ticks": {
+			"type": "int",
+			"name": "Ship Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "ship-overwrite"
+		},
+		"ship-cap": {
+			"type": "int",
+			"name": "Ship Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "ship-overwrite"
+		},
+		"ship-slack": {
+			"type": "int",
+			"name": "Ship Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "ship-overwrite"
+		},
+
+		"title-ball": {
+			"type": "title",
+			"name": "Ball"
+		},
+		"ball-enable": {
+			"type": "bool",
+			"name": "Enable Ball",
+			"default": true
+		},
+		"ball-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Ball",
+			"default": false
+		},
+		"ball-ticks": {
+			"type": "int",
+			"name": "Ball Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "ball-overwrite"
+		},
+		"ball-cap": {
+			"type": "int",
+			"name": "Ball Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "ball-overwrite"
+		},
+		"ball-slack": {
+			"type": "int",
+			"name": "Ball Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "ball-overwrite"
+		},
+
+		"title-ufo": {
+			"type": "title",
+			"name": "UFO"
+		},
+		"ufo-enable": {
+			"type": "bool",
+			"name": "Enable UFO",
+			"default": true
+		},
+		"ufo-overwrite": {
+			"type": "bool",
+			"name": "Overwrite UFO",
+			"default": false
+		},
+		"ufo-ticks": {
+			"type": "int",
+			"name": "UFO Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "ufo-overwrite"
+		},
+		"ufo-cap": {
+			"type": "int",
+			"name": "UFO Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "ufo-overwrite"
+		},
+		"ufo-slack": {
+			"type": "int",
+			"name": "UFO Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "ufo-overwrite"
+		},
+
+		"title-wave": {
+			"type": "title",
+			"name": "Wave"
+		},
+		"wave-enable": {
+			"type": "bool",
+			"name": "Enable Wave",
+			"default": true
+		},
+		"wave-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Wave",
+			"default": false
+		},
+		"wave-ticks": {
+			"type": "int",
+			"name": "Wave Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "wave-overwrite"
+		},
+		"wave-cap": {
+			"type": "int",
+			"name": "Wave Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "wave-overwrite"
+		},
+		"wave-slack": {
+			"type": "int",
+			"name": "Wave Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "wave-overwrite"
+		},
+
+		"title-robot": {
+			"type": "title",
+			"name": "Robot"
+		},
+		"robot-enable": {
+			"type": "bool",
+			"name": "Enable Robot",
+			"default": true
+		},
+		"robot-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Robot",
+			"default": false
+		},
+		"robot-ticks": {
+			"type": "int",
+			"name": "Robot Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "robot-overwrite"
+		},
+		"robot-cap": {
+			"type": "int",
+			"name": "Robot Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "robot-overwrite"
+		},
+		"robot-slack": {
+			"type": "int",
+			"name": "Robot Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "robot-overwrite"
+		},
+
+		"title-spider": {
+			"type": "title",
+			"name": "Spider"
+		},
+		"spider-enable": {
+			"type": "bool",
+			"name": "Enable Spider",
+			"default": true
+		},
+		"spider-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Spider",
+			"default": false
+		},
+		"spider-ticks": {
+			"type": "int",
+			"name": "Spider Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "spider-overwrite"
+		},
+		"spider-cap": {
+			"type": "int",
+			"name": "Spider Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "spider-overwrite"
+		},
+		"spider-slack": {
+			"type": "int",
+			"name": "Spider Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "spider-overwrite"
+		},
+
+		"title-swing": {
+			"type": "title",
+			"name": "Swing"
+		},
+		"swing-enable": {
+			"type": "bool",
+			"name": "Enable Swing",
+			"default": true
+		},
+		"swing-overwrite": {
+			"type": "bool",
+			"name": "Overwrite Swing",
+			"default": false
+		},
+		"swing-ticks": {
+			"type": "int",
+			"name": "Swing Ticks",
+			"default": 2,
+			"min": 0,
+			"max": 32,
+			"enable-if": "swing-overwrite"
+		},
+		"swing-cap": {
+			"type": "int",
+			"name": "Swing Look-Ahead",
+			"default": 0,
+			"min": 0,
+			"max": 240,
+			"enable-if": "swing-overwrite"
+		},
+		"swing-slack": {
+			"type": "int",
+			"name": "Swing Slack",
+			"default": -1,
+			"min": -1,
+			"max": 16,
+			"enable-if": "swing-overwrite"
+		},
+
+		"title-keys": {
+			"type": "title",
+			"name": "Keybinds"
+		},
+		"hotkey-cycle": {
+			"type": "keybind",
+			"name": "Cycle Preset",
+			"description": "Cycle Tight → Normal → Wide → Max → Off.",
+			"default": "F6",
+			"category": "gameplay"
+		},
+		"hotkey-debug": {
+			"type": "keybind",
+			"name": "Toggle Debug Logging",
+			"description": "Toggle debug SAVED-press logging.",
+			"default": "Ctrl+Shift+D",
+			"category": "gameplay"
+		},
+		"hotkey-reset-level": {
+			"type": "keybind",
+			"name": "Reset Level Learning",
+			"description": "Clear the auto-tune profile for the current level (bias, trust, spots).",
+			"default": "Ctrl+Shift+R",
+			"category": "gameplay"
+		},
+		"hotkey-auto-tune": {
+			"type": "keybind",
+			"name": "Toggle Smart Learning",
+			"description": "Toggle Auto-Tune / smart learning (bias, trust, look-ahead per spot). Does not change the tick window.",
+			"default": "Ctrl+Shift+L",
+			"category": "gameplay"
+		}
+	}
+}

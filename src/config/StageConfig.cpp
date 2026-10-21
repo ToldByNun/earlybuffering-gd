@@ -1,0 +1,286 @@
+#include "StageConfig.hpp"
+
+#include <Geode/Geode.hpp>
+#include <Geode/loader/SettingV3.hpp>
+#include <algorithm>
+#include <array>
+#include <string>
+
+using namespace geode::prelude;
+
+namespace frire {
+
+namespace {
+
+constexpr char const* PRESET_NAMES[] = { "Tight", "Normal", "Wide", "Max", "Off" };
+
+struct PresetDef {
+    bool enabled;
+    int ticksAll;
+    int ticksWave;
+    int slack;
+    int cap;
+};
+
+constexpr PresetDef PRESETS[] = {
+    { true,  2,  2, 2, 0 }, // Tight
+    { true,  4,  4, 2, 0 }, // Normal
+    { true,  8,  8, 2, 0 }, // Wide
+    { true, 16,  8, 2, 0 }, // Max
+    { false, 0,  0, 2, 0 }, // Off
+};
+
+struct ModeIds {
+    char const* enable;
+    char const* overwrite;
+    char const* ticks;
+    char const* cap;
+    char const* slack;
+    char const* name;
+};
+
+constexpr ModeIds MODE_IDS[] = {
+    { "cube-enable",   "cube-overwrite",   "cube-ticks",   "cube-cap",   "cube-slack",   "cube"   },
+    { "ship-enable",   "ship-overwrite",   "ship-ticks",   "ship-cap",   "ship-slack",   "ship"   },
+    { "ball-enable",   "ball-overwrite",   "ball-ticks",   "ball-cap",   "ball-slack",   "ball"   },
+    { "ufo-enable",    "ufo-overwrite",    "ufo-ticks",    "ufo-cap",    "ufo-slack",    "ufo"    },
+    { "wave-enable",   "wave-overwrite",   "wave-ticks",   "wave-cap",   "wave-slack",   "wave"   },
+    { "robot-enable",  "robot-overwrite",  "robot-ticks",  "robot-cap",  "robot-slack",  "robot"  },
+    { "spider-enable", "spider-overwrite", "spider-ticks", "spider-cap", "spider-slack", "spider" },
+    { "swing-enable",  "swing-overwrite",  "swing-ticks",  "swing-cap",  "swing-slack",  "swing"  },
+};
+
+StageInfo g_cachedStage{};
+std::array<ModeParams, StageConfig::MODE_COUNT> g_cachedModes{};
+bool g_cachedDebug = true;
+bool g_cachedSafeMode = false;
+bool g_cachedShowOverlay = true;
+bool g_cachedAssistPress = true;
+bool g_cachedAssistRelease = true;
+bool g_cachedSwallow = false;
+bool g_cachedAutoTune = true;
+int g_cachedSimBudgetUs = 1500;
+int g_cachedSlack = 2;
+int g_cachedLookAhead = 0;
+bool g_cacheInitialized = false;
+bool g_applying = false;
+std::string g_lastSyncedPreset;
+
+int clampInt(int v, int lo, int hi) {
+    return std::max(lo, std::min(hi, v));
+}
+
+int readInt(Mod* mod, char const* id, int fallback) {
+    try {
+        return static_cast<int>(mod->getSettingValue<int64_t>(id));
+    }
+    catch (...) {
+        return fallback;
+    }
+}
+
+bool readBool(Mod* mod, char const* id, bool fallback) {
+    try {
+        return mod->getSettingValue<bool>(id);
+    }
+    catch (...) {
+        return fallback;
+    }
+}
+
+}
+
+char const* StageConfig::presetName(int index) {
+    if (index < 0 || index >= STAGE_COUNT) return "Off";
+    return PRESET_NAMES[index];
+}
+
+int StageConfig::presetIndexByName(std::string const& name) {
+    for (int i = 0; i < STAGE_COUNT; ++i) {
+        if (name == PRESET_NAMES[i]) return i;
+    }
+    return 0;
+}
+
+void StageConfig::refreshCache() {
+    auto* mod = Mod::get();
+    g_cachedStage.index = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("stage-index")), 0, STAGE_COUNT - 1);
+    g_cachedStage.enabled = mod->getSettingValue<bool>("enabled");
+    g_cachedStage.ticksAll = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-all")), 0, 32);
+    g_cachedStage.ticksWave = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-wave")), 0, 32);
+
+    g_cachedDebug = mod->getSettingValue<bool>("debug-logging");
+    g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
+    g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
+    g_cachedAssistPress = readBool(mod, "assist-press", true);
+    g_cachedAssistRelease = readBool(mod, "assist-release", true);
+    g_cachedSwallow = readBool(mod, "swallow-hopeless", false);
+    g_cachedAutoTune = readBool(mod, "auto-tune", true);
+    g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
+    g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
+    g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
+
+    for (int i = 0; i < MODE_COUNT; ++i) {
+        auto const& ids = MODE_IDS[i];
+        ModeParams p;
+        p.enabled = readBool(mod, ids.enable, true);
+        p.overwrite = readBool(mod, ids.overwrite, false);
+        int const fallbackTicks = (i == static_cast<int>(GameModeKind::Wave))
+            ? g_cachedStage.ticksWave
+            : g_cachedStage.ticksAll;
+        if (p.overwrite) {
+            p.ticks = clampInt(readInt(mod, ids.ticks, fallbackTicks), 0, 32);
+            p.cap = clampInt(readInt(mod, ids.cap, 0), 0, 240);
+            int slack = readInt(mod, ids.slack, -1);
+            p.slack = slack < 0 ? g_cachedSlack : clampInt(slack, 0, 16);
+        }
+        else {
+            p.ticks = fallbackTicks;
+            p.cap = g_cachedLookAhead;
+            p.slack = g_cachedSlack;
+        }
+        g_cachedModes[static_cast<size_t>(i)] = p;
+    }
+
+    if (g_lastSyncedPreset.empty()) {
+        try {
+            g_lastSyncedPreset = mod->getSettingValue<std::string>("preset");
+        }
+        catch (...) {
+            g_lastSyncedPreset = PRESET_NAMES[g_cachedStage.index];
+        }
+    }
+
+    g_cacheInitialized = true;
+}
+
+void ensureCache() {
+    if (!g_cacheInitialized) StageConfig::refreshCache();
+}
+
+void StageConfig::notePresetSynced(std::string const& name) {
+    g_lastSyncedPreset = name;
+}
+
+std::string StageConfig::lastSyncedPreset() {
+    ensureCache();
+    return g_lastSyncedPreset;
+}
+
+StageInfo StageConfig::preset(int index) {
+    index = clampInt(index, 0, STAGE_COUNT - 1);
+    auto const& def = PRESETS[index];
+    StageInfo info;
+    info.index = index;
+    info.enabled = def.enabled;
+    info.ticksAll = def.ticksAll;
+    info.ticksWave = def.ticksWave;
+    return info;
+}
+
+void StageConfig::applyPreset(int index) {
+    index = clampInt(index, 0, STAGE_COUNT - 1);
+    auto const info = preset(index);
+    auto const& def = PRESETS[index];
+
+    g_applying = true;
+    g_cachedStage = info;
+    g_cachedSlack = def.slack;
+    g_cachedLookAhead = def.cap;
+    g_cacheInitialized = true;
+
+    auto* mod = Mod::get();
+    mod->setSettingValue<int64_t>("stage-index", info.index);
+    mod->setSettingValue<std::string>("preset", std::string(PRESET_NAMES[index]));
+    mod->setSettingValue<bool>("enabled", info.enabled);
+    mod->setSettingValue<int64_t>("ticks-all", info.ticksAll);
+    mod->setSettingValue<int64_t>("ticks-wave", info.ticksWave);
+    mod->setSettingValue<int64_t>("death-slack", def.slack);
+    mod->setSettingValue<int64_t>("look-ahead-cap", def.cap);
+    g_lastSyncedPreset = PRESET_NAMES[index];
+    g_applying = false;
+
+    refreshCache();
+}
+
+void StageConfig::applyPresetByName(std::string const& name) {
+    applyPreset(presetIndexByName(name));
+}
+
+StageInfo StageConfig::cycleNext() {
+    ensureCache();
+    int next = g_cachedStage.index + 1;
+    if (next >= STAGE_COUNT) next = 0;
+    applyPreset(next);
+    return g_cachedStage;
+}
+
+void StageConfig::toggleDebugLogging() {
+    ensureCache();
+    g_cachedDebug = !g_cachedDebug;
+    Mod::get()->setSettingValue<bool>("debug-logging", g_cachedDebug);
+}
+
+void StageConfig::toggleAutoTune() {
+    ensureCache();
+    g_cachedAutoTune = !g_cachedAutoTune;
+    Mod::get()->setSettingValue<bool>("auto-tune", g_cachedAutoTune);
+}
+
+bool StageConfig::isApplying() { return g_applying; }
+
+StageInfo StageConfig::fromSettings() {
+    ensureCache();
+    return g_cachedStage;
+}
+
+bool StageConfig::isEnabled() { ensureCache(); return g_cachedStage.enabled; }
+bool StageConfig::debugLogging() { ensureCache(); return g_cachedDebug; }
+bool StageConfig::safeMode() { ensureCache(); return g_cachedSafeMode; }
+bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
+bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
+bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
+bool StageConfig::swallowHopeless() { ensureCache(); return g_cachedSwallow; }
+bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
+int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
+int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
+int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
+int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
+int StageConfig::lookAheadCap() { ensureCache(); return g_cachedLookAhead; }
+int StageConfig::stageIndex() { ensureCache(); return g_cachedStage.index; }
+
+GameModeKind StageConfig::kindOf(PlayerObject* player) {
+    if (!player) return GameModeKind::Cube;
+    if (player->m_isDart) return GameModeKind::Wave;
+    if (player->m_isShip) return GameModeKind::Ship;
+    if (player->m_isBall) return GameModeKind::Ball;
+    if (player->m_isBird) return GameModeKind::Ufo;
+    if (player->m_isRobot) return GameModeKind::Robot;
+    if (player->m_isSpider) return GameModeKind::Spider;
+    if (player->m_isSwing) return GameModeKind::Swing;
+    return GameModeKind::Cube;
+}
+
+char const* StageConfig::kindName(GameModeKind kind) {
+    int const i = static_cast<int>(kind);
+    if (i < 0 || i >= MODE_COUNT) return "cube";
+    return MODE_IDS[i].name;
+}
+
+ModeParams StageConfig::paramsFor(GameModeKind kind) {
+    ensureCache();
+    int const i = static_cast<int>(kind);
+    if (i < 0 || i >= MODE_COUNT) return g_cachedModes[0];
+    return g_cachedModes[static_cast<size_t>(i)];
+}
+
+ModeParams StageConfig::paramsFor(PlayerObject* player) {
+    return paramsFor(kindOf(player));
+}
+
+std::string StageConfig::stageLabel(StageInfo const& info) {
+    if (!info.enabled || info.index >= STAGE_COUNT - 1) return "OFF";
+    return fmt::format("{} ({}A/{}W)", presetName(info.index), info.ticksAll, info.ticksWave);
+}
+
+}
