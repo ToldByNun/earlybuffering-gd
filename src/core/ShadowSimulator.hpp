@@ -1,5 +1,8 @@
 #pragma once
 
+#include "ReplayImport.hpp"
+#include "../config/StageConfig.hpp"
+
 #include <Geode/Geode.hpp>
 #include <vector>
 #include <cstdint>
@@ -100,6 +103,24 @@ public:
         int maxTicks,
         bool shiftActionBy = false,
         int actionShift = 0
+    );
+
+    // Bake helper: run absolute-frame ReplayEvents from a snapshot.
+    // Fills xAtFrame / modeAtFrame if sampleFrame >= 0 and that frame is reached.
+    struct BakeRunResult {
+        bool died = false;
+        int deathFrame = -1;
+        float xAtSample = 0.f;
+        GameModeKind modeAtSample = GameModeKind::Cube;
+        bool sampled = false;
+    };
+    BakeRunResult runBakeTimeline(
+        PlayLayer* layer,
+        int snapshotSlot,
+        std::vector<ReplayEvent> const& events,
+        float dt,
+        int untilFrame,
+        int sampleFrame = -1
     );
 
     struct Model {

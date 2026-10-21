@@ -59,7 +59,9 @@ bool g_cachedAssistPress = true;
 bool g_cachedAssistRelease = true;
 bool g_cachedSwallow = false;
 bool g_cachedAutoTune = true;
+AssistMode g_cachedAssistMode = AssistMode::Hybrid;
 int g_cachedSimBudgetUs = 1500;
+int g_cachedBakeRadius = 0;
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
 bool g_cacheInitialized = false;
@@ -117,8 +119,18 @@ void StageConfig::refreshCache() {
     g_cachedSwallow = readBool(mod, "swallow-hopeless", false);
     g_cachedAutoTune = readBool(mod, "auto-tune", true);
     g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
+    g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 64);
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
+    try {
+        auto modeStr = mod->getSettingValue<std::string>("assist-mode");
+        if (modeStr == "Live") g_cachedAssistMode = AssistMode::Live;
+        else if (modeStr == "Replay") g_cachedAssistMode = AssistMode::Replay;
+        else g_cachedAssistMode = AssistMode::Hybrid;
+    }
+    catch (...) {
+        g_cachedAssistMode = AssistMode::Hybrid;
+    }
 
     for (int i = 0; i < MODE_COUNT; ++i) {
         auto const& ids = MODE_IDS[i];
@@ -227,6 +239,27 @@ void StageConfig::toggleAutoTune() {
     Mod::get()->setSettingValue<bool>("auto-tune", g_cachedAutoTune);
 }
 
+char const* StageConfig::assistModeName(AssistMode mode) {
+    switch (mode) {
+        case AssistMode::Live: return "Live";
+        case AssistMode::Replay: return "Replay";
+        case AssistMode::Hybrid: return "Hybrid";
+    }
+    return "Hybrid";
+}
+
+void StageConfig::setAssistMode(AssistMode mode) {
+    ensureCache();
+    g_cachedAssistMode = mode;
+    Mod::get()->setSettingValue<std::string>("assist-mode", std::string(assistModeName(mode)));
+}
+
+void StageConfig::cycleAssistMode() {
+    ensureCache();
+    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 3;
+    setAssistMode(static_cast<AssistMode>(next));
+}
+
 bool StageConfig::isApplying() { return g_applying; }
 
 StageInfo StageConfig::fromSettings() {
@@ -242,7 +275,9 @@ bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
 bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
 bool StageConfig::swallowHopeless() { ensureCache(); return g_cachedSwallow; }
 bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
+AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode; }
 int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
+int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }
 int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
 int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }

@@ -792,4 +792,61 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
     return out;
 }
 
+ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
+    PlayLayer* layer,
+    int slot,
+    std::vector<ReplayEvent> const& events,
+    float dt,
+    int untilFrame,
+    int sampleFrame
+) {
+    BakeRunResult out;
+    auto* snap = this->snapshotSlot(slot);
+    if (!layer || !snap || !m_shadow || dt <= 0.f || untilFrame < 0) return out;
+
+    copyPlayerState(m_shadow, snap);
+    m_dead = false;
+    m_jumped = false;
+    m_unknown = false;
+    m_deathObject = nullptr;
+
+    auto* s = m_shadow;
+    size_t nextEv = 0;
+
+    auto applyEv = [&](ReplayEvent const& ev) {
+        auto btn = PlayerButton::Jump;
+        if (ev.button == 2) btn = PlayerButton::Left;
+        else if (ev.button == 3) btn = PlayerButton::Right;
+        if (ev.down) s->pushButton(btn);
+        else s->releaseButton(btn);
+    };
+
+    m_simulating = true;
+    beginCapture(layer);
+
+    for (int frame = 0; frame <= untilFrame; ++frame) {
+        while (nextEv < events.size() && events[nextEv].frame == frame) {
+            applyEv(events[nextEv]);
+            ++nextEv;
+        }
+
+        if (sampleFrame >= 0 && frame == sampleFrame) {
+            out.xAtSample = s->getPositionX();
+            out.modeAtSample = StageConfig::kindOf(s);
+            out.sampled = true;
+        }
+
+        stepPhysics(layer, s, dt, dt);
+        if (m_dead || m_unknown) {
+            out.died = true;
+            out.deathFrame = frame;
+            break;
+        }
+    }
+
+    restoreCapture(layer);
+    m_simulating = false;
+    return out;
+}
+
 }

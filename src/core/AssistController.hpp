@@ -54,6 +54,10 @@ public:
 
     void resetLevelProfile();
 
+    // Bake map: capture at attempt start; run offline bake from pause UI.
+    int startSnapshotSlot() const { return m_startSnapshotSlot; }
+    geode::Result<int> runBakeMap(PlayLayer* layer);
+
     bool isInjecting() const;
     BufferedInput const& buffer() const;
     int attemptTick() const;
@@ -73,6 +77,12 @@ private:
     void syncButtonState(PlayLayer* playLayer);
     bool planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt);
     bool planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt);
+    // Returns true if bake handled the input (caller should return that bool).
+    // Sets handled=false if bake has no window and Hybrid should fall through to live.
+    bool tryBakeAssist(
+        PlayLayer* playLayer, PlayerObject* player, bool player1,
+        bool down, int effectTick, bool& handled
+    );
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player);
     void flushPendingRelease(PlayLayer* playLayer);
     bool userHolding(bool player1) const { return m_userHolding[player1 ? 0 : 1]; }
@@ -106,6 +116,9 @@ private:
     int m_pendingReleaseTick = 0;
     float m_lastPlayerX = 0.f;
     GameModeKind m_lastMode = GameModeKind::Cube;
+    int m_startSnapshotSlot = -1;
+    bool m_startSnapshotTaken = false;
+    std::string m_lastBakeHint;
     std::string m_overlayText = "frirecracker: OFF";
 };
 

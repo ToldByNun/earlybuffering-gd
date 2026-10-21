@@ -1,5 +1,6 @@
 #include "config/StageConfig.hpp"
 #include "core/AssistController.hpp"
+#include "core/BakeMap.hpp"
 #include "debug/AssistLog.hpp"
 #include "ui/StatusOverlay.hpp"
 
@@ -52,6 +53,15 @@ $on_mod(Loaded) {
         AssistController::get().updateOverlay();
     });
 
+    listenForKeybindSettingPresses("hotkey-assist-mode", [](Keybind const&, bool down, bool repeat, double) {
+        if (!down || repeat) return;
+        StageConfig::cycleAssistMode();
+        AssistLog::info(fmt::format(
+            "ASSIST MODE: {}", StageConfig::assistModeName(StageConfig::assistMode())
+        ));
+        AssistController::get().updateOverlay();
+    });
+
     // Preset dropdown: only fill defaults when the user actually picks a *different* preset.
     listenForSettingChanges<std::string>("preset", [](std::string value) {
         if (StageConfig::isApplying()) return;
@@ -93,8 +103,13 @@ $on_mod(Loaded) {
     watchBool("swallow-hopeless");
     watchBool("auto-tune");
     watchInt("sim-budget-us");
+    watchInt("bake-radius");
     watchBool("assist-press");
     watchBool("assist-release");
+
+    listenForSettingChanges<std::string>("assist-mode", [](std::string) {
+        onAnySetting();
+    });
 
     char const* boolIds[] = {
         "cube-enable", "cube-overwrite",

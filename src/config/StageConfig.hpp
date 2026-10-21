@@ -19,6 +19,12 @@ enum class GameModeKind {
     Count
 };
 
+enum class AssistMode {
+    Live = 0,
+    Replay,
+    Hybrid
+};
+
 struct StageInfo {
     int index = 0;       // 0..4 (4 = OFF)
     bool enabled = true;
@@ -54,6 +60,8 @@ public:
     static void toggleDebugLogging();
     // Toggle smart / per-level learning (bias, trust, capMul). Window ticks unchanged.
     static void toggleAutoTune();
+    static void cycleAssistMode();
+    static void setAssistMode(AssistMode mode);
 
     static bool isApplying();
     // Remember the last preset we applied so load-time listener spam can't wipe custom ticks.
@@ -68,7 +76,10 @@ public:
     static bool assistRelease();
     static bool swallowHopeless();
     static bool autoTune();
+    static AssistMode assistMode();
+    static char const* assistModeName(AssistMode mode);
     static int simBudgetUs();
+    static int bakeRadius();
     static int ticksAll();
     static int ticksWave();
     static int deathSlack();

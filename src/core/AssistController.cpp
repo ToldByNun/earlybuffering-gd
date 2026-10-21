@@ -1,4 +1,5 @@
 #include "AssistController.hpp"
+#include "BakeMap.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
@@ -64,6 +65,9 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
     m_modeKnown = false;
+    m_startSnapshotTaken = false;
+    m_startSnapshotSlot = -1;
+    m_lastBakeHint.clear();
     m_log.clear();
     syncButtonState(playLayer);
     updateOverlay();
@@ -76,16 +80,33 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     StatusOverlay::attach(playLayer);
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
+        BakeMap::get().loadForLevel(playLayer->m_level);
     }
     updateOverlay();
 }
 
 void AssistController::onLevelQuit() {
     LevelProfile::get().save();
+    BakeMap::get().save();
     ShadowSimulator::get().detach();
     StatusOverlay::detach();
     LevelProfile::get().clear();
     resetAttempt();
+}
+
+geode::Result<int> AssistController::runBakeMap(PlayLayer* layer) {
+    if (!layer) return geode::Err("No layer");
+    if (!m_startSnapshotTaken || m_startSnapshotSlot < 0) {
+        // Capture current player as start if near the beginning of an attempt.
+        if (layer->m_player1 && m_attemptTick <= 5) {
+            m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(layer->m_player1);
+            m_startSnapshotTaken = m_startSnapshotSlot >= 0;
+        }
+    }
+    if (!m_startSnapshotTaken) {
+        return geode::Err("Reset the level once (start snapshot), then Bake Map");
+    }
+    return BakeMap::get().bake(layer, m_startSnapshotSlot, StageConfig::bakeRadius());
 }
 
 void AssistController::resetLevelProfile() {
@@ -136,27 +157,25 @@ void AssistController::updateOverlay() {
         int left = 0;
         if (m_buffer.state == BufferState::Buffered) left = m_buffer.fireTick - m_attemptTick;
 
+        auto const* modeName = StageConfig::assistModeName(StageConfig::assistMode());
+        std::string learnBit;
         if (StageConfig::autoTune()) {
             auto spot = LevelProfile::get().overlaySpot(m_lastMode, m_lastPlayerX);
-            int const biasI = roundBias(spot.bias);
-            m_overlayText = fmt::format(
-                "frirecracker: {} | {} left={} | learn bias{:+d} trust {:.1f} n={}",
-                StageConfig::stageLabel(stage),
-                state,
-                left,
-                biasI,
-                spot.trust,
-                spot.n
-            );
+            learnBit = fmt::format("learn bias{:+d} t{:.1f}", roundBias(spot.bias), spot.trust);
         }
         else {
-            m_overlayText = fmt::format(
-                "frirecracker: {} | {} left={} | learn OFF",
-                StageConfig::stageLabel(stage),
-                state,
-                left
-            );
+            learnBit = "learn OFF";
         }
+        std::string bakeBit = m_lastBakeHint.empty() ? BakeMap::get().statusLine() : m_lastBakeHint;
+        m_overlayText = fmt::format(
+            "frirecracker: {} | {} | {} left={} | {} | {}",
+            StageConfig::stageLabel(stage),
+            modeName,
+            state,
+            left,
+            learnBit,
+            bakeBit
+        );
     }
     StatusOverlay::update(m_overlayText);
 }
@@ -381,6 +400,11 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     if (p1) {
         m_lastPlayerX = p1->getPositionX();
         m_lastMode = StageConfig::kindOf(p1);
+        // Capture attempt-start physics for Bake Map (once per attempt).
+        if (!m_startSnapshotTaken && m_attemptTick <= 2) {
+            m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(p1);
+            m_startSnapshotTaken = m_startSnapshotSlot >= 0;
+        }
 
         bool const modeChanged = m_modeKnown && (
             m_modeShip != p1->m_isShip ||
@@ -433,9 +457,99 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     updateOverlay();
 }
 
+bool AssistController::tryBakeAssist(
+    PlayLayer* playLayer, PlayerObject* player, bool player1,
+    bool down, int effectTick, bool& handled
+) {
+    handled = false;
+    auto mode = StageConfig::assistMode();
+    if (mode == AssistMode::Live) return true;
+
+    auto const& bake = BakeMap::get();
+    if (!bake.loaded() || bake.data().clicks.empty()) {
+        if (mode == AssistMode::Replay) {
+            handled = true;
+            m_lastBakeHint = "bake missing";
+            return true; // pass through — nothing to assist with
+        }
+        return true; // Hybrid → live
+    }
+
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
+    int approxFrame = static_cast<int>(std::lround(m_attemptTick * (tps * m_simDt)));
+    auto const* win = bake.findNear(player->getPositionX(), approxFrame, down, !player1);
+    if (!win) {
+        if (mode == AssistMode::Replay) {
+            handled = true;
+            m_lastBakeHint = "no window";
+            return true;
+        }
+        return true; // Hybrid live fallback
+    }
+
+    handled = true;
+    m_lastBakeHint = fmt::format("bake [{},{}]", win->earliest, win->latest);
+
+    // Map bake frames onto attempt ticks using bake TPS vs current sim dt.
+    auto frameToTick = [&](int frame) -> int {
+        if (m_simDt <= 0.f) return effectTick + (frame - win->nominalFrame);
+        double ticksPerBakeFrame = 1.0 / (tps * m_simDt);
+        int delta = static_cast<int>(std::lround((frame - win->nominalFrame) * ticksPerBakeFrame));
+        return effectTick + delta;
+    };
+
+    int earliestTick = frameToTick(win->earliest);
+    int latestTick = frameToTick(win->latest);
+    if (latestTick < earliestTick) std::swap(latestTick, earliestTick);
+
+    // Already inside the safe window → do it now.
+    if (effectTick >= earliestTick && effectTick <= latestTick) {
+        AssistLog::debug(fmt::format(
+            "bake: in window [{},{}] → pass", win->earliest, win->latest
+        ));
+        return true;
+    }
+    // Too late
+    if (effectTick > latestTick) {
+        AssistLog::debug("bake: past latest → pass");
+        if (mode == AssistMode::Hybrid) {
+            handled = false; // try live
+            return true;
+        }
+        return true;
+    }
+
+    // Too early → buffer until earliest
+    int delay = earliestTick - effectTick;
+    int const limit = activeLimit(player);
+    if (limit > 0) delay = std::min(delay, limit);
+    if (delay <= 0) return true;
+
+    m_buffer = {};
+    m_buffer.state = BufferState::Buffered;
+    m_buffer.down = down;
+    m_buffer.player1 = player1;
+    m_buffer.pressTick = effectTick;
+    m_buffer.fireTick = effectTick + delay;
+    m_buffer.limit = std::max(limit, delay);
+    m_buffer.expectedJumpTick = m_buffer.fireTick;
+    m_buffer.decisionX = player->getPositionX();
+    m_buffer.mode = StageConfig::kindOf(player);
+    AssistLog::debug(fmt::format(
+        "bake ASSIST {} +{} ticks (window [{},{}])",
+        down ? "press" : "release", delay, win->earliest, win->latest
+    ));
+    updateOverlay();
+    return false;
+}
+
 bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt) {
     int const limit = activeLimit(player);
     if (limit <= 0) return true;
+
+    bool bakeHandled = false;
+    bool const bakeRet = tryBakeAssist(playLayer, player, player1, true, effectTick, bakeHandled);
+    if (bakeHandled) return bakeRet;
 
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
@@ -511,6 +625,10 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
 bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt) {
     int const limit = activeLimit(player);
     if (limit <= 0) return true;
+
+    bool bakeHandled = false;
+    bool const bakeRet = tryBakeAssist(playLayer, player, player1, false, effectTick, bakeHandled);
+    if (bakeHandled) return bakeRet;
 
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();

@@ -112,6 +112,21 @@
 			"description": "Learn bias / trust / look-ahead per level and spot as you play. The window (ticks) is never changed. Profiles save under the mod's save folder.",
 			"default": true
 		},
+		"assist-mode": {
+			"type": "string",
+			"name": "Assist Mode",
+			"description": "Live = trajectory each click. Replay = only Bake Map windows. Hybrid = Bake when available, else Live.",
+			"one-of": ["Live", "Replay", "Hybrid"],
+			"default": "Hybrid"
+		},
+		"bake-radius": {
+			"type": "int",
+			"name": "Bake Radius",
+			"description": "Max frames to shift each replay click when baking. 0 = auto (max of ticks-all and 8).",
+			"default": 0,
+			"min": 0,
+			"max": 64
+		},
 		"sim-budget-us": {
 			"type": "int",
 			"name": "Sim Budget (µs)",
@@ -478,6 +493,13 @@
 			"name": "Toggle Smart Learning",
 			"description": "Toggle Auto-Tune / smart learning (bias, trust, look-ahead per spot). Does not change the tick window.",
 			"default": "Ctrl+Shift+L",
+			"category": "gameplay"
+		},
+		"hotkey-assist-mode": {
+			"type": "keybind",
+			"name": "Cycle Assist Mode",
+			"description": "Cycle Live → Replay → Hybrid.",
+			"default": "Ctrl+Shift+M",
 			"category": "gameplay"
 		}
 	}

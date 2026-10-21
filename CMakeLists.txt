@@ -21,4 +21,18 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
+# GDR / GDR2 replay format (header-only)
+set(LIBGDR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+CPMAddPackage("gh:maxnut/GDReplayFormat#d8d2f0b1193a46cdf47b413dc832616dd052b6a9")
+target_link_libraries(${PROJECT_NAME} libGDR)
+if (WIN32)
+    target_link_libraries(${PROJECT_NAME} comdlg32)
+endif()
+
+# MSVC batch-compiles TUs and can ICE on some Geode/arc headers; one TU per cl.exe.
+if (MSVC)
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_UseMultiToolTask false)
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_CL_MPCount 1)
+endif()
+
 setup_geode_mod(${PROJECT_NAME})
