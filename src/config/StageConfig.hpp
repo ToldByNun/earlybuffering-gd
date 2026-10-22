@@ -84,6 +84,8 @@ public:
     static char const* assistModeHint(AssistMode mode);
     static int simBudgetUs();
     static int bakeRadius();
+    static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
+    static int minClickIntervalMs(); // 0 = off; swallow presses closer than this
     static int ticksAll();
     static int ticksWave();
     static int deathSlack();

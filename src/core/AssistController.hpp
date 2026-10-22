@@ -5,6 +5,8 @@
 #include "../config/StageConfig.hpp"
 
 #include <Geode/Geode.hpp>
+#include <chrono>
+#include <deque>
 #include <string>
 
 namespace frire {
@@ -65,6 +67,8 @@ public:
     int attemptTick() const;
     float lastDt() const;
     double estimatedTps() const;
+    int currentCps() const;
+    bool cpsLimited() const;
 
     void updateOverlay();
     std::string overlayText() const;
@@ -88,6 +92,8 @@ private:
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player);
     void flushPendingRelease(PlayLayer* playLayer);
     bool userHolding(bool player1) const { return m_userHolding[player1 ? 0 : 1]; }
+    void noteUserClick();
+    void pruneClickTimes();
 
     void recordDecision(
         PlayLayer* playLayer, PlayerObject* player, bool down,
@@ -122,6 +128,8 @@ private:
     bool m_startSnapshotTaken = false;
     std::string m_lastBakeHint;
     std::string m_overlayText = "frirecracker: OFF";
+    std::deque<std::chrono::steady_clock::time_point> m_clickTimes;
+    bool m_cpsLocked = false;
 };
 
 }

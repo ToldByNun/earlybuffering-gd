@@ -63,6 +63,8 @@ bool g_cachedAutoTune = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
+int g_cachedCpsLimit = 0;
+int g_cachedMinClickIntervalMs = 0;
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
 bool g_cacheInitialized = false;
@@ -122,6 +124,8 @@ void StageConfig::refreshCache() {
     g_cachedAutoTune = readBool(mod, "auto-tune", true);
     g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
     g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 128);
+    g_cachedCpsLimit = clampInt(readInt(mod, "cps-limit", 0), 0, 40);
+    g_cachedMinClickIntervalMs = clampInt(readInt(mod, "min-click-interval-ms", 0), 0, 500);
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
     try {
@@ -299,6 +303,8 @@ bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
 AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode; }
 int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
 int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }
+int StageConfig::cpsLimit() { ensureCache(); return g_cachedCpsLimit; }
+int StageConfig::minClickIntervalMs() { ensureCache(); return g_cachedMinClickIntervalMs; }
 int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
 int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }

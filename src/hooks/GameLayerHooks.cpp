@@ -93,6 +93,33 @@ class $modify(FrireGJBaseGameLayer, GJBaseGameLayer) {
         return GJBaseGameLayer::spawnParticle(plist, zOrder, positionType, position);
     }
 
+    cocos2d::CCParticleSystemQuad* createParticle(
+        int objectType, char const* plistName, int tag, cocos2d::tCCPositionType positionType
+    ) {
+        if (simulating()) return nullptr;
+        return GJBaseGameLayer::createParticle(objectType, plistName, tag, positionType);
+    }
+
+    cocos2d::CCParticleSystemQuad* claimParticle(gd::string key, int zLayer) {
+        if (simulating()) return nullptr;
+        return GJBaseGameLayer::claimParticle(key, zLayer);
+    }
+
+    cocos2d::CCParticleSystemQuad* createCustomParticle(
+        gd::string const& key, cocos2d::ParticleStruct const& particleStruct, int minimum, bool dontAdd
+    ) {
+        if (simulating()) return nullptr;
+        return GJBaseGameLayer::createCustomParticle(key, particleStruct, minimum, dontAdd);
+    }
+
+    cocos2d::CCParticleSystemQuad* claimCustomParticle(
+        gd::string const& key, cocos2d::ParticleStruct const& particleStruct,
+        int zLayer, int zOrder, int uiObject, bool dontAdd
+    ) {
+        if (simulating()) return nullptr;
+        return GJBaseGameLayer::claimCustomParticle(key, particleStruct, zLayer, zOrder, uiObject, dontAdd);
+    }
+
     void spawnParticleTrigger(int particleID, cocos2d::CCPoint position, float rotation, float scale) {
         if (simulating()) return;
         GJBaseGameLayer::spawnParticleTrigger(particleID, position, rotation, scale);
@@ -275,8 +302,10 @@ class $modify(FrirePlayerObjectLate, PlayerObject) {
 class $modify(FrireEnhancedGameObject, EnhancedGameObject) {
     void activatedByPlayer(PlayerObject* player) {
         if (simulating()) {
-            // Save pre-touch state, then mark used for THIS run (restored after).
+            // Save pre-touch state for restore. Rings: physics via applyRingJump only —
+            // calling the original here re-triggers orb VFX/particles on the real object.
             ShadowSimulator::get().noteActivated(this);
+            if (typeinfo_cast<RingObject*>(this)) return;
             EnhancedGameObject::activatedByPlayer(player);
             return;
         }
@@ -286,7 +315,8 @@ class $modify(FrireEnhancedGameObject, EnhancedGameObject) {
     void powerOnObject(int state) {
         if (simulating()) {
             ShadowSimulator::get().noteActivated(this);
-            // Still apply power state for the run; visuals/particles stay blocked.
+            // Rings: skip — applyRingJump owns orb claim. Pads/other: physics only.
+            if (typeinfo_cast<RingObject*>(this)) return;
             EnhancedGameObject::powerOnObject(state);
             return;
         }

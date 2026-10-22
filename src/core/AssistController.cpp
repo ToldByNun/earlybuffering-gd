@@ -70,6 +70,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_startSnapshotSlot = -1;
     m_lastBakeHint.clear();
     m_log.clear();
+    m_clickTimes.clear();
+    m_cpsLocked = false;
     syncButtonState(playLayer);
     updateOverlay();
 }
@@ -110,6 +112,8 @@ void AssistController::onLevelQuit() {
     m_startSnapshotSlot = -1;
     m_lastBakeHint.clear();
     m_log.clear();
+    m_clickTimes.clear();
+    m_cpsLocked = false;
     m_userHolding[0] = m_userHolding[1] = false;
 }
 
@@ -164,7 +168,47 @@ int AssistController::activeLimit(PlayerObject* player) const {
 bool AssistController::shouldAssistPlayer(PlayerObject* player) const {
     if (!StageConfig::isEnabled()) return false;
     if (!player || player->m_isDead) return false;
+    if (cpsLimited()) return false;
     return StageConfig::paramsFor(player).enabled;
+}
+
+void AssistController::pruneClickTimes() {
+    auto const now = std::chrono::steady_clock::now();
+    while (!m_clickTimes.empty()
+        && now - m_clickTimes.front() > std::chrono::seconds(1)) {
+        m_clickTimes.pop_front();
+    }
+}
+
+void AssistController::noteUserClick() {
+    m_clickTimes.push_back(std::chrono::steady_clock::now());
+    pruneClickTimes();
+    int const lim = StageConfig::cpsLimit();
+    if (lim > 0 && static_cast<int>(m_clickTimes.size()) >= lim) {
+        if (!m_cpsLocked) {
+            m_cpsLocked = true;
+            AssistLog::info(fmt::format(
+                "CPS: limit hit ({} >= {}) — assist paused",
+                m_clickTimes.size(), lim
+            ));
+        }
+    }
+}
+
+int AssistController::currentCps() const {
+    auto const now = std::chrono::steady_clock::now();
+    int n = 0;
+    for (auto const& t : m_clickTimes) {
+        if (now - t <= std::chrono::seconds(1)) ++n;
+    }
+    return n;
+}
+
+bool AssistController::cpsLimited() const {
+    int const lim = StageConfig::cpsLimit();
+    if (lim <= 0) return false;
+    // Use cached lock flag + live count so we unlock as soon as CPS drops.
+    return currentCps() >= lim;
 }
 
 void AssistController::updateOverlay() {
@@ -200,29 +244,25 @@ void AssistController::updateOverlay() {
         }
         std::string bakeBit = m_lastBakeHint.empty() ? BakeMap::get().statusLine() : m_lastBakeHint;
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
-        if (!trajBit.empty()) {
-            m_overlayText = fmt::format(
-                "frire {} | mode {} | {} left={} | {} | {} | {}",
-                StageConfig::stageLabel(stage),
-                modeName,
-                state,
-                left,
-                learnBit,
-                bakeBit,
-                trajBit
-            );
+        int const cpsLim = StageConfig::cpsLimit();
+        std::string cpsBit;
+        if (cpsLim > 0) {
+            int const cps = currentCps();
+            cpsBit = cpsLimited()
+                ? fmt::format("CPS LOCK {}/{}", cps, cpsLim)
+                : fmt::format("cps {}/{}", cps, cpsLim);
         }
-        else {
-            m_overlayText = fmt::format(
-                "frire {} | mode {} | {} left={} | {} | {}",
-                StageConfig::stageLabel(stage),
-                modeName,
-                state,
-                left,
-                learnBit,
-                bakeBit
-            );
-        }
+        m_overlayText = fmt::format(
+            "frire {} | mode {} | {} left={} | {} | {}",
+            StageConfig::stageLabel(stage),
+            modeName,
+            state,
+            left,
+            learnBit,
+            bakeBit
+        );
+        if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
+        if (!trajBit.empty()) m_overlayText += " | " + trajBit;
     }
     StatusOverlay::update(m_overlayText);
 }
@@ -481,6 +521,20 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     }
 
     TrajectoryVisualizer::get().onPhysicsTick(playLayer, dt);
+
+    // CPS limiter: unlock when rate drops; flush any held buffer so clicks aren't eaten.
+    pruneClickTimes();
+    int const cpsLim = StageConfig::cpsLimit();
+    if (cpsLim > 0) {
+        bool const limited = currentCps() >= cpsLim;
+        if (m_cpsLocked && !limited) {
+            m_cpsLocked = false;
+            AssistLog::info(fmt::format("CPS: unlocked (now {}/{})", currentCps(), cpsLim));
+        }
+        if (limited && m_buffer.state == BufferState::Buffered && p1) {
+            fireBuffered(playLayer, p1);
+        }
+    }
 
     if (m_buffer.state == BufferState::Idle) {
         updateOverlay();
@@ -753,6 +807,23 @@ bool AssistController::onHandleButton(
 
     auto* player = player1 ? playLayer->m_player1 : playLayer->m_player2;
     if (!player) return true;
+
+    // Debounce double-clicks, then count for CPS (before assist may swallow).
+    if (down) {
+        int const minMs = StageConfig::minClickIntervalMs();
+        if (minMs > 0 && !m_clickTimes.empty()) {
+            auto const elapsed = std::chrono::steady_clock::now() - m_clickTimes.back();
+            if (elapsed < std::chrono::milliseconds(minMs)) {
+                AssistLog::debug(fmt::format(
+                    "click debounce: swallowed ({}ms < {}ms)",
+                    std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(),
+                    minMs
+                ));
+                return false;
+            }
+        }
+        noteUserClick();
+    }
 
     m_userHolding[player1 ? 0 : 1] = down;
 

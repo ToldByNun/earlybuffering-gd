@@ -135,6 +135,8 @@ $on_mod(Loaded) {
     watchBool("auto-tune");
     watchInt("sim-budget-us");
     watchInt("bake-radius");
+    watchInt("cps-limit");
+    watchInt("min-click-interval-ms");
     watchBool("assist-press");
     watchBool("assist-release");
 

@@ -88,10 +88,29 @@ void ShadowSimulator::hideGhost(PlayerObject* p) {
     if (!p) return;
     p->setVisible(false);
     p->setOpacity(0);
+    p->m_playEffects = false;
     if (p->m_waveTrail) {
         p->m_waveTrail->setVisible(false);
         p->m_waveTrail->setOpacity(0);
     }
+    // Shadow particle emitters must not paint the real level during sim.
+    auto mute = [](cocos2d::CCParticleSystemQuad* q) {
+        if (!q) return;
+        q->setVisible(false);
+        q->stopSystem();
+        q->setEmissionRate(0.f);
+    };
+    mute(p->m_playerGroundParticles);
+    mute(p->m_trailingParticles);
+    mute(p->m_shipClickParticles);
+    mute(p->m_vehicleGroundParticles);
+    mute(p->m_ufoClickParticles);
+    mute(p->m_robotBurstParticles);
+    mute(p->m_dashParticles);
+    mute(p->m_swingBurstParticles1);
+    mute(p->m_swingBurstParticles2);
+    mute(p->m_landParticles0);
+    mute(p->m_landParticles1);
 }
 
 void ShadowSimulator::noteActivated(GameObject* gobj) {

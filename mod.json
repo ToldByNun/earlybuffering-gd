@@ -133,6 +133,22 @@
 			"min": 0,
 			"max": 128
 		},
+		"cps-limit": {
+			"type": "int",
+			"name": "CPS Limit",
+			"description": "Pause assist while your click rate is at or above this (clicks per second, 1s window). 0 = off. Assist turns back on when CPS drops below the limit.",
+			"default": 0,
+			"min": 0,
+			"max": 40
+		},
+		"min-click-interval-ms": {
+			"type": "int",
+			"name": "Min Click Interval (ms)",
+			"description": "Ignore a jump press if the previous one was less than this many milliseconds ago. Blocks accidental double-clicks. 0 = off. Try 30–80ms.",
+			"default": 0,
+			"min": 0,
+			"max": 500
+		},
 		"sim-budget-us": {
 			"type": "int",
 			"name": "Sim Budget (µs)",
