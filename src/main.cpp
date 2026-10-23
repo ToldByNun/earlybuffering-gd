@@ -1,6 +1,7 @@
 #include "config/StageConfig.hpp"
 #include "core/AssistController.hpp"
 #include "core/BakeMap.hpp"
+#include "core/ShadowSimulator.hpp"
 #include "debug/AssistLog.hpp"
 #include "ui/StatusOverlay.hpp"
 #include "ui/TrajectoryVisualizer.hpp"
@@ -25,6 +26,13 @@ $on_mod(Loaded) {
     // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
     StageConfig::refreshCache();
     AssistLog::printBanner();
+
+    {
+        std::string report;
+        bool const ok = ShadowSimulator::regressionSelfCheck(report);
+        if (ok) AssistLog::info(report);
+        else AssistLog::info(fmt::format("WARN {}", report));
+    }
 
     listenForKeybindSettingPresses("hotkey-cycle", [](Keybind const&, bool down, bool repeat, double) {
         if (!down || repeat) return;
@@ -141,8 +149,15 @@ $on_mod(Loaded) {
     watchBool("assist-orbs");
     watchBool("assist-press");
     watchBool("assist-release");
+    watchInt("tick-budget");
+    watchInt("smart-depth");
+    watchInt("smart-combos");
+    watchInt("smart-horizon");
 
     listenForSettingChanges<std::string>("assist-mode", [](std::string) {
+        onAnySetting();
+    });
+    listenForSettingChanges<std::string>("assist-verify", [](std::string) {
         onAnySetting();
     });
 

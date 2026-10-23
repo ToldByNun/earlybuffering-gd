@@ -4,8 +4,9 @@
 #include "../config/StageConfig.hpp"
 
 #include <Geode/Geode.hpp>
-#include <vector>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace frire {
 
@@ -17,11 +18,24 @@ enum class PlanAction {
 struct PlanOptions {
     float capMul = 1.f;
     int maxBranches = 4;
-    int budgetUs = 1500; // 0 = no budget
-    // Live/Hybrid smart multi-jump (1 = single-click plan only)
+    int budgetUs = 1500; // soft cap; tick budget is primary
+    int tickBudget = 4000; // physics ticks per plan() call
     int smartDepth = 1;
     int smartCombos = 48;
     int smartHorizon = 0; // 0 = auto from model cap
+    int attemptStartTick = 0; // absolute attempt tick at plan time (for abs death ticks)
+};
+
+struct ThreatZone {
+    float startX = 0.f;
+    float endX = 0.f;
+    bool valid = false;
+};
+
+struct ActWindow {
+    int dMin = -1;
+    int dMax = -1;
+    bool valid() const { return dMin >= 0 && dMax >= dMin; }
 };
 
 struct SimPlan {
@@ -35,12 +49,21 @@ struct SimPlan {
     GameObject* firstDeathObject = nullptr;
     int baselineDeathTick = -1;
     GameObject* baselineDeathObject = nullptr;
+    float baselineDeathX = 0.f;
     bool unknown = false;
     bool budgetHit = false;
     bool activatedRing = false;
     bool usedOrbWindow = false;
+    bool threatCleared = false;
+    bool orbUseful = false;
+    bool requireOrb = false;
+    bool requireHold = false;
+    int dMin = -1;
+    int dMax = -1;
+    int planId = 0;
     int smartDepthUsed = 1;
     int smartCombosUsed = 0;
+    ThreatZone threatZone{};
 };
 
 struct InputEvent {
@@ -48,21 +71,18 @@ struct InputEvent {
     bool down = false;
 };
 
-// On a press or release: for each offset 0..limit, run the real trajectory.
-// Until that offset the button stays as it is now (not yet pressed / still held).
-// At that offset the input happens, then movement, then hitboxes.
-// Follow-up branches (release after k) can still rescue a continuous death.
-// The first offset that does not die wins. Offset 0 → Pass (do it now).
-// A later offset → Delay (block the original input, inject it there).
-// If every offset dies → Pass. Never blocks a click that cannot be saved.
+// Lexicographic planner: threat-zone clear, orb activation windows, ±k robustness.
+// Never blocks a hopeless click (Pass).
 class ShadowSimulator {
 public:
     static constexpr int SNAPSHOT_SLOTS = 16;
+    static constexpr float kClusterGapX = 50.f;
+    static constexpr int kWindowMarginK = 1;
+    static constexpr int kDefaultTickBudget = 4000;
 
     static ShadowSimulator& get();
 
     void attach(PlayLayer* layer);
-    // layerDying: PlayLayer is quitting — don't removeFromParent (tree is being destroyed).
     void detach(bool layerDying = false);
 
     bool isSimulating() const { return m_simulating; }
@@ -77,19 +97,13 @@ public:
     void noteActivated(GameObject* obj);
     void noteUnknown() { m_unknown = true; }
 
-    // Apply orb physics to the shadow and mark the orb used for THIS run only
-    // (restored afterward). Prevents the same orb from re-firing every tick.
-    // Requires Jump held — matches real GD (no claim while waiting to press).
     void applyRingJump(PlayerObject* shadow, RingObject* ring);
     bool isApplyingRing() const { return m_applyingRing; }
-    // Orb-window scan: record overlap without claiming / boosting.
     bool isOrbScanning() const { return m_orbScanning; }
     void noteOrbOverlap();
 
-    // Copy all physics-relevant state from src onto dst (shadow or snapshot slot).
     static void copyPlayerState(PlayerObject* dst, PlayerObject* src);
 
-    // Capture real player into a ring-buffer snapshot slot. Returns slot index.
     int captureSnapshot(PlayerObject* real);
     PlayerObject* snapshotSlot(int slot) const;
 
@@ -98,19 +112,23 @@ public:
         float dt, float firstDt, PlanOptions const& options = {}
     );
 
-    // Multi-jump search for Live/Hybrid. Only the first action delay is returned
-    // (later clicks validate that the delay leads to a realistic continuation).
     SimPlan planSequence(
         PlayLayer* layer, PlayerObject* real, bool down, int limit,
         float dt, float firstDt, PlanOptions const& options = {}
     );
 
-    // Replay from a snapshot with an absolute-tick input timeline.
-    // Returns death tick relative to startTick, or -1 if survived.
-    // deathObject out-param optional.
+    // Build hazard cluster around a death X / object (public for tests/logging).
+    static ThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
+
+    // Ahead-X / jump-reach orb hint (used by bake heuristic + planner).
+    static bool spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit, float dt);
+
+    // Headless regression checks (threat bins / zone clear math). Returns false on fail.
+    static bool regressionSelfCheck(std::string& report);
+
     struct ReplayResult {
         bool died = false;
-        int deathTick = -1; // relative to startTick
+        int deathTick = -1;
         GameObject* deathObject = nullptr;
         bool unknown = false;
         bool activatedRing = false;
@@ -128,8 +146,6 @@ public:
         int actionShift = 0
     );
 
-    // Bake helper: run absolute-frame ReplayEvents from a snapshot.
-    // Fills xAtFrame / modeAtFrame if sampleFrame >= 0 and that frame is reached.
     struct BakeRunResult {
         bool died = false;
         int deathFrame = -1;
@@ -146,7 +162,6 @@ public:
         int sampleFrame = -1
     );
 
-    // Record shadow positions each frame (for debug trajectory viz).
     struct PathSample {
         std::vector<cocos2d::CCPoint> points;
         int deathFrame = -1;
@@ -168,29 +183,33 @@ public:
     };
     static Model modelFor(PlayerObject* p, int limit, float capMul = 1.f);
 
-    // Ticks (relative) where the shadow overlaps a ring without the new press.
     struct OrbWindow {
         bool found = false;
         int first = -1;
         int last = -1;
     };
 
-private:
     struct RunResult {
         bool died = false;
         bool diedBeforeAction = false;
         bool jumped = false;
         bool unknown = false;
         bool activatedRing = false;
+        bool unknownTrunc = false;
+        bool zoneCleared = false;
+        bool wasDashing = false;
         int ringCount = 0;
         int jumpTick = -1;
         int deathTick = -1;
         int unknownTick = -1;
         int ticksRan = 0;
+        int ticksBeforeNeutral = 0;
         float endX = 0.f;
+        float deathX = 0.f;
         GameObject* deathObject = nullptr;
     };
 
+private:
     struct SavedObject {
         EnhancedGameObject* obj = nullptr;
         bool activated = false;
@@ -200,39 +219,36 @@ private:
         int state = 0;
         bool claimTouch = false;
         bool isRing = false;
-        bool isActivated = false;   // GameObject::m_isActivated
-        bool egoVisible = true;     // EnhancedGameObject::m_visible
+        bool isActivated = false;
+        bool egoVisible = true;
         GLubyte opacity = 255;
         bool nodeVisible = true;
     };
 
     static void hideGhost(PlayerObject* p);
 
-    // releaseAfter < 0 → hold until end (or tap-release for cube).
-    // releaseAfter >= 0 → release that many ticks after the action.
     RunResult runOne(
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
-        float dt, float firstDt, Model const& model, int releaseAfter
+        float dt, float firstDt, Model const& model, int releaseAfter,
+        ThreatZone const* zone, int* tickBudgetLeft
     );
-    // Baseline: never apply the new input.
     RunResult runBaseline(
         PlayLayer* layer, PlayerObject* real, bool down,
-        float dt, float firstDt, Model const& model
+        float dt, float firstDt, Model const& model, int* tickBudgetLeft
     );
 
-    // Fly without the new press; record ticks overlapping a ring hitbox.
     OrbWindow scanOrbWindow(
         PlayLayer* layer, PlayerObject* real, bool down,
-        int scanTicks, float dt, float firstDt
+        int scanTicks, float dt, float firstDt, int* tickBudgetLeft
     );
+
+    static bool isHazardLike(GameObject* obj);
 
     void beginCapture(PlayLayer* layer);
     void restoreCapture(PlayLayer* layer);
     void copyWaveTrail(PlayerObject* dst, PlayerObject* src);
     static void clearCollisionLogs(PlayerObject* s);
-    // Hitboxes at the current position (before this tick's input/move).
     void stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt);
-    // Move, then hitboxes at the new position.
     void stepPhysics(PlayLayer* layer, PlayerObject* s, float stepDt, float dt);
 
     PlayerObject* m_shadow = nullptr;

@@ -33,6 +33,13 @@ struct BufferedInput {
     int rechecks = 0;
     float decisionX = 0.f;
     GameModeKind mode = GameModeKind::Cube;
+    bool requireOrb = false;
+    bool requireHold = false;
+    int dMin = -1;
+    int dMax = -1;
+    int planId = 0;
+    bool awaitingOutcome = false;
+    int outcomeUntilTick = 0;
 };
 
 class AssistController {
@@ -94,6 +101,9 @@ private:
     bool userHolding(bool player1) const { return m_userHolding[player1 ? 0 : 1]; }
     void noteUserClick();
     void pruneClickTimes();
+    void beginOutcome(SimPlan const& plan, int effectTick);
+    void pollOutcome(PlayLayer* playLayer);
+    void logPlan(SimPlan const& plan, char const* kind);
 
     void recordDecision(
         PlayLayer* playLayer, PlayerObject* player, bool down,
@@ -121,6 +131,7 @@ private:
     bool m_modeKnown = false;
     bool m_pendingRelease = false;
     bool m_pendingReleaseP1 = true;
+    bool m_pendingReleaseHold = false;
     int m_pendingReleaseTick = 0;
     float m_lastPlayerX = 0.f;
     GameModeKind m_lastMode = GameModeKind::Cube;
@@ -130,6 +141,12 @@ private:
     std::string m_overlayText = "frirecracker: OFF";
     std::deque<std::chrono::steady_clock::time_point> m_clickTimes;
     bool m_cpsLocked = false;
+    int m_outcomePlanId = 0;
+    bool m_outcomePending = false;
+    int m_outcomeUntil = 0;
+    bool m_outcomePlayer1 = true;
+    bool m_outcomeExpectOrb = false;
+    float m_outcomeStartX = 0.f;
 };
 
 }

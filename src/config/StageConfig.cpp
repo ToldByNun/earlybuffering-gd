@@ -70,6 +70,8 @@ int g_cachedMinClickIntervalMs = 0;
 int g_cachedSmartDepth = 1;
 int g_cachedSmartCombos = 48;
 int g_cachedSmartHorizon = 0;
+std::string g_cachedAssistVerify = "off";
+int g_cachedTickBudget = 4000;
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
 bool g_cacheInitialized = false;
@@ -136,6 +138,14 @@ void StageConfig::refreshCache() {
     g_cachedSmartDepth = clampInt(readInt(mod, "smart-depth", 1), 1, 3);
     g_cachedSmartCombos = clampInt(readInt(mod, "smart-combos", 48), 8, 256);
     g_cachedSmartHorizon = clampInt(readInt(mod, "smart-horizon", 0), 0, 320);
+    g_cachedTickBudget = clampInt(readInt(mod, "tick-budget", 4000), 500, 20000);
+    try {
+        g_cachedAssistVerify = mod->getSettingValue<std::string>("assist-verify");
+        if (g_cachedAssistVerify != "ab") g_cachedAssistVerify = "off";
+    }
+    catch (...) {
+        g_cachedAssistVerify = "off";
+    }
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
     try {
@@ -320,6 +330,15 @@ int StageConfig::minClickIntervalMs() { ensureCache(); return g_cachedMinClickIn
 int StageConfig::smartDepth() { ensureCache(); return g_cachedSmartDepth; }
 int StageConfig::smartCombos() { ensureCache(); return g_cachedSmartCombos; }
 int StageConfig::smartHorizon() { ensureCache(); return g_cachedSmartHorizon; }
+char const* StageConfig::assistVerifyMode() {
+    ensureCache();
+    return g_cachedAssistVerify.c_str();
+}
+bool StageConfig::assistVerifyAb() {
+    ensureCache();
+    return g_cachedAssistVerify == "ab";
+}
+int StageConfig::tickBudgetPerPress() { ensureCache(); return g_cachedTickBudget; }
 int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
 int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }

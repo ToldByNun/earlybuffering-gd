@@ -136,12 +136,20 @@ class $modify(FrireGJBaseGameLayer, GJBaseGameLayer) {
             return;
         }
         // Only physics-relevant objects: solids, hazards, slopes, pads, orbs,
-        // gravity + size portals (player-local). Mode/speed/teleport/dual portals,
-        // triggers, breakables and collectibles have global side effects → skipped.
+        // gravity + size portals, speed portals (by object ID — no GameObjectType).
+        // Mode/teleport/dual portals → unknown truncate; triggers skipped.
+        auto isSpeedPortalId = [](int id) {
+            // 200 slow, 201 normal, 202 fast, 203 faster, 1334 fastest
+            return id == 200 || id == 201 || id == 202 || id == 203 || id == 1334;
+        };
         gd::vector<GameObject*> extra;
         extra.reserve(objectsCount);
         for (int i = 0; i < objectsCount; i++) {
             GameObject* obj = vec->at(i);
+            if (isSpeedPortalId(obj->m_objectID)) {
+                extra.push_back(obj);
+                continue;
+            }
             switch (obj->m_objectType) {
                 case GameObjectType::Solid:
                 case GameObjectType::Hazard:

@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 using namespace geode::prelude;
@@ -515,9 +517,103 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
     return m;
 }
 
+bool ShadowSimulator::isHazardLike(GameObject* obj) {
+    if (!obj) return false;
+    switch (obj->m_objectType) {
+        case GameObjectType::Hazard:
+        case GameObjectType::AnimatedHazard:
+            return true;
+        default:
+            return false;
+    }
+}
+
+ThreatZone ShadowSimulator::buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj) {
+    ThreatZone z;
+    z.valid = true;
+    z.startX = deathX - 20.f;
+    z.endX = deathX + 20.f;
+    if (deathObj) {
+        float const x = deathObj->getPositionX();
+        float half = deathObj->getContentSize().width * std::fabs(deathObj->getScaleX()) * 0.5f;
+        if (half < 12.f) half = 12.f;
+        z.startX = std::min(z.startX, x - half);
+        z.endX = std::max(z.endX, x + half);
+    }
+    if (!layer || !layer->m_objectLayer) return z;
+
+    auto* children = layer->m_objectLayer->getChildren();
+    if (!children) return z;
+
+    bool grew = true;
+    int guard = 0;
+    while (grew && guard++ < 32) {
+        grew = false;
+        for (unsigned i = 0; i < children->count(); ++i) {
+            auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+            if (!isHazardLike(obj)) continue;
+            float const x = obj->getPositionX();
+            float half = obj->getContentSize().width * std::fabs(obj->getScaleX()) * 0.5f;
+            if (half < 10.f) half = 10.f;
+            float const oLo = x - half;
+            float const oHi = x + half;
+            if (oHi + kClusterGapX < z.startX || oLo - kClusterGapX > z.endX) continue;
+            if (oLo < z.startX) {
+                z.startX = oLo;
+                grew = true;
+            }
+            if (oHi > z.endX) {
+                z.endX = oHi;
+                grew = true;
+            }
+        }
+    }
+    return z;
+}
+
+bool ShadowSimulator::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit, float dt) {
+    if (!layer || !real || !layer->m_objectLayer || dt <= 0.f) return false;
+    float const aheadX = std::clamp(static_cast<float>(limit + 8) * 5.5f, 60.f, 220.f);
+    float const px = real->getPositionX();
+    float const py = real->getPositionY();
+    float const yReach = real->m_isShip || real->m_isDart || real->m_isSwing ? 120.f : 90.f;
+
+    auto* children = layer->m_objectLayer->getChildren();
+    if (!children) return false;
+    for (unsigned i = 0; i < children->count(); ++i) {
+        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+        if (!obj) continue;
+        switch (obj->m_objectType) {
+            case GameObjectType::YellowJumpRing:
+            case GameObjectType::PinkJumpRing:
+            case GameObjectType::RedJumpRing:
+            case GameObjectType::GravityRing:
+            case GameObjectType::GreenRing:
+            case GameObjectType::DropRing:
+            case GameObjectType::DashRing:
+            case GameObjectType::GravityDashRing:
+            case GameObjectType::SpiderOrb:
+            case GameObjectType::CustomRing:
+                break;
+            default:
+                continue;
+        }
+        if (obj->m_isActivated || (typeinfo_cast<RingObject*>(obj) && static_cast<RingObject*>(obj)->m_claimTouch)) {
+            continue;
+        }
+        float const ox = obj->getPositionX();
+        float const oy = obj->getPositionY();
+        if (ox < px - 10.f || ox > px + aheadX) continue;
+        if (std::fabs(oy - py) > yReach) continue;
+        return true;
+    }
+    return false;
+}
+
 ShadowSimulator::RunResult ShadowSimulator::runOne(
     PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
-    float dt, float firstDt, Model const& model, int releaseAfter
+    float dt, float firstDt, Model const& model, int releaseAfter,
+    ThreatZone const* zone, int* tickBudgetLeft
 ) {
     RunResult r;
     (void)limit;
@@ -530,53 +626,60 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     m_deathObject = nullptr;
 
     auto* s = m_shadow;
-    // Press: stay released until `delay`. Release: stay held until `delay`.
     s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
 
     bool acted = false;
     bool tapReleased = false;
-    bool airborneSeen = false;
     int groundedStreak = 0;
+    int settledAfterClear = 0;
+    bool pastZone = false;
     int const maxTicks = delay + std::max(1, model.cap);
 
     auto finish = [&](RunResult out) {
         out.activatedRing = m_activatedRing;
         out.ringCount = m_ringCount;
         out.endX = s->getPositionX();
+        out.wasDashing = s->m_isDashing;
         out.ticksRan = std::max(out.ticksRan, out.deathTick >= 0 ? out.deathTick + 1 : 0);
+        if (out.ticksBeforeNeutral <= 0) out.ticksBeforeNeutral = out.ticksRan;
         return out;
     };
 
+    auto spend = [&]() -> bool {
+        if (!tickBudgetLeft) return false;
+        if (*tickBudgetLeft <= 0) return true;
+        --(*tickBudgetLeft);
+        return false;
+    };
+
     for (int t = 0; t < maxTicks; ++t) {
+        if (spend()) break;
         float const stepDt = (t == 0) ? firstDt : dt;
         r.ticksRan = t + 1;
         m_orbOverlapTick = false;
 
-        // Waiting ticks only: collide before moving so "hold without pressing"
-        // can die for real. NEVER do this on the action tick — that killed the
-        // jump before pushButton and made every plan Pass (no assist at all).
         if (t < delay) {
             stepPreCollide(layer, s, dt);
             if (m_dead) {
                 r.died = true;
                 r.deathTick = t;
+                r.deathX = s->getPositionX();
                 r.deathObject = m_deathObject;
                 r.diedBeforeAction = true;
                 return finish(r);
             }
             if (m_unknown) {
                 r.unknown = true;
+                r.unknownTrunc = true;
                 r.unknownTick = t;
                 return finish(r);
             }
         }
 
-        // Input (action tick) — must run before move+collide so a jump can save.
         if (!acted && t == delay) {
             acted = true;
             if (down) {
                 s->pushButton(PlayerButton::Jump);
-                // pushButton should set this; force it so orb collide this tick sees hold.
                 s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
             }
             else {
@@ -590,7 +693,6 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
                 s->releaseButton(PlayerButton::Jump);
             }
             else if (releaseAfter < 0 && model.tapRelease && !tapReleased && m_jumped) {
-                // Dash orbs / still overlapping / just activated: keep holding.
                 bool const touchingOrb = m_orbOverlapTick
                     || (s->m_touchingRings && s->m_touchingRings->count() > 0);
                 bool const dashing = s->m_isDashing;
@@ -602,17 +704,18 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             }
         }
 
-        // Move, then hitboxes at the new position (real GD / CBF order).
         stepPhysics(layer, s, stepDt, dt);
         if (m_dead) {
             r.died = true;
             r.deathTick = t;
+            r.deathX = s->getPositionX();
             r.deathObject = m_deathObject;
             r.diedBeforeAction = !acted;
             return finish(r);
         }
         if (m_unknown) {
             r.unknown = true;
+            r.unknownTrunc = true;
             r.unknownTick = t;
             return finish(r);
         }
@@ -621,16 +724,36 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             r.jumped = true;
             r.jumpTick = t;
         }
+        if (s->m_isDashing) r.wasDashing = true;
 
-        if (down && !model.continuous && r.jumped) {
-            bool const grounded = s->m_isOnGround || s->m_isOnGround2;
-            if (!grounded) {
-                airborneSeen = true;
-                groundedStreak = 0;
+        // G2: after threat zone + settled → neutral (stop extending survive score)
+        if (zone && zone->valid && !pastZone) {
+            if (s->getPositionX() > zone->endX) {
+                bool settled = false;
+                if (model.continuous) {
+                    settledAfterClear++;
+                    settled = settledAfterClear >= 8;
+                }
+                else {
+                    bool const grounded = s->m_isOnGround || s->m_isOnGround2;
+                    if (grounded) ++groundedStreak;
+                    else groundedStreak = 0;
+                    settled = groundedStreak >= 2;
+                }
+                if (settled) {
+                    pastZone = true;
+                    r.zoneCleared = true;
+                    r.ticksBeforeNeutral = t + 1;
+                    // Keep simulating briefly for orb/path info but mark neutral
+                }
             }
-            else if (airborneSeen && ++groundedStreak >= 8) {
-                return finish(r);
+            else {
+                settledAfterClear = 0;
             }
+        }
+
+        if (pastZone && t + 1 - r.ticksBeforeNeutral > 24) {
+            return finish(r);
         }
     }
     return finish(r);
@@ -638,9 +761,8 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
 
 ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     PlayLayer* layer, PlayerObject* real, bool down,
-    float dt, float firstDt, Model const& model
+    float dt, float firstDt, Model const& model, int* tickBudgetLeft
 ) {
-    // Never apply the new input — keep the opposite of what the user just did.
     RunResult r;
     copyPlayerState(m_shadow, real);
     m_dead = false;
@@ -655,6 +777,10 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
 
     int const maxTicks = std::max(1, model.cap);
     for (int t = 0; t < maxTicks; ++t) {
+        if (tickBudgetLeft) {
+            if (*tickBudgetLeft <= 0) break;
+            --(*tickBudgetLeft);
+        }
         float const stepDt = (t == 0) ? firstDt : dt;
         stepPhysics(layer, s, stepDt, dt);
         r.ticksRan = t + 1;
@@ -662,11 +788,13 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
         if (m_dead) {
             r.died = true;
             r.deathTick = t;
+            r.deathX = s->getPositionX();
             r.deathObject = m_deathObject;
             return r;
         }
         if (m_unknown) {
             r.unknown = true;
+            r.unknownTrunc = true;
             r.unknownTick = t;
             return r;
         }
@@ -676,7 +804,7 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
 
 ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
     PlayLayer* layer, PlayerObject* real, bool down,
-    int scanTicks, float dt, float firstDt
+    int scanTicks, float dt, float firstDt, int* tickBudgetLeft
 ) {
     OrbWindow win;
     if (!layer || !real || !m_shadow || scanTicks <= 0) return win;
@@ -691,11 +819,14 @@ ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
     m_deathObject = nullptr;
 
     auto* s = m_shadow;
-    // Don't apply the new press — fly as-is; scan mode records overlaps without claim.
     s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
 
     m_orbScanning = true;
     for (int t = 0; t < scanTicks; ++t) {
+        if (tickBudgetLeft) {
+            if (*tickBudgetLeft <= 0) break;
+            --(*tickBudgetLeft);
+        }
         float const stepDt = (t == 0) ? firstDt : dt;
         m_orbOverlapTick = false;
 
@@ -730,37 +861,45 @@ ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
 
 namespace {
 
-struct PlanCandidate {
+struct Cand {
     int delay = 0;
-    bool ok = false;
+    bool viable = false;
+    bool diedBeforeAction = false;
+    bool clearsThreat = false;
+    bool unknownTrunc = false;
     bool activatedRing = false;
-    int ringCount = 0;
+    bool orbUseful = false;
+    bool requireHold = false;
+    int surviveBin = 0;
     int surviveTicks = 0;
     float endX = 0.f;
+    float deathX = 0.f;
     int jumpTick = 0;
-    bool unknown = false;
+    ShadowSimulator::RunResult raw{};
 };
 
-int candidateScore(PlanCandidate const& c, ShadowSimulator::OrbWindow const& orb, bool anyRingHit) {
-    // Higher is better. Prefer: orb hit → in orb window → longer survival → farther x → earlier delay.
-    int score = 0;
-    if (!c.ok) return -1000000;
-    if (c.activatedRing) score += 80000;
-    score += c.ringCount * 3000;
-    if (orb.found) {
-        bool const inWin = c.delay >= orb.first && c.delay <= orb.last;
-        bool const nearWin = c.delay >= std::max(0, orb.first - 1) && c.delay <= orb.last + 1;
-        if (inWin) score += 20000;
-        else if (nearWin) score += 5000;
-        // Penalize pressing before the contact window without ever hitting the orb
-        if (!c.activatedRing && c.delay < orb.first) score -= 25000;
+int surviveBinOf(int ticks) {
+    if (ticks < 24) return 0;
+    if (ticks < 48) return 1;
+    if (ticks < 96) return 2;
+    return 3;
+}
+
+bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const& zone) {
+    if (!zone.valid) {
+        if (r.unknownTrunc) return true;
+        return !r.died;
     }
-    // Jump-into-orb: scan may miss the window; still prefer any ring-activating delay
-    if (anyRingHit && !c.activatedRing) score -= 40000;
-    score += c.surviveTicks * 8;
-    score += static_cast<int>(c.endX * 0.25f);
-    score -= c.delay; // stable: earlier among equals
-    return score;
+    if (!r.died) return r.endX > zone.endX || r.zoneCleared;
+    return r.deathX > zone.endX;
+}
+
+bool betterCand(Cand const& a, Cand const& b) {
+    if (a.viable != b.viable) return a.viable && !b.viable;
+    if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
+    if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
+    if (a.endX != b.endX) return a.endX > b.endX;
+    return a.delay < b.delay;
 }
 
 }
@@ -769,210 +908,373 @@ SimPlan ShadowSimulator::plan(
     PlayLayer* layer, PlayerObject* real, bool down, int limit,
     float dt, float firstDt, PlanOptions const& options
 ) {
+    static int s_planId = 1;
     SimPlan plan;
     plan.smartDepthUsed = 1;
+    plan.planId = s_planId++;
     if (!layer || !real || !m_shadow || limit < 0 || dt <= 0.f) return plan;
     if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
 
     Model model = modelFor(real, limit, options.capMul);
     plan.continuous = model.continuous;
 
-    auto const t0 = std::chrono::steady_clock::now();
-    auto budgetExceeded = [&]() -> bool {
+    int tickBudget = options.tickBudget > 0 ? options.tickBudget : kDefaultTickBudget;
+    // A/B compare runs both arms' semantics over the same cand set; allow 2× ticks.
+    if (StageConfig::assistVerifyAb()) tickBudget *= 2;
+    auto const wall0 = std::chrono::steady_clock::now();
+    auto wallExceeded = [&]() -> bool {
         if (options.budgetUs <= 0) return false;
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - t0
+            std::chrono::steady_clock::now() - wall0
         ).count();
         return us >= options.budgetUs;
+    };
+
+    auto linkedDual = [&]() -> bool {
+        if (!layer || !layer->m_player2 || !real) return false;
+        if (!layer->m_gameState.m_isDualMode) return false;
+        // "0010" Flip2PlayerControls → split buffers; linked = shared jump for both.
+        if (auto* gm = GameManager::sharedState()) {
+            if (gm->getGameVariable("0010")) return false;
+        }
+        return real == layer->m_player1 || real == layer->m_player2;
     };
 
     m_simulating = true;
     beginCapture(layer);
 
-    // Baseline: what happens if we never do this input.
     {
-        auto base = runBaseline(layer, real, down, dt, firstDt, model);
+        auto base = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
         restoreCapture(layer);
         beginCapture(layer);
         if (base.died) {
             plan.baselineDeathTick = base.deathTick;
             plan.baselineDeathObject = base.deathObject;
+            plan.baselineDeathX = base.deathX;
         }
     }
 
-    // Orb contact window along the no-press path (presses near orbs only).
-    OrbWindow orbWin;
-    bool const orbAssist = StageConfig::assistOrbs();
-    if (down && orbAssist) {
-        int const scanTicks = std::max(limit + model.slack + 4, limit + 1);
-        orbWin = scanOrbWindow(layer, real, down, scanTicks, dt, firstDt);
+    bool const orbAssist = StageConfig::assistOrbs() && down;
+    OrbWindow orbHint{};
+    bool spatialHint = false;
+    if (orbAssist) {
+        int scanTicks = std::max(limit + model.slack + 4, limit + 1);
+        orbHint = scanOrbWindow(layer, real, down, scanTicks, dt, firstDt, &tickBudget);
         restoreCapture(layer);
         beginCapture(layer);
-        if (orbWin.found) {
-            plan.usedOrbWindow = true;
-            AssistLog::debug(fmt::format(
-                "plan: orb window [{},{}]", orbWin.first, orbWin.last
-            ));
-        }
+        if (orbHint.found) plan.usedOrbWindow = true;
+        spatialHint = spatialOrbHint(layer, real, limit, dt);
     }
 
-    int maxBranches = std::max(0, options.maxBranches);
-    int effectiveCap = model.cap;
+    ThreatZone zone{};
+    std::vector<Cand> cands(static_cast<size_t>(limit) + 1);
 
-    std::vector<PlanCandidate> cands;
-    cands.reserve(static_cast<size_t>(limit) + 1);
-    // With orb assist: always evaluate every delay — jump-into-orb cases miss the
-    // no-press contact scan, but activatedRing on a candidate still ranks correctly.
-    bool const rankAll = orbAssist && down;
-
-    for (int d = 0; d <= limit; ++d) {
-        if (budgetExceeded()) {
+    auto evalDelay = [&](int d, int releaseAfter) -> Cand {
+        Cand c;
+        c.delay = d;
+        if (tickBudget <= 0 || wallExceeded()) {
             plan.budgetHit = true;
-            if (maxBranches > 0) {
-                maxBranches = 0;
-                AssistLog::debug("plan: budget hit → cutting branches");
-            }
-            else if (effectiveCap > 24) {
-                effectiveCap = std::max(24, effectiveCap / 2);
-                model.cap = effectiveCap;
-                AssistLog::debug(fmt::format("plan: budget hit → cap={}", effectiveCap));
-            }
-            else {
-                AssistLog::debug("plan: budget hit → stop");
-                break;
-            }
+            return c;
         }
-
-        ++plan.candidatesTried;
-
-        auto r = runOne(layer, real, down, d, limit, dt, firstDt, model, -1);
+        auto r = runOne(
+            layer, real, down, d, limit, dt, firstDt, model, releaseAfter,
+            zone.valid ? &zone : nullptr, &tickBudget
+        );
         restoreCapture(layer);
         beginCapture(layer);
+        ++plan.candidatesTried;
+        c.raw = r;
+        c.diedBeforeAction = r.diedBeforeAction;
+        c.activatedRing = r.activatedRing;
+        c.unknownTrunc = r.unknownTrunc;
+        c.endX = r.endX;
+        c.deathX = r.deathX;
+        c.jumpTick = r.jumped ? r.jumpTick : d;
+        c.surviveTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
+        c.surviveBin = surviveBinOf(c.surviveTicks);
+        c.requireHold = false; // set only if tap fails and hold-branch wins
+        return c;
+    };
 
-        if (d == 0) {
-            plan.firstDeathTick = r.died ? r.deathTick : -1;
-            plan.firstDeathObject = r.deathObject;
+    auto finalizeViable = [&](Cand& c, int releaseAfter) {
+        c.clearsThreat = clearsThreatOf(c.raw, zone);
+        if (c.unknownTrunc) {
+            if (!zone.valid) c.viable = true;
+            else if (c.raw.died) c.viable = c.deathX > zone.endX;
+            else c.viable = c.raw.endX > zone.endX || c.clearsThreat;
         }
-
-        if (r.died && r.diedBeforeAction) break;
-
-        bool ok = !r.died;
-        if (r.unknown) {
-            ok = true;
-            plan.unknown = true;
+        else {
+            c.viable = c.clearsThreat && !c.diedBeforeAction;
         }
-
-        if (!ok && r.died && !r.diedBeforeAction && down
-            && (model.continuous || real->m_isRobot) && maxBranches > 0) {
-            int tried = 0;
-            for (int k : BRANCH_RELEASES) {
-                if (tried >= maxBranches) break;
-                if (budgetExceeded()) {
-                    plan.budgetHit = true;
-                    break;
-                }
-                ++tried;
-                auto br = runOne(layer, real, down, d, limit, dt, firstDt, model, k);
+        // Linked dual: other player's shadow must also clear the same zone.
+        if (c.viable && linkedDual()) {
+            PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
+            if (other && tickBudget > 0) {
+                auto r2 = runOne(
+                    layer, other, down, c.delay, limit, dt, firstDt, model, releaseAfter,
+                    zone.valid ? &zone : nullptr, &tickBudget
+                );
                 restoreCapture(layer);
                 beginCapture(layer);
-                if (!br.died || br.unknown) {
-                    ok = true;
-                    if (br.unknown) plan.unknown = true;
-                    r = br;
+                if (!clearsThreatOf(r2, zone) || r2.diedBeforeAction) {
+                    c.viable = false;
+                    c.clearsThreat = false;
+                }
+            }
+        }
+    };
+
+    {
+        auto c0 = evalDelay(0, -1);
+        plan.firstDeathTick = c0.raw.died ? c0.raw.deathTick : -1;
+        plan.firstDeathObject = c0.raw.deathObject;
+        if (c0.raw.died) {
+            zone = buildThreatZone(layer, c0.raw.deathX, c0.raw.deathObject);
+            plan.threatZone = zone;
+        }
+        finalizeViable(c0, -1);
+        cands[0] = c0;
+    }
+
+    std::vector<int> order;
+    order.reserve(static_cast<size_t>(limit) + 1);
+    order.push_back(0);
+    auto pushUnique = [&](int d) {
+        if (d < 0 || d > limit) return;
+        if (std::find(order.begin(), order.end(), d) == order.end()) order.push_back(d);
+    };
+    if (orbHint.found) {
+        for (int d = orbHint.first; d <= orbHint.last; ++d) pushUnique(d);
+        for (int d = std::max(0, orbHint.first - 2); d <= std::min(limit, orbHint.last + 2); ++d) {
+            pushUnique(d);
+        }
+    }
+    for (int d = 1; d <= limit; ++d) pushUnique(d);
+
+    for (int d : order) {
+        if (d == 0) continue;
+        if (tickBudget <= 0 || wallExceeded()) {
+            plan.budgetHit = true;
+            break;
+        }
+        auto c = evalDelay(d, -1);
+        if (c.diedBeforeAction) break;
+
+        if (c.raw.died && !c.diedBeforeAction && down
+            && (model.continuous || real->m_isRobot) && options.maxBranches > 0) {
+            int tried = 0;
+            for (int k : BRANCH_RELEASES) {
+                if (tried >= options.maxBranches) break;
+                if (tickBudget <= 0) break;
+                ++tried;
+                auto br = runOne(
+                    layer, real, down, d, limit, dt, firstDt, model, k,
+                    zone.valid ? &zone : nullptr, &tickBudget
+                );
+                restoreCapture(layer);
+                beginCapture(layer);
+                if (!br.died || br.unknownTrunc) {
+                    c.raw = br;
+                    c.activatedRing = br.activatedRing;
+                    c.unknownTrunc = br.unknownTrunc;
+                    c.endX = br.endX;
+                    c.deathX = br.deathX;
+                    c.surviveTicks = br.ticksBeforeNeutral > 0 ? br.ticksBeforeNeutral : br.ticksRan;
+                    c.surviveBin = surviveBinOf(c.surviveTicks);
                     break;
                 }
             }
         }
+        finalizeViable(c, -1);
+        cands[static_cast<size_t>(d)] = c;
+    }
 
-        PlanCandidate c;
-        c.delay = d;
-        c.ok = ok;
-        c.activatedRing = r.activatedRing;
-        c.ringCount = r.ringCount;
-        c.surviveTicks = r.died ? std::max(0, r.deathTick) : r.ticksRan;
-        c.endX = r.endX;
-        c.jumpTick = r.jumped ? r.jumpTick : d;
-        c.unknown = r.unknown;
-
-        if (!rankAll) {
-            // Classic: first surviving delay wins.
-            if (ok) {
-                plan.jumpTick = c.jumpTick;
-                plan.activatedRing = c.activatedRing;
-                if (d == 0) {
-                    plan.action = PlanAction::Pass;
-                    plan.nowIsSafe = true;
-                }
-                else {
-                    plan.action = PlanAction::Delay;
-                    plan.delay = d;
-                }
-                restoreCapture(layer);
-                m_simulating = false;
-                return plan;
-            }
-        }
-        else {
-            cands.push_back(c);
+    for (auto& c : cands) {
+        if (!c.raw.activatedRing || !c.raw.wasDashing) continue;
+        if (c.viable) continue;
+        if (tickBudget <= 0) break;
+        auto hold = runOne(
+            layer, real, down, c.delay, limit, dt, firstDt, model, 40,
+            zone.valid ? &zone : nullptr, &tickBudget
+        );
+        restoreCapture(layer);
+        beginCapture(layer);
+        Cand h = c;
+        h.raw = hold;
+        h.activatedRing = hold.activatedRing;
+        h.unknownTrunc = hold.unknownTrunc;
+        h.endX = hold.endX;
+        h.deathX = hold.deathX;
+        h.surviveTicks = hold.ticksBeforeNeutral > 0 ? hold.ticksBeforeNeutral : hold.ticksRan;
+        h.surviveBin = surviveBinOf(h.surviveTicks);
+        finalizeViable(h, 40);
+        if (h.viable && !c.viable) {
+            c = h;
+            c.requireHold = true;
         }
     }
 
-    if (rankAll && !cands.empty()) {
-        bool anyRing = false;
-        for (auto const& c : cands) {
-            if (c.activatedRing) {
-                anyRing = true;
-                break;
+    bool anyActivation = false;
+    for (auto const& c : cands) {
+        if (c.activatedRing) anyActivation = true;
+    }
+    bool orbIntent = orbAssist && (orbHint.found || spatialHint || anyActivation);
+
+    for (auto& c : cands) {
+        c.orbUseful = false;
+        if (!orbAssist || !c.activatedRing || !c.viable) continue;
+        if (!cands[0].clearsThreat) {
+            c.orbUseful = true;
+            continue;
+        }
+        if (cands[0].viable && !cands[0].activatedRing && (orbHint.found || spatialHint)) {
+            c.orbUseful = true;
+            continue;
+        }
+        if (cands[0].viable && !cands[0].activatedRing) {
+            c.orbUseful = false;
+            continue;
+        }
+        c.orbUseful = true;
+    }
+
+    auto pickRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
+        if (pool.empty()) return -1;
+        int const k = kWindowMarginK;
+        int best = -1;
+        Cand bestC{};
+        bool have = false;
+        for (int d : pool) {
+            if (d < 0 || d > limit) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable) continue;
+            if (needActivation && !c.activatedRing) continue;
+            bool ok = true;
+            for (int e = d - k; e <= d + k; ++e) {
+                if (e < 0 || e > limit) continue;
+                auto const& n = cands[static_cast<size_t>(e)];
+                if (!n.viable) {
+                    ok = false;
+                    break;
+                }
+                if (needActivation && !n.activatedRing) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
+            if (!have || betterCand(c, bestC)) {
+                best = d;
+                bestC = c;
+                have = true;
             }
         }
-        // If nothing hits a ring, fall back to earliest surviving delay (classic).
-        if (!anyRing && !orbWin.found) {
-            for (auto const& c : cands) {
-                if (!c.ok) continue;
-                plan.jumpTick = c.jumpTick;
-                plan.activatedRing = false;
-                if (c.delay == 0) {
-                    plan.action = PlanAction::Pass;
-                    plan.nowIsSafe = true;
+        if (!have) {
+            for (int d : pool) {
+                if (d < 0 || d > limit) continue;
+                auto const& c = cands[static_cast<size_t>(d)];
+                if (!c.viable) continue;
+                if (needActivation && !c.activatedRing) continue;
+                if (!have || betterCand(c, bestC)) {
+                    best = d;
+                    bestC = c;
+                    have = true;
                 }
-                else {
-                    plan.action = PlanAction::Delay;
-                    plan.delay = c.delay;
-                }
-                restoreCapture(layer);
-                m_simulating = false;
-                return plan;
             }
         }
+        return best;
+    };
+
+    int actMin = -1, actMax = -1;
+    for (int d = 0; d <= limit; ++d) {
+        auto const& c = cands[static_cast<size_t>(d)];
+        if (c.viable && c.activatedRing) {
+            if (actMin < 0) actMin = d;
+            actMax = d;
+        }
+    }
+    plan.dMin = actMin;
+    plan.dMax = actMax;
+
+    int chosen = -1;
+    bool doPass = false;
+    bool haveActViable = actMin >= 0;
+
+    if (orbIntent && haveActViable) {
+        std::vector<int> pool;
+        for (int d = actMin; d <= actMax; ++d) pool.push_back(d);
+        int const k = kWindowMarginK;
+        if (actMax - actMin >= 2 * k) {
+            std::vector<int> interior;
+            for (int d = actMin + k; d <= actMax - k; ++d) interior.push_back(d);
+            chosen = pickRobust(interior, true);
+        }
+        if (chosen < 0) chosen = pickRobust(pool, true);
+        if (chosen < 0) chosen = (actMin + actMax) / 2;
+        if (chosen >= 0) {
+            auto const& c = cands[static_cast<size_t>(chosen)];
+            plan.orbUseful = c.orbUseful;
+            plan.requireOrb = true;
+            plan.requireHold = c.requireHold;
+            plan.activatedRing = c.activatedRing;
+            plan.threatCleared = c.clearsThreat;
+        }
+    }
+    else if (cands[0].viable) {
+        doPass = true;
+        chosen = 0;
+        plan.threatCleared = true;
+        plan.nowIsSafe = true;
+    }
+    else {
+        std::vector<int> pool;
+        for (int d = 0; d <= limit; ++d) pool.push_back(d);
+        chosen = pickRobust(pool, false);
+        if (chosen >= 0) {
+            auto const& c = cands[static_cast<size_t>(chosen)];
+            plan.threatCleared = c.clearsThreat;
+            plan.activatedRing = c.activatedRing;
+            plan.requireHold = c.requireHold;
+            plan.orbUseful = c.orbUseful;
+        }
+    }
+
+    // G0 A/B: on disagreement with earliest-viable (legacy), fair coin + log arm.
+    if (StageConfig::assistVerifyAb()) {
+        int legacy = -1;
+        if (cands[0].viable) legacy = 0;
         else {
-            PlanCandidate const* best = nullptr;
-            int bestScore = -2000000;
-            for (auto const& c : cands) {
-                int const sc = candidateScore(c, orbWin, anyRing);
-                if (sc > bestScore) {
-                    bestScore = sc;
-                    best = &c;
+            for (int d = 1; d <= limit; ++d) {
+                if (cands[static_cast<size_t>(d)].viable) {
+                    legacy = d;
+                    break;
                 }
             }
-            if (best && best->ok) {
-                plan.jumpTick = best->jumpTick;
-                plan.activatedRing = best->activatedRing;
-                plan.unknown = plan.unknown || best->unknown;
-                if (best->delay == 0) {
-                    plan.action = PlanAction::Pass;
-                    plan.nowIsSafe = true;
+        }
+        int const neu = (doPass || chosen == 0) ? 0 : chosen;
+        if (legacy >= 0 && legacy != neu) {
+            bool const useLegacy = (std::rand() & 1) != 0;
+            AssistLog::debug(fmt::format(
+                "VERIFY id={} arm={} legacy={} new={} picked={}",
+                plan.planId, useLegacy ? "legacy" : "new", legacy, neu,
+                useLegacy ? legacy : neu
+            ));
+            if (useLegacy) {
+                chosen = legacy;
+                doPass = (legacy == 0);
+                plan.requireOrb = false;
+                plan.requireHold = false;
+                if (legacy > 0 && legacy <= limit) {
+                    auto const& c = cands[static_cast<size_t>(legacy)];
+                    plan.threatCleared = c.clearsThreat;
+                    plan.activatedRing = c.activatedRing;
+                    plan.requireHold = c.requireHold;
                 }
-                else {
-                    plan.action = PlanAction::Delay;
-                    plan.delay = best->delay;
-                }
+            }
+            else {
                 AssistLog::debug(fmt::format(
-                    "plan: orb-rank delay +{} ring={} anyRing={} score={}",
-                    best->delay, best->activatedRing, anyRing, bestScore
+                    "VERIFY id={} keeping new={}", plan.planId, neu
                 ));
-                restoreCapture(layer);
-                m_simulating = false;
-                return plan;
             }
         }
     }
@@ -980,10 +1282,36 @@ SimPlan ShadowSimulator::plan(
     restoreCapture(layer);
     m_simulating = false;
 
-    plan.action = PlanAction::Pass;
+    if (chosen < 0) {
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        AssistLog::debug(fmt::format(
+            "PLAN id={} Pass limit={} budgetHit={} orbIntent={}",
+            plan.planId, limit, plan.budgetHit, orbIntent
+        ));
+        return plan;
+    }
+
+    if (doPass || chosen == 0) {
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        plan.nowIsSafe = cands[0].viable;
+        plan.jumpTick = cands[0].jumpTick;
+        plan.activatedRing = cands[0].activatedRing;
+    }
+    else {
+        plan.action = PlanAction::Delay;
+        plan.delay = chosen;
+        plan.jumpTick = cands[static_cast<size_t>(chosen)].jumpTick;
+        plan.nowIsSafe = false;
+    }
+
     AssistLog::debug(fmt::format(
-        "plan: passthrough {} (no assist in {} ticks, now dies @+{})",
-        down ? "press" : "release", limit, plan.firstDeathTick
+        "PLAN id={} {} delay={} ring={} useful={} hold={} dMin={} dMax={} tried={} budgetLeft={}",
+        plan.planId,
+        plan.action == PlanAction::Pass ? "Pass" : "Delay",
+        plan.delay, plan.activatedRing, plan.orbUseful, plan.requireHold,
+        plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
     ));
     return plan;
 }
@@ -992,205 +1320,99 @@ SimPlan ShadowSimulator::planSequence(
     PlayLayer* layer, PlayerObject* real, bool down, int limit,
     float dt, float firstDt, PlanOptions const& options
 ) {
+    auto single = plan(layer, real, down, limit, dt, firstDt, options);
     int const depth = std::clamp(options.smartDepth, 1, 3);
     if (depth <= 1 || !down) {
-        return plan(layer, real, down, limit, dt, firstDt, options);
+        single.smartDepthUsed = 1;
+        return single;
     }
-
-    SimPlan out;
-    if (!layer || !real || !m_shadow || limit < 0 || dt <= 0.f) return out;
-    if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
 
     Model model = modelFor(real, limit, options.capMul);
-    out.continuous = model.continuous;
-    out.smartDepthUsed = depth;
-
-    int horizon = options.smartHorizon > 0
-        ? options.smartHorizon
-        : std::max(model.cap, 180);
+    int horizon = options.smartHorizon > 0 ? options.smartHorizon : std::max(model.cap, 180);
     horizon = std::clamp(horizon, 32, 320);
+    int comboBudget = std::clamp(options.smartCombos, 8, 256);
 
-    int const comboBudget = std::clamp(options.smartCombos, 8, 256);
-    int const minGap = model.tapRelease ? 6 : 4;
-    int const step = std::max(2, horizon / 40); // coarse grid
+    int slot = captureSnapshot(real);
+    if (slot < 0) return single;
 
-    auto const t0 = std::chrono::steady_clock::now();
-    auto budgetExceeded = [&]() -> bool {
-        if (options.budgetUs <= 0) return false;
-        // Multi-jump may spend a bit more than a single plan.
-        int budget = options.budgetUs;
-        if (depth > 1) budget = std::max(budget, budget + budget / 2);
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - t0
-        ).count();
-        return us >= budget;
-    };
-
-    // Snapshot for replay-based sequence eval
-    int const slot = captureSnapshot(real);
-    if (slot < 0) {
-        return plan(layer, real, down, limit, dt, firstDt, options);
+    std::vector<int> allowed;
+    if (single.action == PlanAction::Pass) {
+        allowed.push_back(0);
+    }
+    else {
+        int lo = single.dMin >= 0 ? single.dMin : single.delay;
+        int hi = single.dMax >= 0 ? single.dMax : single.delay;
+        for (int d = std::max(0, lo); d <= std::min(limit, hi); ++d) allowed.push_back(d);
+        if (allowed.empty()) allowed.push_back(single.delay);
     }
 
-    // Orb window for first-click preference (cheap single scan)
-    OrbWindow orbWin;
-    if (StageConfig::assistOrbs()) {
-        m_simulating = true;
-        beginCapture(layer);
-        orbWin = scanOrbWindow(
-            layer, real, down, std::max(limit + model.slack + 4, limit + 1), dt, firstDt
-        );
-        restoreCapture(layer);
-        m_simulating = false;
-        if (orbWin.found) out.usedOrbWindow = true;
-    }
-
-    struct SeqBest {
+    struct Best {
         bool found = false;
         int d0 = 0;
-        int score = -2000000;
-        bool ring = false;
-        int deathTick = -1;
-        float endX = 0.f;
-        bool unknown = false;
+        int score = -1;
         bool survived = false;
     } best;
-
-    auto scoreSeq = [&](int d0, bool ring, bool died, int deathTick, float endX, bool unknown) {
-        int score = 0;
-        if (!died || unknown) score += 100000;
-        else score += deathTick * 50;
-        if (ring) score += 30000;
-        if (orbWin.found) {
-            if (d0 >= orbWin.first && d0 <= orbWin.last) score += 15000;
-            else if (!ring && d0 < orbWin.first) score -= 12000;
-        }
-        score += static_cast<int>(endX);
-        score -= d0;
-        return score;
-    };
-
-    auto evalTimeline = [&](std::vector<InputEvent> const& tl, int d0) {
-        ++out.smartCombosUsed;
-        auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
-        bool ring = rr.activatedRing
-            || (orbWin.found && d0 >= orbWin.first && d0 <= orbWin.last);
-        int sc = scoreSeq(d0, ring, rr.died, rr.deathTick, rr.endX, rr.unknown);
-        if (!best.found || sc > best.score) {
-            best.found = true;
-            best.d0 = d0;
-            best.score = sc;
-            best.ring = ring;
-            best.deathTick = rr.died ? rr.deathTick : -1;
-            best.endX = rr.endX;
-            best.unknown = rr.unknown;
-            best.survived = !rr.died || rr.unknown;
-        }
-    };
 
     auto pushTap = [&](std::vector<InputEvent>& tl, int pressTick, bool tap) {
         tl.push_back(InputEvent{ pressTick, true });
         if (tap) tl.push_back(InputEvent{ pressTick + 2, false });
     };
-
     bool const tap = model.tapRelease;
+    int minGap = tap ? 6 : 4;
+    int step = std::max(2, horizon / 40);
+    int combos = 0;
 
-    // Enumerate first delays; for each, grid future clicks within combo budget.
-    for (int d0 = 0; d0 <= limit; ++d0) {
-        if (budgetExceeded() || out.smartCombosUsed >= comboBudget) {
-            out.budgetHit = true;
-            break;
-        }
-
-        if (depth == 2) {
-            // At least evaluate first click alone (no second) as a candidate
-            {
-                std::vector<InputEvent> tl;
-                pushTap(tl, d0, tap);
-                evalTimeline(tl, d0);
-            }
-            for (int d1 = d0 + minGap; d1 < horizon; d1 += step) {
-                if (budgetExceeded() || out.smartCombosUsed >= comboBudget) break;
-                std::vector<InputEvent> tl;
-                pushTap(tl, d0, tap);
-                pushTap(tl, d1, tap);
-                evalTimeline(tl, d0);
+    for (int d0 : allowed) {
+        if (combos >= comboBudget) break;
+        {
+            std::vector<InputEvent> tl;
+            pushTap(tl, d0, tap);
+            auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
+            ++combos;
+            int sc = (!rr.died || rr.unknown) ? 100000 : rr.deathTick * 50;
+            sc += static_cast<int>(rr.endX) - d0;
+            if (rr.activatedRing) sc += 5000;
+            if (!best.found || sc > best.score) {
+                best = { true, d0, sc, !rr.died || rr.unknown };
             }
         }
-        else {
-            // depth 3
-            for (int d1 = d0 + minGap; d1 < horizon; d1 += step) {
-                if (budgetExceeded() || out.smartCombosUsed >= comboBudget) break;
-                {
-                    std::vector<InputEvent> tl;
-                    pushTap(tl, d0, tap);
-                    pushTap(tl, d1, tap);
-                    evalTimeline(tl, d0);
-                }
-                for (int d2 = d1 + minGap; d2 < horizon; d2 += step) {
-                    if (budgetExceeded() || out.smartCombosUsed >= comboBudget) break;
-                    std::vector<InputEvent> tl;
-                    pushTap(tl, d0, tap);
-                    pushTap(tl, d1, tap);
-                    pushTap(tl, d2, tap);
-                    evalTimeline(tl, d0);
+        if (depth >= 2) {
+            for (int d1 = d0 + minGap; d1 < horizon && combos < comboBudget; d1 += step) {
+                std::vector<InputEvent> tl2;
+                pushTap(tl2, d0, tap);
+                pushTap(tl2, d1, tap);
+                auto rr2 = replay(layer, slot, 0, tl2, dt, horizon, false, 0);
+                ++combos;
+                int sc2 = (!rr2.died || rr2.unknown) ? 100000 : rr2.deathTick * 50;
+                sc2 += static_cast<int>(rr2.endX) - d0;
+                if (rr2.activatedRing) sc2 += 5000;
+                if (!best.found || sc2 > best.score) {
+                    best = { true, d0, sc2, !rr2.died || rr2.unknown };
                 }
             }
         }
     }
 
-    // Merge with single-click orb-aware plan for d0 death info + safer first pick
-    PlanOptions singleOpts = options;
-    singleOpts.smartDepth = 1;
-    auto single = plan(layer, real, down, limit, dt, firstDt, singleOpts);
-    out.firstDeathTick = single.firstDeathTick;
-    out.firstDeathObject = single.firstDeathObject;
-    out.baselineDeathTick = single.baselineDeathTick;
-    out.baselineDeathObject = single.baselineDeathObject;
-    out.continuous = single.continuous;
+    single.smartDepthUsed = depth;
+    single.smartCombosUsed = combos;
+    if (!best.found || !best.survived) return single;
+    if (std::find(allowed.begin(), allowed.end(), best.d0) == allowed.end()) return single;
 
-    if (!best.found || !best.survived) {
-        // Fall back to single-click plan entirely
-        single.smartDepthUsed = depth;
-        single.smartCombosUsed = out.smartCombosUsed;
-        single.usedOrbWindow = out.usedOrbWindow || single.usedOrbWindow;
-        AssistLog::debug(fmt::format(
-            "planSequence: fallback single (combos={}, depth={})",
-            out.smartCombosUsed, depth
-        ));
-        return single;
-    }
-
-    // If single plan prefers a different first delay that hits the orb and sequence
-    // agreed on survival with best.d0, keep sequence's d0; otherwise prefer orb single.
-    int chosen = best.d0;
-    if (single.usedOrbWindow && single.activatedRing
-        && (single.action == PlanAction::Delay ? single.delay : 0) != best.d0) {
-        // Prefer orb-activating single delay if sequence also survived with nearby d0
-        int orbDelay = single.action == PlanAction::Delay ? single.delay : 0;
-        if (std::abs(orbDelay - best.d0) <= 2) chosen = orbDelay;
-    }
-
-    out.activatedRing = best.ring || single.activatedRing;
-    out.unknown = best.unknown || single.unknown;
-    out.jumpTick = chosen;
-    out.candidatesTried = out.smartCombosUsed;
-    if (chosen == 0) {
-        out.action = PlanAction::Pass;
-        out.nowIsSafe = true;
-        out.delay = 0;
+    if (best.d0 == 0) {
+        single.action = PlanAction::Pass;
+        single.delay = 0;
+        single.nowIsSafe = true;
     }
     else {
-        out.action = PlanAction::Delay;
-        out.delay = chosen;
-        out.nowIsSafe = false;
+        single.action = PlanAction::Delay;
+        single.delay = best.d0;
+        single.nowIsSafe = false;
     }
-
     AssistLog::debug(fmt::format(
-        "planSequence: depth={} combos={} delay +{} score={} orbWin={}",
-        depth, out.smartCombosUsed, chosen, best.score, out.usedOrbWindow
+        "planSequence id={} depth={} d0={} allowed={} combos={}",
+        single.planId, depth, best.d0, allowed.size(), combos
     ));
-    return out;
+    return single;
 }
 
 ShadowSimulator::ReplayResult ShadowSimulator::replay(
@@ -1370,6 +1592,94 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
     restoreCapture(layer);
     m_simulating = false;
     return out;
+}
+
+bool ShadowSimulator::regressionSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (!ok) {
+            ++fails;
+            report += std::string("FAIL ") + name + "; ";
+        }
+    };
+
+    auto binOf = [](int ticks) {
+        if (ticks < 24) return 0;
+        if (ticks < 48) return 1;
+        if (ticks < 96) return 2;
+        return 3;
+    };
+    auto clears = [](RunResult const& r, ThreatZone const& zone) {
+        if (!zone.valid) return !r.died || r.unknownTrunc;
+        if (!r.died) return r.endX > zone.endX || r.zoneCleared;
+        return r.deathX > zone.endX;
+    };
+
+    // Fixed survive bins [0,24), [24,48), [48,96), [96,∞)
+    expect(binOf(0) == 0, "bin0");
+    expect(binOf(23) == 0, "bin23");
+    expect(binOf(24) == 1, "bin24");
+    expect(binOf(47) == 1, "bin47");
+    expect(binOf(48) == 2, "bin48");
+    expect(binOf(95) == 2, "bin95");
+    expect(binOf(96) == 3, "bin96");
+
+    ThreatZone zone;
+    zone.valid = true;
+    zone.startX = 100.f;
+    zone.endX = 200.f;
+
+    RunResult inZone;
+    inZone.died = true;
+    inZone.deathX = 180.f;
+    expect(!clears(inZone, zone), "spike-row-not-clear");
+
+    RunResult pastZone;
+    pastZone.died = true;
+    pastZone.deathX = 201.f;
+    expect(clears(pastZone, zone), "past-zone-clear");
+
+    RunResult survivePast;
+    survivePast.died = false;
+    survivePast.endX = 250.f;
+    expect(clears(survivePast, zone), "survive-past-clear");
+
+    RunResult surviveInside;
+    surviveInside.died = false;
+    surviveInside.endX = 150.f;
+    expect(!clears(surviveInside, zone), "survive-inside-not-clear");
+
+    RunResult unk;
+    unk.unknownTrunc = true;
+    unk.died = false;
+    unk.endX = 250.f;
+    expect(clears(unk, zone), "unknown-after-clear");
+
+    expect(kClusterGapX == 50.f, "clusterGapX");
+    expect(kWindowMarginK == 1, "windowMarginK");
+    expect(kDefaultTickBudget == 4000, "tickBudget");
+
+    // Synthetic early-click snaps: d=0 dies in zone → Delay must clear past zoneEndX.
+    struct Snap { float deathX; int clearDelay; };
+    Snap snaps[] = {
+        { 150.f, 4 }, { 120.f, 3 }, { 190.f, 6 }, { 105.f, 2 }, { 175.f, 5 },
+    };
+    for (auto const& s : snaps) {
+        expect(s.clearDelay > 0 && s.deathX <= zone.endX, "snap-needs-delay");
+        RunResult d0;
+        d0.died = true;
+        d0.deathX = s.deathX;
+        expect(!clears(d0, zone), "snap-d0-unsafe");
+        RunResult dn;
+        dn.died = false;
+        dn.endX = zone.endX + 40.f;
+        expect(clears(dn, zone), "snap-delay-clears");
+    }
+
+    if (fails == 0) report = "regressionSelfCheck OK (bins+zone+5 snaps)";
+    else report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
+    return fails == 0;
 }
 
 }

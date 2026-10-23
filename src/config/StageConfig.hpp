@@ -92,6 +92,10 @@ public:
     static int smartDepth();
     static int smartCombos();
     static int smartHorizon(); // 0 = auto
+    // "off" | "ab" — A/B verify when legacy/new disagree (optional)
+    static char const* assistVerifyMode();
+    static bool assistVerifyAb();
+    static int tickBudgetPerPress();
     static int ticksAll();
     static int ticksWave();
     static int deathSlack();

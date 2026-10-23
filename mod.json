@@ -99,7 +99,7 @@
 		"death-slack": {
 			"type": "int",
 			"name": "Death Slack",
-			"description": "Deaths this many ticks apart count as the SAME obstacle (later unrelated spikes won't steal the click). 0 = strict. 2 is the recommended default.",
+			"description": "Extra ticks of look-ahead after a planned jump (not the hazard zone). Threat clear uses clustered spike X (zoneEndX), not this. 2 is the recommended default.",
 			"default": 2,
 			"min": 0,
 			"max": 16
@@ -158,7 +158,7 @@
 		"assist-orbs": {
 			"type": "bool",
 			"name": "Orb Assist",
-			"description": "When on, Live/Hybrid delay presses to hit nearby orbs (contact window + ring activation). When off, orbs use the same earliest-survive planner as normal jumps.",
+			"description": "When on, prefer delays that activate a needed orb (activation window). Does not force decoy orbs if you are already safe. Off = threat-zone planner only.",
 			"default": true
 		},
 		"sim-budget-us": {
@@ -197,6 +197,21 @@
 			"default": 0,
 			"min": 0,
 			"max": 320
+		},
+		"tick-budget": {
+			"type": "int",
+			"name": "Plan Tick Budget",
+			"description": "Max physics ticks the live planner may simulate per press (deterministic). Default 4000. Exhausted budget → Pass.",
+			"default": 4000,
+			"min": 500,
+			"max": 20000
+		},
+		"assist-verify": {
+			"type": "string",
+			"name": "Assist Verify",
+			"description": "off = normal planner. ab = when legacy earliest-survive disagrees with the new zone/orb planner, flip a coin, log VERIFY arm + PLAN/OUTCOME (uses 2× tick budget).",
+			"one-of": ["off", "ab"],
+			"default": "off"
 		},
 
 		"assist-press": {

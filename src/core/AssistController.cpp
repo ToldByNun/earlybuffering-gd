@@ -270,6 +270,11 @@ void AssistController::updateOverlay() {
         if (!smartBit.empty()) m_overlayText += " | " + smartBit;
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
+        if (StageConfig::assistOrbs()) m_overlayText += " | orbs";
+        if (StageConfig::assistVerifyAb()) m_overlayText += " | verifyAB";
+        if (m_buffer.requireOrb && m_buffer.dMin >= 0) {
+            m_overlayText += fmt::format(" | orbWin[{},{}]", m_buffer.dMin, m_buffer.dMax);
+        }
     }
     StatusOverlay::update(m_overlayText);
 }
@@ -402,10 +407,60 @@ void AssistController::runPostmortem(
     dec.resolved = true;
 }
 
+void AssistController::beginOutcome(SimPlan const& plan, int effectTick) {
+    m_outcomePending = true;
+    m_outcomePlanId = plan.planId;
+    m_outcomeUntil = effectTick + 96;
+    m_outcomeExpectOrb = plan.requireOrb || plan.activatedRing;
+    m_outcomeStartX = m_lastPlayerX;
+}
+
+void AssistController::pollOutcome(PlayLayer* playLayer) {
+    if (!m_outcomePending || !playLayer) return;
+    auto* p = m_outcomePlayer1 ? playLayer->m_player1 : playLayer->m_player2;
+    if (!p) {
+        m_outcomePending = false;
+        return;
+    }
+    if (p->m_isDead) {
+        AssistLog::debug(fmt::format(
+            "OUTCOME id={} death x={:.1f} orbExpect={}",
+            m_outcomePlanId, p->getPositionX(), m_outcomeExpectOrb
+        ));
+        m_outcomePending = false;
+        return;
+    }
+    if (m_attemptTick >= m_outcomeUntil) {
+        bool const orbHit = p->m_hasEverHitRing || p->m_touchedRing;
+        AssistLog::debug(fmt::format(
+            "OUTCOME id={} alive dx={:.1f} orb={} expect={}",
+            m_outcomePlanId, p->getPositionX() - m_outcomeStartX, orbHit, m_outcomeExpectOrb
+        ));
+        m_outcomePending = false;
+    }
+}
+
+void AssistController::logPlan(SimPlan const& plan, char const* kind) {
+    AssistLog::debug(fmt::format(
+        "PLAN id={} kind={} action={} delay={} requireOrb={} hold={} dMin={} dMax={} budgetHit={}",
+        plan.planId, kind,
+        plan.action == PlanAction::Pass ? "Pass" : "Delay",
+        plan.delay, plan.requireOrb, plan.requireHold, plan.dMin, plan.dMax, plan.budgetHit
+    ));
+}
+
 void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, GameObject* object) {
     if (!playLayer || !player) return;
     if (ShadowSimulator::get().isSimulating()) return;
     if (ShadowSimulator::get().isShadow(player)) return;
+
+    if (m_outcomePending) {
+        AssistLog::debug(fmt::format(
+            "OUTCOME id={} death x={:.1f} orbExpect={}",
+            m_outcomePlanId, player->getPositionX(), m_outcomeExpectOrb
+        ));
+        m_outcomePending = false;
+    }
 
     if (StageConfig::autoTune() && LevelProfile::get().loaded()) {
         if (auto* dec = m_log.findForDeath(m_attemptTick)) {
@@ -423,8 +478,15 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
 void AssistController::flushPendingRelease(PlayLayer* playLayer) {
     if (!m_pendingRelease || !playLayer) return;
     if (m_attemptTick < m_pendingReleaseTick) return;
+    if (m_pendingReleaseHold) {
+        auto* p = m_pendingReleaseP1 ? playLayer->m_player1 : playLayer->m_player2;
+        if (p && p->m_isDashing && m_attemptTick < m_pendingReleaseTick + 90) {
+            return;
+        }
+    }
     bool const p1 = m_pendingReleaseP1;
     m_pendingRelease = false;
+    m_pendingReleaseHold = false;
     if (userHolding(p1)) return;
     m_injecting = true;
     playLayer->handleButton(false, JUMP_BUTTON, p1);
@@ -432,50 +494,80 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
 }
 
 void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) {
-    // Last look before inject: if "press now" still dies, slide later inside the
-    // original window. No blind +1 — only shift when the sim still says early.
     int const elapsed = m_attemptTick - m_buffer.pressTick;
     int const remaining = m_buffer.limit - elapsed;
+
+    // Orb/window-aware recheck: stay inside [dMin, dMax] relative to pressTick
     if (player && remaining > 0 && m_buffer.rechecks < 2 && m_simDt > 0.f) {
-        PlanOptions opts;
-        opts.budgetUs = StageConfig::simBudgetUs();
-        opts.capMul = StageConfig::autoTune()
-            ? LevelProfile::get().capMul(m_buffer.mode)
-            : 1.f;
-        opts.maxBranches = 2;
-        // Recheck stays single-click (cheap) even when smart depth > 1.
-        opts.smartDepth = 1;
-        auto re = ShadowSimulator::get().plan(
-            playLayer, player, m_buffer.down, remaining, m_simDt, m_simDt, opts
-        );
-        if (re.action == PlanAction::Delay && re.delay > 0) {
-            int const newFire = m_attemptTick + re.delay;
-            if (newFire <= m_buffer.pressTick + m_buffer.limit) {
-                ++m_buffer.rechecks;
-                m_buffer.fireTick = newFire;
-                AssistLog::debug(fmt::format(
-                    "recheck: still early, +{} more (tick={})", re.delay, m_attemptTick
-                ));
-                return;
+        int const absMin = m_buffer.dMin >= 0 ? m_buffer.pressTick + m_buffer.dMin : m_buffer.pressTick;
+        int const absMax = m_buffer.dMax >= 0
+            ? m_buffer.pressTick + m_buffer.dMax
+            : m_buffer.pressTick + m_buffer.limit;
+
+        if (m_attemptTick < absMin) {
+            // Too early for orb window — wait
+            m_buffer.fireTick = absMin;
+            ++m_buffer.rechecks;
+            return;
+        }
+        if (m_attemptTick > absMax && m_buffer.requireOrb) {
+            // Past window — fire immediately
+        }
+        else if (!m_buffer.requireOrb || m_attemptTick <= absMax) {
+            PlanOptions opts;
+            opts.budgetUs = StageConfig::simBudgetUs();
+            opts.tickBudget = StageConfig::tickBudgetPerPress() / 4;
+            opts.capMul = StageConfig::autoTune()
+                ? LevelProfile::get().capMul(m_buffer.mode)
+                : 1.f;
+            opts.maxBranches = 2;
+            opts.smartDepth = 1;
+            auto re = ShadowSimulator::get().plan(
+                playLayer, player, m_buffer.down, remaining, m_simDt, m_simDt, opts
+            );
+            if (re.action == PlanAction::Delay && re.delay > 0) {
+                int newFire = m_attemptTick + re.delay;
+                if (m_buffer.dMin >= 0) newFire = std::max(newFire, absMin);
+                if (m_buffer.dMax >= 0) newFire = std::min(newFire, absMax);
+                if (newFire > m_attemptTick && newFire <= m_buffer.pressTick + m_buffer.limit) {
+                    ++m_buffer.rechecks;
+                    m_buffer.fireTick = newFire;
+                    AssistLog::debug(fmt::format(
+                        "recheck: slide fire={} (tick={})", newFire, m_attemptTick
+                    ));
+                    return;
+                }
             }
         }
     }
 
     bool const wasPress = m_buffer.down;
     bool const player1 = m_buffer.player1;
+    bool const requireHold = m_buffer.requireHold;
     bool const letGo = m_buffer.releaseSeen || !userHolding(player1);
     int const delayed = std::max(0, m_attemptTick - m_buffer.pressTick);
+    int const planId = m_buffer.planId;
+    bool const expectOrb = m_buffer.requireOrb;
 
     inject(playLayer, m_buffer.down);
     AssistLog::printSavedPress(delayed, m_buffer.pressTick, m_attemptTick, m_buffer.limit, estimatedTps());
     if (!wasPress) {
         AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", m_attemptTick));
     }
+
+    m_outcomePending = true;
+    m_outcomePlanId = planId;
+    m_outcomeUntil = m_attemptTick + 96;
+    m_outcomePlayer1 = player1;
+    m_outcomeExpectOrb = expectOrb;
+    m_outcomeStartX = player ? player->getPositionX() : 0.f;
+
     clearBuffer();
 
     if (wasPress && letGo) {
         m_pendingRelease = true;
         m_pendingReleaseP1 = player1;
+        m_pendingReleaseHold = requireHold;
         m_pendingReleaseTick = m_attemptTick + 1;
     }
 }
@@ -490,6 +582,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     ++m_attemptTick;
     if (!playLayer) return;
 
+    pollOutcome(playLayer);
     flushPendingRelease(playLayer);
 
     auto* p1 = playLayer->m_player1;
@@ -650,6 +743,27 @@ bool AssistController::tryBakeAssist(
     m_buffer.expectedJumpTick = m_buffer.fireTick;
     m_buffer.decisionX = player->getPositionX();
     m_buffer.mode = StageConfig::kindOf(player);
+
+    // G4 bake heuristic (no file format change): if Orb Assist would have intent
+    // near this bake delay, apply the same [dMin,dMax] recheck/requireOrb rules.
+    if (down && StageConfig::assistOrbs()) {
+        int const dMin = std::max(0, earliestTick - effectTick);
+        int const dMax = std::max(dMin, latestTick - effectTick);
+        bool const nearOrb = ShadowSimulator::spatialOrbHint(
+            playLayer, player, std::max(limit, dMax + 2), m_simDt
+        );
+        if (nearOrb) {
+            m_buffer.requireOrb = true;
+            m_buffer.dMin = dMin;
+            m_buffer.dMax = dMax;
+            m_buffer.fireTick = std::max(m_buffer.fireTick, effectTick + dMin);
+            m_buffer.fireTick = std::min(m_buffer.fireTick, effectTick + dMax);
+            AssistLog::debug(fmt::format(
+                "bake orb-heuristic win=[{},{}] ticks", dMin, dMax
+            ));
+        }
+    }
+
     AssistLog::debug(fmt::format(
         "bake ASSIST {} +{} ticks (window [{},{}])",
         down ? "press" : "release", delay, win->earliest, win->latest
@@ -690,37 +804,35 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
 
     PlanOptions opts;
     opts.budgetUs = StageConfig::simBudgetUs();
+    opts.tickBudget = StageConfig::tickBudgetPerPress();
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     opts.maxBranches = 4;
     opts.smartDepth = StageConfig::smartDepth();
     opts.smartCombos = StageConfig::smartCombos();
     opts.smartHorizon = StageConfig::smartHorizon();
+    opts.attemptStartTick = effectTick;
 
-    // Live + Hybrid fallback: multi-jump when smart-depth > 1.
     auto plan = (opts.smartDepth > 1)
         ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
 
+    logPlan(plan, "press");
+    m_outcomePlayer1 = player1;
+    beginOutcome(plan, effectTick);
+
     if (plan.action != PlanAction::Delay) {
-        AssistLog::debug(fmt::format(
-            "passthrough press ({}{}limit {}{}{}) tick={}",
-            plan.unknown ? "portal, " : "",
-            plan.nowIsSafe ? "safe, " : "no assist, ",
-            limit,
-            plan.usedOrbWindow ? ", orb" : "",
-            plan.activatedRing ? "+ring" : "",
-            effectTick
-        ));
         recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
         return true;
     }
 
-    // Bias may shift the delay, but must never turn a real Delay into Pass
-    // (negative learn bias was wiping the assist entirely).
     int delay = plan.delay;
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             delay = delay + roundBias(spot->bias);
+        }
+        // Clamp bias into activation window when requireOrb
+        if (plan.requireOrb && plan.dMin >= 0 && plan.dMax >= plan.dMin) {
+            delay = std::max(plan.dMin, std::min(plan.dMax, delay));
         }
         delay = std::max(1, std::min(limit, delay));
     }
@@ -736,12 +848,23 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     m_buffer.continuous = plan.continuous;
     m_buffer.decisionX = x;
     m_buffer.mode = kind;
+    m_buffer.requireOrb = plan.requireOrb;
+    m_buffer.requireHold = plan.requireHold;
+    m_buffer.dMin = plan.dMin;
+    m_buffer.dMax = plan.dMax;
+    m_buffer.planId = plan.planId;
+
+    // Keep fire inside activation window
+    if (plan.dMin >= 0) {
+        m_buffer.fireTick = std::max(m_buffer.fireTick, effectTick + plan.dMin);
+    }
+    if (plan.dMax >= 0) {
+        m_buffer.fireTick = std::min(m_buffer.fireTick, effectTick + plan.dMax);
+    }
 
     AssistLog::debug(fmt::format(
-        "ASSIST press +{} ticks (now dies @+{}, limit {}, smart {}j/{}c, orb={}, tick={})",
-        delay, plan.firstDeathTick, limit,
-        plan.smartDepthUsed, plan.smartCombosUsed,
-        plan.activatedRing, effectTick
+        "ASSIST press +{} ticks id={} ring={} hold={} win=[{},{}]",
+        delay, plan.planId, plan.activatedRing, plan.requireHold, plan.dMin, plan.dMax
     ));
     recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     updateOverlay();
