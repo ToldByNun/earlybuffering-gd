@@ -47,9 +47,13 @@ void ShadowSimulator::detach(bool layerDying) {
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
     m_simulating = false;
     m_applyingRing = false;
+    m_orbScanning = false;
+    m_orbOverlapTick = false;
     m_dead = false;
     m_jumped = false;
     m_unknown = false;
+    m_activatedRing = false;
+    m_ringCount = 0;
     m_deathObject = nullptr;
     m_saved.clear();
     m_savedActivatedIDs = {};
@@ -137,8 +141,21 @@ void ShadowSimulator::noteActivated(GameObject* gobj) {
     m_saved.push_back(s);
 }
 
+void ShadowSimulator::noteOrbOverlap() {
+    m_orbOverlapTick = true;
+}
+
 void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
     if (!shadow || !ring || shadow != m_shadow) return;
+
+    // Real GD: orbs only fire while Jump is held. Without this, wait-ticks before a
+    // delayed press claim the orb early and every orb prediction is wrong.
+    int const jumpIdx = static_cast<int>(PlayerButton::Jump);
+    bool const holding = shadow->m_holdingButtons[jumpIdx];
+    if (!holding) {
+        m_orbOverlapTick = true;
+        return;
+    }
 
     // Already used this run (and not multi-activate) → one jump only.
     bool const multi = ring->m_isMultiActivate || ring->canAllowMultiActivate();
@@ -146,6 +163,8 @@ void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
     if (!multi && shadow->m_touchedRings.count(ring->m_uniqueID)) return;
 
     noteActivated(ring);
+    m_activatedRing = true;
+    ++m_ringCount;
 
     // Real orb physics. Re-entrancy flag lets the ringJump hook call the original.
     // VFX hooks (spawnCircle, activateObject visuals, particles) stay blocked.
@@ -506,6 +525,8 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     m_dead = false;
     m_jumped = false;
     m_unknown = false;
+    m_activatedRing = false;
+    m_ringCount = 0;
     m_deathObject = nullptr;
 
     auto* s = m_shadow;
@@ -518,8 +539,18 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     int groundedStreak = 0;
     int const maxTicks = delay + std::max(1, model.cap);
 
+    auto finish = [&](RunResult out) {
+        out.activatedRing = m_activatedRing;
+        out.ringCount = m_ringCount;
+        out.endX = s->getPositionX();
+        out.ticksRan = std::max(out.ticksRan, out.deathTick >= 0 ? out.deathTick + 1 : 0);
+        return out;
+    };
+
     for (int t = 0; t < maxTicks; ++t) {
         float const stepDt = (t == 0) ? firstDt : dt;
+        r.ticksRan = t + 1;
+        m_orbOverlapTick = false;
 
         // Waiting ticks only: collide before moving so "hold without pressing"
         // can die for real. NEVER do this on the action tick — that killed the
@@ -531,20 +562,27 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
                 r.deathTick = t;
                 r.deathObject = m_deathObject;
                 r.diedBeforeAction = true;
-                return r;
+                return finish(r);
             }
             if (m_unknown) {
                 r.unknown = true;
                 r.unknownTick = t;
-                return r;
+                return finish(r);
             }
         }
 
         // Input (action tick) — must run before move+collide so a jump can save.
         if (!acted && t == delay) {
             acted = true;
-            if (down) s->pushButton(PlayerButton::Jump);
-            else s->releaseButton(PlayerButton::Jump);
+            if (down) {
+                s->pushButton(PlayerButton::Jump);
+                // pushButton should set this; force it so orb collide this tick sees hold.
+                s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
+            }
+            else {
+                s->releaseButton(PlayerButton::Jump);
+                s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+            }
         }
         else if (acted && down) {
             if (releaseAfter >= 0 && !tapReleased && t == delay + releaseAfter) {
@@ -552,10 +590,12 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
                 s->releaseButton(PlayerButton::Jump);
             }
             else if (releaseAfter < 0 && model.tapRelease && !tapReleased && m_jumped) {
-                // Dash orbs / still overlapping a ring: must keep holding.
-                bool const touchingOrb = s->m_touchingRings && s->m_touchingRings->count() > 0;
+                // Dash orbs / still overlapping / just activated: keep holding.
+                bool const touchingOrb = m_orbOverlapTick
+                    || (s->m_touchingRings && s->m_touchingRings->count() > 0);
                 bool const dashing = s->m_isDashing;
-                if (!touchingOrb && !dashing) {
+                bool const justHitOrb = m_activatedRing && t <= delay + 4;
+                if (!touchingOrb && !dashing && !justHitOrb) {
                     tapReleased = true;
                     s->releaseButton(PlayerButton::Jump);
                 }
@@ -569,12 +609,12 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             r.deathTick = t;
             r.deathObject = m_deathObject;
             r.diedBeforeAction = !acted;
-            return r;
+            return finish(r);
         }
         if (m_unknown) {
             r.unknown = true;
             r.unknownTick = t;
-            return r;
+            return finish(r);
         }
 
         if (m_jumped && !r.jumped) {
@@ -589,11 +629,11 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
                 groundedStreak = 0;
             }
             else if (airborneSeen && ++groundedStreak >= 8) {
-                return r;
+                return finish(r);
             }
         }
     }
-    return r;
+    return finish(r);
 }
 
 ShadowSimulator::RunResult ShadowSimulator::runBaseline(
@@ -606,6 +646,8 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     m_dead = false;
     m_jumped = false;
     m_unknown = false;
+    m_activatedRing = false;
+    m_ringCount = 0;
     m_deathObject = nullptr;
 
     auto* s = m_shadow;
@@ -615,6 +657,8 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     for (int t = 0; t < maxTicks; ++t) {
         float const stepDt = (t == 0) ? firstDt : dt;
         stepPhysics(layer, s, stepDt, dt);
+        r.ticksRan = t + 1;
+        r.endX = s->getPositionX();
         if (m_dead) {
             r.died = true;
             r.deathTick = t;
@@ -630,11 +674,103 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     return r;
 }
 
+ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
+    PlayLayer* layer, PlayerObject* real, bool down,
+    int scanTicks, float dt, float firstDt
+) {
+    OrbWindow win;
+    if (!layer || !real || !m_shadow || scanTicks <= 0) return win;
+
+    copyPlayerState(m_shadow, real);
+    m_dead = false;
+    m_jumped = false;
+    m_unknown = false;
+    m_activatedRing = false;
+    m_ringCount = 0;
+    m_orbOverlapTick = false;
+    m_deathObject = nullptr;
+
+    auto* s = m_shadow;
+    // Don't apply the new press — fly as-is; scan mode records overlaps without claim.
+    s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
+
+    m_orbScanning = true;
+    for (int t = 0; t < scanTicks; ++t) {
+        float const stepDt = (t == 0) ? firstDt : dt;
+        m_orbOverlapTick = false;
+
+        stepPreCollide(layer, s, dt);
+        bool const touchPre = m_orbOverlapTick
+            || (s->m_touchingRings && s->m_touchingRings->count() > 0);
+        if (touchPre) {
+            if (!win.found) {
+                win.found = true;
+                win.first = t;
+            }
+            win.last = t;
+        }
+        if (m_dead || m_unknown) break;
+
+        m_orbOverlapTick = false;
+        stepPhysics(layer, s, stepDt, dt);
+        bool const touchPost = m_orbOverlapTick
+            || (s->m_touchingRings && s->m_touchingRings->count() > 0);
+        if (touchPost) {
+            if (!win.found) {
+                win.found = true;
+                win.first = t;
+            }
+            win.last = t;
+        }
+        if (m_dead || m_unknown) break;
+    }
+    m_orbScanning = false;
+    return win;
+}
+
+namespace {
+
+struct PlanCandidate {
+    int delay = 0;
+    bool ok = false;
+    bool activatedRing = false;
+    int ringCount = 0;
+    int surviveTicks = 0;
+    float endX = 0.f;
+    int jumpTick = 0;
+    bool unknown = false;
+};
+
+int candidateScore(PlanCandidate const& c, ShadowSimulator::OrbWindow const& orb, bool anyRingHit) {
+    // Higher is better. Prefer: orb hit → in orb window → longer survival → farther x → earlier delay.
+    int score = 0;
+    if (!c.ok) return -1000000;
+    if (c.activatedRing) score += 80000;
+    score += c.ringCount * 3000;
+    if (orb.found) {
+        bool const inWin = c.delay >= orb.first && c.delay <= orb.last;
+        bool const nearWin = c.delay >= std::max(0, orb.first - 1) && c.delay <= orb.last + 1;
+        if (inWin) score += 20000;
+        else if (nearWin) score += 5000;
+        // Penalize pressing before the contact window without ever hitting the orb
+        if (!c.activatedRing && c.delay < orb.first) score -= 25000;
+    }
+    // Jump-into-orb: scan may miss the window; still prefer any ring-activating delay
+    if (anyRingHit && !c.activatedRing) score -= 40000;
+    score += c.surviveTicks * 8;
+    score += static_cast<int>(c.endX * 0.25f);
+    score -= c.delay; // stable: earlier among equals
+    return score;
+}
+
+}
+
 SimPlan ShadowSimulator::plan(
     PlayLayer* layer, PlayerObject* real, bool down, int limit,
     float dt, float firstDt, PlanOptions const& options
 ) {
     SimPlan plan;
+    plan.smartDepthUsed = 1;
     if (!layer || !real || !m_shadow || limit < 0 || dt <= 0.f) return plan;
     if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
 
@@ -664,13 +800,34 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
+    // Orb contact window along the no-press path (presses near orbs only).
+    OrbWindow orbWin;
+    bool const orbAssist = StageConfig::assistOrbs();
+    if (down && orbAssist) {
+        int const scanTicks = std::max(limit + model.slack + 4, limit + 1);
+        orbWin = scanOrbWindow(layer, real, down, scanTicks, dt, firstDt);
+        restoreCapture(layer);
+        beginCapture(layer);
+        if (orbWin.found) {
+            plan.usedOrbWindow = true;
+            AssistLog::debug(fmt::format(
+                "plan: orb window [{},{}]", orbWin.first, orbWin.last
+            ));
+        }
+    }
+
     int maxBranches = std::max(0, options.maxBranches);
     int effectiveCap = model.cap;
+
+    std::vector<PlanCandidate> cands;
+    cands.reserve(static_cast<size_t>(limit) + 1);
+    // With orb assist: always evaluate every delay — jump-into-orb cases miss the
+    // no-press contact scan, but activatedRing on a candidate still ranks correctly.
+    bool const rankAll = orbAssist && down;
 
     for (int d = 0; d <= limit; ++d) {
         if (budgetExceeded()) {
             plan.budgetHit = true;
-            // First cut branches, then shorten horizon for remaining offsets.
             if (maxBranches > 0) {
                 maxBranches = 0;
                 AssistLog::debug("plan: budget hit → cutting branches");
@@ -688,7 +845,6 @@ SimPlan ShadowSimulator::plan(
 
         ++plan.candidatesTried;
 
-        // Main branch: hold (continuous) or tap-release (cube).
         auto r = runOne(layer, real, down, d, limit, dt, firstDt, model, -1);
         restoreCapture(layer);
         beginCapture(layer);
@@ -706,8 +862,6 @@ SimPlan ShadowSimulator::plan(
             plan.unknown = true;
         }
 
-        // Continuous / robot: if the main branch died after the action, try
-        // releasing earlier — that death may not be this click's fault.
         if (!ok && r.died && !r.diedBeforeAction && down
             && (model.continuous || real->m_isRobot) && maxBranches > 0) {
             int tried = 0;
@@ -730,25 +884,96 @@ SimPlan ShadowSimulator::plan(
             }
         }
 
-        if (ok) {
-            plan.jumpTick = r.jumped ? r.jumpTick : d;
-            if (d == 0) {
-                plan.action = PlanAction::Pass;
-                plan.nowIsSafe = true;
+        PlanCandidate c;
+        c.delay = d;
+        c.ok = ok;
+        c.activatedRing = r.activatedRing;
+        c.ringCount = r.ringCount;
+        c.surviveTicks = r.died ? std::max(0, r.deathTick) : r.ticksRan;
+        c.endX = r.endX;
+        c.jumpTick = r.jumped ? r.jumpTick : d;
+        c.unknown = r.unknown;
+
+        if (!rankAll) {
+            // Classic: first surviving delay wins.
+            if (ok) {
+                plan.jumpTick = c.jumpTick;
+                plan.activatedRing = c.activatedRing;
+                if (d == 0) {
+                    plan.action = PlanAction::Pass;
+                    plan.nowIsSafe = true;
+                }
+                else {
+                    plan.action = PlanAction::Delay;
+                    plan.delay = d;
+                }
+                restoreCapture(layer);
+                m_simulating = false;
+                return plan;
             }
-            else {
-                plan.action = PlanAction::Delay;
-                plan.delay = d;
-                if (plan.baselineDeathObject && r.deathObject
-                    && plan.baselineDeathObject == r.deathObject) {
-                    AssistLog::debug(fmt::format(
-                        "plan: delay +{} same death object as baseline", d
-                    ));
+        }
+        else {
+            cands.push_back(c);
+        }
+    }
+
+    if (rankAll && !cands.empty()) {
+        bool anyRing = false;
+        for (auto const& c : cands) {
+            if (c.activatedRing) {
+                anyRing = true;
+                break;
+            }
+        }
+        // If nothing hits a ring, fall back to earliest surviving delay (classic).
+        if (!anyRing && !orbWin.found) {
+            for (auto const& c : cands) {
+                if (!c.ok) continue;
+                plan.jumpTick = c.jumpTick;
+                plan.activatedRing = false;
+                if (c.delay == 0) {
+                    plan.action = PlanAction::Pass;
+                    plan.nowIsSafe = true;
+                }
+                else {
+                    plan.action = PlanAction::Delay;
+                    plan.delay = c.delay;
+                }
+                restoreCapture(layer);
+                m_simulating = false;
+                return plan;
+            }
+        }
+        else {
+            PlanCandidate const* best = nullptr;
+            int bestScore = -2000000;
+            for (auto const& c : cands) {
+                int const sc = candidateScore(c, orbWin, anyRing);
+                if (sc > bestScore) {
+                    bestScore = sc;
+                    best = &c;
                 }
             }
-            restoreCapture(layer);
-            m_simulating = false;
-            return plan;
+            if (best && best->ok) {
+                plan.jumpTick = best->jumpTick;
+                plan.activatedRing = best->activatedRing;
+                plan.unknown = plan.unknown || best->unknown;
+                if (best->delay == 0) {
+                    plan.action = PlanAction::Pass;
+                    plan.nowIsSafe = true;
+                }
+                else {
+                    plan.action = PlanAction::Delay;
+                    plan.delay = best->delay;
+                }
+                AssistLog::debug(fmt::format(
+                    "plan: orb-rank delay +{} ring={} anyRing={} score={}",
+                    best->delay, best->activatedRing, anyRing, bestScore
+                ));
+                restoreCapture(layer);
+                m_simulating = false;
+                return plan;
+            }
         }
     }
 
@@ -761,6 +986,211 @@ SimPlan ShadowSimulator::plan(
         down ? "press" : "release", limit, plan.firstDeathTick
     ));
     return plan;
+}
+
+SimPlan ShadowSimulator::planSequence(
+    PlayLayer* layer, PlayerObject* real, bool down, int limit,
+    float dt, float firstDt, PlanOptions const& options
+) {
+    int const depth = std::clamp(options.smartDepth, 1, 3);
+    if (depth <= 1 || !down) {
+        return plan(layer, real, down, limit, dt, firstDt, options);
+    }
+
+    SimPlan out;
+    if (!layer || !real || !m_shadow || limit < 0 || dt <= 0.f) return out;
+    if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
+
+    Model model = modelFor(real, limit, options.capMul);
+    out.continuous = model.continuous;
+    out.smartDepthUsed = depth;
+
+    int horizon = options.smartHorizon > 0
+        ? options.smartHorizon
+        : std::max(model.cap, 180);
+    horizon = std::clamp(horizon, 32, 320);
+
+    int const comboBudget = std::clamp(options.smartCombos, 8, 256);
+    int const minGap = model.tapRelease ? 6 : 4;
+    int const step = std::max(2, horizon / 40); // coarse grid
+
+    auto const t0 = std::chrono::steady_clock::now();
+    auto budgetExceeded = [&]() -> bool {
+        if (options.budgetUs <= 0) return false;
+        // Multi-jump may spend a bit more than a single plan.
+        int budget = options.budgetUs;
+        if (depth > 1) budget = std::max(budget, budget + budget / 2);
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - t0
+        ).count();
+        return us >= budget;
+    };
+
+    // Snapshot for replay-based sequence eval
+    int const slot = captureSnapshot(real);
+    if (slot < 0) {
+        return plan(layer, real, down, limit, dt, firstDt, options);
+    }
+
+    // Orb window for first-click preference (cheap single scan)
+    OrbWindow orbWin;
+    if (StageConfig::assistOrbs()) {
+        m_simulating = true;
+        beginCapture(layer);
+        orbWin = scanOrbWindow(
+            layer, real, down, std::max(limit + model.slack + 4, limit + 1), dt, firstDt
+        );
+        restoreCapture(layer);
+        m_simulating = false;
+        if (orbWin.found) out.usedOrbWindow = true;
+    }
+
+    struct SeqBest {
+        bool found = false;
+        int d0 = 0;
+        int score = -2000000;
+        bool ring = false;
+        int deathTick = -1;
+        float endX = 0.f;
+        bool unknown = false;
+        bool survived = false;
+    } best;
+
+    auto scoreSeq = [&](int d0, bool ring, bool died, int deathTick, float endX, bool unknown) {
+        int score = 0;
+        if (!died || unknown) score += 100000;
+        else score += deathTick * 50;
+        if (ring) score += 30000;
+        if (orbWin.found) {
+            if (d0 >= orbWin.first && d0 <= orbWin.last) score += 15000;
+            else if (!ring && d0 < orbWin.first) score -= 12000;
+        }
+        score += static_cast<int>(endX);
+        score -= d0;
+        return score;
+    };
+
+    auto evalTimeline = [&](std::vector<InputEvent> const& tl, int d0) {
+        ++out.smartCombosUsed;
+        auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
+        bool ring = rr.activatedRing
+            || (orbWin.found && d0 >= orbWin.first && d0 <= orbWin.last);
+        int sc = scoreSeq(d0, ring, rr.died, rr.deathTick, rr.endX, rr.unknown);
+        if (!best.found || sc > best.score) {
+            best.found = true;
+            best.d0 = d0;
+            best.score = sc;
+            best.ring = ring;
+            best.deathTick = rr.died ? rr.deathTick : -1;
+            best.endX = rr.endX;
+            best.unknown = rr.unknown;
+            best.survived = !rr.died || rr.unknown;
+        }
+    };
+
+    auto pushTap = [&](std::vector<InputEvent>& tl, int pressTick, bool tap) {
+        tl.push_back(InputEvent{ pressTick, true });
+        if (tap) tl.push_back(InputEvent{ pressTick + 2, false });
+    };
+
+    bool const tap = model.tapRelease;
+
+    // Enumerate first delays; for each, grid future clicks within combo budget.
+    for (int d0 = 0; d0 <= limit; ++d0) {
+        if (budgetExceeded() || out.smartCombosUsed >= comboBudget) {
+            out.budgetHit = true;
+            break;
+        }
+
+        if (depth == 2) {
+            // At least evaluate first click alone (no second) as a candidate
+            {
+                std::vector<InputEvent> tl;
+                pushTap(tl, d0, tap);
+                evalTimeline(tl, d0);
+            }
+            for (int d1 = d0 + minGap; d1 < horizon; d1 += step) {
+                if (budgetExceeded() || out.smartCombosUsed >= comboBudget) break;
+                std::vector<InputEvent> tl;
+                pushTap(tl, d0, tap);
+                pushTap(tl, d1, tap);
+                evalTimeline(tl, d0);
+            }
+        }
+        else {
+            // depth 3
+            for (int d1 = d0 + minGap; d1 < horizon; d1 += step) {
+                if (budgetExceeded() || out.smartCombosUsed >= comboBudget) break;
+                {
+                    std::vector<InputEvent> tl;
+                    pushTap(tl, d0, tap);
+                    pushTap(tl, d1, tap);
+                    evalTimeline(tl, d0);
+                }
+                for (int d2 = d1 + minGap; d2 < horizon; d2 += step) {
+                    if (budgetExceeded() || out.smartCombosUsed >= comboBudget) break;
+                    std::vector<InputEvent> tl;
+                    pushTap(tl, d0, tap);
+                    pushTap(tl, d1, tap);
+                    pushTap(tl, d2, tap);
+                    evalTimeline(tl, d0);
+                }
+            }
+        }
+    }
+
+    // Merge with single-click orb-aware plan for d0 death info + safer first pick
+    PlanOptions singleOpts = options;
+    singleOpts.smartDepth = 1;
+    auto single = plan(layer, real, down, limit, dt, firstDt, singleOpts);
+    out.firstDeathTick = single.firstDeathTick;
+    out.firstDeathObject = single.firstDeathObject;
+    out.baselineDeathTick = single.baselineDeathTick;
+    out.baselineDeathObject = single.baselineDeathObject;
+    out.continuous = single.continuous;
+
+    if (!best.found || !best.survived) {
+        // Fall back to single-click plan entirely
+        single.smartDepthUsed = depth;
+        single.smartCombosUsed = out.smartCombosUsed;
+        single.usedOrbWindow = out.usedOrbWindow || single.usedOrbWindow;
+        AssistLog::debug(fmt::format(
+            "planSequence: fallback single (combos={}, depth={})",
+            out.smartCombosUsed, depth
+        ));
+        return single;
+    }
+
+    // If single plan prefers a different first delay that hits the orb and sequence
+    // agreed on survival with best.d0, keep sequence's d0; otherwise prefer orb single.
+    int chosen = best.d0;
+    if (single.usedOrbWindow && single.activatedRing
+        && (single.action == PlanAction::Delay ? single.delay : 0) != best.d0) {
+        // Prefer orb-activating single delay if sequence also survived with nearby d0
+        int orbDelay = single.action == PlanAction::Delay ? single.delay : 0;
+        if (std::abs(orbDelay - best.d0) <= 2) chosen = orbDelay;
+    }
+
+    out.activatedRing = best.ring || single.activatedRing;
+    out.unknown = best.unknown || single.unknown;
+    out.jumpTick = chosen;
+    out.candidatesTried = out.smartCombosUsed;
+    if (chosen == 0) {
+        out.action = PlanAction::Pass;
+        out.nowIsSafe = true;
+        out.delay = 0;
+    }
+    else {
+        out.action = PlanAction::Delay;
+        out.delay = chosen;
+        out.nowIsSafe = false;
+    }
+
+    AssistLog::debug(fmt::format(
+        "planSequence: depth={} combos={} delay +{} score={} orbWin={}",
+        depth, out.smartCombosUsed, chosen, best.score, out.usedOrbWindow
+    ));
+    return out;
 }
 
 ShadowSimulator::ReplayResult ShadowSimulator::replay(
@@ -781,6 +1211,8 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
     m_dead = false;
     m_jumped = false;
     m_unknown = false;
+    m_activatedRing = false;
+    m_ringCount = 0;
     m_deathObject = nullptr;
 
     auto* s = m_shadow;
@@ -811,6 +1243,7 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
         }
 
         stepPhysics(layer, s, dt, dt);
+        out.endX = s->getPositionX();
         if (m_dead) {
             out.died = true;
             out.deathTick = t;
@@ -823,6 +1256,8 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
         }
     }
 
+    out.activatedRing = m_activatedRing;
+    out.ringCount = m_ringCount;
     restoreCapture(layer);
     m_simulating = false;
     return out;

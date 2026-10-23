@@ -56,8 +56,10 @@ bool g_cachedDebug = true;
 bool g_cachedSafeMode = false;
 bool g_cachedShowOverlay = true;
 bool g_cachedShowTrajectory = false;
+bool g_cachedShowPauseBake = true;
 bool g_cachedAssistPress = true;
 bool g_cachedAssistRelease = true;
+bool g_cachedAssistOrbs = true;
 bool g_cachedSwallow = false;
 bool g_cachedAutoTune = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
@@ -65,6 +67,9 @@ int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
 int g_cachedCpsLimit = 0;
 int g_cachedMinClickIntervalMs = 0;
+int g_cachedSmartDepth = 1;
+int g_cachedSmartCombos = 48;
+int g_cachedSmartHorizon = 0;
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
 bool g_cacheInitialized = false;
@@ -118,14 +123,19 @@ void StageConfig::refreshCache() {
     g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
     g_cachedShowTrajectory = readBool(mod, "show-trajectory", false);
+    g_cachedShowPauseBake = readBool(mod, "show-pause-bake", true);
     g_cachedAssistPress = readBool(mod, "assist-press", true);
     g_cachedAssistRelease = readBool(mod, "assist-release", true);
+    g_cachedAssistOrbs = readBool(mod, "assist-orbs", true);
     g_cachedSwallow = readBool(mod, "swallow-hopeless", false);
     g_cachedAutoTune = readBool(mod, "auto-tune", true);
     g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
     g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 128);
     g_cachedCpsLimit = clampInt(readInt(mod, "cps-limit", 0), 0, 40);
     g_cachedMinClickIntervalMs = clampInt(readInt(mod, "min-click-interval-ms", 0), 0, 500);
+    g_cachedSmartDepth = clampInt(readInt(mod, "smart-depth", 1), 1, 3);
+    g_cachedSmartCombos = clampInt(readInt(mod, "smart-combos", 48), 8, 256);
+    g_cachedSmartHorizon = clampInt(readInt(mod, "smart-horizon", 0), 0, 320);
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
     try {
@@ -296,8 +306,10 @@ bool StageConfig::debugLogging() { ensureCache(); return g_cachedDebug; }
 bool StageConfig::safeMode() { ensureCache(); return g_cachedSafeMode; }
 bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
 bool StageConfig::showTrajectory() { ensureCache(); return g_cachedShowTrajectory; }
+bool StageConfig::showPauseBake() { ensureCache(); return g_cachedShowPauseBake; }
 bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
 bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
+bool StageConfig::assistOrbs() { ensureCache(); return g_cachedAssistOrbs; }
 bool StageConfig::swallowHopeless() { ensureCache(); return g_cachedSwallow; }
 bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
 AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode; }
@@ -305,6 +317,9 @@ int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
 int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }
 int StageConfig::cpsLimit() { ensureCache(); return g_cachedCpsLimit; }
 int StageConfig::minClickIntervalMs() { ensureCache(); return g_cachedMinClickIntervalMs; }
+int StageConfig::smartDepth() { ensureCache(); return g_cachedSmartDepth; }
+int StageConfig::smartCombos() { ensureCache(); return g_cachedSmartCombos; }
+int StageConfig::smartHorizon() { ensureCache(); return g_cachedSmartHorizon; }
 int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
 int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }

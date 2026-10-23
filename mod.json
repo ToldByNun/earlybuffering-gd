@@ -64,6 +64,12 @@
 			"description": "Draw predicted paths: gray=no click, green=earliest window, yellow=nominal, red=latest. Shows how big the click window is. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
+		"show-pause-bake": {
+			"type": "bool",
+			"name": "Pause Menu Bake UI",
+			"description": "Show frirecracker bake controls on the pause screen (Cycle Mode, Import, Bake Map, Brute Bake, Cancel). Turn off for a clean pause menu.",
+			"default": true
+		},
 
 		"title-window": {
 			"type": "title",
@@ -144,10 +150,16 @@
 		"min-click-interval-ms": {
 			"type": "int",
 			"name": "Min Click Interval (ms)",
-			"description": "Ignore a jump press if the previous one was less than this many milliseconds ago. Blocks accidental double-clicks. 0 = off. Try 30–80ms.",
+			"description": "If you press again within this many ms, assist skips that press (vanilla click still goes through — never blocks your input). 0 = off. Try 30–80ms.",
 			"default": 0,
 			"min": 0,
 			"max": 500
+		},
+		"assist-orbs": {
+			"type": "bool",
+			"name": "Orb Assist",
+			"description": "When on, Live/Hybrid delay presses to hit nearby orbs (contact window + ring activation). When off, orbs use the same earliest-survive planner as normal jumps.",
+			"default": true
 		},
 		"sim-budget-us": {
 			"type": "int",
@@ -157,6 +169,36 @@
 			"min": 0,
 			"max": 10000
 		},
+
+		"title-smart": {
+			"type": "title",
+			"name": "Smart Prediction (Live / Hybrid)"
+		},
+		"smart-depth": {
+			"type": "int",
+			"name": "Smart Depth (Jumps Ahead)",
+			"description": "How many jumps into the future Live/Hybrid may plan. 1 = classic single-click assist. 2–3 = search sequences so the first delay stays realistic further ahead. Replay/BruteForce ignore this.",
+			"default": 1,
+			"min": 1,
+			"max": 3
+		},
+		"smart-combos": {
+			"type": "int",
+			"name": "Smart Combos",
+			"description": "Max click-timing combinations tested per press when Smart Depth > 1. Higher = smarter, more CPU. Capped further by Sim Budget.",
+			"default": 48,
+			"min": 8,
+			"max": 256
+		},
+		"smart-horizon": {
+			"type": "int",
+			"name": "Smart Horizon (Ticks)",
+			"description": "How far (physics ticks @ ~240/s) the multi-jump search simulates. 0 = auto (~180–240). Only used when Smart Depth > 1.",
+			"default": 0,
+			"min": 0,
+			"max": 320
+		},
+
 		"assist-press": {
 			"type": "bool",
 			"name": "Assist Presses",

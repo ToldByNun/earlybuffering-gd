@@ -75,8 +75,10 @@ public:
     static bool safeMode();
     static bool showOverlay();
     static bool showTrajectory();
+    static bool showPauseBake(); // pause-screen bake / mode buttons
     static bool assistPress();
     static bool assistRelease();
+    static bool assistOrbs(); // orb contact-window ranking (Live/Hybrid)
     static bool swallowHopeless();
     static bool autoTune();
     static AssistMode assistMode();
@@ -85,7 +87,11 @@ public:
     static int simBudgetUs();
     static int bakeRadius();
     static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
-    static int minClickIntervalMs(); // 0 = off; swallow presses closer than this
+    static int minClickIntervalMs(); // 0 = off; skip assist (click still passes)
+    // Live/Hybrid multi-jump: 1 = single-click only
+    static int smartDepth();
+    static int smartCombos();
+    static int smartHorizon(); // 0 = auto
     static int ticksAll();
     static int ticksWave();
     static int deathSlack();

@@ -131,12 +131,14 @@ $on_mod(Loaded) {
         }
         AssistController::get().updateOverlay();
     });
+    watchBool("show-pause-bake");
     watchBool("swallow-hopeless");
     watchBool("auto-tune");
     watchInt("sim-budget-us");
     watchInt("bake-radius");
     watchInt("cps-limit");
     watchInt("min-click-interval-ms");
+    watchBool("assist-orbs");
     watchBool("assist-press");
     watchBool("assist-release");
 

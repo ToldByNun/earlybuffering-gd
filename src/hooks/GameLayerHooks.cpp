@@ -60,11 +60,16 @@ class $modify(FrireGJBaseGameLayer, GJBaseGameLayer) {
     }
 
     // Orbs: one physics jump on the shadow, claim for this run only, no VFX.
-    // Previously ringJump(skipCheck) without claiming re-fired every collision tick
-    // and made every orb prediction wrong.
+    // Requires Jump held (applyRingJump) — wait-ticks must not claim early.
+    // Orb-window scan records overlap only (no boost / claim).
     void playerTouchedRing(PlayerObject* player, RingObject* ring) {
         if (simulating()) {
-            ShadowSimulator::get().applyRingJump(player, ring);
+            auto& sim = ShadowSimulator::get();
+            if (sim.isOrbScanning()) {
+                sim.noteOrbOverlap();
+                return;
+            }
+            sim.applyRingJump(player, ring);
             return;
         }
         GJBaseGameLayer::playerTouchedRing(player, ring);

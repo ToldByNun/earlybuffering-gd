@@ -18,6 +18,10 @@ struct PlanOptions {
     float capMul = 1.f;
     int maxBranches = 4;
     int budgetUs = 1500; // 0 = no budget
+    // Live/Hybrid smart multi-jump (1 = single-click plan only)
+    int smartDepth = 1;
+    int smartCombos = 48;
+    int smartHorizon = 0; // 0 = auto from model cap
 };
 
 struct SimPlan {
@@ -33,6 +37,10 @@ struct SimPlan {
     GameObject* baselineDeathObject = nullptr;
     bool unknown = false;
     bool budgetHit = false;
+    bool activatedRing = false;
+    bool usedOrbWindow = false;
+    int smartDepthUsed = 1;
+    int smartCombosUsed = 0;
 };
 
 struct InputEvent {
@@ -71,8 +79,12 @@ public:
 
     // Apply orb physics to the shadow and mark the orb used for THIS run only
     // (restored afterward). Prevents the same orb from re-firing every tick.
+    // Requires Jump held — matches real GD (no claim while waiting to press).
     void applyRingJump(PlayerObject* shadow, RingObject* ring);
     bool isApplyingRing() const { return m_applyingRing; }
+    // Orb-window scan: record overlap without claiming / boosting.
+    bool isOrbScanning() const { return m_orbScanning; }
+    void noteOrbOverlap();
 
     // Copy all physics-relevant state from src onto dst (shadow or snapshot slot).
     static void copyPlayerState(PlayerObject* dst, PlayerObject* src);
@@ -86,6 +98,13 @@ public:
         float dt, float firstDt, PlanOptions const& options = {}
     );
 
+    // Multi-jump search for Live/Hybrid. Only the first action delay is returned
+    // (later clicks validate that the delay leads to a realistic continuation).
+    SimPlan planSequence(
+        PlayLayer* layer, PlayerObject* real, bool down, int limit,
+        float dt, float firstDt, PlanOptions const& options = {}
+    );
+
     // Replay from a snapshot with an absolute-tick input timeline.
     // Returns death tick relative to startTick, or -1 if survived.
     // deathObject out-param optional.
@@ -94,6 +113,9 @@ public:
         int deathTick = -1; // relative to startTick
         GameObject* deathObject = nullptr;
         bool unknown = false;
+        bool activatedRing = false;
+        int ringCount = 0;
+        float endX = 0.f;
     };
     ReplayResult replay(
         PlayLayer* layer,
@@ -146,15 +168,26 @@ public:
     };
     static Model modelFor(PlayerObject* p, int limit, float capMul = 1.f);
 
+    // Ticks (relative) where the shadow overlaps a ring without the new press.
+    struct OrbWindow {
+        bool found = false;
+        int first = -1;
+        int last = -1;
+    };
+
 private:
     struct RunResult {
         bool died = false;
         bool diedBeforeAction = false;
         bool jumped = false;
         bool unknown = false;
+        bool activatedRing = false;
+        int ringCount = 0;
         int jumpTick = -1;
         int deathTick = -1;
         int unknownTick = -1;
+        int ticksRan = 0;
+        float endX = 0.f;
         GameObject* deathObject = nullptr;
     };
 
@@ -187,6 +220,12 @@ private:
         float dt, float firstDt, Model const& model
     );
 
+    // Fly without the new press; record ticks overlapping a ring hitbox.
+    OrbWindow scanOrbWindow(
+        PlayLayer* layer, PlayerObject* real, bool down,
+        int scanTicks, float dt, float firstDt
+    );
+
     void beginCapture(PlayLayer* layer);
     void restoreCapture(PlayLayer* layer);
     void copyWaveTrail(PlayerObject* dst, PlayerObject* src);
@@ -201,9 +240,13 @@ private:
     int m_nextSnapshot = 0;
     bool m_simulating = false;
     bool m_applyingRing = false;
+    bool m_orbScanning = false;
+    bool m_orbOverlapTick = false;
     bool m_dead = false;
     bool m_jumped = false;
     bool m_unknown = false;
+    bool m_activatedRing = false;
+    int m_ringCount = 0;
     GameObject* m_deathObject = nullptr;
     std::vector<SavedObject> m_saved;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;

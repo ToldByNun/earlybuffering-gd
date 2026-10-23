@@ -244,6 +244,12 @@ void AssistController::updateOverlay() {
         }
         std::string bakeBit = m_lastBakeHint.empty() ? BakeMap::get().statusLine() : m_lastBakeHint;
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
+        int const smartDepth = StageConfig::smartDepth();
+        std::string smartBit;
+        if (smartDepth > 1
+            && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
+            smartBit = fmt::format("smart {}j/{}c", smartDepth, StageConfig::smartCombos());
+        }
         int const cpsLim = StageConfig::cpsLimit();
         std::string cpsBit;
         if (cpsLim > 0) {
@@ -261,6 +267,7 @@ void AssistController::updateOverlay() {
             learnBit,
             bakeBit
         );
+        if (!smartBit.empty()) m_overlayText += " | " + smartBit;
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
     }
@@ -436,6 +443,8 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
             ? LevelProfile::get().capMul(m_buffer.mode)
             : 1.f;
         opts.maxBranches = 2;
+        // Recheck stays single-click (cheap) even when smart depth > 1.
+        opts.smartDepth = 1;
         auto re = ShadowSimulator::get().plan(
             playLayer, player, m_buffer.down, remaining, m_simDt, m_simDt, opts
         );
@@ -683,15 +692,24 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.budgetUs = StageConfig::simBudgetUs();
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     opts.maxBranches = 4;
+    opts.smartDepth = StageConfig::smartDepth();
+    opts.smartCombos = StageConfig::smartCombos();
+    opts.smartHorizon = StageConfig::smartHorizon();
 
-    auto plan = ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
+    // Live + Hybrid fallback: multi-jump when smart-depth > 1.
+    auto plan = (opts.smartDepth > 1)
+        ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
+        : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
 
     if (plan.action != PlanAction::Delay) {
         AssistLog::debug(fmt::format(
-            "passthrough press ({}{}limit {}) tick={}",
+            "passthrough press ({}{}limit {}{}{}) tick={}",
             plan.unknown ? "portal, " : "",
             plan.nowIsSafe ? "safe, " : "no assist, ",
-            limit, effectTick
+            limit,
+            plan.usedOrbWindow ? ", orb" : "",
+            plan.activatedRing ? "+ring" : "",
+            effectTick
         ));
         recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
         return true;
@@ -720,8 +738,10 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     m_buffer.mode = kind;
 
     AssistLog::debug(fmt::format(
-        "ASSIST press +{} ticks (now dies @+{}, limit {}, tick={})",
-        delay, plan.firstDeathTick, limit, effectTick
+        "ASSIST press +{} ticks (now dies @+{}, limit {}, smart {}j/{}c, orb={}, tick={})",
+        delay, plan.firstDeathTick, limit,
+        plan.smartDepthUsed, plan.smartCombosUsed,
+        plan.activatedRing, effectTick
     ));
     recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     updateOverlay();
@@ -808,24 +828,24 @@ bool AssistController::onHandleButton(
     auto* player = player1 ? playLayer->m_player1 : playLayer->m_player2;
     if (!player) return true;
 
-    // Debounce double-clicks, then count for CPS (before assist may swallow).
+    m_userHolding[player1 ? 0 : 1] = down;
+
+    // Min click interval: skip assist only — never block the vanilla click.
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
         if (minMs > 0 && !m_clickTimes.empty()) {
             auto const elapsed = std::chrono::steady_clock::now() - m_clickTimes.back();
             if (elapsed < std::chrono::milliseconds(minMs)) {
                 AssistLog::debug(fmt::format(
-                    "click debounce: swallowed ({}ms < {}ms)",
+                    "click debounce: no assist ({}ms < {}ms), pass through",
                     std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(),
                     minMs
                 ));
-                return false;
+                return true;
             }
         }
         noteUserClick();
     }
-
-    m_userHolding[player1 ? 0 : 1] = down;
 
     bool const midStep = m_inRealUpdate;
     int const effectTick = midStep ? m_attemptTick : m_attemptTick + 1;

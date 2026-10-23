@@ -214,6 +214,10 @@ CCMenuItemSpriteExtra* makeTextBtn(char const* text, float width, auto cb) {
 class $modify(FrirePauseLayer, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
+        if (!StageConfig::showPauseBake()) {
+            // Setting off: leave pause menu clean (no bake chrome).
+            return;
+        }
         if (this->getChildByID("frirecracker-bake-menu"_spr)) {
             refreshPauseLabels(this);
             return;
