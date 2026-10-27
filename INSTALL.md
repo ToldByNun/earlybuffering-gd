@@ -35,3 +35,7 @@ Local development is primarily **Windows**. Multi-platform binaries are produced
 2. Ensure **geode.node-ids** is installed.
 3. Prefer **Safe Mode** on for online / rated play.
 4. Platformer levels: assist stays off by design.
+
+## CI note
+
+GitHub Actions builds Windows, macOS, and Android. The iOS job is currently **continue-on-error** because GeodeBindings fails to compile FMOD stubs under the runner's Xcode 26 toolchain (upstream, not EarlyBuffer source). Re-enable hard-fail when Geode/bindings fix lands.

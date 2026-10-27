@@ -56,7 +56,8 @@ void ShadowSimulator::detach(bool layerDying) {
     m_ringCount = 0;
     m_deathObject = nullptr;
     m_saved.clear();
-    m_savedActivatedIDs = {};
+    // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
+    m_savedActivatedIDs.clear();
 
     auto kill = [layerDying](PlayerObject*& p) {
         if (!p) return;
