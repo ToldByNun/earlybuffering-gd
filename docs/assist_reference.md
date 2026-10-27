@@ -37,6 +37,7 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 | assist-percent-min | int | 0 | 0 | 100 | |
 | assist-percent-max | int | 100 | 0 | 100 | |
 | save-feedback | string | off | off/icon/sound | | |
+| assist-off-N-from/to | float | -1 | -1 | 100 | N=1..6; -1 unused; inclusive off range |
 | ticks-all | int | 2 | 0 | 32 | Delay window |
 | ticks-wave | int | 2 | 0 | 32 | |
 | death-slack | int | 2 | 0 | 16 | Look-ahead slack, not zone |
@@ -98,3 +99,7 @@ Safe mode + assistTouchedRun block percentage/newbest when assist injected.
 ## Constants
 
 clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. Platformer: assist off.
+
+## Authorship
+
+Design requirements: maintainer. Spec text and implementation: AI-assisted (see repository README).

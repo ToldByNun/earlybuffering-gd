@@ -4,9 +4,7 @@
 #include <Geode/loader/SettingV3.hpp>
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
-#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -112,81 +110,40 @@ static float clampPct(float v) {
     return std::max(0.f, std::min(100.f, v));
 }
 
-// Parse "12.50-25.00; 50-60.25" or one range per line.
-static std::vector<StageConfig::PercentRange> parseDisableRanges(std::string const& raw) {
-    std::vector<StageConfig::PercentRange> out;
-    std::string token;
-    auto flush = [&]() {
-        // trim
-        auto begin = token.find_first_not_of(" \t\r\n");
-        if (begin == std::string::npos) { token.clear(); return; }
-        auto end = token.find_last_not_of(" \t\r\n");
-        std::string s = token.substr(begin, end - begin + 1);
-        token.clear();
-        if (s.empty()) return;
+static float readFloat(Mod* mod, char const* id, float fallback) {
+    try {
+        return static_cast<float>(mod->getSettingValue<double>(id));
+    }
+    catch (...) {
+        return fallback;
+    }
+}
 
-        // allow "a-b", "a – b", "a to b"
-        for (char& c : s) {
-            if (c == ',' ) c = ' '; // shouldn't appear inside one token
-        }
-        std::string left, right;
-        auto toPos = s.find(" to ");
-        size_t sep = std::string::npos;
-        size_t sepLen = 1;
-        if (toPos != std::string::npos) {
-            sep = toPos;
-            sepLen = 4;
-        }
-        else {
-            // ASCII '-' or UTF-8 en-dash U+2013 (e2 80 93)
-            for (size_t i = 0; i < s.size(); ++i) {
-                if (s[i] == '-') { sep = i; sepLen = 1; break; }
-                if (i + 2 < s.size()
-                    && static_cast<unsigned char>(s[i]) == 0xe2
-                    && static_cast<unsigned char>(s[i + 1]) == 0x80
-                    && static_cast<unsigned char>(s[i + 2]) == 0x93) {
-                    sep = i;
-                    sepLen = 3;
-                    break;
-                }
-            }
-        }
-        if (sep == std::string::npos) return;
-        left = s.substr(0, sep);
-        right = s.substr(sep + sepLen);
-        auto trimStr = [](std::string& t) {
-            auto b = t.find_first_not_of(" \t");
-            auto e = t.find_last_not_of(" \t");
-            if (b == std::string::npos) { t.clear(); return; }
-            t = t.substr(b, e - b + 1);
-        };
-        trimStr(left);
-        trimStr(right);
-        if (left.empty() || right.empty()) return;
-        char* endL = nullptr;
-        char* endR = nullptr;
-        float a = std::strtof(left.c_str(), &endL);
-        float b = std::strtof(right.c_str(), &endR);
-        if (endL == left.c_str() || endR == right.c_str()) return;
-        a = clampPct(a);
-        b = clampPct(b);
-        // round to 2 decimals for stable compare
-        a = std::round(a * 100.f) / 100.f;
-        b = std::round(b * 100.f) / 100.f;
+static float round2(float v) {
+    return std::round(v * 100.f) / 100.f;
+}
+
+static void loadAssistOffSlots(Mod* mod, std::vector<StageConfig::PercentRange>& out) {
+    out.clear();
+    static char const* fromIds[] = {
+        "assist-off-1-from", "assist-off-2-from", "assist-off-3-from",
+        "assist-off-4-from", "assist-off-5-from", "assist-off-6-from"
+    };
+    static char const* toIds[] = {
+        "assist-off-1-to", "assist-off-2-to", "assist-off-3-to",
+        "assist-off-4-to", "assist-off-5-to", "assist-off-6-to"
+    };
+    static_assert(sizeof(fromIds) / sizeof(fromIds[0]) == StageConfig::ASSIST_OFF_SLOTS);
+    for (int i = 0; i < StageConfig::ASSIST_OFF_SLOTS; ++i) {
+        float a = readFloat(mod, fromIds[i], -1.f);
+        float b = readFloat(mod, toIds[i], -1.f);
+        // -1 = unused slot
+        if (a < 0.f || b < 0.f) continue;
+        a = round2(clampPct(a));
+        b = round2(clampPct(b));
         if (a > b) std::swap(a, b);
         out.push_back({ a, b });
-    };
-
-    for (char c : raw) {
-        if (c == '\n' || c == '\r' || c == ';' || c == ',') {
-            flush();
-        }
-        else {
-            token.push_back(c);
-        }
     }
-    flush();
-    return out;
 }
 
 char const* StageConfig::presetName(int index) {
@@ -233,14 +190,7 @@ void StageConfig::refreshCache() {
     if (g_cachedAssistPercentMin > g_cachedAssistPercentMax) {
         std::swap(g_cachedAssistPercentMin, g_cachedAssistPercentMax);
     }
-    try {
-        g_cachedAssistDisableRanges = parseDisableRanges(
-            mod->getSettingValue<std::string>("assist-disable-ranges")
-        );
-    }
-    catch (...) {
-        g_cachedAssistDisableRanges.clear();
-    }
+    loadAssistOffSlots(mod, g_cachedAssistDisableRanges);
     g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", true);
     try {
         g_cachedSaveFeedback = mod->getSettingValue<std::string>("save-feedback");

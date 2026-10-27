@@ -1,26 +1,37 @@
-# frirecracker - build / install
+# Build & install
 
 ## Requirements
 
-- Geometry Dash 2.2081
-- Geode 5.11.1+
-- CMake + C++20 toolchain (MSVC on Windows)
+- Geometry Dash **2.2081**
+- [Geode](https://geode-sdk.org/) **5.11.1+** (SDK + CLI)
+- CMake 3.21+ and a **C++23** toolchain (MSVC on Windows)
 
-## Build (Windows)
+Set `GEODE_SDK` to your Geode SDK checkout.
 
-```
+## Quick build (recommended)
+
+```bash
 geode build --config RelWithDebInfo
 ```
 
-Or configure/build with CMake into `build/`, then package with Geode CLI.
+The CLI packages and can install the `.geode` into your mods folder.
 
-## Install
+## CMake
 
-Copy the produced `.geode` into your Geode mods folder, or use `geode run` / Geode install from the CLI.
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build --config RelWithDebInfo
+```
 
-## Hardening notes
+Then package with the Geode CLI, or use `setup_geode_mod` output from the build tree.
 
-- Assist is disabled in platformer.
-- Bake is main-thread only (BakeScheduler); cancel from pause UI.
-- Profiles/bakes key off LevelContentKey (id + content revision hash).
-- On load, PlanGoldCorpus + shadow self-check run once (console).
+## Platforms
+
+Local development is primarily **Windows**. Multi-platform binaries are produced by GitHub Actions (Windows, macOS, iOS, Android32/64).
+
+## After install
+
+1. Enable the mod in Geode.
+2. Ensure **geode.node-ids** is installed.
+3. Prefer **Safe Mode** on for online / rated play.
+4. Platformer levels: assist stays off by design.

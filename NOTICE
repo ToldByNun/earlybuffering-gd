@@ -1,0 +1,7 @@
+Third-party components
+======================
+
+- Geode SDK and Geometry Dash bindings — see https://geode-sdk.org/
+- GDReplayFormat (libGDR) — https://github.com/maxnut/GDReplayFormat (license per upstream)
+
+Geometry Dash is © RobTop Games. This project is an unofficial mod and is not affiliated with RobTop.

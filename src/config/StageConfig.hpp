@@ -115,7 +115,8 @@ public:
         float from = 0.f;
         float to = 0.f;
     };
-    // Ranges where assist is forced off (inclusive). Parsed from assist-disable-ranges.
+    static constexpr int ASSIST_OFF_SLOTS = 6;
+    // Ranges where assist is forced off (inclusive). From float settings assist-off-N-from/to (-1 = unused).
     static std::vector<PercentRange> const& assistDisableRanges();
     static bool isInAssistDisableRange(float percent);
     static bool showPauseAssist();

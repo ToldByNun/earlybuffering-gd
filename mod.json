@@ -10,7 +10,7 @@
 	"name": "frirecracker",
 	"version": "v1.0.0",
 	"developer": "Audesign",
-	"description": "Input forgiveness assist: buffers early jumps and fires on the first valid tick.",
+	"description": "Early-input forgiveness assist for GD 2.2081. Buffers early jumps and fires on the first shadow-safe tick. Not an autoplayer; Safe Mode recommended.",
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"
 	},
@@ -104,11 +104,107 @@
 			"min": 0,
 			"max": 100
 		},
-		"assist-disable-ranges": {
-			"type": "string",
-			"name": "Assist Disable Ranges (%)",
-			"description": "List of percent ranges where assist is always OFF. Format: from-to per line (2 decimals ok), e.g. 12.50-25.00 then 50.00-60.25. Separators: newline, ; or ,. Inclusive. Empty = none.",
-			"default": ""
+		"title-assist-off": {
+			"type": "title",
+			"name": "Assist Off Ranges (%)"
+		},
+		"assist-off-1-from": {
+			"type": "float",
+			"name": "Range 1 From",
+			"description": "Start of percent window where assist is OFF. -1 = slot unused. Inclusive with Range 1 To.",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-1-to": {
+			"type": "float",
+			"name": "Range 1 To",
+			"description": "End of percent window where assist is OFF. -1 = slot unused.",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-2-from": {
+			"type": "float",
+			"name": "Range 2 From",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-2-to": {
+			"type": "float",
+			"name": "Range 2 To",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-3-from": {
+			"type": "float",
+			"name": "Range 3 From",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-3-to": {
+			"type": "float",
+			"name": "Range 3 To",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-4-from": {
+			"type": "float",
+			"name": "Range 4 From",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-4-to": {
+			"type": "float",
+			"name": "Range 4 To",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-5-from": {
+			"type": "float",
+			"name": "Range 5 From",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-5-to": {
+			"type": "float",
+			"name": "Range 5 To",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-6-from": {
+			"type": "float",
+			"name": "Range 6 From",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
+		},
+		"assist-off-6-to": {
+			"type": "float",
+			"name": "Range 6 To",
+			"default": -1,
+			"min": -1,
+			"max": 100,
+			"control": { "slider": true, "slider-step": 0.01, "input": true }
 		},
 		"save-feedback": {
 			"type": "string",
