@@ -7,7 +7,7 @@
 using namespace geode::prelude;
 
 char const* AssistLog::modTag() {
-    return "frirecracker";
+    return "EarlyBuffer";
 }
 
 double AssistLog::ticksToFrames60(int ticks, double physicsTps) {

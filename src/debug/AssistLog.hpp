@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_DEBUG_ASSISTLOG_HPP
-#define FRIRECRACKER_DEBUG_ASSISTLOG_HPP
+#ifndef EARLYBUFFER_DEBUG_ASSISTLOG_HPP
+#define EARLYBUFFER_DEBUG_ASSISTLOG_HPP
 
 #include <cstdint>
 #include <string>
@@ -24,4 +24,4 @@ public:
     static double ticksToFrames60(int ticks, double physicsTps);
 };
 
-#endif // FRIRECRACKER_DEBUG_ASSISTLOG_HPP
+#endif // EARLYBUFFER_DEBUG_ASSISTLOG_HPP

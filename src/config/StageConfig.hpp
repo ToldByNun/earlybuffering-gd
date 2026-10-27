@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CONFIG_STAGECONFIG_HPP
-#define FRIRECRACKER_CONFIG_STAGECONFIG_HPP
+#ifndef EARLYBUFFER_CONFIG_STAGECONFIG_HPP
+#define EARLYBUFFER_CONFIG_STAGECONFIG_HPP
 
 #include <cstdint>
 #include <string>
@@ -128,4 +128,4 @@ public:
 using GameModeKind = StageConfig::GameModeKind;
 using AssistMode = StageConfig::AssistMode;
 
-#endif // FRIRECRACKER_CONFIG_STAGECONFIG_HPP
+#endif // EARLYBUFFER_CONFIG_STAGECONFIG_HPP

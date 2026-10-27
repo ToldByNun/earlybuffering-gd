@@ -1,17 +1,17 @@
 from pathlib import Path
 import re
 
-root = Path(r"C:\Users\mikaj\Desktop\frirecracker\src")
+root = Path(r"C:\Users\mikaj\Desktop\earlybuffer\src")
 
 
 def guard_name(path: Path) -> str:
     rel = path.relative_to(root).as_posix().upper().replace("/", "_").replace(".", "_").replace("-", "_")
-    return f"FRIRECRACKER_{rel}"
+    return f"EARLYBUFFER_{rel}"
 
 
-def strip_namespace_frire(text: str) -> str:
-    text = re.sub(r"^\s*using\s+namespace\s+frire\s*;\s*\n", "", text, flags=re.M)
-    text = re.sub(r"^namespace\s+frire\s*\{\s*\n", "", text, flags=re.M)
+def strip_namespace_Eg(text: str) -> str:
+    text = re.sub(r"^\s*using\s+namespace\s+Eg\s*;\s*\n", "", text, flags=re.M)
+    text = re.sub(r"^namespace\s+Eg\s*\{\s*\n", "", text, flags=re.M)
     lines = text.splitlines(True)
     idx = len(lines) - 1
     while idx >= 0 and lines[idx].strip() == "":
@@ -89,8 +89,8 @@ def main() -> None:
         new = raw
         if path.suffix == ".hpp":
             new = replace_pragma(new, path)
-        if "namespace frire" in new or "using namespace frire" in new:
-            new = strip_namespace_frire(new)
+        if "namespace Eg" in new or "using namespace Eg" in new:
+            new = strip_namespace_Eg(new)
         if re.search(r"^namespace\s*\{", new, flags=re.M):
             new = anon_to_static_block(new)
         if new != raw:
@@ -105,11 +105,11 @@ def main() -> None:
         if path.suffix not in (".hpp", ".cpp"):
             continue
         t = path.read_text(encoding="utf-8", errors="replace")
-        if "namespace frire" in t or "using namespace frire" in t:
+        if "namespace Eg" in t or "using namespace Eg" in t:
             left.append(path.name)
         if re.search(r"^namespace\s*\{", t, flags=re.M):
             anon.append(path.name)
-    print("remaining frire ns", left)
+    print("remaining Eg ns", left)
     print("remaining anon ns", anon)
 
 

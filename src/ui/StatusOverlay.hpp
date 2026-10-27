@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_UI_STATUSOVERLAY_HPP
-#define FRIRECRACKER_UI_STATUSOVERLAY_HPP
+#ifndef EARLYBUFFER_UI_STATUSOVERLAY_HPP
+#define EARLYBUFFER_UI_STATUSOVERLAY_HPP
 
 #include <Geode/Geode.hpp>
 #include <string>
@@ -16,4 +16,4 @@ private:
     static cocos2d::CCLabelBMFont* s_label;
 };
 
-#endif // FRIRECRACKER_UI_STATUSOVERLAY_HPP
+#endif // EARLYBUFFER_UI_STATUSOVERLAY_HPP

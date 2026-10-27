@@ -1,6 +1,6 @@
 # Security
 
-frirecracker is a local Geometry Dash client mod. It does not intentionally open network sockets or exfiltrate save data.
+EarlyBuffer is a local Geometry Dash client mod. It does not intentionally open network sockets or exfiltrate save data.
 
 ## Reporting
 

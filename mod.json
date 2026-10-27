@@ -6,8 +6,8 @@
 		"mac": "2.2081",
 		"ios": "2.2081"
 	},
-	"id": "audesign.frirecracker",
-	"name": "frirecracker",
+	"id": "audesign.earlybuffer",
+	"name": "EarlyBuffer",
 	"version": "v1.0.0",
 	"developer": "Audesign",
 	"description": "Early-input forgiveness assist for GD 2.2081. Buffers early jumps and fires on the first shadow-safe tick. Not an autoplayer; Safe Mode recommended.",
@@ -67,7 +67,7 @@
 		"show-pause-bake": {
 			"type": "bool",
 			"name": "Pause Menu Bake UI",
-			"description": "Show frirecracker bake controls on the pause screen (Cycle Mode, Import, Bake Map, Brute Bake, Cancel). Turn off for a clean pause menu.",
+			"description": "Show EarlyBuffer bake controls on the pause screen (Cycle Mode, Import, Bake Map, Brute Bake, Cancel). Turn off for a clean pause menu.",
 			"default": true
 		},
 		"show-pause-assist": {

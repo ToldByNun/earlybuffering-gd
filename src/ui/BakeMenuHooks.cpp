@@ -41,7 +41,7 @@ std::optional<std::filesystem::path> pickReplayFileWin32() {
 
 std::optional<std::filesystem::path> pickSaveJsonWin32(bool saveAs) {
     wchar_t fileBuf[MAX_PATH] = {};
-    wcscpy_s(fileBuf, L"frirecracker-config.json");
+    wcscpy_s(fileBuf, L"earlybuffer-config.json");
     OPENFILENAMEW ofn{};
     ofn.lStructSize = sizeof(ofn);
     ofn.lpstrFile = fileBuf;
@@ -60,11 +60,11 @@ std::optional<std::filesystem::path> pickSaveJsonWin32(bool saveAs) {
 #endif
 
 CCLabelBMFont* findStatusLabel(PauseLayer* self) {
-    return typeinfo_cast<CCLabelBMFont*>(self->getChildByID("frirecracker-bake-status"_spr));
+    return typeinfo_cast<CCLabelBMFont*>(self->getChildByID("earlybuffer-bake-status"_spr));
 }
 
 CCLabelBMFont* findModeLabel(PauseLayer* self) {
-    return typeinfo_cast<CCLabelBMFont*>(self->getChildByID("frirecracker-mode-label"_spr));
+    return typeinfo_cast<CCLabelBMFont*>(self->getChildByID("earlybuffer-mode-label"_spr));
 }
 
 void refreshPauseLabels(PauseLayer* self) {
@@ -98,14 +98,14 @@ void handleImportedPath(std::filesystem::path const& path) {
     auto loaded = ReplayImport::load(path);
     if (loaded.isErr()) {
         AssistLog::info(fmt::format("Import failed: {}", loaded.unwrapErr()));
-        FLAlertLayer::create("frirecracker", loaded.unwrapErr().c_str(), "OK")->show();
+        FLAlertLayer::create("EarlyBuffer", loaded.unwrapErr().c_str(), "OK")->show();
         return;
     }
     BakeMap::get().setPendingReplay(loaded.unwrap());
     AssistController::get().updateOverlay();
     auto const* r = BakeMap::get().pendingReplay();
     FLAlertLayer::create(
-        "frirecracker",
+        "EarlyBuffer",
         fmt::format(
             "Imported {}\n{} events @ {:.0f} tps ({})\n\n"
             "Press Bake Map for replay windows.\n"
@@ -121,7 +121,7 @@ void handleImportedPath(std::filesystem::path const& path) {
 
 void doImportReplay() {
     if (BakeMap::get().isBaking() || BakeScheduler::get().running()) {
-        FLAlertLayer::create("frirecracker", "Bake in progress — wait or cancel.", "OK")->show();
+        FLAlertLayer::create("EarlyBuffer", "Bake in progress — wait or cancel.", "OK")->show();
         return;
     }
 #ifdef GEODE_IS_WINDOWS
@@ -130,7 +130,7 @@ void doImportReplay() {
     handleImportedPath(*picked);
 #else
     FLAlertLayer::create(
-        "frirecracker",
+        "EarlyBuffer",
         "Replay import is Windows-only for now.",
         "OK"
     )->show();
@@ -140,16 +140,16 @@ void doImportReplay() {
 void startBake(bool brute) {
     auto* pl = PlayLayer::get();
     if (!pl) {
-        FLAlertLayer::create("frirecracker", "No level loaded.", "OK")->show();
+        FLAlertLayer::create("EarlyBuffer", "No level loaded.", "OK")->show();
         return;
     }
     if (BakeMap::get().isBaking() || BakeScheduler::get().running()) {
-        FLAlertLayer::create("frirecracker", "Bake already running.", "OK")->show();
+        FLAlertLayer::create("EarlyBuffer", "Bake already running.", "OK")->show();
         return;
     }
     if (!brute && !BakeMap::get().pendingReplay()) {
         FLAlertLayer::create(
-            "frirecracker",
+            "EarlyBuffer",
             "Bake Map needs a replay.\nImport Replay first — or use Brute Bake\n(no macro, explores safe clicks).",
             "OK"
         )->show();
@@ -158,7 +158,7 @@ void startBake(bool brute) {
     auto snap = AssistController::get().ensureStartSnapshot(pl);
     if (snap.isErr()) {
         FLAlertLayer::create(
-            "frirecracker",
+            "EarlyBuffer",
             "Reset the level once (play from start),\nthen pause and bake again.",
             "OK"
         )->show();
@@ -173,7 +173,7 @@ void startBake(bool brute) {
         brute ? BakeMethod::BruteForce : BakeMethod::Replay
     );
     if (!ok) {
-        FLAlertLayer::create("frirecracker", "Could not start bake.", "OK")->show();
+        FLAlertLayer::create("EarlyBuffer", "Could not start bake.", "OK")->show();
         return;
     }
     AssistController::get().updateOverlay();
@@ -240,13 +240,13 @@ void doExportConfig() {
     auto path = pickSaveJsonWin32(true);
     if (!path) return;
     auto r = ConfigBundle::exportTo(*path);
-    if (r.isErr()) FLAlertLayer::create("frirecracker", r.unwrapErr().c_str(), "OK")->show();
-    else FLAlertLayer::create("frirecracker", "Config exported.", "OK")->show();
+    if (r.isErr()) FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
+    else FLAlertLayer::create("EarlyBuffer", "Config exported.", "OK")->show();
 #else
-    auto path = Mod::get()->getSaveDir() / "frirecracker-config.json";
+    auto path = Mod::get()->getSaveDir() / "earlybuffer-config.json";
     auto r = ConfigBundle::exportTo(path);
     FLAlertLayer::create(
-        "frirecracker",
+        "EarlyBuffer",
         r.isOk() ? fmt::format("Exported to {}", path.string()).c_str() : r.unwrapErr().c_str(),
         "OK"
     )->show();
@@ -259,13 +259,13 @@ void doImportConfig() {
     if (!path) return;
     auto r = ConfigBundle::importFrom(*path);
 #else
-    auto path = Mod::get()->getSaveDir() / "frirecracker-config.json";
+    auto path = Mod::get()->getSaveDir() / "earlybuffer-config.json";
     auto r = ConfigBundle::importFrom(path);
 #endif
-    if (r.isErr()) FLAlertLayer::create("frirecracker", r.unwrapErr().c_str(), "OK")->show();
+    if (r.isErr()) FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
     else {
         AssistController::get().updateOverlay();
-        FLAlertLayer::create("frirecracker", "Config imported.", "OK")->show();
+        FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
     }
 }
 
@@ -279,15 +279,15 @@ CCMenuItemSpriteExtra* makeTextBtn(char const* text, float width, auto cb) {
 }
 
 
-class $modify(FrirePauseLayer, PauseLayer) {
+class $modify(EbPauseLayer, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
         bool const showBake = StageConfig::showPauseBake();
         bool const showAssist = StageConfig::showPauseAssist();
         if (!showBake && !showAssist) return;
 
-        if (this->getChildByID("frirecracker-bake-menu"_spr)
-            || this->getChildByID("frirecracker-assist-menu"_spr)) {
+        if (this->getChildByID("earlybuffer-bake-menu"_spr)
+            || this->getChildByID("earlybuffer-assist-menu"_spr)) {
             refreshPauseLabels(this);
             return;
         }
@@ -295,9 +295,9 @@ class $modify(FrirePauseLayer, PauseLayer) {
         auto win = this->getContentSize();
 
         if (showBake) {
-            auto* title = CCLabelBMFont::create("frirecracker bake", "goldFont.fnt");
-            if (!title) title = CCLabelBMFont::create("frirecracker bake", "bigFont.fnt");
-            title->setID("frirecracker-bake-title"_spr);
+            auto* title = CCLabelBMFont::create("EarlyBuffer bake", "goldFont.fnt");
+            if (!title) title = CCLabelBMFont::create("EarlyBuffer bake", "bigFont.fnt");
+            title->setID("earlybuffer-bake-title"_spr);
             title->setScale(0.45f);
             title->setAnchorPoint({ 0.f, 1.f });
             title->setPosition({ 14.f, win.height - 52.f });
@@ -305,7 +305,7 @@ class $modify(FrirePauseLayer, PauseLayer) {
 
             auto* modeLbl = CCLabelBMFont::create("Mode: …", "chatFont.fnt");
             if (!modeLbl) modeLbl = CCLabelBMFont::create("Mode: …", "bigFont.fnt");
-            modeLbl->setID("frirecracker-mode-label"_spr);
+            modeLbl->setID("earlybuffer-mode-label"_spr);
             modeLbl->setScale(0.5f);
             modeLbl->setAnchorPoint({ 0.f, 1.f });
             modeLbl->setPosition({ 14.f, win.height - 72.f });
@@ -313,7 +313,7 @@ class $modify(FrirePauseLayer, PauseLayer) {
 
             auto* status = CCLabelBMFont::create("…", "chatFont.fnt");
             if (!status) status = CCLabelBMFont::create("…", "bigFont.fnt");
-            status->setID("frirecracker-bake-status"_spr);
+            status->setID("earlybuffer-bake-status"_spr);
             status->setScale(0.45f);
             status->setAnchorPoint({ 0.f, 1.f });
             status->setOpacity(210);
@@ -321,7 +321,7 @@ class $modify(FrirePauseLayer, PauseLayer) {
             this->addChild(status, 999);
 
             auto* col = CCMenu::create();
-            col->setID("frirecracker-bake-menu"_spr);
+            col->setID("earlybuffer-bake-menu"_spr);
             col->setContentSize({ 160.f, 220.f });
             col->ignoreAnchorPointForPosition(false);
             col->setAnchorPoint({ 0.f, 1.f });
@@ -346,7 +346,7 @@ class $modify(FrirePauseLayer, PauseLayer) {
 
         if (showAssist) {
             auto* acol = CCMenu::create();
-            acol->setID("frirecracker-assist-menu"_spr);
+            acol->setID("earlybuffer-assist-menu"_spr);
             acol->setContentSize({ 160.f, 280.f });
             acol->ignoreAnchorPointForPosition(false);
             acol->setAnchorPoint({ 1.f, 1.f });
@@ -372,7 +372,7 @@ class $modify(FrirePauseLayer, PauseLayer) {
         }
 
         refreshPauseLabels(this);
-        this->schedule(schedule_selector(FrirePauseLayer::onBakePoll), 0.15f);
+        this->schedule(schedule_selector(EbPauseLayer::onBakePoll), 0.15f);
     }
 
     void onBakePoll(float) {

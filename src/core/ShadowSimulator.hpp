@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CORE_SHADOWSIMULATOR_HPP
-#define FRIRECRACKER_CORE_SHADOWSIMULATOR_HPP
+#ifndef EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
+#define EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
 
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
@@ -268,4 +268,4 @@ private:
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
 };
 
-#endif // FRIRECRACKER_CORE_SHADOWSIMULATOR_HPP
+#endif // EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP

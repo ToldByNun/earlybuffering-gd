@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CORE_ASSISTCONTROLLER_HPP
-#define FRIRECRACKER_CORE_ASSISTCONTROLLER_HPP
+#ifndef EARLYBUFFER_CORE_ASSISTCONTROLLER_HPP
+#define EARLYBUFFER_CORE_ASSISTCONTROLLER_HPP
 
 #include "DecisionLog.hpp"
 #include "ShadowSimulator.hpp"
@@ -140,7 +140,7 @@ private:
     int m_startSnapshotSlot = -1;
     bool m_startSnapshotTaken = false;
     std::string m_lastBakeHint;
-    std::string m_overlayText = "frirecracker: OFF";
+    std::string m_overlayText = "EarlyBuffer: OFF";
     std::deque<std::chrono::steady_clock::time_point> m_clickTimes;
     bool m_cpsLocked = false;
     int m_outcomePlanId = 0;
@@ -154,4 +154,4 @@ private:
     int m_savesLevel = 0;
 };
 
-#endif // FRIRECRACKER_CORE_ASSISTCONTROLLER_HPP
+#endif // EARLYBUFFER_CORE_ASSISTCONTROLLER_HPP

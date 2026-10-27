@@ -24,11 +24,11 @@ bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMetho
         BakeScheduler::get().markFinished();
         if (res.isErr()) {
             AssistLog::info(fmt::format("BAKE failed: {}", res.unwrapErr()));
-            FLAlertLayer::create("frirecracker", res.unwrapErr().c_str(), "OK")->show();
+            FLAlertLayer::create("EarlyBuffer", res.unwrapErr().c_str(), "OK")->show();
         } else {
             AssistLog::info(fmt::format("BAKE done: {} windows", res.unwrap()));
             FLAlertLayer::create(
-                "frirecracker",
+                "EarlyBuffer",
                 fmt::format("Bake done — {} windows (main-thread).", res.unwrap()).c_str(),
                 "OK"
             )->show();

@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CORE_REPLAYIMPORT_HPP
-#define FRIRECRACKER_CORE_REPLAYIMPORT_HPP
+#ifndef EARLYBUFFER_CORE_REPLAYIMPORT_HPP
+#define EARLYBUFFER_CORE_REPLAYIMPORT_HPP
 
 #include <Geode/Geode.hpp>
 #include <string>
@@ -32,4 +32,4 @@ public:
     static geode::Result<ImportedReplay> loadSlc(std::filesystem::path const& path);
 };
 
-#endif // FRIRECRACKER_CORE_REPLAYIMPORT_HPP
+#endif // EARLYBUFFER_CORE_REPLAYIMPORT_HPP

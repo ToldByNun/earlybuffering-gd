@@ -1,12 +1,12 @@
-# frirecracker
+# EarlyBuffer
 
 **Geode** mod for **Geometry Dash 2.2081** -- early-input forgiveness assist.
 
-When you click a little early, frirecracker buffers the press and fires on the first shadow-simulated safe tick. It is an assist tool, not an autoplayer and not late-forgiveness (it does not rewind time for late clicks).
+When you click a little early, EarlyBuffer buffers the press and fires on the first shadow-simulated safe tick. It is an assist tool, not an autoplayer and not late-forgiveness (it does not rewind time for late clicks).
 
 | | |
 |---|---|
-| Mod ID | `audesign.frirecracker` |
+| Mod ID | `audesign.earlybuffer` |
 | Target | GD 2.2081 / Geode 5.11.1+ |
 | Platforms | Windows, macOS, iOS, Android (CI) |
 | License | [MIT](LICENSE) |
@@ -42,7 +42,7 @@ CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/wor
 
 ## Settings (quick)
 
-Open Geode -> frirecracker -> Settings. Highlights:
+Open Geode -> EarlyBuffer -> Settings. Highlights:
 
 - **Enabled / Preset / Assist Mode** -- master control and Live / Hybrid / Replay / BruteForce
 - **Safe Mode / Overlay / Pause UI** -- publish-safe defaults; hide chrome when you want a clean pause menu
@@ -73,3 +73,5 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - Maintainer / design: **Audesign** ([ToldByNun](https://github.com/ToldByNun))
 - Built on [Geode](https://geode-sdk.org/) and Geometry Dash bindings
 - Replay import uses [GDReplayFormat](https://github.com/maxnut/GDReplayFormat) (libGDR)
+
+> Formerly developed under the working names *frirecracker* / *EarlyBuffer*.

@@ -66,6 +66,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: frirecracker-${{ github.sha }}
+          name: earlybuffer-${{ github.sha }}
           path: ${{ steps.build.outputs.build-output }}
           if-no-files-found: error

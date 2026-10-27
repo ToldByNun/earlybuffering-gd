@@ -47,7 +47,7 @@ Thanks for helping. Please read the [README](README.md) honesty note: design is 
 ## Code style
 
 - Match neighboring files (Geode prelude, class-only headers with `#ifndef` guards).
-- No `namespace frire` / anonymous namespaces for new code (project convention).
+- No `namespace Eg` / anonymous namespaces for new code (project convention).
 - Avoid committing `build/`, `build_*.txt`, or local save dumps.
 
 ## License

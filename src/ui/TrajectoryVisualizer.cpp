@@ -102,7 +102,7 @@ void TrajectoryVisualizer::ensureNode(PlayLayer* layer) {
     }
     m_node = CCDrawNode::create();
     if (!m_node) return;
-    m_node->setID("frirecracker-trajectory"_spr);
+    m_node->setID("earlybuffer-trajectory"_spr);
     m_node->setBlendFunc({ GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA });
     if (layer->m_objectLayer) {
         layer->m_objectLayer->addChild(m_node, 9999);

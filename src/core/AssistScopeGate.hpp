@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CORE_ASSISTSCOPEGATE_HPP
-#define FRIRECRACKER_CORE_ASSISTSCOPEGATE_HPP
+#ifndef EARLYBUFFER_CORE_ASSISTSCOPEGATE_HPP
+#define EARLYBUFFER_CORE_ASSISTSCOPEGATE_HPP
 
 class PlayerObject;
 class PlayLayer;
@@ -11,4 +11,4 @@ public:
     static char const* blockReason(PlayLayer* layer, PlayerObject* player);
 };
 
-#endif // FRIRECRACKER_CORE_ASSISTSCOPEGATE_HPP
+#endif // EARLYBUFFER_CORE_ASSISTSCOPEGATE_HPP

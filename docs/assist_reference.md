@@ -1,4 +1,4 @@
-# frirecracker Assist Reference
+# EarlyBuffer Assist Reference
 
 Rebuild / harden guide for Geometry Dash 2.2081 (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X.
 

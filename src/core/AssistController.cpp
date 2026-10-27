@@ -240,7 +240,7 @@ void AssistController::updateOverlay() {
     else if (m_buffer.state == BufferState::FiredHolding) state = "hold";
 
     if (!stage.enabled) {
-        m_overlayText = "frirecracker: OFF";
+        m_overlayText = "EarlyBuffer: OFF";
     }
     else {
         int left = 0;
@@ -277,7 +277,7 @@ void AssistController::updateOverlay() {
                 : fmt::format("cps {}/{}", cps, cpsLim);
         }
         m_overlayText = fmt::format(
-            "frire {} | mode {} | {} left={} | {} | {}",
+            "EarlyBuffer {} | mode {} | {} left={} | {} | {}",
             StageConfig::stageLabel(stage),
             modeName,
             state,

@@ -11,8 +11,8 @@ using namespace geode::prelude;
 
 
 
-struct FrireGdr : gdr::Replay<FrireGdr, gdr::Input<>> {
-    FrireGdr() : Replay("frirecracker", 1) {}
+struct EbGdr : gdr::Replay<EbGdr, gdr::Input<>> {
+    EbGdr() : Replay("earlybuffer", 1) {}
 };
 
 std::string lowerExt(std::filesystem::path const& path) {
@@ -92,7 +92,7 @@ Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& path) {
 }
 
 Result<ImportedReplay> ReplayImport::loadGdr(std::filesystem::path const& path) {
-    auto res = FrireGdr::importData(path);
+    auto res = EbGdr::importData(path);
     if (res.isErr()) return Err(res.unwrapErr());
 
     auto const& r = res.unwrap();

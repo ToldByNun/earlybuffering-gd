@@ -22,7 +22,7 @@ inline bool simulating() { return ShadowSimulator::get().isSimulating(); }
 // ---------------------------------------------------------------------------
 // Input + physics tick
 // ---------------------------------------------------------------------------
-class $modify(FrireGJBaseGameLayer, GJBaseGameLayer) {
+class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     static void onModify(auto& self) {
         (void)self.setHookPriority("GJBaseGameLayer::handleButton", Priority::First);
     }
@@ -159,7 +159,7 @@ class $modify(FrireGJBaseGameLayer, GJBaseGameLayer) {
 // ---------------------------------------------------------------------------
 // Player
 // ---------------------------------------------------------------------------
-class $modify(FrirePlayerObject, PlayerObject) {
+class $modify(EbPlayerObject, PlayerObject) {
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayerObject::pushButton", Priority::First);
         (void)self.setHookPriority("PlayerObject::update", Priority::First);
@@ -245,7 +245,7 @@ class $modify(FrirePlayerObject, PlayerObject) {
 // Runs *after* every other hook on PlayerObject::update (notably Click Between Frames,
 // which splits one step into several sub-updates). Lets us know how much of the current
 // step has already been simulated when a mid-step input arrives.
-class $modify(FrirePlayerObjectLate, PlayerObject) {
+class $modify(EbPlayerObjectLate, PlayerObject) {
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayerObject::update", Priority::Last);
     }
@@ -259,7 +259,7 @@ class $modify(FrirePlayerObjectLate, PlayerObject) {
 // ---------------------------------------------------------------------------
 // Objects touched by the shadow: no triggers, no visuals; flags restored after sim
 // ---------------------------------------------------------------------------
-class $modify(FrireEnhancedGameObject, EnhancedGameObject) {
+class $modify(EbEnhancedGameObject, EnhancedGameObject) {
     void activatedByPlayer(PlayerObject* player) {
         if (simulating()) {
             // Save pre-touch state for restore. Rings: physics via applyRingJump only —
@@ -292,14 +292,14 @@ class $modify(FrireEnhancedGameObject, EnhancedGameObject) {
     }
 };
 
-class $modify(FrireEffectGameObject, EffectGameObject) {
+class $modify(EbEffectGameObject, EffectGameObject) {
     void triggerObject(GJBaseGameLayer* layer, int uniqueID, gd::vector<int> const* remapKeys) {
         if (simulating()) return;
         EffectGameObject::triggerObject(layer, uniqueID, remapKeys);
     }
 };
 
-class $modify(FrireGameObject, GameObject) {
+class $modify(EbGameObject, GameObject) {
     void playShineEffect() {
         if (simulating()) return;
         GameObject::playShineEffect();
@@ -321,7 +321,7 @@ class $modify(FrireGameObject, GameObject) {
 };
 
 // Orb / pad ripple + power visuals. Real level objects must not show sim touches.
-class $modify(FrireRingObject, RingObject) {
+class $modify(EbRingObject, RingObject) {
     void spawnCircle() {
         if (simulating()) return;
         RingObject::spawnCircle();
@@ -344,7 +344,7 @@ class $modify(FrireRingObject, RingObject) {
     }
 };
 
-class $modify(FrireHardStreak, HardStreak) {
+class $modify(EbHardStreak, HardStreak) {
     void addPoint(cocos2d::CCPoint point) {
         // Wave collision uses the trail. The shadow must be allowed to grow its own;
         // the real player's trail must not be touched during sim.
@@ -356,7 +356,7 @@ class $modify(FrireHardStreak, HardStreak) {
 // ---------------------------------------------------------------------------
 // PlayLayer lifecycle + death detection
 // ---------------------------------------------------------------------------
-class $modify(FrirePlayLayer, PlayLayer) {
+class $modify(EbPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayLayer::destroyPlayer", Priority::First);
     }
@@ -426,7 +426,7 @@ class $modify(FrirePlayLayer, PlayLayer) {
     }
 };
 
-class $modify(FrireGJGameLevel, GJGameLevel) {
+class $modify(EbGJGameLevel, GJGameLevel) {
     void savePercentage(int percent, bool isPracticeMode, int clicks, int attempts, bool isChkValid) {
         if (StageConfig::isEnabled() && StageConfig::safeMode()) return;
         if (AssistController::get().assistTouchedRun()) return;

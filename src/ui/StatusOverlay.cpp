@@ -14,9 +14,9 @@ void StatusOverlay::attach(PlayLayer* playLayer) {
     detach();
     if (!playLayer) return;
 
-    s_label = CCLabelBMFont::create("frirecracker", "chatFont.fnt");
+    s_label = CCLabelBMFont::create("EarlyBuffer", "chatFont.fnt");
     if (!s_label) {
-        s_label = CCLabelBMFont::create("frirecracker", "bigFont.fnt");
+        s_label = CCLabelBMFont::create("EarlyBuffer", "bigFont.fnt");
     }
     if (!s_label) return;
 
@@ -24,12 +24,12 @@ void StatusOverlay::attach(PlayLayer* playLayer) {
     s_label->setAnchorPoint({ 0.f, 1.f });
     s_label->setOpacity(220);
     s_label->setAlignment(kCCTextAlignmentLeft);
-    s_label->setID("frirecracker-status-overlay"_spr);
+    s_label->setID("earlybuffer-status-overlay"_spr);
 
     auto const winSize = CCDirector::sharedDirector()->getWinSize();
     s_label->setPosition({ 10.f, winSize.height - 10.f });
 
-    g_lastText = "frirecracker";
+    g_lastText = "EarlyBuffer";
     g_lastVisible = StageConfig::showOverlay();
     s_label->setVisible(g_lastVisible);
 

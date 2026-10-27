@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CORE_BAKEMAP_HPP
-#define FRIRECRACKER_CORE_BAKEMAP_HPP
+#ifndef EARLYBUFFER_CORE_BAKEMAP_HPP
+#define EARLYBUFFER_CORE_BAKEMAP_HPP
 
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
@@ -130,4 +130,4 @@ private:
     mutable std::mutex m_simMutex;
 };
 
-#endif // FRIRECRACKER_CORE_BAKEMAP_HPP
+#endif // EARLYBUFFER_CORE_BAKEMAP_HPP

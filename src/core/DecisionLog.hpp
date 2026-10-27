@@ -1,5 +1,5 @@
-#ifndef FRIRECRACKER_CORE_DECISIONLOG_HPP
-#define FRIRECRACKER_CORE_DECISIONLOG_HPP
+#ifndef EARLYBUFFER_CORE_DECISIONLOG_HPP
+#define EARLYBUFFER_CORE_DECISIONLOG_HPP
 
 #include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
@@ -50,4 +50,4 @@ private:
     std::vector<DecisionEntry> m_entries;
 };
 
-#endif // FRIRECRACKER_CORE_DECISIONLOG_HPP
+#endif // EARLYBUFFER_CORE_DECISIONLOG_HPP
