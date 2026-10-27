@@ -35,4 +35,19 @@ if (MSVC)
     set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_CL_MPCount 1)
 endif()
 
+# GeodeBindings GeneratedSource.cpp uses FMOD_* types without including fmod.h.
+# On iOS (and sometimes other Clang targets) that fails with "unknown type name FMOD_RESULT".
+# Force-include Geode's FMOD headers into GeodeBindings before those TUs compile.
+if (TARGET GeodeBindings)
+    set(_EB_FMOD_H "$ENV{GEODE_SDK}/loader/include/Geode/fmod/fmod.h")
+    if (EXISTS "${_EB_FMOD_H}")
+        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
+            target_compile_options(GeodeBindings PRIVATE "-include${_EB_FMOD_H}")
+        elseif (MSVC)
+            target_compile_options(GeodeBindings PRIVATE "/FI${_EB_FMOD_H}")
+        endif()
+        message(STATUS "EarlyBuffer: force-including FMOD headers for GeodeBindings")
+    endif()
+endif()
+
 setup_geode_mod(${PROJECT_NAME})

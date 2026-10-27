@@ -43,9 +43,6 @@ jobs:
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
-    # iOS currently fails in GeodeBindings (FMOD types / Xcode 26 toolchain).
-    # Keep the job visible but do not block package of Win/macOS/Android.
-    continue-on-error: ${{ matrix.config.name == 'iOS' }}
 
     steps:
       - uses: actions/checkout@v4

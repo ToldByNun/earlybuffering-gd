@@ -38,4 +38,4 @@ Local development is primarily **Windows**. Multi-platform binaries are produced
 
 ## CI note
 
-GitHub Actions builds Windows, macOS, and Android. The iOS job is currently **continue-on-error** because GeodeBindings fails to compile FMOD stubs under the runner's Xcode 26 toolchain (upstream, not EarlyBuffer source). Re-enable hard-fail when Geode/bindings fix lands.
+Multi-platform CI builds Windows, macOS, iOS, and Android. iOS GeodeBindings needs an FMOD force-include (see `CMakeLists.txt`) because codegen emits FMOD stubs without including `fmod.h`.
