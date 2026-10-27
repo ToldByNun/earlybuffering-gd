@@ -3,6 +3,7 @@
 #include "core/BakeMap.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "debug/AssistLog.hpp"
+#include "debug/PlanGoldCorpus.hpp"
 #include "ui/StatusOverlay.hpp"
 #include "ui/TrajectoryVisualizer.hpp"
 
@@ -10,17 +11,14 @@
 #include <Geode/loader/SettingV3.hpp>
 
 using namespace geode::prelude;
-using namespace frire;
 
-namespace {
-
-void onAnySetting() {
+static void onAnySetting() {
     if (StageConfig::isApplying()) return;
     StageConfig::refreshCache();
     AssistController::get().updateOverlay();
 }
 
-}
+
 
 $on_mod(Loaded) {
     // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
@@ -30,6 +28,12 @@ $on_mod(Loaded) {
     {
         std::string report;
         bool const ok = ShadowSimulator::regressionSelfCheck(report);
+        if (ok) AssistLog::info(report);
+        else AssistLog::info(fmt::format("WARN {}", report));
+    }
+    {
+        std::string report;
+        bool const ok = PlanGoldCorpus::run(report);
         if (ok) AssistLog::info(report);
         else AssistLog::info(fmt::format("WARN {}", report));
     }
@@ -140,8 +144,13 @@ $on_mod(Loaded) {
         AssistController::get().updateOverlay();
     });
     watchBool("show-pause-bake");
+    watchBool("show-pause-assist");
     watchBool("swallow-hopeless");
     watchBool("auto-tune");
+    watchBool("assist-only-practice");
+    watchBool("assist-startpos-only");
+    watchInt("assist-percent-min");
+    watchInt("assist-percent-max");
     watchInt("sim-budget-us");
     watchInt("bake-radius");
     watchInt("cps-limit");
@@ -158,6 +167,12 @@ $on_mod(Loaded) {
         onAnySetting();
     });
     listenForSettingChanges<std::string>("assist-verify", [](std::string) {
+        onAnySetting();
+    });
+    listenForSettingChanges<std::string>("save-feedback", [](std::string) {
+        onAnySetting();
+    });
+    listenForSettingChanges<std::string>("assist-disable-ranges", [](std::string) {
         onAnySetting();
     });
 

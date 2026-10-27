@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FRIRECRACKER_CORE_LEVELPROFILE_HPP
+#define FRIRECRACKER_CORE_LEVELPROFILE_HPP
 
 #include "../config/StageConfig.hpp"
 
@@ -7,7 +8,6 @@
 #include <unordered_map>
 #include <cmath>
 
-namespace frire {
 
 struct SpotStats {
     float bias = 0.f;       // [-2, +2], applied as round(bias) on Delay
@@ -79,4 +79,4 @@ private:
     ModeLearn m_modes[StageConfig::MODE_COUNT];
 };
 
-}
+#endif // FRIRECRACKER_CORE_LEVELPROFILE_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FRIRECRACKER_CORE_DECISIONLOG_HPP
+#define FRIRECRACKER_CORE_DECISIONLOG_HPP
 
 #include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
@@ -7,7 +8,6 @@
 #include <vector>
 #include <optional>
 
-namespace frire {
 
 struct DecisionEntry {
     int tick = 0;                 // effect / decision tick
@@ -50,4 +50,4 @@ private:
     std::vector<DecisionEntry> m_entries;
 };
 
-}
+#endif // FRIRECRACKER_CORE_DECISIONLOG_HPP

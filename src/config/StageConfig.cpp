@@ -4,15 +4,15 @@
 #include <Geode/loader/SettingV3.hpp>
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <string>
+#include <vector>
 
 using namespace geode::prelude;
 
-namespace frire {
-
-namespace {
-
-constexpr char const* PRESET_NAMES[] = { "Tight", "Normal", "Wide", "Max", "Off" };
+static constexpr char const* PRESET_NAMES[] = { "Tight", "Normal", "Wide", "Max", "Off" };
 
 struct PresetDef {
     bool enabled;
@@ -72,17 +72,24 @@ int g_cachedSmartCombos = 48;
 int g_cachedSmartHorizon = 0;
 std::string g_cachedAssistVerify = "off";
 int g_cachedTickBudget = 4000;
+bool g_cachedAssistOnlyPractice = false;
+bool g_cachedAssistStartposOnly = false;
+int g_cachedAssistPercentMin = 0;
+int g_cachedAssistPercentMax = 100;
+std::vector<StageConfig::PercentRange> g_cachedAssistDisableRanges;
+bool g_cachedShowPauseAssist = true;
+std::string g_cachedSaveFeedback = "off";
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
 bool g_cacheInitialized = false;
 bool g_applying = false;
 std::string g_lastSyncedPreset;
 
-int clampInt(int v, int lo, int hi) {
+static int clampInt(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
 }
 
-int readInt(Mod* mod, char const* id, int fallback) {
+static int readInt(Mod* mod, char const* id, int fallback) {
     try {
         return static_cast<int>(mod->getSettingValue<int64_t>(id));
     }
@@ -91,7 +98,7 @@ int readInt(Mod* mod, char const* id, int fallback) {
     }
 }
 
-bool readBool(Mod* mod, char const* id, bool fallback) {
+static bool readBool(Mod* mod, char const* id, bool fallback) {
     try {
         return mod->getSettingValue<bool>(id);
     }
@@ -100,6 +107,86 @@ bool readBool(Mod* mod, char const* id, bool fallback) {
     }
 }
 
+static float clampPct(float v) {
+    if (!std::isfinite(v)) return 0.f;
+    return std::max(0.f, std::min(100.f, v));
+}
+
+// Parse "12.50-25.00; 50-60.25" or one range per line.
+static std::vector<StageConfig::PercentRange> parseDisableRanges(std::string const& raw) {
+    std::vector<StageConfig::PercentRange> out;
+    std::string token;
+    auto flush = [&]() {
+        // trim
+        auto begin = token.find_first_not_of(" \t\r\n");
+        if (begin == std::string::npos) { token.clear(); return; }
+        auto end = token.find_last_not_of(" \t\r\n");
+        std::string s = token.substr(begin, end - begin + 1);
+        token.clear();
+        if (s.empty()) return;
+
+        // allow "a-b", "a – b", "a to b"
+        for (char& c : s) {
+            if (c == ',' ) c = ' '; // shouldn't appear inside one token
+        }
+        std::string left, right;
+        auto toPos = s.find(" to ");
+        size_t sep = std::string::npos;
+        size_t sepLen = 1;
+        if (toPos != std::string::npos) {
+            sep = toPos;
+            sepLen = 4;
+        }
+        else {
+            // ASCII '-' or UTF-8 en-dash U+2013 (e2 80 93)
+            for (size_t i = 0; i < s.size(); ++i) {
+                if (s[i] == '-') { sep = i; sepLen = 1; break; }
+                if (i + 2 < s.size()
+                    && static_cast<unsigned char>(s[i]) == 0xe2
+                    && static_cast<unsigned char>(s[i + 1]) == 0x80
+                    && static_cast<unsigned char>(s[i + 2]) == 0x93) {
+                    sep = i;
+                    sepLen = 3;
+                    break;
+                }
+            }
+        }
+        if (sep == std::string::npos) return;
+        left = s.substr(0, sep);
+        right = s.substr(sep + sepLen);
+        auto trimStr = [](std::string& t) {
+            auto b = t.find_first_not_of(" \t");
+            auto e = t.find_last_not_of(" \t");
+            if (b == std::string::npos) { t.clear(); return; }
+            t = t.substr(b, e - b + 1);
+        };
+        trimStr(left);
+        trimStr(right);
+        if (left.empty() || right.empty()) return;
+        char* endL = nullptr;
+        char* endR = nullptr;
+        float a = std::strtof(left.c_str(), &endL);
+        float b = std::strtof(right.c_str(), &endR);
+        if (endL == left.c_str() || endR == right.c_str()) return;
+        a = clampPct(a);
+        b = clampPct(b);
+        // round to 2 decimals for stable compare
+        a = std::round(a * 100.f) / 100.f;
+        b = std::round(b * 100.f) / 100.f;
+        if (a > b) std::swap(a, b);
+        out.push_back({ a, b });
+    };
+
+    for (char c : raw) {
+        if (c == '\n' || c == '\r' || c == ';' || c == ',') {
+            flush();
+        }
+        else {
+            token.push_back(c);
+        }
+    }
+    flush();
+    return out;
 }
 
 char const* StageConfig::presetName(int index) {
@@ -139,6 +226,31 @@ void StageConfig::refreshCache() {
     g_cachedSmartCombos = clampInt(readInt(mod, "smart-combos", 48), 8, 256);
     g_cachedSmartHorizon = clampInt(readInt(mod, "smart-horizon", 0), 0, 320);
     g_cachedTickBudget = clampInt(readInt(mod, "tick-budget", 4000), 500, 20000);
+    g_cachedAssistOnlyPractice = readBool(mod, "assist-only-practice", false);
+    g_cachedAssistStartposOnly = readBool(mod, "assist-startpos-only", false);
+    g_cachedAssistPercentMin = clampInt(readInt(mod, "assist-percent-min", 0), 0, 100);
+    g_cachedAssistPercentMax = clampInt(readInt(mod, "assist-percent-max", 100), 0, 100);
+    if (g_cachedAssistPercentMin > g_cachedAssistPercentMax) {
+        std::swap(g_cachedAssistPercentMin, g_cachedAssistPercentMax);
+    }
+    try {
+        g_cachedAssistDisableRanges = parseDisableRanges(
+            mod->getSettingValue<std::string>("assist-disable-ranges")
+        );
+    }
+    catch (...) {
+        g_cachedAssistDisableRanges.clear();
+    }
+    g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", true);
+    try {
+        g_cachedSaveFeedback = mod->getSettingValue<std::string>("save-feedback");
+        if (g_cachedSaveFeedback != "icon" && g_cachedSaveFeedback != "sound") {
+            g_cachedSaveFeedback = "off";
+        }
+    }
+    catch (...) {
+        g_cachedSaveFeedback = "off";
+    }
     try {
         g_cachedAssistVerify = mod->getSettingValue<std::string>("assist-verify");
         if (g_cachedAssistVerify != "ab") g_cachedAssistVerify = "off";
@@ -339,6 +451,24 @@ bool StageConfig::assistVerifyAb() {
     return g_cachedAssistVerify == "ab";
 }
 int StageConfig::tickBudgetPerPress() { ensureCache(); return g_cachedTickBudget; }
+bool StageConfig::assistOnlyPractice() { ensureCache(); return g_cachedAssistOnlyPractice; }
+bool StageConfig::assistStartposOnly() { ensureCache(); return g_cachedAssistStartposOnly; }
+int StageConfig::assistPercentMin() { ensureCache(); return g_cachedAssistPercentMin; }
+int StageConfig::assistPercentMax() { ensureCache(); return g_cachedAssistPercentMax; }
+std::vector<StageConfig::PercentRange> const& StageConfig::assistDisableRanges() {
+    ensureCache();
+    return g_cachedAssistDisableRanges;
+}
+bool StageConfig::isInAssistDisableRange(float percent) {
+    ensureCache();
+    float const p = clampPct(percent);
+    for (auto const& r : g_cachedAssistDisableRanges) {
+        if (p + 0.0001f >= r.from && p - 0.0001f <= r.to) return true;
+    }
+    return false;
+}
+bool StageConfig::showPauseAssist() { ensureCache(); return g_cachedShowPauseAssist; }
+char const* StageConfig::saveFeedbackMode() { ensureCache(); return g_cachedSaveFeedback.c_str(); }
 int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
 int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
@@ -379,4 +509,3 @@ std::string StageConfig::stageLabel(StageInfo const& info) {
     return fmt::format("{} ({}A/{}W)", presetName(info.index), info.ticksAll, info.ticksWave);
 }
 
-}

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FRIRECRACKER_CORE_ASSISTCONTROLLER_HPP
+#define FRIRECRACKER_CORE_ASSISTCONTROLLER_HPP
 
 #include "DecisionLog.hpp"
 #include "ShadowSimulator.hpp"
@@ -9,7 +10,6 @@
 #include <deque>
 #include <string>
 
-namespace frire {
 
 enum class BufferState {
     Idle,
@@ -60,6 +60,8 @@ public:
 
     void noteRealJump(PlayerObject* player);
     void onRealDeath(PlayLayer* playLayer, PlayerObject* player, GameObject* object);
+    void onCheckpointLoad();
+    bool assistTouchedRun() const { return m_assistTouchedRun; }
 
     void resetLevelProfile();
 
@@ -147,6 +149,9 @@ private:
     bool m_outcomePlayer1 = true;
     bool m_outcomeExpectOrb = false;
     float m_outcomeStartX = 0.f;
+    bool m_assistTouchedRun = false;
+    int m_savesAttempt = 0;
+    int m_savesLevel = 0;
 };
 
-}
+#endif // FRIRECRACKER_CORE_ASSISTCONTROLLER_HPP

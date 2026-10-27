@@ -1,4 +1,5 @@
 #include "BakeMap.hpp"
+#include "AssistController.hpp"
 #include "ShadowSimulator.hpp"
 #include "LevelProfile.hpp"
 #include "../debug/AssistLog.hpp"
@@ -6,14 +7,11 @@
 #include <Geode/utils/file.hpp>
 #include <algorithm>
 #include <cmath>
-#include <thread>
 #include <limits>
 
 using namespace geode::prelude;
 
-namespace frire {
 
-namespace {
 
 std::filesystem::path bakesDir() {
     return Mod::get()->getSaveDir() / "bakes";
@@ -50,12 +48,10 @@ int resolveRadius(int bakeRadius, BakeMethod method) {
 }
 
 unsigned workerCount() {
-    unsigned n = std::thread::hardware_concurrency();
-    if (n == 0) n = 4;
-    return std::max(1u, n);
+    // Main-thread only: Cocos/PlayLayer are not thread-safe.
+    return 1u;
 }
 
-}
 
 BakeMap& BakeMap::get() {
     static BakeMap inst;
@@ -339,7 +335,8 @@ Result<int> BakeMap::bakeBrute(
     if (!layer->m_player1) return Err("No player");
 
     bakeRadius = resolveRadius(bakeRadius, BakeMethod::BruteForce);
-    double const tps = 240.0;
+    double tps = AssistController::get().estimatedTps();
+    if (tps < 60.0 || tps > 480.0) tps = 240.0;
     float const dt = static_cast<float>(1.0 / tps);
     int const maxFrames = static_cast<int>(tps * 180.0); // 3 min physics cap
     int const maxClicks = 400;
@@ -358,15 +355,14 @@ Result<int> BakeMap::bakeBrute(
     out.tps = tps;
     out.method = "brute";
 
-    unsigned const threads = workerCount();
     m_progress.total = maxClicks;
     m_progress.done = 0;
     m_progress.setStatus(fmt::format(
-        "brute (no replay) · radius {} · {} threads", bakeRadius, threads
+        "brute (no replay) · radius {} · serial @ {:.0f} tps", bakeRadius, tps
     ));
     AssistLog::info(fmt::format(
-        "BAKE brute: death-driven search, radius {}, horizon {}, {} threads — no replay",
-        bakeRadius, horizon, threads
+        "BAKE brute: death-driven search, radius {}, horizon {}, serial main-thread @ {:.0f} tps",
+        bakeRadius, horizon, tps
     ));
 
     auto holdingAtEnd = [](std::vector<ReplayEvent> const& tl) {
@@ -475,7 +471,6 @@ Result<int> BakeMap::bakeBrute(
         ));
 
         std::vector<Trial> trials(specs.size());
-        std::atomic<size_t> nextSpec{0};
 
         auto processSpec = [&](size_t idx) {
             if (m_progress.cancel.load()) return;
@@ -525,18 +520,11 @@ Result<int> BakeMap::bakeBrute(
             m_progress.done.load() + static_cast<int>(specs.size()) + (maxClicks - step)
         );
 
-        std::vector<std::thread> pool;
-        pool.reserve(threads);
-        for (unsigned t = 0; t < threads; ++t) {
-            pool.emplace_back([&]() {
-                while (!m_progress.cancel.load()) {
-                    size_t idx = nextSpec.fetch_add(1);
-                    if (idx >= specs.size()) break;
-                    processSpec(idx);
-                }
-            });
+        // Serial main-thread only (Cocos/PlayLayer are not thread-safe).
+        for (size_t idx = 0; idx < specs.size(); ++idx) {
+            if (m_progress.cancel.load()) return Err("Bake cancelled");
+            processSpec(idx);
         }
-        for (auto& th : pool) th.join();
         if (m_progress.cancel.load()) return Err("Bake cancelled");
 
         // Best survival past current death
@@ -641,8 +629,8 @@ Result<int> BakeMap::bakeBrute(
     m_loaded = true;
     save();
     AssistLog::info(fmt::format(
-        "BAKE: {} clicks (brute, no replay) @ {:.0f} tps, {} threads",
-        m_data.clicks.size(), m_data.tps, threads
+        "BAKE: {} clicks (brute, no replay) @ {:.0f} tps (serial)",
+        m_data.clicks.size(), m_data.tps
     ));
     return Ok(static_cast<int>(m_data.clicks.size()));
 }
@@ -703,6 +691,4 @@ Result<> BakeMap::readFile() {
         m_data.clicks.push_back(c);
     }
     return Ok();
-}
-
 }

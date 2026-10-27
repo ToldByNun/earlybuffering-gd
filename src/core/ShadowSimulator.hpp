@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FRIRECRACKER_CORE_SHADOWSIMULATOR_HPP
+#define FRIRECRACKER_CORE_SHADOWSIMULATOR_HPP
 
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
@@ -8,7 +9,6 @@
 #include <string>
 #include <vector>
 
-namespace frire {
 
 enum class PlanAction {
     Pass,     // do the input now (vanilla) — NEVER block the player
@@ -268,4 +268,4 @@ private:
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
 };
 
-}
+#endif // FRIRECRACKER_CORE_SHADOWSIMULATOR_HPP

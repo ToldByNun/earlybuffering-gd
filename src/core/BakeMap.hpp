@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FRIRECRACKER_CORE_BAKEMAP_HPP
+#define FRIRECRACKER_CORE_BAKEMAP_HPP
 
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
@@ -11,7 +12,6 @@
 #include <vector>
 #include <optional>
 
-namespace frire {
 
 struct BakedClick {
     int nominalFrame = 0;
@@ -130,4 +130,4 @@ private:
     mutable std::mutex m_simMutex;
 };
 
-}
+#endif // FRIRECRACKER_CORE_BAKEMAP_HPP

@@ -1,4 +1,6 @@
 #include "LevelProfile.hpp"
+#include "AssistLearning.hpp"
+#include "LevelContentKey.hpp"
 #include "../debug/AssistLog.hpp"
 
 #include <Geode/Geode.hpp>
@@ -9,23 +11,21 @@
 
 using namespace geode::prelude;
 
-namespace frire {
 
-namespace {
 
-float clampf(float v, float lo, float hi) {
+static float clamp01f(float v, float lo, float hi) {
     return std::max(lo, std::min(hi, v));
 }
 
-std::filesystem::path levelsDir() {
+static std::filesystem::path levelsDir() {
     return Mod::get()->getSaveDir() / "levels";
 }
 
-std::filesystem::path profilePath(std::string const& key) {
+static std::filesystem::path profilePath(std::string const& key) {
     return levelsDir() / (key + ".json");
 }
 
-}
+
 
 LevelProfile& LevelProfile::get() {
     static LevelProfile inst;
@@ -38,21 +38,7 @@ int LevelProfile::spotBucket(float x) {
 }
 
 std::string LevelProfile::makeKey(GJGameLevel* level) {
-    if (!level) return "unknown";
-    if (level->m_levelID > 0) {
-        return fmt::format("id_{}", static_cast<int>(level->m_levelID));
-    }
-    // Editor / local: hash name + length of level string
-    std::string name = level->m_levelName;
-    size_t len = 0;
-    try {
-        len = level->m_levelString.size();
-    }
-    catch (...) {
-        len = 0;
-    }
-    size_t h = std::hash<std::string>{}(name) ^ (len * 2654435761u);
-    return fmt::format("ed_{:x}", h);
+    return LevelContentKey::fullKey(level);
 }
 
 void LevelProfile::clear() {
@@ -103,7 +89,7 @@ float LevelProfile::capMul(GameModeKind kind) const {
 }
 
 void LevelProfile::setCapMul(GameModeKind kind, float mul) {
-    mode(kind).capMul = clampf(mul, 0.5f, 2.f);
+    mode(kind).capMul = clamp01f(mul, 0.5f, 2.f);
     m_dirty = true;
 }
 
@@ -126,14 +112,14 @@ void LevelProfile::recomputeCapMul(GameModeKind kind) {
     }
     // Many false "you'll die" predictions → shorten horizon.
     float rate = static_cast<float>(pess) / static_cast<float>(total);
-    if (rate > 0.25f) m.capMul = clampf(0.6f, 0.5f, 2.f);
-    else if (rate < 0.05f && total >= 20) m.capMul = clampf(1.2f, 0.5f, 2.f);
-    else m.capMul = clampf(m.capMul, 0.5f, 2.f);
+    if (rate > 0.25f) m.capMul = clamp01f(0.6f, 0.5f, 2.f);
+    else if (rate < 0.05f && total >= 20) m.capMul = clamp01f(1.2f, 0.5f, 2.f);
+    else m.capMul = clamp01f(m.capMul, 0.5f, 2.f);
 }
 
 void LevelProfile::noteBias(GameModeKind kind, float x, float delta, char const* reason) {
     auto& s = spot(kind, x);
-    s.bias = clampf(s.bias + delta, -2.f, 2.f);
+    s.bias = clamp01f(s.bias + delta, -2.f, 2.f);
     s.n += 1;
     m_dirty = true;
     AssistLog::debug(fmt::format(
@@ -144,7 +130,7 @@ void LevelProfile::noteBias(GameModeKind kind, float x, float delta, char const*
 
 void LevelProfile::noteTrust(GameModeKind kind, float x, float factor, char const* reason) {
     auto& s = spot(kind, x);
-    s.trust = clampf(s.trust * factor, 0.f, 1.f);
+    s.trust = clamp01f(s.trust * factor, 0.f, 1.f);
     s.n += 1;
     m_dirty = true;
     AssistLog::debug(fmt::format(
@@ -155,7 +141,7 @@ void LevelProfile::noteTrust(GameModeKind kind, float x, float factor, char cons
 
 void LevelProfile::noteTrustUp(GameModeKind kind, float x, float amount, char const* reason) {
     auto& s = spot(kind, x);
-    s.trust = clampf(s.trust + amount, 0.f, 1.f);
+    s.trust = clamp01f(s.trust + amount, 0.f, 1.f);
     m_dirty = true;
     if (reason) {
         AssistLog::debug(fmt::format(
@@ -184,7 +170,10 @@ void LevelProfile::notePessimism(GameModeKind kind, float x) {
 void LevelProfile::noteSaved(GameModeKind kind, float x) {
     auto& s = spot(kind, x);
     s.saved += 1;
-    noteTrustUp(kind, x, 0.1f, "survived horizon");
+    // Never reinforce trust from assist-inject "saves" (self-reinforcing loop).
+    if (AssistLearning::allowTrustUpFromAssistInject()) {
+        noteTrustUp(kind, x, 0.1f, "survived horizon");
+    }
 }
 
 void LevelProfile::noteDiedAfterAssist(GameModeKind kind, float x) {
@@ -296,7 +285,7 @@ Result<> LevelProfile::readFile() {
         auto& mj = modes[name];
         auto& m = m_modes[i];
         if (mj.contains("capMul")) {
-            m.capMul = clampf(static_cast<float>(mj["capMul"].asDouble().unwrapOr(1.0)), 0.5f, 2.f);
+            m.capMul = clamp01f(static_cast<float>(mj["capMul"].asDouble().unwrapOr(1.0)), 0.5f, 2.f);
         }
         if (mj.contains("spots") && mj["spots"].isObject()) {
             for (auto const& [k, sj] : mj["spots"]) {
@@ -304,8 +293,8 @@ Result<> LevelProfile::readFile() {
                 try { bucket = std::stoi(k); }
                 catch (...) { continue; }
                 SpotStats s;
-                if (sj.contains("bias")) s.bias = clampf(static_cast<float>(sj["bias"].asDouble().unwrapOr(0.0)), -2.f, 2.f);
-                if (sj.contains("trust")) s.trust = clampf(static_cast<float>(sj["trust"].asDouble().unwrapOr(1.0)), 0.f, 1.f);
+                if (sj.contains("bias")) s.bias = clamp01f(static_cast<float>(sj["bias"].asDouble().unwrapOr(0.0)), -2.f, 2.f);
+                if (sj.contains("trust")) s.trust = clamp01f(static_cast<float>(sj["trust"].asDouble().unwrapOr(1.0)), 0.f, 1.f);
                 if (sj.contains("pessimism")) s.pessimism = static_cast<int>(sj["pessimism"].asInt().unwrapOr(0));
                 if (sj.contains("n")) s.n = static_cast<int>(sj["n"].asInt().unwrapOr(0));
                 if (sj.contains("saved")) s.saved = static_cast<int>(sj["saved"].asInt().unwrapOr(0));
@@ -318,4 +307,4 @@ Result<> LevelProfile::readFile() {
     return Ok();
 }
 
-}
+

@@ -49,7 +49,7 @@
 		"show-overlay": {
 			"type": "bool",
 			"name": "In-Level Overlay",
-			"description": "Small on-screen status label while playing.",
+			"description": "On-screen status while playing (mode, buffer, learn, VERIFY/UNSAFE, perf, saves, config hints). Off = no in-level overlay at all. Pause bake/assist buttons are separate settings below.",
 			"default": true
 		},
 		"debug-logging": {
@@ -69,6 +69,53 @@
 			"name": "Pause Menu Bake UI",
 			"description": "Show frirecracker bake controls on the pause screen (Cycle Mode, Import, Bake Map, Brute Bake, Cancel). Turn off for a clean pause menu.",
 			"default": true
+		},
+		"show-pause-assist": {
+			"type": "bool",
+			"name": "Pause Menu Assist Buttons",
+			"description": "Show hotkey mirrors on pause (preset, debug, learning, trajectory, config export/import).",
+			"default": true
+		},
+		"assist-only-practice": {
+			"type": "bool",
+			"name": "Assist Only in Practice",
+			"description": "When on, Live/Hybrid assist only runs in practice mode.",
+			"default": false
+		},
+		"assist-startpos-only": {
+			"type": "bool",
+			"name": "Assist Only from Start Pos / Test",
+			"description": "When on, assist only when the level is in test/start-pos mode.",
+			"default": false
+		},
+		"assist-percent-min": {
+			"type": "int",
+			"name": "Assist Percent Min",
+			"description": "Assist only at or above this percent (0–100). Pair with Assist Percent Max. Use Disable Ranges below for holes inside this window.",
+			"default": 0,
+			"min": 0,
+			"max": 100
+		},
+		"assist-percent-max": {
+			"type": "int",
+			"name": "Assist Percent Max",
+			"description": "Assist only at or below this percent (0–100).",
+			"default": 100,
+			"min": 0,
+			"max": 100
+		},
+		"assist-disable-ranges": {
+			"type": "string",
+			"name": "Assist Disable Ranges (%)",
+			"description": "List of percent ranges where assist is always OFF. Format: from-to per line (2 decimals ok), e.g. 12.50-25.00 then 50.00-60.25. Separators: newline, ; or ,. Inclusive. Empty = none.",
+			"default": ""
+		},
+		"save-feedback": {
+			"type": "string",
+			"name": "Save Feedback",
+			"description": "Extra feedback when assist injects a delayed click. off = none; icon/sound log a SAVE line (UI cue later).",
+			"one-of": ["off", "icon", "sound"],
+			"default": "off"
 		},
 
 		"title-window": {

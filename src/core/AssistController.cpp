@@ -1,7 +1,13 @@
 #include "AssistController.hpp"
+#include "AssistLearning.hpp"
+#include "AssistPerfStats.hpp"
+#include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
+#include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
+#include <chrono>
+#include <cstring>
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../ui/StatusOverlay.hpp"
@@ -12,16 +18,14 @@
 
 using namespace geode::prelude;
 
-namespace frire {
 
-namespace {
 constexpr int JUMP_BUTTON = 1;
 
-int roundBias(float bias) {
+static int roundBias(float bias) {
     if (bias >= 0.f) return static_cast<int>(std::lround(bias));
     return static_cast<int>(std::lround(bias));
 }
-}
+
 
 AssistController& AssistController::get() {
     static AssistController instance;
@@ -41,6 +45,13 @@ double AssistController::estimatedTps() const {
 std::string AssistController::overlayText() const { return m_overlayText; }
 
 void AssistController::clearBuffer() { m_buffer = {}; }
+
+void AssistController::onCheckpointLoad() {
+    clearBuffer();
+    m_pendingRelease = false;
+    m_pendingReleaseHold = false;
+    m_outcomePending = false;
+}
 
 void AssistController::syncButtonState(PlayLayer* playLayer) {
     if (!playLayer) return;
@@ -62,6 +73,10 @@ void AssistController::syncButtonState(PlayLayer* playLayer) {
 void AssistController::resetAttempt(PlayLayer* playLayer) {
     clearBuffer();
     m_pendingRelease = false;
+    m_pendingReleaseHold = false;
+    m_assistTouchedRun = false;
+    m_savesAttempt = 0;
+    DivergenceTracker::get().clear();
     m_attemptTick = 0;
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
@@ -72,6 +87,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_log.clear();
     m_clickTimes.clear();
     m_cpsLocked = false;
+    m_outcomePending = false;
     syncButtonState(playLayer);
     updateOverlay();
 }
@@ -169,7 +185,9 @@ bool AssistController::shouldAssistPlayer(PlayerObject* player) const {
     if (!StageConfig::isEnabled()) return false;
     if (!player || player->m_isDead) return false;
     if (cpsLimited()) return false;
-    return StageConfig::paramsFor(player).enabled;
+    if (!StageConfig::paramsFor(player).enabled) return false;
+    if (!AssistScopeGate::allowAssist(PlayLayer::get(), player)) return false;
+    return true;
 }
 
 void AssistController::pruneClickTimes() {
@@ -271,7 +289,32 @@ void AssistController::updateOverlay() {
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
         if (StageConfig::assistOrbs()) m_overlayText += " | orbs";
-        if (StageConfig::assistVerifyAb()) m_overlayText += " | verifyAB";
+        if (StageConfig::assistVerifyAb()) m_overlayText += " | VERIFY AB ON";
+        if (!StageConfig::safeMode() && StageConfig::isEnabled()) m_overlayText += " | UNSAFE";
+        if (auto* pl = PlayLayer::get()) {
+            if (AssistScopeGate::isPlatformer(pl->m_player1)) {
+                m_overlayText += " | platformer: off";
+            }
+            if (auto const* reason = AssistScopeGate::blockReason(pl, pl->m_player1)) {
+                if (std::strcmp(reason, "percent-disable") == 0) {
+                    m_overlayText += fmt::format(" | pct-off @{:.2f}%", pl->getCurrentPercent());
+                }
+                else if (std::strcmp(reason, "percent-gate") == 0) {
+                    m_overlayText += " | pct-gate";
+                }
+            }
+        }
+        {
+            auto bit = AssistPerfStats::get().overlayBit();
+            if (!bit.empty()) m_overlayText += " | " + bit;
+        }
+        {
+            auto bit = DivergenceTracker::get().overlayBit();
+            if (!bit.empty()) m_overlayText += " | " + bit;
+        }
+        if (m_savesAttempt > 0) {
+            m_overlayText += fmt::format(" | saves {}/{}", m_savesAttempt, m_savesLevel);
+        }
         if (m_buffer.requireOrb && m_buffer.dMin >= 0) {
             m_overlayText += fmt::format(" | orbWin[{},{}]", m_buffer.dMin, m_buffer.dMax);
         }
@@ -281,6 +324,11 @@ void AssistController::updateOverlay() {
 
 void AssistController::inject(GJBaseGameLayer* layer, bool down) {
     if (!layer) return;
+    m_assistTouchedRun = true;
+    if (down) {
+        ++m_savesAttempt;
+        ++m_savesLevel;
+    }
     // Timeline already seeded in recordDecision with the planned fire tick.
     m_injecting = true;
     layer->handleButton(down, JUMP_BUTTON, m_buffer.player1);
@@ -427,6 +475,7 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
             "OUTCOME id={} death x={:.1f} orbExpect={}",
             m_outcomePlanId, p->getPositionX(), m_outcomeExpectOrb
         ));
+        DivergenceTracker::get().note(true, true, m_outcomeExpectOrb, false);
         m_outcomePending = false;
         return;
     }
@@ -436,6 +485,7 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
             "OUTCOME id={} alive dx={:.1f} orb={} expect={}",
             m_outcomePlanId, p->getPositionX() - m_outcomeStartX, orbHit, m_outcomeExpectOrb
         ));
+        DivergenceTracker::get().note(true, false, m_outcomeExpectOrb, orbHit);
         m_outcomePending = false;
     }
 }
@@ -551,6 +601,12 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
 
     inject(playLayer, m_buffer.down);
     AssistLog::printSavedPress(delayed, m_buffer.pressTick, m_attemptTick, m_buffer.limit, estimatedTps());
+    {
+        char const* fb = StageConfig::saveFeedbackMode();
+        if (fb && std::strcmp(fb, "off") != 0) {
+            AssistLog::info(fmt::format("SAVE feedback={} delay={}", fb, delayed));
+        }
+    }
     if (!wasPress) {
         AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", m_attemptTick));
     }
@@ -784,15 +840,17 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
 
-    // Low trust at this spot → never delay, just pass through.
+    // Low trust at this spot → pass through (unless explore roll).
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= LevelProfile::TRUST_PASS_MIN_N
-                && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD) {
+                && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD
+                && !AssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
                 AssistLog::debug(fmt::format(
                     "learned: low trust @{} (trust {:.2f}, n={})",
                     LevelProfile::spotBucket(x), spot->trust, spot->n
                 ));
+                AssistLearning::decaySpot(kind, x);
                 SimPlan dummy;
                 dummy.action = PlanAction::Pass;
                 dummy.firstDeathTick = -1;
@@ -812,9 +870,14 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
 
+    auto const t0 = std::chrono::steady_clock::now();
     auto plan = (opts.smartDepth > 1)
         ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
+    int const planUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - t0
+    ).count());
+    AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
 
     logPlan(plan, "press");
     m_outcomePlayer1 = player1;
@@ -886,10 +949,12 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= LevelProfile::TRUST_PASS_MIN_N
-                && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD) {
+                && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD
+                && !AssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
                 AssistLog::debug(fmt::format(
                     "learned: low trust @{} (release)", LevelProfile::spotBucket(x)
                 ));
+                AssistLearning::decaySpot(kind, x);
                 return true;
             }
         }
@@ -897,6 +962,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
 
     PlanOptions opts;
     opts.budgetUs = StageConfig::simBudgetUs();
+    opts.tickBudget = StageConfig::tickBudgetPerPress();
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     opts.maxBranches = 4;
 
@@ -1005,8 +1071,12 @@ bool AssistController::onHandleButton(
         return pass;
     }
 
-    if (ours && m_buffer.state == BufferState::Buffered && m_buffer.down && !m_buffer.releaseSeen) {
-        return false;
+    if (ours && m_buffer.state == BufferState::Buffered && m_buffer.down) {
+        if (!m_buffer.releaseSeen) {
+            return false; // same press still armed; swallow duplicate downs
+        }
+        // Press B before fireTick after Release A: fire A first, then plan B.
+        fireBuffered(playLayer, player);
     }
     if (ours && m_buffer.state == BufferState::Buffered && !m_buffer.down) {
         fireBuffered(playLayer, player);
@@ -1033,4 +1103,4 @@ bool AssistController::allowPushButton(PlayerObject* player, PlayerButton button
     return m_buffer.player1 != isP1;
 }
 
-}
+

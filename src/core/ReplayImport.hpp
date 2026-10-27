@@ -1,11 +1,11 @@
-#pragma once
+#ifndef FRIRECRACKER_CORE_REPLAYIMPORT_HPP
+#define FRIRECRACKER_CORE_REPLAYIMPORT_HPP
 
 #include <Geode/Geode.hpp>
 #include <string>
 #include <vector>
 #include <filesystem>
 
-namespace frire {
 
 struct ReplayEvent {
     int frame = 0;
@@ -32,4 +32,4 @@ public:
     static geode::Result<ImportedReplay> loadSlc(std::filesystem::path const& path);
 };
 
-}
+#endif // FRIRECRACKER_CORE_REPLAYIMPORT_HPP

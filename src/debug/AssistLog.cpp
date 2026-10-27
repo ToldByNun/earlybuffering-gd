@@ -6,8 +6,6 @@
 
 using namespace geode::prelude;
 
-namespace frire {
-
 char const* AssistLog::modTag() {
     return "frirecracker";
 }
@@ -108,4 +106,3 @@ void AssistLog::printSavedPress(
     );
 }
 
-}

@@ -1,9 +1,9 @@
-#pragma once
+#ifndef FRIRECRACKER_UI_STATUSOVERLAY_HPP
+#define FRIRECRACKER_UI_STATUSOVERLAY_HPP
 
 #include <Geode/Geode.hpp>
 #include <string>
 
-namespace frire {
 
 class StatusOverlay {
 public:
@@ -16,4 +16,4 @@ private:
     static cocos2d::CCLabelBMFont* s_label;
 };
 
-}
+#endif // FRIRECRACKER_UI_STATUSOVERLAY_HPP

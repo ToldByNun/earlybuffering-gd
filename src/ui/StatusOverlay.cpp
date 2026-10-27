@@ -3,14 +3,12 @@
 
 using namespace geode::prelude;
 
-namespace frire {
 
 cocos2d::CCLabelBMFont* StatusOverlay::s_label = nullptr;
 
-namespace {
 std::string g_lastText;
 bool g_lastVisible = false;
-}
+
 
 void StatusOverlay::attach(PlayLayer* playLayer) {
     detach();
@@ -74,4 +72,4 @@ void StatusOverlay::setVisible(bool visible) {
     }
 }
 
-}
+

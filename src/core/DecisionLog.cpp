@@ -1,6 +1,5 @@
 #include "DecisionLog.hpp"
 
-namespace frire {
 
 void DecisionLog::clear() {
     m_entries.clear();
@@ -39,4 +38,4 @@ DecisionEntry* DecisionLog::findForDeath(int tick) {
     return nullptr;
 }
 
-}
+

@@ -9,9 +9,7 @@
 
 using namespace geode::prelude;
 
-namespace frire {
 
-namespace {
 
 struct FrireGdr : gdr::Replay<FrireGdr, gdr::Input<>> {
     FrireGdr() : Replay("frirecracker", 1) {}
@@ -53,7 +51,6 @@ T readBE(std::ifstream& f) {
     return v;
 }
 
-}
 
 Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& path) {
     if (!std::filesystem::exists(path)) return Err("File not found");
@@ -315,6 +312,4 @@ Result<ImportedReplay> ReplayImport::loadSlc(std::filesystem::path const& path) 
     });
     if (out.events.empty()) return Err("SLC: no jump/move inputs");
     return Ok(std::move(out));
-}
-
 }

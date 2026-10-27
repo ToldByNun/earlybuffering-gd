@@ -1,30 +1,11 @@
-#pragma once
+#ifndef FRIRECRACKER_CONFIG_STAGECONFIG_HPP
+#define FRIRECRACKER_CONFIG_STAGECONFIG_HPP
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class PlayerObject;
-
-namespace frire {
-
-enum class GameModeKind {
-    Cube = 0,
-    Ship,
-    Ball,
-    Ufo,
-    Wave,
-    Robot,
-    Spider,
-    Swing,
-    Count
-};
-
-enum class AssistMode {
-    Live = 0,
-    Replay,
-    Hybrid,
-    BruteForce // mode 3: precomputed exhaustive bake only
-};
 
 struct StageInfo {
     int index = 0;       // 0..4 (4 = OFF)
@@ -43,6 +24,25 @@ struct ModeParams {
 
 class StageConfig {
 public:
+    enum class GameModeKind {
+        Cube = 0,
+        Ship,
+        Ball,
+        Ufo,
+        Wave,
+        Robot,
+        Spider,
+        Swing,
+        Count
+    };
+
+    enum class AssistMode {
+        Live = 0,
+        Replay,
+        Hybrid,
+        BruteForce
+    };
+
     static constexpr int STAGE_COUNT = 5;
     static constexpr int MODE_COUNT = static_cast<int>(GameModeKind::Count);
 
@@ -107,7 +107,24 @@ public:
     static ModeParams paramsFor(GameModeKind kind);
     static ModeParams paramsFor(PlayerObject* player);
 
+    static bool assistOnlyPractice();
+    static bool assistStartposOnly();
+    static int assistPercentMin();
+    static int assistPercentMax();
+    struct PercentRange {
+        float from = 0.f;
+        float to = 0.f;
+    };
+    // Ranges where assist is forced off (inclusive). Parsed from assist-disable-ranges.
+    static std::vector<PercentRange> const& assistDisableRanges();
+    static bool isInAssistDisableRange(float percent);
+    static bool showPauseAssist();
+    static char const* saveFeedbackMode();
+
     static std::string stageLabel(StageInfo const& info);
 };
 
-}
+using GameModeKind = StageConfig::GameModeKind;
+using AssistMode = StageConfig::AssistMode;
+
+#endif // FRIRECRACKER_CONFIG_STAGECONFIG_HPP

@@ -11,11 +11,9 @@
 
 using namespace geode::prelude;
 
-namespace frire {
 
-namespace {
 constexpr int BRANCH_RELEASES[] = { 2, 5, 10, 18 };
-}
+
 
 ShadowSimulator& ShadowSimulator::get() {
     static ShadowSimulator inst;
@@ -859,7 +857,6 @@ ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
     return win;
 }
 
-namespace {
 
 struct Cand {
     int delay = 0;
@@ -878,14 +875,14 @@ struct Cand {
     ShadowSimulator::RunResult raw{};
 };
 
-int surviveBinOf(int ticks) {
+static int surviveBinOf(int ticks) {
     if (ticks < 24) return 0;
     if (ticks < 48) return 1;
     if (ticks < 96) return 2;
     return 3;
 }
 
-bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const& zone) {
+static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const& zone) {
     if (!zone.valid) {
         if (r.unknownTrunc) return true;
         return !r.died;
@@ -894,7 +891,7 @@ bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const& zone)
     return r.deathX > zone.endX;
 }
 
-bool betterCand(Cand const& a, Cand const& b) {
+static bool betterCand(Cand const& a, Cand const& b) {
     if (a.viable != b.viable) return a.viable && !b.viable;
     if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
     if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
@@ -902,7 +899,7 @@ bool betterCand(Cand const& a, Cand const& b) {
     return a.delay < b.delay;
 }
 
-}
+
 
 SimPlan ShadowSimulator::plan(
     PlayLayer* layer, PlayerObject* real, bool down, int limit,
@@ -1210,7 +1207,7 @@ SimPlan ShadowSimulator::plan(
             chosen = pickRobust(interior, true);
         }
         if (chosen < 0) chosen = pickRobust(pool, true);
-        if (chosen < 0) chosen = (actMin + actMax) / 2;
+        // No midpoint: earliest ±k-robust, else earliest viable (pickRobust fallback).
         if (chosen >= 0) {
             auto const& c = cands[static_cast<size_t>(chosen)];
             plan.orbUseful = c.orbUseful;
@@ -1682,4 +1679,4 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     return fails == 0;
 }
 
-}
+

@@ -1,9 +1,8 @@
-#pragma once
+#ifndef FRIRECRACKER_DEBUG_ASSISTLOG_HPP
+#define FRIRECRACKER_DEBUG_ASSISTLOG_HPP
 
-#include <string>
 #include <cstdint>
-
-namespace frire {
+#include <string>
 
 struct StageInfo;
 
@@ -25,4 +24,4 @@ public:
     static double ticksToFrames60(int ticks, double physicsTps);
 };
 
-}
+#endif // FRIRECRACKER_DEBUG_ASSISTLOG_HPP

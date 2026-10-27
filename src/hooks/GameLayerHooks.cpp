@@ -1,5 +1,6 @@
 #include "../core/AssistController.hpp"
 #include "../core/ShadowSimulator.hpp"
+#include "../core/SimCollisionPolicy.hpp"
 #include "../config/StageConfig.hpp"
 #include "../ui/StatusOverlay.hpp"
 
@@ -15,11 +16,8 @@
 #include <Geode/modify/RingObject.hpp>
 
 using namespace geode::prelude;
-using namespace frire;
-
-namespace {
 inline bool simulating() { return ShadowSimulator::get().isSimulating(); }
-}
+
 
 // ---------------------------------------------------------------------------
 // Input + physics tick
@@ -135,72 +133,21 @@ class $modify(FrireGJBaseGameLayer, GJBaseGameLayer) {
             GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
             return;
         }
-        // Only physics-relevant objects: solids, hazards, slopes, pads, orbs,
-        // gravity + size portals, speed portals (by object ID — no GameObjectType).
-        // Mode/teleport/dual portals → unknown truncate; triggers skipped.
-        auto isSpeedPortalId = [](int id) {
-            // 200 slow, 201 normal, 202 fast, 203 faster, 1334 fastest
-            return id == 200 || id == 201 || id == 202 || id == 203 || id == 1334;
-        };
         gd::vector<GameObject*> extra;
         extra.reserve(objectsCount);
         for (int i = 0; i < objectsCount; i++) {
             GameObject* obj = vec->at(i);
-            if (isSpeedPortalId(obj->m_objectID)) {
-                extra.push_back(obj);
-                continue;
-            }
-            switch (obj->m_objectType) {
-                case GameObjectType::Solid:
-                case GameObjectType::Hazard:
-                case GameObjectType::AnimatedHazard:
-                case GameObjectType::Slope:
-                case GameObjectType::InverseGravityPortal:
-                case GameObjectType::NormalGravityPortal:
-                case GameObjectType::GravityTogglePortal:
-                case GameObjectType::RegularSizePortal:
-                case GameObjectType::MiniSizePortal:
-                case GameObjectType::YellowJumpPad:
-                case GameObjectType::PinkJumpPad:
-                case GameObjectType::RedJumpPad:
-                case GameObjectType::GravityPad:
-                case GameObjectType::SpiderPad:
-                case GameObjectType::YellowJumpRing:
-                case GameObjectType::PinkJumpRing:
-                case GameObjectType::RedJumpRing:
-                case GameObjectType::GravityRing:
-                case GameObjectType::GreenRing:
-                case GameObjectType::DropRing:
-                case GameObjectType::DashRing:
-                case GameObjectType::GravityDashRing:
-                case GameObjectType::SpiderOrb:
-                case GameObjectType::CustomRing:
-                case GameObjectType::CollisionObject:
-                case GameObjectType::Breakable:
+            switch (SimCollisionPolicy::classify(obj)) {
+                case SimObjectAction::Include:
                     extra.push_back(obj);
                     break;
-
-                // Portals we deliberately don't simulate: if the shadow actually reaches
-                // one, everything beyond is unknown → stop the run instead of guessing.
-                case GameObjectType::ShipPortal:
-                case GameObjectType::CubePortal:
-                case GameObjectType::BallPortal:
-                case GameObjectType::UfoPortal:
-                case GameObjectType::WavePortal:
-                case GameObjectType::RobotPortal:
-                case GameObjectType::SpiderPortal:
-                case GameObjectType::SwingPortal:
-                case GameObjectType::InverseMirrorPortal:
-                case GameObjectType::NormalMirrorPortal:
-                case GameObjectType::DualPortal:
-                case GameObjectType::SoloPortal:
-                case GameObjectType::TeleportPortal:
-                case GameObjectType::TeleportOrb:
-                case GameObjectType::Modifier:
+                case SimObjectAction::UnknownOnOverlap:
                     if (player && obj->getObjectRect().intersectsRect(player->getObjectRect())) {
                         ShadowSimulator::get().noteUnknown();
+                        SimCollisionPolicy::noteLimitedSimOnce();
                     }
                     break;
+                case SimObjectAction::Skip:
                 default:
                     break;
             }
@@ -457,21 +404,32 @@ class $modify(FrirePlayLayer, PlayLayer) {
     }
 
     void levelComplete() {
-        if (StageConfig::safeMode() && StageConfig::isEnabled()) {
+        // When assist is enabled, never treat the run as legit progress.
+        if (StageConfig::isEnabled()) {
+            m_isTestMode = true;
+        }
+        if (AssistController::get().assistTouchedRun()) {
             m_isTestMode = true;
         }
         PlayLayer::levelComplete();
     }
 
     void showNewBest(bool newReward, int orbs, int diamonds, bool demonKey, bool noRetry, bool noTitle) {
-        if (StageConfig::safeMode() && StageConfig::isEnabled()) return;
+        if (StageConfig::isEnabled() && StageConfig::safeMode()) return;
+        if (AssistController::get().assistTouchedRun()) return;
         PlayLayer::showNewBest(newReward, orbs, diamonds, demonKey, noRetry, noTitle);
+    }
+
+    void loadFromCheckpoint(CheckpointObject* checkpoint) {
+        AssistController::get().onCheckpointLoad();
+        PlayLayer::loadFromCheckpoint(checkpoint);
     }
 };
 
 class $modify(FrireGJGameLevel, GJGameLevel) {
     void savePercentage(int percent, bool isPracticeMode, int clicks, int attempts, bool isChkValid) {
-        if (StageConfig::safeMode() && StageConfig::isEnabled()) return;
+        if (StageConfig::isEnabled() && StageConfig::safeMode()) return;
+        if (AssistController::get().assistTouchedRun()) return;
         GJGameLevel::savePercentage(percent, isPracticeMode, clicks, attempts, isChkValid);
     }
 };
