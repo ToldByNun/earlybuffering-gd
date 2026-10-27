@@ -74,3 +74,6 @@ state/
 
 # Packaged mods (local)
 *.geode
+
+# Local release staging (notes, checklists, packaged builds)
+releases/

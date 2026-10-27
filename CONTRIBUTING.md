@@ -53,3 +53,7 @@ Thanks for helping. Please read the [README](README.md) honesty note: design is 
 ## License
 
 By contributing, you agree your changes are licensed under the MIT License (see `LICENSE`).
+
+## Releases
+
+Local staging lives in `releases/` (gitignored): checklists, draft notes, and packaged `.geode` files. Do not commit that folder.
