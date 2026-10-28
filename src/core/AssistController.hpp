@@ -106,6 +106,22 @@ public:
     );
     static bool fireTickSelfCheck(std::string& report);
 
+    // Recheck slide: at most +kRecheckMaxSlide later than oldFire (non-orb).
+    // Never past absMax - robustK. Returns accepted fire tick, or -1 = reject.
+    static constexpr int kRecheckMaxSlide = 2;
+    static int acceptRecheckSlide(
+        int oldFire,
+        int attemptTick,
+        int proposedFire,
+        int absMax,
+        int robustK,
+        int deadline,
+        bool requireOrb,
+        bool planOk
+    );
+    static int estimateRobustK(PlayerObject* player, float dtVariance);
+    static bool recheckSlideSelfCheck(std::string& report);
+
 private:
     AssistController() = default;
 
@@ -122,7 +138,8 @@ private:
         PlayLayer* playLayer, PlayerObject* player, bool player1,
         bool down, int effectTick, float firstDt, bool& handled
     );
-    void fireBuffered(PlayLayer* playLayer, PlayerObject* player);
+    // allowRecheck=false for CPS / mode-change force-fire (inject now).
+    void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
     bool userHolding(bool player1) const { return m_userHolding[player1 ? 0 : 1]; }
     void noteUserClick();

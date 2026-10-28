@@ -147,9 +147,20 @@ When arming a Delay press, `planDelay = plan.delay` and `expectedJumpTick = effe
 
 Helpers: `AssistController::resolveFireTick` / `shouldFireBuffered` / `fireTickSelfCheck`.
 
+## Recheck slide safety
+
+Before inject, live recheck may slide `fireTick`. Rules (`acceptRecheckSlide`):
+
+- Plan must be Delay, `delay > 0`, `!budgetHit`, and (`threatCleared` or orb).
+- Cap late slides to `oldFire + 2` (non-orb); orb may wait for `dMin`.
+- Never past `absMax - robustK` (collapsed margin falls back to `absMax`).
+- Clamp to `pressTick + limit`. Early slides (earlier fire) allowed.
+- Log `recheck: oldFire→newFire` via AssistLog + PerfTrace.
+- CPS / mode-change force-fire: `allowRecheck=false` (inject immediately).
+
 ## Pseudocode fireBuffered()
 
-Wait for dMin if requireOrb; up to 2 reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; PendingRelease if needed.
+Wait for dMin if requireOrb; up to 2 safe reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; PendingRelease if needed.
 Press B while ArmedPress: fire A first, then plan B.
 
 ## Buffer states

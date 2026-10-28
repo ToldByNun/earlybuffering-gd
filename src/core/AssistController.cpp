@@ -394,6 +394,93 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
     return false;
 }
 
+int AssistController::estimateRobustK(PlayerObject* player, float dtVariance) {
+    int forced = StageConfig::robustK();
+    if (forced > 0) return std::clamp(forced, 1, 3);
+
+    int k = ShadowSimulator::kWindowMarginK;
+    if (player) {
+        if (player->m_isDart || player->m_isShip || player->m_isSwing) k = 2;
+        if (player->m_playerSpeed > 1.1f) k = std::max(k, 2);
+        if (player->m_playerSpeed > 1.5f) k = 3;
+    }
+    if (dtVariance > 0.08f) k = std::min(3, k + 1);
+    return k;
+}
+
+int AssistController::acceptRecheckSlide(
+    int oldFire,
+    int attemptTick,
+    int proposedFire,
+    int absMax,
+    int robustK,
+    int deadline,
+    bool requireOrb,
+    bool planOk
+) {
+    if (!planOk) return -1;
+    if (proposedFire <= attemptTick) return -1;
+
+    int const k = std::clamp(robustK, 0, 3);
+    int safeMax = absMax;
+    if (k > 0) {
+        safeMax = absMax - k;
+        // Collapsed margin → keep absMax so we can still fire inside the window.
+        if (safeMax <= attemptTick) {
+            safeMax = absMax;
+        }
+    }
+    proposedFire = std::min(proposedFire, safeMax);
+    proposedFire = std::min(proposedFire, deadline);
+    if (proposedFire <= attemptTick) return -1;
+
+    // Cap late slides only (earlier rechecks stay useful). Orb may wait for dMin.
+    if (!requireOrb && proposedFire > oldFire + kRecheckMaxSlide) {
+        proposedFire = oldFire + kRecheckMaxSlide;
+    }
+    if (proposedFire <= attemptTick) return -1;
+
+    // No-op / already due — caller should inject, not re-arm.
+    if (proposedFire == oldFire) return -1;
+    return proposedFire;
+}
+
+bool AssistController::recheckSlideSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    // planOk false → reject
+    expect(acceptRecheckSlide(10, 8, 12, 20, 1, 20, false, false) < 0, "reject-bad-plan");
+    // Late slide capped at +2
+    expect(acceptRecheckSlide(10, 8, 20, 30, 0, 30, false, true) == 12, "cap-slide-plus2");
+    // Early slide (earlier than oldFire) allowed
+    expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, false, true) == 11, "early-slide-ok");
+    // robustK: absMax 20, k=2 → safeMax 18
+    expect(acceptRecheckSlide(10, 8, 19, 20, 2, 30, false, true) == 12, "robust-then-cap");
+    // past attempt → reject
+    expect(acceptRecheckSlide(10, 12, 12, 20, 0, 20, false, true) < 0, "not-future");
+    // orb: allow large late slide (dMin wait)
+    expect(acceptRecheckSlide(10, 8, 18, 20, 0, 20, true, true) == 18, "orb-allow-late");
+    // same fire → reject (inject instead)
+    expect(acceptRecheckSlide(12, 8, 12, 20, 0, 20, false, true) < 0, "noop-reject");
+    // deadline clamp
+    expect(acceptRecheckSlide(10, 8, 14, 30, 0, 8, false, true) < 0, "deadline-collapse");
+    expect(acceptRecheckSlide(10, 8, 14, 30, 0, 13, false, true) == 12, "deadline-cap-slide");
+
+    if (fails == 0) {
+        report = "recheckSlideSelfCheck OK";
+        return true;
+    }
+    report = fmt::format("recheckSlideSelfCheck {} fails: {}", fails, report);
+    return false;
+}
+
 int AssistController::activeLimit(PlayerObject* player) const {
     return StageConfig::paramsFor(player).ticks;
 }
@@ -778,73 +865,127 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
     m_injecting = false;
 }
 
-void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) {
-    int const elapsed = m_attemptTick - m_buffer.pressTick;
-    int const remaining = m_buffer.limit - elapsed;
+void AssistController::fireBuffered(
+    PlayLayer* playLayer, PlayerObject* player, bool allowRecheck
+) {
+    int const elapsed = this->m_attemptTick - this->m_buffer.pressTick;
+    int const remaining = this->m_buffer.limit - elapsed;
 
-    // Orb/window-aware recheck: stay inside [dMin, dMax] relative to pressTick
-    if (player && remaining > 0 && m_buffer.rechecks < 2 && m_simDt > 0.f) {
-        int const absMin = m_buffer.dMin >= 0 ? m_buffer.pressTick + m_buffer.dMin : m_buffer.pressTick;
-        int const absMax = m_buffer.dMax >= 0
-            ? m_buffer.pressTick + m_buffer.dMax
-            : m_buffer.pressTick + m_buffer.limit;
+    // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
+    // Skipped for CPS / mode-change force-fire.
+    if (allowRecheck
+        && player
+        && remaining > 0
+        && this->m_buffer.rechecks < 2
+        && this->m_simDt > 0.f) {
+        int const absMin = this->m_buffer.dMin >= 0
+            ? this->m_buffer.pressTick + this->m_buffer.dMin
+            : this->m_buffer.pressTick;
+        int const absMax = this->m_buffer.dMax >= 0
+            ? this->m_buffer.pressTick + this->m_buffer.dMax
+            : this->m_buffer.pressTick + this->m_buffer.limit;
+        int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
+        int const robustK = estimateRobustK(player, this->m_dtVarEma);
 
-        if (m_attemptTick < absMin) {
-            // Too early for orb window — wait
-            m_buffer.fireTick = absMin;
-            ++m_buffer.rechecks;
+        if (this->m_attemptTick < absMin) {
+            // Too early for orb window — wait (orb dMin force; not slide-capped).
+            int const oldFire = this->m_buffer.fireTick;
+            this->m_buffer.fireTick = absMin;
+            ++this->m_buffer.rechecks;
+            if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
+                auto const detail = fmt::format(
+                    "recheck: oldFire={}→newFire={} (orb-dMin wait tick={})",
+                    oldFire, absMin, this->m_attemptTick
+                );
+                AssistLog::debug(detail);
+                PerfTrace::get().note("recheck", detail);
+            }
             return;
         }
-        if (m_attemptTick > absMax && m_buffer.requireOrb) {
+        if (this->m_attemptTick > absMax && this->m_buffer.requireOrb) {
             // Past window — fire immediately
         }
-        else if (!m_buffer.requireOrb || m_attemptTick <= absMax) {
+        else if (!this->m_buffer.requireOrb || this->m_attemptTick <= absMax) {
             PlanOptions opts;
             opts.budgetUs = StageConfig::simBudgetUs();
             opts.tickBudget = StageConfig::tickBudgetPerPress() / 4;
             opts.capMul = StageConfig::autoTune()
-                ? LevelProfile::get().capMul(m_buffer.mode)
+                ? LevelProfile::get().capMul(this->m_buffer.mode)
                 : 1.f;
             opts.maxBranches = 2;
             opts.smartDepth = 1;
-            fillPlanRobustLatency(opts, player, m_dtVarEma);
+            fillPlanRobustLatency(opts, player, this->m_dtVarEma);
             auto re = ShadowSimulator::get().plan(
-                playLayer, player, m_buffer.down, remaining, m_simDt, m_simDt, opts
+                playLayer, player, this->m_buffer.down, remaining,
+                this->m_simDt, this->m_simDt, opts
             );
-            if (re.action == PlanAction::Delay && re.delay > 0) {
+
+            bool const planOk =
+                re.action == PlanAction::Delay
+                && re.delay > 0
+                && !re.budgetHit
+                && (re.threatCleared || re.requireOrb || this->m_buffer.requireOrb);
+
+            if (planOk) {
                 int const jumpRel = re.jumpTick > 0 ? re.jumpTick : re.delay;
-                int newFire = resolveFireTick(
+                int proposed = resolveFireTick(
                     this->m_attemptTick, re.delay, jumpRel, this->m_buffer.requireOrb
                 );
-                if (this->m_buffer.dMin >= 0) newFire = std::max(newFire, absMin);
-                if (this->m_buffer.dMax >= 0) newFire = std::min(newFire, absMax);
-                int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
-                newFire = std::min(newFire, deadline);
-                if (newFire > this->m_attemptTick && newFire <= deadline) {
+                if (this->m_buffer.dMin >= 0) {
+                    proposed = std::max(proposed, absMin);
+                }
+                if (this->m_buffer.dMax >= 0) {
+                    proposed = std::min(proposed, absMax);
+                }
+                proposed = std::min(proposed, deadline);
+
+                int const oldFire = this->m_buffer.fireTick;
+                int const accepted = acceptRecheckSlide(
+                    oldFire,
+                    this->m_attemptTick,
+                    proposed,
+                    absMax,
+                    robustK,
+                    deadline,
+                    this->m_buffer.requireOrb,
+                    true
+                );
+                if (accepted > 0) {
                     ++this->m_buffer.rechecks;
-                    this->m_buffer.fireTick = newFire;
+                    this->m_buffer.fireTick = accepted;
                     this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
                     this->m_buffer.planDelay = re.delay;
-                    AssistLog::debug(fmt::format(
-                        "recheck: slide fire={} jump={} (tick={})",
-                        newFire, this->m_buffer.expectedJumpTick, this->m_attemptTick
-                    ));
+                    if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
+                        auto const detail = fmt::format(
+                            "recheck: oldFire={}→newFire={} jump={} Δ={} (tick={})",
+                            oldFire,
+                            accepted,
+                            this->m_buffer.expectedJumpTick,
+                            accepted - oldFire,
+                            this->m_attemptTick
+                        );
+                        AssistLog::debug(detail);
+                        PerfTrace::get().note("recheck", detail);
+                    }
                     return;
                 }
             }
         }
     }
 
-    bool const wasPress = m_buffer.down;
-    bool const player1 = m_buffer.player1;
-    bool const requireHold = m_buffer.requireHold;
-    bool const letGo = m_buffer.releaseSeen || !userHolding(player1);
-    int const delayed = std::max(0, m_attemptTick - m_buffer.pressTick);
-    int const planId = m_buffer.planId;
-    bool const expectOrb = m_buffer.requireOrb;
+    bool const wasPress = this->m_buffer.down;
+    bool const player1 = this->m_buffer.player1;
+    bool const requireHold = this->m_buffer.requireHold;
+    bool const letGo = this->m_buffer.releaseSeen || !this->userHolding(player1);
+    int const delayed = std::max(0, this->m_attemptTick - this->m_buffer.pressTick);
+    int const planId = this->m_buffer.planId;
+    bool const expectOrb = this->m_buffer.requireOrb;
 
-    inject(playLayer, m_buffer.down);
-    AssistLog::printSavedPress(delayed, m_buffer.pressTick, m_attemptTick, m_buffer.limit, estimatedTps());
+    this->inject(playLayer, this->m_buffer.down);
+    AssistLog::printSavedPress(
+        delayed, this->m_buffer.pressTick, this->m_attemptTick,
+        this->m_buffer.limit, this->estimatedTps()
+    );
     if (delayed > 0
         && (StageConfig::saveFeedbackSound()
             || StageConfig::saveFeedbackIcon()
@@ -852,24 +993,24 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
         SaveFeedback::get().onSave(playLayer, player, delayed);
     }
     if (!wasPress) {
-        AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", m_attemptTick));
+        AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", this->m_attemptTick));
     }
 
-    m_outcomePending = true;
-    m_outcomePlanId = planId;
-    m_outcomeUntil = m_attemptTick + 96;
-    m_outcomePlayer1 = player1;
-    m_outcomeExpectOrb = expectOrb;
-    m_outcomePlanDelay = delayed > 0;
-    m_outcomeStartX = player ? player->getPositionX() : 0.f;
+    this->m_outcomePending = true;
+    this->m_outcomePlanId = planId;
+    this->m_outcomeUntil = this->m_attemptTick + 96;
+    this->m_outcomePlayer1 = player1;
+    this->m_outcomeExpectOrb = expectOrb;
+    this->m_outcomePlanDelay = delayed > 0;
+    this->m_outcomeStartX = player ? player->getPositionX() : 0.f;
 
-    clearBuffer();
+    this->clearBuffer();
 
     if (wasPress && letGo) {
-        m_pendingRelease = true;
-        m_pendingReleaseP1 = player1;
-        m_pendingReleaseHold = requireHold;
-        m_pendingReleaseTick = m_attemptTick + 1;
+        this->m_pendingRelease = true;
+        this->m_pendingReleaseP1 = player1;
+        this->m_pendingReleaseHold = requireHold;
+        this->m_pendingReleaseTick = this->m_attemptTick + 1;
     }
 }
 
@@ -937,7 +1078,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         if (modeChanged && this->m_buffer.state != BufferState::Idle) {
             AssistLog::debug("mode change → delivering buffered input");
             PerfTrace::Scope const scope("fireBuffered.modeChange");
-            this->fireBuffered(playLayer, p1);
+            this->fireBuffered(playLayer, p1, false);
             this->updateOverlay();
         }
 
@@ -962,7 +1103,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         }
         if (limited && this->m_buffer.state == BufferState::Buffered && p1) {
             PerfTrace::Scope const scope("fireBuffered.cps");
-            this->fireBuffered(playLayer, p1);
+            this->fireBuffered(playLayer, p1, false);
         }
     }
 
