@@ -120,7 +120,16 @@ public:
     static std::vector<PercentRange> const& assistDisableRanges();
     static bool isInAssistDisableRange(float percent);
     static bool showPauseAssist();
+    // "off" | "icon" | "sound" | "both"
     static char const* saveFeedbackMode();
+    static bool saveFeedbackIcon();
+    static bool saveFeedbackSound();
+    struct ColorRgb {
+        uint8_t r = 124;
+        uint8_t g = 255;
+        uint8_t b = 74;
+    };
+    static ColorRgb saveFeedbackColor();
 
     static std::string stageLabel(StageInfo const& info);
 };

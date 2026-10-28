@@ -95,6 +95,11 @@ void ShadowSimulator::parkGhosts() {
     m_shadow->m_position = cocos2d::CCPoint{ 0.f, 105.f };
     m_shadow->m_yVelocity = 0.0;
     m_shadow->m_isDead = false;
+    // Wave trail points stay in world space after a sim — clear so leftover
+    // streak geometry cannot interact with live collision/debug paths.
+    if (m_shadow->m_waveTrail) {
+        m_shadow->m_waveTrail->reset();
+    }
     hideGhost(m_shadow);
 }
 

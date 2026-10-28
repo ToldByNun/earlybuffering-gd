@@ -10,6 +10,7 @@
 #include <cstring>
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../ui/SaveFeedback.hpp"
 #include "../ui/StatusOverlay.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
@@ -88,6 +89,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_clickTimes.clear();
     m_cpsLocked = false;
     m_outcomePending = false;
+    SaveFeedback::get().reset();
     syncButtonState(playLayer);
     updateOverlay();
 }
@@ -109,6 +111,7 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
     // layerDying=true: do not removeFromParent (avoids UAF during quit).
+    SaveFeedback::get().reset();
     TrajectoryVisualizer::get().detach(true);
     StatusOverlay::detach(true);
     ShadowSimulator::get().detach(true);
@@ -601,11 +604,8 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
 
     inject(playLayer, m_buffer.down);
     AssistLog::printSavedPress(delayed, m_buffer.pressTick, m_attemptTick, m_buffer.limit, estimatedTps());
-    {
-        char const* fb = StageConfig::saveFeedbackMode();
-        if (fb && std::strcmp(fb, "off") != 0) {
-            AssistLog::info(fmt::format("SAVE feedback={} delay={}", fb, delayed));
-        }
+    if (delayed > 0 && std::strcmp(StageConfig::saveFeedbackMode(), "off") != 0) {
+        SaveFeedback::get().onSave(playLayer, player, delayed);
     }
     if (!wasPress) {
         AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", m_attemptTick));
@@ -640,6 +640,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
 
     pollOutcome(playLayer);
     flushPendingRelease(playLayer);
+    SaveFeedback::get().onPhysicsTick();
 
     auto* p1 = playLayer->m_player1;
     if (p1) {

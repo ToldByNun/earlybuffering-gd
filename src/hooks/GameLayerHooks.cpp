@@ -2,6 +2,7 @@
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimCollisionPolicy.hpp"
 #include "../config/StageConfig.hpp"
+#include "../debug/AssistLog.hpp"
 #include "../ui/StatusOverlay.hpp"
 
 #include <Geode/Geode.hpp>
@@ -129,30 +130,64 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     }
 
     void collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec, int objectsCount, float dt) {
-        if (!simulating()) {
-            GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
+        auto& sim = ShadowSimulator::get();
+
+        // Sim must only collide the shadow — never the real player mid-plan.
+        if (sim.isSimulating()) {
+            if (!sim.isShadow(player)) return;
+            gd::vector<GameObject*> extra;
+            extra.reserve(objectsCount);
+            for (int i = 0; i < objectsCount; i++) {
+                GameObject* obj = vec->at(i);
+                // Never feed our own ghosts back into shadow collision either.
+                if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
+                    if (sim.isOwnedGhost(asPl)) continue;
+                }
+                switch (SimCollisionPolicy::classify(obj)) {
+                    case SimObjectAction::Include:
+                        extra.push_back(obj);
+                        break;
+                    case SimObjectAction::UnknownOnOverlap:
+                        if (player && obj->getObjectRect().intersectsRect(player->getObjectRect())) {
+                            sim.noteUnknown();
+                            SimCollisionPolicy::noteLimitedSimOnce();
+                        }
+                        break;
+                    case SimObjectAction::Skip:
+                    default:
+                        break;
+                }
+            }
+            GJBaseGameLayer::collisionCheckObjects(player, &extra, static_cast<int>(extra.size()), dt);
             return;
         }
-        gd::vector<GameObject*> extra;
-        extra.reserve(objectsCount);
-        for (int i = 0; i < objectsCount; i++) {
-            GameObject* obj = vec->at(i);
-            switch (SimCollisionPolicy::classify(obj)) {
-                case SimObjectAction::Include:
-                    extra.push_back(obj);
-                    break;
-                case SimObjectAction::UnknownOnOverlap:
-                    if (player && obj->getObjectRect().intersectsRect(player->getObjectRect())) {
-                        ShadowSimulator::get().noteUnknown();
-                        SimCollisionPolicy::noteLimitedSimOnce();
+
+        // Live: strip owned ghosts if they ever appear in the candidate list
+        // (invisible PlayerObjects in objectLayer can otherwise kill wave/"to nothing").
+        if (vec && objectsCount > 0) {
+            bool anyGhost = false;
+            for (int i = 0; i < objectsCount; i++) {
+                if (auto* asPl = typeinfo_cast<PlayerObject*>(vec->at(i))) {
+                    if (sim.isOwnedGhost(asPl)) { anyGhost = true; break; }
+                }
+            }
+            if (anyGhost) {
+                gd::vector<GameObject*> extra;
+                extra.reserve(static_cast<size_t>(objectsCount));
+                for (int i = 0; i < objectsCount; i++) {
+                    GameObject* obj = vec->at(i);
+                    if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
+                        if (sim.isOwnedGhost(asPl)) continue;
                     }
-                    break;
-                case SimObjectAction::Skip:
-                default:
-                    break;
+                    extra.push_back(obj);
+                }
+                GJBaseGameLayer::collisionCheckObjects(
+                    player, &extra, static_cast<int>(extra.size()), dt
+                );
+                return;
             }
         }
-        GJBaseGameLayer::collisionCheckObjects(player, &extra, static_cast<int>(extra.size()), dt);
+        GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
     }
 };
 
@@ -204,6 +239,7 @@ class $modify(EbPlayerObject, PlayerObject) {
     }
 
     void ringJump(RingObject* ring, bool skipCheck) {
+        if (ShadowSimulator::get().isOwnedGhost(this) && !simulating()) return;
         if (simulating()) {
             auto& sim = ShadowSimulator::get();
             // applyRingJump → ringJump: passthrough to the real implementation once.
@@ -215,6 +251,13 @@ class $modify(EbPlayerObject, PlayerObject) {
             return;
         }
         PlayerObject::ringJump(ring, skipCheck);
+    }
+
+    void playerDestroyed(bool noEffects) {
+        // Ghosts must never run the vanilla destroyed path (death FX / fail state).
+        if (ShadowSimulator::get().isOwnedGhost(this)) return;
+        if (simulating()) return;
+        PlayerObject::playerDestroyed(noEffects);
     }
 
     void playSpiderDashEffect(cocos2d::CCPoint from, cocos2d::CCPoint to) {
@@ -403,12 +446,24 @@ class $modify(EbPlayLayer, PlayLayer) {
             return;
         }
 
+        // Real player colliding with an owned ghost-as-object (wave vs invisible
+        // snapshot/shadow body) — treat as non-event, not a level fail.
+        if (auto* killer = typeinfo_cast<PlayerObject*>(object)) {
+            if (sim.isOwnedGhost(killer)) {
+                AssistLog::debug("destroyPlayer: swallowed death to owned ghost body");
+                if (player) player->m_isDead = false;
+                return;
+            }
+        }
+
         // While simulating, swallow real-player deaths too (sim must not bleed).
         // Anticheat on the real player still goes through.
         if (sim.isSimulating()) {
             if (object == m_anticheatSpike) {
                 PlayLayer::destroyPlayer(player, object);
+                return;
             }
+            if (player) player->m_isDead = false;
             return;
         }
 

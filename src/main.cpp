@@ -172,6 +172,9 @@ $on_mod(Loaded) {
     listenForSettingChanges<std::string>("save-feedback", [](std::string) {
         onAnySetting();
     });
+    listenForSettingChanges<cocos2d::ccColor3B>("save-icon-color", [](cocos2d::ccColor3B) {
+        onAnySetting();
+    });
     auto watchFloat = [](char const* id) {
         listenForSettingChanges<double>(id, [](double) { onAnySetting(); });
     };

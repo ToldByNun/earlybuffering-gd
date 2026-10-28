@@ -36,7 +36,8 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 | assist-startpos-only | bool | false | | | |
 | assist-percent-min | int | 0 | 0 | 100 | |
 | assist-percent-max | int | 100 | 0 | 100 | |
-| save-feedback | string | off | off/icon/sound | | |
+| save-feedback | string | off | off/icon/sound/both | sound = per-tick MP3; icon = color flash |
+| save-icon-color | rgb | #7CFF4A | | Flash color for icon/both |
 | assist-off-N-from/to | float | -1 | -1 | 100 | N=1..6; -1 unused; inclusive off range |
 | ticks-all | int | 2 | 0 | 32 | Delay window |
 | ticks-wave | int | 2 | 0 | 32 | |
@@ -96,9 +97,11 @@ Bake runs serial on the main thread via BakeScheduler (no worker pool).
 While simulating: no sounds/achievements/percentage/particles/trigger side-effects; SimCollisionPolicy filter; orb hold-gate.
 Safe mode + assistTouchedRun block percentage/newbest when assist injected.
 
-Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` (incl. anticheatSpike).
-Real-player deaths are swallowed while `m_simulating` (anticheat on real players still passes).
-Active shadow is parked off-level after each sim; ghost `update` is no-op unless actively stepping.
+Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` / `playerDestroyed` (incl. anticheatSpike).
+Death to an owned ghost as the killer object is swallowed. Real-player deaths are swallowed while
+`m_simulating` (anticheat on real players still passes). During sim, `collisionCheckObjects` runs
+only for the shadow. Live collision lists strip owned ghosts. Active shadow is parked off-level
+after each sim (wave trail reset); ghost `update` is no-op unless actively stepping.
 
 ## Constants
 

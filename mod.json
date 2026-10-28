@@ -209,9 +209,15 @@
 		"save-feedback": {
 			"type": "string",
 			"name": "Save Feedback",
-			"description": "Extra feedback when assist injects a delayed click. off = none; icon/sound log a SAVE line (UI cue later).",
-			"one-of": ["off", "icon", "sound"],
-			"default": "off"
+			"description": "Cue when assist injects a delayed click. Sound = per-tick clip (+1…+7, +8+). Icon = flash player with Save Icon Color. both = sound+icon.",
+			"one-of": ["off", "icon", "sound", "both"],
+			"default": "both"
+		},
+		"save-icon-color": {
+			"type": "color",
+			"name": "Save Icon Color",
+			"description": "Color flashed onto the player icon when Save Feedback is icon or both.",
+			"default": "#7CFF4A"
 		},
 
 		"title-window": {
@@ -731,5 +737,10 @@
 			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
 		}
+	},
+	"resources": {
+		"files": [
+			"resources/cues/*.mp3"
+		]
 	}
 }

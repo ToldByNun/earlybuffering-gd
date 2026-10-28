@@ -77,6 +77,7 @@ int g_cachedAssistPercentMax = 100;
 std::vector<StageConfig::PercentRange> g_cachedAssistDisableRanges;
 bool g_cachedShowPauseAssist = true;
 std::string g_cachedSaveFeedback = "off";
+StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
 bool g_cacheInitialized = false;
@@ -194,12 +195,21 @@ void StageConfig::refreshCache() {
     g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", true);
     try {
         g_cachedSaveFeedback = mod->getSettingValue<std::string>("save-feedback");
-        if (g_cachedSaveFeedback != "icon" && g_cachedSaveFeedback != "sound") {
+        if (g_cachedSaveFeedback != "icon"
+            && g_cachedSaveFeedback != "sound"
+            && g_cachedSaveFeedback != "both") {
             g_cachedSaveFeedback = "off";
         }
     }
     catch (...) {
         g_cachedSaveFeedback = "off";
+    }
+    try {
+        auto const c = mod->getSettingValue<cocos2d::ccColor3B>("save-icon-color");
+        g_cachedSaveIconColor = { c.r, c.g, c.b };
+    }
+    catch (...) {
+        g_cachedSaveIconColor = {};
     }
     try {
         g_cachedAssistVerify = mod->getSettingValue<std::string>("assist-verify");
@@ -419,6 +429,18 @@ bool StageConfig::isInAssistDisableRange(float percent) {
 }
 bool StageConfig::showPauseAssist() { ensureCache(); return g_cachedShowPauseAssist; }
 char const* StageConfig::saveFeedbackMode() { ensureCache(); return g_cachedSaveFeedback.c_str(); }
+bool StageConfig::saveFeedbackIcon() {
+    ensureCache();
+    return g_cachedSaveFeedback == "icon" || g_cachedSaveFeedback == "both";
+}
+bool StageConfig::saveFeedbackSound() {
+    ensureCache();
+    return g_cachedSaveFeedback == "sound" || g_cachedSaveFeedback == "both";
+}
+StageConfig::ColorRgb StageConfig::saveFeedbackColor() {
+    ensureCache();
+    return g_cachedSaveIconColor;
+}
 int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
 int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
