@@ -113,9 +113,15 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 
 Lexico: orbUseful > surviveBin > endX−λ·delay > earliest. Bins 24/48/96. k from `robust-k` or auto (mode/speed/dtVariance). λ = ModeParams.latencyWeight.
 
-## Click intent (spam)
+## Click intent (spam) v2
 
-`ClickIntentGuard` ring of recent Jump presses per player. Dense spam (wave ≈ 3 presses / 10 ticks) → assist Pass unless spatial orb/pad ahead. Continuous modes also Pass release assist during spam. Reset on attempt / quit.
+`ClickIntentGuard` ring of recent Jump presses per player (P1/P2 independent).
+
+Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean ≤ mode max, low σ, no mid-spam pause) **or** **very dense** (need+2). First 1–2 clicks and pause-then-resume → assist allowed.
+
+**Do not Pass** (allow assist) when spatial orb/pad ahead **or** a BakeMap window is nearby. Portal/teleport corridor spam looks rhythmic → Pass unless orb/pad.
+
+Continuous modes also Pass release assist during spam. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
 ## Divergence / UNTRUST
 

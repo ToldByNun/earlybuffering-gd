@@ -1,6 +1,7 @@
 #include "PlanGoldCorpus.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/AssistLearning.hpp"
+#include "../core/ClickIntentGuard.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
@@ -25,6 +26,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistController::recheckSlideSelfCheck(recheckReport), "recheck-slide");
     std::string exploreReport;
     expect(AssistLearning::exploreGateSelfCheck(exploreReport), "learn-explore-gate");
+    std::string intentReport;
+    expect(ClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";

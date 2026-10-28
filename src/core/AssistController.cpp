@@ -81,6 +81,33 @@ static void fillBakePreferBand(
     opts.preferDelayMax = l;
 }
 
+// Nearby bake click → ClickIntentGuard must not Pass (assist allowed).
+static bool nearBakeWindowHint(
+    PlayerObject* player,
+    bool player1,
+    bool down,
+    int attemptTick,
+    float simDt
+) {
+    if (!player || simDt <= 0.f) return false;
+    auto const& bake = BakeMap::get();
+    if (!bake.loaded() || bake.data().clicks.empty()) return false;
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
+    int const approxFrame = static_cast<int>(std::lround(attemptTick * (tps * simDt)));
+    return bake.findNear(
+        player->getPositionX(), approxFrame, down, !player1,
+        StageConfig::kindOf(player)
+    ) != nullptr;
+}
+
+static bool nearOrbOrPadHint(
+    PlayLayer* playLayer, PlayerObject* player, int limit, float simDt
+) {
+    if (!StageConfig::assistOrbs()) return false;
+    if (!playLayer || !player || limit <= 0 || simDt <= 0.f) return false;
+    return ShadowSimulator::spatialOrbHint(playLayer, player, limit, simDt);
+}
+
 
 AssistController& AssistController::get() {
     static AssistController instance;
@@ -1313,13 +1340,15 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     }
     m_untrustPassHint = false;
 
-    // Dense spam (esp. wave): Pass unless an orb/pad is clearly ahead.
-    if (ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind)) {
-        bool nearOrb = false;
-        if (StageConfig::assistOrbs() && limit > 0 && m_simDt > 0.f) {
-            nearOrb = ShadowSimulator::spatialOrbHint(playLayer, player, limit, m_simDt);
-        }
-        if (!nearOrb) {
+    // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
+    {
+        bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
+        bool const nearBake = nearBakeWindowHint(
+            player, player1, true, effectTick, this->m_simDt
+        );
+        if (ClickIntentGuard::get().shouldPassThrough(
+                slot, effectTick, kind, nearOrb, nearBake
+            )) {
             AssistLog::debug(fmt::format(
                 "intent: spam Pass (mode={}, tick={})", StageConfig::kindName(kind), effectTick
             ));
@@ -1327,7 +1356,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
             dummy.action = PlanAction::Pass;
             dummy.firstDeathTick = -1;
             dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
             return true;
         }
     }
@@ -1491,12 +1520,14 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     // Continuous spam: do not delay releases either (would steal hold state).
     bool const continuous =
         player->m_isDart || player->m_isShip || player->m_isSwing;
-    if (continuous && ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind)) {
-        bool nearOrb = false;
-        if (StageConfig::assistOrbs() && limit > 0 && m_simDt > 0.f) {
-            nearOrb = ShadowSimulator::spatialOrbHint(playLayer, player, limit, m_simDt);
-        }
-        if (!nearOrb) {
+    if (continuous) {
+        bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
+        bool const nearBake = nearBakeWindowHint(
+            player, player1, false, effectTick, this->m_simDt
+        );
+        if (ClickIntentGuard::get().shouldPassThrough(
+                slot, effectTick, kind, nearOrb, nearBake
+            )) {
             AssistLog::debug(fmt::format(
                 "intent: spam Pass release (mode={}, tick={})",
                 StageConfig::kindName(kind), effectTick
