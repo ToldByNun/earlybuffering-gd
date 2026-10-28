@@ -1196,7 +1196,51 @@ SimPlan ShadowSimulator::plan(
             pushUnique(d);
         }
     }
+
+    // Bake-prior prefer band (after d0 / orb): evaluate ±k margin so robust check works.
+    int preferLo = -1;
+    int preferHi = -1;
+    bool hasPrefer = options.preferDelayMin >= 0
+        && options.preferDelayMax >= options.preferDelayMin;
+    if (hasPrefer) {
+        preferLo = std::max(0, options.preferDelayMin);
+        preferHi = std::min(limit, options.preferDelayMax);
+        hasPrefer = preferLo <= preferHi;
+    }
+    int preferLastInOrder = -1;
+    if (hasPrefer) {
+        int const k = kWindowMarginK;
+        int const marginLo = std::max(0, preferLo - k);
+        int const marginHi = std::min(limit, preferHi + k);
+        for (int d = marginLo; d <= marginHi; ++d) pushUnique(d);
+        for (int d : order) {
+            if (d >= marginLo && d <= marginHi) preferLastInOrder = d;
+        }
+    }
+
     for (int d = 1; d <= limit; ++d) pushUnique(d);
+
+    auto preferBandRobust = [&]() -> bool {
+        if (!hasPrefer) return false;
+        int const k = kWindowMarginK;
+        for (int d = preferLo; d <= preferHi; ++d) {
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable) continue;
+            bool ok = true;
+            for (int e = d - k; e <= d + k; ++e) {
+                if (e < 0 || e > limit) continue;
+                if (!cands[static_cast<size_t>(e)].viable) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) return true;
+        }
+        for (int d = preferLo; d <= preferHi; ++d) {
+            if (cands[static_cast<size_t>(d)].viable) return true;
+        }
+        return false;
+    };
 
     for (int d : order) {
         if (d == 0) continue;
@@ -1234,6 +1278,15 @@ SimPlan ShadowSimulator::plan(
         }
         finalizeViable(c, -1);
         cands[static_cast<size_t>(d)] = c;
+
+        // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
+        if (hasPrefer && !plan.budgetHit && d == preferLastInOrder && preferBandRobust()) {
+            AssistLog::debug(fmt::format(
+                "PLAN id={} prefer-band early-exit [{},{}] after {} cands",
+                plan.planId, preferLo, preferHi, plan.candidatesTried
+            ));
+            break;
+        }
     }
 
     for (auto& c : cands) {

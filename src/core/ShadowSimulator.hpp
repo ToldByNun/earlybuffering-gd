@@ -24,6 +24,10 @@ struct PlanOptions {
     int smartCombos = 48;
     int smartHorizon = 0; // 0 = auto from model cap
     int attemptStartTick = 0; // absolute attempt tick at plan time (for abs death ticks)
+    // Live bake-prior: delay ticks from a nearby BakeMap window (−1 = unset).
+    // Enqueued after d0 / orb window; early-exit when a ±k-robust prefer delay is viable.
+    int preferDelayMin = -1;
+    int preferDelayMax = -1;
 };
 
 struct ThreatZone {

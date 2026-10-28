@@ -111,6 +111,10 @@ Cancel: death, resetLevel, quit, checkpoint load. Force-fire: mode-change, CPS u
 
 When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each allowed `d0` with a fixed follow-up timeline from the next 1–2 bake/self-bake clicks (same mode; beyond horizon / mode change aborts). Score = survive + reach next X − weak latency. Only `d0` is buffered. No bake follow-ups → prior hypothetical d1 grid.
 
+## Live bake-prior (prefer band)
+
+`PlanOptions.preferDelayMin/Max` from a nearby BakeMap window (delay ticks). Cand order: d0 → orb window → prefer±k → rest. Early-exit after prefer margin if a ±k-robust prefer delay is viable (`!budgetHit`). Orb-intent still wins final pick over prefer. Empty / out-of-limit band ignored.
+
 ## LevelProfile JSON
 
 key (LevelContentKey fullKey with content rev), modes[Mode].capMul, modes[Mode].spots[bucket].{bias,trust,n,saved,diedAfterAssist,pessimism,histN,earlyHist[17]}

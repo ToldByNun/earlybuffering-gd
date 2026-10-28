@@ -31,6 +31,47 @@ static int roundBias(float bias) {
     return static_cast<int>(std::lround(bias));
 }
 
+// Map a nearby BakeMap window onto delay ticks for Live prefer-band ordering.
+static void fillBakePreferBand(
+    PlanOptions& opts,
+    PlayerObject* player,
+    bool player1,
+    bool down,
+    int effectTick,
+    int limit,
+    int attemptTick,
+    float simDt
+) {
+    if (!player || limit <= 0 || simDt <= 0.f) return;
+    auto const& bake = BakeMap::get();
+    if (!bake.loaded() || bake.data().clicks.empty()) return;
+
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
+    int const approxFrame = static_cast<int>(std::lround(attemptTick * (tps * simDt)));
+    auto const* win = bake.findNear(
+        player->getPositionX(), approxFrame, down, !player1,
+        StageConfig::kindOf(player)
+    );
+    if (!win) return;
+
+    auto frameToTick = [&](int frame) -> int {
+        double const ticksPerBakeFrame = 1.0 / (tps * simDt);
+        int const delta = static_cast<int>(std::lround(
+            (frame - win->nominalFrame) * ticksPerBakeFrame
+        ));
+        return effectTick + delta;
+    };
+
+    int e = frameToTick(win->earliest) - effectTick;
+    int l = frameToTick(win->latest) - effectTick;
+    if (l < e) std::swap(l, e);
+    e = std::max(0, std::min(limit, e));
+    l = std::max(0, std::min(limit, l));
+    if (e > l) return;
+    opts.preferDelayMin = e;
+    opts.preferDelayMax = l;
+}
+
 
 AssistController& AssistController::get() {
     static AssistController instance;
@@ -974,6 +1015,9 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.smartCombos = StageConfig::smartCombos();
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
+    fillBakePreferBand(
+        opts, player, player1, true, effectTick, limit, m_attemptTick, m_simDt
+    );
 
     auto const t0 = std::chrono::steady_clock::now();
     auto plan = (opts.smartDepth > 1)
@@ -1108,6 +1152,10 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
         opts.capMul *= 0.85f;
     }
     opts.maxBranches = 4;
+    opts.attemptStartTick = effectTick;
+    fillBakePreferBand(
+        opts, player, player1, false, effectTick, limit, m_attemptTick, m_simDt
+    );
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
 

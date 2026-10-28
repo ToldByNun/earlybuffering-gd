@@ -2,6 +2,10 @@
 
 ## v1.2.0 (unreleased)
 
+### Live bake-prior
+
+- Nearby BakeMap window becomes a Live prefer delay band (after d0/orb); early-exit when a robust prefer delay is found.
+
 ### Smart bake-chain + learning histogram
 
 - `planSequence` scores `d0` using next bake/self-bake follow-up clicks when available.
