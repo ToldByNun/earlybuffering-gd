@@ -30,6 +30,8 @@ Settings (Trigger World): `trigger-bake` (default on), `trigger-bake-skip-dynami
 
 When enabled, static move/rotate/scale trigger motion is cached per level content key (`triggers/{fullKey}.json`). On level enter: load if present, otherwise build once (later commits). Shadow sim applies baked poses so static movers are not `UnknownOnOverlap`. Dynamic triggers (follow player / camera / touch-path) are not stored in that cache; with `trigger-bake-skip-dynamic` they stay Unknown (recommended for weaker PCs). Off `trigger-bake` = legacy Unknown-on-overlap for all trigger/effect overlaps.
 
+Classifier (`TriggerClassify`): **only lethal-motion candidates** are ever baked — Move/Rotate/Scale/Spawn/Follow (IDs 901/1346/2067/1268/1347/1585/1817). Camera (1913–1917, 2015…), pulse/alpha/toggle/shake/song/SFX/TimeWarp → always `Ignore` (cannot kill via object pose), even if flagged dynamic. On movers: lock-to-player/camera / follow / touch-start → `DynamicFollow`/`DynamicOther`; fixed spawn-driven move/rotate/scale → `Static*`. Unknown effect IDs → `Ignore` (no false Dynamic work). `TriggerClassify::selfCheck` runs at mod load.
+
 ## Not in scope
 
 - Late-forgiveness (rewind time for late clicks)

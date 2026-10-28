@@ -2,6 +2,7 @@
 #include "core/AssistController.hpp"
 #include "core/BakeMap.hpp"
 #include "core/ShadowSimulator.hpp"
+#include "core/TriggerClassify.hpp"
 #include "debug/AssistLog.hpp"
 #include "debug/LagProbe.hpp"
 #include "debug/PerfTrace.hpp"
@@ -55,6 +56,12 @@ $on_mod(Loaded) {
     {
         std::string report;
         bool const ok = ShadowSimulator::regressionSelfCheck(report);
+        if (ok) AssistLog::info(report);
+        else AssistLog::info(fmt::format("WARN {}", report));
+    }
+    {
+        std::string report;
+        bool const ok = TriggerClassify::selfCheck(report);
         if (ok) AssistLog::info(report);
         else AssistLog::info(fmt::format("WARN {}", report));
     }
