@@ -1396,8 +1396,25 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
-            if (AssistLearning::shouldExploreHistogram(spot->histN)) {
+            bool const bakePrefer =
+                opts.preferDelayMin >= 0
+                && opts.preferDelayMax >= opts.preferDelayMin;
+            // Density for explore gate even when orb forced us past spam Pass.
+            bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
+                slot, effectTick, kind
+            );
+            if (AssistLearning::allowHistogramExplore(
+                    kind,
+                    spot->histN,
+                    spamDense,
+                    bakePrefer,
+                    spot->diedAfterAssist
+                )) {
                 off += (std::rand() % 3) - 1;
+                AssistLog::debug(fmt::format(
+                    "learn: hist explore ±1 @{} histN={}",
+                    LevelProfile::spotBucket(x), spot->histN
+                ));
             }
             delay = delay + off;
         }
@@ -1527,8 +1544,24 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
-            if (AssistLearning::shouldExploreHistogram(spot->histN)) {
+            bool const bakePrefer =
+                opts.preferDelayMin >= 0
+                && opts.preferDelayMax >= opts.preferDelayMin;
+            bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
+                slot, effectTick, kind
+            );
+            if (AssistLearning::allowHistogramExplore(
+                    kind,
+                    spot->histN,
+                    spamDense,
+                    bakePrefer,
+                    spot->diedAfterAssist
+                )) {
                 off += (std::rand() % 3) - 1;
+                AssistLog::debug(fmt::format(
+                    "learn: hist explore ±1 release @{} histN={}",
+                    LevelProfile::spotBucket(x), spot->histN
+                ));
             }
             delay = delay + off;
         }

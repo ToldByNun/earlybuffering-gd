@@ -184,7 +184,9 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 key (LevelContentKey fullKey with content rev), modes[Mode].capMul, modes[Mode].spots[bucket].{bias,trust,n,saved,diedAfterAssist,pessimism,histN,earlyHist[17]}
 
-Earliness histogram bins −8…+8 from Pass/postmortem only (never inject saves). Laplace modal → delay offset when histN≥3; else classic bias±2. Bin decay on autosave; explore while histN<8.
+Earliness histogram bins −8…+8 from Pass/postmortem only (never inject saves). Laplace modal → delay offset when histN≥3; else classic bias±2. Bin decay on autosave.
+
+**Histogram ±1 explore gate** (`AssistLearning::allowHistogramExplore`): while `histN < 8`, a ~20% roll may add ±1 to delay — **blocked** for Wave/Ship/Swing, when `ClickIntentGuard` density would Pass, when a bake-prefer band is active, or when `diedAfterAssist > 0` at that spot. Preferred delay offset (non-random) still applies.
 
 ## BakeMap JSON
 
