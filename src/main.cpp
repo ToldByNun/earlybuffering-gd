@@ -145,6 +145,7 @@ $on_mod(Loaded) {
     });
     watchBool("show-pause-bake");
     watchBool("show-pause-assist");
+    watchBool("show-pause-hub");
     watchBool("swallow-hopeless");
     watchBool("auto-tune");
     watchBool("self-bake");

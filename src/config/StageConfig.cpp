@@ -72,6 +72,7 @@ bool g_cachedSafeMode = false;
 bool g_cachedShowOverlay = true;
 bool g_cachedShowTrajectory = false;
 bool g_cachedShowPauseBake = true;
+bool g_cachedShowPauseHub = true;
 bool g_cachedAssistPress = true;
 bool g_cachedAssistRelease = true;
 bool g_cachedAssistOrbs = true;
@@ -193,6 +194,7 @@ void StageConfig::refreshCache() {
     g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
     g_cachedShowTrajectory = readBool(mod, "show-trajectory", false);
     g_cachedShowPauseBake = readBool(mod, "show-pause-bake", true);
+    g_cachedShowPauseHub = readBool(mod, "show-pause-hub", true);
     g_cachedAssistPress = readBool(mod, "assist-press", true);
     g_cachedAssistRelease = readBool(mod, "assist-release", true);
     g_cachedAssistOrbs = readBool(mod, "assist-orbs", true);
@@ -420,6 +422,7 @@ bool StageConfig::safeMode() { ensureCache(); return g_cachedSafeMode; }
 bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
 bool StageConfig::showTrajectory() { ensureCache(); return g_cachedShowTrajectory; }
 bool StageConfig::showPauseBake() { ensureCache(); return g_cachedShowPauseBake; }
+bool StageConfig::showPauseHub() { ensureCache(); return g_cachedShowPauseHub; }
 bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
 bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
 bool StageConfig::assistOrbs() { ensureCache(); return g_cachedAssistOrbs; }

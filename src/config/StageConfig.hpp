@@ -83,6 +83,8 @@ public:
     static bool showTrajectory();
     static bool showPauseBake(); // pause-screen bake / mode buttons
     static bool showPauseAssist();
+    // Pause top-right button → Geode openSettingsPopup (later: hub).
+    static bool showPauseHub();
     // "off" | "icon" | "sound" | "both"
     static char const* saveFeedbackMode();
     static bool saveFeedbackIcon();

@@ -23,6 +23,9 @@ public:
     static void exportConfig();
     static void importConfig();
 
+    // Geode ModSettingsPopup (search / titles / pages) for this mod.
+    static void openModSettings();
+
 private:
     PauseActionBridge() = delete;
 

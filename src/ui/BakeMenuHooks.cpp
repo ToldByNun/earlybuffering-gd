@@ -59,7 +59,8 @@ class $modify(EbPauseLayer, PauseLayer) {
         PauseLayer::customSetup();
         bool const showBake = StageConfig::showPauseBake();
         bool const showAssist = StageConfig::showPauseAssist();
-        if (!showBake && !showAssist) return;
+        bool const showHub = StageConfig::showPauseHub();
+        if (!showBake && !showAssist && !showHub) return;
 
         // Already installed (idempotent). Still (re)schedule poll — prior early-return skipped it.
         if (this->getChildByIDRecursive("earlybuffer-pause-ui"_spr)) {
@@ -75,6 +76,44 @@ class $modify(EbPauseLayer, PauseLayer) {
         auto* marker = CCNode::create();
         marker->setID("earlybuffer-pause-ui"_spr);
         host->addChild(marker);
+
+        // Top-right: opens Geode ModSettingsPopup for EarlyBuffer (search / titles / pages).
+        if (showHub) {
+            auto* spr = CircleButtonSprite::create(
+                CCLabelBMFont::create("EB", "bigFont.fnt"),
+                CircleBaseColor::Cyan,
+                CircleBaseSize::Small
+            );
+            if (!spr) {
+                spr = CircleButtonSprite::createWithSpriteFrameName(
+                    "GJ_optionsBtn_001.png", 0.6f, CircleBaseColor::Cyan, CircleBaseSize::Small
+                );
+            }
+            auto* btn = CCMenuItemExt::createSpriteExtra(spr, [](CCMenuItemSpriteExtra*) {
+                PauseActionBridge::openModSettings();
+            });
+            btn->setID("earlybuffer-settings-btn"_spr);
+            btn->setScale(0.85f);
+
+            bool placedOnRight = false;
+            if (auto* right = PauseMenuAttach::rightButtonMenu(this)) {
+                // Prefer NodeIDs right column (same touch path as options gear).
+                right->addChild(btn);
+                right->updateLayout();
+                placedOnRight = true;
+                AssistLog::debug("pause-ui: EB settings on right-button-menu");
+            }
+            if (!placedOnRight) {
+                auto* menu = CCMenu::create();
+                menu->setID("earlybuffer-settings-menu"_spr);
+                menu->ignoreAnchorPointForPosition(false);
+                menu->setAnchorPoint({ 1.f, 1.f });
+                menu->setPosition({ win.width - 12.f, win.height - 12.f });
+                menu->addChild(btn);
+                host->addChild(menu, 1100);
+                AssistLog::debug("pause-ui: EB settings fallback top-right menu");
+            }
+        }
 
         if (showBake) {
             auto* title = CCLabelBMFont::create("EarlyBuffer bake", "goldFont.fnt");

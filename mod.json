@@ -74,6 +74,12 @@
 			"description": "Show hotkey mirrors on pause (preset, debug, learning, trajectory, config export/import).",
 			"default": true
 		},
+		"show-pause-hub": {
+			"type": "bool",
+			"name": "Pause Settings Button",
+			"description": "Show a top-right EarlyBuffer button on pause that opens the full Geode settings popup (search, sections, pages).",
+			"default": true
+		},
 		"save-feedback": {
 			"type": "string",
 			"name": "Save Feedback",

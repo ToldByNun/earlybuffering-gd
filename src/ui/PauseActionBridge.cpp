@@ -10,6 +10,7 @@
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
+#include <Geode/ui/GeodeUI.hpp>
 #include <optional>
 
 #ifdef GEODE_IS_WINDOWS
@@ -275,5 +276,15 @@ void PauseActionBridge::importConfig() {
     else {
         AssistController::get().updateOverlay();
         FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
+    }
+}
+
+void PauseActionBridge::openModSettings() {
+    auto* mod = Mod::get();
+    if (!mod) return;
+    // Theme-respecting Geode settings UI (search, section titles, PAGE n/m).
+    auto* popup = geode::openSettingsPopup(mod, false);
+    if (!popup) {
+        AssistLog::info("openModSettings: no settings popup (mod has no settings?)");
     }
 }
