@@ -121,6 +121,18 @@ Lexico: orbUseful > surviveBin > endX−λ·delay > earliest. Bins 24/48/96. k f
 
 `DivergenceTracker` ring (48): bad if delayed assist died, or orb expected but missed (death or delayed-for-orb). Warn ≥35%/n≥8; UNTRUST ≥45%/n≥12. `pollOutcome` uses real `planDelay`; `onRealDeath` notes pending outcomes. Live/Hybrid-live: `simUntrusted` → force Pass + overlay `UNTRUST pass` (no explore). `shouldWarn` soft: `capMul *= 0.85`. Clear on attempt reset only.
 
+## effectTick attribution
+
+`onPhysicsTick` increments `attemptTick`, then `beginRealUpdate` → `PlayerObject::update` → `endRealUpdate`.
+CBF / mid-step clicks happen while `m_inRealUpdate` is true (`midStep`).
+
+| Mode class | midStep | between frames | firstDt |
+|------------|---------|----------------|---------|
+| Continuous (Wave/Ship/Swing/Ufo/Spider) | `attemptTick` | `attemptTick` (never +1) | mid: remainder/`timeWarp`; else full `simDt` |
+| Discrete (Cube/Ball/Robot) | `attemptTick` | `attemptTick+1` | same |
+
+Rule: never fold CBF remainder into the tick index — that caused systematic ±1 between mid-step and between-frame presses (wave spam). Helpers: `AssistController::resolveEffectTick` / `effectTickSelfCheck`. Debug: `attrib:` AssistLog line + PerfTrace `attrib` when debug-logging or perf-trace is on.
+
 ## Pseudocode fireBuffered()
 
 Wait for dMin if requireOrb; up to 2 reclamps into [dMin,dMax]; inject; PendingRelease if needed.

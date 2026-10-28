@@ -83,6 +83,15 @@ public:
     void updateOverlay();
     std::string overlayText() const;
 
+    // effectTick attribution (exposed for PlanGold / selfCheck).
+    // Continuous modes (wave/ship/swing/ufo/spider): always attemptTick —
+    // never attemptTick+1; CBF remainder lives only in firstDt.
+    // Discrete modes: mid-step → attemptTick; between frames → attemptTick+1.
+    static bool continuousModePlayer(PlayerObject* player);
+    static bool continuousModeKind(GameModeKind kind);
+    static int resolveEffectTick(int attemptTick, bool midStep, bool continuous);
+    static bool effectTickSelfCheck(std::string& report);
+
 private:
     AssistController() = default;
 

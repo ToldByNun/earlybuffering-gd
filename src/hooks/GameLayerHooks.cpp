@@ -219,6 +219,7 @@ class $modify(EbPlayerObject, PlayerObject) {
             if (auto* pl = PlayLayer::get(); pl && this == pl->m_player1) {
                 auto& ac = AssistController::get();
                 ac.onPhysicsTick(pl, dt);
+                // begin/endRealUpdate brackets mid-step / CBF clicks for effectTick.
                 ac.beginRealUpdate();
                 PlayerObject::update(dt);
                 ac.endRealUpdate();

@@ -239,19 +239,93 @@ void AssistController::resetLevelProfile() {
 }
 
 void AssistController::beginRealUpdate() {
-    m_inRealUpdate = true;
-    m_subDtSeen = 0.f;
+    // True only while PlayerObject::update runs for real P1
+    // (see GameLayerHooks). CBF / mid-step clicks set midStep=true.
+    this->m_inRealUpdate = true;
+    this->m_subDtSeen = 0.f;
 }
 
 void AssistController::endRealUpdate() {
-    m_inRealUpdate = false;
+    this->m_inRealUpdate = false;
 }
 
 void AssistController::onSubStep(PlayerObject* player, float dt) {
-    if (!m_inRealUpdate || dt <= 0.f) return;
+    if (!this->m_inRealUpdate || dt <= 0.f) return;
     auto* pl = PlayLayer::get();
     if (!pl || player != pl->m_player1) return;
-    m_subDtSeen += dt;
+    this->m_subDtSeen += dt;
+}
+
+bool AssistController::continuousModeKind(GameModeKind kind) {
+    switch (kind) {
+        case GameModeKind::Wave:
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+        case GameModeKind::Ufo:
+        case GameModeKind::Spider:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool AssistController::continuousModePlayer(PlayerObject* player) {
+    if (!player) return false;
+    return continuousModeKind(StageConfig::kindOf(player));
+}
+
+int AssistController::resolveEffectTick(int attemptTick, bool midStep, bool continuous) {
+    if (attemptTick < 0) attemptTick = 0;
+    // Continuous: unify mid-step vs between-frames. The old +1 path for
+    // between-frames systematically scheduled fires one tick later than an
+    // otherwise identical mid-step press — fatal in wave spam (±1).
+    // firstDt still carries CBF remainder when midStep.
+    if (continuous) return attemptTick;
+    return midStep ? attemptTick : attemptTick + 1;
+}
+
+bool AssistController::effectTickSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    // Discrete cube-like: mid-step stays on current tick; between frames advances.
+    expect(resolveEffectTick(10, true, false) == 10, "discrete-mid");
+    expect(resolveEffectTick(10, false, false) == 11, "discrete-between");
+
+    // Continuous: never +1 (mid and between share the same effectTick).
+    expect(resolveEffectTick(10, true, true) == 10, "cont-mid");
+    expect(resolveEffectTick(10, false, true) == 10, "cont-between");
+    expect(resolveEffectTick(0, false, true) == 0, "cont-zero");
+    expect(resolveEffectTick(-3, false, false) == 1, "neg-clamp-discrete");
+    expect(resolveEffectTick(-3, true, true) == 0, "neg-clamp-cont");
+
+    expect(continuousModeKind(GameModeKind::Wave), "kind-wave");
+    expect(continuousModeKind(GameModeKind::Ship), "kind-ship");
+    expect(continuousModeKind(GameModeKind::Swing), "kind-swing");
+    expect(continuousModeKind(GameModeKind::Ufo), "kind-ufo");
+    expect(continuousModeKind(GameModeKind::Spider), "kind-spider");
+    expect(!continuousModeKind(GameModeKind::Cube), "kind-cube");
+    expect(!continuousModeKind(GameModeKind::Ball), "kind-ball");
+    expect(!continuousModeKind(GameModeKind::Robot), "kind-robot");
+
+    // Mid-step must not double-advance: continuous mid == discrete mid == attemptTick.
+    expect(
+        resolveEffectTick(42, true, true) == resolveEffectTick(42, true, false),
+        "mid-no-double-advance"
+    );
+
+    if (fails == 0) {
+        report = "effectTickSelfCheck OK";
+        return true;
+    }
+    report = fmt::format("effectTickSelfCheck {} fails: {}", fails, report);
+    return false;
 }
 
 int AssistController::activeLimit(PlayerObject* player) const {
@@ -1261,15 +1335,18 @@ bool AssistController::onHandleButton(
     auto* player = player1 ? playLayer->m_player1 : playLayer->m_player2;
     if (!player) return true;
 
-    m_userHolding[player1 ? 0 : 1] = down;
+    this->m_userHolding[player1 ? 0 : 1] = down;
 
-    bool const midStep = m_inRealUpdate;
-    int const effectTick = midStep ? m_attemptTick : m_attemptTick + 1;
+    // Attribution: see resolveEffectTick / assist_reference.md "effectTick".
+    // m_inRealUpdate ↔ inside PlayerObject::update (CBF mid-step).
+    bool const midStep = this->m_inRealUpdate;
+    bool const continuous = continuousModePlayer(player);
+    int const effectTick = resolveEffectTick(this->m_attemptTick, midStep, continuous);
 
     auto finish = [&](bool passThrough) -> bool {
         if (passThrough) {
             SelfBakeRecorder::get().noteVanillaInput(
-                playLayer, player, player1, down, effectTick, m_simDt
+                playLayer, player, player1, down, effectTick, this->m_simDt
             );
         }
         return passThrough;
@@ -1278,8 +1355,8 @@ bool AssistController::onHandleButton(
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
-        if (minMs > 0 && !m_clickTimes.empty()) {
-            auto const elapsed = std::chrono::steady_clock::now() - m_clickTimes.back();
+        if (minMs > 0 && !this->m_clickTimes.empty()) {
+            auto const elapsed = std::chrono::steady_clock::now() - this->m_clickTimes.back();
             if (elapsed < std::chrono::milliseconds(minMs)) {
                 AssistLog::debug(fmt::format(
                     "click debounce: no assist ({}ms < {}ms), pass through",
@@ -1289,59 +1366,82 @@ bool AssistController::onHandleButton(
                 return finish(true);
             }
         }
-        noteUserClick();
+        this->noteUserClick();
         ClickIntentGuard::get().notePress(
             player1 ? 0 : 1, effectTick, StageConfig::kindOf(player)
         );
     }
-    float firstDt = m_simDt;
+
+    // firstDt: full sim dt between frames; CBF remainder / timeWarp when mid-step.
+    // Never fold the remainder into effectTick (that caused ±1 vs between-frames).
+    float firstDt = this->m_simDt;
     if (midStep) {
-        float rem = m_lastDt - m_subDtSeen;
-        float const minDt = m_lastDt * 0.02f;
+        float rem = this->m_lastDt - this->m_subDtSeen;
+        float const minDt = this->m_lastDt * 0.02f;
         if (rem < minDt) rem = minDt;
-        if (rem > m_lastDt) rem = m_lastDt;
+        if (rem > this->m_lastDt) rem = this->m_lastDt;
         float tw = playLayer->m_gameState.m_timeWarp;
         if (tw <= 0.f) tw = 1.f;
         firstDt = rem / tw;
     }
 
+    if (down && (StageConfig::debugLogging() || StageConfig::perfTrace())) {
+        auto const detail = fmt::format(
+            "effectTick={} attemptTick={} midStep={} continuous={} firstDt={:.6f} simDt={:.6f} p{}",
+            effectTick,
+            this->m_attemptTick,
+            midStep ? 1 : 0,
+            continuous ? 1 : 0,
+            firstDt,
+            this->m_simDt,
+            player1 ? 1 : 2
+        );
+        AssistLog::debug(fmt::format("attrib: {}", detail));
+        PerfTrace::get().note("attrib", detail);
+    }
+
     // Track real (non-swallowed) inputs for learning timelines.
     // Buffered/swallowed ones are recorded when we inject or as releaseSeen.
-    bool const ours = m_buffer.state != BufferState::Idle && m_buffer.player1 == player1;
+    bool const ours =
+        this->m_buffer.state != BufferState::Idle && this->m_buffer.player1 == player1;
 
     if (!down) {
         if (ours) {
-            if (!m_buffer.down) {
+            if (!this->m_buffer.down) {
                 return false;
             }
-            m_buffer.releaseSeen = true;
-            m_buffer.releaseTick = effectTick;
-            m_log.noteInput(effectTick, false);
+            this->m_buffer.releaseSeen = true;
+            this->m_buffer.releaseTick = effectTick;
+            this->m_log.noteInput(effectTick, false);
             return false;
         }
 
-        if (!shouldAssistPlayer(player) || !StageConfig::assistRelease()) return finish(true);
-        if (m_attemptTick <= 2) return finish(true);
-        bool const pass = planRelease(playLayer, player, player1, effectTick, firstDt);
-        if (pass) m_log.noteInput(effectTick, false);
+        if (!this->shouldAssistPlayer(player) || !StageConfig::assistRelease()) {
+            return finish(true);
+        }
+        if (this->m_attemptTick <= 2) return finish(true);
+        bool const pass = this->planRelease(playLayer, player, player1, effectTick, firstDt);
+        if (pass) this->m_log.noteInput(effectTick, false);
         return finish(pass);
     }
 
-    if (ours && m_buffer.state == BufferState::Buffered && m_buffer.down) {
-        if (!m_buffer.releaseSeen) {
+    if (ours && this->m_buffer.state == BufferState::Buffered && this->m_buffer.down) {
+        if (!this->m_buffer.releaseSeen) {
             return false; // same press still armed; swallow duplicate downs
         }
         // Press B before fireTick after Release A: fire A first, then plan B.
-        fireBuffered(playLayer, player);
+        this->fireBuffered(playLayer, player);
     }
-    if (ours && m_buffer.state == BufferState::Buffered && !m_buffer.down) {
-        fireBuffered(playLayer, player);
+    if (ours && this->m_buffer.state == BufferState::Buffered && !this->m_buffer.down) {
+        this->fireBuffered(playLayer, player);
     }
 
-    if (!shouldAssistPlayer(player) || !StageConfig::assistPress()) return finish(true);
-    if (m_attemptTick <= 2) return finish(true);
-    bool const pass = planPress(playLayer, player, player1, effectTick, firstDt);
-    if (pass) m_log.noteInput(effectTick, true);
+    if (!this->shouldAssistPlayer(player) || !StageConfig::assistPress()) {
+        return finish(true);
+    }
+    if (this->m_attemptTick <= 2) return finish(true);
+    bool const pass = this->planPress(playLayer, player, player1, effectTick, firstDt);
+    if (pass) this->m_log.noteInput(effectTick, true);
     return finish(pass);
 }
 
