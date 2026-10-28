@@ -3,6 +3,7 @@
 #include "AssistPerfStats.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
+#include "ClickIntentGuard.hpp"
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
@@ -52,6 +53,7 @@ void AssistController::onCheckpointLoad() {
     m_pendingRelease = false;
     m_pendingReleaseHold = false;
     m_outcomePending = false;
+    ClickIntentGuard::get().reset();
 }
 
 void AssistController::syncButtonState(PlayLayer* playLayer) {
@@ -90,6 +92,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_cpsLocked = false;
     m_outcomePending = false;
     SaveFeedback::get().reset();
+    ClickIntentGuard::get().reset();
     syncButtonState(playLayer);
     updateOverlay();
 }
@@ -112,6 +115,7 @@ void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
     // layerDying=true: do not removeFromParent (avoids UAF during quit).
     SaveFeedback::get().reset();
+    ClickIntentGuard::get().reset();
     TrajectoryVisualizer::get().detach(true);
     StatusOverlay::detach(true);
     ShadowSimulator::get().detach(true);
@@ -840,6 +844,26 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
+    int const slot = player1 ? 0 : 1;
+
+    // Dense spam (esp. wave): Pass unless an orb/pad is clearly ahead.
+    if (ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind)) {
+        bool nearOrb = false;
+        if (StageConfig::assistOrbs() && limit > 0 && m_simDt > 0.f) {
+            nearOrb = ShadowSimulator::spatialOrbHint(playLayer, player, limit, m_simDt);
+        }
+        if (!nearOrb) {
+            AssistLog::debug(fmt::format(
+                "intent: spam Pass (mode={}, tick={})", StageConfig::kindName(kind), effectTick
+            ));
+            SimPlan dummy;
+            dummy.action = PlanAction::Pass;
+            dummy.firstDeathTick = -1;
+            dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+            return true;
+        }
+    }
 
     // Low trust at this spot → pass through (unless explore roll).
     if (StageConfig::autoTune() && profile.loaded()) {
@@ -946,6 +970,24 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
+    int const slot = player1 ? 0 : 1;
+
+    // Continuous spam: do not delay releases either (would steal hold state).
+    bool const continuous =
+        player->m_isDart || player->m_isShip || player->m_isSwing;
+    if (continuous && ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind)) {
+        bool nearOrb = false;
+        if (StageConfig::assistOrbs() && limit > 0 && m_simDt > 0.f) {
+            nearOrb = ShadowSimulator::spatialOrbHint(playLayer, player, limit, m_simDt);
+        }
+        if (!nearOrb) {
+            AssistLog::debug(fmt::format(
+                "intent: spam Pass release (mode={}, tick={})",
+                StageConfig::kindName(kind), effectTick
+            ));
+            return true;
+        }
+    }
 
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
@@ -1020,6 +1062,9 @@ bool AssistController::onHandleButton(
 
     m_userHolding[player1 ? 0 : 1] = down;
 
+    bool const midStep = m_inRealUpdate;
+    int const effectTick = midStep ? m_attemptTick : m_attemptTick + 1;
+
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
@@ -1035,10 +1080,10 @@ bool AssistController::onHandleButton(
             }
         }
         noteUserClick();
+        ClickIntentGuard::get().notePress(
+            player1 ? 0 : 1, effectTick, StageConfig::kindOf(player)
+        );
     }
-
-    bool const midStep = m_inRealUpdate;
-    int const effectTick = midStep ? m_attemptTick : m_attemptTick + 1;
     float firstDt = m_simDt;
     if (midStep) {
         float rem = m_lastDt - m_subDtSeen;

@@ -14,6 +14,10 @@
 - Per-tick sound cues for +1…+7 delayed ticks; +8+ uses the 8-tick clip (shipped in the mod package under resources).
 - Icon flash uses **Save Icon Color** (color picker).
 
+### Project
+
+- Mod logo (`logo.png`) for Geode / Index listing.
+
 ## v1.0.0
 
 First public release as **EarlyBuffer** (formerly *frirecracker* / *EarlyGrace*).

@@ -1058,6 +1058,27 @@ SimPlan ShadowSimulator::plan(
         }
         finalizeViable(c0, -1);
         cands[0] = c0;
+
+        // No threat target: baseline survives and no orb/pad ahead → Pass now.
+        // Avoids buffering wave spam / empty corridors with nothing to forgive.
+        bool const noThreat = !c0.raw.died && !zone.valid;
+        bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
+        if (noThreat && noOrbTarget) {
+            restoreCapture(layer);
+            m_simulating = false;
+            parkGhosts();
+            plan.action = PlanAction::Pass;
+            plan.delay = 0;
+            plan.nowIsSafe = true;
+            plan.threatCleared = true;
+            plan.jumpTick = c0.jumpTick;
+            plan.activatedRing = c0.activatedRing;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} Pass no-threat limit={} budgetHit={}",
+                plan.planId, limit, plan.budgetHit
+            ));
+            return plan;
+        }
     }
 
     std::vector<int> order;

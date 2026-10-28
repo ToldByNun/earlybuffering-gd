@@ -65,12 +65,17 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 1. tickBudget from opts (default 4000); if verifyAb then *2
 2. modelFor; capture state
 3. d0 press baseline -> ThreatZone clusterGapX=50
-4. eval delays under tick + sim-budget-us
-5. orbIntent: earliest +/-k robust activation (NO midpoint)
-6. else d0 clearsThreat -> Pass; else earliest +/-k robust viable
-7. budgetHit -> Pass; linked dual both clear
+4. **no-threat Pass**: baseline did not die, zone invalid, no orb/pad hint → Pass (skip further cands)
+5. eval delays under tick + sim-budget-us
+6. orbIntent: earliest +/-k robust activation (NO midpoint)
+7. else d0 clearsThreat -> Pass; else earliest +/-k robust viable
+8. budgetHit -> Pass; linked dual both clear
 
 Lexico: orbUseful > surviveBin > endX > earliest. Bins 24/48/96. k=1.
+
+## Click intent (spam)
+
+`ClickIntentGuard` ring of recent Jump presses per player. Dense spam (wave ≈ 3 presses / 10 ticks) → assist Pass unless spatial orb/pad ahead. Continuous modes also Pass release assist during spam. Reset on attempt / quit.
 
 ## Pseudocode fireBuffered()
 
