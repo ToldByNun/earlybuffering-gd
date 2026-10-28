@@ -158,6 +158,8 @@ private:
     ImportedReplay m_replay;
     bool m_hasReplay = false;
     bool m_loaded = false;
+    // Set by mergeSelfClicks; cleared by save(). Avoids disk I/O on death flush.
+    mutable bool m_dirty = false;
     BakeProgress m_progress;
     mutable std::mutex m_simMutex;
 };

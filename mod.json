@@ -59,7 +59,13 @@
 		"perf-trace": {
 			"type": "bool",
 			"name": "Perf Trace",
-			"description": "Time assist hot paths; on spikes write a breakdown to the Geode console and to earlybuffer-perf.log in the mod save folder. Leave on while diagnosing FPS hitchs.",
+			"description": "Time assist hot paths every physics tick. Writes to %LOCALAPPDATA%/GeometryDash/geode/mods/audesign.earlybuffer/earlybuffer-perf.log. Noisy — prefer Lag Probe for death spikes.",
+			"default": false
+		},
+		"lag-probe": {
+			"type": "bool",
+			"name": "Lag Probe",
+			"description": "Log timed death/reset/checkpoint episodes to earlybuffer-lagprobe.log in the mod save folder (%LOCALAPPDATA%/GeometryDash/geode/mods/audesign.earlybuffer/). Leave ON while reproducing death lag spikes — file includes a full legend.",
 			"default": true
 		},
 		"show-trajectory": {
@@ -373,7 +379,7 @@
 		"ticks-wave": {
 			"type": "int",
 			"name": "Ticks (Wave default)",
-			"description": "Default window for wave when Wave → Overwrite is off.",
+			"description": "Default window for wave when Wave → Overwrite is off. Keep 2 for Tight feel; use 4+ (Normal/Wide) if you want full ±robust-k neighbors in spam. Max preset uses 8 for wave (not 16).",
 			"default": 2,
 			"min": 0,
 			"max": 32

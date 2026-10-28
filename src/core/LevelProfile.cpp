@@ -230,7 +230,8 @@ void LevelProfile::maybeAutosave() {
     if (m_deathsSinceSave >= 5) {
         m_deathsSinceSave = 0;
         decayHistograms();
-        save();
+        // Do not sync-write during destroyPlayer — quit / complete persist.
+        // m_dirty is already set by note* / decayHistograms.
     }
 }
 

@@ -80,6 +80,8 @@ public:
     static bool debugLogging();
     // Section timings + spike dumps to Geode log and save-dir earlybuffer-perf.log.
     static bool perfTrace();
+    // Death/reset/checkpoint episode timings → earlybuffer-lagprobe.log.
+    static bool lagProbe();
     static bool safeMode();
     static bool showOverlay();
     static bool showTrajectory();

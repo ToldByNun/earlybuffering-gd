@@ -197,9 +197,13 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 `PlanOptions.preferDelayMin/Max` from a nearby BakeMap window (delay ticks). Cand order: d0 → orb window → prefer±k → rest. Early-exit after prefer margin if a ±k-robust prefer delay is viable (`!budgetHit`). Orb-intent still wins final pick over prefer. Empty / out-of-limit band ignored.
 
-## Adaptive robustK + latency
+## Adaptive robustK + latency (+ wave spam)
 
-`robust-k` 0 → auto: Wave/Ship/Swing start at 2; speed >1.1 → ≥2, >1.5 → 3; relative dt EMA >0.08 bumps +1 (cap 3). Fixed 1–3 overrides auto. `robust-jitter`: after pick, re-run with firstDt×0.97/1.03; fail → mark non-viable and re-pick. `ModeParams.latencyWeight` (defaults Cube 0.25 … Wave 1.0) enters `betterCand` and smart sequence scoring as `endX − λ·delay`.
+`robust-k` 0 → auto (`ShadowSimulator::autoRobustK`): Wave/Ship/Swing start at 2; speed >1.1 → ≥2, >1.5 → 3; relative dt EMA >0.08 bumps +1 (cap 3). **Wave + spam-dense** (ClickIntentGuard density, even when orb forces assist): keep ≥2; if speed >1.05 → **3**. Fixed 1–3 overrides auto. `robust-jitter`: after pick, re-run with firstDt×0.97/1.03; fail → mark non-viable and re-pick.
+
+`ModeParams.latencyWeight` (defaults Cube 0.25 … Wave 1.0) enters `betterCand` as `endX − λ·delay`. On Wave spam-dense assists only, λ is scaled ×0.65 so earliest-bias does not phase-shift corridors.
+
+**ticks-wave default stays 2** (Tight feel, not autoplay). With auto k=2..3, full ±k neighbors often do not fit in a 2-tick window — `pickRobust` falls back to earliest viable. Use Normal/Wide/Max (wave 4/8/8) when you want real ±k margin in spam. Max uses ticks-all=16 but ticks-wave=8 on purpose (wave windows stay shorter than cube).
 
 ## LevelProfile JSON
 

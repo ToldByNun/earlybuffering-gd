@@ -82,7 +82,8 @@ void TrajectoryVisualizer::detach(bool layerDying) {
     m_ticksSinceRebuild = 0;
     m_hasWindow = false;
     if (!m_node) return;
-    if (!layerDying && m_node->getParent()) {
+    (void)layerDying;
+    if (m_node->getParent()) {
         m_node->removeFromParent();
     }
     m_node->release();

@@ -171,9 +171,10 @@ void PerfTrace::end(char const* section) {
         char const* name = this->m_orphan.name ? this->m_orphan.name : section;
         auto const line = fmt::format("ORPHAN {}={:.2f}ms", name, us / 1000.0);
         this->appendLine(line);
-        // Do NOT sync-flush to disk on every hot orphan — evacuateGhosts / plan
-        // regularly exceed 1ms and flush() was causing multi-ms hitches on restart.
-        if (us >= kHotSectionUs) {
+        // Do NOT sync-flush to disk on orphans. Also skip console for routine
+        // sub-5ms plan/evacuate noise — AssistLog::info every click hitchs FPS.
+        constexpr int64_t kOrphanConsoleUs = 5000;
+        if (us >= kOrphanConsoleUs) {
             AssistLog::info(line);
         }
         return;

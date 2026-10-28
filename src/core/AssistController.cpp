@@ -13,6 +13,7 @@
 #include <cstring>
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
 #include "../ui/SaveFeedback.hpp"
 #include "../ui/SaveFrameCounter.hpp"
@@ -33,11 +34,24 @@ static int roundBias(float bias) {
     return static_cast<int>(std::lround(bias));
 }
 
-static void fillPlanRobustLatency(PlanOptions& opts, PlayerObject* player, float dtVariance) {
+static void fillPlanRobustLatency(
+    PlanOptions& opts,
+    PlayerObject* player,
+    float dtVariance,
+    bool spamDense = false
+) {
     opts.robustK = StageConfig::robustK();
     opts.robustJitter = StageConfig::robustJitter();
     opts.dtVariance = dtVariance;
-    if (player) opts.latencyWeight = StageConfig::paramsFor(player).latencyWeight;
+    opts.spamDense = spamDense;
+    if (player) {
+        opts.latencyWeight = StageConfig::paramsFor(player).latencyWeight;
+        // Wave λ=1.0 prefers earliest hard — in spam+orb assists that phase-shifts
+        // into spikes. Soften only on spam-dense assists (Pass-excluded paths).
+        if (spamDense && player->m_isDart && opts.latencyWeight > 0.5f) {
+            opts.latencyWeight *= 0.65f;
+        }
+    }
 }
 
 // Map a nearby BakeMap window onto delay ticks for Live prefer-band ordering.
@@ -139,6 +153,8 @@ void AssistController::onCheckpointLoad() {
 
 void AssistController::onLevelComplete(PlayLayer* playLayer) {
     SelfBakeRecorder::get().flushSegment(playLayer, "complete");
+    LevelProfile::get().save();
+    BakeMap::get().save();
 }
 
 void AssistController::syncButtonState(PlayLayer* playLayer) {
@@ -160,7 +176,11 @@ void AssistController::syncButtonState(PlayLayer* playLayer) {
 
 void AssistController::resetAttempt(PlayLayer* playLayer) {
     // No refine on reset — often chained right after death (would double-freeze).
-    SelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
+    LagProbe::Scope const episodeScope("eb.resetAttempt");
+    {
+        LagProbe::Scope const s("eb.flushSegment");
+        SelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
+    }
     clearBuffer();
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
@@ -185,10 +205,22 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_outcomePending = false;
     m_outcomePlanDelay = false;
     m_untrustPassHint = false;
-    SaveFeedback::get().reset();
-    ClickIntentGuard::get().reset();
-    syncButtonState(playLayer);
-    updateOverlay();
+    {
+        LagProbe::Scope const s("eb.saveFeedbackReset");
+        SaveFeedback::get().reset();
+    }
+    {
+        LagProbe::Scope const s("eb.clickGuardReset");
+        ClickIntentGuard::get().reset();
+    }
+    {
+        LagProbe::Scope const s("eb.syncButtons");
+        syncButtonState(playLayer);
+    }
+    {
+        LagProbe::Scope const s("eb.updateOverlay");
+        updateOverlay();
+    }
 }
 
 void AssistController::onLevelInit(PlayLayer* playLayer) {
@@ -208,7 +240,7 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 
 void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
-    // layerDying=true: do not removeFromParent (avoids UAF during quit).
+    // detach() unlinks then releases — never release while still parented.
     SelfBakeRecorder::get().cancelRefine();
     SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "quit", false);
     SelfBakeRecorder::get().onLevelQuit();
@@ -218,9 +250,9 @@ void AssistController::onLevelQuit() {
     TrajectoryVisualizer::get().detach(true);
     StatusOverlay::detach(true);
     ShadowSimulator::get().detach(true);
-    PerfTrace::get().flush("levelQuit");
-    PerfTrace::get().note("levelQuit");
 
+    // Persist then clear. Skip PerfTrace sync flush here — large logs were
+    // hitching quits; pending lines flush on next enable / natural batch.
     LevelProfile::get().save();
     BakeMap::get().save();
     LevelProfile::get().clear();
@@ -428,15 +460,16 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
 int AssistController::estimateRobustK(PlayerObject* player, float dtVariance) {
     int forced = StageConfig::robustK();
     if (forced > 0) return std::clamp(forced, 1, 3);
-
-    int k = ShadowSimulator::kWindowMarginK;
+    // Recheck path: treat as spam-dense when recent presses look rhythmic.
+    bool spamDense = false;
     if (player) {
-        if (player->m_isDart || player->m_isShip || player->m_isSwing) k = 2;
-        if (player->m_playerSpeed > 1.1f) k = std::max(k, 2);
-        if (player->m_playerSpeed > 1.5f) k = 3;
+        auto* pl = PlayLayer::get();
+        int const slot = (pl && player == pl->m_player2) ? 1 : 0;
+        spamDense = ClickIntentGuard::get().shouldPassThrough(
+            slot, AssistController::get().attemptTick(), StageConfig::kindOf(player)
+        );
     }
-    if (dtVariance > 0.08f) k = std::min(3, k + 1);
-    return k;
+    return ShadowSimulator::autoRobustK(player, dtVariance, spamDense);
 }
 
 int AssistController::acceptRecheckSlide(
@@ -739,16 +772,16 @@ void AssistController::runPostmortem(
     auto& sim = ShadowSimulator::get();
 
     int const age = this->m_attemptTick - dec.tick;
-    // Cap replay length — unbounded age after long attempts stalled death for seconds.
-    constexpr int kPostmortemMaxTicks = 96;
+    // destroyPlayer hot path — keep this to ONE short replay. Extra d±1 probes
+    // (up to 3×96 physics ticks) were hitching deaths after assist.
+    constexpr int kPostmortemMaxTicks = 32;
     if (age > 400) {
         profile.noteDiedAfterAssist(dec.mode, dec.x);
         dec.resolved = true;
         return;
     }
-    int const maxTicks = std::min(kPostmortemMaxTicks, std::max(8, age + 4));
+    int const maxTicks = std::min(kPostmortemMaxTicks, std::max(8, age + 2));
 
-    // Replay with real inputs from the snapshot.
     auto rep = sim.replay(
         playLayer, dec.snapshotSlot, dec.tick, dec.timeline, this->m_simDt, maxTicks, false, 0
     );
@@ -759,45 +792,10 @@ void AssistController::runPostmortem(
 
     if (!reproduced) {
         profile.noteTrust(dec.mode, dec.x, 0.6f, "sim diverged");
-        profile.noteDiedAfterAssist(dec.mode, dec.x);
-        dec.resolved = true;
-        return;
     }
-
-    // Sim matches reality. Prefer d+1 first — "too early" is the common failure.
-    if (dec.assisted && dec.delay > 0) {
-        bool improved = false;
-        if (dec.delay < dec.limit) {
-            auto late = sim.replay(
-                playLayer, dec.snapshotSlot, dec.tick, dec.timeline,
-                this->m_simDt, maxTicks, true, +1
-            );
-            if (!late.died) {
-                profile.noteBias(dec.mode, dec.x, +0.5f, "d+1 survived");
-                profile.noteEarliness(dec.mode, dec.x, +1, "d+1 survived");
-                improved = true;
-            }
-        }
-        if (!improved && dec.delay >= 1) {
-            auto early = sim.replay(
-                playLayer, dec.snapshotSlot, dec.tick, dec.timeline,
-                this->m_simDt, maxTicks, true, -1
-            );
-            if (!early.died) {
-                profile.noteBias(dec.mode, dec.x, -0.5f, "d-1 survived");
-                profile.noteEarliness(dec.mode, dec.x, -1, "d-1 survived");
-                improved = true;
-            }
-        }
-        if (!improved) {
-            profile.noteDiedAfterAssist(dec.mode, dec.x);
-        }
-    }
-    else {
-        profile.noteDiedAfterAssist(dec.mode, dec.x);
-        if (!dec.assisted) {
-            profile.noteEarliness(dec.mode, dec.x, 0, "postmortem pass");
-        }
+    profile.noteDiedAfterAssist(dec.mode, dec.x);
+    if (!dec.assisted) {
+        profile.noteEarliness(dec.mode, dec.x, 0, "postmortem pass");
     }
 
     dec.resolved = true;
@@ -857,38 +855,50 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     if (!playLayer || !player) return;
     if (ShadowSimulator::get().isSimulating()) return;
     if (ShadowSimulator::get().isOwnedGhost(player)) return;
+    (void)object;
 
-    if (m_outcomePending) {
-        AssistLog::debug(fmt::format(
-            "OUTCOME id={} death x={:.1f} orbExpect={} delay={}",
-            m_outcomePlanId, player->getPositionX(), m_outcomeExpectOrb, m_outcomePlanDelay
-        ));
+    LagProbe::Scope const deathScope("eb.onRealDeath");
+
+    // destroyPlayer hot path — no physics replays, no disk, no bake merge.
+    // GD physics is main-thread only; "multithread" death work is not viable.
+    // Heavy learning/bake runs on resetAttempt (next attempt), not here.
+    if (this->m_outcomePending) {
+        LagProbe::Scope const s("eb.outcomeNote");
         DivergenceTracker::get().note(
-            m_outcomePlanDelay, true, m_outcomeExpectOrb, false
+            this->m_outcomePlanDelay, true, this->m_outcomeExpectOrb, false
         );
-        m_outcomePending = false;
+        this->m_outcomePending = false;
     }
 
     if (StageConfig::autoTune() && LevelProfile::get().loaded()) {
         if (auto* dec = this->m_log.findForDeath(this->m_attemptTick)) {
-            PerfTrace::Scope const scope("postmortem");
-            this->runPostmortem(playLayer, player, object, *dec);
+            LagProbe::Scope const s("eb.learnDeath", fmt::format(
+                "assisted={} delay={} x={:.1f}",
+                dec->assisted, dec->delay, dec->x
+            ));
+            // Bookkeeping only — no ShadowSimulator::replay (was hitching deaths).
+            LevelProfile::get().noteDiedAfterAssist(dec->mode, dec->x);
+            if (!dec->assisted) {
+                LevelProfile::get().noteEarliness(dec->mode, dec->x, 0, "death pass");
+            }
+            dec->resolved = true;
         }
-        LevelProfile::get().maybeAutosave();
+        {
+            LagProbe::Scope const s("eb.maybeAutosave");
+            LevelProfile::get().maybeAutosave();
+        }
     }
 
-    // Death path must stay cheap: merge point windows only. Refine (up to 64
-    // sims) on the main thread was causing 1–2s freezes after every death.
-    {
-        PerfTrace::Scope const scope("selfBakeFlush");
-        SelfBakeRecorder::get().flushSegment(playLayer, "death", false);
-    }
     this->clearBuffer();
     this->m_pendingRelease = false;
-    // Markers stay until death/restart — clear on real death (practice may not resetLevel yet).
-    SaveFrameCounter::get().clear();
-    this->syncButtonState(playLayer);
-    this->updateOverlay();
+    {
+        LagProbe::Scope const s("eb.saveCounterClear");
+        SaveFrameCounter::get().clear();
+    }
+    {
+        LagProbe::Scope const s("eb.syncButtons");
+        this->syncButtonState(playLayer);
+    }
 }
 
 void AssistController::flushPendingRelease(PlayLayer* playLayer) {
@@ -980,7 +990,7 @@ void AssistController::fireBuffered(
                 : 1.f;
             opts.maxBranches = 2;
             opts.smartDepth = 1;
-            fillPlanRobustLatency(opts, player, this->m_dtVarEma);
+            fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, this->m_buffer.down, remaining,
                 this->m_simDt, this->m_simDt, opts
@@ -1455,9 +1465,14 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.smartCombos = StageConfig::smartCombos();
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
-    fillPlanRobustLatency(opts, player, m_dtVarEma);
+    // Density without orb/bake override — softens Wave λ / bumps auto k when
+    // we still assist (e.g. orb in spam corridor).
+    bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
+        slot, effectTick, kind
+    );
+    fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDense);
     fillBakePreferBand(
-        opts, player, player1, true, effectTick, limit, m_attemptTick, m_simDt
+        opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt
     );
 
     auto const t0 = std::chrono::steady_clock::now();
@@ -1625,9 +1640,12 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     }
     opts.maxBranches = 4;
     opts.attemptStartTick = effectTick;
-    fillPlanRobustLatency(opts, player, m_dtVarEma);
+    bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
+        slot, effectTick, kind
+    );
+    fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDenseRel);
     fillBakePreferBand(
-        opts, player, player1, false, effectTick, limit, m_attemptTick, m_simDt
+        opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt
     );
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);

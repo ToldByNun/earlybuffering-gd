@@ -4,6 +4,8 @@
 #include "BakeMap.hpp"
 #include "LevelProfile.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/LagProbe.hpp"
+#include <fmt/format.h>
 
 #include <Geode/Geode.hpp>
 #include <cmath>
@@ -80,11 +82,22 @@ void SelfBakeRecorder::noteVanillaInput(
 }
 
 void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool allowRefine) {
-    if (m_pending.empty()) return;
-    if (BakeMap::get().isBaking()) {
-        AssistLog::debug("self-bake: flush skipped (bake running)");
+    if (m_pending.empty()) {
+        LagProbe::get().mark("flushSegment.empty", reason ? reason : "?");
         return;
     }
+    if (BakeMap::get().isBaking()) {
+        AssistLog::debug("self-bake: flush skipped (bake running)");
+        LagProbe::get().mark("flushSegment.skippedBake", reason ? reason : "?");
+        return;
+    }
+
+    LagProbe::get().mark("flushSegment.begin", fmt::format(
+        "reason={} pending={} refine={}",
+        reason ? reason : "?",
+        m_pending.size(),
+        allowRefine
+    ));
 
     std::vector<BakedClick> clicks;
     clicks.reserve(m_pending.size());
@@ -107,6 +120,7 @@ void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool a
         bool const assistTouched = AssistController::get().assistTouchedRun();
         if (slot >= 0 && !assistTouched) {
             m_cancelRefine = false;
+            LagProbe::Scope const refineScope("eb.flushSegment.refine");
             expanded = BakeMap::get().refineSelfWindows(
                 layer,
                 slot,
@@ -127,7 +141,11 @@ void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool a
         }
     }
 
-    int const n = BakeMap::get().mergeSelfClicks(clicks);
+    int n = 0;
+    {
+        LagProbe::Scope const mergeScope("eb.flushSegment.merge");
+        n = BakeMap::get().mergeSelfClicks(clicks);
+    }
     if (n > 0) {
         AssistLog::debug(fmt::format(
             "self-bake: flushed {} click(s) ({}) expanded={} → map +{}",
@@ -137,4 +155,8 @@ void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool a
             n
         ));
     }
+    LagProbe::get().mark("flushSegment.done", fmt::format(
+        "clicks={} expanded={} merged={}",
+        clicks.size(), expanded, n
+    ));
 }

@@ -61,6 +61,7 @@ BakeMap& BakeMap::get() {
 void BakeMap::clear() {
     m_data = {};
     m_loaded = false;
+    this->m_dirty = false;
 }
 
 void BakeMap::clearPendingReplay() {
@@ -80,6 +81,7 @@ void BakeMap::setPendingReplay(ImportedReplay replay) {
 void BakeMap::loadForLevel(GJGameLevel* level) {
     m_data = {};
     m_loaded = false;
+    this->m_dirty = false;
     if (!level) return;
     m_data.levelKey = LevelProfile::makeKey(level);
     m_loaded = true;
@@ -94,8 +96,10 @@ void BakeMap::loadForLevel(GJGameLevel* level) {
 
 void BakeMap::save() const {
     if (!m_loaded || m_data.levelKey.empty()) return;
+    if (!this->m_dirty) return;
     auto res = writeFile();
     if (res.isOk()) {
+        this->m_dirty = false;
         AssistLog::debug(fmt::format(
             "BAKE: saved {} ({} clicks, {})",
             m_data.levelKey, m_data.clicks.size(), m_data.method
@@ -326,7 +330,9 @@ int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
         m_data.method = "self";
         if (m_data.sourceReplay.empty()) m_data.sourceReplay = "self-bake";
     }
-    save();
+    // Do not sync-write here — death/reset flushSegment hit this on the main
+    // thread and stalled restarts. Persist on quit / level complete / explicit save.
+    this->m_dirty = true;
     return touched;
 }
 
@@ -507,6 +513,7 @@ Result<int> BakeMap::bakeReplay(
 
     m_data = std::move(out);
     m_loaded = true;
+    this->m_dirty = true;
     save();
     AssistLog::info(fmt::format(
         "BAKE: {} clicks from {} @ {:.0f} tps (replay)",
@@ -818,6 +825,7 @@ Result<int> BakeMap::bakeBrute(
 
     m_data = std::move(out);
     m_loaded = true;
+    this->m_dirty = true;
     save();
     AssistLog::info(fmt::format(
         "BAKE: {} clicks (brute, no replay) @ {:.0f} tps (serial)",

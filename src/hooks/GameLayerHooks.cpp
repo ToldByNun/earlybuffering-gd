@@ -4,7 +4,10 @@
 #include "../core/SimCollisionPolicy.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/LagProbe.hpp"
+#include "../debug/PerfTrace.hpp"
 #include "../ui/StatusOverlay.hpp"
+#include <fmt/format.h>
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
@@ -426,10 +429,23 @@ class $modify(EbPlayLayer, PlayLayer) {
     void resetLevel() {
         // Ghosts land in section vectors via sim checkCollisions. Vanilla
         // resetLevel → sortSectionVector then AVs on those bodies — evacuate first.
-        BakeScheduler::get().cancel();
+        PerfTrace::Scope const scope("resetLevelHook");
+        LagProbe::get().beginEpisode("resetLevel", fmt::format(
+            "attemptTickWas={} practice={}",
+            AssistController::get().attemptTick(),
+            this->m_isPracticeMode
+        ));
+        {
+            LagProbe::Scope const s("eb.bakeCancel");
+            BakeScheduler::get().cancel();
+        }
         ShadowSimulator::get().evacuateGhosts(this);
         AssistController::get().resetAttempt(this);
-        PlayLayer::resetLevel();
+        {
+            LagProbe::Scope const s("vanilla.PlayLayer::resetLevel");
+            PlayLayer::resetLevel();
+        }
+        LagProbe::get().endEpisode();
     }
 
     void onQuit() {
@@ -474,7 +490,23 @@ class $modify(EbPlayLayer, PlayLayer) {
         }
 
         if (object != m_anticheatSpike) {
+            auto const mode = player ? StageConfig::kindName(StageConfig::kindOf(player)) : "?";
+            LagProbe::get().beginEpisode("death", fmt::format(
+                "x={:.1f} y={:.1f} tick={} mode={} killer={} practice={}",
+                player ? player->getPositionX() : 0.f,
+                player ? player->getPositionY() : 0.f,
+                AssistController::get().attemptTick(),
+                mode ? mode : "?",
+                object ? object->m_objectID : -1,
+                this->m_isPracticeMode
+            ));
             AssistController::get().onRealDeath(this, player, object);
+            {
+                LagProbe::Scope const s("vanilla.destroyPlayer");
+                PlayLayer::destroyPlayer(player, object);
+            }
+            LagProbe::get().endEpisode();
+            return;
         }
         PlayLayer::destroyPlayer(player, object);
     }
@@ -513,10 +545,24 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void loadFromCheckpoint(CheckpointObject* checkpoint) {
-        BakeScheduler::get().cancel();
+        LagProbe::get().beginEpisode("loadFromCheckpoint", fmt::format(
+            "attemptTickWas={}",
+            AssistController::get().attemptTick()
+        ));
+        {
+            LagProbe::Scope const s("eb.bakeCancel");
+            BakeScheduler::get().cancel();
+        }
         ShadowSimulator::get().evacuateGhosts(this);
-        AssistController::get().onCheckpointLoad();
-        PlayLayer::loadFromCheckpoint(checkpoint);
+        {
+            LagProbe::Scope const s("eb.onCheckpointLoad");
+            AssistController::get().onCheckpointLoad();
+        }
+        {
+            LagProbe::Scope const s("vanilla.loadFromCheckpoint");
+            PlayLayer::loadFromCheckpoint(checkpoint);
+        }
+        LagProbe::get().endEpisode();
     }
 };
 

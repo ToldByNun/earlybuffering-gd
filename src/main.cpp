@@ -3,6 +3,7 @@
 #include "core/BakeMap.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "debug/AssistLog.hpp"
+#include "debug/LagProbe.hpp"
 #include "debug/PerfTrace.hpp"
 #include "debug/PlanGoldCorpus.hpp"
 #include "ui/ActionButtonSetting.hpp"
@@ -19,10 +20,15 @@ static void syncPerfTrace() {
     PerfTrace::get().setEnabled(StageConfig::perfTrace());
 }
 
+static void syncLagProbe() {
+    LagProbe::get().setEnabled(StageConfig::lagProbe());
+}
+
 static void onAnySetting() {
     if (StageConfig::isApplying()) return;
     StageConfig::refreshCache();
     syncPerfTrace();
+    syncLagProbe();
     AssistController::get().updateOverlay();
 }
 
@@ -37,9 +43,13 @@ $on_mod(Loaded) {
     // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
     StageConfig::refreshCache();
     syncPerfTrace();
+    syncLagProbe();
     AssistLog::printBanner();
     if (StageConfig::perfTrace()) {
         AssistLog::info(fmt::format("PerfTrace logging to {}", PerfTrace::logPath()));
+    }
+    if (StageConfig::lagProbe()) {
+        AssistLog::info(fmt::format("LagProbe logging to {}", LagProbe::logPath()));
     }
 
     {
@@ -147,6 +157,7 @@ $on_mod(Loaded) {
     watchInt("look-ahead-cap");
     watchBool("debug-logging");
     watchBool("perf-trace");
+    watchBool("lag-probe");
     watchBool("safe-mode");
 
     listenForSettingChanges<bool>("show-trajectory", [](bool value) {

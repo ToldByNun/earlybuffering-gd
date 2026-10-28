@@ -67,8 +67,9 @@ void SaveFrameCounter::attach(PlayLayer* layer) {
 
 void SaveFrameCounter::detach(bool layerDying) {
     if (!this->m_root) return;
-
-    if (!layerDying && this->m_root->getParent()) {
+    (void)layerDying;
+    // Unlink before release — same retain trap as shadow ghosts on quit.
+    if (this->m_root->getParent()) {
         this->m_root->removeFromParent();
     }
     this->m_root->release();

@@ -28,12 +28,15 @@ struct PlanOptions {
     // Enqueued after d0 / orb window; early-exit when a ±k-robust prefer delay is viable.
     int preferDelayMin = -1;
     int preferDelayMax = -1;
-    // ±k robust margin: 0 = auto (mode/speed/dtVariance); else clamp 1–3.
+    // ±k robust margin: 0 = auto (mode/speed/dtVariance/spam); else clamp 1–3.
     int robustK = 0;
     bool robustJitter = false;
     float dtVariance = 0.f; // relative dt EMA from AssistController (auto k bump)
     // betterCand after surviveBin: endX − latencyWeight · delay.
     float latencyWeight = 0.25f;
+    // ClickIntentGuard density (assist still running, e.g. orb) → wider auto k,
+    // slightly softer Wave λ so earliest-delay bias does not phase-shift spam.
+    bool spamDense = false;
 };
 
 struct ThreatZone {
@@ -183,6 +186,19 @@ public:
     // Prefer short release for continuous; mid-window for tap modes.
     static int pickPreferredRelease(int earliest, int latest, bool continuous);
 
+    // Auto robustK (no setting override). Wave spam → ≥2, often 3 with speed.
+    static int autoRobustK(
+        PlayerObject* real, float dtVariance, bool spamDense = false
+    );
+    // Pure hints for selfCheck (no PlayerObject).
+    static int autoRobustKHints(
+        bool waveLike,
+        bool isWave,
+        float playerSpeed,
+        float dtVariance,
+        bool spamDense
+    );
+
     // Headless regression checks (threat bins / zone clear math). Returns false on fail.
     static bool regressionSelfCheck(std::string& report);
 
@@ -315,6 +331,9 @@ private:
 
     PlayerObject* m_shadow = nullptr;
     PlayerObject* m_snapshots[SNAPSHOT_SLOTS] = {};
+    // Layer that owns the ghost children. resetLevel runs during PlayLayer::init
+    // (setupHasCompleted) before onLevelInit/attach — evacuate must no-op then.
+    GJBaseGameLayer* m_hostLayer = nullptr;
     int m_nextSnapshot = 0;
     bool m_simulating = false;
     bool m_applyingRing = false;

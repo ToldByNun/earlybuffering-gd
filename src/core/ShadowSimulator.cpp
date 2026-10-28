@@ -2,6 +2,7 @@
 #include "BakeMap.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
 
 #include <algorithm>
@@ -47,6 +48,7 @@ void ShadowSimulator::attach(PlayLayer* layer) {
         m_snapshots[i] = makeHidden(id.c_str());
     }
     m_nextSnapshot = 0;
+    m_hostLayer = layer;
 }
 
 void ShadowSimulator::detach(bool layerDying) {
@@ -64,18 +66,20 @@ void ShadowSimulator::detach(bool layerDying) {
     m_saved.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
     m_savedActivatedIDs.clear();
+    // Clear host first so a nested evacuate (if any) sees "not attached".
+    m_hostLayer = nullptr;
 
     auto kill = [layerDying](PlayerObject*& p) {
         if (!p) return;
-        // Mid-level reattach: remove from tree. On quit: PlayerObject::removeFromParent
-        // during teardown is a common crash source — drop our retain and let
-        // PlayLayer::onQuit destroy the remaining child retain.
-        if (!layerDying) {
-            if (p->getParent()) p->removeFromParent();
-        }
-        else {
-            // Hide so a half-frame of quit doesn't flash ghosts
+        // ALWAYS unlink before release. release()-while-parented can drop retain
+        // to 0 while still in the children array → setNextScene double-frees in
+        // ~PlayerObject (CCObject::release AV). onQuit runs before teardown, so
+        // removeFromParent is safe here.
+        if (layerDying) {
             p->setVisible(false);
+        }
+        if (p->getParent()) {
+            p->removeFromParentAndCleanup(false);
         }
         p->release();
         p = nullptr;
@@ -94,23 +98,40 @@ bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
 }
 
 bool ShadowSimulator::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* obj) {
-    // removeObjectFromSection AVs when section indices point at null slots (common
-    // for ghosts that never entered the grid, or after a partial park).
+    // Never call GJBaseGameLayer::removeObjectFromSection — it AVs when indices
+    // are stale, sections are half-built (init/setupHasCompleted), or mx is bad
+    // (crash read @ 0xB8). Erase our pointer from the inner vector ourselves.
     if (!layer || !obj) return false;
     int const ox = obj->m_outerSectionIndex;
     int const ix = obj->m_innerSectionIndex;
-    int const mx = obj->m_middleSectionIndex;
-    if (ox < 0 || ix < 0 || mx < 0) return false;
+    if (ox < 0 || ix < 0) {
+        obj->m_outerSectionIndex = -1;
+        obj->m_innerSectionIndex = -1;
+        obj->m_middleSectionIndex = -1;
+        return false;
+    }
 
     auto& sections = layer->m_sections;
-    if (ox >= static_cast<int>(sections.size())) return false;
-    auto* mid = sections[ox];
-    if (!mid || ix >= static_cast<int>(mid->size())) return false;
-    auto* inner = (*mid)[ix];
-    if (!inner) return false;
+    bool erased = false;
+    if (ox < static_cast<int>(sections.size())) {
+        auto* mid = sections[static_cast<size_t>(ox)];
+        if (mid && ix < static_cast<int>(mid->size())) {
+            auto* inner = (*mid)[static_cast<size_t>(ix)];
+            if (inner) {
+                for (int i = static_cast<int>(inner->size()) - 1; i >= 0; --i) {
+                    if ((*inner)[static_cast<size_t>(i)] != obj) continue;
+                    inner->erase(inner->begin() + static_cast<std::ptrdiff_t>(i));
+                    erased = true;
+                    break;
+                }
+            }
+        }
+    }
 
-    layer->removeObjectFromSection(obj);
-    return true;
+    obj->m_outerSectionIndex = -1;
+    obj->m_innerSectionIndex = -1;
+    obj->m_middleSectionIndex = -1;
+    return erased;
 }
 
 void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self) {
@@ -193,7 +214,9 @@ void ShadowSimulator::parkGhosts() {
     if (!this->m_shadow) return;
 
     if (auto* layer = PlayLayer::get()) {
-        ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
+        if (layer == this->m_hostLayer) {
+            ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
+        }
     }
     this->m_shadow->m_outerSectionIndex = -1;
     this->m_shadow->m_innerSectionIndex = -1;
@@ -213,6 +236,7 @@ void ShadowSimulator::parkGhosts() {
 
 void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     PerfTrace::Scope const scope("evacuateGhosts");
+    LagProbe::Scope const lagScope("eb.evacuateGhosts");
     // Abort any in-flight sim; do NOT restoreCapture here — reset/checkpoint
     // rebuilds object state and restoring into freed/reused objects can AV.
     this->m_simulating = false;
@@ -228,25 +252,40 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_saved.clear();
     this->m_savedActivatedIDs.clear();
 
-    // Prefer index-based remove; scrub is a safety net (targeted then early-exit).
-    if (layer) {
-        bool anyIndexed = false;
-        auto markIndexed = [&](PlayerObject* p) {
-            if (!p) return;
-            if (p->m_outerSectionIndex >= 0
-                || p->m_innerSectionIndex >= 0
-                || p->m_middleSectionIndex >= 0) {
-                anyIndexed = true;
-            }
-            ShadowSimulator::tryRemoveFromSection(layer, p);
-        };
-        markIndexed(this->m_shadow);
-        for (auto* slot : this->m_snapshots) {
-            markIndexed(slot);
+    // PlayLayer::init → setupHasCompleted → resetLevel runs BEFORE attach().
+    // Touching section vectors or stale ghosts there AVs (GD read @ 0xB8).
+    if (!layer || layer != this->m_hostLayer || !this->m_shadow) {
+        LagProbe::get().mark("evacuate.skip", "no host / no shadow / wrong layer");
+        return;
+    }
+
+    // Scrub WHILE indices are still valid. tryRemove clears them to -1 — calling
+    // scrub after that forced the slow full-grid walk (~10–20ms on large levels)
+    // on every death→reset after assist had simulated.
+    bool anyIndexed = false;
+    auto noteIndexed = [&](PlayerObject* p) {
+        if (!p) return;
+        if (p->m_outerSectionIndex >= 0
+            || p->m_innerSectionIndex >= 0
+            || p->m_middleSectionIndex >= 0) {
+            anyIndexed = true;
         }
-        // Skip full scrub when nothing claimed a section (parked ghosts).
-        if (anyIndexed) {
-            ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+    };
+    noteIndexed(this->m_shadow);
+    for (auto* slot : this->m_snapshots) {
+        noteIndexed(slot);
+    }
+    LagProbe::get().mark("evacuate.indexed", anyIndexed ? "yes" : "no");
+    if (anyIndexed) {
+        LagProbe::Scope const s("eb.evacuate.scrub");
+        ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+    }
+    // Belt-and-suspenders: index erase if scrub missed a stale cell.
+    {
+        LagProbe::Scope const s("eb.evacuate.tryRemove");
+        ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
+        for (auto* slot : this->m_snapshots) {
+            ShadowSimulator::tryRemoveFromSection(layer, slot);
         }
     }
 
@@ -271,9 +310,12 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
         this->hideGhost(p);
     };
 
-    evac(this->m_shadow);
-    for (auto* slot : this->m_snapshots) {
-        evac(slot);
+    {
+        LagProbe::Scope const s("eb.evacuate.park");
+        evac(this->m_shadow);
+        for (auto* slot : this->m_snapshots) {
+            evac(slot);
+        }
     }
 }
 
@@ -866,6 +908,41 @@ int ShadowSimulator::pickPreferredRelease(int earliest, int latest, bool continu
     return earliest + (latest - earliest) / 2;
 }
 
+int ShadowSimulator::autoRobustKHints(
+    bool waveLike,
+    bool isWave,
+    float playerSpeed,
+    float dtVariance,
+    bool spamDense
+) {
+    int k = kWindowMarginK; // 1
+    if (waveLike) k = 2;
+    // Wave spam corridors: keep at least 2; at speed bump to 3 so ±1 neighbors
+    // of the pick stay clear (ticks-wave=2 may still fall back — see docs).
+    if (isWave && spamDense) {
+        k = std::max(k, 2);
+        if (playerSpeed > 1.05f) k = std::max(k, 3);
+    }
+    if (playerSpeed > 1.1f) k = std::max(k, 2);
+    if (playerSpeed > 1.5f) k = 3;
+    if (dtVariance > 0.08f) k = std::min(3, k + 1);
+    return std::clamp(k, 1, 3);
+}
+
+int ShadowSimulator::autoRobustK(
+    PlayerObject* real, float dtVariance, bool spamDense
+) {
+    bool waveLike = false;
+    bool isWave = false;
+    float speed = 1.f;
+    if (real) {
+        isWave = real->m_isDart;
+        waveLike = real->m_isDart || real->m_isShip || real->m_isSwing;
+        speed = real->m_playerSpeed;
+    }
+    return autoRobustKHints(waveLike, isWave, speed, dtVariance, spamDense);
+}
+
 ShadowSimulator::RunResult ShadowSimulator::runOne(
     PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
     float dt, float firstDt, Model const& model, int releaseAfter,
@@ -1160,20 +1237,12 @@ static bool betterCand(Cand const& a, Cand const& b, float latencyWeight) {
     return a.delay < b.delay;
 }
 
-// 0 = auto from mode / speed / relative dt variance; else clamp 1–3.
+// 0 = auto from mode / speed / dt variance / spam density; else clamp 1–3.
 static int resolveRobustK(PlayerObject* real, PlanOptions const& options) {
     int forced = options.robustK;
     if (forced <= 0) forced = StageConfig::robustK();
     if (forced > 0) return std::clamp(forced, 1, 3);
-
-    int k = ShadowSimulator::kWindowMarginK; // classic default 1
-    if (real) {
-        if (real->m_isDart || real->m_isShip || real->m_isSwing) k = 2;
-        if (real->m_playerSpeed > 1.1f) k = std::max(k, 2);
-        if (real->m_playerSpeed > 1.5f) k = 3;
-    }
-    if (options.dtVariance > 0.08f) k = std::min(3, k + 1);
-    return k;
+    return ShadowSimulator::autoRobustK(real, options.dtVariance, options.spamDense);
 }
 
 
@@ -2412,6 +2481,13 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(pickPreferredRelease(2, 10, false) == 6, "pref-rel-tap");
     expect(pickPreferredRelease(-1, 5, false) < 0, "pref-rel-unset");
     expect(pickPreferredRelease(4, 4, false) == 4, "pref-rel-same");
+
+    expect(autoRobustKHints(true, true, 1.f, 0.f, false) == 2, "k-wave");
+    expect(autoRobustKHints(true, true, 1.2f, 0.f, true) == 3, "k-wave-spam-spd");
+    expect(autoRobustKHints(true, true, 1.f, 0.f, true) == 2, "k-wave-spam-slow");
+    expect(autoRobustKHints(false, false, 1.f, 0.f, false) == 1, "k-cube");
+    expect(autoRobustKHints(false, false, 1.6f, 0.f, false) == 3, "k-fast");
+    expect(autoRobustKHints(true, false, 1.f, 0.1f, false) == 3, "k-dt-bump");
 
     // Synthetic early-click snaps: d=0 dies in zone → Delay must clear past zoneEndX.
     struct Snap { float deathX; int clearDelay; };
