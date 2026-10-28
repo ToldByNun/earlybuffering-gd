@@ -9,6 +9,7 @@
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
+#include "TriggerWorldStore.hpp"
 #include <chrono>
 #include <cstring>
 #include "../config/StageConfig.hpp"
@@ -156,6 +157,7 @@ void AssistController::onLevelComplete(PlayLayer* playLayer) {
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "complete");
     LevelProfile::get().save();
     BakeMap::get().save();
+    TriggerWorldStore::get().save();
 }
 
 void AssistController::syncButtonState(PlayLayer* playLayer) {
@@ -235,6 +237,12 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
         BakeMap::get().loadForLevel(playLayer->m_level);
+        if (StageConfig::triggerBake()) {
+            TriggerWorldStore::get().loadForLevel(playLayer->m_level);
+        }
+        else {
+            TriggerWorldStore::get().clear();
+        }
     }
     updateOverlay();
 }
@@ -256,7 +264,9 @@ void AssistController::onLevelQuit() {
     // hitching quits; pending lines flush on next enable / natural batch.
     LevelProfile::get().save();
     BakeMap::get().save();
+    TriggerWorldStore::get().save();
     LevelProfile::get().clear();
+    TriggerWorldStore::get().clear();
 
     // Quiet reset — overlay already detached
     clearBuffer();

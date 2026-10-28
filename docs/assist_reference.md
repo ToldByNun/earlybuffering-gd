@@ -28,7 +28,9 @@ Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (def
 
 Settings (Trigger World): `trigger-bake` (default on), `trigger-bake-skip-dynamic` (default on).
 
-When enabled, static move/rotate/scale trigger motion is cached per level content key (`triggers/{fullKey}.json`). On level enter: load if present, otherwise build once (later commits). Shadow sim applies baked poses so static movers are not `UnknownOnOverlap`. Dynamic triggers (follow player / camera / touch-path) are not stored in that cache; with `trigger-bake-skip-dynamic` they stay Unknown (recommended for weaker PCs). Off `trigger-bake` = legacy Unknown-on-overlap for all trigger/effect overlaps.
+When enabled, static move/rotate/scale trigger motion is cached per level content key (`triggers/{fullKey}.json` under the mod save dir). On level enter: `TriggerWorldStore::loadForLevel` if present (miss = empty store until baker). Shadow sim applies baked poses so static movers are not `UnknownOnOverlap` (later commits). Player-coupled dynamics stay out of the static cache; with `trigger-bake-skip-dynamic` they stay Unknown. Off `trigger-bake` = clear store / legacy Unknown-on-overlap.
+
+JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Save on quit/complete when dirty (not on death).
 
 Classifier (`TriggerClassify`): **only lethal-motion candidates** — Move/Rotate/Scale/Spawn/Follow (901/1346/2067/1268/1347/1585/1817). Camera/pulse/song/etc. → always `Ignore`.
 
