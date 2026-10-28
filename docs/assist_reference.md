@@ -21,44 +21,46 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 
 ## Settings table
 
-| Key | Type | Default | Min | Max | Notes |
+Geode UI order (titles): **General** → **Assist Scope** (+ Off Ranges) → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal** (`stage-index`, deprecated `swallow-hopeless`).
+
+| Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
-| enabled | bool | true | | | Master |
-| preset | string | Tight | Tight/Normal/Wide/Max/Off | | Fills defaults |
-| stage-index | int | 0 | 0 | 4 | Internal |
-| safe-mode | bool | true | | | Block saves when assist enabled |
-| show-overlay | bool | true | | | |
-| debug-logging | bool | true | | | |
-| show-trajectory | bool | false | | | |
-| show-pause-bake | bool | true | | | |
-| show-pause-assist | bool | true | | | Hotkey mirrors + config I/O |
-| assist-only-practice | bool | false | | | |
-| assist-startpos-only | bool | false | | | |
-| assist-percent-min | int | 0 | 0 | 100 | |
-| assist-percent-max | int | 100 | 0 | 100 | |
-| save-feedback | string | both | off/icon/sound/both | sound = per-tick MP3; icon = color flash |
-| save-icon-color | rgb | #7CFF4A | | Flash color for icon/both |
-| assist-off-N-from/to | float | -1 | -1 | 100 | N=1..6; -1 unused; inclusive off range |
-| ticks-all | int | 2 | 0 | 32 | Delay window |
-| ticks-wave | int | 2 | 0 | 32 | |
-| death-slack | int | 2 | 0 | 16 | Look-ahead slack, not zone |
-| look-ahead-cap | int | 0 | 0 | 240 | 0=auto |
-| swallow-hopeless | bool | false | | | Deprecated unused |
-| auto-tune | bool | true | | | Never changes ticks; no trust-up from inject saves |
-| assist-mode | string | Hybrid | Live/Replay/Hybrid/BruteForce | | |
-| bake-radius | int | 0 | 0 | 128 | 0=auto |
-| cps-limit | int | 0 | 0 | 40 | 0=off |
-| min-click-interval-ms | int | 0 | 0 | 500 | Skip assist only |
-| assist-orbs | bool | true | | | |
-| sim-budget-us | int | 1500 | 0 | 10000 | Soft wall-clock; 0=unlimited |
-| smart-depth | int | 1 | 1 | 3 | |
-| smart-combos | int | 48 | 8 | 256 | |
-| smart-horizon | int | 0 | 0 | 320 | 0=auto |
-| tick-budget | int | 4000 | 500 | 20000 | Hard tick sum; exhaust=Pass |
-| assist-verify | string | off | off/ab | | Debug A/B only |
-| assist-press | bool | true | | | |
-| assist-release | bool | true | | | |
-| MODE-enable/overwrite/ticks/cap/slack | mixed | see mod.json | | | cube..swing |
+| enabled | bool | true | | | General — master |
+| preset | string | Tight | Tight/Normal/Wide/Max/Off | | General — fills defaults |
+| safe-mode | bool | true | | | General — block saves when assist enabled |
+| show-overlay | bool | true | | | General |
+| debug-logging | bool | true | | | General |
+| show-trajectory | bool | false | | | General |
+| show-pause-bake | bool | true | | | General |
+| show-pause-assist | bool | true | | | General — hotkey mirrors + config I/O |
+| save-feedback | string | both | off/icon/sound/both | | General — sound = per-tick MP3; icon = color flash |
+| save-icon-color | rgb | #7CFF4A | | | General — flash color for icon/both |
+| assist-only-practice | bool | false | | | Scope |
+| assist-startpos-only | bool | false | | | Scope |
+| assist-percent-min | int | 0 | 0 | 100 | Scope |
+| assist-percent-max | int | 100 | 0 | 100 | Scope |
+| assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
+| ticks-all | int | 2 | 0 | 32 | Window |
+| ticks-wave | int | 2 | 0 | 32 | Window |
+| death-slack | int | 2 | 0 | 16 | Algorithm — look-ahead slack, not zone |
+| look-ahead-cap | int | 0 | 0 | 240 | Algorithm — 0=auto |
+| assist-mode | string | Hybrid | Live/Replay/Hybrid/BruteForce | | Algorithm |
+| bake-radius | int | 0 | 0 | 128 | Algorithm — 0=auto |
+| cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
+| min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
+| assist-orbs | bool | true | | | Algorithm |
+| sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited |
+| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass |
+| assist-press | bool | true | | | Algorithm |
+| assist-release | bool | true | | | Algorithm |
+| smart-depth | int | 1 | 1 | 3 | Smart |
+| smart-combos | int | 48 | 8 | 256 | Smart |
+| smart-horizon | int | 0 | 0 | 320 | Smart — 0=auto |
+| auto-tune | bool | true | | | Learning — never changes ticks; no trust-up from inject saves |
+| assist-verify | string | off | off/ab | | Learning — debug A/B only |
+| MODE-enable/overwrite/ticks/cap/slack | mixed | see mod.json | | | Per-mode cube..swing |
+| stage-index | int | 0 | 0 | 4 | Internal — preset mirror |
+| swallow-hopeless | bool | false | | | Internal — deprecated unused |
 
 ## Pseudocode plan()
 

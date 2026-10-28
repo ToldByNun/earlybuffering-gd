@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.0 (unreleased)
+
+### Settings
+
+- Regrouped Geode settings: **General** → **Assist Scope** → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal**.
+- Moved practice / startpos / percent / off-ranges under Assist Scope; `auto-tune` + `assist-verify` under Learning; plan budgets under Algorithm.
+- Buried `stage-index` and deprecated `swallow-hopeless` under Internal.
+
 ## v1.1.0
 
 ### Fixes

@@ -5,6 +5,7 @@ using namespace geode::prelude;
 
 static void put(matjson::Value& o, char const* k, auto v) { o[k] = v; }
 
+// Exports a portable subset spanning Window / Algorithm / Smart (not full Scope/Learning).
 geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     auto* mod = Mod::get();
     matjson::Value root;

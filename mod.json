@@ -29,16 +29,14 @@
 			"type": "string",
 			"name": "Preset",
 			"description": "Fills the default window / slack / look-ahead. Per-mode overwrites are kept. Cycle in-game with the hotkey (F6).",
-			"one-of": ["Tight", "Normal", "Wide", "Max", "Off"],
+			"one-of": [
+				"Tight",
+				"Normal",
+				"Wide",
+				"Max",
+				"Off"
+			],
 			"default": "Tight"
-		},
-		"stage-index": {
-			"type": "int",
-			"name": "Preset Index",
-			"description": "Internal preset index (0=Tight … 3=Max, 4=Off). Prefer the Preset dropdown.",
-			"default": 0,
-			"min": 0,
-			"max": 4
 		},
 		"safe-mode": {
 			"type": "bool",
@@ -49,7 +47,7 @@
 		"show-overlay": {
 			"type": "bool",
 			"name": "In-Level Overlay",
-			"description": "On-screen status while playing (mode, buffer, learn, VERIFY/UNSAFE, perf, saves, config hints). Off = no in-level overlay at all. Pause bake/assist buttons are separate settings below.",
+			"description": "On-screen status while playing (mode, buffer, learn, VERIFY/UNSAFE, perf, saves). Off = no in-level overlay. Pause bake/assist buttons are separate.",
 			"default": true
 		},
 		"debug-logging": {
@@ -76,16 +74,39 @@
 			"description": "Show hotkey mirrors on pause (preset, debug, learning, trajectory, config export/import).",
 			"default": true
 		},
+		"save-feedback": {
+			"type": "string",
+			"name": "Save Feedback",
+			"description": "Cue when assist injects a delayed click. Sound = per-tick clip (+1…+7, +8+). Icon = flash player with Save Icon Color. both = sound+icon.",
+			"one-of": [
+				"off",
+				"icon",
+				"sound",
+				"both"
+			],
+			"default": "both"
+		},
+		"save-icon-color": {
+			"type": "color",
+			"name": "Save Icon Color",
+			"description": "Color flashed onto the player icon when Save Feedback is icon or both.",
+			"default": "#7CFF4A"
+		},
+		"title-scope": {
+			"type": "title",
+			"name": "Assist Scope",
+			"description": "Where Live/Hybrid assist is allowed (practice, startpos, percent window, off-ranges). Platformer is always blocked."
+		},
 		"assist-only-practice": {
 			"type": "bool",
 			"name": "Assist Only in Practice",
-			"description": "When on, Live/Hybrid assist only runs in practice mode.",
+			"description": "When on, Live/Hybrid assist only runs in practice mode. Part of Assist Scope.",
 			"default": false
 		},
 		"assist-startpos-only": {
 			"type": "bool",
 			"name": "Assist Only from Start Pos / Test",
-			"description": "When on, assist only when the level is in test/start-pos mode.",
+			"description": "When on, assist only in test/start-pos mode. Part of Assist Scope.",
 			"default": false
 		},
 		"assist-percent-min": {
@@ -106,7 +127,8 @@
 		},
 		"title-assist-off": {
 			"type": "title",
-			"name": "Assist Off Ranges (%)"
+			"name": "Assist Off Ranges (%)",
+			"description": "Inclusive percent holes where assist is forced off (inside the Assist Percent Min/Max window). -1 = unused slot."
 		},
 		"assist-off-1-from": {
 			"type": "float",
@@ -115,7 +137,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-1-to": {
 			"type": "float",
@@ -124,7 +150,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-2-from": {
 			"type": "float",
@@ -132,7 +162,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-2-to": {
 			"type": "float",
@@ -140,7 +174,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-3-from": {
 			"type": "float",
@@ -148,7 +186,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-3-to": {
 			"type": "float",
@@ -156,7 +198,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-4-from": {
 			"type": "float",
@@ -164,7 +210,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-4-to": {
 			"type": "float",
@@ -172,7 +222,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-5-from": {
 			"type": "float",
@@ -180,7 +234,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-5-to": {
 			"type": "float",
@@ -188,7 +246,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-6-from": {
 			"type": "float",
@@ -196,7 +258,11 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
 		"assist-off-6-to": {
 			"type": "float",
@@ -204,22 +270,12 @@
 			"default": -1,
 			"min": -1,
 			"max": 100,
-			"control": { "slider": true, "slider-step": 0.01, "input": true }
+			"control": {
+				"slider": true,
+				"slider-step": 0.01,
+				"input": true
+			}
 		},
-		"save-feedback": {
-			"type": "string",
-			"name": "Save Feedback",
-			"description": "Cue when assist injects a delayed click. Sound = per-tick clip (+1…+7, +8+). Icon = flash player with Save Icon Color. both = sound+icon.",
-			"one-of": ["off", "icon", "sound", "both"],
-			"default": "both"
-		},
-		"save-icon-color": {
-			"type": "color",
-			"name": "Save Icon Color",
-			"description": "Color flashed onto the player icon when Save Feedback is icon or both.",
-			"default": "#7CFF4A"
-		},
-
 		"title-window": {
 			"type": "title",
 			"name": "Default Window"
@@ -240,10 +296,10 @@
 			"min": 0,
 			"max": 32
 		},
-
 		"title-algorithm": {
 			"type": "title",
-			"name": "Algorithm"
+			"name": "Algorithm",
+			"description": "Planner mode, bake radius, CPS gates, budgets, press/release. Smart multi-jump is the next section."
 		},
 		"death-slack": {
 			"type": "int",
@@ -261,23 +317,16 @@
 			"min": 0,
 			"max": 240
 		},
-		"swallow-hopeless": {
-			"type": "bool",
-			"name": "Swallow If Hopeless (unused)",
-			"description": "Deprecated — the mod never blocks your clicks. Kept so old configs still load.",
-			"default": false
-		},
-		"auto-tune": {
-			"type": "bool",
-			"name": "Auto-Tune Per Level",
-			"description": "Learn bias / trust / look-ahead per level and spot as you play. The window (ticks) is never changed. Profiles save under the mod's save folder.",
-			"default": true
-		},
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
 			"description": "Live = plan each click. Replay = windows from imported macro. Hybrid = bake if near, else live. BruteForce = use Brute Bake map (no replay — explores safe click timings through the level).",
-			"one-of": ["Live", "Replay", "Hybrid", "BruteForce"],
+			"one-of": [
+				"Live",
+				"Replay",
+				"Hybrid",
+				"BruteForce"
+			],
 			"default": "Hybrid"
 		},
 		"bake-radius": {
@@ -318,7 +367,26 @@
 			"min": 0,
 			"max": 10000
 		},
-
+		"tick-budget": {
+			"type": "int",
+			"name": "Plan Tick Budget",
+			"description": "Max physics ticks the live planner may simulate per press (deterministic). Default 4000. Exhausted budget → Pass.",
+			"default": 4000,
+			"min": 500,
+			"max": 20000
+		},
+		"assist-press": {
+			"type": "bool",
+			"name": "Assist Presses",
+			"description": "Delay or swallow jump presses.",
+			"default": true
+		},
+		"assist-release": {
+			"type": "bool",
+			"name": "Assist Releases",
+			"description": "Delay or swallow jump releases (wave / ship / robot short-hops).",
+			"default": true
+		},
 		"title-smart": {
 			"type": "title",
 			"name": "Smart Prediction (Live / Hybrid)"
@@ -347,35 +415,27 @@
 			"min": 0,
 			"max": 320
 		},
-		"tick-budget": {
-			"type": "int",
-			"name": "Plan Tick Budget",
-			"description": "Max physics ticks the live planner may simulate per press (deterministic). Default 4000. Exhausted budget → Pass.",
-			"default": 4000,
-			"min": 500,
-			"max": 20000
+		"title-learning": {
+			"type": "title",
+			"name": "Learning",
+			"description": "Per-level bias/trust learning. Window ticks are never changed. Self-bake settings land in later 1.2 commits."
+		},
+		"auto-tune": {
+			"type": "bool",
+			"name": "Auto-Tune Per Level",
+			"description": "Learn bias / trust / look-ahead per level and spot as you play. The window (ticks) is never changed. Toggle: Ctrl+Shift+L. Reset current level: Ctrl+Shift+R. Profiles save under the mod save folder.",
+			"default": true
 		},
 		"assist-verify": {
 			"type": "string",
 			"name": "Assist Verify",
-			"description": "off = normal planner. ab = when legacy earliest-survive disagrees with the new zone/orb planner, flip a coin, log VERIFY arm + PLAN/OUTCOME (uses 2× tick budget).",
-			"one-of": ["off", "ab"],
+			"description": "Debug A/B: when legacy earliest-survive disagrees with the zone/orb planner, flip a coin, log VERIFY arm + PLAN/OUTCOME (uses 2× tick budget). Prefer off for normal play.",
+			"one-of": [
+				"off",
+				"ab"
+			],
 			"default": "off"
 		},
-
-		"assist-press": {
-			"type": "bool",
-			"name": "Assist Presses",
-			"description": "Delay or swallow jump presses.",
-			"default": true
-		},
-		"assist-release": {
-			"type": "bool",
-			"name": "Assist Releases",
-			"description": "Delay or swallow jump releases (wave / ship / robot short-hops).",
-			"default": true
-		},
-
 		"title-cube": {
 			"type": "title",
 			"name": "Cube"
@@ -417,7 +477,6 @@
 			"max": 16,
 			"enable-if": "cube-overwrite"
 		},
-
 		"title-ship": {
 			"type": "title",
 			"name": "Ship"
@@ -456,7 +515,6 @@
 			"max": 16,
 			"enable-if": "ship-overwrite"
 		},
-
 		"title-ball": {
 			"type": "title",
 			"name": "Ball"
@@ -495,7 +553,6 @@
 			"max": 16,
 			"enable-if": "ball-overwrite"
 		},
-
 		"title-ufo": {
 			"type": "title",
 			"name": "UFO"
@@ -534,7 +591,6 @@
 			"max": 16,
 			"enable-if": "ufo-overwrite"
 		},
-
 		"title-wave": {
 			"type": "title",
 			"name": "Wave"
@@ -573,7 +629,6 @@
 			"max": 16,
 			"enable-if": "wave-overwrite"
 		},
-
 		"title-robot": {
 			"type": "title",
 			"name": "Robot"
@@ -612,7 +667,6 @@
 			"max": 16,
 			"enable-if": "robot-overwrite"
 		},
-
 		"title-spider": {
 			"type": "title",
 			"name": "Spider"
@@ -651,7 +705,6 @@
 			"max": 16,
 			"enable-if": "spider-overwrite"
 		},
-
 		"title-swing": {
 			"type": "title",
 			"name": "Swing"
@@ -690,7 +743,6 @@
 			"max": 16,
 			"enable-if": "swing-overwrite"
 		},
-
 		"title-keys": {
 			"type": "title",
 			"name": "Keybinds"
@@ -736,6 +788,25 @@
 			"description": "Show/hide debug trajectories and click-window paths (green earliest … red latest).",
 			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
+		},
+		"title-internal": {
+			"type": "title",
+			"name": "Internal",
+			"description": "Kept for old configs / preset sync. Prefer the Preset dropdown and ignore these."
+		},
+		"stage-index": {
+			"type": "int",
+			"name": "Preset Index (internal)",
+			"description": "Internal mirror of Preset (0=Tight … 3=Max, 4=Off). Written by F6 / applyPreset — do not edit; use the Preset dropdown.",
+			"default": 0,
+			"min": 0,
+			"max": 4
+		},
+		"swallow-hopeless": {
+			"type": "bool",
+			"name": "Swallow If Hopeless (deprecated)",
+			"description": "Deprecated unused — the mod never blocks your clicks. Kept so old configs still load.",
+			"default": false
 		}
 	},
 	"resources": {

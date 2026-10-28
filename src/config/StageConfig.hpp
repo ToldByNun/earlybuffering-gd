@@ -70,43 +70,29 @@ public:
     static void notePresetSynced(std::string const& name);
     static std::string lastSyncedPreset();
 
+    // Setting groups mirror mod.json titles: General → Assist Scope → Window →
+    // Algorithm → Smart → Learning → per-mode → Keybinds → Internal.
+
+    // --- General / UI ---
     static bool isEnabled();
     static bool debugLogging();
     static bool safeMode();
     static bool showOverlay();
     static bool showTrajectory();
     static bool showPauseBake(); // pause-screen bake / mode buttons
-    static bool assistPress();
-    static bool assistRelease();
-    static bool assistOrbs(); // orb contact-window ranking (Live/Hybrid)
-    static bool swallowHopeless();
-    static bool autoTune();
-    static AssistMode assistMode();
-    static char const* assistModeName(AssistMode mode);
-    static char const* assistModeHint(AssistMode mode);
-    static int simBudgetUs();
-    static int bakeRadius();
-    static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
-    static int minClickIntervalMs(); // 0 = off; skip assist (click still passes)
-    // Live/Hybrid multi-jump: 1 = single-click only
-    static int smartDepth();
-    static int smartCombos();
-    static int smartHorizon(); // 0 = auto
-    // "off" | "ab" — A/B verify when legacy/new disagree (optional)
-    static char const* assistVerifyMode();
-    static bool assistVerifyAb();
-    static int tickBudgetPerPress();
-    static int ticksAll();
-    static int ticksWave();
-    static int deathSlack();
-    static int lookAheadCap();
-    static int stageIndex();
+    static bool showPauseAssist();
+    // "off" | "icon" | "sound" | "both"
+    static char const* saveFeedbackMode();
+    static bool saveFeedbackIcon();
+    static bool saveFeedbackSound();
+    struct ColorRgb {
+        uint8_t r = 124;
+        uint8_t g = 255;
+        uint8_t b = 74;
+    };
+    static ColorRgb saveFeedbackColor();
 
-    static GameModeKind kindOf(PlayerObject* player);
-    static char const* kindName(GameModeKind kind);
-    static ModeParams paramsFor(GameModeKind kind);
-    static ModeParams paramsFor(PlayerObject* player);
-
+    // --- Assist Scope (practice / startpos / percent / off-ranges) ---
     static bool assistOnlyPractice();
     static bool assistStartposOnly();
     static int assistPercentMin();
@@ -119,17 +105,47 @@ public:
     // Ranges where assist is forced off (inclusive). From float settings assist-off-N-from/to (-1 = unused).
     static std::vector<PercentRange> const& assistDisableRanges();
     static bool isInAssistDisableRange(float percent);
-    static bool showPauseAssist();
-    // "off" | "icon" | "sound" | "both"
-    static char const* saveFeedbackMode();
-    static bool saveFeedbackIcon();
-    static bool saveFeedbackSound();
-    struct ColorRgb {
-        uint8_t r = 124;
-        uint8_t g = 255;
-        uint8_t b = 74;
-    };
-    static ColorRgb saveFeedbackColor();
+
+    // --- Default Window ---
+    static int ticksAll();
+    static int ticksWave();
+
+    // --- Algorithm ---
+    static bool assistPress();
+    static bool assistRelease();
+    static bool assistOrbs(); // orb contact-window ranking (Live/Hybrid)
+    static bool swallowHopeless(); // deprecated unused (Internal)
+    static AssistMode assistMode();
+    static char const* assistModeName(AssistMode mode);
+    static char const* assistModeHint(AssistMode mode);
+    static int simBudgetUs();
+    static int bakeRadius();
+    static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
+    static int minClickIntervalMs(); // 0 = off; skip assist (click still passes)
+    static int tickBudgetPerPress();
+    static int deathSlack();
+    static int lookAheadCap();
+
+    // --- Smart Prediction (Live / Hybrid) ---
+    // Live/Hybrid multi-jump: 1 = single-click only
+    static int smartDepth();
+    static int smartCombos();
+    static int smartHorizon(); // 0 = auto
+
+    // --- Learning ---
+    static bool autoTune();
+    // "off" | "ab" — A/B verify when legacy/new disagree (optional)
+    static char const* assistVerifyMode();
+    static bool assistVerifyAb();
+
+    // --- Internal ---
+    static int stageIndex();
+
+    // --- Per-mode ---
+    static GameModeKind kindOf(PlayerObject* player);
+    static char const* kindName(GameModeKind kind);
+    static ModeParams paramsFor(GameModeKind kind);
+    static ModeParams paramsFor(PlayerObject* player);
 
     static std::string stageLabel(StageInfo const& info);
 };
