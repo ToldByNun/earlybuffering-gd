@@ -25,6 +25,9 @@ struct BufferedInput {
     int fireTick = 0;
     int limit = 0;
     int expectedJumpTick = 0;
+    // Plan delay at arm time (before jumpTick alignment). SaveFeedback uses
+    // actual attemptTick - pressTick at inject, not this field.
+    int planDelay = 0;
     bool continuous = false;
     bool releaseSeen = false;
     int releaseTick = 0;
@@ -91,6 +94,17 @@ public:
     static bool continuousModeKind(GameModeKind kind);
     static int resolveEffectTick(int attemptTick, bool midStep, bool continuous);
     static bool effectTickSelfCheck(std::string& report);
+
+    // Fire tick vs sim jumpTick. Non-orb: if jump lands after press in sim,
+    // inject on jumpTick (avoids ±1-early press). Orb: keep activation delay.
+    // Clamps to [effectTick+delay floor via caller window] — see armFireTicks.
+    static int resolveFireTick(
+        int effectTick, int delay, int jumpTick, bool requireOrb
+    );
+    static bool shouldFireBuffered(
+        int attemptTick, int fireTick, int pressTick, int planDelay, int limit
+    );
+    static bool fireTickSelfCheck(std::string& report);
 
 private:
     AssistController() = default;

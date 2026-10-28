@@ -18,6 +18,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(InLevelSettingsFilter::selfCheck(filterReport), "inlevel-settings-filter");
     std::string attribReport;
     expect(AssistController::effectTickSelfCheck(attribReport), "effect-tick-attrib");
+    std::string fireReport;
+    expect(AssistController::fireTickSelfCheck(fireReport), "fire-tick-jump");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";

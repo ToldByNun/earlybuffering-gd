@@ -133,9 +133,23 @@ CBF / mid-step clicks happen while `m_inRealUpdate` is true (`midStep`).
 
 Rule: never fold CBF remainder into the tick index — that caused systematic ±1 between mid-step and between-frame presses (wave spam). Helpers: `AssistController::resolveEffectTick` / `effectTickSelfCheck`. Debug: `attrib:` AssistLog line + PerfTrace `attrib` when debug-logging or perf-trace is on.
 
+## fireTick vs jumpTick
+
+When arming a Delay press, `planDelay = plan.delay` and `expectedJumpTick = effectTick + jumpTick` (sim-relative).
+
+`resolveFireTick(effectTick, delay, jumpTick, requireOrb)`:
+
+- Non-orb and `jumpTick > delay` → `fireTick = effectTick + jumpTick` (inject when the jump matters, not one frame early).
+- Orb / `jumpTick <= delay` → `fireTick = effectTick + delay` (activation window wins; hold covers lag).
+- Always clamp to `pressTick + limit`.
+
+`shouldFireBuffered`: fire when `attemptTick >= fireTick`, or on the last tick of the window if `planDelay` is already met (late-fire guard). SaveFeedback `+N` uses actual `attemptTick - pressTick` at inject, not `planDelay`.
+
+Helpers: `AssistController::resolveFireTick` / `shouldFireBuffered` / `fireTickSelfCheck`.
+
 ## Pseudocode fireBuffered()
 
-Wait for dMin if requireOrb; up to 2 reclamps into [dMin,dMax]; inject; PendingRelease if needed.
+Wait for dMin if requireOrb; up to 2 reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; PendingRelease if needed.
 Press B while ArmedPress: fire A first, then plan B.
 
 ## Buffer states

@@ -328,6 +328,72 @@ bool AssistController::effectTickSelfCheck(std::string& report) {
     return false;
 }
 
+int AssistController::resolveFireTick(
+    int effectTick, int delay, int jumpTick, bool requireOrb
+) {
+    if (effectTick < 0) effectTick = 0;
+    if (delay < 0) delay = 0;
+    int fireDelay = delay;
+    // Non-orb: sim may register the jump after the press tick. Injecting on
+    // delay alone then feels one frame early vs when the jump matters.
+    // Orb windows: activation timing (delay / dMin) wins — hold covers jump.
+    if (!requireOrb && jumpTick > delay) {
+        fireDelay = jumpTick;
+    }
+    return effectTick + fireDelay;
+}
+
+bool AssistController::shouldFireBuffered(
+    int attemptTick, int fireTick, int pressTick, int planDelay, int limit
+) {
+    if (attemptTick >= fireTick) return true;
+    if (limit <= 0) return attemptTick >= fireTick;
+
+    // Late-fire guard: last tick of the forgiveness window — inject rather
+    // than miss entirely when jump alignment pushed fireTick to the edge.
+    int const deadline = pressTick + limit;
+    if (attemptTick >= deadline) return true;
+    if (attemptTick >= deadline - 1 && attemptTick >= pressTick + std::max(0, planDelay)) {
+        return true;
+    }
+    return false;
+}
+
+bool AssistController::fireTickSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    // Same-tick jump → fire at delay.
+    expect(resolveFireTick(100, 3, 3, false) == 103, "jump-eq-delay");
+    // Jump one tick later → fire at jumpTick (non-orb).
+    expect(resolveFireTick(100, 3, 4, false) == 104, "jump-after-delay");
+    // Orb keeps activation delay even if jump lags.
+    expect(resolveFireTick(100, 3, 5, true) == 103, "orb-keeps-delay");
+    expect(resolveFireTick(0, 0, 0, false) == 0, "zero");
+    expect(resolveFireTick(-2, 2, 2, false) == 2, "neg-effect");
+
+    expect(shouldFireBuffered(10, 10, 5, 3, 8), "due-eq");
+    expect(shouldFireBuffered(11, 10, 5, 3, 8), "due-late");
+    expect(!shouldFireBuffered(9, 10, 5, 3, 8), "not-yet");
+    // Last tick of window (press=5, limit=8 → deadline=13): at 12 with planDelay met.
+    expect(shouldFireBuffered(12, 14, 5, 3, 8), "last-chance");
+    expect(!shouldFireBuffered(11, 14, 5, 3, 8), "not-last-chance");
+    expect(shouldFireBuffered(13, 14, 5, 3, 8), "at-deadline");
+
+    if (fails == 0) {
+        report = "fireTickSelfCheck OK";
+        return true;
+    }
+    report = fmt::format("fireTickSelfCheck {} fails: {}", fails, report);
+    return false;
+}
+
 int AssistController::activeLimit(PlayerObject* player) const {
     return StageConfig::paramsFor(player).ticks;
 }
@@ -746,14 +812,22 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
                 playLayer, player, m_buffer.down, remaining, m_simDt, m_simDt, opts
             );
             if (re.action == PlanAction::Delay && re.delay > 0) {
-                int newFire = m_attemptTick + re.delay;
-                if (m_buffer.dMin >= 0) newFire = std::max(newFire, absMin);
-                if (m_buffer.dMax >= 0) newFire = std::min(newFire, absMax);
-                if (newFire > m_attemptTick && newFire <= m_buffer.pressTick + m_buffer.limit) {
-                    ++m_buffer.rechecks;
-                    m_buffer.fireTick = newFire;
+                int const jumpRel = re.jumpTick > 0 ? re.jumpTick : re.delay;
+                int newFire = resolveFireTick(
+                    this->m_attemptTick, re.delay, jumpRel, this->m_buffer.requireOrb
+                );
+                if (this->m_buffer.dMin >= 0) newFire = std::max(newFire, absMin);
+                if (this->m_buffer.dMax >= 0) newFire = std::min(newFire, absMax);
+                int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
+                newFire = std::min(newFire, deadline);
+                if (newFire > this->m_attemptTick && newFire <= deadline) {
+                    ++this->m_buffer.rechecks;
+                    this->m_buffer.fireTick = newFire;
+                    this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
+                    this->m_buffer.planDelay = re.delay;
                     AssistLog::debug(fmt::format(
-                        "recheck: slide fire={} (tick={})", newFire, m_attemptTick
+                        "recheck: slide fire={} jump={} (tick={})",
+                        newFire, this->m_buffer.expectedJumpTick, this->m_attemptTick
                     ));
                     return;
                 }
@@ -906,7 +980,14 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     }
 
     if (this->m_buffer.state == BufferState::Buffered) {
-        if (this->m_attemptTick >= this->m_buffer.fireTick) {
+        bool const due = shouldFireBuffered(
+            this->m_attemptTick,
+            this->m_buffer.fireTick,
+            this->m_buffer.pressTick,
+            this->m_buffer.planDelay,
+            this->m_buffer.limit
+        );
+        if (due) {
             PerfTrace::Scope const scope("fireBuffered");
             this->fireBuffered(playLayer, player);
         }
@@ -1016,16 +1097,18 @@ bool AssistController::tryBakeAssist(
     }
 
     // Too early → buffer until earliest
-    m_buffer = {};
-    m_buffer.state = BufferState::Buffered;
-    m_buffer.down = down;
-    m_buffer.player1 = player1;
-    m_buffer.pressTick = effectTick;
-    m_buffer.fireTick = effectTick + delay;
-    m_buffer.limit = std::max(limit, delay);
-    m_buffer.expectedJumpTick = m_buffer.fireTick;
-    m_buffer.decisionX = player->getPositionX();
-    m_buffer.mode = kind;
+    this->m_buffer = {};
+    this->m_buffer.state = BufferState::Buffered;
+    this->m_buffer.down = down;
+    this->m_buffer.player1 = player1;
+    this->m_buffer.pressTick = effectTick;
+    this->m_buffer.planDelay = delay;
+    this->m_buffer.limit = std::max(limit, delay);
+    // Bake has no sim jumpTick — fire at planned delay.
+    this->m_buffer.fireTick = resolveFireTick(effectTick, delay, delay, false);
+    this->m_buffer.expectedJumpTick = this->m_buffer.fireTick;
+    this->m_buffer.decisionX = player->getPositionX();
+    this->m_buffer.mode = kind;
 
     // G4 bake heuristic (no file format change): if Orb Assist would have intent
     // near this bake delay, apply the same [dMin,dMax] recheck/requireOrb rules.
@@ -1033,25 +1116,30 @@ bool AssistController::tryBakeAssist(
         int const dMin = std::max(0, earliestTick - effectTick);
         int const dMax = std::max(dMin, latestTick - effectTick);
         bool const nearOrb = ShadowSimulator::spatialOrbHint(
-            playLayer, player, std::max(limit, dMax + 2), m_simDt
+            playLayer, player, std::max(limit, dMax + 2), this->m_simDt
         );
         if (nearOrb) {
-            m_buffer.requireOrb = true;
-            m_buffer.dMin = dMin;
-            m_buffer.dMax = dMax;
-            m_buffer.fireTick = std::max(m_buffer.fireTick, effectTick + dMin);
-            m_buffer.fireTick = std::min(m_buffer.fireTick, effectTick + dMax);
+            this->m_buffer.requireOrb = true;
+            this->m_buffer.dMin = dMin;
+            this->m_buffer.dMax = dMax;
+            this->m_buffer.fireTick = resolveFireTick(effectTick, delay, delay, true);
+            this->m_buffer.fireTick = std::max(this->m_buffer.fireTick, effectTick + dMin);
+            this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + dMax);
             AssistLog::debug(fmt::format(
                 "bake orb-heuristic win=[{},{}] ticks", dMin, dMax
             ));
         }
     }
+    this->m_buffer.fireTick = std::min(
+        this->m_buffer.fireTick, this->m_buffer.pressTick + this->m_buffer.limit
+    );
 
     AssistLog::debug(fmt::format(
-        "bake ASSIST {} +{} ticks (window [{},{}])",
-        down ? "press" : "release", delay, win->earliest, win->latest
+        "bake ASSIST {} +{} ticks (window [{},{}] fire={})",
+        down ? "press" : "release", delay, win->earliest, win->latest,
+        this->m_buffer.fireTick
     ));
-    updateOverlay();
+    this->updateOverlay();
     return false;
 }
 
@@ -1179,37 +1267,44 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
         delay = std::max(1, std::min(limit, delay));
     }
 
-    m_buffer = {};
-    m_buffer.state = BufferState::Buffered;
-    m_buffer.down = true;
-    m_buffer.player1 = player1;
-    m_buffer.pressTick = effectTick;
-    m_buffer.fireTick = effectTick + delay;
-    m_buffer.limit = limit;
-    m_buffer.expectedJumpTick = effectTick + plan.jumpTick;
-    m_buffer.continuous = plan.continuous;
-    m_buffer.decisionX = x;
-    m_buffer.mode = kind;
-    m_buffer.requireOrb = plan.requireOrb;
-    m_buffer.requireHold = plan.requireHold;
-    m_buffer.dMin = plan.dMin;
-    m_buffer.dMax = plan.dMax;
-    m_buffer.planId = plan.planId;
+    this->m_buffer = {};
+    this->m_buffer.state = BufferState::Buffered;
+    this->m_buffer.down = true;
+    this->m_buffer.player1 = player1;
+    this->m_buffer.pressTick = effectTick;
+    this->m_buffer.planDelay = delay;
+    this->m_buffer.limit = limit;
+    int const jumpRel = plan.jumpTick > 0 ? plan.jumpTick : delay;
+    this->m_buffer.expectedJumpTick = effectTick + jumpRel;
+    this->m_buffer.fireTick = resolveFireTick(
+        effectTick, delay, jumpRel, plan.requireOrb
+    );
+    this->m_buffer.continuous = plan.continuous;
+    this->m_buffer.decisionX = x;
+    this->m_buffer.mode = kind;
+    this->m_buffer.requireOrb = plan.requireOrb;
+    this->m_buffer.requireHold = plan.requireHold;
+    this->m_buffer.dMin = plan.dMin;
+    this->m_buffer.dMax = plan.dMax;
+    this->m_buffer.planId = plan.planId;
 
     // Keep fire inside activation window
     if (plan.dMin >= 0) {
-        m_buffer.fireTick = std::max(m_buffer.fireTick, effectTick + plan.dMin);
+        this->m_buffer.fireTick = std::max(this->m_buffer.fireTick, effectTick + plan.dMin);
     }
     if (plan.dMax >= 0) {
-        m_buffer.fireTick = std::min(m_buffer.fireTick, effectTick + plan.dMax);
+        this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + plan.dMax);
     }
+    // Never arm past the forgiveness deadline.
+    this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + limit);
 
     AssistLog::debug(fmt::format(
-        "ASSIST press +{} ticks id={} ring={} hold={} win=[{},{}]",
-        delay, plan.planId, plan.activatedRing, plan.requireHold, plan.dMin, plan.dMax
+        "ASSIST press +{} ticks id={} ring={} hold={} win=[{},{}] fire={} jump={}",
+        delay, plan.planId, plan.activatedRing, plan.requireHold, plan.dMin, plan.dMax,
+        this->m_buffer.fireTick, this->m_buffer.expectedJumpTick
     ));
-    recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
-    updateOverlay();
+    this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
+    this->updateOverlay();
     return false;
 }
 
@@ -1299,24 +1394,27 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
         delay = std::max(1, std::min(limit, delay));
     }
 
-    m_buffer = {};
-    m_buffer.state = BufferState::Buffered;
-    m_buffer.down = false;
-    m_buffer.player1 = player1;
-    m_buffer.pressTick = effectTick;
-    m_buffer.fireTick = effectTick + delay;
-    m_buffer.limit = limit;
-    m_buffer.expectedJumpTick = effectTick + delay;
-    m_buffer.continuous = plan.continuous;
-    m_buffer.decisionX = x;
-    m_buffer.mode = kind;
+    this->m_buffer = {};
+    this->m_buffer.state = BufferState::Buffered;
+    this->m_buffer.down = false;
+    this->m_buffer.player1 = player1;
+    this->m_buffer.pressTick = effectTick;
+    this->m_buffer.planDelay = delay;
+    this->m_buffer.limit = limit;
+    // Releases have no jumpTick — fire at delay.
+    this->m_buffer.fireTick = resolveFireTick(effectTick, delay, delay, false);
+    this->m_buffer.expectedJumpTick = this->m_buffer.fireTick;
+    this->m_buffer.continuous = plan.continuous;
+    this->m_buffer.decisionX = x;
+    this->m_buffer.mode = kind;
+    this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + limit);
 
     AssistLog::debug(fmt::format(
-        "ASSIST release +{} ticks (now dies @+{}, limit {}, tick={})",
-        delay, plan.firstDeathTick, limit, effectTick
+        "ASSIST release +{} ticks (now dies @+{}, limit {}, tick={} fire={})",
+        delay, plan.firstDeathTick, limit, effectTick, this->m_buffer.fireTick
     ));
-    recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
-    updateOverlay();
+    this->recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
+    this->updateOverlay();
     return false;
 }
 
