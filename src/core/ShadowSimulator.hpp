@@ -28,6 +28,12 @@ struct PlanOptions {
     // Enqueued after d0 / orb window; early-exit when a ±k-robust prefer delay is viable.
     int preferDelayMin = -1;
     int preferDelayMax = -1;
+    // ±k robust margin: 0 = auto (mode/speed/dtVariance); else clamp 1–3.
+    int robustK = 0;
+    bool robustJitter = false;
+    float dtVariance = 0.f; // relative dt EMA from AssistController (auto k bump)
+    // betterCand after surviveBin: endX − latencyWeight · delay.
+    float latencyWeight = 0.25f;
 };
 
 struct ThreatZone {
@@ -75,8 +81,8 @@ struct InputEvent {
     bool down = false;
 };
 
-// Lexicographic planner: threat-zone clear, orb activation windows, ±k robustness.
-// Never blocks a hopeless click (Pass).
+// Lexicographic planner: threat-zone clear, orb activation windows, adaptive ±k
+// robustness, optional firstDt jitter, latency-weighted endX. Never blocks (Pass).
 class ShadowSimulator {
 public:
     static constexpr int SNAPSHOT_SLOTS = 16;

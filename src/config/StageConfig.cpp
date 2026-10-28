@@ -34,19 +34,36 @@ struct ModeIds {
     char const* ticks;
     char const* cap;
     char const* slack;
+    char const* latency;
     char const* name;
 };
 
 constexpr ModeIds MODE_IDS[] = {
-    { "cube-enable",   "cube-overwrite",   "cube-ticks",   "cube-cap",   "cube-slack",   "cube"   },
-    { "ship-enable",   "ship-overwrite",   "ship-ticks",   "ship-cap",   "ship-slack",   "ship"   },
-    { "ball-enable",   "ball-overwrite",   "ball-ticks",   "ball-cap",   "ball-slack",   "ball"   },
-    { "ufo-enable",    "ufo-overwrite",    "ufo-ticks",    "ufo-cap",    "ufo-slack",    "ufo"    },
-    { "wave-enable",   "wave-overwrite",   "wave-ticks",   "wave-cap",   "wave-slack",   "wave"   },
-    { "robot-enable",  "robot-overwrite",  "robot-ticks",  "robot-cap",  "robot-slack",  "robot"  },
-    { "spider-enable", "spider-overwrite", "spider-ticks", "spider-cap", "spider-slack", "spider" },
-    { "swing-enable",  "swing-overwrite",  "swing-ticks",  "swing-cap",  "swing-slack",  "swing"  },
+    { "cube-enable",   "cube-overwrite",   "cube-ticks",   "cube-cap",   "cube-slack",   "cube-latency",   "cube"   },
+    { "ship-enable",   "ship-overwrite",   "ship-ticks",   "ship-cap",   "ship-slack",   "ship-latency",   "ship"   },
+    { "ball-enable",   "ball-overwrite",   "ball-ticks",   "ball-cap",   "ball-slack",   "ball-latency",   "ball"   },
+    { "ufo-enable",    "ufo-overwrite",    "ufo-ticks",    "ufo-cap",    "ufo-slack",    "ufo-latency",    "ufo"    },
+    { "wave-enable",   "wave-overwrite",   "wave-ticks",   "wave-cap",   "wave-slack",   "wave-latency",   "wave"   },
+    { "robot-enable",  "robot-overwrite",  "robot-ticks",  "robot-cap",  "robot-slack",  "robot-latency",  "robot"  },
+    { "spider-enable", "spider-overwrite", "spider-ticks", "spider-cap", "spider-slack", "spider-latency", "spider" },
+    { "swing-enable",  "swing-overwrite",  "swing-ticks",  "swing-cap",  "swing-slack",  "swing-latency",  "swing"  },
 };
+
+// Wave/Ship/Swing prefer earlier clicks; Cube tolerates delay more.
+static float defaultLatencyWeight(int modeIndex) {
+    static float const kDefaults[] = {
+        0.25f, // Cube
+        0.75f, // Ship
+        0.35f, // Ball
+        0.35f, // Ufo
+        1.00f, // Wave
+        0.40f, // Robot
+        0.40f, // Spider
+        0.85f, // Swing
+    };
+    if (modeIndex < 0 || modeIndex >= StageConfig::MODE_COUNT) return 0.25f;
+    return kDefaults[modeIndex];
+}
 
 StageInfo g_cachedStage{};
 std::array<ModeParams, StageConfig::MODE_COUNT> g_cachedModes{};
@@ -71,6 +88,8 @@ int g_cachedMinClickIntervalMs = 0;
 int g_cachedSmartDepth = 1;
 int g_cachedSmartCombos = 48;
 int g_cachedSmartHorizon = 0;
+int g_cachedRobustK = 0;
+bool g_cachedRobustJitter = false;
 std::string g_cachedAssistVerify = "off";
 int g_cachedTickBudget = 4000;
 bool g_cachedAssistOnlyPractice = false;
@@ -189,6 +208,8 @@ void StageConfig::refreshCache() {
     g_cachedSmartDepth = clampInt(readInt(mod, "smart-depth", 1), 1, 3);
     g_cachedSmartCombos = clampInt(readInt(mod, "smart-combos", 48), 8, 256);
     g_cachedSmartHorizon = clampInt(readInt(mod, "smart-horizon", 0), 0, 320);
+    g_cachedRobustK = clampInt(readInt(mod, "robust-k", 0), 0, 3);
+    g_cachedRobustJitter = readBool(mod, "robust-jitter", false);
     g_cachedTickBudget = clampInt(readInt(mod, "tick-budget", 4000), 500, 20000);
     g_cachedAssistOnlyPractice = readBool(mod, "assist-only-practice", false);
     g_cachedAssistStartposOnly = readBool(mod, "assist-startpos-only", false);
@@ -245,16 +266,20 @@ void StageConfig::refreshCache() {
         int const fallbackTicks = (i == static_cast<int>(GameModeKind::Wave))
             ? g_cachedStage.ticksWave
             : g_cachedStage.ticksAll;
+        float const latDefault = defaultLatencyWeight(i);
         if (p.overwrite) {
             p.ticks = clampInt(readInt(mod, ids.ticks, fallbackTicks), 0, 32);
             p.cap = clampInt(readInt(mod, ids.cap, 0), 0, 240);
             int slack = readInt(mod, ids.slack, -1);
             p.slack = slack < 0 ? g_cachedSlack : clampInt(slack, 0, 16);
+            float lat = readFloat(mod, ids.latency, latDefault);
+            p.latencyWeight = std::max(0.f, std::min(2.f, lat));
         }
         else {
             p.ticks = fallbackTicks;
             p.cap = g_cachedLookAhead;
             p.slack = g_cachedSlack;
+            p.latencyWeight = latDefault;
         }
         g_cachedModes[static_cast<size_t>(i)] = p;
     }
@@ -411,6 +436,8 @@ int StageConfig::minClickIntervalMs() { ensureCache(); return g_cachedMinClickIn
 int StageConfig::smartDepth() { ensureCache(); return g_cachedSmartDepth; }
 int StageConfig::smartCombos() { ensureCache(); return g_cachedSmartCombos; }
 int StageConfig::smartHorizon() { ensureCache(); return g_cachedSmartHorizon; }
+int StageConfig::robustK() { ensureCache(); return g_cachedRobustK; }
+bool StageConfig::robustJitter() { ensureCache(); return g_cachedRobustJitter; }
 char const* StageConfig::assistVerifyMode() {
     ensureCache();
     return g_cachedAssistVerify.c_str();

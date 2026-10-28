@@ -121,6 +121,8 @@ private:
     int m_attemptTick = 0;
     float m_lastDt = 1.f / 240.f;
     float m_simDt = 1.f / 240.f;
+    float m_dtEma = 1.f / 240.f;
+    float m_dtVarEma = 0.f; // relative |dt−ema|/ema for auto robustK
     bool m_inRealUpdate = false;
     float m_subDtSeen = 0.f;
     bool m_userHolding[2] = { false, false };

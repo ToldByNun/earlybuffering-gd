@@ -2,6 +2,11 @@
 
 ## v1.2.0 (unreleased)
 
+### Adaptive robust window + latency cost
+
+- Smart settings: **Robust Window (±k)** (`0` = auto from mode/speed/dt variance) and optional **firstDt jitter** (±3% re-sim of top cand).
+- `betterCand` ranks by `endX − latencyWeight·delay` after surviveBin; per-mode defaults (Wave 1.0 … Cube 0.25), overwriteable under each mode.
+
 ### Live bake-prior
 
 - Nearby BakeMap window becomes a Live prefer delay band (after d0/orb); early-exit when a robust prefer delay is found.

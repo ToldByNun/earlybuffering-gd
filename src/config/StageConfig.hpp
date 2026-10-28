@@ -20,6 +20,8 @@ struct ModeParams {
     int ticks = 2;
     int cap = 0;     // 0 = auto
     int slack = 2;
+    // betterCand: score = endX − latencyWeight · delay (Wave high, Cube low).
+    float latencyWeight = 0.25f;
 };
 
 class StageConfig {
@@ -131,6 +133,10 @@ public:
     static int smartDepth();
     static int smartCombos();
     static int smartHorizon(); // 0 = auto
+    // ±k robust window: 0 = auto from mode / speed / dt variance; else 1–3.
+    static int robustK();
+    // Re-check top cand with firstDt ±3% before committing Delay.
+    static bool robustJitter();
 
     // --- Learning ---
     static bool autoTune();

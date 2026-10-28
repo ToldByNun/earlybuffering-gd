@@ -19,6 +19,8 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     root["tick-budget"] = mod->getSettingValue<int64_t>("tick-budget");
     root["sim-budget-us"] = mod->getSettingValue<int64_t>("sim-budget-us");
     root["smart-depth"] = mod->getSettingValue<int64_t>("smart-depth");
+    root["robust-k"] = mod->getSettingValue<int64_t>("robust-k");
+    root["robust-jitter"] = mod->getSettingValue<bool>("robust-jitter");
     std::ofstream f(path);
     if (!f) return Err("export open failed");
     f << root.dump();
@@ -51,7 +53,8 @@ geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
     applyS("preset"); applyS("assist-mode");
     applyI("ticks-all"); applyI("ticks-wave"); applyI("death-slack");
     applyI("tick-budget"); applyI("sim-budget-us"); applyI("smart-depth");
-    applyB("assist-orbs");
+    applyI("robust-k");
+    applyB("assist-orbs"); applyB("robust-jitter");
     StageConfig::refreshCache();
     return Ok();
 }

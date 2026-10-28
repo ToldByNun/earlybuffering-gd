@@ -919,12 +919,30 @@ static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const
     return r.deathX > zone.endX;
 }
 
-static bool betterCand(Cand const& a, Cand const& b) {
+static bool betterCand(Cand const& a, Cand const& b, float latencyWeight) {
     if (a.viable != b.viable) return a.viable && !b.viable;
     if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
     if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
-    if (a.endX != b.endX) return a.endX > b.endX;
+    float const scoreA = a.endX - latencyWeight * static_cast<float>(a.delay);
+    float const scoreB = b.endX - latencyWeight * static_cast<float>(b.delay);
+    if (scoreA != scoreB) return scoreA > scoreB;
     return a.delay < b.delay;
+}
+
+// 0 = auto from mode / speed / relative dt variance; else clamp 1–3.
+static int resolveRobustK(PlayerObject* real, PlanOptions const& options) {
+    int forced = options.robustK;
+    if (forced <= 0) forced = StageConfig::robustK();
+    if (forced > 0) return std::clamp(forced, 1, 3);
+
+    int k = ShadowSimulator::kWindowMarginK; // classic default 1
+    if (real) {
+        if (real->m_isDart || real->m_isShip || real->m_isSwing) k = 2;
+        if (real->m_playerSpeed > 1.1f) k = std::max(k, 2);
+        if (real->m_playerSpeed > 1.5f) k = 3;
+    }
+    if (options.dtVariance > 0.08f) k = std::min(3, k + 1);
+    return k;
 }
 
 
@@ -1043,6 +1061,8 @@ SimPlan ShadowSimulator::plan(
 
     Model model = modelFor(real, limit, options.capMul);
     plan.continuous = model.continuous;
+    int const robustK = resolveRobustK(real, options);
+    float const latencyWeight = std::max(0.f, options.latencyWeight);
 
     int tickBudget = options.tickBudget > 0 ? options.tickBudget : kDefaultTickBudget;
     // A/B compare runs both arms' semantics over the same cand set; allow 2× ticks.
@@ -1209,7 +1229,7 @@ SimPlan ShadowSimulator::plan(
     }
     int preferLastInOrder = -1;
     if (hasPrefer) {
-        int const k = kWindowMarginK;
+        int const k = robustK;
         int const marginLo = std::max(0, preferLo - k);
         int const marginHi = std::min(limit, preferHi + k);
         for (int d = marginLo; d <= marginHi; ++d) pushUnique(d);
@@ -1222,7 +1242,7 @@ SimPlan ShadowSimulator::plan(
 
     auto preferBandRobust = [&]() -> bool {
         if (!hasPrefer) return false;
-        int const k = kWindowMarginK;
+        int const k = robustK;
         for (int d = preferLo; d <= preferHi; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
             if (!c.viable) continue;
@@ -1340,7 +1360,7 @@ SimPlan ShadowSimulator::plan(
 
     auto pickRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         if (pool.empty()) return -1;
-        int const k = kWindowMarginK;
+        int const k = robustK;
         int best = -1;
         Cand bestC{};
         bool have = false;
@@ -1363,7 +1383,7 @@ SimPlan ShadowSimulator::plan(
                 }
             }
             if (!ok) continue;
-            if (!have || betterCand(c, bestC)) {
+            if (!have || betterCand(c, bestC, latencyWeight)) {
                 best = d;
                 bestC = c;
                 have = true;
@@ -1375,7 +1395,7 @@ SimPlan ShadowSimulator::plan(
                 auto const& c = cands[static_cast<size_t>(d)];
                 if (!c.viable) continue;
                 if (needActivation && !c.activatedRing) continue;
-                if (!have || betterCand(c, bestC)) {
+                if (!have || betterCand(c, bestC, latencyWeight)) {
                     best = d;
                     bestC = c;
                     have = true;
@@ -1383,6 +1403,25 @@ SimPlan ShadowSimulator::plan(
             }
         }
         return best;
+    };
+
+    // Optional: top cand must also clear threat under firstDt ±3%.
+    auto jitterOk = [&](int d, int releaseAfter) -> bool {
+        if (!options.robustJitter || d < 0) return true;
+        if (tickBudget <= 0 || wallExceeded()) return true; // soft accept
+        static float const kScales[] = { 0.97f, 1.03f };
+        for (float s : kScales) {
+            float jd = firstDt * s;
+            if (jd <= 0.f || jd > dt * 1.5f) jd = firstDt;
+            auto r = runOne(
+                layer, real, down, d, limit, dt, jd, model, releaseAfter,
+                zone.valid ? &zone : nullptr, &tickBudget
+            );
+            restoreCapture(layer);
+            beginCapture(layer);
+            if (!clearsThreatOf(r, zone) || r.diedBeforeAction) return false;
+        }
+        return true;
     };
 
     int actMin = -1, actMax = -1;
@@ -1403,13 +1442,22 @@ SimPlan ShadowSimulator::plan(
     if (orbIntent && haveActViable) {
         std::vector<int> pool;
         for (int d = actMin; d <= actMax; ++d) pool.push_back(d);
-        int const k = kWindowMarginK;
+        int const k = robustK;
+        auto tryPick = [&](std::vector<int> const& p) -> int {
+            for (;;) {
+                int pick = pickRobust(p, true);
+                if (pick < 0) return -1;
+                int releaseAfter = cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
+                if (jitterOk(pick, releaseAfter)) return pick;
+                cands[static_cast<size_t>(pick)].viable = false;
+            }
+        };
         if (actMax - actMin >= 2 * k) {
             std::vector<int> interior;
             for (int d = actMin + k; d <= actMax - k; ++d) interior.push_back(d);
-            chosen = pickRobust(interior, true);
+            chosen = tryPick(interior);
         }
-        if (chosen < 0) chosen = pickRobust(pool, true);
+        if (chosen < 0) chosen = tryPick(pool);
         // No midpoint: earliest ±k-robust, else earliest viable (pickRobust fallback).
         if (chosen >= 0) {
             auto const& c = cands[static_cast<size_t>(chosen)];
@@ -1421,15 +1469,45 @@ SimPlan ShadowSimulator::plan(
         }
     }
     else if (cands[0].viable) {
-        doPass = true;
-        chosen = 0;
-        plan.threatCleared = true;
-        plan.nowIsSafe = true;
+        int releaseAfter = cands[0].requireHold ? 40 : -1;
+        if (jitterOk(0, releaseAfter)) {
+            doPass = true;
+            chosen = 0;
+            plan.threatCleared = true;
+            plan.nowIsSafe = true;
+        }
+        else {
+            cands[0].viable = false;
+            std::vector<int> pool;
+            for (int d = 0; d <= limit; ++d) pool.push_back(d);
+            for (;;) {
+                chosen = pickRobust(pool, false);
+                if (chosen < 0) break;
+                int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
+                if (jitterOk(chosen, releaseAfter2)) break;
+                cands[static_cast<size_t>(chosen)].viable = false;
+                chosen = -1;
+            }
+            if (chosen >= 0) {
+                auto const& c = cands[static_cast<size_t>(chosen)];
+                plan.threatCleared = c.clearsThreat;
+                plan.activatedRing = c.activatedRing;
+                plan.requireHold = c.requireHold;
+                plan.orbUseful = c.orbUseful;
+            }
+        }
     }
     else {
         std::vector<int> pool;
         for (int d = 0; d <= limit; ++d) pool.push_back(d);
-        chosen = pickRobust(pool, false);
+        for (;;) {
+            chosen = pickRobust(pool, false);
+            if (chosen < 0) break;
+            int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
+            if (jitterOk(chosen, releaseAfter)) break;
+            cands[static_cast<size_t>(chosen)].viable = false;
+            chosen = -1;
+        }
         if (chosen >= 0) {
             auto const& c = cands[static_cast<size_t>(chosen)];
             plan.threatCleared = c.clearsThreat;
@@ -1608,7 +1686,8 @@ SimPlan ShadowSimulator::planSequence(
             ++combos;
             bool const survived = !rr.died || rr.unknown;
             int sc = survived ? 100000 : rr.deathTick * 50;
-            sc += static_cast<int>(rr.endX) - d0; // weak latency penalty on d0
+            float const lat = std::max(0.f, options.latencyWeight);
+            sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
             if (rr.activatedRing) sc += 5000;
             // Reachability of next bake reference X.
             if (!chain.empty() && survived) {
@@ -1628,7 +1707,8 @@ SimPlan ShadowSimulator::planSequence(
             auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
             ++combos;
             int sc = (!rr.died || rr.unknown) ? 100000 : rr.deathTick * 50;
-            sc += static_cast<int>(rr.endX) - d0;
+            float const lat = std::max(0.f, options.latencyWeight);
+            sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
             if (rr.activatedRing) sc += 5000;
             if (!best.found || sc > best.score) {
                 best = { true, d0, sc, !rr.died || rr.unknown };
@@ -1642,7 +1722,8 @@ SimPlan ShadowSimulator::planSequence(
                 auto rr2 = replay(layer, slot, 0, tl2, dt, horizon, false, 0);
                 ++combos;
                 int sc2 = (!rr2.died || rr2.unknown) ? 100000 : rr2.deathTick * 50;
-                sc2 += static_cast<int>(rr2.endX) - d0;
+                float const lat2 = std::max(0.f, options.latencyWeight);
+                sc2 += static_cast<int>(rr2.endX - lat2 * static_cast<float>(d0));
                 if (rr2.activatedRing) sc2 += 5000;
                 if (!best.found || sc2 > best.score) {
                     best = { true, d0, sc2, !rr2.died || rr2.unknown };

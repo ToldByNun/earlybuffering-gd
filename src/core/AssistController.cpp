@@ -31,6 +31,13 @@ static int roundBias(float bias) {
     return static_cast<int>(std::lround(bias));
 }
 
+static void fillPlanRobustLatency(PlanOptions& opts, PlayerObject* player, float dtVariance) {
+    opts.robustK = StageConfig::robustK();
+    opts.robustJitter = StageConfig::robustJitter();
+    opts.dtVariance = dtVariance;
+    if (player) opts.latencyWeight = StageConfig::paramsFor(player).latencyWeight;
+}
+
 // Map a nearby BakeMap window onto delay ticks for Live prefer-band ordering.
 static void fillBakePreferBand(
     PlanOptions& opts,
@@ -133,6 +140,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_attemptTick = 0;
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
+    m_dtEma = 1.f / 240.f;
+    m_dtVarEma = 0.f;
     m_modeKnown = false;
     m_startSnapshotTaken = false;
     m_startSnapshotSlot = -1;
@@ -651,6 +660,7 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
                 : 1.f;
             opts.maxBranches = 2;
             opts.smartDepth = 1;
+            fillPlanRobustLatency(opts, player, m_dtVarEma);
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, m_buffer.down, remaining, m_simDt, m_simDt, opts
             );
@@ -711,6 +721,11 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         float tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
         m_simDt = m_lastDt / tw;
+        // Relative frame-time variance EMA → auto robustK bump when unstable.
+        float const err = dt - m_dtEma;
+        m_dtEma += 0.1f * err;
+        float const denom = std::max(m_dtEma, 1e-4f);
+        m_dtVarEma = 0.1f * std::abs(err) / denom + 0.9f * m_dtVarEma;
     }
     ++m_attemptTick;
     if (!playLayer) return;
@@ -1015,6 +1030,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.smartCombos = StageConfig::smartCombos();
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
+    fillPlanRobustLatency(opts, player, m_dtVarEma);
     fillBakePreferBand(
         opts, player, player1, true, effectTick, limit, m_attemptTick, m_simDt
     );
@@ -1153,6 +1169,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     }
     opts.maxBranches = 4;
     opts.attemptStartTick = effectTick;
+    fillPlanRobustLatency(opts, player, m_dtVarEma);
     fillBakePreferBand(
         opts, player, player1, false, effectTick, limit, m_attemptTick, m_simDt
     );

@@ -165,6 +165,8 @@ $on_mod(Loaded) {
     watchInt("smart-depth");
     watchInt("smart-combos");
     watchInt("smart-horizon");
+    watchInt("robust-k");
+    watchBool("robust-jitter");
 
     listenForSettingChanges<std::string>("assist-mode", [](std::string) {
         onAnySetting();
@@ -215,4 +217,10 @@ $on_mod(Loaded) {
         "swing-ticks", "swing-cap", "swing-slack"
     };
     for (auto* id : intIds) watchInt(id);
+
+    char const* latencyIds[] = {
+        "cube-latency", "ship-latency", "ball-latency", "ufo-latency",
+        "wave-latency", "robot-latency", "spider-latency", "swing-latency"
+    };
+    for (auto* id : latencyIds) watchFloat(id);
 }

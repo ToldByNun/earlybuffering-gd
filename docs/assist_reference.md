@@ -67,12 +67,14 @@ Geode UI order (titles): **General** → **Assist Scope** (+ Off Ranges) → **D
 | smart-depth | int | 1 | 1 | 3 | Smart |
 | smart-combos | int | 48 | 8 | 256 | Smart |
 | smart-horizon | int | 0 | 0 | 320 | Smart — 0=auto |
+| robust-k | int | 0 | 0 | 3 | Smart — 0=auto (mode/speed/dt var → 1–3) |
+| robust-jitter | bool | false | | | Smart — re-sim top cand at firstDt ±3% |
 | auto-tune | bool | true | | | Learning — never changes ticks; no trust-up from inject saves |
 | self-bake | bool | true | | | Learning — record vanilla clicks in practice |
 | self-bake-normal | bool | false | | | Learning — also record outside practice |
 | self-bake-refine | bool | true | | | Learning — budgeted window search on flush |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |
-| MODE-enable/overwrite/ticks/cap/slack | mixed | see mod.json | | | Per-mode cube..swing |
+| MODE-enable/overwrite/ticks/cap/slack/latency | mixed | see mod.json | | | Per-mode cube..swing; latencyWeight defaults Cube 0.25 … Wave 1.0 |
 | stage-index | int | 0 | 0 | 4 | Internal — preset mirror |
 | swallow-hopeless | bool | false | | | Internal — deprecated unused |
 
@@ -83,11 +85,11 @@ Geode UI order (titles): **General** → **Assist Scope** (+ Off Ranges) → **D
 3. d0 press baseline -> ThreatZone clusterGapX=50
 4. **no-threat Pass**: baseline did not die, zone invalid, no orb/pad hint → Pass (skip further cands)
 5. eval delays under tick + sim-budget-us
-6. orbIntent: earliest +/-k robust activation (NO midpoint)
+6. orbIntent: earliest +/-k robust activation (NO midpoint); optional firstDt ±3% jitter on top cand
 7. else d0 clearsThreat -> Pass; else earliest +/-k robust viable
 8. budgetHit -> Pass; linked dual both clear
 
-Lexico: orbUseful > surviveBin > endX > earliest. Bins 24/48/96. k=1.
+Lexico: orbUseful > surviveBin > endX−λ·delay > earliest. Bins 24/48/96. k from `robust-k` or auto (mode/speed/dtVariance). λ = ModeParams.latencyWeight.
 
 ## Click intent (spam)
 
@@ -114,6 +116,10 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 ## Live bake-prior (prefer band)
 
 `PlanOptions.preferDelayMin/Max` from a nearby BakeMap window (delay ticks). Cand order: d0 → orb window → prefer±k → rest. Early-exit after prefer margin if a ±k-robust prefer delay is viable (`!budgetHit`). Orb-intent still wins final pick over prefer. Empty / out-of-limit band ignored.
+
+## Adaptive robustK + latency
+
+`robust-k` 0 → auto: Wave/Ship/Swing start at 2; speed >1.1 → ≥2, >1.5 → 3; relative dt EMA >0.08 bumps +1 (cap 3). Fixed 1–3 overrides auto. `robust-jitter`: after pick, re-run with firstDt×0.97/1.03; fail → mark non-viable and re-pick. `ModeParams.latencyWeight` (defaults Cube 0.25 … Wave 1.0) enters `betterCand` and smart sequence scoring as `endX − λ·delay`.
 
 ## LevelProfile JSON
 
