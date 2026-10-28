@@ -25,6 +25,8 @@ public:
 
     // Geode ModSettingsPopup (search / titles / pages) for this mod.
     static void openModSettings();
+    // Pause hub popup (Bake | Assist | Settings). No-op if already open.
+    static void openHub();
 
 private:
     PauseActionBridge() = delete;

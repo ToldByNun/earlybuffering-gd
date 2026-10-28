@@ -1,4 +1,5 @@
 #include "PauseActionBridge.hpp"
+#include "InLevelSettingsFilter.hpp"
 
 #include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
@@ -12,6 +13,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <optional>
+#include <string>
 
 #ifdef GEODE_IS_WINDOWS
 # ifndef WIN32_LEAN_AND_MEAN
@@ -282,9 +284,15 @@ void PauseActionBridge::importConfig() {
 void PauseActionBridge::openModSettings() {
     auto* mod = Mod::get();
     if (!mod) return;
-    // Theme-respecting Geode settings UI (search, section titles, PAGE n/m).
     auto* popup = geode::openSettingsPopup(mod, false);
     if (!popup) {
         AssistLog::info("openModSettings: no settings popup (mod has no settings?)");
+        return;
     }
+    // Category switcher (Main / Ingame / Assist / Visual / Modes / Keys) on every open.
+    InLevelSettingsFilterKeeper::attach(popup);
+}
+
+void PauseActionBridge::openHub() {
+    openModSettings();
 }

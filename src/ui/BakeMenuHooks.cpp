@@ -90,7 +90,7 @@ class $modify(EbPauseLayer, PauseLayer) {
                 );
             }
             auto* btn = CCMenuItemExt::createSpriteExtra(spr, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::openModSettings();
+                PauseActionBridge::openHub();
             });
             btn->setID("earlybuffer-settings-btn"_spr);
             btn->setScale(0.85f);

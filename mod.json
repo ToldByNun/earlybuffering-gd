@@ -76,8 +76,8 @@
 		},
 		"show-pause-hub": {
 			"type": "bool",
-			"name": "Pause Settings Button",
-			"description": "Show a top-right EarlyBuffer button on pause that opens the full Geode settings popup (search, sections, pages).",
+			"name": "Pause Hub Button",
+			"description": "Show a top-right EarlyBuffer (EB) button on pause. Opens Geode settings with a Main/Ingame/Assist/Visual/Modes/Keys page switcher at the top.",
 			"default": true
 		},
 		"save-feedback": {

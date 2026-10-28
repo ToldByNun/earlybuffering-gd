@@ -1,6 +1,7 @@
 #include "PlanGoldCorpus.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
+#include "../ui/InLevelSettingsFilter.hpp"
 #include <fmt/format.h>
 
 bool PlanGoldCorpus::run(std::string& report) {
@@ -12,6 +13,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     std::string shadowReport;
     expect(ShadowSimulator::regressionSelfCheck(shadowReport), "shadow-self");
     expect(BufferEventMachine::selfCheck(), "buffer-sm");
+    std::string filterReport;
+    expect(InLevelSettingsFilter::selfCheck(filterReport), "inlevel-settings-filter");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";
