@@ -26,11 +26,16 @@ using namespace geode::prelude;
 class PauseActionBridgeDetail {
 public:
     static CCLabelBMFont* findStatusLabel(PauseLayer* self) {
-        return typeinfo_cast<CCLabelBMFont*>(self->getChildByID("earlybuffer-bake-status"_spr));
+        // Labels live under main-layer (NodeIDs) or PauseLayer root (legacy).
+        return typeinfo_cast<CCLabelBMFont*>(
+            self->getChildByIDRecursive("earlybuffer-bake-status"_spr)
+        );
     }
 
     static CCLabelBMFont* findModeLabel(PauseLayer* self) {
-        return typeinfo_cast<CCLabelBMFont*>(self->getChildByID("earlybuffer-mode-label"_spr));
+        return typeinfo_cast<CCLabelBMFont*>(
+            self->getChildByIDRecursive("earlybuffer-mode-label"_spr)
+        );
     }
 
 #ifdef GEODE_IS_WINDOWS

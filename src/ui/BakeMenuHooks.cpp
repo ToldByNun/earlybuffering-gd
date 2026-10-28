@@ -1,6 +1,7 @@
 #include "PauseActionBridge.hpp"
 #include "../core/BakeScheduler.hpp"
 #include "../config/StageConfig.hpp"
+#include "../debug/AssistLog.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PauseLayer.hpp>
@@ -24,6 +25,35 @@ public:
     }
 };
 
+// Resolve geode.node-ids PauseLayer menus (live under main-layer, not PauseLayer root).
+class PauseMenuAttach {
+public:
+    static CCNode* hostLayer(PauseLayer* self) {
+        if (!self) return nullptr;
+        if (auto* main = self->getChildByID("main-layer")) return main;
+        return self;
+    }
+
+    static CCMenu* leftButtonMenu(PauseLayer* self) {
+        if (!self) return nullptr;
+        return typeinfo_cast<CCMenu*>(self->getChildByIDRecursive("left-button-menu"));
+    }
+
+    static CCMenu* rightButtonMenu(PauseLayer* self) {
+        if (!self) return nullptr;
+        return typeinfo_cast<CCMenu*>(self->getChildByIDRecursive("right-button-menu"));
+    }
+
+    // Widen NodeIDs side menus (default ~40px) so text buttons receive hits.
+    static void prepareSideMenu(CCMenu* menu, float width) {
+        if (!menu) return;
+        auto sz = menu->getContentSize();
+        if (sz.width < width) {
+            menu->setContentSize({ width, sz.height });
+        }
+    }
+};
+
 class $modify(EbPauseLayer, PauseLayer) {
     void customSetup() {
         PauseLayer::customSetup();
@@ -31,13 +61,20 @@ class $modify(EbPauseLayer, PauseLayer) {
         bool const showAssist = StageConfig::showPauseAssist();
         if (!showBake && !showAssist) return;
 
-        if (this->getChildByID("earlybuffer-bake-menu"_spr)
-            || this->getChildByID("earlybuffer-assist-menu"_spr)) {
+        // Already installed (idempotent). Still (re)schedule poll — prior early-return skipped it.
+        if (this->getChildByIDRecursive("earlybuffer-pause-ui"_spr)) {
             PauseActionBridge::refreshPauseLabels(this);
+            this->schedule(schedule_selector(EbPauseLayer::onBakePoll), 0.15f);
             return;
         }
 
+        auto* host = PauseMenuAttach::hostLayer(this);
+        if (!host) return;
+
         auto win = this->getContentSize();
+        auto* marker = CCNode::create();
+        marker->setID("earlybuffer-pause-ui"_spr);
+        host->addChild(marker);
 
         if (showBake) {
             auto* title = CCLabelBMFont::create("EarlyBuffer bake", "goldFont.fnt");
@@ -46,7 +83,7 @@ class $modify(EbPauseLayer, PauseLayer) {
             title->setScale(0.45f);
             title->setAnchorPoint({ 0.f, 1.f });
             title->setPosition({ 14.f, win.height - 52.f });
-            this->addChild(title, 999);
+            host->addChild(title, 999);
 
             auto* modeLbl = CCLabelBMFont::create("Mode: …", "chatFont.fnt");
             if (!modeLbl) modeLbl = CCLabelBMFont::create("Mode: …", "bigFont.fnt");
@@ -54,7 +91,7 @@ class $modify(EbPauseLayer, PauseLayer) {
             modeLbl->setScale(0.5f);
             modeLbl->setAnchorPoint({ 0.f, 1.f });
             modeLbl->setPosition({ 14.f, win.height - 72.f });
-            this->addChild(modeLbl, 999);
+            host->addChild(modeLbl, 999);
 
             auto* status = CCLabelBMFont::create("…", "chatFont.fnt");
             if (!status) status = CCLabelBMFont::create("…", "bigFont.fnt");
@@ -63,81 +100,128 @@ class $modify(EbPauseLayer, PauseLayer) {
             status->setAnchorPoint({ 0.f, 1.f });
             status->setOpacity(210);
             status->setPosition({ 14.f, win.height - 92.f });
-            this->addChild(status, 999);
+            host->addChild(status, 999);
 
-            auto* col = CCMenu::create();
-            col->setID("earlybuffer-bake-menu"_spr);
-            col->setContentSize({ 160.f, 220.f });
-            col->ignoreAnchorPointForPosition(false);
-            col->setAnchorPoint({ 0.f, 1.f });
-            col->setPosition({ 14.f, win.height - 130.f });
+            auto addBakeButtons = [&](CCMenu* menu) {
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Cycle Mode", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::cycleAssistMode();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Import Replay", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::importReplay();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Bake Map", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::startBake(false);
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Brute Bake", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::startBake(true);
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Cancel", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::cancelBake();
+                    }
+                ));
+            };
 
-            col->addChild(PauseMenuButtonFactory::makeTextBtn("Cycle Mode", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::cycleAssistMode();
-            }));
-            col->addChild(PauseMenuButtonFactory::makeTextBtn("Import Replay", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::importReplay();
-            }));
-            col->addChild(PauseMenuButtonFactory::makeTextBtn("Bake Map", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::startBake(false);
-            }));
-            col->addChild(PauseMenuButtonFactory::makeTextBtn("Brute Bake", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::startBake(true);
-            }));
-            col->addChild(PauseMenuButtonFactory::makeTextBtn("Cancel", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::cancelBake();
-            }));
-
-            col->setLayout(
-                ColumnLayout::create()
-                    ->setGap(4.f)
-                    ->setAxisAlignment(AxisAlignment::Start)
-                    ->setCrossAxisAlignment(AxisAlignment::Start)
-                    ->setAutoScale(false)
-            );
-            col->updateLayout();
-            this->addChild(col, 1000);
+            if (auto* left = PauseMenuAttach::leftButtonMenu(this)) {
+                PauseMenuAttach::prepareSideMenu(left, 160.f);
+                addBakeButtons(left);
+                left->updateLayout();
+                AssistLog::debug("pause-ui: bake buttons on left-button-menu");
+            }
+            else {
+                // Fallback when node-ids menus are missing: menu under main-layer (touch path).
+                AssistLog::debug("pause-ui: left-button-menu missing — fallback CCMenu on main-layer");
+                auto* col = CCMenu::create();
+                col->setID("earlybuffer-bake-menu"_spr);
+                col->setContentSize({ 160.f, 220.f });
+                col->ignoreAnchorPointForPosition(false);
+                col->setAnchorPoint({ 0.f, 1.f });
+                col->setPosition({ 14.f, win.height - 130.f });
+                addBakeButtons(col);
+                col->setLayout(
+                    ColumnLayout::create()
+                        ->setGap(4.f)
+                        ->setAxisAlignment(AxisAlignment::Start)
+                        ->setCrossAxisAlignment(AxisAlignment::Start)
+                        ->setAutoScale(false)
+                );
+                col->updateLayout();
+                host->addChild(col, 1000);
+            }
         }
 
         if (showAssist) {
-            auto* acol = CCMenu::create();
-            acol->setID("earlybuffer-assist-menu"_spr);
-            acol->setContentSize({ 160.f, 280.f });
-            acol->ignoreAnchorPointForPosition(false);
-            acol->setAnchorPoint({ 1.f, 1.f });
-            acol->setPosition({ win.width - 14.f, win.height - 52.f });
+            auto addAssistButtons = [&](CCMenu* menu) {
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Cycle Preset", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::cyclePreset();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Toggle Debug", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::toggleDebug();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Reset Learn", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::resetLearning();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Toggle Learn", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::toggleAutoTune();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Trajectory", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::toggleTrajectory();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Export Cfg", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::exportConfig();
+                    }
+                ));
+                menu->addChild(PauseMenuButtonFactory::makeTextBtn(
+                    "Import Cfg", 140.f, [](CCMenuItemSpriteExtra*) {
+                        PauseActionBridge::importConfig();
+                    }
+                ));
+            };
 
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Cycle Preset", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::cyclePreset();
-            }));
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Toggle Debug", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::toggleDebug();
-            }));
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Reset Learn", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::resetLearning();
-            }));
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Toggle Learn", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::toggleAutoTune();
-            }));
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Trajectory", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::toggleTrajectory();
-            }));
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Export Cfg", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::exportConfig();
-            }));
-            acol->addChild(PauseMenuButtonFactory::makeTextBtn("Import Cfg", 140.f, [](CCMenuItemSpriteExtra*) {
-                PauseActionBridge::importConfig();
-            }));
-
-            acol->setLayout(
-                ColumnLayout::create()
-                    ->setGap(4.f)
-                    ->setAxisAlignment(AxisAlignment::Start)
-                    ->setCrossAxisAlignment(AxisAlignment::End)
-                    ->setAutoScale(false)
-            );
-            acol->updateLayout();
-            this->addChild(acol, 1000);
+            if (auto* right = PauseMenuAttach::rightButtonMenu(this)) {
+                PauseMenuAttach::prepareSideMenu(right, 160.f);
+                addAssistButtons(right);
+                right->updateLayout();
+                AssistLog::debug("pause-ui: assist buttons on right-button-menu");
+            }
+            else {
+                AssistLog::debug("pause-ui: right-button-menu missing — fallback CCMenu on main-layer");
+                auto* acol = CCMenu::create();
+                acol->setID("earlybuffer-assist-menu"_spr);
+                acol->setContentSize({ 160.f, 280.f });
+                acol->ignoreAnchorPointForPosition(false);
+                acol->setAnchorPoint({ 1.f, 1.f });
+                acol->setPosition({ win.width - 14.f, win.height - 52.f });
+                addAssistButtons(acol);
+                acol->setLayout(
+                    ColumnLayout::create()
+                        ->setGap(4.f)
+                        ->setAxisAlignment(AxisAlignment::Start)
+                        ->setCrossAxisAlignment(AxisAlignment::End)
+                        ->setAutoScale(false)
+                );
+                acol->updateLayout();
+                host->addChild(acol, 1000);
+            }
         }
 
         PauseActionBridge::refreshPauseLabels(this);
