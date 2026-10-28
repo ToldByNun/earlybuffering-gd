@@ -171,9 +171,10 @@ void PerfTrace::end(char const* section) {
         char const* name = this->m_orphan.name ? this->m_orphan.name : section;
         auto const line = fmt::format("ORPHAN {}={:.2f}ms", name, us / 1000.0);
         this->appendLine(line);
+        // Do NOT sync-flush to disk on every hot orphan — evacuateGhosts / plan
+        // regularly exceed 1ms and flush() was causing multi-ms hitches on restart.
         if (us >= kHotSectionUs) {
             AssistLog::info(line);
-            this->flush("orphan");
         }
         return;
     }
@@ -217,7 +218,10 @@ void PerfTrace::dumpSpike(TickSample const& tick) {
     );
     this->appendLine(line);
     AssistLog::info(line);
-    this->flush("spike");
+    // Batch to disk — sync flush on every spike hitch (saveSound ~4ms + flush).
+    if ((this->m_spikeCount % 8) == 0 || this->m_pendingLines >= 80) {
+        this->flush("spike");
+    }
 }
 
 void PerfTrace::dumpPeriodicSummary() {
@@ -294,7 +298,10 @@ void PerfTrace::dumpPeriodicSummary() {
     );
     this->appendLine(line);
     AssistLog::info(line);
-    this->flush("summary");
+    // Summary every ~120 ticks; flush only when buffer is chunky.
+    if (this->m_pendingLines >= 40) {
+        this->flush("summary");
+    }
 }
 
 void PerfTrace::endTick() {

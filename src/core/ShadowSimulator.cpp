@@ -137,21 +137,49 @@ void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, Shado
         return false;
     };
 
+    auto scrubCell = [&](auto* inner, int& found) {
+        if (!inner || found >= ghostCount) return;
+        for (int i = static_cast<int>(inner->size()) - 1; i >= 0; --i) {
+            if (static_cast<size_t>(i) >= inner->size()) continue;
+            auto* obj = (*inner)[static_cast<size_t>(i)];
+            if (!isOwnedSlot(obj)) continue;
+            inner->erase(inner->begin() + static_cast<std::ptrdiff_t>(i));
+            ++found;
+            if (found >= ghostCount) return;
+        }
+    };
+
     auto& sections = layer->m_sections;
+    int found = 0;
+
+    // Fast path: only touch cells named by each ghost's section indices.
+    for (int g = 0; g < ghostCount; ++g) {
+        auto* obj = ghosts[g];
+        if (!obj) continue;
+        int const ox = obj->m_outerSectionIndex;
+        int const ix = obj->m_innerSectionIndex;
+        int const mx = obj->m_middleSectionIndex;
+        if (ox < 0 || ix < 0 || mx < 0) continue;
+        if (ox >= static_cast<int>(sections.size())) continue;
+        auto* mid = sections[static_cast<size_t>(ox)];
+        if (!mid || ix >= static_cast<int>(mid->size())) continue;
+        scrubCell((*mid)[static_cast<size_t>(ix)], found);
+        if (found >= ghostCount) return;
+    }
+
+    // Slow path only if some ghosts still might linger (bad / -1 indices).
+    // Early-exit once every owned pointer was erased — never walk the whole
+    // grid "just in case" after that (was ~20ms/restart on large levels).
+    if (found >= ghostCount) return;
+
     size_t const outerN = sections.size();
     for (size_t ox = 0; ox < outerN; ++ox) {
         auto* mid = sections[ox];
         if (!mid) continue;
         size_t const midN = mid->size();
         for (size_t ix = 0; ix < midN; ++ix) {
-            auto* inner = (*mid)[ix];
-            if (!inner) continue;
-            for (int i = static_cast<int>(inner->size()) - 1; i >= 0; --i) {
-                if (static_cast<size_t>(i) >= inner->size()) continue;
-                auto* obj = (*inner)[static_cast<size_t>(i)];
-                if (!isOwnedSlot(obj)) continue;
-                inner->erase(inner->begin() + static_cast<std::ptrdiff_t>(i));
-            }
+            scrubCell((*mid)[ix], found);
+            if (found >= ghostCount) return;
         }
     }
 }
@@ -197,17 +225,26 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_saved.clear();
     this->m_savedActivatedIDs.clear();
 
-    // Prefer index-based remove when slots look valid; then scrub by raw
-    // pointer so bad indices still cannot leave ghosts for sortSectionVector.
+    // Prefer index-based remove; scrub is a safety net (targeted then early-exit).
     if (layer) {
-        if (this->m_shadow) {
-            ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
-        }
+        bool anyIndexed = false;
+        auto markIndexed = [&](PlayerObject* p) {
+            if (!p) return;
+            if (p->m_outerSectionIndex >= 0
+                || p->m_innerSectionIndex >= 0
+                || p->m_middleSectionIndex >= 0) {
+                anyIndexed = true;
+            }
+            ShadowSimulator::tryRemoveFromSection(layer, p);
+        };
+        markIndexed(this->m_shadow);
         for (auto* slot : this->m_snapshots) {
-            if (!slot) continue;
-            ShadowSimulator::tryRemoveFromSection(layer, slot);
+            markIndexed(slot);
         }
-        ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+        // Skip full scrub when nothing claimed a section (parked ghosts).
+        if (anyIndexed) {
+            ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+        }
     }
 
     auto evac = [&](PlayerObject* p) {
@@ -769,6 +806,56 @@ bool ShadowSimulator::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int l
     return false;
 }
 
+bool ShadowSimulator::spatialHazardProximity(
+    PlayLayer* layer, PlayerObject* real, float proximityX
+) {
+    if (!layer || !real || !layer->m_objectLayer || proximityX <= 0.f) return false;
+
+    float const px = real->getPositionX();
+    float const py = real->getPositionY();
+    float const yReach = real->m_isShip || real->m_isDart || real->m_isSwing ? 100.f : 70.f;
+
+    auto* children = layer->m_objectLayer->getChildren();
+    if (!children) return false;
+
+    for (unsigned i = 0; i < children->count(); ++i) {
+        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+        if (!isHazardLike(obj)) continue;
+
+        float const ox = obj->getPositionX();
+        float const oy = obj->getPositionY();
+        float half = obj->getContentSize().width * std::fabs(obj->getScaleX()) * 0.5f;
+        if (half < 8.f) half = 8.f;
+        float const oLo = ox - half;
+        float const oHi = ox + half;
+        // Ahead of player, overlapping [px, px+proximityX].
+        if (oHi < px - 4.f) continue;
+        if (oLo > px + proximityX) continue;
+        if (std::fabs(oy - py) > yReach) continue;
+        return true;
+    }
+    return false;
+}
+
+bool ShadowSimulator::shouldWaveHazardProximityPass(
+    bool isWave, bool nearHazard, bool noOrbTarget
+) {
+    if (!isWave) return false;
+    if (!nearHazard) return false;
+    if (!noOrbTarget) return false;
+    return true;
+}
+
+bool ShadowSimulator::shouldWaveFutileDelayPass(
+    bool isWave, bool orbIntent, int bestSurviveBin, float bestEndXGain
+) {
+    if (!isWave) return false;
+    if (orbIntent) return false;
+    if (bestSurviveBin > 0) return false;
+    if (bestEndXGain >= kFutileEndXGain) return false;
+    return true;
+}
+
 ShadowSimulator::RunResult ShadowSimulator::runOne(
     PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
     float dt, float firstDt, Model const& model, int releaseAfter,
@@ -1321,8 +1408,8 @@ SimPlan ShadowSimulator::plan(
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
             restoreCapture(layer);
-            m_simulating = false;
-            parkGhosts();
+            this->m_simulating = false;
+            this->parkGhosts();
             plan.action = PlanAction::Pass;
             plan.delay = 0;
             plan.nowIsSafe = true;
@@ -1332,6 +1419,33 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} Pass no-threat limit={} budgetHit={}",
                 plan.planId, limit, plan.budgetHit
+            ));
+            return plan;
+        }
+
+        // Wave zigzag: hazards in proximity ahead + no orb → Pass even if d0
+        // built a distant ThreatZone. Delaying phase-shifts into spikes.
+        bool const isWave = real && real->m_isDart;
+        float const proxX = std::clamp(
+            static_cast<float>(limit + 4) * 5.5f,
+            kHazardProximityXMin,
+            kHazardProximityXMax
+        );
+        bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
+        if (shouldWaveHazardProximityPass(isWave, nearHazard, noOrbTarget)) {
+            restoreCapture(layer);
+            this->m_simulating = false;
+            this->parkGhosts();
+            plan.action = PlanAction::Pass;
+            plan.delay = 0;
+            plan.nowIsSafe = c0.viable;
+            plan.threatCleared = c0.clearsThreat || !zone.valid;
+            plan.jumpTick = c0.jumpTick;
+            plan.activatedRing = c0.activatedRing;
+            plan.threatZone = zone;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} Pass wave-hazard-proximity prox={:.0f} zone={} budgetHit={}",
+                plan.planId, proxX, zone.valid, plan.budgetHit
             ));
             return plan;
         }
@@ -1473,6 +1587,37 @@ SimPlan ShadowSimulator::plan(
         if (c.activatedRing) anyActivation = true;
     }
     bool orbIntent = orbAssist && (orbHint.found || spatialHint || anyActivation);
+
+    // Wave: no delay improves surviveBin / endX → Pass (avoid phase-shift "assists").
+    {
+        bool const isWave = real && real->m_isDart;
+        int bestBin = 0;
+        float bestGain = 0.f;
+        float const baseEnd = cands[0].endX;
+        for (int d = 0; d <= limit; ++d) {
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (c.surviveBin > bestBin) bestBin = c.surviveBin;
+            float const gain = c.endX - baseEnd;
+            if (gain > bestGain) bestGain = gain;
+        }
+        if (shouldWaveFutileDelayPass(isWave, orbIntent, bestBin, bestGain)) {
+            restoreCapture(layer);
+            this->m_simulating = false;
+            this->parkGhosts();
+            plan.action = PlanAction::Pass;
+            plan.delay = 0;
+            plan.nowIsSafe = cands[0].viable;
+            plan.threatCleared = cands[0].clearsThreat || !zone.valid;
+            plan.jumpTick = cands[0].jumpTick;
+            plan.activatedRing = cands[0].activatedRing;
+            plan.threatZone = zone;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} Pass wave-futile-delay bin={} gain={:.1f} budgetHit={}",
+                plan.planId, bestBin, bestGain, plan.budgetHit
+            ));
+            return plan;
+        }
+    }
 
     for (auto& c : cands) {
         c.orbUseful = false;
@@ -2135,6 +2280,41 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(kClusterGapX == 50.f, "clusterGapX");
     expect(kWindowMarginK == 1, "windowMarginK");
     expect(kDefaultTickBudget == 4000, "tickBudget");
+    expect(kFutileEndXGain == 8.f, "futileEndXGain");
+
+    // Wave proximity / futile-delay gates
+    expect(
+        shouldWaveHazardProximityPass(true, true, true),
+        "wave-prox-pass"
+    );
+    expect(
+        !shouldWaveHazardProximityPass(true, true, false),
+        "wave-prox-orb-blocks"
+    );
+    expect(
+        !shouldWaveHazardProximityPass(false, true, true),
+        "wave-prox-not-cube"
+    );
+    expect(
+        !shouldWaveHazardProximityPass(true, false, true),
+        "wave-prox-no-hazard"
+    );
+    expect(
+        shouldWaveFutileDelayPass(true, false, 0, 3.f),
+        "wave-futile-pass"
+    );
+    expect(
+        !shouldWaveFutileDelayPass(true, true, 0, 3.f),
+        "wave-futile-orb"
+    );
+    expect(
+        !shouldWaveFutileDelayPass(true, false, 1, 3.f),
+        "wave-futile-bin"
+    );
+    expect(
+        !shouldWaveFutileDelayPass(true, false, 0, 12.f),
+        "wave-futile-gain"
+    );
 
     // Synthetic early-click snaps: d=0 dies in zone → Delay must clear past zoneEndX.
     struct Snap { float deathX; int clearDelay; };

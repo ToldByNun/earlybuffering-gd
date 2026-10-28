@@ -159,7 +159,8 @@ void AssistController::syncButtonState(PlayLayer* playLayer) {
 }
 
 void AssistController::resetAttempt(PlayLayer* playLayer) {
-    SelfBakeRecorder::get().flushSegment(playLayer, "reset");
+    // No refine on reset — often chained right after death (would double-freeze).
+    SelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
     clearBuffer();
     m_pendingRelease = false;
     m_pendingReleaseHold = false;
@@ -734,12 +735,19 @@ void AssistController::runPostmortem(
     auto& profile = LevelProfile::get();
     auto& sim = ShadowSimulator::get();
 
-    int const age = m_attemptTick - dec.tick;
-    int const maxTicks = std::max(8, age + 4);
+    int const age = this->m_attemptTick - dec.tick;
+    // Cap replay length — unbounded age after long attempts stalled death for seconds.
+    constexpr int kPostmortemMaxTicks = 96;
+    if (age > 400) {
+        profile.noteDiedAfterAssist(dec.mode, dec.x);
+        dec.resolved = true;
+        return;
+    }
+    int const maxTicks = std::min(kPostmortemMaxTicks, std::max(8, age + 4));
 
     // Replay with real inputs from the snapshot.
     auto rep = sim.replay(
-        playLayer, dec.snapshotSlot, dec.tick, dec.timeline, m_simDt, maxTicks, false, 0
+        playLayer, dec.snapshotSlot, dec.tick, dec.timeline, this->m_simDt, maxTicks, false, 0
     );
 
     bool const tickMatch = rep.died && std::abs(rep.deathTick - age) <= 1;
@@ -759,7 +767,7 @@ void AssistController::runPostmortem(
         if (dec.delay < dec.limit) {
             auto late = sim.replay(
                 playLayer, dec.snapshotSlot, dec.tick, dec.timeline,
-                m_simDt, maxTicks, true, +1
+                this->m_simDt, maxTicks, true, +1
             );
             if (!late.died) {
                 profile.noteBias(dec.mode, dec.x, +0.5f, "d+1 survived");
@@ -770,7 +778,7 @@ void AssistController::runPostmortem(
         if (!improved && dec.delay >= 1) {
             auto early = sim.replay(
                 playLayer, dec.snapshotSlot, dec.tick, dec.timeline,
-                m_simDt, maxTicks, true, -1
+                this->m_simDt, maxTicks, true, -1
             );
             if (!early.died) {
                 profile.noteBias(dec.mode, dec.x, -0.5f, "d-1 survived");
@@ -859,19 +867,25 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     }
 
     if (StageConfig::autoTune() && LevelProfile::get().loaded()) {
-        if (auto* dec = m_log.findForDeath(m_attemptTick)) {
-            runPostmortem(playLayer, player, object, *dec);
+        if (auto* dec = this->m_log.findForDeath(this->m_attemptTick)) {
+            PerfTrace::Scope const scope("postmortem");
+            this->runPostmortem(playLayer, player, object, *dec);
         }
         LevelProfile::get().maybeAutosave();
     }
 
-    SelfBakeRecorder::get().flushSegment(playLayer, "death");
-    clearBuffer();
-    m_pendingRelease = false;
+    // Death path must stay cheap: merge point windows only. Refine (up to 64
+    // sims) on the main thread was causing 1–2s freezes after every death.
+    {
+        PerfTrace::Scope const scope("selfBakeFlush");
+        SelfBakeRecorder::get().flushSegment(playLayer, "death", false);
+    }
+    this->clearBuffer();
+    this->m_pendingRelease = false;
     // Markers stay until death/restart — clear on real death (practice may not resetLevel yet).
     SaveFrameCounter::get().clear();
-    syncButtonState(playLayer);
-    updateOverlay();
+    this->syncButtonState(playLayer);
+    this->updateOverlay();
 }
 
 void AssistController::flushPendingRelease(PlayLayer* playLayer) {
@@ -1688,9 +1702,10 @@ bool AssistController::onHandleButton(
         firstDt = rem / tw;
     }
 
-    if (down && (StageConfig::debugLogging() || StageConfig::perfTrace())) {
-        auto const detail = fmt::format(
-            "effectTick={} attemptTick={} midStep={} continuous={} firstDt={:.6f} simDt={:.6f} p{}",
+    // Attribution log only under debug-logging (not every press into perf file).
+    if (down && StageConfig::debugLogging()) {
+        AssistLog::debug(fmt::format(
+            "attrib: effectTick={} attemptTick={} midStep={} continuous={} firstDt={:.6f} simDt={:.6f} p{}",
             effectTick,
             this->m_attemptTick,
             midStep ? 1 : 0,
@@ -1698,9 +1713,7 @@ bool AssistController::onHandleButton(
             firstDt,
             this->m_simDt,
             player1 ? 1 : 2
-        );
-        AssistLog::debug(fmt::format("attrib: {}", detail));
-        PerfTrace::get().note("attrib", detail);
+        ));
     }
 
     // Track real (non-swallowed) inputs for learning timelines.

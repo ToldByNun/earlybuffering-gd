@@ -22,7 +22,7 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (default off), `self-bake-refine` (default on).
 
-`SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). When refine is on, start snapshot exists, and assist did not touch the run: `refineSelfWindows` binary-searches earliest/latest (budget 64 sims, bake-radius, cancelable). Quit cancels refine and merges point windows only.
+`SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). **Death and reset never refine** (merge-only — refine on the main thread caused 1–2s freezes). Checkpoint / complete / quit may refine when enabled, start snapshot exists, and assist did not touch the run (`refineSelfWindows`, budget 64 sims). Quit cancels in-flight refine.
 
 ## Not in scope
 
@@ -106,6 +106,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 2. modelFor; capture state
 3. d0 press baseline -> ThreatZone clusterGapX=50
 4. **no-threat Pass**: baseline did not die, zone invalid, no orb/pad hint → Pass (skip further cands)
+4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam)
+4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, all surviveBin ≤0 and best endX gain &lt; 8 → Pass
 5. eval delays under tick + sim-budget-us
 6. orbIntent: earliest +/-k robust activation (NO midpoint); optional firstDt ±3% jitter on top cand
 7. else d0 clearsThreat -> Pass; else earliest +/-k robust viable

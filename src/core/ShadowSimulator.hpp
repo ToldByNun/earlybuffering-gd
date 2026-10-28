@@ -89,6 +89,11 @@ public:
     static constexpr float kClusterGapX = 50.f;
     static constexpr int kWindowMarginK = 1;
     static constexpr int kDefaultTickBudget = 4000;
+    // Wave zigzag: hazard AABB within this ahead-X (+ auto from limit) → Pass.
+    static constexpr float kHazardProximityXMin = 70.f;
+    static constexpr float kHazardProximityXMax = 140.f;
+    // Delays that do not improve surviveBin / endX beyond this → Pass (wave).
+    static constexpr float kFutileEndXGain = 8.f;
 
     static ShadowSimulator& get();
 
@@ -154,6 +159,19 @@ public:
 
     // Ahead-X / jump-reach orb hint (used by bake heuristic + planner).
     static bool spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit, float dt);
+
+    // Hazard AABB within proximityX ahead of player (wave corridor spikes).
+    static bool spatialHazardProximity(
+        PlayLayer* layer, PlayerObject* real, float proximityX
+    );
+
+    // Pure gates for plan() / selfCheck (no layer).
+    static bool shouldWaveHazardProximityPass(
+        bool isWave, bool nearHazard, bool noOrbTarget
+    );
+    static bool shouldWaveFutileDelayPass(
+        bool isWave, bool orbIntent, int bestSurviveBin, float bestEndXGain
+    );
 
     // Headless regression checks (threat bins / zone clear math). Returns false on fail.
     static bool regressionSelfCheck(std::string& report);
