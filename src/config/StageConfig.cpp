@@ -83,6 +83,8 @@ bool g_cachedAutoTune = true;
 bool g_cachedSelfBake = true;
 bool g_cachedSelfBakeNormal = false;
 bool g_cachedSelfBakeRefine = true;
+bool g_cachedTriggerBake = true;
+bool g_cachedTriggerBakeSkipDynamic = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
@@ -209,6 +211,8 @@ void StageConfig::refreshCache() {
     g_cachedSelfBake = readBool(mod, "self-bake", true);
     g_cachedSelfBakeNormal = readBool(mod, "self-bake-normal", false);
     g_cachedSelfBakeRefine = readBool(mod, "self-bake-refine", true);
+    g_cachedTriggerBake = readBool(mod, "trigger-bake", true);
+    g_cachedTriggerBakeSkipDynamic = readBool(mod, "trigger-bake-skip-dynamic", true);
     g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
     g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 128);
     g_cachedCpsLimit = clampInt(readInt(mod, "cps-limit", 0), 0, 40);
@@ -431,6 +435,8 @@ bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
 bool StageConfig::selfBake() { ensureCache(); return g_cachedSelfBake; }
 bool StageConfig::selfBakeNormal() { ensureCache(); return g_cachedSelfBakeNormal; }
 bool StageConfig::selfBakeRefine() { ensureCache(); return g_cachedSelfBakeRefine; }
+bool StageConfig::triggerBake() { ensureCache(); return g_cachedTriggerBake; }
+bool StageConfig::triggerBakeSkipDynamic() { ensureCache(); return g_cachedTriggerBakeSkipDynamic; }
 AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode; }
 int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
 int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }

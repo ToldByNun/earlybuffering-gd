@@ -73,7 +73,7 @@ public:
     static std::string lastSyncedPreset();
 
     // Setting groups mirror mod.json titles: General → Assist Scope → Window →
-    // Algorithm → Smart → Learning → per-mode → Keybinds → Internal.
+    // Algorithm → Smart → Learning → Trigger World → per-mode → Keybinds → Internal.
 
     // --- General / UI ---
     static bool isEnabled();
@@ -150,6 +150,9 @@ public:
     static bool selfBake();
     static bool selfBakeNormal();
     static bool selfBakeRefine();
+    // Trigger World: static mover cache for shadow sim; skip dynamic on weak PCs.
+    static bool triggerBake();
+    static bool triggerBakeSkipDynamic();
     // "off" | "ab" — A/B verify when legacy/new disagree (optional)
     static char const* assistVerifyMode();
     static bool assistVerifyAb();

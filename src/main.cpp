@@ -180,6 +180,8 @@ $on_mod(Loaded) {
     watchBool("self-bake");
     watchBool("self-bake-normal");
     watchBool("self-bake-refine");
+    watchBool("trigger-bake");
+    watchBool("trigger-bake-skip-dynamic");
     watchBool("assist-only-practice");
     watchBool("assist-startpos-only");
     watchInt("assist-percent-min");

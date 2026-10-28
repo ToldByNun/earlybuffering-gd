@@ -24,10 +24,16 @@ Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (def
 
 `SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). **Death and reset never refine** (merge-only — refine on the main thread caused 1–2s freezes). Checkpoint / complete / quit may refine when enabled, start snapshot exists, and assist did not touch the run (`refineSelfWindows`, budget 64 sims). Quit cancels in-flight refine.
 
+## Trigger World Bake
+
+Settings (Trigger World): `trigger-bake` (default on), `trigger-bake-skip-dynamic` (default on).
+
+When enabled, static move/rotate/scale trigger motion is cached per level content key (`triggers/{fullKey}.json`). On level enter: load if present, otherwise build once (later commits). Shadow sim applies baked poses so static movers are not `UnknownOnOverlap`. Dynamic triggers (follow player / camera / touch-path) are not stored in that cache; with `trigger-bake-skip-dynamic` they stay Unknown (recommended for weaker PCs). Off `trigger-bake` = legacy Unknown-on-overlap for all trigger/effect overlaps.
+
 ## Not in scope
 
 - Late-forgiveness (rewind time for late clicks)
-- Full move/rotate/scale trigger simulation (Unknown/warn only)
+- Enabling raw `triggerObject` during live plan (mutates the real level)
 - Multi-click injection queue beyond Smart d0 selection
 
 ## Pause / settings UI
@@ -95,6 +101,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | self-bake | bool | true | | | Learning — record vanilla clicks in practice |
 | self-bake-normal | bool | false | | | Learning — also record outside practice |
 | self-bake-refine | bool | true | | | Learning — budgeted window search on flush |
+| trigger-bake | bool | true | | | Trigger World — static mover cache for shadow sim |
+| trigger-bake-skip-dynamic | bool | true | | | Trigger World — do not bake/probe follow-player etc. |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |
 | MODE-enable/overwrite/ticks/cap/slack/latency | mixed | see mod.json | | | Per-mode cube..swing; latencyWeight defaults Cube 0.25 … Wave 1.0 |
 | stage-index | int | 0 | 0 | 4 | Internal — preset mirror |

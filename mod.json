@@ -548,6 +548,24 @@
 			"default": true,
 			"enable-if": "self-bake"
 		},
+		"title-trigger-world": {
+			"type": "title",
+			"name": "Trigger World",
+			"description": "Precompute static move/rotate/scale trigger motion into a cache (loaded on level enter). Dynamic triggers (follow player, etc.) stay live-only or unknown."
+		},
+		"trigger-bake": {
+			"type": "bool",
+			"name": "Trigger World Bake",
+			"description": "Cache static trigger motion for this level (content-keyed). On enter: load if present, otherwise build once. Applied during shadow sim so movers are not Unknown. Off = legacy Unknown-on-overlap for triggers.",
+			"default": true
+		},
+		"trigger-bake-skip-dynamic": {
+			"type": "bool",
+			"name": "Skip Dynamic Triggers",
+			"description": "Do not bake or live-probe follow-player / camera-follow / touch-path-dependent triggers (weaker PCs). They stay Unknown in sim. Off = attempt cheap live handling later. Recommended on.",
+			"default": true,
+			"enable-if": "trigger-bake"
+		},
 		"assist-verify": {
 			"type": "string",
 			"name": "Assist Verify",
