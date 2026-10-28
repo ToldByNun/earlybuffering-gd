@@ -496,6 +496,7 @@ class $modify(EbPlayLayer, PlayLayer) {
         if (AssistController::get().assistTouchedRun()) {
             m_isTestMode = true;
         }
+        AssistController::get().onLevelComplete(this);
         PlayLayer::levelComplete();
     }
 

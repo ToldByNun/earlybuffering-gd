@@ -2,6 +2,11 @@
 
 ## v1.2.0 (unreleased)
 
+### Self-bake (skeleton)
+
+- Practice-mode vanilla clicks recorded into BakeMap (`method=self`) on segment end (death / checkpoint / complete / reset / quit).
+- Dedup merge by near x/frame; point-windows for now (refine later). Assist injects never recorded.
+
 ### Bake verify
 
 - `findNear` prefers matching game mode, then falls back (legacy maps).

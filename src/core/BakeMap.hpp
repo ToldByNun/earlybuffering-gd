@@ -27,7 +27,7 @@ struct BakeMapData {
     std::string levelKey;
     std::string sourceReplay;
     double tps = 240.0;
-    std::string method = "replay"; // "replay" | "brute"
+    std::string method = "replay"; // "replay" | "brute" | "self"
     std::vector<BakedClick> clicks;
 };
 
@@ -99,6 +99,14 @@ public:
         float playerX, int approxFrame, bool down, bool player2,
         std::optional<GameModeKind> preferMode = std::nullopt
     ) const;
+
+    // Merge self-bake point-windows: dedup by down/player2/near x+frame → union
+    // earliest/latest. Sets method="self" when the map was empty or already self.
+    // Returns number of clicks added or widened. Cap kMaxMapClicks.
+    static constexpr float MERGE_X_TOL = 40.f;
+    static constexpr int MERGE_FRAME_TOL = 30;
+    static constexpr size_t kMaxMapClicks = 512;
+    int mergeSelfClicks(std::vector<BakedClick> const& incoming);
 
     std::string statusLine() const;
     std::string pauseStatusLine() const;

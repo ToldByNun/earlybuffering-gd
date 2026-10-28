@@ -5,6 +5,7 @@
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
+#include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
@@ -50,11 +51,16 @@ std::string AssistController::overlayText() const { return m_overlayText; }
 void AssistController::clearBuffer() { m_buffer = {}; }
 
 void AssistController::onCheckpointLoad() {
+    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint");
     clearBuffer();
     m_pendingRelease = false;
     m_pendingReleaseHold = false;
     m_outcomePending = false;
     ClickIntentGuard::get().reset();
+}
+
+void AssistController::onLevelComplete(PlayLayer* playLayer) {
+    SelfBakeRecorder::get().flushSegment(playLayer, "complete");
 }
 
 void AssistController::syncButtonState(PlayLayer* playLayer) {
@@ -75,6 +81,7 @@ void AssistController::syncButtonState(PlayLayer* playLayer) {
 }
 
 void AssistController::resetAttempt(PlayLayer* playLayer) {
+    SelfBakeRecorder::get().flushSegment(playLayer, "reset");
     clearBuffer();
     m_pendingRelease = false;
     m_pendingReleaseHold = false;
@@ -100,6 +107,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
 
 void AssistController::onLevelInit(PlayLayer* playLayer) {
     m_userHolding[0] = m_userHolding[1] = false;
+    SelfBakeRecorder::get().onLevelInit(playLayer);
     resetAttempt(playLayer);
     ShadowSimulator::get().attach(playLayer);
     StatusOverlay::attach(playLayer);
@@ -115,6 +123,8 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
     // layerDying=true: do not removeFromParent (avoids UAF during quit).
+    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "quit");
+    SelfBakeRecorder::get().onLevelQuit();
     SaveFeedback::get().reset();
     ClickIntentGuard::get().reset();
     TrajectoryVisualizer::get().detach(true);
@@ -527,6 +537,7 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
         LevelProfile::get().maybeAutosave();
     }
 
+    SelfBakeRecorder::get().flushSegment(playLayer, "death");
     clearBuffer();
     m_pendingRelease = false;
     syncButtonState(playLayer);
@@ -1098,6 +1109,15 @@ bool AssistController::onHandleButton(
     bool const midStep = m_inRealUpdate;
     int const effectTick = midStep ? m_attemptTick : m_attemptTick + 1;
 
+    auto finish = [&](bool passThrough) -> bool {
+        if (passThrough) {
+            SelfBakeRecorder::get().noteVanillaInput(
+                playLayer, player, player1, down, effectTick, m_simDt
+            );
+        }
+        return passThrough;
+    };
+
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
@@ -1109,7 +1129,7 @@ bool AssistController::onHandleButton(
                     std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(),
                     minMs
                 ));
-                return true;
+                return finish(true);
             }
         }
         noteUserClick();
@@ -1143,11 +1163,11 @@ bool AssistController::onHandleButton(
             return false;
         }
 
-        if (!shouldAssistPlayer(player) || !StageConfig::assistRelease()) return true;
-        if (m_attemptTick <= 2) return true;
+        if (!shouldAssistPlayer(player) || !StageConfig::assistRelease()) return finish(true);
+        if (m_attemptTick <= 2) return finish(true);
         bool const pass = planRelease(playLayer, player, player1, effectTick, firstDt);
         if (pass) m_log.noteInput(effectTick, false);
-        return pass;
+        return finish(pass);
     }
 
     if (ours && m_buffer.state == BufferState::Buffered && m_buffer.down) {
@@ -1161,11 +1181,11 @@ bool AssistController::onHandleButton(
         fireBuffered(playLayer, player);
     }
 
-    if (!shouldAssistPlayer(player) || !StageConfig::assistPress()) return true;
-    if (m_attemptTick <= 2) return true;
+    if (!shouldAssistPlayer(player) || !StageConfig::assistPress()) return finish(true);
+    if (m_attemptTick <= 2) return finish(true);
     bool const pass = planPress(playLayer, player, player1, effectTick, firstDt);
     if (pass) m_log.noteInput(effectTick, true);
-    return pass;
+    return finish(pass);
 }
 
 bool AssistController::allowPushButton(PlayerObject* player, PlayerButton button) {

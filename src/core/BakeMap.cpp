@@ -148,6 +148,45 @@ std::string BakeMap::pauseStatusLine() const {
     return line;
 }
 
+int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
+    if (incoming.empty() || !m_loaded) return 0;
+    if (isBaking()) return 0;
+
+    bool const wasEmpty = m_data.clicks.empty();
+    int touched = 0;
+
+    for (auto const& neu : incoming) {
+        BakedClick* match = nullptr;
+        for (auto& old : m_data.clicks) {
+            if (old.down != neu.down || old.player2 != neu.player2) continue;
+            if (std::fabs(old.x - neu.x) > MERGE_X_TOL) continue;
+            if (std::abs(old.nominalFrame - neu.nominalFrame) > MERGE_FRAME_TOL) continue;
+            match = &old;
+            break;
+        }
+        if (match) {
+            int const prevE = match->earliest;
+            int const prevL = match->latest;
+            match->earliest = std::min(match->earliest, neu.earliest);
+            match->latest = std::max(match->latest, neu.latest);
+            if (match->earliest != prevE || match->latest != prevL) ++touched;
+            continue;
+        }
+        if (m_data.clicks.size() >= kMaxMapClicks) continue;
+        m_data.clicks.push_back(neu);
+        ++touched;
+    }
+
+    if (touched <= 0) return 0;
+
+    if (wasEmpty || m_data.method == "self" || m_data.method.empty()) {
+        m_data.method = "self";
+        if (m_data.sourceReplay.empty()) m_data.sourceReplay = "self-bake";
+    }
+    save();
+    return touched;
+}
+
 BakedClick const* BakeMap::findNear(
     float playerX, int approxFrame, bool down, bool player2,
     std::optional<GameModeKind> preferMode

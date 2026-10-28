@@ -61,6 +61,7 @@ public:
     void noteRealJump(PlayerObject* player);
     void onRealDeath(PlayLayer* playLayer, PlayerObject* player, GameObject* object);
     void onCheckpointLoad();
+    void onLevelComplete(PlayLayer* playLayer);
     bool assistTouchedRun() const { return m_assistTouchedRun; }
 
     void resetLevelProfile();

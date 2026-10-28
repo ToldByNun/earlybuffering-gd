@@ -18,6 +18,10 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 `BakeMap::findNear` prefers `BakedClick.mode == kindOf(player)` within 120px X; falls back to any mode if none match.
 Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone + runOne at planned delay). Success = clearsThreat and not diedBeforeAction (linked dual checked). Fail: Hybrid → Live; Replay/Brute → Pass.
 
+## Self-bake (skeleton)
+
+`SelfBakeRecorder` records practice-mode vanilla jump inputs (never assist injects). On death / checkpoint load / complete / reset / quit, merges point-windows into `BakeMap` via `mergeSelfClicks` (`method=self` when map empty/self; dedup by down/player2/near x+frame → earliest/latest union; cap 512). Window refine is a later commit.
+
 ## Not in scope
 
 - Late-forgiveness (rewind time for late clicks)
