@@ -11,6 +11,11 @@
 - **Assist** page: Cycle Preset / Reset Learn / Export·Import Cfg above the assist settings rows.
 - Re-open EB is a no-op while settings are already open; scroll preserved across Geode rebuilds.
 
+### Save feedback toggles
+
+- Replaced combined `save-feedback` (off/icon/sound/both) with three Visual toggles: **Sound**, **Color** (icon flash), **Counter** (world +N — coming next).
+- Defaults match old `both` (sound+color on, counter off). Re-check toggles if you previously used off/sound/icon-only.
+
 ### Adaptive robust window + latency cost
 
 - Smart settings: **Robust Window (±k)** (`0` = auto from mode/speed/dt variance) and optional **firstDt jitter** (±3% re-sim of top cand).

@@ -144,22 +144,28 @@
 			"description": "Load EarlyBuffer settings from a JSON file.",
 			"button-text": "import"
 		},
-		"save-feedback": {
-			"type": "string",
-			"name": "Save Feedback",
-			"description": "Cue when assist injects a delayed click. Sound = per-tick clip (+1…+7, +8+). Icon = flash player with Save Icon Color. both = sound+icon.",
-			"one-of": [
-				"off",
-				"icon",
-				"sound",
-				"both"
-			],
-			"default": "both"
+		"save-feedback-sound": {
+			"type": "bool",
+			"name": "Save Feedback Sound",
+			"description": "Play a per-tick MP3 cue (+1…+7, +8+) when assist injects a delayed click.",
+			"default": true
+		},
+		"save-feedback-color": {
+			"type": "bool",
+			"name": "Save Feedback Color",
+			"description": "Flash the player icon with Save Icon Color when assist injects a delayed click.",
+			"default": true
+		},
+		"save-feedback-counter": {
+			"type": "bool",
+			"name": "Save Feedback Counter",
+			"description": "Show a world-space circle and +N frames-saved label at the click position (clears on death / restart).",
+			"default": false
 		},
 		"save-icon-color": {
 			"type": "color",
 			"name": "Save Icon Color",
-			"description": "Color flashed onto the player icon when Save Feedback is icon or both.",
+			"description": "Color flashed onto the player icon when Save Feedback Color is on.",
 			"default": "#7CFF4A"
 		},
 		"title-scope": {

@@ -63,8 +63,10 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | show-pause-bake | bool | true | | | Ingame — pause status lines only |
 | show-pause-assist | bool | false | | | Ingame — legacy unused (actions under Assist page) |
 | show-pause-hub | bool | true | | | Ingame — EB button |
-| save-feedback | string | both | off/icon/sound/both | | Visual — sound = per-tick MP3; icon = color flash |
-| save-icon-color | rgb | #7CFF4A | | | Visual — flash color for icon/both |
+| save-feedback-sound | bool | true | | | Visual — per-tick MP3 cue on delayed inject |
+| save-feedback-color | bool | true | | | Visual — flash player icon on delayed inject |
+| save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart) |
+| save-icon-color | rgb | #7CFF4A | | | Visual — flash color when save-feedback-color is on |
 | assist-only-practice | bool | false | | | Scope |
 | assist-startpos-only | bool | false | | | Scope |
 | assist-percent-min | int | 0 | 0 | 100 | Scope |

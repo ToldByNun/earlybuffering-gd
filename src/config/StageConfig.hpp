@@ -85,16 +85,16 @@ public:
     static bool showPauseAssist();
     // Pause top-right button → Geode openSettingsPopup (later: hub).
     static bool showPauseHub();
-    // "off" | "icon" | "sound" | "both"
-    static char const* saveFeedbackMode();
-    static bool saveFeedbackIcon();
+    // Independent save-feedback toggles (sound / icon flash / frame counter).
     static bool saveFeedbackSound();
+    static bool saveFeedbackIcon(); // Save Feedback Color (icon flash)
+    static bool saveFeedbackCounter();
     struct ColorRgb {
         uint8_t r = 124;
         uint8_t g = 255;
         uint8_t b = 74;
     };
-    static ColorRgb saveFeedbackColor();
+    static ColorRgb saveFeedbackColor(); // picker used when saveFeedbackIcon()
 
     // --- Assist Scope (practice / startpos / percent / off-ranges) ---
     static bool assistOnlyPractice();

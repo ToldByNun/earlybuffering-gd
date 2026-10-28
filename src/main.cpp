@@ -182,9 +182,9 @@ $on_mod(Loaded) {
     listenForSettingChanges<std::string>("assist-verify", [](std::string) {
         onAnySetting();
     });
-    listenForSettingChanges<std::string>("save-feedback", [](std::string) {
-        onAnySetting();
-    });
+    watchBool("save-feedback-sound");
+    watchBool("save-feedback-color");
+    watchBool("save-feedback-counter");
     listenForSettingChanges<cocos2d::ccColor3B>("save-icon-color", [](cocos2d::ccColor3B) {
         onAnySetting();
     });

@@ -99,7 +99,9 @@ int g_cachedAssistPercentMin = 0;
 int g_cachedAssistPercentMax = 100;
 std::vector<StageConfig::PercentRange> g_cachedAssistDisableRanges;
 bool g_cachedShowPauseAssist = false;
-std::string g_cachedSaveFeedback = "off";
+bool g_cachedSaveFeedbackSound = true;
+bool g_cachedSaveFeedbackColor = true;
+bool g_cachedSaveFeedbackCounter = false;
 StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
@@ -222,17 +224,9 @@ void StageConfig::refreshCache() {
     }
     loadAssistOffSlots(mod, g_cachedAssistDisableRanges);
     g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", false);
-    try {
-        g_cachedSaveFeedback = mod->getSettingValue<std::string>("save-feedback");
-        if (g_cachedSaveFeedback != "icon"
-            && g_cachedSaveFeedback != "sound"
-            && g_cachedSaveFeedback != "both") {
-            g_cachedSaveFeedback = "off";
-        }
-    }
-    catch (...) {
-        g_cachedSaveFeedback = "off";
-    }
+    g_cachedSaveFeedbackSound = readBool(mod, "save-feedback-sound", true);
+    g_cachedSaveFeedbackColor = readBool(mod, "save-feedback-color", true);
+    g_cachedSaveFeedbackCounter = readBool(mod, "save-feedback-counter", false);
     try {
         auto const c = mod->getSettingValue<cocos2d::ccColor3B>("save-icon-color");
         g_cachedSaveIconColor = { c.r, c.g, c.b };
@@ -467,14 +461,17 @@ bool StageConfig::isInAssistDisableRange(float percent) {
     return false;
 }
 bool StageConfig::showPauseAssist() { ensureCache(); return g_cachedShowPauseAssist; }
-char const* StageConfig::saveFeedbackMode() { ensureCache(); return g_cachedSaveFeedback.c_str(); }
-bool StageConfig::saveFeedbackIcon() {
-    ensureCache();
-    return g_cachedSaveFeedback == "icon" || g_cachedSaveFeedback == "both";
-}
 bool StageConfig::saveFeedbackSound() {
     ensureCache();
-    return g_cachedSaveFeedback == "sound" || g_cachedSaveFeedback == "both";
+    return g_cachedSaveFeedbackSound;
+}
+bool StageConfig::saveFeedbackIcon() {
+    ensureCache();
+    return g_cachedSaveFeedbackColor;
+}
+bool StageConfig::saveFeedbackCounter() {
+    ensureCache();
+    return g_cachedSaveFeedbackCounter;
 }
 StageConfig::ColorRgb StageConfig::saveFeedbackColor() {
     ensureCache();

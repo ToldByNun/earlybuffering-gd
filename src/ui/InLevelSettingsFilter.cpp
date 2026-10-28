@@ -42,7 +42,11 @@ SettingsCategory InLevelSettingsFilter::categoryForKey(std::string const& key) {
         || key == "import-config-action") {
         return SettingsCategory::Assist;
     }
-    if (key == "show-trajectory" || key == "save-feedback" || key == "save-icon-color") {
+    if (key == "show-trajectory"
+        || key == "save-feedback-sound"
+        || key == "save-feedback-color"
+        || key == "save-feedback-counter"
+        || key == "save-icon-color") {
         return SettingsCategory::Visual;
     }
     if (key == "title-cube" || key.rfind("cube-", 0) == 0
@@ -415,6 +419,10 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("cycle-preset-action") == SettingsCategory::Assist, "cat-cycle-preset");
     expect(categoryForKey("assist-mode") == SettingsCategory::Assist, "cat-assist-mode");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
+    expect(categoryForKey("save-feedback-sound") == SettingsCategory::Visual, "cat-save-sound");
+    expect(categoryForKey("save-feedback-color") == SettingsCategory::Visual, "cat-save-color");
+    expect(categoryForKey("save-feedback-counter") == SettingsCategory::Visual, "cat-save-counter");
+    expect(categoryForKey("save-icon-color") == SettingsCategory::Visual, "cat-save-icon-color");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Keys, "cat-hotkey-keys");
     expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");

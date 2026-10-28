@@ -690,7 +690,10 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
 
     inject(playLayer, m_buffer.down);
     AssistLog::printSavedPress(delayed, m_buffer.pressTick, m_attemptTick, m_buffer.limit, estimatedTps());
-    if (delayed > 0 && std::strcmp(StageConfig::saveFeedbackMode(), "off") != 0) {
+    if (delayed > 0
+        && (StageConfig::saveFeedbackSound()
+            || StageConfig::saveFeedbackIcon()
+            || StageConfig::saveFeedbackCounter())) {
         SaveFeedback::get().onSave(playLayer, player, delayed);
     }
     if (!wasPress) {
