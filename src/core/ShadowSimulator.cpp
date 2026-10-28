@@ -928,6 +928,107 @@ static bool betterCand(Cand const& a, Cand const& b) {
 
 
 
+ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
+    PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
+    float dt, float firstDt, PlanOptions const& options
+) {
+    VerifyDelayResult out;
+    if (!layer || !real || !m_shadow || limit < 0 || dt <= 0.f) return out;
+    if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
+    delay = std::max(0, delay);
+
+    Model model = modelFor(real, limit, options.capMul);
+    int tickBudget = options.tickBudget > 0 ? options.tickBudget : kDefaultTickBudget;
+    auto const wall0 = std::chrono::steady_clock::now();
+    auto wallExceeded = [&]() -> bool {
+        if (options.budgetUs <= 0) return false;
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - wall0
+        ).count();
+        return us >= options.budgetUs;
+    };
+
+    auto linkedDual = [&]() -> bool {
+        if (!layer || !layer->m_player2 || !real) return false;
+        if (!layer->m_gameState.m_isDualMode) return false;
+        if (auto* gm = GameManager::sharedState()) {
+            if (gm->getGameVariable("0010")) return false;
+        }
+        return real == layer->m_player1 || real == layer->m_player2;
+    };
+
+    m_simulating = true;
+    beginCapture(layer);
+
+    ThreatZone zone{};
+    {
+        // Probe d0 to build the same threat zone Live uses.
+        auto c0 = runOne(
+            layer, real, down, 0, limit, dt, firstDt, model, -1,
+            nullptr, &tickBudget
+        );
+        restoreCapture(layer);
+        beginCapture(layer);
+        if (c0.died) {
+            zone = buildThreatZone(layer, c0.deathX, c0.deathObject);
+            out.threatZone = zone;
+        }
+        if (tickBudget <= 0 || wallExceeded()) {
+            out.budgetHit = true;
+            restoreCapture(layer);
+            m_simulating = false;
+            parkGhosts();
+            return out;
+        }
+    }
+
+    auto r = runOne(
+        layer, real, down, delay, limit, dt, firstDt, model, -1,
+        zone.valid ? &zone : nullptr, &tickBudget
+    );
+    restoreCapture(layer);
+    beginCapture(layer);
+
+    out.diedBeforeAction = r.diedBeforeAction;
+    out.clearsThreat = clearsThreatOf(r, zone);
+    out.unknown = r.unknown || r.unknownTrunc;
+    bool viable = false;
+    if (r.unknownTrunc) {
+        if (!zone.valid) viable = true;
+        else if (r.died) viable = r.deathX > zone.endX;
+        else viable = r.endX > zone.endX || out.clearsThreat;
+    }
+    else {
+        viable = out.clearsThreat && !r.diedBeforeAction;
+    }
+
+    if (viable && linkedDual()) {
+        PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
+        if (other && tickBudget > 0 && !wallExceeded()) {
+            auto r2 = runOne(
+                layer, other, down, delay, limit, dt, firstDt, model, -1,
+                zone.valid ? &zone : nullptr, &tickBudget
+            );
+            restoreCapture(layer);
+            beginCapture(layer);
+            if (!clearsThreatOf(r2, zone) || r2.diedBeforeAction) {
+                viable = false;
+                out.clearsThreat = false;
+            }
+        }
+    }
+
+    if (tickBudget <= 0 || wallExceeded()) out.budgetHit = true;
+
+    restoreCapture(layer);
+    m_simulating = false;
+    parkGhosts();
+
+    // Budget exhaustion → do not trust bake (caller falls through / Pass).
+    out.ok = viable && !out.budgetHit;
+    return out;
+}
+
 SimPlan ShadowSimulator::plan(
     PlayLayer* layer, PlayerObject* real, bool down, int limit,
     float dt, float firstDt, PlanOptions const& options

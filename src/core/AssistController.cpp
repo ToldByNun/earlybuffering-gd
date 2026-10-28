@@ -3,6 +3,7 @@
 #include "AssistPerfStats.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
+#include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
@@ -725,7 +726,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
 
 bool AssistController::tryBakeAssist(
     PlayLayer* playLayer, PlayerObject* player, bool player1,
-    bool down, int effectTick, bool& handled
+    bool down, int effectTick, float firstDt, bool& handled
 ) {
     handled = false;
     auto mode = StageConfig::assistMode();
@@ -733,6 +734,19 @@ bool AssistController::tryBakeAssist(
 
     bool const bakeOnly =
         mode == AssistMode::Replay || mode == AssistMode::BruteForce;
+    bool const hybrid = mode == AssistMode::Hybrid;
+
+    auto fallThroughOrPass = [&](char const* reason) -> bool {
+        AssistLog::debug(fmt::format("bake: {} → {}", reason, hybrid ? "live" : "pass"));
+        if (hybrid) {
+            handled = false;
+            m_lastBakeHint = reason;
+            return true;
+        }
+        handled = true;
+        m_lastBakeHint = reason;
+        return true;
+    };
 
     auto const& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) {
@@ -746,7 +760,10 @@ bool AssistController::tryBakeAssist(
 
     double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
     int approxFrame = static_cast<int>(std::lround(m_attemptTick * (tps * m_simDt)));
-    auto const* win = bake.findNear(player->getPositionX(), approxFrame, down, !player1);
+    auto const kind = StageConfig::kindOf(player);
+    auto const* win = bake.findNear(
+        player->getPositionX(), approxFrame, down, !player1, kind
+    );
     if (!win) {
         if (bakeOnly) {
             handled = true;
@@ -755,9 +772,6 @@ bool AssistController::tryBakeAssist(
         }
         return true; // Hybrid live fallback
     }
-
-    handled = true;
-    m_lastBakeHint = fmt::format("bake [{},{}]", win->earliest, win->latest);
 
     // Map bake frames onto attempt ticks using bake TPS vs current sim dt.
     auto frameToTick = [&](int frame) -> int {
@@ -771,29 +785,44 @@ bool AssistController::tryBakeAssist(
     int latestTick = frameToTick(win->latest);
     if (latestTick < earliestTick) std::swap(latestTick, earliestTick);
 
+    int const limit = activeLimit(player);
+
+    // Too late for this window
+    if (effectTick > latestTick) {
+        return fallThroughOrPass("past latest");
+    }
+
+    // Planned delay: 0 if already inside window, else wait until earliest.
+    int delay = 0;
+    if (effectTick < earliestTick) {
+        delay = earliestTick - effectTick;
+        if (limit > 0) delay = std::min(delay, limit);
+        if (delay <= 0) delay = 0;
+    }
+
+    // Live re-verify: stale / wrong-mode / route drift → Hybrid live, bake-only Pass.
+    if (limit > 0 && m_simDt > 0.f) {
+        float const fd = (firstDt > 0.f && firstDt <= m_simDt) ? firstDt : m_simDt;
+        auto const vr = BakeVerifier::verify(
+            playLayer, player, down, delay, limit, m_simDt, fd
+        );
+        if (!vr.ok) {
+            return fallThroughOrPass(vr.budgetHit ? "verify budget" : "verify fail");
+        }
+    }
+
+    handled = true;
+    m_lastBakeHint = fmt::format("bake [{},{}]", win->earliest, win->latest);
+
     // Already inside the safe window → do it now.
-    if (effectTick >= earliestTick && effectTick <= latestTick) {
+    if (delay <= 0) {
         AssistLog::debug(fmt::format(
-            "bake: in window [{},{}] → pass", win->earliest, win->latest
+            "bake: in window [{},{}] verify ok → pass", win->earliest, win->latest
         ));
         return true;
     }
-    // Too late
-    if (effectTick > latestTick) {
-        AssistLog::debug("bake: past latest → pass");
-        if (mode == AssistMode::Hybrid) {
-            handled = false; // try live
-            return true;
-        }
-        return true; // Replay / BruteForce: pass
-    }
 
     // Too early → buffer until earliest
-    int delay = earliestTick - effectTick;
-    int const limit = activeLimit(player);
-    if (limit > 0) delay = std::min(delay, limit);
-    if (delay <= 0) return true;
-
     m_buffer = {};
     m_buffer.state = BufferState::Buffered;
     m_buffer.down = down;
@@ -803,7 +832,7 @@ bool AssistController::tryBakeAssist(
     m_buffer.limit = std::max(limit, delay);
     m_buffer.expectedJumpTick = m_buffer.fireTick;
     m_buffer.decisionX = player->getPositionX();
-    m_buffer.mode = StageConfig::kindOf(player);
+    m_buffer.mode = kind;
 
     // G4 bake heuristic (no file format change): if Orb Assist would have intent
     // near this bake delay, apply the same [dMin,dMax] recheck/requireOrb rules.
@@ -838,7 +867,9 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     if (limit <= 0) return true;
 
     bool bakeHandled = false;
-    bool const bakeRet = tryBakeAssist(playLayer, player, player1, true, effectTick, bakeHandled);
+    bool const bakeRet = tryBakeAssist(
+        playLayer, player, player1, true, effectTick, firstDt, bakeHandled
+    );
     if (bakeHandled) return bakeRet;
 
     auto const kind = StageConfig::kindOf(player);
@@ -964,7 +995,9 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     if (limit <= 0) return true;
 
     bool bakeHandled = false;
-    bool const bakeRet = tryBakeAssist(playLayer, player, player1, false, effectTick, bakeHandled);
+    bool const bakeRet = tryBakeAssist(
+        playLayer, player, player1, false, effectTick, firstDt, bakeHandled
+    );
     if (bakeHandled) return bakeRet;
 
     auto const kind = StageConfig::kindOf(player);

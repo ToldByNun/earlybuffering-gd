@@ -203,7 +203,10 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     ));
 
     auto const* win = bake.loaded()
-        ? bake.findNear(player->getPositionX(), approxFrame, true, false)
+        ? bake.findNear(
+            player->getPositionX(), approxFrame, true, false,
+            StageConfig::kindOf(player)
+          )
         : nullptr;
 
     int delayEarly = 0;

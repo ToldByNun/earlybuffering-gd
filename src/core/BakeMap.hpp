@@ -92,8 +92,12 @@ public:
         BakeMethod method = BakeMethod::Replay
     );
 
+    // Prefer clicks whose mode matches preferMode within LOOKUP_X_TOL.
+    // If none match, fall back to any mode (legacy maps / missing mode).
+    // Pass preferMode=nullopt to skip the mode preference pass entirely.
     BakedClick const* findNear(
-        float playerX, int approxFrame, bool down, bool player2
+        float playerX, int approxFrame, bool down, bool player2,
+        std::optional<GameModeKind> preferMode = std::nullopt
     ) const;
 
     std::string statusLine() const;

@@ -2,6 +2,12 @@
 
 ## v1.2.0 (unreleased)
 
+### Bake verify
+
+- `findNear` prefers matching game mode, then falls back (legacy maps).
+- Hybrid/Replay/Brute: one-shot live `verifyDelay` (clearsThreat) before using a bake window.
+- Verify fail → Hybrid falls through to Live; Replay/Brute Pass.
+
 ### Settings
 
 - Regrouped Geode settings: **General** → **Assist Scope** → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal**.

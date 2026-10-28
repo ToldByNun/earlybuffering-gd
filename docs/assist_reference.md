@@ -7,11 +7,16 @@ Rebuild / harden guide for Geometry Dash 2.2081 (Geode). Physics unit = tick (me
 | Mode | Role |
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
-| Hybrid | Bake window if near, else Live. |
+| Hybrid | Bake window if near + live verify clearsThreat, else Live. |
 | Replay | Precomputed click windows from imported macro bake (TAS-like timing map). |
 | BruteForce | Precomputed exhaustive safe timings (TAS-like generator). Not a live multi-click bot queue. |
 
 Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, not a live macro injector queue.
+
+## Bake verify (Hybrid / Replay / Brute)
+
+`BakeMap::findNear` prefers `BakedClick.mode == kindOf(player)` within 120px X; falls back to any mode if none match.
+Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone + runOne at planned delay). Success = clearsThreat and not diedBeforeAction (linked dual checked). Fail: Hybrid → Live; Replay/Brute → Pass.
 
 ## Not in scope
 

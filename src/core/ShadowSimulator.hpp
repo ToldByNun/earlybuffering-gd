@@ -121,6 +121,21 @@ public:
         float dt, float firstDt, PlanOptions const& options = {}
     );
 
+    // Single-candidate bake check: runOne(delay) must clear the threat zone
+    // and not die before the action. Used by Hybrid bake verify (O(1) sim).
+    struct VerifyDelayResult {
+        bool ok = false;
+        bool clearsThreat = false;
+        bool diedBeforeAction = false;
+        bool budgetHit = false;
+        bool unknown = false;
+        ThreatZone threatZone{};
+    };
+    VerifyDelayResult verifyDelay(
+        PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
+        float dt, float firstDt, PlanOptions const& options = {}
+    );
+
     // Build hazard cluster around a death X / object (public for tests/logging).
     static ThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
 

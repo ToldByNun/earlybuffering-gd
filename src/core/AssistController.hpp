@@ -93,10 +93,10 @@ private:
     bool planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt);
     bool planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt);
     // Returns true if bake handled the input (caller should return that bool).
-    // Sets handled=false if bake has no window and Hybrid should fall through to live.
+    // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
     bool tryBakeAssist(
         PlayLayer* playLayer, PlayerObject* player, bool player1,
-        bool down, int effectTick, bool& handled
+        bool down, int effectTick, float firstDt, bool& handled
     );
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player);
     void flushPendingRelease(PlayLayer* playLayer);

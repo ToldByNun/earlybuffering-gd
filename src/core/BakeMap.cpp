@@ -149,21 +149,30 @@ std::string BakeMap::pauseStatusLine() const {
 }
 
 BakedClick const* BakeMap::findNear(
-    float playerX, int approxFrame, bool down, bool player2
+    float playerX, int approxFrame, bool down, bool player2,
+    std::optional<GameModeKind> preferMode
 ) const {
-    BakedClick const* best = nullptr;
-    float bestDx = LOOKUP_X_TOL + 1.f;
-    for (auto const& c : m_data.clicks) {
-        if (c.down != down || c.player2 != player2) continue;
-        float dx = std::fabs(c.x - playerX);
-        if (dx > LOOKUP_X_TOL) continue;
-        if (approxFrame >= 0 && c.nominalFrame + 240 < approxFrame) continue;
-        if (dx < bestDx) {
-            bestDx = dx;
-            best = &c;
+    auto pick = [&](bool requireMode) -> BakedClick const* {
+        BakedClick const* best = nullptr;
+        float bestDx = LOOKUP_X_TOL + 1.f;
+        for (auto const& c : m_data.clicks) {
+            if (c.down != down || c.player2 != player2) continue;
+            if (requireMode && preferMode && c.mode != *preferMode) continue;
+            float dx = std::fabs(c.x - playerX);
+            if (dx > LOOKUP_X_TOL) continue;
+            if (approxFrame >= 0 && c.nominalFrame + 240 < approxFrame) continue;
+            if (dx < bestDx) {
+                bestDx = dx;
+                best = &c;
+            }
         }
+        return best;
+    };
+
+    if (preferMode) {
+        if (auto const* hit = pick(true)) return hit;
     }
-    return best;
+    return pick(false);
 }
 
 bool BakeMap::testShiftedClick(
