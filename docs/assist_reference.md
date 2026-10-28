@@ -141,6 +141,19 @@ CBF / mid-step clicks happen while `m_inRealUpdate` is true (`midStep`).
 
 Rule: never fold CBF remainder into the tick index — that caused systematic ±1 between mid-step and between-frame presses (wave spam). Helpers: `AssistController::resolveEffectTick` / `effectTickSelfCheck`. Debug: `attrib:` AssistLog line + PerfTrace `attrib` when debug-logging or perf-trace is on.
 
+## Hold / release after assist (7.5)
+
+After a **Delay** press is chosen, the planner probes release-after values `{0,1,2,3,5,8,10,14,18,24,32,40}` (budget ≤8 extra sims) and records:
+
+| Field | Meaning |
+|-------|---------|
+| `releaseEarliest`…`releaseLatest` | Safe hold durations (ticks after press) that still clear the threat |
+| `releaseAfter` | Preferred release (continuous → earliest; tap → mid-window) |
+
+On inject: if the user still holds, arm `pendingRelease` at preferred; continuous modes may hold until `releaseLatest`, then force release. Early user release inside the window → no inject. **Re-click** while pending → cancel scheduled release and re-plan (second click in the window). Dash `requireHold` keeps release deferred while `m_isDashing`.
+
+Branch releases `{2,5,10,18}` and dash-hold `40` seed the window when they already won viability.
+
 ## fireTick vs jumpTick
 
 When arming a Delay press, `planDelay = plan.delay` and `expectedJumpTick = effectTick + jumpTick` (sim-relative).

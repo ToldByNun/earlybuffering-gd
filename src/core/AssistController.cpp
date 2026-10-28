@@ -162,8 +162,11 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     // No refine on reset — often chained right after death (would double-freeze).
     SelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
     clearBuffer();
-    m_pendingRelease = false;
-    m_pendingReleaseHold = false;
+    this->m_pendingRelease = false;
+    this->m_pendingReleaseHold = false;
+    this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseTick = 0;
+    this->m_pendingReleaseLatest = 0;
     m_assistTouchedRun = false;
     m_savesAttempt = 0;
     DivergenceTracker::get().clear();
@@ -889,21 +892,43 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
 }
 
 void AssistController::flushPendingRelease(PlayLayer* playLayer) {
-    if (!m_pendingRelease || !playLayer) return;
-    if (m_attemptTick < m_pendingReleaseTick) return;
-    if (m_pendingReleaseHold) {
-        auto* p = m_pendingReleaseP1 ? playLayer->m_player1 : playLayer->m_player2;
-        if (p && p->m_isDashing && m_attemptTick < m_pendingReleaseTick + 90) {
+    if (!this->m_pendingRelease || !playLayer) return;
+    if (this->m_attemptTick < this->m_pendingReleaseTick) return;
+
+    bool const p1 = this->m_pendingReleaseP1;
+    bool const holding = this->userHolding(p1);
+
+    if (this->m_pendingReleaseHold) {
+        auto* p = p1 ? playLayer->m_player1 : playLayer->m_player2;
+        if (p && p->m_isDashing
+            && this->m_attemptTick < this->m_pendingReleaseTick + 90) {
             return;
         }
     }
-    bool const p1 = m_pendingReleaseP1;
-    m_pendingRelease = false;
-    m_pendingReleaseHold = false;
-    if (userHolding(p1)) return;
-    m_injecting = true;
+
+    // User already released inside the safe window — nothing to inject.
+    if (!holding) {
+        this->m_pendingRelease = false;
+        this->m_pendingReleaseHold = false;
+        this->m_pendingReleaseContinuous = false;
+        return;
+    }
+
+    // Continuous: allow hold until releaseLatest; tap modes: release at preferred.
+    if (this->m_pendingReleaseContinuous
+        && this->m_attemptTick < this->m_pendingReleaseLatest) {
+        return;
+    }
+
+    this->m_pendingRelease = false;
+    this->m_pendingReleaseHold = false;
+    this->m_pendingReleaseContinuous = false;
+    this->m_injecting = true;
     playLayer->handleButton(false, JUMP_BUTTON, p1);
-    m_injecting = false;
+    this->m_injecting = false;
+    AssistLog::debug(fmt::format(
+        "hold-assist: injected release @{} (p{})", this->m_attemptTick, p1 ? 1 : 2
+    ));
 }
 
 void AssistController::fireBuffered(
@@ -1017,10 +1042,15 @@ void AssistController::fireBuffered(
     bool const wasPress = this->m_buffer.down;
     bool const player1 = this->m_buffer.player1;
     bool const requireHold = this->m_buffer.requireHold;
+    bool const continuous = this->m_buffer.continuous;
     bool const letGo = this->m_buffer.releaseSeen || !this->userHolding(player1);
     int const delayed = std::max(0, this->m_attemptTick - this->m_buffer.pressTick);
     int const planId = this->m_buffer.planId;
     bool const expectOrb = this->m_buffer.requireOrb;
+    int releaseAfter = this->m_buffer.releaseAfter;
+    int releaseLatest = this->m_buffer.releaseLatest;
+    if (releaseAfter < 0) releaseAfter = requireHold ? 40 : 1;
+    if (releaseLatest < releaseAfter) releaseLatest = releaseAfter;
 
     this->inject(playLayer, this->m_buffer.down);
     AssistLog::printSavedPress(
@@ -1047,11 +1077,28 @@ void AssistController::fireBuffered(
 
     this->clearBuffer();
 
-    if (wasPress && letGo) {
+    // After assisted press: schedule safe release (preferred / force-at-latest).
+    if (wasPress) {
         this->m_pendingRelease = true;
         this->m_pendingReleaseP1 = player1;
         this->m_pendingReleaseHold = requireHold;
-        this->m_pendingReleaseTick = this->m_attemptTick + 1;
+        this->m_pendingReleaseContinuous = continuous;
+        if (letGo) {
+            // User already up — release next tick (buffer swallowed their release).
+            this->m_pendingReleaseTick = this->m_attemptTick + 1;
+            this->m_pendingReleaseLatest = this->m_attemptTick + 1;
+        }
+        else {
+            this->m_pendingReleaseTick = this->m_attemptTick + releaseAfter;
+            this->m_pendingReleaseLatest = this->m_attemptTick + releaseLatest;
+            AssistLog::debug(fmt::format(
+                "hold-assist: arm release [{},{}] @fire={} cont={}",
+                this->m_pendingReleaseTick,
+                this->m_pendingReleaseLatest,
+                this->m_attemptTick,
+                continuous ? 1 : 0
+            ));
+        }
     }
 }
 
@@ -1487,6 +1534,9 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     this->m_buffer.requireHold = plan.requireHold;
     this->m_buffer.dMin = plan.dMin;
     this->m_buffer.dMax = plan.dMax;
+    this->m_buffer.releaseAfter = plan.releaseAfter;
+    this->m_buffer.releaseEarliest = plan.releaseEarliest;
+    this->m_buffer.releaseLatest = plan.releaseLatest;
     this->m_buffer.planId = plan.planId;
 
     // Keep fire inside activation window
@@ -1500,8 +1550,10 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + limit);
 
     AssistLog::debug(fmt::format(
-        "ASSIST press +{} ticks id={} ring={} hold={} win=[{},{}] fire={} jump={}",
-        delay, plan.planId, plan.activatedRing, plan.requireHold, plan.dMin, plan.dMax,
+        "ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} win=[{},{}] fire={} jump={}",
+        delay, plan.planId, plan.activatedRing, plan.requireHold,
+        plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter,
+        plan.dMin, plan.dMax,
         this->m_buffer.fireTick, this->m_buffer.expectedJumpTick
     ));
     this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
@@ -1653,6 +1705,16 @@ bool AssistController::onHandleButton(
     if (!player) return true;
 
     this->m_userHolding[player1 ? 0 : 1] = down;
+
+    // Second click while a hold-assist release is armed: cancel it and re-plan.
+    if (down
+        && this->m_pendingRelease
+        && this->m_pendingReleaseP1 == player1) {
+        this->m_pendingRelease = false;
+        this->m_pendingReleaseHold = false;
+        this->m_pendingReleaseContinuous = false;
+        AssistLog::debug("hold-assist: cancel pending release (re-click)");
+    }
 
     // Attribution: see resolveEffectTick / assist_reference.md "effectTick".
     // m_inRealUpdate ↔ inside PlayerObject::update (CBF mid-step).

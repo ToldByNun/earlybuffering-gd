@@ -16,6 +16,9 @@ using namespace geode::prelude;
 
 
 constexpr int BRANCH_RELEASES[] = { 2, 5, 10, 18 };
+// Post-pick hold probe: how long can the player hold, and when to let go safely.
+constexpr int HOLD_PROBE_RELEASES[] = { 0, 1, 2, 3, 5, 8, 10, 14, 18, 24, 32, 40 };
+constexpr int HOLD_PROBE_MAX = 8; // budget: at most this many extra runOnes
 
 
 ShadowSimulator& ShadowSimulator::get() {
@@ -856,6 +859,13 @@ bool ShadowSimulator::shouldWaveFutileDelayPass(
     return true;
 }
 
+int ShadowSimulator::pickPreferredRelease(int earliest, int latest, bool continuous) {
+    if (earliest < 0) return -1;
+    if (latest < earliest) latest = earliest;
+    if (continuous) return earliest; // wave/ship: let go ASAP inside safe window
+    return earliest + (latest - earliest) / 2;
+}
+
 ShadowSimulator::RunResult ShadowSimulator::runOne(
     PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
     float dt, float firstDt, Model const& model, int releaseAfter,
@@ -1115,6 +1125,7 @@ struct Cand {
     bool activatedRing = false;
     bool orbUseful = false;
     bool requireHold = false;
+    int releaseAfter = -1; // ticks after press; -1 = auto tap / unknown
     int surviveBin = 0;
     int surviveTicks = 0;
     float endX = 0.f;
@@ -1540,11 +1551,13 @@ SimPlan ShadowSimulator::plan(
                     c.deathX = br.deathX;
                     c.surviveTicks = br.ticksBeforeNeutral > 0 ? br.ticksBeforeNeutral : br.ticksRan;
                     c.surviveBin = surviveBinOf(c.surviveTicks);
+                    c.releaseAfter = k;
+                    c.requireHold = false;
                     break;
                 }
             }
         }
-        finalizeViable(c, -1);
+        finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
         cands[static_cast<size_t>(d)] = c;
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
@@ -1579,6 +1592,7 @@ SimPlan ShadowSimulator::plan(
         if (h.viable && !c.viable) {
             c = h;
             c.requireHold = true;
+            c.releaseAfter = 40;
         }
     }
 
@@ -1836,9 +1850,79 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
+    // Hold/release window for the chosen Delay: how long can they hold, when
+    // to let go without dying. Covers ship/wave hold, robot, orb dash holds.
+    if (chosen > 0 && down && tickBudget > 0 && !wallExceeded()) {
+        auto const& base = cands[static_cast<size_t>(chosen)];
+        int earliest = -1;
+        int latest = -1;
+        int bestRel = base.releaseAfter;
+        int bestBin = base.surviveBin;
+        float bestEnd = base.endX;
+        int tried = 0;
+
+        // Seed from branch that already won.
+        if (base.releaseAfter >= 0 && base.viable) {
+            earliest = base.releaseAfter;
+            latest = base.releaseAfter;
+        }
+
+        for (int rel : HOLD_PROBE_RELEASES) {
+            if (tried >= HOLD_PROBE_MAX) break;
+            if (tickBudget <= 0 || wallExceeded()) break;
+            if (base.releaseAfter >= 0 && rel == base.releaseAfter) continue;
+            ++tried;
+            auto r = runOne(
+                layer, real, down, chosen, limit, dt, firstDt, model, rel,
+                zone.valid ? &zone : nullptr, &tickBudget
+            );
+            restoreCapture(layer);
+            beginCapture(layer);
+            ++plan.candidatesTried;
+
+            bool const ok = clearsThreatOf(r, zone) && !r.diedBeforeAction
+                && (!r.died || r.unknownTrunc || (zone.valid && r.deathX > zone.endX));
+            if (!ok) continue;
+
+            int const sTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
+            int const sBin = surviveBinOf(sTicks);
+            if (earliest < 0 || rel < earliest) earliest = rel;
+            if (latest < 0 || rel > latest) latest = rel;
+            if (bestRel < 0
+                || sBin > bestBin
+                || (sBin == bestBin && r.endX > bestEnd + 0.5f)
+                || (sBin == bestBin && std::fabs(r.endX - bestEnd) <= 0.5f
+                    && (model.continuous ? rel < bestRel : false))) {
+                bestRel = rel;
+                bestBin = sBin;
+                bestEnd = r.endX;
+            }
+        }
+
+        plan.holdScanTried = tried;
+        if (earliest >= 0) {
+            plan.releaseEarliest = earliest;
+            plan.releaseLatest = latest >= earliest ? latest : earliest;
+            if (bestRel < 0) {
+                bestRel = pickPreferredRelease(
+                    plan.releaseEarliest, plan.releaseLatest, model.continuous
+                );
+            }
+            plan.releaseAfter = bestRel;
+            if (plan.releaseAfter >= 40 || base.requireHold) {
+                plan.requireHold = true;
+            }
+        }
+        else if (base.releaseAfter >= 0) {
+            plan.releaseAfter = base.releaseAfter;
+            plan.releaseEarliest = base.releaseAfter;
+            plan.releaseLatest = base.releaseAfter;
+        }
+    }
+
     restoreCapture(layer);
-    m_simulating = false;
-    parkGhosts();
+    this->m_simulating = false;
+    this->parkGhosts();
 
     if (chosen < 0) {
         plan.action = PlanAction::Pass;
@@ -1862,13 +1946,21 @@ SimPlan ShadowSimulator::plan(
         plan.delay = chosen;
         plan.jumpTick = cands[static_cast<size_t>(chosen)].jumpTick;
         plan.nowIsSafe = false;
+        if (plan.releaseAfter < 0 && cands[static_cast<size_t>(chosen)].releaseAfter >= 0) {
+            plan.releaseAfter = cands[static_cast<size_t>(chosen)].releaseAfter;
+            plan.releaseEarliest = plan.releaseAfter;
+            plan.releaseLatest = plan.releaseAfter;
+        }
+        plan.requireHold = plan.requireHold
+            || cands[static_cast<size_t>(chosen)].requireHold;
     }
 
     AssistLog::debug(fmt::format(
-        "PLAN id={} {} delay={} ring={} useful={} hold={} dMin={} dMax={} tried={} budgetLeft={}",
+        "PLAN id={} {} delay={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         plan.planId,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         plan.delay, plan.activatedRing, plan.orbUseful, plan.requireHold,
+        plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
     ));
     return plan;
@@ -2315,6 +2407,11 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         !shouldWaveFutileDelayPass(true, false, 0, 12.f),
         "wave-futile-gain"
     );
+
+    expect(pickPreferredRelease(2, 10, true) == 2, "pref-rel-cont");
+    expect(pickPreferredRelease(2, 10, false) == 6, "pref-rel-tap");
+    expect(pickPreferredRelease(-1, 5, false) < 0, "pref-rel-unset");
+    expect(pickPreferredRelease(4, 4, false) == 4, "pref-rel-same");
 
     // Synthetic early-click snaps: d=0 dies in zone → Delay must clear past zoneEndX.
     struct Snap { float deathX; int clearDelay; };

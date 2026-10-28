@@ -70,6 +70,13 @@ struct SimPlan {
     bool requireHold = false;
     int dMin = -1;
     int dMax = -1;
+    // Hold/release after assisted press (ticks after the press action).
+    // earliest..latest = safe hold durations; preferred = best release timing.
+    // -1 = unset (no probe / Pass).
+    int releaseAfter = -1;
+    int releaseEarliest = -1;
+    int releaseLatest = -1;
+    int holdScanTried = 0;
     int planId = 0;
     int smartDepthUsed = 1;
     int smartCombosUsed = 0;
@@ -172,6 +179,9 @@ public:
     static bool shouldWaveFutileDelayPass(
         bool isWave, bool orbIntent, int bestSurviveBin, float bestEndXGain
     );
+
+    // Prefer short release for continuous; mid-window for tap modes.
+    static int pickPreferredRelease(int earliest, int latest, bool continuous);
 
     // Headless regression checks (threat bins / zone clear math). Returns false on fail.
     static bool regressionSelfCheck(std::string& report);

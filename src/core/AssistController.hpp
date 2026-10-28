@@ -40,6 +40,10 @@ struct BufferedInput {
     bool requireHold = false;
     int dMin = -1;
     int dMax = -1;
+    // Safe hold window after inject (ticks after fire). -1 = unset.
+    int releaseAfter = -1;
+    int releaseEarliest = -1;
+    int releaseLatest = -1;
     int planId = 0;
     bool awaitingOutcome = false;
     int outcomeUntilTick = 0;
@@ -177,7 +181,9 @@ private:
     bool m_pendingRelease = false;
     bool m_pendingReleaseP1 = true;
     bool m_pendingReleaseHold = false;
-    int m_pendingReleaseTick = 0;
+    bool m_pendingReleaseContinuous = false;
+    int m_pendingReleaseTick = 0;      // preferred / earliest force point
+    int m_pendingReleaseLatest = 0;    // must release by here if still holding
     float m_lastPlayerX = 0.f;
     GameModeKind m_lastMode = GameModeKind::Cube;
     int m_startSnapshotSlot = -1;
