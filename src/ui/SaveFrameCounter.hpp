@@ -7,19 +7,34 @@
 // Markers persist until clear() (death / attempt reset) or detach() (level quit).
 class SaveFrameCounter {
 public:
+    static constexpr int kMaxMarkers = 64;
+
     static SaveFrameCounter& get();
 
     void attach(PlayLayer* layer);
     void detach(bool layerDying);
     void clear();
 
-    // delayTicks = frames held back; color buckets 1..8. No-op until spawn is wired.
+    // delayTicks = frames held back. Color from bucket 1..8; label shows +N (capped 99).
     void spawn(PlayLayer* layer, cocos2d::CCPoint worldPos, int delayTicks);
 
+    // Exposed for selfCheck / tests.
+    static int bucketFrames(int delayTicks);
+    static cocos2d::ccColor3B colorForBucket(int bucket);
+
 private:
+    static constexpr float kRingRadius = 8.f;
+    static constexpr float kRingBorder = 1.6f;
+    static constexpr float kLabelScale = 0.24f;
+    static constexpr float kLabelGap = 4.f;
+    static constexpr unsigned kRingSegments = 28;
+
     SaveFrameCounter() = default;
 
     void ensureRoot(PlayLayer* layer);
+    void dropOldestIfOverCap();
+    static cocos2d::ccColor4F to4F(cocos2d::ccColor3B c, float a);
+    static cocos2d::CCNode* makeMarker(cocos2d::CCPoint worldPos, int delayTicks);
 
     cocos2d::CCNode* m_root = nullptr;
 };

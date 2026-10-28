@@ -13,8 +13,9 @@
 
 ### Save feedback toggles
 
-- Replaced combined `save-feedback` (off/icon/sound/both) with three Visual toggles: **Sound**, **Color** (icon flash), **Counter** (world +N — coming next).
+- Replaced combined `save-feedback` (off/icon/sound/both) with three Visual toggles: **Sound**, **Color** (icon flash), **Counter** (world +N).
 - Defaults match old `both` (sound+color on, counter off). Re-check toggles if you previously used off/sound/icon-only.
+- **Counter**: hollow ring + `+N` in GD font at the assisted click, colored by frames saved (1–8 palette); stays until death/restart; max 64 markers.
 
 ### Crash fix: restart / checkpoint
 

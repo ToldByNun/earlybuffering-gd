@@ -65,7 +65,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | show-pause-hub | bool | true | | | Ingame — EB button |
 | save-feedback-sound | bool | true | | | Visual — per-tick MP3 cue on delayed inject |
 | save-feedback-color | bool | true | | | Visual — flash player icon on delayed inject |
-| save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart) |
+| save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart); palette 1…8 `#ff614e`…`#c069fa`; cap 64 markers |
 | save-icon-color | rgb | #7CFF4A | | | Visual — flash color when save-feedback-color is on |
 | assist-only-practice | bool | false | | | Scope |
 | assist-startpos-only | bool | false | | | Scope |
