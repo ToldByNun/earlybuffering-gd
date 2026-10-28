@@ -24,10 +24,13 @@ public:
 
 private:
     static constexpr float kRingRadius = 8.f;
-    static constexpr float kRingBorder = 1.6f;
-    static constexpr float kLabelScale = 0.24f;
-    static constexpr float kLabelGap = 4.f;
-    static constexpr unsigned kRingSegments = 28;
+    static constexpr float kRingBorder = 1.8f;
+    static constexpr float kOutlineBorder = 1.25f;
+    static constexpr float kOutlinePad = 1.35f;
+    static constexpr float kLabelScale = 0.34f;
+    static constexpr float kLabelGap = 5.f;
+    static constexpr float kLabelOutlinePx = 1.6f;
+    static constexpr unsigned kRingSegments = 32;
 
     SaveFrameCounter() = default;
 
@@ -35,6 +38,13 @@ private:
     void dropOldestIfOverCap();
     static cocos2d::ccColor4F to4F(cocos2d::ccColor3B c, float a);
     static cocos2d::CCNode* makeMarker(cocos2d::CCPoint worldPos, int delayTicks);
+    static void addOutlinedLabel(
+        cocos2d::CCNode* parent,
+        char const* text,
+        cocos2d::ccColor3B color,
+        float x,
+        float y
+    );
 
     cocos2d::CCNode* m_root = nullptr;
 };

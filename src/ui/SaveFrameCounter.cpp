@@ -94,6 +94,48 @@ void SaveFrameCounter::dropOldestIfOverCap() {
     }
 }
 
+void SaveFrameCounter::addOutlinedLabel(
+    CCNode* parent,
+    char const* text,
+    ccColor3B color,
+    float x,
+    float y
+) {
+    if (!parent || !text) return;
+
+    char const* fontName = "bigFont.fnt";
+    auto* label = CCLabelBMFont::create(text, fontName);
+    if (!label) {
+        fontName = "chatFont.fnt";
+        label = CCLabelBMFont::create(text, fontName);
+        if (!label) return;
+    }
+
+    ccColor3B const outline = { 0, 0, 0 };
+    float const o = kLabelOutlinePx;
+
+    // 8-direction thick black outline in parent space (independent of label scale).
+    float const ox[8] = { -o, o, 0.f, 0.f, -o, -o, o, o };
+    float const oy[8] = { 0.f, 0.f, -o, o, -o, o, -o, o };
+    for (int i = 0; i < 8; ++i) {
+        auto* shadow = CCLabelBMFont::create(text, fontName);
+        if (!shadow) continue;
+        shadow->setScale(kLabelScale);
+        shadow->setColor(outline);
+        shadow->setOpacity(255);
+        shadow->setAnchorPoint({ 1.f, 0.5f });
+        shadow->setPosition({ x + ox[i], y + oy[i] });
+        parent->addChild(shadow, 0);
+    }
+
+    label->setScale(kLabelScale);
+    label->setColor(color);
+    label->setAnchorPoint({ 1.f, 0.5f });
+    label->setPosition({ x, y });
+    label->setID("earlybuffer-save-marker-label"_spr);
+    parent->addChild(label, 1);
+}
+
 CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
     int const bucket = bucketFrames(delayTicks);
     auto const rgb = colorForBucket(bucket);
@@ -108,7 +150,21 @@ CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
     if (!draw) return nullptr;
 
     draw->setBlendFunc({ GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA });
-    // Hollow ring: transparent fill + solid border (matches click-indicator look).
+
+    ccColor3B const black = { 0, 0, 0 };
+    float const outerR = kRingRadius + kOutlinePad;
+    float const innerR = std::max(1.f, kRingRadius - kRingBorder);
+
+    // Outer black rim.
+    draw->drawCircle(
+        CCPointZero,
+        outerR,
+        to4F(black, 0.f),
+        kOutlineBorder,
+        to4F(black, 1.f),
+        kRingSegments
+    );
+    // Colored ring body.
     draw->drawCircle(
         CCPointZero,
         kRingRadius,
@@ -117,10 +173,19 @@ CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
         to4F(rgb, 0.95f),
         kRingSegments
     );
+    // Inner black rim (inside the colored stroke).
+    draw->drawCircle(
+        CCPointZero,
+        innerR,
+        to4F(black, 0.f),
+        kOutlineBorder,
+        to4F(black, 1.f),
+        kRingSegments
+    );
     // Soft inner tint so the hole reads on dark/busy backgrounds.
     draw->drawCircle(
         CCPointZero,
-        kRingRadius - kRingBorder,
+        std::max(0.5f, innerR - kOutlineBorder),
         to4F(rgb, 0.12f),
         0.f,
         to4F(rgb, 0.f),
@@ -128,22 +193,14 @@ CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
     );
     marker->addChild(draw);
 
-    auto* label = CCLabelBMFont::create(
-        fmt::format("+{}", shown).c_str(), "bigFont.fnt"
+    auto const text = fmt::format("+{}", shown);
+    addOutlinedLabel(
+        marker,
+        text.c_str(),
+        rgb,
+        -(kRingRadius + kLabelGap),
+        0.f
     );
-    if (!label) {
-        label = CCLabelBMFont::create(
-            fmt::format("+{}", shown).c_str(), "chatFont.fnt"
-        );
-    }
-    if (label) {
-        label->setScale(kLabelScale);
-        label->setColor(rgb);
-        label->setAnchorPoint({ 1.f, 0.5f });
-        label->setPosition({ -(kRingRadius + kLabelGap), 0.f });
-        label->setID("earlybuffer-save-marker-label"_spr);
-        marker->addChild(label);
-    }
 
     return marker;
 }
