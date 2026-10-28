@@ -14,6 +14,7 @@
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../ui/SaveFeedback.hpp"
+#include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
@@ -180,6 +181,7 @@ void AssistController::onLevelQuit() {
     SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "quit", false);
     SelfBakeRecorder::get().onLevelQuit();
     SaveFeedback::get().reset();
+    SaveFrameCounter::get().detach(true);
     ClickIntentGuard::get().reset();
     TrajectoryVisualizer::get().detach(true);
     StatusOverlay::detach(true);
@@ -609,6 +611,8 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     SelfBakeRecorder::get().flushSegment(playLayer, "death");
     clearBuffer();
     m_pendingRelease = false;
+    // Markers stay until death/restart — clear on real death (practice may not resetLevel yet).
+    SaveFrameCounter::get().clear();
     syncButtonState(playLayer);
     updateOverlay();
 }

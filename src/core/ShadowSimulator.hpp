@@ -258,6 +258,8 @@ private:
     };
 
     static void hideGhost(PlayerObject* p);
+    static bool tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* obj);
+    static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self);
 
     RunResult runOne(
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,

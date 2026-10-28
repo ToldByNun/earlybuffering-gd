@@ -88,16 +88,57 @@ bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
     return false;
 }
 
+bool ShadowSimulator::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* obj) {
+    // removeObjectFromSection AVs when section indices point at null slots (common
+    // for ghosts that never entered the grid, or after a partial park).
+    if (!layer || !obj) return false;
+    int const ox = obj->m_outerSectionIndex;
+    int const ix = obj->m_innerSectionIndex;
+    int const mx = obj->m_middleSectionIndex;
+    if (ox < 0 || ix < 0 || mx < 0) return false;
+
+    auto& sections = layer->m_sections;
+    if (ox >= static_cast<int>(sections.size())) return false;
+    auto* mid = sections[ox];
+    if (!mid || ix >= static_cast<int>(mid->size())) return false;
+    auto* inner = (*mid)[ix];
+    if (!inner) return false;
+
+    layer->removeObjectFromSection(obj);
+    return true;
+}
+
+void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self) {
+    if (!layer || !self) return;
+
+    // Walk every section cell and erase owned ghosts by pointer — do not trust
+    // GameObject section indices (removeObjectFromSection null-derefs on bad slots).
+    auto& sections = layer->m_sections;
+    for (auto* mid : sections) {
+        if (!mid) continue;
+        for (auto* inner : *mid) {
+            if (!inner) continue;
+            for (int i = static_cast<int>(inner->size()) - 1; i >= 0; --i) {
+                auto* obj = (*inner)[static_cast<size_t>(i)];
+                auto* asPl = typeinfo_cast<PlayerObject*>(obj);
+                if (!asPl || !self->isOwnedGhost(asPl)) continue;
+                inner->erase(inner->begin() + i);
+            }
+        }
+    }
+}
+
 void ShadowSimulator::parkGhosts() {
     // Only the active sim body — snapshots must keep captured state for
     // bake / outcome verify / trajectory samplePath.
     if (!this->m_shadow) return;
 
-    // Sim checkCollisions inserts the shadow into section grids. Leave those
-    // slots empty so live collision / later sortSectionVector cannot touch us.
     if (auto* layer = PlayLayer::get()) {
-        layer->removeObjectFromSection(this->m_shadow);
+        ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
     }
+    this->m_shadow->m_outerSectionIndex = -1;
+    this->m_shadow->m_innerSectionIndex = -1;
+    this->m_shadow->m_middleSectionIndex = -1;
 
     this->m_shadow->setPosition({ 0.f, 105.f });
     this->m_shadow->m_position = cocos2d::CCPoint{ 0.f, 105.f };
@@ -127,11 +168,13 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_saved.clear();
     this->m_savedActivatedIDs.clear();
 
+    ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+
     auto evac = [&](PlayerObject* p) {
         if (!p) return;
-        if (layer) {
-            layer->removeObjectFromSection(p);
-        }
+        p->m_outerSectionIndex = -1;
+        p->m_innerSectionIndex = -1;
+        p->m_middleSectionIndex = -1;
         p->setPosition({ 0.f, 105.f });
         p->m_position = cocos2d::CCPoint{ 0.f, 105.f };
         p->m_yVelocity = 0.0;

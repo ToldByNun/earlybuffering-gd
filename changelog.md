@@ -19,6 +19,7 @@
 ### Crash fix: restart / checkpoint
 
 - Evacuate shadow+snapshot ghosts from section vectors before `resetLevel` / checkpoint load (fixes `sortSectionVector` AV after sim). Cancel in-flight bake on those paths.
+- Do not call bare `removeObjectFromSection` on ghosts (null section slots AV); scrub section cells by pointer and only try-remove when indices/slots are valid.
 
 ### Adaptive robust window + latency cost
 

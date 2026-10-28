@@ -2,8 +2,10 @@
 #define EARLYBUFFER_UI_SAVEFEEDBACK_HPP
 
 #include <Geode/Geode.hpp>
+#include <filesystem>
+#include <string>
 
-// Plays per-tick save cue sounds and/or flashes the player icon color.
+// Per-save cues: sound (MP3), icon color flash, and/or frame-counter markers.
 class SaveFeedback {
 public:
     static SaveFeedback& get();
@@ -21,6 +23,10 @@ private:
 
     void playSound(int delayTicks);
     void flashIcon(PlayerObject* player);
+    void restoreFlash();
+
+    static std::string cueFileName(int delayTicks);
+    static std::filesystem::path cuePathFor(std::string const& file);
 
     PlayerObject* m_flashPlayer = nullptr;
     cocos2d::ccColor3B m_savedColor1{ 255, 255, 255 };
@@ -31,4 +37,4 @@ private:
     int m_flashTicksLeft = 0;
 };
 
-#endif
+#endif // EARLYBUFFER_UI_SAVEFEEDBACK_HPP
