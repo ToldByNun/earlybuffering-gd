@@ -4,18 +4,26 @@
 #include "../config/StageConfig.hpp"
 
 #include <Geode/Geode.hpp>
+#include <array>
+#include <cmath>
 #include <string>
 #include <unordered_map>
-#include <cmath>
 
 
 struct SpotStats {
+    static constexpr int HIST_RADIUS = 8;                 // bins cover [-8, +8]
+    static constexpr int HIST_BINS = HIST_RADIUS * 2 + 1; // 17
+
     float bias = 0.f;       // [-2, +2], applied as round(bias) on Delay
     float trust = 1.f;      // [0, 1]
     int pessimism = 0;
     int n = 0;
     int saved = 0;
     int diedAfterAssist = 0;
+    // Click-earliness histogram (vanilla/Pass/postmortem only; never inject saves).
+    // Bin i stores weight for offset (i - HIST_RADIUS) ticks.
+    std::array<float, HIST_BINS> earlyHist{};
+    int histN = 0;
 };
 
 struct ModeLearn {
@@ -56,6 +64,12 @@ public:
     void notePessimism(GameModeKind kind, float x);
     void noteSaved(GameModeKind kind, float x);
     void noteDiedAfterAssist(GameModeKind kind, float x);
+
+    // Earliness offset in ticks (−HIST_RADIUS…+HIST_RADIUS). Laplace-smoothed modal
+    // used as delay bias when histN is large enough; empty hist → fall back to bias.
+    void noteEarliness(GameModeKind kind, float x, int offset, char const* reason);
+    int preferredDelayOffset(GameModeKind kind, float x) const;
+    void decayHistograms(); // exponential bin decay (autosave)
 
     void maybeAutosave(); // every 5 deaths
     void markDirty() { m_dirty = true; }

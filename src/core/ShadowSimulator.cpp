@@ -1,4 +1,5 @@
 #include "ShadowSimulator.hpp"
+#include "BakeMap.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 
@@ -1509,8 +1510,65 @@ SimPlan ShadowSimulator::planSequence(
     int step = std::max(2, horizon / 40);
     int combos = 0;
 
+    // Smart bake-chain: fix follow-up clicks from BakeMap when available.
+    GameModeKind const kind = StageConfig::kindOf(real);
+    bool const player2 = layer && layer->m_player2 && real == layer->m_player2;
+    auto followUps = BakeMap::get().loaded()
+        ? BakeMap::get().nextClicksAfter(
+            real->getPositionX(), true, player2, kind, std::min(depth - 1, 2)
+          )
+        : std::vector<BakedClick const*>{};
+
+    // Drop follow-ups that change mode or lie beyond the smart horizon (by X).
+    float const speed = std::max(0.5f, real->m_playerSpeed * 311.2f * std::max(dt, 1.f / 240.f));
+    std::vector<BakedClick const*> chain;
+    for (auto const* c : followUps) {
+        if (!c) continue;
+        if (c->mode != kind) break; // mode change aborts chain
+        float const dx = c->x - real->getPositionX();
+        int const eta = static_cast<int>(std::lround(dx / speed));
+        if (eta <= 0 || eta >= horizon) continue;
+        chain.push_back(c);
+        if (static_cast<int>(chain.size()) >= depth - 1) break;
+    }
+    bool const useBakeChain = !chain.empty();
+
     for (int d0 : allowed) {
         if (combos >= comboBudget) break;
+
+        if (useBakeChain) {
+            std::vector<InputEvent> tl;
+            pushTap(tl, d0, tap);
+            for (auto const* c : chain) {
+                float const dx = c->x - real->getPositionX();
+                int tFollow = std::max(d0 + minGap, static_cast<int>(std::lround(dx / speed)));
+                // Prefer nominal frame center of bake window when convertible.
+                int const midFrame = (c->earliest + c->latest) / 2;
+                int const approxNow = options.attemptStartTick;
+                if (midFrame > approxNow) {
+                    tFollow = std::max(d0 + minGap, midFrame - approxNow);
+                }
+                if (tFollow >= horizon) continue;
+                pushTap(tl, tFollow, tap);
+            }
+            auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
+            ++combos;
+            bool const survived = !rr.died || rr.unknown;
+            int sc = survived ? 100000 : rr.deathTick * 50;
+            sc += static_cast<int>(rr.endX) - d0; // weak latency penalty on d0
+            if (rr.activatedRing) sc += 5000;
+            // Reachability of next bake reference X.
+            if (!chain.empty() && survived) {
+                float const targetX = chain.front()->x;
+                if (rr.endX + BakeMap::LOOKUP_X_TOL >= targetX) sc += 20000;
+                else sc -= 10000; // missed next window
+            }
+            if (!best.found || sc > best.score) {
+                best = { true, d0, sc, survived };
+            }
+            continue;
+        }
+
         {
             std::vector<InputEvent> tl;
             pushTap(tl, d0, tap);
@@ -1556,8 +1614,8 @@ SimPlan ShadowSimulator::planSequence(
         single.nowIsSafe = false;
     }
     AssistLog::debug(fmt::format(
-        "planSequence id={} depth={} d0={} allowed={} combos={}",
-        single.planId, depth, best.d0, allowed.size(), combos
+        "planSequence id={} depth={} d0={} allowed={} combos={} bakeChain={}",
+        single.planId, depth, best.d0, allowed.size(), combos, useBakeChain
     ));
     return single;
 }

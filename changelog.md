@@ -2,6 +2,11 @@
 
 ## v1.2.0 (unreleased)
 
+### Smart bake-chain + learning histogram
+
+- `planSequence` scores `d0` using next bake/self-bake follow-up clicks when available.
+- Per-spot click-earliness histogram (−8…+8); Laplace modal biases delay; decay + thin-hist explore.
+
 ### Divergence / UNTRUST
 
 - Outcome `planDelay` is real Delay vs Pass; `onRealDeath` notes pending outcomes into `DivergenceTracker`.

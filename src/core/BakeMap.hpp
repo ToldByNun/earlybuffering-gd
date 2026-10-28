@@ -100,6 +100,14 @@ public:
         std::optional<GameModeKind> preferMode = std::nullopt
     ) const;
 
+    // Next bake/self-bake clicks after playerX (same down/player2; prefer mode).
+    // Sorted by ascending x. Used by smart bake-chain (planSequence).
+    std::vector<BakedClick const*> nextClicksAfter(
+        float playerX, bool down, bool player2,
+        std::optional<GameModeKind> preferMode,
+        int maxCount
+    ) const;
+
     // Merge self-bake point-windows: dedup by down/player2/near x+frame → union
     // earliest/latest. Sets method="self" when the map was empty or already self.
     // Returns number of clicks added or widened. Cap kMaxMapClicks.

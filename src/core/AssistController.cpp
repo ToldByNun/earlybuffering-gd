@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 using namespace geode::prelude;
 
@@ -453,6 +454,7 @@ void AssistController::runPostmortem(
             );
             if (!late.died) {
                 profile.noteBias(dec.mode, dec.x, +0.5f, "d+1 survived");
+                profile.noteEarliness(dec.mode, dec.x, +1, "d+1 survived");
                 improved = true;
             }
         }
@@ -463,6 +465,7 @@ void AssistController::runPostmortem(
             );
             if (!early.died) {
                 profile.noteBias(dec.mode, dec.x, -0.5f, "d-1 survived");
+                profile.noteEarliness(dec.mode, dec.x, -1, "d-1 survived");
                 improved = true;
             }
         }
@@ -472,6 +475,9 @@ void AssistController::runPostmortem(
     }
     else {
         profile.noteDiedAfterAssist(dec.mode, dec.x);
+        if (!dec.assisted) {
+            profile.noteEarliness(dec.mode, dec.x, 0, "postmortem pass");
+        }
     }
 
     dec.resolved = true;
@@ -984,13 +990,21 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
 
     if (plan.action != PlanAction::Delay) {
         recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
+        // Vanilla/Pass click timing — feed earliness histogram (never inject saves).
+        if (StageConfig::autoTune() && profile.loaded()) {
+            profile.noteEarliness(kind, x, 0, "pass");
+        }
         return true;
     }
 
     int delay = plan.delay;
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
-            delay = delay + roundBias(spot->bias);
+            int off = profile.preferredDelayOffset(kind, x);
+            if (AssistLearning::shouldExploreHistogram(spot->histN)) {
+                off += (std::rand() % 3) - 1;
+            }
+            delay = delay + off;
         }
         // Clamp bias into activation window when requireOrb
         if (plan.requireOrb && plan.dMin >= 0 && plan.dMax >= plan.dMin) {
@@ -1105,7 +1119,11 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     int delay = plan.delay;
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
-            delay = delay + roundBias(spot->bias);
+            int off = profile.preferredDelayOffset(kind, x);
+            if (AssistLearning::shouldExploreHistogram(spot->histN)) {
+                off += (std::rand() % 3) - 1;
+            }
+            delay = delay + off;
         }
         delay = std::max(1, std::min(limit, delay));
     }

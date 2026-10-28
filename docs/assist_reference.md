@@ -107,9 +107,15 @@ Press B while ArmedPress: fire A first, then plan B.
 Idle | ArmedPress | ArmedRelease | PendingRelease
 Cancel: death, resetLevel, quit, checkpoint load. Force-fire: mode-change, CPS unlock.
 
+## Smart bake-chain
+
+When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each allowed `d0` with a fixed follow-up timeline from the next 1–2 bake/self-bake clicks (same mode; beyond horizon / mode change aborts). Score = survive + reach next X − weak latency. Only `d0` is buffered. No bake follow-ups → prior hypothetical d1 grid.
+
 ## LevelProfile JSON
 
-key (LevelContentKey fullKey with content rev), modes[Mode].capMul, modes[Mode].spots[bucket].{bias,trust,n,saved,diedAfterAssist,pessimism}
+key (LevelContentKey fullKey with content rev), modes[Mode].capMul, modes[Mode].spots[bucket].{bias,trust,n,saved,diedAfterAssist,pessimism,histN,earlyHist[17]}
+
+Earliness histogram bins −8…+8 from Pass/postmortem only (never inject saves). Laplace modal → delay offset when histN≥3; else classic bias±2. Bin decay on autosave; explore while histN<8.
 
 ## BakeMap JSON
 

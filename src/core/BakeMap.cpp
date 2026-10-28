@@ -259,6 +259,38 @@ int BakeMap::refineSelfWindows(
     return expanded;
 }
 
+std::vector<BakedClick const*> BakeMap::nextClicksAfter(
+    float playerX, bool down, bool player2,
+    std::optional<GameModeKind> preferMode,
+    int maxCount
+) const {
+    std::vector<BakedClick const*> out;
+    if (maxCount <= 0 || !m_loaded) return out;
+
+    auto collect = [&](bool requireMode) {
+        std::vector<BakedClick const*> hits;
+        for (auto const& c : m_data.clicks) {
+            if (c.down != down || c.player2 != player2) continue;
+            if (c.x <= playerX + 1.f) continue;
+            if (requireMode && preferMode && c.mode != *preferMode) continue;
+            hits.push_back(&c);
+        }
+        std::sort(hits.begin(), hits.end(), [](auto const* a, auto const* b) {
+            if (a->x != b->x) return a->x < b->x;
+            return a->nominalFrame < b->nominalFrame;
+        });
+        return hits;
+    };
+
+    auto hits = preferMode ? collect(true) : collect(false);
+    if (hits.empty() && preferMode) hits = collect(false);
+    for (auto const* c : hits) {
+        out.push_back(c);
+        if (static_cast<int>(out.size()) >= maxCount) break;
+    }
+    return out;
+}
+
 int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
     if (incoming.empty() || !m_loaded) return 0;
     if (isBaking()) return 0;

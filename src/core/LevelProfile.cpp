@@ -183,10 +183,53 @@ void LevelProfile::noteDiedAfterAssist(GameModeKind kind, float x) {
     m_dirty = true;
 }
 
+void LevelProfile::noteEarliness(GameModeKind kind, float x, int offset, char const* reason) {
+    auto& s = spot(kind, x);
+    int const clamped = std::max(-SpotStats::HIST_RADIUS, std::min(SpotStats::HIST_RADIUS, offset));
+    int const bin = clamped + SpotStats::HIST_RADIUS;
+    s.earlyHist[static_cast<size_t>(bin)] += 1.f;
+    s.histN += 1;
+    m_dirty = true;
+    AssistLog::debug(fmt::format(
+        "LEARN: spot {} earliness {:+d} histN={} ({})",
+        spotBucket(x), clamped, s.histN, reason ? reason : ""
+    ));
+}
+
+int LevelProfile::preferredDelayOffset(GameModeKind kind, float x) const {
+    auto const* s = trySpot(kind, x);
+    if (!s || s->histN < 3) {
+        if (!s) return 0;
+        // Fall back to classic ±2 bias.
+        if (s->bias >= 0.f) return static_cast<int>(std::lround(s->bias));
+        return static_cast<int>(std::lround(s->bias));
+    }
+    int bestBin = SpotStats::HIST_RADIUS;
+    float bestW = -1.f;
+    for (int i = 0; i < SpotStats::HIST_BINS; ++i) {
+        float const w = s->earlyHist[static_cast<size_t>(i)] + 1.f; // Laplace
+        if (w > bestW) {
+            bestW = w;
+            bestBin = i;
+        }
+    }
+    return bestBin - SpotStats::HIST_RADIUS;
+}
+
+void LevelProfile::decayHistograms() {
+    for (auto& m : m_modes) {
+        for (auto& [_, s] : m.spots) {
+            for (float& w : s.earlyHist) w *= 0.95f;
+        }
+    }
+    m_dirty = true;
+}
+
 void LevelProfile::maybeAutosave() {
     ++m_deathsSinceSave;
     if (m_deathsSinceSave >= 5) {
         m_deathsSinceSave = 0;
+        decayHistograms();
         save();
     }
 }
@@ -259,6 +302,13 @@ Result<> LevelProfile::writeFile() const {
             sj["n"] = s.n;
             sj["saved"] = s.saved;
             sj["diedAfterAssist"] = s.diedAfterAssist;
+            sj["histN"] = s.histN;
+            if (s.histN > 0) {
+                std::vector<matjson::Value> hist;
+                hist.reserve(SpotStats::HIST_BINS);
+                for (float w : s.earlyHist) hist.push_back(w);
+                sj["earlyHist"] = hist;
+            }
             spots[std::to_string(bucket)] = sj;
         }
         mj["spots"] = spots;
@@ -299,6 +349,15 @@ Result<> LevelProfile::readFile() {
                 if (sj.contains("n")) s.n = static_cast<int>(sj["n"].asInt().unwrapOr(0));
                 if (sj.contains("saved")) s.saved = static_cast<int>(sj["saved"].asInt().unwrapOr(0));
                 if (sj.contains("diedAfterAssist")) s.diedAfterAssist = static_cast<int>(sj["diedAfterAssist"].asInt().unwrapOr(0));
+                if (sj.contains("histN")) s.histN = static_cast<int>(sj["histN"].asInt().unwrapOr(0));
+                if (sj.contains("earlyHist") && sj["earlyHist"].isArray()) {
+                    size_t bi = 0;
+                    for (auto const& cell : sj["earlyHist"]) {
+                        if (bi >= SpotStats::HIST_BINS) break;
+                        s.earlyHist[bi] = static_cast<float>(cell.asDouble().unwrapOr(0.0));
+                        ++bi;
+                    }
+                }
                 m.spots[bucket] = s;
             }
         }
