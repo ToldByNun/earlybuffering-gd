@@ -8,7 +8,9 @@
 #include <fmt/format.h>
 
 #include <Geode/Geode.hpp>
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 
 using namespace geode::prelude;
 
@@ -26,44 +28,58 @@ bool SelfBakeRecorder::shouldRecord(PlayLayer* layer, PlayerObject* player) cons
     return StageConfig::selfBakeNormal();
 }
 
+bool SelfBakeRecorder::canDrain(PlayLayer* layer) const {
+    if (!layer) return false;
+    if (!StageConfig::selfBake()) return false;
+    if (BakeMap::get().isBaking()) return false;
+    // Never burn frame time during death / fail anim — that was the hitch.
+    if (auto* p = layer->m_player1) {
+        if (p->m_isDead) return false;
+    }
+    return true;
+}
+
 void SelfBakeRecorder::onLevelInit(PlayLayer* layer) {
-    m_cancelRefine = false;
-    clearPending();
-    m_levelKey.clear();
+    this->m_cancelRefine = false;
+    this->clearPending();
+    this->m_refineQueue.clear();
+    this->m_levelKey.clear();
     if (layer && layer->m_level) {
-        m_levelKey = LevelProfile::makeKey(layer->m_level);
+        this->m_levelKey = LevelProfile::makeKey(layer->m_level);
     }
 }
 
 void SelfBakeRecorder::onLevelQuit() {
-    cancelRefine();
-    clearPending();
-    m_levelKey.clear();
+    this->cancelRefine();
+    this->clearPending();
+    this->m_refineQueue.clear();
+    this->m_levelKey.clear();
 }
 
 void SelfBakeRecorder::cancelRefine() {
-    m_cancelRefine = true;
+    this->m_cancelRefine = true;
 }
 
 void SelfBakeRecorder::clearPending() {
-    m_pending.clear();
+    this->m_pending.clear();
 }
 
 void SelfBakeRecorder::noteVanillaInput(
     PlayLayer* layer, PlayerObject* player, bool player1,
     bool down, int attemptTick, float simDt
 ) {
-    if (!shouldRecord(layer, player)) return;
-    if (m_pending.size() >= kMaxPending) return;
+    if (!this->shouldRecord(layer, player)) return;
+    if (this->m_pending.size() >= kMaxPending) return;
 
     if (layer->m_level) {
         auto const key = LevelProfile::makeKey(layer->m_level);
-        if (!m_levelKey.empty() && key != m_levelKey) {
-            clearPending();
-            m_levelKey = key;
+        if (!this->m_levelKey.empty() && key != this->m_levelKey) {
+            this->clearPending();
+            this->m_refineQueue.clear();
+            this->m_levelKey = key;
         }
-        else if (m_levelKey.empty()) {
-            m_levelKey = key;
+        else if (this->m_levelKey.empty()) {
+            this->m_levelKey = key;
         }
     }
 
@@ -78,30 +94,15 @@ void SelfBakeRecorder::noteVanillaInput(
     s.mode = StageConfig::kindOf(player);
     s.down = down;
     s.player2 = !player1;
-    m_pending.push_back(s);
+    this->m_pending.push_back(s);
 }
 
-void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool allowRefine) {
-    if (m_pending.empty()) {
-        LagProbe::get().mark("flushSegment.empty", reason ? reason : "?");
-        return;
-    }
-    if (BakeMap::get().isBaking()) {
-        AssistLog::debug("self-bake: flush skipped (bake running)");
-        LagProbe::get().mark("flushSegment.skippedBake", reason ? reason : "?");
-        return;
-    }
-
-    LagProbe::get().mark("flushSegment.begin", fmt::format(
-        "reason={} pending={} refine={}",
-        reason ? reason : "?",
-        m_pending.size(),
-        allowRefine
-    ));
+void SelfBakeRecorder::mergeSamples(std::vector<Sample>& samples, char const* reason) {
+    if (samples.empty()) return;
 
     std::vector<BakedClick> clicks;
-    clicks.reserve(m_pending.size());
-    for (auto const& s : m_pending) {
+    clicks.reserve(samples.size());
+    for (auto const& s : samples) {
         BakedClick c;
         c.nominalFrame = s.frame;
         c.earliest = s.frame;
@@ -112,51 +113,115 @@ void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool a
         c.mode = s.mode;
         clicks.push_back(c);
     }
-    clearPending();
+    samples.clear();
 
-    int expanded = 0;
-    if (allowRefine && StageConfig::selfBake() && StageConfig::selfBakeRefine() && layer) {
-        int const slot = AssistController::get().startSnapshotSlot();
-        bool const assistTouched = AssistController::get().assistTouchedRun();
-        if (slot >= 0 && !assistTouched) {
-            m_cancelRefine = false;
-            LagProbe::Scope const refineScope("eb.flushSegment.refine");
-            expanded = BakeMap::get().refineSelfWindows(
-                layer,
-                slot,
-                clicks,
-                StageConfig::bakeRadius(),
-                kRefineBudgetSims,
-                &m_cancelRefine
-            );
-            if (m_cancelRefine.load()) {
-                AssistLog::debug("self-bake: refine cancelled — merging current windows");
-            }
-        }
-        else if (assistTouched) {
-            AssistLog::debug("self-bake: refine skipped (assist touched run)");
-        }
-        else {
-            AssistLog::debug("self-bake: refine skipped (no start snapshot)");
-        }
-    }
-
-    int n = 0;
-    {
-        LagProbe::Scope const mergeScope("eb.flushSegment.merge");
-        n = BakeMap::get().mergeSelfClicks(clicks);
-    }
+    int const n = BakeMap::get().mergeSelfClicks(clicks);
     if (n > 0) {
         AssistLog::debug(fmt::format(
-            "self-bake: flushed {} click(s) ({}) expanded={} → map +{}",
+            "self-bake: merged {} click(s) ({}) → map +{}",
             clicks.size(),
             reason ? reason : "?",
-            expanded,
             n
         ));
     }
-    LagProbe::get().mark("flushSegment.done", fmt::format(
-        "clicks={} expanded={} merged={}",
-        clicks.size(), expanded, n
-    ));
+
+    // Queue for slow refine (only when setting on). Cap queue growth.
+    if (StageConfig::selfBakeRefine()) {
+        for (auto const& c : clicks) {
+            if (this->m_refineQueue.size() >= kMaxPending) break;
+            this->m_refineQueue.push_back(c);
+        }
+    }
+}
+
+void SelfBakeRecorder::drainRefine(PlayLayer* layer) {
+    if (!layer || this->m_refineQueue.empty()) return;
+    if (!StageConfig::selfBakeRefine()) {
+        this->m_refineQueue.clear();
+        return;
+    }
+    if (AssistController::get().assistTouchedRun()) {
+        // Assist polluted this attempt's start snapshot usefulness — drop queue.
+        this->m_refineQueue.clear();
+        return;
+    }
+    int const slot = AssistController::get().startSnapshotSlot();
+    if (slot < 0) return;
+
+    // One click per tick, tiny sim budget — spreads cost across frames.
+    BakedClick click = this->m_refineQueue.front();
+    this->m_refineQueue.erase(this->m_refineQueue.begin());
+
+    std::vector<BakedClick> one{ click };
+    this->m_cancelRefine = false;
+    int const expanded = BakeMap::get().refineSelfWindows(
+        layer,
+        slot,
+        one,
+        StageConfig::bakeRadius(),
+        kIdleRefineSimsPerTick,
+        &this->m_cancelRefine
+    );
+    if (expanded > 0 || one[0].earliest != click.earliest || one[0].latest != click.latest) {
+        BakeMap::get().mergeSelfClicks(one);
+    }
+}
+
+void SelfBakeRecorder::onPhysicsTick(PlayLayer* layer) {
+    if (!this->canDrain(layer)) return;
+
+    // 1) Cheap: fold buffered samples into the bake map (point windows).
+    if (!this->m_pending.empty()) {
+        size_t const n = std::min(this->m_pending.size(), kIdleMergePerTick);
+        std::vector<Sample> batch(
+            this->m_pending.begin(),
+            this->m_pending.begin() + static_cast<std::ptrdiff_t>(n)
+        );
+        this->m_pending.erase(
+            this->m_pending.begin(),
+            this->m_pending.begin() + static_cast<std::ptrdiff_t>(n)
+        );
+        LagProbe::Scope const scope("eb.selfBake.idleMerge");
+        this->mergeSamples(batch, "idle");
+    }
+
+    // 2) Amortized refine — only when merge buffer is quiet.
+    if (this->m_pending.empty() && !this->m_refineQueue.empty()) {
+        LagProbe::Scope const scope("eb.selfBake.idleRefine");
+        this->drainRefine(layer);
+    }
+}
+
+void SelfBakeRecorder::flushMergeOnly(PlayLayer* layer, char const* reason) {
+    (void)layer;
+    if (this->m_pending.empty()) {
+        LagProbe::get().mark("flushMergeOnly.empty", reason ? reason : "?");
+        return;
+    }
+    if (BakeMap::get().isBaking()) {
+        LagProbe::get().mark("flushMergeOnly.skippedBake", reason ? reason : "?");
+        return;
+    }
+    LagProbe::Scope const scope("eb.selfBake.flushMergeOnly", reason ? reason : "?");
+    this->mergeSamples(this->m_pending, reason);
+    // Drop refine queue on forced flush — quit/complete shouldn't start sims.
+    this->m_refineQueue.clear();
+}
+
+void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool allowRefine) {
+    // Hot-path compatibility shim: NEVER refine here. Merge-only, or no-op if
+    // caller is reset/checkpoint (those should leave work to idle drain).
+    (void)allowRefine;
+    char const* r = reason ? reason : "?";
+    // Death/reset/checkpoint must stay instant — leave buffer for idle drain.
+    if (std::strcmp(r, "reset") == 0
+        || std::strcmp(r, "checkpoint") == 0
+        || std::strcmp(r, "death") == 0) {
+        LagProbe::get().mark("flushSegment.deferred", fmt::format(
+            "reason={} pending={} refineQ={}",
+            r, this->m_pending.size(), this->m_refineQueue.size()
+        ));
+        return;
+    }
+    this->flushMergeOnly(layer, r);
 }

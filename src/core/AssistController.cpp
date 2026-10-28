@@ -143,7 +143,8 @@ std::string AssistController::overlayText() const { return m_overlayText; }
 void AssistController::clearBuffer() { m_buffer = {}; }
 
 void AssistController::onCheckpointLoad() {
-    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint");
+    // Do not flush/refine here — idle drain handles the buffer after respawn.
+    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint", false);
     clearBuffer();
     m_pendingRelease = false;
     m_pendingReleaseHold = false;
@@ -152,7 +153,7 @@ void AssistController::onCheckpointLoad() {
 }
 
 void AssistController::onLevelComplete(PlayLayer* playLayer) {
-    SelfBakeRecorder::get().flushSegment(playLayer, "complete");
+    SelfBakeRecorder::get().flushMergeOnly(playLayer, "complete");
     LevelProfile::get().save();
     BakeMap::get().save();
 }
@@ -175,7 +176,7 @@ void AssistController::syncButtonState(PlayLayer* playLayer) {
 }
 
 void AssistController::resetAttempt(PlayLayer* playLayer) {
-    // No refine on reset — often chained right after death (would double-freeze).
+    // Self-bake stays buffered — idle drain merges after we're alive again.
     LagProbe::Scope const episodeScope("eb.resetAttempt");
     {
         LagProbe::Scope const s("eb.flushSegment");
@@ -242,7 +243,7 @@ void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
     // detach() unlinks then releases — never release while still parented.
     SelfBakeRecorder::get().cancelRefine();
-    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "quit", false);
+    SelfBakeRecorder::get().flushMergeOnly(PlayLayer::get(), "quit");
     SelfBakeRecorder::get().onLevelQuit();
     SaveFeedback::get().reset();
     SaveFrameCounter::get().detach(true);
@@ -1143,6 +1144,10 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     {
         PerfTrace::Scope const scope("saveFeedbackTick");
         SaveFeedback::get().onPhysicsTick();
+    }
+    {
+        PerfTrace::Scope const scope("selfBakeIdle");
+        SelfBakeRecorder::get().onPhysicsTick(playLayer);
     }
 
     auto* p1 = playLayer->m_player1;

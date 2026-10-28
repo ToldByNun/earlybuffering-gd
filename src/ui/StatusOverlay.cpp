@@ -42,7 +42,12 @@ void StatusOverlay::detach(bool layerDying) {
         g_lastText.clear();
         return;
     }
-    (void)layerDying;
+    if (layerDying) {
+        s_label->release();
+        s_label = nullptr;
+        g_lastText.clear();
+        return;
+    }
     if (s_label->getParent()) {
         s_label->removeFromParent();
     }

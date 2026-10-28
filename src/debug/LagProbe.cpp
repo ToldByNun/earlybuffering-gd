@@ -122,7 +122,10 @@ void LagProbe::writeLegend() {
     this->appendLine("  eb.evacuate.tryRemove       index-based erase per ghost");
     this->appendLine("  eb.evacuate.park            park/hide ghost bodies");
     this->appendLine("  eb.resetAttempt             clear buffers / flush self-bake");
-    this->appendLine("  eb.flushSegment             BakeMap merge of pending clicks");
+    this->appendLine("  eb.flushSegment             (deferred on reset/checkpoint)");
+    this->appendLine("  eb.selfBake.idleMerge       amortized pending→BakeMap merge");
+    this->appendLine("  eb.selfBake.idleRefine      amortized window refine (few sims/tick)");
+    this->appendLine("  eb.selfBake.flushMergeOnly  quit/complete force-merge, no refine");
     this->appendLine("  eb.saveFeedbackReset        SaveFeedback::reset");
     this->appendLine("  eb.clickGuardReset          ClickIntentGuard::reset");
     this->appendLine("  eb.updateOverlay            status overlay string refresh");

@@ -36,8 +36,10 @@ void ShadowSimulator::attach(PlayLayer* layer) {
         if (!p) return nullptr;
         p->setPosition({ 0.f, 105.f });
         p->setID(id);
+        // objectLayer owns the node (addChild retain). Do NOT extra-retain —
+        // release-on-quit while still parented / double-free in ~PlayerObject
+        // during setNextScene was the quit AV (CCObject::release).
         layer->m_objectLayer->addChild(p);
-        p->retain();
         hideGhost(p);
         return p;
     };
@@ -71,17 +73,18 @@ void ShadowSimulator::detach(bool layerDying) {
 
     auto kill = [layerDying](PlayerObject*& p) {
         if (!p) return;
-        // ALWAYS unlink before release. release()-while-parented can drop retain
-        // to 0 while still in the children array → setNextScene double-frees in
-        // ~PlayerObject (CCObject::release AV). onQuit runs before teardown, so
-        // removeFromParent is safe here.
         if (layerDying) {
+            // Quit / scene change: parent tree will destroy children. Only null
+            // our pointer — never release or removeFromParent here (both have
+            // caused ~PlayerObject → CCObject::release AVs in setNextScene).
             p->setVisible(false);
+            p = nullptr;
+            return;
         }
+        // Mid-level reattach: unlink; addChild was the only retain.
         if (p->getParent()) {
-            p->removeFromParentAndCleanup(false);
+            p->removeFromParentAndCleanup(true);
         }
-        p->release();
         p = nullptr;
     };
     kill(m_shadow);
