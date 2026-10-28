@@ -91,17 +91,67 @@ bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
 void ShadowSimulator::parkGhosts() {
     // Only the active sim body — snapshots must keep captured state for
     // bake / outcome verify / trajectory samplePath.
-    if (!m_shadow) return;
-    m_shadow->setPosition({ 0.f, 105.f });
-    m_shadow->m_position = cocos2d::CCPoint{ 0.f, 105.f };
-    m_shadow->m_yVelocity = 0.0;
-    m_shadow->m_isDead = false;
+    if (!this->m_shadow) return;
+
+    // Sim checkCollisions inserts the shadow into section grids. Leave those
+    // slots empty so live collision / later sortSectionVector cannot touch us.
+    if (auto* layer = PlayLayer::get()) {
+        layer->removeObjectFromSection(this->m_shadow);
+    }
+
+    this->m_shadow->setPosition({ 0.f, 105.f });
+    this->m_shadow->m_position = cocos2d::CCPoint{ 0.f, 105.f };
+    this->m_shadow->m_yVelocity = 0.0;
+    this->m_shadow->m_isDead = false;
     // Wave trail points stay in world space after a sim — clear so leftover
     // streak geometry cannot interact with live collision/debug paths.
-    if (m_shadow->m_waveTrail) {
-        m_shadow->m_waveTrail->reset();
+    if (this->m_shadow->m_waveTrail) {
+        this->m_shadow->m_waveTrail->reset();
     }
-    hideGhost(m_shadow);
+    hideGhost(this->m_shadow);
+}
+
+void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
+    // Abort any in-flight sim; do NOT restoreCapture here — reset/checkpoint
+    // rebuilds object state and restoring into freed/reused objects can AV.
+    this->m_simulating = false;
+    this->m_applyingRing = false;
+    this->m_orbScanning = false;
+    this->m_orbOverlapTick = false;
+    this->m_dead = false;
+    this->m_jumped = false;
+    this->m_unknown = false;
+    this->m_activatedRing = false;
+    this->m_ringCount = 0;
+    this->m_deathObject = nullptr;
+    this->m_saved.clear();
+    this->m_savedActivatedIDs.clear();
+
+    auto evac = [&](PlayerObject* p) {
+        if (!p) return;
+        if (layer) {
+            layer->removeObjectFromSection(p);
+        }
+        p->setPosition({ 0.f, 105.f });
+        p->m_position = cocos2d::CCPoint{ 0.f, 105.f };
+        p->m_yVelocity = 0.0;
+        p->m_isDead = false;
+        if (p->m_waveTrail) {
+            p->m_waveTrail->reset();
+        }
+        if (p->m_touchingRings) {
+            p->m_touchingRings->removeAllObjects();
+        }
+        if (p->m_collisionLogTop) {
+            clearCollisionLogs(p);
+        }
+        hideGhost(p);
+    };
+
+    evac(this->m_shadow);
+    for (auto* slot : this->m_snapshots) {
+        evac(slot);
+    }
 }
 
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {

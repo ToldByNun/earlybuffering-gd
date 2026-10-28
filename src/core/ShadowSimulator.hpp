@@ -107,6 +107,9 @@ public:
     void markDead(PlayerObject* p, GameObject* object = nullptr);
     // Park ghosts off-level so stray collision cannot fail the real attempt.
     void parkGhosts();
+    // Before PlayLayer::resetLevel / checkpoint reload: pull every owned ghost out of
+    // section vectors (sim checkCollisions inserts them; vanilla sortSectionVector AVs).
+    void evacuateGhosts(GJBaseGameLayer* layer);
     void noteJump();
     void noteActivated(GameObject* obj);
     void noteUnknown() { m_unknown = true; }

@@ -16,6 +16,10 @@
 - Replaced combined `save-feedback` (off/icon/sound/both) with three Visual toggles: **Sound**, **Color** (icon flash), **Counter** (world +N — coming next).
 - Defaults match old `both` (sound+color on, counter off). Re-check toggles if you previously used off/sound/icon-only.
 
+### Crash fix: restart / checkpoint
+
+- Evacuate shadow+snapshot ghosts from section vectors before `resetLevel` / checkpoint load (fixes `sortSectionVector` AV after sim). Cancel in-flight bake on those paths.
+
 ### Adaptive robust window + latency cost
 
 - Smart settings: **Robust Window (±k)** (`0` = auto from mode/speed/dt variance) and optional **firstDt jitter** (±3% re-sim of top cand).

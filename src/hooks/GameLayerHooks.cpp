@@ -1,4 +1,5 @@
 #include "../core/AssistController.hpp"
+#include "../core/BakeScheduler.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimCollisionPolicy.hpp"
 #include "../config/StageConfig.hpp"
@@ -422,8 +423,12 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void resetLevel() {
-        PlayLayer::resetLevel();
+        // Ghosts land in section vectors via sim checkCollisions. Vanilla
+        // resetLevel → sortSectionVector then AVs on those bodies — evacuate first.
+        BakeScheduler::get().cancel();
+        ShadowSimulator::get().evacuateGhosts(this);
         AssistController::get().resetAttempt(this);
+        PlayLayer::resetLevel();
     }
 
     void onQuit() {
@@ -507,6 +512,8 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void loadFromCheckpoint(CheckpointObject* checkpoint) {
+        BakeScheduler::get().cancel();
+        ShadowSimulator::get().evacuateGhosts(this);
         AssistController::get().onCheckpointLoad();
         PlayLayer::loadFromCheckpoint(checkpoint);
     }

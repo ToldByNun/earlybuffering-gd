@@ -163,7 +163,8 @@ Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` / `playerD
 Death to an owned ghost as the killer object is swallowed. Real-player deaths are swallowed while
 `m_simulating` (anticheat on real players still passes). During sim, `collisionCheckObjects` runs
 only for the shadow. Live collision lists strip owned ghosts. Active shadow is parked off-level
-after each sim (wave trail reset); ghost `update` is no-op unless actively stepping.
+after each sim (wave trail reset + `removeObjectFromSection`); ghost `update` is no-op unless actively stepping.
+Before `resetLevel` / checkpoint load: `evacuateGhosts` pulls all owned ghosts out of section vectors (avoids `sortSectionVector` AV) and cancels an in-flight bake.
 
 ## Constants
 
