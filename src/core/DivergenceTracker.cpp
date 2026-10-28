@@ -7,9 +7,11 @@ DivergenceTracker& DivergenceTracker::get() {
 }
 
 void DivergenceTracker::note(bool planDelay, bool died, bool expectOrb, bool gotOrb) {
+    // Bad: delayed assist still died, or orb expected but missed (death, or we
+    // delayed for the orb and never hit it).
     bool bad = false;
     if (planDelay && died) bad = true;
-    if (expectOrb && !gotOrb && died) bad = true;
+    if (expectOrb && !gotOrb && (died || planDelay)) bad = true;
     m_bad[m_i] = bad;
     m_i = (m_i + 1) % N;
     if (m_count < N) ++m_count;
@@ -33,5 +35,9 @@ void DivergenceTracker::clear() {
 
 std::string DivergenceTracker::overlayBit() const {
     if (!shouldWarn() && !m_untrusted) return {};
-    return fmt::format("{}div{:.0f}%", m_untrusted ? "UNTRUST " : "WARN ", mismatchRate() * 100.f);
+    return fmt::format(
+        "{}div{:.0f}%",
+        m_untrusted ? "UNTRUST " : "WARN ",
+        mismatchRate() * 100.f
+    );
 }

@@ -2,6 +2,12 @@
 
 ## v1.2.0 (unreleased)
 
+### Divergence / UNTRUST
+
+- Outcome `planDelay` is real Delay vs Pass; `onRealDeath` notes pending outcomes into `DivergenceTracker`.
+- Live/Hybrid-live: `simUntrusted` → force Pass + overlay `UNTRUST pass` (blocks explore).
+- Soft warn shortens planner `capMul` (0.85×).
+
 ### Self-bake
 
 - Settings: **Self-Bake (Practice)** on by default; optional normal-mode; optional refine.

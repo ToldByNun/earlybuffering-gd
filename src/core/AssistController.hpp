@@ -149,7 +149,9 @@ private:
     int m_outcomeUntil = 0;
     bool m_outcomePlayer1 = true;
     bool m_outcomeExpectOrb = false;
+    bool m_outcomePlanDelay = false; // true if plan was Delay (not Pass)
     float m_outcomeStartX = 0.f;
+    bool m_untrustPassHint = false; // overlay: forced Pass under simUntrusted
     bool m_assistTouchedRun = false;
     int m_savesAttempt = 0;
     int m_savesLevel = 0;

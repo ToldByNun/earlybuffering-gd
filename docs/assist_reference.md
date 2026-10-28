@@ -93,6 +93,10 @@ Lexico: orbUseful > surviveBin > endX > earliest. Bins 24/48/96. k=1.
 
 `ClickIntentGuard` ring of recent Jump presses per player. Dense spam (wave ≈ 3 presses / 10 ticks) → assist Pass unless spatial orb/pad ahead. Continuous modes also Pass release assist during spam. Reset on attempt / quit.
 
+## Divergence / UNTRUST
+
+`DivergenceTracker` ring (48): bad if delayed assist died, or orb expected but missed (death or delayed-for-orb). Warn ≥35%/n≥8; UNTRUST ≥45%/n≥12. `pollOutcome` uses real `planDelay`; `onRealDeath` notes pending outcomes. Live/Hybrid-live: `simUntrusted` → force Pass + overlay `UNTRUST pass` (no explore). `shouldWarn` soft: `capMul *= 0.85`. Clear on attempt reset only.
+
 ## Pseudocode fireBuffered()
 
 Wait for dMin if requireOrb; up to 2 reclamps into [dMin,dMax]; inject; PendingRelease if needed.

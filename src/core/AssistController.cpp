@@ -99,6 +99,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_clickTimes.clear();
     m_cpsLocked = false;
     m_outcomePending = false;
+    m_outcomePlanDelay = false;
+    m_untrustPassHint = false;
     SaveFeedback::get().reset();
     ClickIntentGuard::get().reset();
     syncButtonState(playLayer);
@@ -330,6 +332,7 @@ void AssistController::updateOverlay() {
         {
             auto bit = DivergenceTracker::get().overlayBit();
             if (!bit.empty()) m_overlayText += " | " + bit;
+            if (m_untrustPassHint) m_overlayText += " | UNTRUST pass";
         }
         if (m_savesAttempt > 0) {
             m_overlayText += fmt::format(" | saves {}/{}", m_savesAttempt, m_savesLevel);
@@ -479,6 +482,7 @@ void AssistController::beginOutcome(SimPlan const& plan, int effectTick) {
     m_outcomePlanId = plan.planId;
     m_outcomeUntil = effectTick + 96;
     m_outcomeExpectOrb = plan.requireOrb || plan.activatedRing;
+    m_outcomePlanDelay = plan.action == PlanAction::Delay || plan.delay > 0;
     m_outcomeStartX = m_lastPlayerX;
 }
 
@@ -491,20 +495,25 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
     }
     if (p->m_isDead) {
         AssistLog::debug(fmt::format(
-            "OUTCOME id={} death x={:.1f} orbExpect={}",
-            m_outcomePlanId, p->getPositionX(), m_outcomeExpectOrb
+            "OUTCOME id={} death x={:.1f} orbExpect={} delay={}",
+            m_outcomePlanId, p->getPositionX(), m_outcomeExpectOrb, m_outcomePlanDelay
         ));
-        DivergenceTracker::get().note(true, true, m_outcomeExpectOrb, false);
+        DivergenceTracker::get().note(
+            m_outcomePlanDelay, true, m_outcomeExpectOrb, false
+        );
         m_outcomePending = false;
         return;
     }
     if (m_attemptTick >= m_outcomeUntil) {
         bool const orbHit = p->m_hasEverHitRing || p->m_touchedRing;
         AssistLog::debug(fmt::format(
-            "OUTCOME id={} alive dx={:.1f} orb={} expect={}",
-            m_outcomePlanId, p->getPositionX() - m_outcomeStartX, orbHit, m_outcomeExpectOrb
+            "OUTCOME id={} alive dx={:.1f} orb={} expect={} delay={}",
+            m_outcomePlanId, p->getPositionX() - m_outcomeStartX,
+            orbHit, m_outcomeExpectOrb, m_outcomePlanDelay
         ));
-        DivergenceTracker::get().note(true, false, m_outcomeExpectOrb, orbHit);
+        DivergenceTracker::get().note(
+            m_outcomePlanDelay, false, m_outcomeExpectOrb, orbHit
+        );
         m_outcomePending = false;
     }
 }
@@ -525,9 +534,12 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
 
     if (m_outcomePending) {
         AssistLog::debug(fmt::format(
-            "OUTCOME id={} death x={:.1f} orbExpect={}",
-            m_outcomePlanId, player->getPositionX(), m_outcomeExpectOrb
+            "OUTCOME id={} death x={:.1f} orbExpect={} delay={}",
+            m_outcomePlanId, player->getPositionX(), m_outcomeExpectOrb, m_outcomePlanDelay
         ));
+        DivergenceTracker::get().note(
+            m_outcomePlanDelay, true, m_outcomeExpectOrb, false
+        );
         m_outcomePending = false;
     }
 
@@ -633,6 +645,7 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
     m_outcomeUntil = m_attemptTick + 96;
     m_outcomePlayer1 = player1;
     m_outcomeExpectOrb = expectOrb;
+    m_outcomePlanDelay = delayed > 0;
     m_outcomeStartX = player ? player->getPositionX() : 0.f;
 
     clearBuffer();
@@ -889,6 +902,20 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
 
+    // Live/Hybrid-live: sim mismatch ring → force Pass (no explore under UNTRUST).
+    if (DivergenceTracker::get().simUntrusted()) {
+        AssistLog::debug("UNTRUST pass (press)");
+        m_untrustPassHint = true;
+        SimPlan dummy;
+        dummy.action = PlanAction::Pass;
+        dummy.firstDeathTick = -1;
+        dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+        updateOverlay();
+        return true;
+    }
+    m_untrustPassHint = false;
+
     // Dense spam (esp. wave): Pass unless an orb/pad is clearly ahead.
     if (ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind)) {
         bool nearOrb = false;
@@ -932,6 +959,10 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.budgetUs = StageConfig::simBudgetUs();
     opts.tickBudget = StageConfig::tickBudgetPerPress();
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
+    // Soft warn: shorten look-ahead slightly (no hard Pass).
+    if (DivergenceTracker::get().shouldWarn()) {
+        opts.capMul *= 0.85f;
+    }
     opts.maxBranches = 4;
     opts.smartDepth = StageConfig::smartDepth();
     opts.smartCombos = StageConfig::smartCombos();
@@ -1017,6 +1048,13 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
 
+    if (DivergenceTracker::get().simUntrusted()) {
+        AssistLog::debug("UNTRUST pass (release)");
+        m_untrustPassHint = true;
+        updateOverlay();
+        return true;
+    }
+
     // Continuous spam: do not delay releases either (would steal hold state).
     bool const continuous =
         player->m_isDart || player->m_isShip || player->m_isSwing;
@@ -1052,6 +1090,9 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     opts.budgetUs = StageConfig::simBudgetUs();
     opts.tickBudget = StageConfig::tickBudgetPerPress();
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
+    if (DivergenceTracker::get().shouldWarn()) {
+        opts.capMul *= 0.85f;
+    }
     opts.maxBranches = 4;
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
