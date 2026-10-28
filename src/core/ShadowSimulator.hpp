@@ -301,6 +301,18 @@ private:
         bool nodeVisible = true;
     };
 
+    // Transform snapshot for Trigger World Bake apply (restored before flags).
+    struct SavedTransform {
+        int uniqueId = 0;
+        GameObject* obj = nullptr;
+        float x = 0.f;
+        float y = 0.f;
+        float rotation = 0.f;
+        float scaleX = 1.f;
+        float scaleY = 1.f;
+        bool nodeVisible = true;
+    };
+
     static void hideGhost(PlayerObject* p);
     static bool tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* obj);
     static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self);
@@ -324,6 +336,9 @@ private:
 
     void beginCapture(PlayLayer* layer);
     void restoreCapture(PlayLayer* layer);
+    // Snapshot/restore world transforms for TriggerWorldStore ready tracks.
+    void captureTriggerTransforms(PlayLayer* layer);
+    void restoreTriggerTransforms(GJBaseGameLayer* layer);
     void copyWaveTrail(PlayerObject* dst, PlayerObject* src);
     static void clearCollisionLogs(PlayerObject* s);
     void stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt);
@@ -346,6 +361,7 @@ private:
     int m_ringCount = 0;
     GameObject* m_deathObject = nullptr;
     std::vector<SavedObject> m_saved;
+    std::vector<SavedTransform> m_savedTransforms;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
 };
 

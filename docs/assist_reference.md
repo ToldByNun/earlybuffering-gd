@@ -32,6 +32,8 @@ When enabled, static move/rotate/scale trigger motion is cached per level conten
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Save on quit/complete when dirty (not on death).
 
+`ShadowSimulator::beginCapture` snapshots position/rotation/scale/visible for every **ready Static*** track object (`eb.trigger.capture`). `restoreCapture` restores those transforms **before** activation flags; `evacuateGhosts` also restores if a sim aborted mid-apply (`eb.trigger.restore`). Stale pointers skipped via `m_uniqueID` check.
+
 Classifier (`TriggerClassify`): **only lethal-motion candidates** — Move/Rotate/Scale/Spawn/Follow (901/1346/2067/1268/1347/1585/1817). Camera/pulse/song/etc. → always `Ignore`.
 
 **Static vs player-dynamic:** Following **another group/object** (e.g. group 6 follows group 5 that moved +10/−100) is `StaticMove` — the chain is deterministic and bakeable. Only motion that depends on the **live player** is `DynamicFollow` (lock-to-player, rotate-follow P1/P2, target-player flags, Follow Player Y `1585`, lock-to-camera on movers). Touch-triggered motion start → `DynamicOther`. Unknown effect IDs → `Ignore`. `TriggerClassify::selfCheck` runs at mod load.

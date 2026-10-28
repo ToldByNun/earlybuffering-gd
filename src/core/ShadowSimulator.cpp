@@ -4,6 +4,8 @@
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
+#include "../config/StageConfig.hpp"
+#include "TriggerWorldStore.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -66,6 +68,7 @@ void ShadowSimulator::detach(bool layerDying) {
     m_ringCount = 0;
     m_deathObject = nullptr;
     m_saved.clear();
+    this->m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
     m_savedActivatedIDs.clear();
     // Clear host first so a nested evacuate (if any) sees "not attached".
@@ -252,7 +255,14 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_activatedRing = false;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
+    // If a sim aborted after applyAtTick moved solids, put them back before
+    // we drop the snapshot — reset/checkpoint must not inherit drifted poses.
+    if (!this->m_savedTransforms.empty() && layer) {
+        LagProbe::Scope const s("eb.trigger.restore");
+        this->restoreTriggerTransforms(layer);
+    }
     this->m_saved.clear();
+    this->m_savedTransforms.clear();
     this->m_savedActivatedIDs.clear();
 
     // PlayLayer::init → setupHasCompleted → resetLevel runs BEFORE attach().
@@ -432,13 +442,87 @@ void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
     shadow->m_hasEverHitRing = true;
 }
 
+void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
+    this->m_savedTransforms.clear();
+    if (!layer || !StageConfig::triggerBake()) return;
+
+    auto& store = TriggerWorldStore::get();
+    if (!store.loaded() || !store.hasTracks()) return;
+
+    LagProbe::Scope const scope("eb.trigger.capture");
+
+    // Collect uniqueIds we may move this sim.
+    std::vector<int> wanted;
+    wanted.reserve(store.trackCount());
+    for (auto const& track : store.data().tracks) {
+        if (!track.ready || track.keys.empty()) continue;
+        if (!TriggerClassify::isStatic(track.kind)) continue;
+        wanted.push_back(track.uniqueId);
+    }
+    if (wanted.empty()) return;
+
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    if (!children) return;
+
+    for (unsigned i = 0; i < children->count(); ++i) {
+        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+        if (!obj) continue;
+        int const uid = obj->m_uniqueID;
+        bool hit = false;
+        for (int id : wanted) {
+            if (id == uid) { hit = true; break; }
+        }
+        if (!hit) continue;
+
+        SavedTransform st;
+        st.uniqueId = uid;
+        st.obj = obj;
+        st.x = obj->getPositionX();
+        st.y = obj->getPositionY();
+        st.rotation = obj->getRotation();
+        st.scaleX = obj->getScaleX();
+        st.scaleY = obj->getScaleY();
+        st.nodeVisible = obj->isVisible();
+        this->m_savedTransforms.push_back(st);
+    }
+}
+
+void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
+    (void)layer;
+    if (this->m_savedTransforms.empty()) return;
+
+    for (auto const& st : this->m_savedTransforms) {
+        auto* obj = st.obj;
+        // Stale pointer guard: object must still report the same uniqueId.
+        if (!obj) continue;
+        if (obj->m_uniqueID != st.uniqueId) continue;
+
+        obj->setPosition({ st.x, st.y });
+        obj->m_positionX = st.x;
+        obj->m_positionY = st.y;
+        obj->setRotation(st.rotation);
+        obj->setScaleX(st.scaleX);
+        obj->setScaleY(st.scaleY);
+        obj->setVisible(st.nodeVisible);
+    }
+    this->m_savedTransforms.clear();
+}
+
 void ShadowSimulator::beginCapture(PlayLayer* layer) {
-    m_saved.clear();
-    m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
+    this->m_saved.clear();
+    this->m_savedTransforms.clear();
+    this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
+    this->captureTriggerTransforms(layer);
 }
 
 void ShadowSimulator::restoreCapture(PlayLayer* layer) {
-    for (auto const& s : m_saved) {
+    {
+        LagProbe::Scope const scope("eb.trigger.restore");
+        this->restoreTriggerTransforms(layer);
+    }
+
+    for (auto const& s : this->m_saved) {
+        if (!s.obj) continue;
         s.obj->m_activated = s.activated;
         s.obj->m_activatedByPlayer1 = s.p1;
         s.obj->m_activatedByPlayer2 = s.p2;
@@ -450,8 +534,8 @@ void ShadowSimulator::restoreCapture(PlayLayer* layer) {
         s.obj->setVisible(s.nodeVisible);
         if (s.isRing) static_cast<RingObject*>(s.obj)->m_claimTouch = s.claimTouch;
     }
-    m_saved.clear();
-    layer->m_gameState.m_activatedObjectIDs = m_savedActivatedIDs;
+    this->m_saved.clear();
+    layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
 }
 
 void ShadowSimulator::copyWaveTrail(PlayerObject* dst, PlayerObject* src) {
