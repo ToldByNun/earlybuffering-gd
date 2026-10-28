@@ -18,9 +18,11 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 `BakeMap::findNear` prefers `BakedClick.mode == kindOf(player)` within 120px X; falls back to any mode if none match.
 Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone + runOne at planned delay). Success = clearsThreat and not diedBeforeAction (linked dual checked). Fail: Hybrid → Live; Replay/Brute → Pass.
 
-## Self-bake (skeleton)
+## Self-bake
 
-`SelfBakeRecorder` records practice-mode vanilla jump inputs (never assist injects). On death / checkpoint load / complete / reset / quit, merges point-windows into `BakeMap` via `mergeSelfClicks` (`method=self` when map empty/self; dedup by down/player2/near x+frame → earliest/latest union; cap 512). Window refine is a later commit.
+Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (default off), `self-bake-refine` (default on).
+
+`SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). When refine is on, start snapshot exists, and assist did not touch the run: `refineSelfWindows` binary-searches earliest/latest (budget 64 sims, bake-radius, cancelable). Quit cancels refine and merges point windows only.
 
 ## Not in scope
 
@@ -66,6 +68,9 @@ Geode UI order (titles): **General** → **Assist Scope** (+ Off Ranges) → **D
 | smart-combos | int | 48 | 8 | 256 | Smart |
 | smart-horizon | int | 0 | 0 | 320 | Smart — 0=auto |
 | auto-tune | bool | true | | | Learning — never changes ticks; no trust-up from inject saves |
+| self-bake | bool | true | | | Learning — record vanilla clicks in practice |
+| self-bake-normal | bool | false | | | Learning — also record outside practice |
+| self-bake-refine | bool | true | | | Learning — budgeted window search on flush |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |
 | MODE-enable/overwrite/ticks/cap/slack | mixed | see mod.json | | | Per-mode cube..swing |
 | stage-index | int | 0 | 0 | 4 | Internal — preset mirror |

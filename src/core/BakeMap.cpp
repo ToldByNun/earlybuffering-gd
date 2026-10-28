@@ -148,6 +148,117 @@ std::string BakeMap::pauseStatusLine() const {
     return line;
 }
 
+int BakeMap::refineSelfWindows(
+    PlayLayer* layer,
+    int startSnapshotSlot,
+    std::vector<BakedClick>& clicks,
+    int bakeRadius,
+    int budgetSims,
+    std::atomic<bool>* cancel
+) {
+    if (!layer || startSnapshotSlot < 0 || clicks.empty() || budgetSims <= 0) return 0;
+    if (isBaking()) return 0;
+
+    bakeRadius = resolveRadius(bakeRadius, BakeMethod::Replay);
+    double tps = m_data.tps > 0.0 ? m_data.tps : 240.0;
+    float dt = static_cast<float>(1.0 / tps);
+    int const horizon = ShadowSimulator::modelFor(
+        layer->m_player1 ? layer->m_player1 : layer->m_player2,
+        StageConfig::ticksAll()
+    ).cap;
+
+    std::stable_sort(clicks.begin(), clicks.end(), [](auto const& a, auto const& b) {
+        if (a.nominalFrame != b.nominalFrame) return a.nominalFrame < b.nominalFrame;
+        return a.player2 < b.player2;
+    });
+
+    std::vector<ReplayEvent> timeline;
+    timeline.reserve(clicks.size());
+    for (auto const& c : clicks) {
+        timeline.push_back(ReplayEvent{ c.nominalFrame, 1, c.player2, c.down });
+    }
+
+    int simsLeft = budgetSims;
+    int expanded = 0;
+    auto cancelled = [&]() -> bool {
+        return cancel && cancel->load();
+    };
+    auto spend = [&]() -> bool {
+        if (simsLeft <= 0) return true;
+        --simsLeft;
+        return false;
+    };
+
+    for (size_t i = 0; i < clicks.size(); ++i) {
+        if (cancelled() || simsLeft <= 0) break;
+
+        auto& click = clicks[i];
+        int const F = click.nominalFrame;
+        int next = -1;
+        for (size_t j = i + 1; j < clicks.size(); ++j) {
+            if (clicks[j].player2 != click.player2) continue;
+            next = clicks[j].nominalFrame;
+            break;
+        }
+        int until = next > 0 ? std::min(next, F + horizon) : F + horizon;
+        until = std::max(until, F + 1);
+
+        // Keep timeline event frames in sync with current click nominals.
+        timeline[i].frame = F;
+
+        std::lock_guard lock(m_simMutex);
+        if (spend()) break;
+        if (!testShiftedClick(layer, startSnapshotSlot, timeline, static_cast<int>(i), F, until, dt)) {
+            // Nominal dies from start snapshot — keep point window.
+            continue;
+        }
+
+        int lo = std::max(0, F - bakeRadius);
+        int hi = F;
+        while (lo < hi) {
+            if (cancelled() || simsLeft <= 0) break;
+            int mid = lo + (hi - lo) / 2;
+            if (spend()) break;
+            if (testShiftedClick(layer, startSnapshotSlot, timeline, static_cast<int>(i), mid, until, dt)) {
+                hi = mid;
+            }
+            else {
+                lo = mid + 1;
+            }
+        }
+        int earliest = lo;
+
+        lo = F;
+        hi = F + bakeRadius;
+        while (lo < hi) {
+            if (cancelled() || simsLeft <= 0) break;
+            int mid = lo + (hi - lo + 1) / 2;
+            if (spend()) break;
+            if (testShiftedClick(layer, startSnapshotSlot, timeline, static_cast<int>(i), mid, until, dt)) {
+                lo = mid;
+            }
+            else {
+                hi = mid - 1;
+            }
+        }
+        int latest = lo;
+
+        if (earliest > latest) std::swap(earliest, latest);
+        if (earliest < click.earliest || latest > click.latest
+            || earliest != click.nominalFrame || latest != click.nominalFrame) {
+            if (earliest != click.earliest || latest != click.latest) ++expanded;
+            click.earliest = std::min(click.earliest, earliest);
+            click.latest = std::max(click.latest, latest);
+        }
+    }
+
+    AssistLog::debug(fmt::format(
+        "self-bake refine: {}/{} expanded, sims left {}",
+        expanded, clicks.size(), simsLeft
+    ));
+    return expanded;
+}
+
 int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
     if (incoming.empty() || !m_loaded) return 0;
     if (isBaking()) return 0;

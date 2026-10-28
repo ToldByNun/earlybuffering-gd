@@ -3,20 +3,23 @@
 
 #include "../config/StageConfig.hpp"
 
+#include <atomic>
 #include <string>
 #include <vector>
 
 class PlayLayer;
 class PlayerObject;
 
-// Skeleton: record non-injected (vanilla) jump inputs and merge into BakeMap
-// as method "self" point-windows. Refine (binary-search windows) is Commit 5.
+// Record non-injected (vanilla) jump inputs and merge into BakeMap as method
+// "self". Optional budgeted refine expands earliest/latest from start snapshot.
 class SelfBakeRecorder {
 public:
     static constexpr size_t kMaxPending = 256;
     static constexpr size_t kMaxMapClicks = 512;
     static constexpr float kDedupXTol = 40.f;
     static constexpr int kDedupFrameTol = 30;
+    // Max runBakeTimeline probes per flush (binary search is log-radius each).
+    static constexpr int kRefineBudgetSims = 64;
 
     struct Sample {
         int frame = 0;
@@ -37,10 +40,11 @@ public:
         bool down, int attemptTick, float simDt
     );
 
-    // Merge pending samples into BakeMap (method=self) and clear the segment.
-    void flushSegment(PlayLayer* layer, char const* reason);
+    // Merge pending samples into BakeMap. allowRefine uses start snapshot when safe.
+    void flushSegment(PlayLayer* layer, char const* reason, bool allowRefine = true);
 
     void clearPending();
+    void cancelRefine();
     size_t pendingCount() const { return m_pending.size(); }
 
 private:
@@ -50,6 +54,7 @@ private:
 
     std::vector<Sample> m_pending;
     std::string m_levelKey;
+    std::atomic<bool> m_cancelRefine{false};
 };
 
 #endif // EARLYBUFFER_CORE_SELFBAKERECORDER_HPP

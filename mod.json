@@ -418,13 +418,33 @@
 		"title-learning": {
 			"type": "title",
 			"name": "Learning",
-			"description": "Per-level bias/trust learning. Window ticks are never changed. Self-bake settings land in later 1.2 commits."
+			"description": "Per-level bias/trust learning and self-bake. Window ticks are never changed by learning."
 		},
 		"auto-tune": {
 			"type": "bool",
 			"name": "Auto-Tune Per Level",
 			"description": "Learn bias / trust / look-ahead per level and spot as you play. The window (ticks) is never changed. Toggle: Ctrl+Shift+L. Reset current level: Ctrl+Shift+R. Profiles save under the mod save folder.",
 			"default": true
+		},
+		"self-bake": {
+			"type": "bool",
+			"name": "Self-Bake (Practice)",
+			"description": "Record your vanilla practice clicks into the bake map (method=self). Assist injects are never recorded. Default on for practice.",
+			"default": true
+		},
+		"self-bake-normal": {
+			"type": "bool",
+			"name": "Self-Bake in Normal Mode",
+			"description": "Also record vanilla clicks outside practice. Off = practice only (recommended).",
+			"default": false,
+			"enable-if": "self-bake"
+		},
+		"self-bake-refine": {
+			"type": "bool",
+			"name": "Self-Bake Refine Windows",
+			"description": "On segment end, binary-search earliest/latest around each recorded click (budgeted, needs start snapshot, skips if assist touched the run). Off = point windows only.",
+			"default": true,
+			"enable-if": "self-bake"
 		},
 		"assist-verify": {
 			"type": "string",

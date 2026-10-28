@@ -2,10 +2,11 @@
 
 ## v1.2.0 (unreleased)
 
-### Self-bake (skeleton)
+### Self-bake
 
-- Practice-mode vanilla clicks recorded into BakeMap (`method=self`) on segment end (death / checkpoint / complete / reset / quit).
-- Dedup merge by near x/frame; point-windows for now (refine later). Assist injects never recorded.
+- Settings: **Self-Bake (Practice)** on by default; optional normal-mode; optional refine.
+- Vanilla clicks → BakeMap (`method=self`); assist injects never recorded.
+- Budgeted refine expands earliest/latest from start snapshot when assist did not touch the run (skip/cancel-safe).
 
 ### Bake verify
 

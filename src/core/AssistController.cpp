@@ -123,7 +123,8 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
     // layerDying=true: do not removeFromParent (avoids UAF during quit).
-    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "quit");
+    SelfBakeRecorder::get().cancelRefine();
+    SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "quit", false);
     SelfBakeRecorder::get().onLevelQuit();
     SaveFeedback::get().reset();
     ClickIntentGuard::get().reset();

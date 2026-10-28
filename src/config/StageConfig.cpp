@@ -60,6 +60,9 @@ bool g_cachedAssistRelease = true;
 bool g_cachedAssistOrbs = true;
 bool g_cachedSwallow = false;
 bool g_cachedAutoTune = true;
+bool g_cachedSelfBake = true;
+bool g_cachedSelfBakeNormal = false;
+bool g_cachedSelfBakeRefine = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
@@ -176,6 +179,9 @@ void StageConfig::refreshCache() {
     g_cachedAssistOrbs = readBool(mod, "assist-orbs", true);
     g_cachedSwallow = readBool(mod, "swallow-hopeless", false);
     g_cachedAutoTune = readBool(mod, "auto-tune", true);
+    g_cachedSelfBake = readBool(mod, "self-bake", true);
+    g_cachedSelfBakeNormal = readBool(mod, "self-bake-normal", false);
+    g_cachedSelfBakeRefine = readBool(mod, "self-bake-refine", true);
     g_cachedSimBudgetUs = clampInt(readInt(mod, "sim-budget-us", 1500), 0, 10000);
     g_cachedBakeRadius = clampInt(readInt(mod, "bake-radius", 0), 0, 128);
     g_cachedCpsLimit = clampInt(readInt(mod, "cps-limit", 0), 0, 40);
@@ -394,6 +400,9 @@ bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease;
 bool StageConfig::assistOrbs() { ensureCache(); return g_cachedAssistOrbs; }
 bool StageConfig::swallowHopeless() { ensureCache(); return g_cachedSwallow; }
 bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
+bool StageConfig::selfBake() { ensureCache(); return g_cachedSelfBake; }
+bool StageConfig::selfBakeNormal() { ensureCache(); return g_cachedSelfBakeNormal; }
+bool StageConfig::selfBakeRefine() { ensureCache(); return g_cachedSelfBakeRefine; }
 AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode; }
 int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
 int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }

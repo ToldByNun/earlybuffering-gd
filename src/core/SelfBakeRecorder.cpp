@@ -1,4 +1,5 @@
 #include "SelfBakeRecorder.hpp"
+#include "AssistController.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
 #include "LevelProfile.hpp"
@@ -16,14 +17,15 @@ SelfBakeRecorder& SelfBakeRecorder::get() {
 
 bool SelfBakeRecorder::shouldRecord(PlayLayer* layer, PlayerObject* player) const {
     if (!layer || !player) return false;
+    if (!StageConfig::selfBake()) return false;
     if (AssistScopeGate::isPlatformer(player)) return false;
-    // Skeleton: practice only (normal-mode toggle lands with Commit 5 refine).
-    if (!layer->m_isPracticeMode) return false;
     if (BakeMap::get().isBaking()) return false;
-    return true;
+    if (layer->m_isPracticeMode) return true;
+    return StageConfig::selfBakeNormal();
 }
 
 void SelfBakeRecorder::onLevelInit(PlayLayer* layer) {
+    m_cancelRefine = false;
     clearPending();
     m_levelKey.clear();
     if (layer && layer->m_level) {
@@ -32,8 +34,13 @@ void SelfBakeRecorder::onLevelInit(PlayLayer* layer) {
 }
 
 void SelfBakeRecorder::onLevelQuit() {
+    cancelRefine();
     clearPending();
     m_levelKey.clear();
+}
+
+void SelfBakeRecorder::cancelRefine() {
+    m_cancelRefine = true;
 }
 
 void SelfBakeRecorder::clearPending() {
@@ -72,8 +79,7 @@ void SelfBakeRecorder::noteVanillaInput(
     m_pending.push_back(s);
 }
 
-void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason) {
-    (void)layer;
+void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool allowRefine) {
     if (m_pending.empty()) return;
     if (BakeMap::get().isBaking()) {
         AssistLog::debug("self-bake: flush skipped (bake running)");
@@ -95,11 +101,40 @@ void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason) {
     }
     clearPending();
 
+    int expanded = 0;
+    if (allowRefine && StageConfig::selfBake() && StageConfig::selfBakeRefine() && layer) {
+        int const slot = AssistController::get().startSnapshotSlot();
+        bool const assistTouched = AssistController::get().assistTouchedRun();
+        if (slot >= 0 && !assistTouched) {
+            m_cancelRefine = false;
+            expanded = BakeMap::get().refineSelfWindows(
+                layer,
+                slot,
+                clicks,
+                StageConfig::bakeRadius(),
+                kRefineBudgetSims,
+                &m_cancelRefine
+            );
+            if (m_cancelRefine.load()) {
+                AssistLog::debug("self-bake: refine cancelled — merging current windows");
+            }
+        }
+        else if (assistTouched) {
+            AssistLog::debug("self-bake: refine skipped (assist touched run)");
+        }
+        else {
+            AssistLog::debug("self-bake: refine skipped (no start snapshot)");
+        }
+    }
+
     int const n = BakeMap::get().mergeSelfClicks(clicks);
     if (n > 0) {
         AssistLog::debug(fmt::format(
-            "self-bake: flushed {} click(s) ({}) → map +{}",
-            clicks.size(), reason ? reason : "?", n
+            "self-bake: flushed {} click(s) ({}) expanded={} → map +{}",
+            clicks.size(),
+            reason ? reason : "?",
+            expanded,
+            n
         ));
     }
 }

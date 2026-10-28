@@ -134,6 +134,10 @@ public:
 
     // --- Learning ---
     static bool autoTune();
+    // Self-bake: practice default; optional normal-mode; budgeted window refine.
+    static bool selfBake();
+    static bool selfBakeNormal();
+    static bool selfBakeRefine();
     // "off" | "ab" — A/B verify when legacy/new disagree (optional)
     static char const* assistVerifyMode();
     static bool assistVerifyAb();

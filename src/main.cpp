@@ -147,6 +147,9 @@ $on_mod(Loaded) {
     watchBool("show-pause-assist");
     watchBool("swallow-hopeless");
     watchBool("auto-tune");
+    watchBool("self-bake");
+    watchBool("self-bake-normal");
+    watchBool("self-bake-refine");
     watchBool("assist-only-practice");
     watchBool("assist-startpos-only");
     watchInt("assist-percent-min");

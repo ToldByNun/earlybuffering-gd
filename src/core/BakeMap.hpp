@@ -8,9 +8,9 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
-#include <optional>
 
 
 struct BakedClick {
@@ -107,6 +107,18 @@ public:
     static constexpr int MERGE_FRAME_TOL = 30;
     static constexpr size_t kMaxMapClicks = 512;
     int mergeSelfClicks(std::vector<BakedClick> const& incoming);
+
+    // Budgeted binary-search earliest/latest around each click (replay-style),
+    // using a synthetic timeline from `clicks`. Stops when budgetSims or cancel.
+    // Returns number of clicks whose window was expanded. In-place update.
+    int refineSelfWindows(
+        PlayLayer* layer,
+        int startSnapshotSlot,
+        std::vector<BakedClick>& clicks,
+        int bakeRadius,
+        int budgetSims,
+        std::atomic<bool>* cancel = nullptr
+    );
 
     std::string statusLine() const;
     std::string pauseStatusLine() const;
