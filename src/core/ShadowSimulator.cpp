@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -112,18 +113,44 @@ bool ShadowSimulator::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* o
 void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self) {
     if (!layer || !self) return;
 
-    // Walk every section cell and erase owned ghosts by pointer — do not trust
-    // GameObject section indices (removeObjectFromSection null-derefs on bad slots).
+    // Only match our known ghost pointers by raw address. Section slots can hold
+    // freed/poison entries (0xFFF…); typeinfo_cast on those AVs (read @ -1).
+    GameObject* ghosts[1 + SNAPSHOT_SLOTS]{};
+    int ghostCount = 0;
+    if (self->m_shadow) {
+        ghosts[ghostCount++] = self->m_shadow;
+    }
+    for (auto* slot : self->m_snapshots) {
+        if (!slot) continue;
+        ghosts[ghostCount++] = slot;
+    }
+    if (ghostCount <= 0) return;
+
+    auto isOwnedSlot = [&](GameObject* obj) -> bool {
+        if (!obj) return false;
+        auto const addr = reinterpret_cast<uintptr_t>(obj);
+        // Reject null-page and classic poison (-1) without dereferencing.
+        if (addr < 0x10000ull || addr == ~uintptr_t{0}) return false;
+        for (int g = 0; g < ghostCount; ++g) {
+            if (ghosts[g] == obj) return true;
+        }
+        return false;
+    };
+
     auto& sections = layer->m_sections;
-    for (auto* mid : sections) {
+    size_t const outerN = sections.size();
+    for (size_t ox = 0; ox < outerN; ++ox) {
+        auto* mid = sections[ox];
         if (!mid) continue;
-        for (auto* inner : *mid) {
+        size_t const midN = mid->size();
+        for (size_t ix = 0; ix < midN; ++ix) {
+            auto* inner = (*mid)[ix];
             if (!inner) continue;
             for (int i = static_cast<int>(inner->size()) - 1; i >= 0; --i) {
+                if (static_cast<size_t>(i) >= inner->size()) continue;
                 auto* obj = (*inner)[static_cast<size_t>(i)];
-                auto* asPl = typeinfo_cast<PlayerObject*>(obj);
-                if (!asPl || !self->isOwnedGhost(asPl)) continue;
-                inner->erase(inner->begin() + i);
+                if (!isOwnedSlot(obj)) continue;
+                inner->erase(inner->begin() + static_cast<std::ptrdiff_t>(i));
             }
         }
     }
@@ -170,7 +197,18 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_saved.clear();
     this->m_savedActivatedIDs.clear();
 
-    ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+    // Prefer index-based remove when slots look valid; then scrub by raw
+    // pointer so bad indices still cannot leave ghosts for sortSectionVector.
+    if (layer) {
+        if (this->m_shadow) {
+            ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
+        }
+        for (auto* slot : this->m_snapshots) {
+            if (!slot) continue;
+            ShadowSimulator::tryRemoveFromSection(layer, slot);
+        }
+        ShadowSimulator::scrubOwnedGhostsFromSections(layer, this);
+    }
 
     auto evac = [&](PlayerObject* p) {
         if (!p) return;
@@ -188,9 +226,9 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
             p->m_touchingRings->removeAllObjects();
         }
         if (p->m_collisionLogTop) {
-            clearCollisionLogs(p);
+            this->clearCollisionLogs(p);
         }
-        hideGhost(p);
+        this->hideGhost(p);
     };
 
     evac(this->m_shadow);
