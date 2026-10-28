@@ -87,12 +87,16 @@ public:
 
     bool isSimulating() const { return m_simulating; }
     bool isShadow(PlayerObject* p) const { return p && p == m_shadow; }
+    // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
+    bool isOwnedGhost(PlayerObject* p) const;
     PlayerObject* shadow() const { return m_shadow; }
     bool isShadowTrail(HardStreak* trail) const {
         return m_shadow && trail && trail == m_shadow->m_waveTrail;
     }
 
     void markDead(PlayerObject* p, GameObject* object = nullptr);
+    // Park ghosts off-level so stray collision cannot fail the real attempt.
+    void parkGhosts();
     void noteJump();
     void noteActivated(GameObject* obj);
     void noteUnknown() { m_unknown = true; }

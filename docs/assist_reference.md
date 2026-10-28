@@ -96,6 +96,10 @@ Bake runs serial on the main thread via BakeScheduler (no worker pool).
 While simulating: no sounds/achievements/percentage/particles/trigger side-effects; SimCollisionPolicy filter; orb hold-gate.
 Safe mode + assistTouchedRun block percentage/newbest when assist injected.
 
+Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` (incl. anticheatSpike).
+Real-player deaths are swallowed while `m_simulating` (anticheat on real players still passes).
+Active shadow is parked off-level after each sim; ghost `update` is no-op unless actively stepping.
+
 ## Constants
 
 clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. Platformer: assist off.

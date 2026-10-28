@@ -502,7 +502,7 @@ void AssistController::logPlan(SimPlan const& plan, char const* kind) {
 void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, GameObject* object) {
     if (!playLayer || !player) return;
     if (ShadowSimulator::get().isSimulating()) return;
-    if (ShadowSimulator::get().isShadow(player)) return;
+    if (ShadowSimulator::get().isOwnedGhost(player)) return;
 
     if (m_outcomePending) {
         AssistLog::debug(fmt::format(

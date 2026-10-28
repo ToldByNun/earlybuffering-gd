@@ -78,7 +78,28 @@ void ShadowSimulator::detach(bool layerDying) {
     for (auto& s : m_snapshots) kill(s);
 }
 
+bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
+    if (!p) return false;
+    if (p == m_shadow) return true;
+    for (auto* s : m_snapshots) {
+        if (p == s) return true;
+    }
+    return false;
+}
+
+void ShadowSimulator::parkGhosts() {
+    // Only the active sim body — snapshots must keep captured state for
+    // bake / outcome verify / trajectory samplePath.
+    if (!m_shadow) return;
+    m_shadow->setPosition({ 0.f, 105.f });
+    m_shadow->m_position = cocos2d::CCPoint{ 0.f, 105.f };
+    m_shadow->m_yVelocity = 0.0;
+    m_shadow->m_isDead = false;
+    hideGhost(m_shadow);
+}
+
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {
+    // Only the active sim body drives m_dead; snapshots are frozen copies.
     if (p == m_shadow) {
         m_dead = true;
         m_deathObject = object;
@@ -1279,6 +1300,7 @@ SimPlan ShadowSimulator::plan(
 
     restoreCapture(layer);
     m_simulating = false;
+    parkGhosts();
 
     if (chosen < 0) {
         plan.action = PlanAction::Pass;
@@ -1480,6 +1502,7 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
     out.ringCount = m_ringCount;
     restoreCapture(layer);
     m_simulating = false;
+    parkGhosts();
     return out;
 }
 
@@ -1537,6 +1560,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
 
     restoreCapture(layer);
     m_simulating = false;
+    parkGhosts();
     return out;
 }
 
@@ -1589,6 +1613,7 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
 
     restoreCapture(layer);
     m_simulating = false;
+    parkGhosts();
     return out;
 }
 

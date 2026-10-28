@@ -173,6 +173,12 @@ class $modify(EbPlayerObject, PlayerObject) {
     }
 
     void update(float dt) {
+        // Owned ghosts only step from ShadowSimulator::stepPhysics while simulating.
+        if (ShadowSimulator::get().isOwnedGhost(this)) {
+            if (!simulating()) return;
+            PlayerObject::update(dt);
+            return;
+        }
         if (!simulating()) {
             if (auto* pl = PlayLayer::get(); pl && this == pl->m_player1) {
                 auto& ac = AssistController::get();
@@ -251,6 +257,11 @@ class $modify(EbPlayerObjectLate, PlayerObject) {
     }
 
     void update(float dt) {
+        if (ShadowSimulator::get().isOwnedGhost(this)) {
+            if (!simulating()) return;
+            PlayerObject::update(dt);
+            return;
+        }
         if (!simulating()) AssistController::get().onSubStep(this, dt);
         PlayerObject::update(dt);
     }
@@ -378,11 +389,30 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* object) {
-        if (simulating() && object != m_anticheatSpike && ShadowSimulator::get().isShadow(player)) {
-            ShadowSimulator::get().markDead(player, object);
+        auto& sim = ShadowSimulator::get();
+
+        // Ghosts (shadow + snapshots) must NEVER enter vanilla destroyPlayer.
+        // That path can fail the real attempt — looks like "death to nothing"
+        // because the death effect is on m_player1 while the collision was on
+        // an invisible ghost left at a sim/hazard position.
+        // Also covers anticheatSpike: only real players may take that path.
+        if (sim.isOwnedGhost(player)) {
+            if (sim.isSimulating()) {
+                sim.markDead(player, object);
+            }
             return;
         }
-        if (!simulating() && object != m_anticheatSpike) {
+
+        // While simulating, swallow real-player deaths too (sim must not bleed).
+        // Anticheat on the real player still goes through.
+        if (sim.isSimulating()) {
+            if (object == m_anticheatSpike) {
+                PlayLayer::destroyPlayer(player, object);
+            }
+            return;
+        }
+
+        if (object != m_anticheatSpike) {
             AssistController::get().onRealDeath(this, player, object);
         }
         PlayLayer::destroyPlayer(player, object);
