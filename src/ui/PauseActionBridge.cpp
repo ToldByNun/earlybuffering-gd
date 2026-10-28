@@ -282,6 +282,7 @@ void PauseActionBridge::importConfig() {
 }
 
 void PauseActionBridge::openModSettings() {
+    if (InLevelSettingsFilterKeeper::isOpen()) return;
     auto* mod = Mod::get();
     if (!mod) return;
     auto* popup = geode::openSettingsPopup(mod, false);
@@ -289,10 +290,13 @@ void PauseActionBridge::openModSettings() {
         AssistLog::info("openModSettings: no settings popup (mod has no settings?)");
         return;
     }
-    // Category switcher (Main / Ingame / Assist / Visual / Modes / Keys) on every open.
     InLevelSettingsFilterKeeper::attach(popup);
 }
 
 void PauseActionBridge::openHub() {
     openModSettings();
+}
+
+void PauseActionBridge::refreshOpenSettings() {
+    InLevelSettingsFilterKeeper::refreshOpen();
 }

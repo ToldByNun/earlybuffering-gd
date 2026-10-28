@@ -98,7 +98,7 @@ bool g_cachedAssistStartposOnly = false;
 int g_cachedAssistPercentMin = 0;
 int g_cachedAssistPercentMax = 100;
 std::vector<StageConfig::PercentRange> g_cachedAssistDisableRanges;
-bool g_cachedShowPauseAssist = true;
+bool g_cachedShowPauseAssist = false;
 std::string g_cachedSaveFeedback = "off";
 StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
@@ -221,7 +221,7 @@ void StageConfig::refreshCache() {
         std::swap(g_cachedAssistPercentMin, g_cachedAssistPercentMax);
     }
     loadAssistOffSlots(mod, g_cachedAssistDisableRanges);
-    g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", true);
+    g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", false);
     try {
         g_cachedSaveFeedback = mod->getSettingValue<std::string>("save-feedback");
         if (g_cachedSaveFeedback != "icon"

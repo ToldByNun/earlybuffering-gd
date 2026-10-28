@@ -7,6 +7,7 @@
 // Categories for the Geode ModSettingsPopup page switcher (◀ NAME ▶).
 enum class SettingsCategory : int {
     Main = 0,
+    Bake,
     Ingame,
     Assist,
     Visual,
@@ -16,14 +17,14 @@ enum class SettingsCategory : int {
 };
 
 // Filters Geode settings rows by SettingsCategory.
-// Visibility-only + SimpleColumnLayout::ignoreInvisibleChildren; scroll Y preserved.
+// Non-matching rows are reparented out of the list (Geode search style); scroll Y preserved.
 class InLevelSettingsFilter {
 public:
     static char const* categoryName(SettingsCategory cat);
     static SettingsCategory categoryForKey(std::string const& key);
     static bool keepKey(std::string const& key, SettingsCategory cat);
 
-    // Legacy smoke helper: Main∪Ingame∪Assist∪Visual pause-ish set.
+    // Legacy: Main∪Ingame∪Assist∪Visual.
     static bool keepKey(std::string const& key);
 
     static void apply(cocos2d::CCNode* popup, SettingsCategory cat);
@@ -36,10 +37,19 @@ private:
     InLevelSettingsFilter() = delete;
 };
 
-// Attaches to every EarlyBuffer settings popup: category bar + live re-filter.
+// Attaches to every EarlyBuffer settings popup: category bar + live re-filter + Bake/Assist actions.
 class InLevelSettingsFilterKeeper {
 public:
     static void attach(cocos2d::CCNode* popup);
+
+    // True if our keeper is on an open settings popup in the scene.
+    static bool isOpen();
+
+    // Refresh bake status / button enable on the open popup (no-op if closed).
+    static void refreshOpen();
+
+    // Scene watchdog: attach tabs whenever EarlyBuffer settings open (Geode menu or EB).
+    static void startWatchdog();
 
 private:
     InLevelSettingsFilterKeeper() = delete;

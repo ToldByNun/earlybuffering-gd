@@ -23,10 +23,12 @@ public:
     static void exportConfig();
     static void importConfig();
 
-    // Geode ModSettingsPopup (search / titles / pages) for this mod.
+    // Geode ModSettingsPopup with Main/Bake/Ingame/Assist/Visual/Modes/Keys switcher.
     static void openModSettings();
-    // Pause hub popup (Bake | Assist | Settings). No-op if already open.
+    // Same as openModSettings (EB pause button). No-op if already open.
     static void openHub();
+    // Bake poll: refresh Bake-page status on an open settings popup.
+    static void refreshOpenSettings();
 
 private:
     PauseActionBridge() = delete;

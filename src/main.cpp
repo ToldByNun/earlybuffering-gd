@@ -4,6 +4,8 @@
 #include "core/ShadowSimulator.hpp"
 #include "debug/AssistLog.hpp"
 #include "debug/PlanGoldCorpus.hpp"
+#include "ui/ActionButtonSetting.hpp"
+#include "ui/InLevelSettingsFilter.hpp"
 #include "ui/StatusOverlay.hpp"
 #include "ui/TrajectoryVisualizer.hpp"
 
@@ -21,6 +23,11 @@ static void onAnySetting() {
 
 
 $on_mod(Loaded) {
+    // Custom eb-action rows (Bake/Assist buttons) — must resolve before settings UI opens.
+    registerActionButtonSettingType();
+    // Tabs for every EarlyBuffer settings open (Geode menu + pause EB).
+    InLevelSettingsFilterKeeper::startWatchdog();
+
     // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
     StageConfig::refreshCache();
     AssistLog::printBanner();

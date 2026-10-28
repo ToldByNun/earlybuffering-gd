@@ -30,22 +30,41 @@ Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (def
 - Full move/rotate/scale trigger simulation (Unknown/warn only)
 - Multi-click injection queue beyond Smart d0 selection
 
+## Pause / settings UI
+
+Pause: optional status lines (`show-pause-bake`) + top-right **EB** (`show-pause-hub`). No side button stacks.
+
+EB opens the normal Geode ModSettingsPopup with a page switcher:
+
+| Page | Contents |
+|------|----------|
+| Main | Enabled, Preset, Safe Mode, Debug |
+| Bake | Native rows (`eb-action`): Import Bake Replay (button = `import` or `{name.ext}`), Cycle Mode, Bake Map, Brute Bake, Cancel |
+| Ingame | Overlay, pause status/hub toggles |
+| Assist | Action rows (Cycle Preset / Reset Learn / Export·Import) + Scope/Window/Algorithm/Smart/Learning |
+| Visual | Trajectory, Save Feedback / Color |
+| Modes | Cube…Swing per-mode blocks |
+| Keys | Hotkeys + Internal |
+
+Action rows use custom type `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
+
 ## Settings table
 
-Geode UI order (titles): **General** → **Assist Scope** (+ Off Ranges) → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal** (`stage-index`, deprecated `swallow-hopeless`).
+Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ranges) → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal**.
 
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
-| enabled | bool | true | | | General — master |
-| preset | string | Tight | Tight/Normal/Wide/Max/Off | | General — fills defaults |
-| safe-mode | bool | true | | | General — block saves when assist enabled |
-| show-overlay | bool | true | | | General |
-| debug-logging | bool | true | | | General |
-| show-trajectory | bool | false | | | General |
-| show-pause-bake | bool | true | | | General |
-| show-pause-assist | bool | true | | | General — hotkey mirrors + config I/O |
-| save-feedback | string | both | off/icon/sound/both | | General — sound = per-tick MP3; icon = color flash |
-| save-icon-color | rgb | #7CFF4A | | | General — flash color for icon/both |
+| enabled | bool | true | | | Main — master |
+| preset | string | Tight | Tight/Normal/Wide/Max/Off | | Main — fills defaults |
+| safe-mode | bool | true | | | Main — block saves when assist enabled |
+| debug-logging | bool | true | | | Main |
+| show-overlay | bool | true | | | Ingame |
+| show-trajectory | bool | false | | | Visual |
+| show-pause-bake | bool | true | | | Ingame — pause status lines only |
+| show-pause-assist | bool | false | | | Ingame — legacy unused (actions under Assist page) |
+| show-pause-hub | bool | true | | | Ingame — EB button |
+| save-feedback | string | both | off/icon/sound/both | | Visual — sound = per-tick MP3; icon = color flash |
+| save-icon-color | rgb | #7CFF4A | | | Visual — flash color for icon/both |
 | assist-only-practice | bool | false | | | Scope |
 | assist-startpos-only | bool | false | | | Scope |
 | assist-percent-min | int | 0 | 0 | 100 | Scope |

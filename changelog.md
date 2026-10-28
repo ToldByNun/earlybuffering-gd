@@ -2,6 +2,15 @@
 
 ## v1.2.0 (unreleased)
 
+### Pause settings (EB)
+
+- Pause stays clean: top-right **EB** opens Geode settings; optional status lines top-left (`show-pause-bake`).
+- Side bake/assist button stacks removed — actions live in settings pages.
+- Category switcher: **Main → Bake → Ingame → Assist → Visual → Modes → Keys**.
+- **Bake** page: Cycle Mode / Import Replay / Bake Map / Brute Bake / Cancel + live status (poll while pause open).
+- **Assist** page: Cycle Preset / Reset Learn / Export·Import Cfg above the assist settings rows.
+- Re-open EB is a no-op while settings are already open; scroll preserved across Geode rebuilds.
+
 ### Adaptive robust window + latency cost
 
 - Smart settings: **Robust Window (±k)** (`0` = auto from mode/speed/dt variance) and optional **firstDt jitter** (±3% re-sim of top cand).

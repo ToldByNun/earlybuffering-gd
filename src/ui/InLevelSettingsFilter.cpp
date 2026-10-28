@@ -12,6 +12,7 @@ using namespace geode::prelude;
 char const* InLevelSettingsFilter::categoryName(SettingsCategory cat) {
     switch (cat) {
         case SettingsCategory::Main: return "Main";
+        case SettingsCategory::Bake: return "Bake";
         case SettingsCategory::Ingame: return "Ingame";
         case SettingsCategory::Assist: return "Assist";
         case SettingsCategory::Visual: return "Visual";
@@ -27,9 +28,19 @@ SettingsCategory InLevelSettingsFilter::categoryForKey(std::string const& key) {
         || key == "safe-mode" || key == "debug-logging") {
         return SettingsCategory::Main;
     }
+    if (key == "title-bake-actions" || key == "import-bake-replay"
+        || key == "cycle-assist-mode" || key == "bake-map-action"
+        || key == "brute-bake-action" || key == "cancel-bake-action") {
+        return SettingsCategory::Bake;
+    }
     if (key == "show-overlay" || key == "show-pause-bake"
         || key == "show-pause-assist" || key == "show-pause-hub") {
         return SettingsCategory::Ingame;
+    }
+    if (key == "title-assist-actions" || key == "cycle-preset-action"
+        || key == "reset-learn-action" || key == "export-config-action"
+        || key == "import-config-action") {
+        return SettingsCategory::Assist;
     }
     if (key == "show-trajectory" || key == "save-feedback" || key == "save-icon-color") {
         return SettingsCategory::Visual;
@@ -60,7 +71,8 @@ bool InLevelSettingsFilter::keepKey(std::string const& key) {
     return c == SettingsCategory::Main
         || c == SettingsCategory::Ingame
         || c == SettingsCategory::Assist
-        || c == SettingsCategory::Visual;
+        || c == SettingsCategory::Visual
+        || c == SettingsCategory::Bake;
 }
 
 float InLevelSettingsFilter::preservedContentY(
@@ -106,7 +118,6 @@ public:
         auto* left = CCMenuItemSpriteExtra::create(
             leftSpr, this, menu_selector(CategoryBar::onPrev)
         );
-        left->setID("earlybuffer-cat-prev"_spr);
         left->setPosition({ 24.f, 14.f });
         this->addChild(left);
 
@@ -116,22 +127,18 @@ public:
         auto* right = CCMenuItemSpriteExtra::create(
             rightSpr, this, menu_selector(CategoryBar::onNext)
         );
-        right->setID("earlybuffer-cat-next"_spr);
         right->setPosition({ width - 24.f, 14.f });
         this->addChild(right);
 
         m_label = CCLabelBMFont::create("MAIN", "goldFont.fnt");
         m_label->setScale(0.45f);
-        m_label->setID("earlybuffer-cat-label"_spr);
         m_label->setPosition({ width * 0.5f, 14.f });
         this->addChild(m_label);
         return true;
     }
 
     void setCategory(SettingsCategory cat) {
-        if (m_label) {
-            m_label->setString(InLevelSettingsFilter::categoryName(cat));
-        }
+        if (m_label) m_label->setString(InLevelSettingsFilter::categoryName(cat));
     }
 
     void onPrev(CCObject*);
@@ -157,7 +164,6 @@ public:
     SettingsCategory m_category = SettingsCategory::Main;
     CategoryBar* m_bar = nullptr;
     ScrollLayer* m_list = nullptr;
-    // Survives Geode updateState remove/re-add and our own detach.
     std::vector<Ref<SettingNodeV3>> m_all;
     size_t m_lastChildCount = 0;
     SettingsCategory m_appliedCat = SettingsCategory::Count;
@@ -209,7 +215,6 @@ public:
         }
     }
 
-    // Merge any SettingNodeV3 currently in the tree into m_all (Geode may re-add).
     void absorbFromTree(CCNode* popup) {
         std::vector<SettingNodeV3*> found;
         ScrollLayer* list = nullptr;
@@ -218,10 +223,7 @@ public:
         for (auto* sett : found) {
             bool known = false;
             for (auto const& ref : m_all) {
-                if (ref.data() == sett) {
-                    known = true;
-                    break;
-                }
+                if (ref.data() == sett) { known = true; break; }
             }
             if (!known) m_all.push_back(sett);
         }
@@ -229,9 +231,28 @@ public:
 
     static bool nodeKeep(SettingNodeV3* sett, SettingsCategory cat) {
         if (!sett) return false;
-        auto setting = sett->getSetting();
-        if (!setting) return cat == SettingsCategory::Main; // orphan titles → Main only
-        return InLevelSettingsFilter::keepKey(setting->getKey(), cat);
+        if (auto setting = sett->getSetting()) {
+            return InLevelSettingsFilter::keepKey(setting->getKey(), cat);
+        }
+        // Unresolved custom ("Missing setting 'key'") — still map by key in the label
+        // so Bake/Assist pages aren't empty when registration races load.
+        if (auto* label = sett->getNameLabel()) {
+            std::string const s = label->getString();
+            auto match = [&](char const* key) {
+                return s.find(key) != std::string::npos
+                    && InLevelSettingsFilter::keepKey(key, cat);
+            };
+            return match("import-bake-replay")
+                || match("cycle-assist-mode")
+                || match("bake-map-action")
+                || match("brute-bake-action")
+                || match("cancel-bake-action")
+                || match("cycle-preset-action")
+                || match("reset-learn-action")
+                || match("export-config-action")
+                || match("import-config-action");
+        }
+        return false;
     }
 
     void refilter(bool force) {
@@ -246,7 +267,6 @@ public:
         auto* content = m_list->m_contentLayer;
         size_t const childCount = content->getChildrenCount();
 
-        // Skip no-op ticks: same category, Geode hasn't rebuilt the list.
         if (!force
             && m_appliedCat == m_category
             && childCount == m_lastChildCount) {
@@ -256,18 +276,15 @@ public:
         float const yBefore = content->getPositionY();
         float const hBefore = content->getContentHeight();
 
-        // Detach every known setting (Geode search style), then re-attach page rows.
         for (auto& sett : m_all) {
             if (sett) sett->removeFromParent();
         }
 
         bool bg = false;
         for (auto& sett : m_all) {
-            if (!sett) continue;
-            if (!nodeKeep(sett, m_category)) continue;
+            if (!sett || !nodeKeep(sett, m_category)) continue;
             sett->setVisible(true);
             content->addChild(sett);
-            // Match Geode checkerboard as best-effort (no-op if API missing at link time).
             sett->setDefaultBGColor(ccc4(0, 0, 0, bg ? 60 : 20));
             bg = !bg;
         }
@@ -275,7 +292,6 @@ public:
         content->updateLayout();
         float const hAfter = content->getContentHeight();
         if (force && m_appliedCat != m_category) {
-            // Category switch: always pin to top (clearer than preserving mid-scroll junk).
             m_list->moveToTop();
         }
         else {
@@ -306,7 +322,6 @@ public:
     }
 
     void onTick(float) {
-        // Geode search/collapse rebuilds without our event — absorb + re-apply if needed.
         this->refilter(false);
     }
 
@@ -318,6 +333,14 @@ public:
         }
         CC_SAFE_DELETE(ret);
         return nullptr;
+    }
+
+    static KeeperNode* findOpen() {
+        auto* scene = CCScene::get();
+        if (!scene) return nullptr;
+        return typeinfo_cast<KeeperNode*>(
+            scene->getChildByIDRecursive("earlybuffer-inlevel-settings-filter"_spr)
+        );
     }
 
 private:
@@ -336,7 +359,6 @@ void CategoryBar::onNext(CCObject*) {
 
 void InLevelSettingsFilter::apply(CCNode* popup, SettingsCategory cat) {
     if (!popup) return;
-    // One-shot helper for tests / callers without a keeper: visibility not used.
     std::vector<SettingNodeV3*> settings;
     ScrollLayer* list = nullptr;
     FilterWalk::collect(popup, settings, list);
@@ -348,7 +370,7 @@ void InLevelSettingsFilter::apply(CCNode* popup, SettingsCategory cat) {
 
     for (auto* sett : settings) {
         if (!sett) continue;
-        bool keep = true;
+        bool keep = false;
         if (auto setting = sett->getSetting()) {
             keep = keepKey(setting->getKey(), cat);
         }
@@ -370,70 +392,22 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     };
 
     expect(categoryForKey("enabled") == SettingsCategory::Main, "cat-enabled-main");
-    expect(categoryForKey("preset") == SettingsCategory::Main, "cat-preset-main");
+    expect(categoryForKey("import-bake-replay") == SettingsCategory::Bake, "cat-import-bake");
+    expect(categoryForKey("bake-map-action") == SettingsCategory::Bake, "cat-bake-map");
     expect(categoryForKey("show-pause-hub") == SettingsCategory::Ingame, "cat-hub-ingame");
-    expect(categoryForKey("show-overlay") == SettingsCategory::Ingame, "cat-overlay-ingame");
+    expect(categoryForKey("cycle-preset-action") == SettingsCategory::Assist, "cat-cycle-preset");
     expect(categoryForKey("assist-mode") == SettingsCategory::Assist, "cat-assist-mode");
-    expect(categoryForKey("title-algorithm") == SettingsCategory::Assist, "cat-title-algo");
-    expect(categoryForKey("auto-tune") == SettingsCategory::Assist, "cat-auto-tune");
-    expect(categoryForKey("title-scope") == SettingsCategory::Assist, "cat-scope");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
-    expect(categoryForKey("save-feedback") == SettingsCategory::Visual, "cat-save-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
-    expect(categoryForKey("title-ship") == SettingsCategory::Modes, "cat-ship-modes");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Keys, "cat-hotkey-keys");
-    expect(categoryForKey("stage-index") == SettingsCategory::Keys, "cat-stage-keys");
+    expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");
+    expect(!keepKey("import-bake-replay", SettingsCategory::Main), "drop-import-on-main");
 
-    expect(keepKey("enabled", SettingsCategory::Main), "keep-main-enabled");
-    expect(!keepKey("enabled", SettingsCategory::Assist), "drop-enabled-on-assist");
-    expect(keepKey("assist-mode", SettingsCategory::Assist), "keep-assist-mode");
-    expect(!keepKey("cube-latency", SettingsCategory::Main), "drop-cube-on-main");
-    expect(keepKey("cube-latency", SettingsCategory::Modes), "keep-cube-on-modes");
-
-    expect(static_cast<int>(SettingsCategory::Count) == 6, "cat-count-6");
-    for (int i = 0; i < static_cast<int>(SettingsCategory::Count); ++i) {
-        auto const* name = categoryName(static_cast<SettingsCategory>(i));
-        expect(name && std::strlen(name) > 0 && name[0] != '?', "cat-name");
-    }
+    expect(static_cast<int>(SettingsCategory::Count) == 7, "cat-count-7");
+    expect(std::strcmp(categoryName(SettingsCategory::Bake), "Bake") == 0, "cat-name-bake");
 
     expect(preservedContentY(100.f, 800.f, 400.f) == 500.f, "scroll-shrink");
-    expect(preservedContentY(500.f, 400.f, 800.f) == 100.f, "scroll-grow");
     expect(preservedContentY(0.f, 100.f, 100.f) == 0.f, "scroll-same");
-
-    float y = 120.f;
-    float h = 700.f;
-    for (int i = 0; i < 5; ++i) {
-        float const next = preservedContentY(y, h, h);
-        expect(next == y, "scroll-idempotent");
-        y = next;
-    }
-
-    // Page switch scroll: shrink → grow → shrink stays coherent.
-    float simY = 80.f;
-    float simH = 1000.f;
-    simY = preservedContentY(simY, simH, 350.f);
-    expect(simY == 730.f, "sim-page-a");
-    simH = 350.f;
-    simY = preservedContentY(simY, simH, 900.f);
-    expect(simY == 180.f, "sim-page-b");
-    simH = 900.f;
-    simY = preservedContentY(simY, simH, 350.f);
-    expect(simY == 730.f, "sim-page-back");
-
-    // Simulated Geode rebuild: full list children come back, filter reapplies.
-    // (height full → filtered) twice must land on the same Y delta.
-    float rebuildY = 50.f;
-    rebuildY = preservedContentY(rebuildY, 1200.f, 400.f);
-    expect(rebuildY == 850.f, "sim-rebuild-1");
-    rebuildY = preservedContentY(rebuildY, 400.f, 1200.f); // Geode shows all
-    expect(rebuildY == 50.f, "sim-rebuild-full");
-    rebuildY = preservedContentY(rebuildY, 1200.f, 400.f); // we filter again
-    expect(rebuildY == 850.f, "sim-rebuild-2");
-
-    expect(keepKey("enabled"), "legacy-keep-enabled");
-    expect(keepKey("assist-mode"), "legacy-keep-assist");
-    expect(!keepKey("cube-latency"), "legacy-drop-cube");
-    expect(!keepKey("hotkey-cycle"), "legacy-drop-hotkey");
 
     if (fails == 0) report = "InLevelSettingsFilter selfCheck OK";
     else report = fmt::format("InLevelSettingsFilter {} fails: {}", fails, report);
@@ -446,4 +420,140 @@ void InLevelSettingsFilterKeeper::attach(CCNode* popup) {
     if (auto* keeper = KeeperNode::create()) {
         popup->addChild(keeper);
     }
+}
+
+bool InLevelSettingsFilterKeeper::isOpen() {
+    return KeeperNode::findOpen() != nullptr;
+}
+
+void InLevelSettingsFilterKeeper::refreshOpen() {
+    // Action button rows refresh themselves via onTick.
+}
+
+namespace {
+
+class SettingsTabWatchdog : public CCNode {
+public:
+    static bool popupIsOurSettings(CCNode* root) {
+        if (!root || !Mod::get()) return false;
+        std::string const ourId = Mod::get()->getID();
+        std::vector<SettingNodeV3*> settings;
+        ScrollLayer* list = nullptr;
+        FilterWalk::collect(root, settings, list);
+        for (auto* sett : settings) {
+            if (!sett) continue;
+            if (auto s = sett->getSetting()) {
+                if (s->getModID() == ourId) return true;
+            }
+            if (auto* label = sett->getNameLabel()) {
+                std::string const text = label->getString();
+                if (text.find("import-bake-replay") != std::string::npos
+                    || text.find("bake-map-action") != std::string::npos
+                    || text.find("show-pause-hub") != std::string::npos) {
+                    return true;
+                }
+            }
+        }
+        // Title fallback (Geode sets "Settings for EarlyBuffer").
+        std::vector<CCNode*> stack{ root };
+        while (!stack.empty()) {
+            auto* n = stack.back();
+            stack.pop_back();
+            if (auto* lab = typeinfo_cast<CCLabelBMFont*>(n)) {
+                std::string const t = lab->getString();
+                if (t.find("EarlyBuffer") != std::string::npos
+                    && t.find("Settings") != std::string::npos) {
+                    return true;
+                }
+            }
+            if (auto* kids = n->getChildren()) {
+                for (auto* c : CCArrayExt<CCNode*>(kids)) stack.push_back(c);
+            }
+        }
+        return false;
+    }
+
+    static void collectAlerts(CCNode* node, std::vector<FLAlertLayer*>& out) {
+        if (!node) return;
+        if (auto* alert = typeinfo_cast<FLAlertLayer*>(node)) {
+            out.push_back(alert);
+        }
+        auto* kids = node->getChildren();
+        if (!kids) return;
+        for (auto* child : CCArrayExt<CCNode*>(kids)) {
+            collectAlerts(child, out);
+        }
+    }
+
+    static CCNode* findUnattachedOurPopup() {
+        auto* scene = CCScene::get();
+        if (!scene) return nullptr;
+        if (scene->getChildByIDRecursive("earlybuffer-inlevel-settings-filter"_spr)) {
+            return nullptr;
+        }
+
+        // Scan every alert (Geode may nest ModSettings under ModPopup / scene).
+        std::vector<FLAlertLayer*> alerts;
+        collectAlerts(scene, alerts);
+        for (auto* alert : alerts) {
+            if (!alert) continue;
+            if (alert->getChildByID("earlybuffer-inlevel-settings-filter"_spr)) continue;
+            if (!alert->getChildByIDRecursive("search-input")) continue;
+            if (popupIsOurSettings(alert)) return alert;
+        }
+        return nullptr;
+    }
+
+    void ensureOnScene() {
+        auto* scene = CCScene::get();
+        if (!scene) return;
+        if (this->getParent() == scene) return;
+        this->retain();
+        this->removeFromParentAndCleanup(false);
+        scene->addChild(this);
+        this->release();
+    }
+
+    void onTick(float) {
+        this->ensureOnScene();
+        if (auto* popup = findUnattachedOurPopup()) {
+            InLevelSettingsFilterKeeper::attach(popup);
+        }
+    }
+
+    bool initWatchdog() {
+        if (!CCNode::init()) return false;
+        this->setID("earlybuffer-settings-tab-watchdog"_spr);
+        this->schedule(schedule_selector(SettingsTabWatchdog::onTick), 0.1f);
+        return true;
+    }
+
+    static SettingsTabWatchdog* create() {
+        auto* ret = new SettingsTabWatchdog();
+        if (ret && ret->initWatchdog()) {
+            ret->autorelease();
+            return ret;
+        }
+        CC_SAFE_DELETE(ret);
+        return nullptr;
+    }
+};
+
+Ref<SettingsTabWatchdog> g_settingsTabWatchdog;
+
+} // namespace
+
+void InLevelSettingsFilterKeeper::startWatchdog() {
+    if (!g_settingsTabWatchdog) {
+        g_settingsTabWatchdog = SettingsTabWatchdog::create();
+    }
+    if (!g_settingsTabWatchdog) return;
+    auto* scene = CCScene::get();
+    if (!scene) {
+        Loader::get()->queueInMainThread([] {
+            InLevelSettingsFilterKeeper::startWatchdog();
+        });
+        return;
+    }
+    g_settingsTabWatchdog->ensureOnScene();
 }

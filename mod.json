@@ -64,21 +64,85 @@
 		},
 		"show-pause-bake": {
 			"type": "bool",
-			"name": "Pause Menu Bake UI",
-			"description": "Show EarlyBuffer bake controls on the pause screen (Cycle Mode, Import, Bake Map, Brute Bake, Cancel). Turn off for a clean pause menu.",
+			"name": "Pause Bake Status",
+			"description": "Show compact mode/bake status lines on the pause screen (top-left). Bake actions are under EB → Bake — no side button stacks.",
 			"default": true
 		},
 		"show-pause-assist": {
 			"type": "bool",
-			"name": "Pause Menu Assist Buttons",
-			"description": "Show hotkey mirrors on pause (preset, debug, learning, trajectory, config export/import).",
-			"default": true
+			"name": "Pause Assist Buttons (legacy)",
+			"description": "Unused. Assist actions and toggles live under EB settings (Assist page + Main/Visual). Kept so old configs still load.",
+			"default": false
 		},
 		"show-pause-hub": {
 			"type": "bool",
-			"name": "Pause Hub Button",
-			"description": "Show a top-right EarlyBuffer (EB) button on pause. Opens Geode settings with a Main/Ingame/Assist/Visual/Modes/Keys page switcher at the top.",
+			"name": "Pause EB Button",
+			"description": "Show a top-right EarlyBuffer (EB) button on pause. Opens Geode settings with pages: Main, Bake, Ingame, Assist, Visual, Modes, Keys.",
 			"default": true
+		},
+		"title-bake-actions": {
+			"type": "title",
+			"name": "Bake Actions",
+			"description": "Import a replay, bake windows, or cancel. Shown on the Bake settings page."
+		},
+		"import-bake-replay": {
+			"type": "custom:eb-action",
+			"name": "Import Bake Replay",
+			"description": "Pick a GDR / MHR / SLC replay for Bake Map windows. Button shows import, or the loaded file name.",
+			"button-text": "import"
+		},
+		"cycle-assist-mode": {
+			"type": "custom:eb-action",
+			"name": "Cycle Assist Mode",
+			"description": "Live → Replay → Hybrid → BruteForce. Button shows the current mode.",
+			"button-text": "cycle"
+		},
+		"bake-map-action": {
+			"type": "custom:eb-action",
+			"name": "Bake Map",
+			"description": "Bake click windows from the imported replay (needs Import Bake Replay first).",
+			"button-text": "bake"
+		},
+		"brute-bake-action": {
+			"type": "custom:eb-action",
+			"name": "Brute Bake",
+			"description": "Explore safe click timings through the level (no replay required).",
+			"button-text": "brute"
+		},
+		"cancel-bake-action": {
+			"type": "custom:eb-action",
+			"name": "Cancel Bake",
+			"description": "Stop an in-progress bake. Enabled only while baking.",
+			"button-text": "cancel"
+		},
+		"title-assist-actions": {
+			"type": "title",
+			"name": "Assist Actions",
+			"description": "Quick actions for preset / learning / config. Shown on the Assist settings page."
+		},
+		"cycle-preset-action": {
+			"type": "custom:eb-action",
+			"name": "Cycle Preset",
+			"description": "Tight → Normal → Wide → Max → Off. Button shows the current preset.",
+			"button-text": "cycle"
+		},
+		"reset-learn-action": {
+			"type": "custom:eb-action",
+			"name": "Reset Level Learning",
+			"description": "Clear the auto-tune profile for the current level (bias, trust, spots).",
+			"button-text": "reset"
+		},
+		"export-config-action": {
+			"type": "custom:eb-action",
+			"name": "Export Config",
+			"description": "Save EarlyBuffer settings to a JSON file.",
+			"button-text": "export"
+		},
+		"import-config-action": {
+			"type": "custom:eb-action",
+			"name": "Import Config",
+			"description": "Load EarlyBuffer settings from a JSON file.",
+			"button-text": "import"
 		},
 		"save-feedback": {
 			"type": "string",
