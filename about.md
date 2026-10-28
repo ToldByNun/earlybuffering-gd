@@ -15,5 +15,6 @@ Click a bit early -> the mod buffers the press and fires on the first tick the s
 - **Safe Mode** on -- assisted / enabled runs do not count as normal progress
 - **Platformer** -- assist disabled
 - Overlay and pause bake/assist UI can be turned off in settings
+- **Save Feedback** (`both` by default) -- per-tick sound cue and/or icon color flash when a delayed click is injected
 
 Design and requirements: maintainer. Implementation: AI-assisted (see repository README).

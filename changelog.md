@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.0
+
+### Fixes
+
+- **Death-to-nothing:** owned shadow/snapshot players never enter vanilla `destroyPlayer` / `playerDestroyed` (including anticheat). Dying to a ghost body as the killer object is swallowed.
+- While simulating, real-player collision is skipped; live collision lists strip owned ghosts; real deaths mid-sim are swallowed (anticheat on real players still passes).
+- Active shadow is parked off-level after each sim with wave trail reset; ghost `update` is a no-op unless actively stepping.
+
+### Save feedback
+
+- **Save Feedback** setting: `off` / `icon` / `sound` / `both` (default `both`).
+- Per-tick sound cues for +1…+7 delayed ticks; +8+ uses the 8-tick clip (shipped in the mod package under resources).
+- Icon flash uses **Save Icon Color** (color picker).
+
 ## v1.0.0
 
 First public release as **EarlyBuffer** (formerly *frirecracker* / *EarlyGrace*).
