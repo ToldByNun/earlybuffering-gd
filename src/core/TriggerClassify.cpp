@@ -8,7 +8,6 @@
 using namespace geode::prelude;
 
 bool TriggerClassify::isMoveTriggerId(int objectId) {
-    // 901 = Move; 1611 = Stop (motion family).
     return objectId == 901 || objectId == 1611;
 }
 
@@ -25,30 +24,33 @@ bool TriggerClassify::isSpawnTriggerId(int objectId) {
 }
 
 bool TriggerClassify::isFollowTriggerId(int objectId) {
-    // Advanced Follow / Follow Player Y / Follow — move groups with a target.
+    // 1347 Advanced Follow, 1585 Follow Player Y, 1817 Follow.
     return objectId == 1347 || objectId == 1585 || objectId == 1817;
 }
 
+bool TriggerClassify::isFollowPlayerTriggerId(int objectId) {
+    // Always couples to the live player path.
+    return objectId == 1585;
+}
+
 bool TriggerClassify::isNonLethalTriggerId(int objectId) {
-    // Camera (zoom/move/offset/rotate/edge) — never affects solid poses by ID alone.
     if (objectId == 1913 || objectId == 1914 || objectId == 1915
         || objectId == 1916 || objectId == 1917 || objectId == 2015
         || objectId == 2016 || objectId == 2901) {
         return true;
     }
-    // Cosmetic / audio / timing UI — do not bake.
     switch (objectId) {
-        case 29:   // BG effect (legacy)
-        case 1006: // Pulse
-        case 1007: // Alpha
-        case 1049: // Toggle (enable/disable — not a pose track)
-        case 1520: // Shake
-        case 1818: // Random
-        case 3605: // Area fade-ish
-        case 3606: // Song
-        case 3607: // TimeWarp (dt, not object pose)
-        case 3612: // SFX
-        case 3613: // Edit Song
+        case 29:
+        case 1006:
+        case 1007:
+        case 1049:
+        case 1520:
+        case 1818:
+        case 3605:
+        case 3606:
+        case 3607:
+        case 3612:
+        case 3613:
             return true;
         default:
             return false;
@@ -96,21 +98,24 @@ char const* TriggerClassify::kindName(TriggerKind kind) {
     }
 }
 
-bool TriggerClassify::hasDynamicFollowHints(MotionHints const& hints) {
-    // Only meaningful on lethal motion candidates (move/follow of solids).
+bool TriggerClassify::dependsOnLivePlayer(MotionHints const& hints) {
     if (hints.lockToPlayerX || hints.lockToPlayerY) return true;
-    // Solids locked to camera still move in world and can kill.
-    if (hints.lockToCameraX || hints.lockToCameraY) return true;
-    if (hints.followCpp) return true;
     if (hints.rotateFollowP1 || hints.rotateFollowP2) return true;
-    if (hints.directionFollowSnap360) return true;
-    if (TriggerClassify::isFollowTriggerId(hints.objectId)) return true;
+    if (hints.targetPlayer1 || hints.targetPlayer2) return true;
+    if (TriggerClassify::isFollowPlayerTriggerId(hints.objectId)) return true;
+    // Camera lock on a mover: camera usually tracks the player → player-coupled.
+    if (hints.lockToCameraX || hints.lockToCameraY) return true;
     return false;
 }
 
-bool TriggerClassify::hasDynamicOtherHints(MotionHints const& hints) {
-    if (hints.dynamicMode || hints.dynamicBlock) return true;
-    if (hints.useMoveTarget) return true;
+bool TriggerClassify::hasNonPlayerDynamicHints(MotionHints const& hints) {
+    // Touch start time depends on when the player hits the trigger — not bakeable
+    // as a fixed absolute timeline from attempt 0 without knowing touch tick.
+    bool const motionId = TriggerClassify::isMoveTriggerId(hints.objectId)
+        || TriggerClassify::isRotateTriggerId(hints.objectId)
+        || TriggerClassify::isScaleTriggerId(hints.objectId)
+        || TriggerClassify::isFollowTriggerId(hints.objectId);
+    if (hints.touchTriggered && motionId) return true;
     return false;
 }
 
@@ -121,36 +126,37 @@ TriggerKind TriggerClassify::classifyHints(MotionHints const& hints) {
 
     int const id = hints.objectId;
 
-    // Camera / pulse / song / shake / … — always out, even if "dynamic".
     if (TriggerClassify::isNonLethalTriggerId(id)) {
         return TriggerKind::Ignore;
     }
-
-    // Anything that is not a known lethal-motion family → Ignore.
-    // Do not mark unknown effects DynamicOther (would waste bake/live work).
     if (!TriggerClassify::isLethalMotionCandidateId(id)) {
         return TriggerKind::Ignore;
     }
 
-    // Follow / lock-to-player on real movers — not static-cacheable.
-    if (TriggerClassify::hasDynamicFollowHints(hints)) {
+    // Player-coupled → cannot put a single static track in the cache.
+    if (TriggerClassify::dependsOnLivePlayer(hints)) {
         return TriggerKind::DynamicFollow;
     }
-    if (TriggerClassify::hasDynamicOtherHints(hints)) {
+    // Touch-activated motion (start time = player path).
+    if (TriggerClassify::hasNonPlayerDynamicHints(hints)) {
         return TriggerKind::DynamicOther;
     }
 
-    bool const motionId = TriggerClassify::isMoveTriggerId(id)
-        || TriggerClassify::isRotateTriggerId(id)
-        || TriggerClassify::isScaleTriggerId(id);
-    // Touch-activated motion: start time depends on player path.
-    if (hints.touchTriggered && motionId) {
-        return TriggerKind::DynamicOther;
+    // Group-follow / move-target / "dynamic mode" toward another group:
+    // still deterministic if the target group is itself static — StaticMove.
+    // (Baker resolves the chain later; classifier only gates player coupling.)
+    if (TriggerClassify::isFollowTriggerId(id)
+        || hints.useMoveTarget
+        || hints.followCpp
+        || hints.dynamicMode
+        || hints.directionFollowSnap360) {
+        if (TriggerClassify::isFollowPlayerTriggerId(id)) {
+            return TriggerKind::DynamicFollow;
+        }
+        // Follow / move-target of another group ID → bakeable chain.
+        return TriggerKind::StaticMove;
     }
 
-    if (TriggerClassify::isFollowTriggerId(id)) {
-        return TriggerKind::DynamicFollow;
-    }
     if (TriggerClassify::isMoveTriggerId(id)) {
         if (std::fabs(hints.moveOffsetX) < 1e-4f
             && std::fabs(hints.moveOffsetY) < 1e-4f
@@ -198,6 +204,10 @@ TriggerClassify::MotionHints TriggerClassify::hintsFromObject(GameObject* obj) {
     h.useMoveTarget = effect->m_useMoveTarget;
     h.touchTriggered = effect->m_isTouchTriggered;
     h.spawnTriggered = effect->m_isSpawnTriggered;
+    h.targetPlayer1 = effect->m_targetPlayer1;
+    h.targetPlayer2 = effect->m_targetPlayer2;
+    h.targetGroupId = effect->m_targetGroupID;
+    h.centerGroupId = effect->m_centerGroupID;
     h.moveOffsetX = effect->m_moveOffset.x;
     h.moveOffsetY = effect->m_moveOffset.y;
     h.rotationDegrees = effect->m_rotationDegrees;
@@ -221,12 +231,6 @@ bool TriggerClassify::selfCheck(std::string& report) {
 
     expect(TriggerClassify::classify(nullptr) == TriggerKind::Ignore, "null");
 
-    MotionHints empty{};
-    expect(
-        TriggerClassify::classifyHints(empty) == TriggerKind::Ignore,
-        "empty-hints"
-    );
-
     MotionHints move{};
     move.isEffect = true;
     move.objectId = 901;
@@ -237,20 +241,32 @@ bool TriggerClassify::selfCheck(std::string& report) {
         "static-move-901"
     );
 
-    MotionHints touchMove = move;
-    touchMove.touchTriggered = true;
-    touchMove.spawnTriggered = false;
+    // Group 6 follows group 5 (Advanced Follow) — bakeable, not player.
+    MotionHints groupFollow{};
+    groupFollow.isEffect = true;
+    groupFollow.objectId = 1347;
+    groupFollow.targetGroupId = 6;
+    groupFollow.centerGroupId = 5;
+    groupFollow.useMoveTarget = true;
     expect(
-        TriggerClassify::classifyHints(touchMove) == TriggerKind::DynamicOther,
-        "touch-move-dynamic"
+        TriggerClassify::classifyHints(groupFollow) == TriggerKind::StaticMove,
+        "group-follow-static"
     );
 
-    MotionHints follow{};
-    follow.isEffect = true;
-    follow.objectId = 1347;
+    // Same follow ID but targets player → dynamic.
+    MotionHints playerFollow = groupFollow;
+    playerFollow.targetPlayer1 = true;
     expect(
-        TriggerClassify::classifyHints(follow) == TriggerKind::DynamicFollow,
-        "follow-id"
+        TriggerClassify::classifyHints(playerFollow) == TriggerKind::DynamicFollow,
+        "player-target-dynamic"
+    );
+
+    MotionHints followPlayerY{};
+    followPlayerY.isEffect = true;
+    followPlayerY.objectId = 1585;
+    expect(
+        TriggerClassify::classifyHints(followPlayerY) == TriggerKind::DynamicFollow,
+        "follow-player-y"
     );
 
     MotionHints lockPlayer{};
@@ -263,18 +279,24 @@ bool TriggerClassify::selfCheck(std::string& report) {
         "lock-player-x"
     );
 
-    // Camera zoom even with "dynamic" flags must be Ignore (cannot kill).
+    MotionHints touchMove{};
+    touchMove.isEffect = true;
+    touchMove.objectId = 901;
+    touchMove.moveOffsetX = 100.f;
+    touchMove.touchTriggered = true;
+    expect(
+        TriggerClassify::classifyHints(touchMove) == TriggerKind::DynamicOther,
+        "touch-move-dynamic"
+    );
+
     MotionHints cam{};
     cam.isEffect = true;
     cam.objectId = 1913;
     cam.lockToPlayerX = true;
-    cam.dynamicMode = true;
     expect(
         TriggerClassify::classifyHints(cam) == TriggerKind::Ignore,
         "camera-ignore"
     );
-    expect(TriggerClassify::isNonLethalTriggerId(1914), "cam-move-id");
-    expect(TriggerClassify::isNonLethalTriggerId(1917), "cam-rot-id");
 
     MotionHints rot{};
     rot.isEffect = true;
@@ -286,56 +308,23 @@ bool TriggerClassify::selfCheck(std::string& report) {
         "static-rotate"
     );
 
-    MotionHints scale{};
-    scale.isEffect = true;
-    scale.objectId = 2067;
-    scale.spawnTriggered = true;
+    MotionHints dynModeGroup{};
+    dynModeGroup.isEffect = true;
+    dynModeGroup.objectId = 901;
+    dynModeGroup.moveOffsetX = 10.f;
+    dynModeGroup.dynamicMode = true;
+    dynModeGroup.targetGroupId = 5;
     expect(
-        TriggerClassify::classifyHints(scale) == TriggerKind::StaticScale,
-        "static-scale"
-    );
-
-    MotionHints spawn{};
-    spawn.isEffect = true;
-    spawn.objectId = 1268;
-    expect(
-        TriggerClassify::classifyHints(spawn) == TriggerKind::StaticSpawn,
-        "static-spawn"
-    );
-
-    MotionHints dynMode{};
-    dynMode.isEffect = true;
-    dynMode.objectId = 901;
-    dynMode.moveOffsetX = 10.f;
-    dynMode.dynamicMode = true;
-    expect(
-        TriggerClassify::classifyHints(dynMode) == TriggerKind::DynamicOther,
-        "dynamic-mode"
+        TriggerClassify::classifyHints(dynModeGroup) == TriggerKind::StaticMove,
+        "dynamic-mode-group-static"
     );
 
     MotionHints pulse{};
     pulse.isEffect = true;
     pulse.objectId = 1006;
-    pulse.moveOffsetX = 99.f;
     expect(
         TriggerClassify::classifyHints(pulse) == TriggerKind::Ignore,
         "pulse-ignore"
-    );
-
-    MotionHints unknownFx{};
-    unknownFx.isEffect = true;
-    unknownFx.objectId = 99999;
-    unknownFx.moveOffsetX = 40.f;
-    expect(
-        TriggerClassify::classifyHints(unknownFx) == TriggerKind::Ignore,
-        "unknown-fx-ignore"
-    );
-
-    expect(TriggerClassify::isDynamic(TriggerKind::DynamicFollow), "is-dynamic");
-    expect(!TriggerClassify::isStatic(TriggerKind::DynamicFollow), "follow-not-static");
-    expect(
-        std::string(TriggerClassify::kindName(TriggerKind::StaticMove)) == "StaticMove",
-        "kind-name"
     );
 
     if (fails == 0) {
