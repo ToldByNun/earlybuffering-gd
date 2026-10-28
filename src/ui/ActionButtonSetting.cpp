@@ -191,12 +191,12 @@ bool ActionButtonSettingNodeV3::init(std::shared_ptr<ActionButtonSettingV3> sett
 
     auto* menu = this->getButtonMenu();
     auto const initial = dynamicButtonLabel(setting->getKey(), setting->buttonText());
-    m_shownLabel = initial;
-    m_buttonSprite = ButtonSprite::create(initial.c_str(), "bigFont.fnt", "GJ_button_01.png", 0.8f);
-    m_button = CCMenuItemSpriteExtra::create(
-        m_buttonSprite, this, menu_selector(ActionButtonSettingNodeV3::onButton)
+    this->m_shownLabel = initial;
+    this->m_buttonSprite = ButtonSprite::create(initial.c_str(), "bigFont.fnt", "GJ_button_01.png", 0.8f);
+    this->m_button = CCMenuItemSpriteExtra::create(
+        this->m_buttonSprite, this, menu_selector(ActionButtonSettingNodeV3::onButton)
     );
-    layoutActionButton(menu, m_button, m_buttonSprite);
+    layoutActionButton(menu, this->m_button, this->m_buttonSprite);
 
     this->schedule(schedule_selector(ActionButtonSettingNodeV3::onTick), 0.2f);
     this->updateState(nullptr);
@@ -205,43 +205,53 @@ bool ActionButtonSettingNodeV3::init(std::shared_ptr<ActionButtonSettingV3> sett
 
 void ActionButtonSettingNodeV3::refreshLabel() {
     auto setting = std::static_pointer_cast<ActionButtonSettingV3>(this->getSetting());
-    if (!setting || !m_buttonSprite || !m_button || !this->getButtonMenu()) return;
+    if (!setting) return;
+    if (!this->m_buttonSprite || !this->m_button || !this->getButtonMenu()) return;
+
     auto const next = dynamicButtonLabel(setting->getKey(), setting->buttonText());
-    if (next == m_shownLabel) return;
-    m_shownLabel = next;
-    m_buttonSprite->setString(next.c_str());
-    layoutActionButton(this->getButtonMenu(), m_button, m_buttonSprite);
+    if (next == this->m_shownLabel) return;
+
+    this->m_shownLabel = next;
+    this->m_buttonSprite->setString(next.c_str());
+    layoutActionButton(this->getButtonMenu(), this->m_button, this->m_buttonSprite);
 }
 
 void ActionButtonSettingNodeV3::updateState(CCNode* invoker) {
     SettingNodeV3::updateState(invoker);
     this->refreshLabel();
+
     auto setting = this->getSetting();
-    bool const enable = setting && setting->shouldEnable() && actionShouldEnable(setting->getKey());
-    if (m_button) m_button->setEnabled(enable);
-    if (m_buttonSprite) {
-        m_buttonSprite->setCascadeColorEnabled(true);
-        m_buttonSprite->setCascadeOpacityEnabled(true);
-        m_buttonSprite->setOpacity(enable ? 255 : 155);
-        m_buttonSprite->setColor(enable ? ccWHITE : ccGRAY);
-    }
+    bool const enable = setting
+        && setting->shouldEnable()
+        && actionShouldEnable(setting->getKey());
+
+    if (this->m_button) this->m_button->setEnabled(enable);
+    if (!this->m_buttonSprite) return;
+
+    this->m_buttonSprite->setCascadeColorEnabled(true);
+    this->m_buttonSprite->setCascadeOpacityEnabled(true);
+    this->m_buttonSprite->setOpacity(enable ? 255 : 155);
+    this->m_buttonSprite->setColor(enable ? ccWHITE : ccGRAY);
 }
 
 void ActionButtonSettingNodeV3::onTick(float) {
     this->refreshLabel();
+
     auto setting = this->getSetting();
-    if (!setting || !m_button) return;
+    if (!setting || !this->m_button) return;
+
     bool const enable = setting->shouldEnable() && actionShouldEnable(setting->getKey());
-    m_button->setEnabled(enable);
-    if (m_buttonSprite) {
-        m_buttonSprite->setOpacity(enable ? 255 : 155);
-        m_buttonSprite->setColor(enable ? ccWHITE : ccGRAY);
-    }
+    this->m_button->setEnabled(enable);
+    if (!this->m_buttonSprite) return;
+
+    this->m_buttonSprite->setOpacity(enable ? 255 : 155);
+    this->m_buttonSprite->setColor(enable ? ccWHITE : ccGRAY);
 }
 
 void ActionButtonSettingNodeV3::onButton(CCObject*) {
     auto setting = this->getSetting();
     if (!setting) return;
+
     fireSettingAction(setting->getKey());
     this->refreshLabel();
     this->updateState(nullptr);
@@ -251,12 +261,12 @@ ActionButtonSettingNodeV3* ActionButtonSettingNodeV3::create(
     std::shared_ptr<ActionButtonSettingV3> setting, float width
 ) {
     auto* ret = new ActionButtonSettingNodeV3();
-    if (ret && ret->init(setting, width)) {
-        ret->autorelease();
-        return ret;
+    if (!ret || !ret->init(setting, width)) {
+        CC_SAFE_DELETE(ret);
+        return nullptr;
     }
-    CC_SAFE_DELETE(ret);
-    return nullptr;
+    ret->autorelease();
+    return ret;
 }
 
 $execute {

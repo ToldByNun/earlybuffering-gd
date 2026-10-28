@@ -14,7 +14,7 @@ public:
         std::string key, std::string modID, matjson::Value const& json
     );
 
-    std::string const& buttonText() const { return m_buttonText; }
+    std::string const& buttonText() const { return this->m_buttonText; }
 
     bool load(matjson::Value const& json) override;
     bool save(matjson::Value& json) const override;

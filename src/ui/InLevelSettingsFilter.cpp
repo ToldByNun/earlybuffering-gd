@@ -107,7 +107,8 @@ class CategoryBar : public CCMenu {
 public:
     bool initBar(KeeperNode* owner, float width) {
         if (!CCMenu::init()) return false;
-        m_owner = owner;
+
+        this->m_owner = owner;
         this->setID("earlybuffer-settings-category-bar"_spr);
         this->setContentSize({ width, 28.f });
         this->ignoreAnchorPointForPosition(false);
@@ -130,15 +131,16 @@ public:
         right->setPosition({ width - 24.f, 14.f });
         this->addChild(right);
 
-        m_label = CCLabelBMFont::create("MAIN", "goldFont.fnt");
-        m_label->setScale(0.45f);
-        m_label->setPosition({ width * 0.5f, 14.f });
-        this->addChild(m_label);
+        this->m_label = CCLabelBMFont::create("MAIN", "goldFont.fnt");
+        this->m_label->setScale(0.45f);
+        this->m_label->setPosition({ width * 0.5f, 14.f });
+        this->addChild(this->m_label);
         return true;
     }
 
     void setCategory(SettingsCategory cat) {
-        if (m_label) m_label->setString(InLevelSettingsFilter::categoryName(cat));
+        if (!this->m_label) return;
+        this->m_label->setString(InLevelSettingsFilter::categoryName(cat));
     }
 
     void onPrev(CCObject*);
@@ -146,12 +148,12 @@ public:
 
     static CategoryBar* create(KeeperNode* owner, float width) {
         auto* ret = new CategoryBar();
-        if (ret && ret->initBar(owner, width)) {
-            ret->autorelease();
-            return ret;
+        if (!ret || !ret->initBar(owner, width)) {
+            CC_SAFE_DELETE(ret);
+            return nullptr;
         }
-        CC_SAFE_DELETE(ret);
-        return nullptr;
+        ret->autorelease();
+        return ret;
     }
 
 private:
@@ -172,21 +174,23 @@ public:
         auto const n = static_cast<int>(SettingsCategory::Count);
         auto i = static_cast<int>(cat) % n;
         if (i < 0) i += n;
-        m_category = static_cast<SettingsCategory>(i);
-        if (m_bar) m_bar->setCategory(m_category);
+
+        this->m_category = static_cast<SettingsCategory>(i);
+        if (this->m_bar) this->m_bar->setCategory(this->m_category);
         this->refilter(true);
-        if (m_list) m_list->moveToTop();
+        if (this->m_list) this->m_list->moveToTop();
     }
 
     void cycle(int delta) {
         this->setCategory(static_cast<SettingsCategory>(
-            static_cast<int>(m_category) + delta
+            static_cast<int>(this->m_category) + delta
         ));
     }
 
     void ensureBar(ScrollLayer* list) {
         if (!list) return;
-        m_list = list;
+
+        this->m_list = list;
         auto* parent = list->getParent();
         if (!parent) return;
 
@@ -194,8 +198,8 @@ public:
         if (auto* existing = typeinfo_cast<CategoryBar*>(
                 parent->getChildByID("earlybuffer-settings-category-bar"_spr)
             )) {
-            m_bar = existing;
-            m_bar->setCategory(m_category);
+            this->m_bar = existing;
+            this->m_bar->setCategory(this->m_category);
             return;
         }
 
@@ -203,29 +207,37 @@ public:
         if (listSize.height <= kBarH + 40.f) return;
 
         list->setContentSize({ listSize.width, listSize.height - kBarH });
-        if (auto* bar = CategoryBar::create(this, listSize.width)) {
-            bar->setPosition({
-                list->getPositionX() + listSize.width * 0.5f,
-                list->getPositionY() + list->getContentSize().height
-            });
-            bar->setTouchPriority(list->getTouchPriority() - 1);
-            parent->addChild(bar);
-            m_bar = bar;
-            m_bar->setCategory(m_category);
-        }
+        auto* bar = CategoryBar::create(this, listSize.width);
+        if (!bar) return;
+
+        bar->setPosition({
+            list->getPositionX() + listSize.width * 0.5f,
+            list->getPositionY() + list->getContentSize().height
+        });
+        bar->setTouchPriority(list->getTouchPriority() - 1);
+        parent->addChild(bar);
+        this->m_bar = bar;
+        this->m_bar->setCategory(this->m_category);
     }
 
     void absorbFromTree(CCNode* popup) {
+        if (!popup) return;
+
         std::vector<SettingNodeV3*> found;
         ScrollLayer* list = nullptr;
         FilterWalk::collect(popup, found, list);
-        if (list) m_list = list;
+        if (list) this->m_list = list;
+
         for (auto* sett : found) {
+            if (!sett) continue;
             bool known = false;
-            for (auto const& ref : m_all) {
-                if (ref.data() == sett) { known = true; break; }
+            for (auto const& ref : this->m_all) {
+                if (ref.data() != sett) continue;
+                known = true;
+                break;
             }
-            if (!known) m_all.push_back(sett);
+            if (known) continue;
+            this->m_all.push_back(sett);
         }
     }
 
@@ -234,25 +246,26 @@ public:
         if (auto setting = sett->getSetting()) {
             return InLevelSettingsFilter::keepKey(setting->getKey(), cat);
         }
+
         // Unresolved custom ("Missing setting 'key'") — still map by key in the label
         // so Bake/Assist pages aren't empty when registration races load.
-        if (auto* label = sett->getNameLabel()) {
-            std::string const s = label->getString();
-            auto match = [&](char const* key) {
-                return s.find(key) != std::string::npos
-                    && InLevelSettingsFilter::keepKey(key, cat);
-            };
-            return match("import-bake-replay")
-                || match("cycle-assist-mode")
-                || match("bake-map-action")
-                || match("brute-bake-action")
-                || match("cancel-bake-action")
-                || match("cycle-preset-action")
-                || match("reset-learn-action")
-                || match("export-config-action")
-                || match("import-config-action");
-        }
-        return false;
+        auto* label = sett->getNameLabel();
+        if (!label) return false;
+
+        std::string const s = label->getString();
+        auto match = [&](char const* key) {
+            return s.find(key) != std::string::npos
+                && InLevelSettingsFilter::keepKey(key, cat);
+        };
+        return match("import-bake-replay")
+            || match("cycle-assist-mode")
+            || match("bake-map-action")
+            || match("brute-bake-action")
+            || match("cancel-bake-action")
+            || match("cycle-preset-action")
+            || match("reset-learn-action")
+            || match("export-config-action")
+            || match("import-config-action");
     }
 
     void refilter(bool force) {
@@ -260,29 +273,29 @@ public:
         if (!popup) return;
 
         this->absorbFromTree(popup);
-        this->ensureBar(m_list);
-        if (!m_list || !m_list->m_contentLayer) return;
-        if (m_all.empty()) return;
+        this->ensureBar(this->m_list);
+        if (!this->m_list || !this->m_list->m_contentLayer) return;
+        if (this->m_all.empty()) return;
 
-        auto* content = m_list->m_contentLayer;
+        auto* content = this->m_list->m_contentLayer;
         size_t const childCount = content->getChildrenCount();
-
         if (!force
-            && m_appliedCat == m_category
-            && childCount == m_lastChildCount) {
+            && this->m_appliedCat == this->m_category
+            && childCount == this->m_lastChildCount) {
             return;
         }
 
         float const yBefore = content->getPositionY();
         float const hBefore = content->getContentHeight();
 
-        for (auto& sett : m_all) {
-            if (sett) sett->removeFromParent();
+        for (auto& sett : this->m_all) {
+            if (!sett) continue;
+            sett->removeFromParent();
         }
 
         bool bg = false;
-        for (auto& sett : m_all) {
-            if (!sett || !nodeKeep(sett, m_category)) continue;
+        for (auto& sett : this->m_all) {
+            if (!sett || !nodeKeep(sett, this->m_category)) continue;
             sett->setVisible(true);
             content->addChild(sett);
             sett->setDefaultBGColor(ccc4(0, 0, 0, bg ? 60 : 20));
@@ -291,8 +304,8 @@ public:
 
         content->updateLayout();
         float const hAfter = content->getContentHeight();
-        if (force && m_appliedCat != m_category) {
-            m_list->moveToTop();
+        if (force && this->m_appliedCat != this->m_category) {
+            this->m_list->moveToTop();
         }
         else {
             content->setPositionY(
@@ -300,18 +313,20 @@ public:
             );
         }
 
-        m_appliedCat = m_category;
-        m_lastChildCount = content->getChildrenCount();
+        this->m_appliedCat = this->m_category;
+        this->m_lastChildCount = content->getChildrenCount();
     }
 
     bool initKeeper() {
         if (!CCNode::init()) return false;
+
         this->setID("earlybuffer-inlevel-settings-filter"_spr);
-        m_changeHandle = SettingNodeValueChangeEvent().listen(
+        this->m_changeHandle = SettingNodeValueChangeEvent().listen(
             [this](std::string_view modID, std::string_view, SettingNodeV3*, bool) {
                 if (modID != Mod::get()->getID()) return ListenerResult::Propagate;
                 Loader::get()->queueInMainThread([self = Ref(this)] {
-                    if (self) self->refilter(true);
+                    if (!self) return;
+                    self->refilter(true);
                 });
                 return ListenerResult::Propagate;
             }
@@ -327,12 +342,12 @@ public:
 
     static KeeperNode* create() {
         auto* ret = new KeeperNode();
-        if (ret && ret->initKeeper()) {
-            ret->autorelease();
-            return ret;
+        if (!ret || !ret->initKeeper()) {
+            CC_SAFE_DELETE(ret);
+            return nullptr;
         }
-        CC_SAFE_DELETE(ret);
-        return nullptr;
+        ret->autorelease();
+        return ret;
     }
 
     static KeeperNode* findOpen() {
@@ -348,11 +363,13 @@ private:
 };
 
 void CategoryBar::onPrev(CCObject*) {
-    if (m_owner) m_owner->cycle(-1);
+    if (!this->m_owner) return;
+    this->m_owner->cycle(-1);
 }
 
 void CategoryBar::onNext(CCObject*) {
-    if (m_owner) m_owner->cycle(1);
+    if (!this->m_owner) return;
+    this->m_owner->cycle(1);
 }
 
 } // namespace
@@ -417,9 +434,10 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
 void InLevelSettingsFilterKeeper::attach(CCNode* popup) {
     if (!popup) return;
     if (popup->getChildByID("earlybuffer-inlevel-settings-filter"_spr)) return;
-    if (auto* keeper = KeeperNode::create()) {
-        popup->addChild(keeper);
-    }
+
+    auto* keeper = KeeperNode::create();
+    if (!keeper) return;
+    popup->addChild(keeper);
 }
 
 bool InLevelSettingsFilterKeeper::isOpen() {
@@ -436,6 +454,7 @@ class SettingsTabWatchdog : public CCNode {
 public:
     static bool popupIsOurSettings(CCNode* root) {
         if (!root || !Mod::get()) return false;
+
         std::string const ourId = Mod::get()->getID();
         std::vector<SettingNodeV3*> settings;
         ScrollLayer* list = nullptr;
@@ -445,20 +464,23 @@ public:
             if (auto s = sett->getSetting()) {
                 if (s->getModID() == ourId) return true;
             }
-            if (auto* label = sett->getNameLabel()) {
-                std::string const text = label->getString();
-                if (text.find("import-bake-replay") != std::string::npos
-                    || text.find("bake-map-action") != std::string::npos
-                    || text.find("show-pause-hub") != std::string::npos) {
-                    return true;
-                }
+            auto* label = sett->getNameLabel();
+            if (!label) continue;
+            std::string const text = label->getString();
+            if (text.find("import-bake-replay") != std::string::npos
+                || text.find("bake-map-action") != std::string::npos
+                || text.find("show-pause-hub") != std::string::npos) {
+                return true;
             }
         }
+
         // Title fallback (Geode sets "Settings for EarlyBuffer").
         std::vector<CCNode*> stack{ root };
         while (!stack.empty()) {
             auto* n = stack.back();
             stack.pop_back();
+            if (!n) continue;
+
             if (auto* lab = typeinfo_cast<CCLabelBMFont*>(n)) {
                 std::string const t = lab->getString();
                 if (t.find("EarlyBuffer") != std::string::npos
@@ -466,9 +488,9 @@ public:
                     return true;
                 }
             }
-            if (auto* kids = n->getChildren()) {
-                for (auto* c : CCArrayExt<CCNode*>(kids)) stack.push_back(c);
-            }
+            auto* kids = n->getChildren();
+            if (!kids) continue;
+            for (auto* c : CCArrayExt<CCNode*>(kids)) stack.push_back(c);
         }
         return false;
     }
@@ -508,6 +530,7 @@ public:
         auto* scene = CCScene::get();
         if (!scene) return;
         if (this->getParent() == scene) return;
+
         this->retain();
         this->removeFromParentAndCleanup(false);
         scene->addChild(this);
@@ -516,9 +539,9 @@ public:
 
     void onTick(float) {
         this->ensureOnScene();
-        if (auto* popup = findUnattachedOurPopup()) {
-            InLevelSettingsFilterKeeper::attach(popup);
-        }
+        auto* popup = findUnattachedOurPopup();
+        if (!popup) return;
+        InLevelSettingsFilterKeeper::attach(popup);
     }
 
     bool initWatchdog() {
@@ -530,12 +553,12 @@ public:
 
     static SettingsTabWatchdog* create() {
         auto* ret = new SettingsTabWatchdog();
-        if (ret && ret->initWatchdog()) {
-            ret->autorelease();
-            return ret;
+        if (!ret || !ret->initWatchdog()) {
+            CC_SAFE_DELETE(ret);
+            return nullptr;
         }
-        CC_SAFE_DELETE(ret);
-        return nullptr;
+        ret->autorelease();
+        return ret;
     }
 };
 

@@ -241,7 +241,8 @@ void PauseActionBridge::toggleTrajectory() {
     bool const on = StageConfig::showTrajectory();
     TrajectoryVisualizer::get().setEnabled(on);
     if (on) {
-        if (auto* pl = PlayLayer::get()) TrajectoryVisualizer::get().attach(pl);
+        auto* pl = PlayLayer::get();
+        if (pl) TrajectoryVisualizer::get().attach(pl);
     }
     AssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
     AssistController::get().updateOverlay();
@@ -274,11 +275,12 @@ void PauseActionBridge::importConfig() {
     auto path = Mod::get()->getSaveDir() / "earlybuffer-config.json";
     auto r = ConfigBundle::importFrom(path);
 #endif
-    if (r.isErr()) FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
-    else {
-        AssistController::get().updateOverlay();
-        FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
+    if (r.isErr()) {
+        FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
+        return;
     }
+    AssistController::get().updateOverlay();
+    FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
 }
 
 void PauseActionBridge::openModSettings() {

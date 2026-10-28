@@ -68,14 +68,12 @@ class $modify(EbPauseLayer, PauseLayer) {
             btn->setID("earlybuffer-settings-btn"_spr);
             btn->setScale(0.85f);
 
-            bool placedOnRight = false;
             if (auto* right = PauseMenuAttach::rightButtonMenu(this)) {
                 right->addChild(btn);
                 right->updateLayout();
-                placedOnRight = true;
                 AssistLog::debug("pause-ui: EB settings on right-button-menu");
             }
-            if (!placedOnRight) {
+            else {
                 auto* menu = CCMenu::create();
                 menu->setID("earlybuffer-settings-menu"_spr);
                 menu->ignoreAnchorPointForPosition(false);
