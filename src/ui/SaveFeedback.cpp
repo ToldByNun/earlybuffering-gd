@@ -2,6 +2,7 @@
 #include "SaveFrameCounter.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/PerfTrace.hpp"
 
 #include <Geode/Geode.hpp>
 #include <algorithm>
@@ -84,14 +85,14 @@ void SaveFeedback::playSound(int delayTicks) {
 
     if (!path.empty()) {
         eng->playEffect(path.generic_string());
-        AssistLog::info(fmt::format("save cue +{} → {}", delayTicks, path.generic_string()));
+        AssistLog::debug(fmt::format("save cue +{} → {}", delayTicks, path.generic_string()));
         return;
     }
 
     // Last resort: spr-style relative name even if we couldn't stat the file yet
     // (unzipped path can lag one frame after install).
     eng->playEffect(sprName);
-    AssistLog::info(fmt::format(
+    AssistLog::debug(fmt::format(
         "save cue +{} via spr '{}' (resourcesDir={})",
         delayTicks, sprName, mod->getResourcesDir()
     ));
@@ -133,17 +134,21 @@ void SaveFeedback::flashIcon(PlayerObject* player) {
 }
 
 void SaveFeedback::onSave(PlayLayer* playLayer, PlayerObject* player, int delayTicks) {
+    PerfTrace::Scope const scope("onSave");
     if (delayTicks <= 0) return;
 
     if (StageConfig::saveFeedbackSound()) {
+        PerfTrace::Scope const soundScope("saveSound");
         this->playSound(delayTicks);
     }
     if (StageConfig::saveFeedbackIcon() && player) {
+        PerfTrace::Scope const iconScope("saveIcon");
         this->flashIcon(player);
     }
     if (!StageConfig::saveFeedbackCounter()) return;
     if (!playLayer || !player) return;
 
+    PerfTrace::Scope const counterScope("saveCounter");
     auto& counter = SaveFrameCounter::get();
     counter.attach(playLayer);
     counter.spawn(playLayer, player->getPosition(), delayTicks);

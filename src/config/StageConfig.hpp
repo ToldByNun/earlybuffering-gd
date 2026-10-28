@@ -78,6 +78,8 @@ public:
     // --- General / UI ---
     static bool isEnabled();
     static bool debugLogging();
+    // Section timings + spike dumps to Geode log and save-dir earlybuffer-perf.log.
+    static bool perfTrace();
     static bool safeMode();
     static bool showOverlay();
     static bool showTrajectory();

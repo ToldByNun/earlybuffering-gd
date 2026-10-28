@@ -17,6 +17,12 @@
 - Defaults match old `both` (sound+color on, counter off). Re-check toggles if you previously used off/sound/icon-only.
 - **Counter**: hollow ring + `+N` in GD font at the assisted click, colored by frames saved (1–8 palette); stays until death/restart; max 64 markers.
 
+### Perf Trace
+
+- New **Perf Trace** setting (default on): times assist hot paths (`plan`, trajectory rebuild, save feedback, evacuate, …).
+- Spikes (≥4 ms our work / ≥1 ms section) and periodic summaries go to the Geode console and `earlybuffer-perf.log` in the mod save folder.
+- Save-cue console spam gated behind Debug Logging (was logging every inject).
+
 ### Crash fix: restart / checkpoint
 
 - Evacuate shadow+snapshot ghosts from section vectors before `resetLevel` / checkpoint load (fixes `sortSectionVector` AV after sim). Cancel in-flight bake on those paths.

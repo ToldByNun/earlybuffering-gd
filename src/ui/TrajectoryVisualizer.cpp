@@ -4,6 +4,7 @@
 #include "../core/ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -177,8 +178,9 @@ void TrajectoryVisualizer::onPhysicsTick(PlayLayer* layer, float) {
 }
 
 void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
-    if (!m_enabled || !m_node || !layer || !layer->m_player1) return;
-    if (!m_node->getParent()) return;
+    PerfTrace::Scope const scope("trajRebuild");
+    if (!this->m_enabled || !this->m_node || !layer || !layer->m_player1) return;
+    if (!this->m_node->getParent()) return;
     if (ShadowSimulator::get().isSimulating()) return;
 
     auto* player = layer->m_player1;

@@ -3,6 +3,7 @@
 #include "core/BakeMap.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "debug/AssistLog.hpp"
+#include "debug/PerfTrace.hpp"
 #include "debug/PlanGoldCorpus.hpp"
 #include "ui/ActionButtonSetting.hpp"
 #include "ui/InLevelSettingsFilter.hpp"
@@ -14,9 +15,14 @@
 
 using namespace geode::prelude;
 
+static void syncPerfTrace() {
+    PerfTrace::get().setEnabled(StageConfig::perfTrace());
+}
+
 static void onAnySetting() {
     if (StageConfig::isApplying()) return;
     StageConfig::refreshCache();
+    syncPerfTrace();
     AssistController::get().updateOverlay();
 }
 
@@ -30,7 +36,11 @@ $on_mod(Loaded) {
 
     // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
     StageConfig::refreshCache();
+    syncPerfTrace();
     AssistLog::printBanner();
+    if (StageConfig::perfTrace()) {
+        AssistLog::info(fmt::format("PerfTrace logging to {}", PerfTrace::logPath()));
+    }
 
     {
         std::string report;
@@ -136,6 +146,7 @@ $on_mod(Loaded) {
     watchInt("death-slack");
     watchInt("look-ahead-cap");
     watchBool("debug-logging");
+    watchBool("perf-trace");
     watchBool("safe-mode");
 
     listenForSettingChanges<bool>("show-trajectory", [](bool value) {

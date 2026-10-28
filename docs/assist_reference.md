@@ -58,6 +58,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | preset | string | Tight | Tight/Normal/Wide/Max/Off | | Main — fills defaults |
 | safe-mode | bool | true | | | Main — block saves when assist enabled |
 | debug-logging | bool | true | | | Main |
+| perf-trace | bool | true | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | show-overlay | bool | true | | | Ingame |
 | show-trajectory | bool | false | | | Visual |
 | show-pause-bake | bool | true | | | Ingame — pause status lines only |

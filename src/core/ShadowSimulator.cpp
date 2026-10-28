@@ -2,6 +2,7 @@
 #include "BakeMap.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -153,6 +154,7 @@ void ShadowSimulator::parkGhosts() {
 }
 
 void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
+    PerfTrace::Scope const scope("evacuateGhosts");
     // Abort any in-flight sim; do NOT restoreCapture here — reset/checkpoint
     // rebuilds object state and restoring into freed/reused objects can AV.
     this->m_simulating = false;
@@ -1145,11 +1147,12 @@ SimPlan ShadowSimulator::plan(
     PlayLayer* layer, PlayerObject* real, bool down, int limit,
     float dt, float firstDt, PlanOptions const& options
 ) {
+    PerfTrace::Scope const scope("plan");
     static int s_planId = 1;
     SimPlan plan;
     plan.smartDepthUsed = 1;
     plan.planId = s_planId++;
-    if (!layer || !real || !m_shadow || limit < 0 || dt <= 0.f) return plan;
+    if (!layer || !real || !this->m_shadow || limit < 0 || dt <= 0.f) return plan;
     if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
 
     Model model = modelFor(real, limit, options.capMul);

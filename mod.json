@@ -56,6 +56,12 @@
 			"description": "Log SAVED lines and planner decisions to the Geode console.",
 			"default": true
 		},
+		"perf-trace": {
+			"type": "bool",
+			"name": "Perf Trace",
+			"description": "Time assist hot paths; on spikes write a breakdown to the Geode console and to earlybuffer-perf.log in the mod save folder. Leave on while diagnosing FPS hitchs.",
+			"default": true
+		},
 		"show-trajectory": {
 			"type": "bool",
 			"name": "Trajectory Visualizer",

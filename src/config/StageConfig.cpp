@@ -68,6 +68,7 @@ static float defaultLatencyWeight(int modeIndex) {
 StageInfo g_cachedStage{};
 std::array<ModeParams, StageConfig::MODE_COUNT> g_cachedModes{};
 bool g_cachedDebug = true;
+bool g_cachedPerfTrace = true;
 bool g_cachedSafeMode = false;
 bool g_cachedShowOverlay = true;
 bool g_cachedShowTrajectory = false;
@@ -192,6 +193,7 @@ void StageConfig::refreshCache() {
     g_cachedStage.ticksWave = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-wave")), 0, 32);
 
     g_cachedDebug = mod->getSettingValue<bool>("debug-logging");
+    g_cachedPerfTrace = readBool(mod, "perf-trace", true);
     g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
     g_cachedShowTrajectory = readBool(mod, "show-trajectory", false);
@@ -412,6 +414,7 @@ StageInfo StageConfig::fromSettings() {
 
 bool StageConfig::isEnabled() { ensureCache(); return g_cachedStage.enabled; }
 bool StageConfig::debugLogging() { ensureCache(); return g_cachedDebug; }
+bool StageConfig::perfTrace() { ensureCache(); return g_cachedPerfTrace; }
 bool StageConfig::safeMode() { ensureCache(); return g_cachedSafeMode; }
 bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
 bool StageConfig::showTrajectory() { ensureCache(); return g_cachedShowTrajectory; }

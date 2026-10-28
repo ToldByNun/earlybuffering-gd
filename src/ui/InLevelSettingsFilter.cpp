@@ -25,7 +25,7 @@ char const* InLevelSettingsFilter::categoryName(SettingsCategory cat) {
 
 SettingsCategory InLevelSettingsFilter::categoryForKey(std::string const& key) {
     if (key == "title-general" || key == "enabled" || key == "preset"
-        || key == "safe-mode" || key == "debug-logging") {
+        || key == "safe-mode" || key == "debug-logging" || key == "perf-trace") {
         return SettingsCategory::Main;
     }
     if (key == "title-bake-actions" || key == "import-bake-replay"
@@ -418,6 +418,8 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("show-pause-hub") == SettingsCategory::Ingame, "cat-hub-ingame");
     expect(categoryForKey("cycle-preset-action") == SettingsCategory::Assist, "cat-cycle-preset");
     expect(categoryForKey("assist-mode") == SettingsCategory::Assist, "cat-assist-mode");
+    expect(categoryForKey("debug-logging") == SettingsCategory::Main, "cat-debug-main");
+    expect(categoryForKey("perf-trace") == SettingsCategory::Main, "cat-perf-main");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
     expect(categoryForKey("save-feedback-sound") == SettingsCategory::Visual, "cat-save-sound");
     expect(categoryForKey("save-feedback-color") == SettingsCategory::Visual, "cat-save-color");

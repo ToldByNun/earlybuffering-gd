@@ -13,6 +13,7 @@
 #include <cstring>
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+#include "../debug/PerfTrace.hpp"
 #include "../ui/SaveFeedback.hpp"
 #include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
@@ -186,6 +187,8 @@ void AssistController::onLevelQuit() {
     TrajectoryVisualizer::get().detach(true);
     StatusOverlay::detach(true);
     ShadowSimulator::get().detach(true);
+    PerfTrace::get().flush("levelQuit");
+    PerfTrace::get().note("levelQuit");
 
     LevelProfile::get().save();
     BakeMap::get().save();
@@ -723,99 +726,121 @@ void AssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player) 
 }
 
 void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
+    PerfTrace::get().beginTick(this->m_attemptTick, dt);
+    // endTick runs on every exit path (including early returns).
+    struct TickEndGuard {
+        ~TickEndGuard() { PerfTrace::get().endTick(); }
+    } tickEndGuard;
+
     if (dt > 0.f) {
-        if (m_attemptTick < 5 || dt > 0.6f * m_lastDt) m_lastDt = dt;
+        if (this->m_attemptTick < 5 || dt > 0.6f * this->m_lastDt) this->m_lastDt = dt;
         float tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
-        m_simDt = m_lastDt / tw;
-        // Relative frame-time variance EMA → auto robustK bump when unstable.
-        float const err = dt - m_dtEma;
-        m_dtEma += 0.1f * err;
-        float const denom = std::max(m_dtEma, 1e-4f);
-        m_dtVarEma = 0.1f * std::abs(err) / denom + 0.9f * m_dtVarEma;
+        this->m_simDt = this->m_lastDt / tw;
+        float const err = dt - this->m_dtEma;
+        this->m_dtEma += 0.1f * err;
+        float const denom = std::max(this->m_dtEma, 1e-4f);
+        this->m_dtVarEma = 0.1f * std::abs(err) / denom + 0.9f * this->m_dtVarEma;
     }
-    ++m_attemptTick;
+    ++this->m_attemptTick;
     if (!playLayer) return;
 
-    pollOutcome(playLayer);
-    flushPendingRelease(playLayer);
-    SaveFeedback::get().onPhysicsTick();
+    {
+        PerfTrace::Scope const scope("pollOutcome");
+        this->pollOutcome(playLayer);
+    }
+    {
+        PerfTrace::Scope const scope("flushPendingRelease");
+        this->flushPendingRelease(playLayer);
+    }
+    {
+        PerfTrace::Scope const scope("saveFeedbackTick");
+        SaveFeedback::get().onPhysicsTick();
+    }
 
     auto* p1 = playLayer->m_player1;
     if (p1) {
-        m_lastPlayerX = p1->getPositionX();
-        m_lastMode = StageConfig::kindOf(p1);
-        // Capture attempt-start physics for Bake Map (once per attempt).
-        if (!m_startSnapshotTaken && m_attemptTick <= 2) {
-            m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(p1);
-            m_startSnapshotTaken = m_startSnapshotSlot >= 0;
+        this->m_lastPlayerX = p1->getPositionX();
+        this->m_lastMode = StageConfig::kindOf(p1);
+        if (!this->m_startSnapshotTaken && this->m_attemptTick <= 2) {
+            PerfTrace::Scope const scope("captureSnapshot");
+            this->m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(p1);
+            this->m_startSnapshotTaken = this->m_startSnapshotSlot >= 0;
         }
 
-        bool const modeChanged = m_modeKnown && (
-            m_modeShip != p1->m_isShip ||
-            m_modeBall != p1->m_isBall ||
-            m_modeBird != p1->m_isBird ||
-            m_modeDart != p1->m_isDart ||
-            m_modeRobot != p1->m_isRobot ||
-            m_modeSpider != p1->m_isSpider ||
-            m_modeSwing != p1->m_isSwing
+        bool const modeChanged = this->m_modeKnown && (
+            this->m_modeShip != p1->m_isShip ||
+            this->m_modeBall != p1->m_isBall ||
+            this->m_modeBird != p1->m_isBird ||
+            this->m_modeDart != p1->m_isDart ||
+            this->m_modeRobot != p1->m_isRobot ||
+            this->m_modeSpider != p1->m_isSpider ||
+            this->m_modeSwing != p1->m_isSwing
         );
-        m_modeShip = p1->m_isShip;
-        m_modeBall = p1->m_isBall;
-        m_modeBird = p1->m_isBird;
-        m_modeDart = p1->m_isDart;
-        m_modeRobot = p1->m_isRobot;
-        m_modeSpider = p1->m_isSpider;
-        m_modeSwing = p1->m_isSwing;
-        m_modeKnown = true;
+        this->m_modeShip = p1->m_isShip;
+        this->m_modeBall = p1->m_isBall;
+        this->m_modeBird = p1->m_isBird;
+        this->m_modeDart = p1->m_isDart;
+        this->m_modeRobot = p1->m_isRobot;
+        this->m_modeSpider = p1->m_isSpider;
+        this->m_modeSwing = p1->m_isSwing;
+        this->m_modeKnown = true;
 
-        if (modeChanged && m_buffer.state != BufferState::Idle) {
+        if (modeChanged && this->m_buffer.state != BufferState::Idle) {
             AssistLog::debug("mode change → delivering buffered input");
-            fireBuffered(playLayer, p1);
-            updateOverlay();
+            PerfTrace::Scope const scope("fireBuffered.modeChange");
+            this->fireBuffered(playLayer, p1);
+            this->updateOverlay();
         }
 
-        tickLearning(playLayer, p1);
+        {
+            PerfTrace::Scope const scope("tickLearning");
+            this->tickLearning(playLayer, p1);
+        }
     }
 
-    TrajectoryVisualizer::get().onPhysicsTick(playLayer, dt);
+    {
+        PerfTrace::Scope const scope("trajectory");
+        TrajectoryVisualizer::get().onPhysicsTick(playLayer, dt);
+    }
 
-    // CPS limiter: unlock when rate drops; flush any held buffer so clicks aren't eaten.
-    pruneClickTimes();
+    this->pruneClickTimes();
     int const cpsLim = StageConfig::cpsLimit();
     if (cpsLim > 0) {
-        bool const limited = currentCps() >= cpsLim;
-        if (m_cpsLocked && !limited) {
-            m_cpsLocked = false;
-            AssistLog::info(fmt::format("CPS: unlocked (now {}/{})", currentCps(), cpsLim));
+        bool const limited = this->currentCps() >= cpsLim;
+        if (this->m_cpsLocked && !limited) {
+            this->m_cpsLocked = false;
+            AssistLog::info(fmt::format("CPS: unlocked (now {}/{})", this->currentCps(), cpsLim));
         }
-        if (limited && m_buffer.state == BufferState::Buffered && p1) {
-            fireBuffered(playLayer, p1);
+        if (limited && this->m_buffer.state == BufferState::Buffered && p1) {
+            PerfTrace::Scope const scope("fireBuffered.cps");
+            this->fireBuffered(playLayer, p1);
         }
     }
 
-    if (m_buffer.state == BufferState::Idle) {
-        updateOverlay();
+    if (this->m_buffer.state == BufferState::Idle) {
+        this->updateOverlay();
         return;
     }
 
-    auto* player = m_buffer.player1 ? playLayer->m_player1 : playLayer->m_player2;
+    auto* player = this->m_buffer.player1 ? playLayer->m_player1 : playLayer->m_player2;
     if (!player || player->m_isDead) {
-        clearBuffer();
-        syncButtonState(playLayer);
-        updateOverlay();
+        this->clearBuffer();
+        this->syncButtonState(playLayer);
+        this->updateOverlay();
         return;
     }
 
-    if (m_buffer.state == BufferState::Buffered) {
-        if (m_attemptTick >= m_buffer.fireTick) {
-            fireBuffered(playLayer, player);
+    if (this->m_buffer.state == BufferState::Buffered) {
+        if (this->m_attemptTick >= this->m_buffer.fireTick) {
+            PerfTrace::Scope const scope("fireBuffered");
+            this->fireBuffered(playLayer, player);
         }
     }
-    else if (m_buffer.state != BufferState::Idle) {
-        clearBuffer();
+    else if (this->m_buffer.state != BufferState::Idle) {
+        this->clearBuffer();
     }
-    updateOverlay();
+    this->updateOverlay();
 }
 
 bool AssistController::tryBakeAssist(
