@@ -6,6 +6,7 @@
 #include "../core/BakeScheduler.hpp"
 #include "../core/ConfigBundle.hpp"
 #include "../core/ReplayImport.hpp"
+#include "../core/SaveDropPaths.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevConfig.hpp"
@@ -82,6 +83,50 @@ public:
         return std::filesystem::path(fileBuf);
     }
 #endif
+
+#ifndef GEODE_IS_WINDOWS
+    // Non-Win: pick newest replay from SaveDropPaths::replayDropDir().
+    // nullopt = user was already alerted (ensureDirs fail / empty folder).
+    static std::optional<std::filesystem::path> pickReplayFromDropDir() {
+        auto& drops = SaveDropPaths::get();
+        std::string err;
+        if (!drops.ensureDirs(err)) {
+            FLAlertLayer::create(
+                "EarlyBuffer",
+                err.empty()
+                    ? "Could not create the replay drop folder."
+                    : err.c_str(),
+                "OK"
+            )->show();
+            return std::nullopt;
+        }
+
+        auto const dir = drops.replayDropDir();
+        auto const candidates = drops.listReplayCandidates();
+        if (candidates.empty()) {
+            auto const msg = fmt::format(
+                "No replay in the drop folder.\n\n"
+                "Copy one file into:\n{}\n\n"
+                "Supported: .gdr .gdr2 .mhr .json .slc\n"
+                "Empty files are ignored.\n"
+                "If several files are present, Import uses the newest.",
+                dir.string()
+            );
+            FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
+            return std::nullopt;
+        }
+
+        auto const& chosen = candidates.front(); // newest mtime
+        if (candidates.size() > 1) {
+            AssistLog::info(fmt::format(
+                "Import: {} file(s) in drop folder — using newest '{}'",
+                candidates.size(),
+                chosen.filename().string()
+            ));
+        }
+        return chosen;
+    }
+#endif
 };
 
 void PauseActionBridge::refreshPauseLabels(PauseLayer* self) {
@@ -149,11 +194,9 @@ void PauseActionBridge::importReplay() {
     if (!picked) return;
     handleImportedPath(*picked);
 #else
-    FLAlertLayer::create(
-        "EarlyBuffer",
-        "Replay import is Windows-only for now.",
-        "OK"
-    )->show();
+    auto picked = PauseActionBridgeDetail::pickReplayFromDropDir();
+    if (!picked) return;
+    handleImportedPath(*picked);
 #endif
 }
 
