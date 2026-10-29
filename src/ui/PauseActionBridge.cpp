@@ -18,6 +18,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
+#include <Geode/utils/file.hpp>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -530,17 +531,65 @@ void PauseActionBridge::devCopyReport() {
         return;
     }
     auto const& r = DevReport::last();
-    // Clipboard = same overlay field string (contract A names only).
+    // Clipboard / file = same overlay field string (contract A names only).
     std::string const text = r.overlayLine.empty()
         ? DevReport::formatOverlayLine(r)
         : r.overlayLine;
-    clipboard::write(text);
-    AssistLog::info(fmt::format("Dev Lab: copied report → {}", text));
-    FLAlertLayer::create(
-        "EarlyBuffer Dev",
-        fmt::format("Copied to clipboard:\n{}", text).c_str(),
-        "OK"
-    )->show();
+
+    bool const clipOk = clipboard::write(text);
+
+    auto& drops = SaveDropPaths::get();
+    std::string dirErr;
+    bool fileOk = false;
+    std::string fileErr;
+    auto const path = drops.reportPath();
+    if (!drops.ensureDirs(dirErr)) {
+        fileErr = dirErr.empty() ? "could not create save folder" : dirErr;
+    }
+    else {
+        auto const written = file::writeString(path, text);
+        if (written.isOk()) {
+            fileOk = true;
+        }
+        else {
+            fileErr = written.unwrapErr();
+            if (fileErr.empty()) fileErr = "write failed";
+        }
+    }
+
+    AssistLog::info(fmt::format(
+        "Dev Lab: copy report clip={} file={} → {}",
+        clipOk ? "ok" : "fail",
+        fileOk ? path.string() : fileErr,
+        text
+    ));
+
+    std::string msg;
+    if (clipOk && fileOk) {
+        msg = fmt::format("Copied / saved to:\n{}\n\n{}", path.string(), text);
+    }
+    else if (fileOk && !clipOk) {
+        msg = fmt::format(
+            "Clipboard failed; saved to:\n{}\n\n{}",
+            path.string(),
+            text
+        );
+    }
+    else if (clipOk && !fileOk) {
+        msg = fmt::format(
+            "Copied to clipboard.\nFile save failed: {}\n\n{}",
+            fileErr,
+            text
+        );
+    }
+    else {
+        msg = fmt::format(
+            "Copy failed (clipboard and file).\nFile: {}\n\n{}",
+            fileErr,
+            text
+        );
+    }
+    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::openModSettings() {

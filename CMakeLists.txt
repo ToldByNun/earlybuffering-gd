@@ -25,8 +25,14 @@ add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 set(LIBGDR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 CPMAddPackage("gh:maxnut/GDReplayFormat#d8d2f0b1193a46cdf47b413dc832616dd052b6a9")
 target_link_libraries(${PROJECT_NAME} libGDR)
+
+# Win32 file dialogs (PauseActionBridge GetOpenFileNameW / GetSaveFileNameW).
+# Must stay WIN32-only — never link comdlg32 (or any dialog lib) on Android/NDK,
+# macOS, or iOS. Non-Windows uses SaveDropPaths under the mod save dir instead.
 if (WIN32)
     target_link_libraries(${PROJECT_NAME} comdlg32)
+elseif (ANDROID)
+    message(STATUS "EarlyBuffer: Android build — no Windows dialog libs (comdlg32)")
 endif()
 
 # MSVC batch-compiles TUs and can ICE on some Geode/arc headers; one TU per cl.exe.
