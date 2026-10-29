@@ -1,4 +1,5 @@
 #include "StageConfig.hpp"
+#include "../core/PlatformLimits.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -456,7 +457,10 @@ char const* StageConfig::assistPickName() {
     ensureCache();
     return g_cachedAssistPickLegacy ? "Legacy" : "New";
 }
-int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
+int StageConfig::simBudgetUs() {
+    ensureCache();
+    return PlatformLimits::get().clampSimBudgetUs(g_cachedSimBudgetUs);
+}
 int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }
 int StageConfig::cpsLimit() { ensureCache(); return g_cachedCpsLimit; }
 int StageConfig::minClickIntervalMs() { ensureCache(); return g_cachedMinClickIntervalMs; }
@@ -473,7 +477,10 @@ bool StageConfig::assistVerifyAb() {
     ensureCache();
     return g_cachedAssistVerify == "ab";
 }
-int StageConfig::tickBudgetPerPress() { ensureCache(); return g_cachedTickBudget; }
+int StageConfig::tickBudgetPerPress() {
+    ensureCache();
+    return PlatformLimits::get().clampTickBudget(g_cachedTickBudget);
+}
 int StageConfig::husReplanBudgetUs() {
     int const full = simBudgetUs();
     if (full <= 0) return 200; // unlimited wall → still cap HUS slice

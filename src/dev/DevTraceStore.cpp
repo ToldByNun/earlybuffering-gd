@@ -1,4 +1,5 @@
 #include "DevTraceStore.hpp"
+#include "../core/PlatformLimits.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
@@ -1190,70 +1191,73 @@ bool DevTraceStore::selfCheck(std::string& report) {
     expect(validatePressChain(back.attempts[0].events, 10, err), "json-chain");
 
     // Store API: begin/append/seal/flush (disk) when Mod is available.
-    auto& store = DevTraceStore::get();
-    bool const wasOpen = store.isOpen();
-    DevSessionFile saved = store.session();
-    expect(store.beginSession("selfcheck-api", 3), "store-begin");
-    store.setModVersion("v1.3.0-test");
-    store.setLevelMeta("lvl", "Level", false, true, "fp");
-    expect(store.beginAttempt(100), "store-attempt");
-    int64_t const pid = store.allocPressId();
-    expect(pid > 0, "store-pressId");
+    // Android load path skips disk gold — see PlatformLimits::allowLoadDiskSelfCheck.
+    if (PlatformLimits::get().allowLoadDiskSelfCheck()) {
+        auto& store = DevTraceStore::get();
+        bool const wasOpen = store.isOpen();
+        DevSessionFile saved = store.session();
+        expect(store.beginSession("selfcheck-api", 3), "store-begin");
+        store.setModVersion("v1.3.0-test");
+        store.setLevelMeta("lvl", "Level", false, true, "fp");
+        expect(store.beginAttempt(100), "store-attempt");
+        int64_t const pid = store.allocPressId();
+        expect(pid > 0, "store-pressId");
 
-    DevDecisionEvent e1 = makeEv(DevEventKind::PressObserved, 0, 0, pid, 0, 0);
-    e1.pressTick = 100;
-    expect(store.appendEvent(e1) != nullptr, "store-append-press");
-    auto* pPlan = store.appendEvent(makeEv(DevEventKind::PlanFinished, 0, 0, pid, 0, 9));
-    expect(pPlan != nullptr, "store-append-plan");
-    // Fix parent to press eventId after auto-assign.
-    auto* cur = store.currentAttempt();
-    expect(cur && cur->events.size() >= 2, "store-two-events");
-    if (cur && cur->events.size() >= 2) {
-        cur->events[1].parentEventId = cur->events[0].eventId;
-        cur->events[1].planId = 9;
-        auto* arm = store.appendEvent(makeEv(
-            DevEventKind::DelayArm, 0, 0, pid, cur->events[1].eventId, 9
-        ));
-        expect(arm != nullptr, "store-append-arm");
-        auto* fire = store.appendEvent(makeEv(
-            DevEventKind::Fire, 0, 0, pid, arm->eventId, 9
-        ));
-        expect(fire != nullptr, "store-append-fire");
-        auto* out = store.appendEvent(makeEv(
-            DevEventKind::Outcome, 0, 0, pid, fire->eventId, 9
-        ));
-        expect(out != nullptr, "store-append-outcome");
-        expect(validatePressChain(cur->events, pid, err), "store-chain");
-    }
-    expect(store.sealAttempt("death", true), "store-seal");
-    expect(store.session().recordingsDone == 1, "store-count");
+        DevDecisionEvent e1 = makeEv(DevEventKind::PressObserved, 0, 0, pid, 0, 0);
+        e1.pressTick = 100;
+        expect(store.appendEvent(e1) != nullptr, "store-append-press");
+        auto* pPlan = store.appendEvent(makeEv(DevEventKind::PlanFinished, 0, 0, pid, 0, 9));
+        expect(pPlan != nullptr, "store-append-plan");
+        // Fix parent to press eventId after auto-assign.
+        auto* cur = store.currentAttempt();
+        expect(cur && cur->events.size() >= 2, "store-two-events");
+        if (cur && cur->events.size() >= 2) {
+            cur->events[1].parentEventId = cur->events[0].eventId;
+            cur->events[1].planId = 9;
+            auto* arm = store.appendEvent(makeEv(
+                DevEventKind::DelayArm, 0, 0, pid, cur->events[1].eventId, 9
+            ));
+            expect(arm != nullptr, "store-append-arm");
+            auto* fire = store.appendEvent(makeEv(
+                DevEventKind::Fire, 0, 0, pid, arm->eventId, 9
+            ));
+            expect(fire != nullptr, "store-append-fire");
+            auto* out = store.appendEvent(makeEv(
+                DevEventKind::Outcome, 0, 0, pid, fire->eventId, 9
+            ));
+            expect(out != nullptr, "store-append-outcome");
+            expect(validatePressChain(cur->events, pid, err), "store-chain");
+        }
+        expect(store.sealAttempt("death", true), "store-seal");
+        expect(store.session().recordingsDone == 1, "store-count");
 
-    // Reload from disk
-    auto path = store.sessionPath();
-    expect(std::filesystem::exists(path), "store-file-exists");
-    std::ifstream in(path);
-    expect(static_cast<bool>(in), "store-file-open");
-    std::string diskBody(
-        (std::istreambuf_iterator<char>(in)),
-        std::istreambuf_iterator<char>()
-    );
-    DevSessionFile diskSess;
-    expect(sessionFromJsonString(diskBody, diskSess, jerr), "store-disk-parse");
-    expect(diskSess.attempts.size() == 1, "store-disk-attempt");
-    if (!diskSess.attempts.empty()) {
-        expect(
-            validatePressChain(diskSess.attempts[0].events, pid, err),
-            "store-disk-chain"
+        // Reload from disk
+        auto path = store.sessionPath();
+        expect(std::filesystem::exists(path), "store-file-exists");
+        std::ifstream in(path);
+        expect(static_cast<bool>(in), "store-file-open");
+        std::string diskBody(
+            (std::istreambuf_iterator<char>(in)),
+            std::istreambuf_iterator<char>()
         );
-    }
+        DevSessionFile diskSess;
+        expect(sessionFromJsonString(diskBody, diskSess, jerr), "store-disk-parse");
+        expect(diskSess.attempts.size() == 1, "store-disk-attempt");
+        if (!diskSess.attempts.empty()) {
+            expect(
+                validatePressChain(diskSess.attempts[0].events, pid, err),
+                "store-disk-chain"
+            );
+        }
 
-    // Cleanup selfcheck file; restore previous open state lightly.
-    store.closeSession();
-    std::error_code ec;
-    std::filesystem::remove(path, ec);
-    if (wasOpen) {
-        // Do not resurrect prior session contents; callers must reopen.
-        (void)saved;
+        // Cleanup selfcheck file; restore previous open state lightly.
+        store.closeSession();
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        if (wasOpen) {
+            // Do not resurrect prior session contents; callers must reopen.
+            (void)saved;
+        }
     }
 
     if (fails == 0) {

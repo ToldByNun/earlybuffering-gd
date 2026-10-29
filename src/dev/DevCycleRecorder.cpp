@@ -3,6 +3,7 @@
 #include "DevLiveWitness.hpp"
 #include "DevRejectLedger.hpp"
 #include "DevStateDiff.hpp"
+#include "../core/PlatformLimits.hpp"
 
 #include <Geode/Geode.hpp>
 #include <cstring>
@@ -552,17 +553,20 @@ bool DevCycleRecorder::selfCheck(std::string& report) {
     rec.m_cycles.clear();
     expect(rec.activePressId() == 0, "clear-active");
 
-    auto& store = DevTraceStore::get();
-    bool const opened = store.beginSession("cycle-selfcheck5", 2);
-    expect(opened, "open-session");
-    if (opened) {
-        expect(store.beginAttempt(0), "begin-attempt");
-        // Without recordEnable, beginPress no-ops — still exercise store chain.
-        expect(rec.beginPress(0, true, 10, 10) == 0 || DevConfig::recordEnable(), "begin-gate");
-        store.closeSession();
-        auto path = store.tracesDir() / "session-cycle-selfcheck5.json";
-        std::error_code ec;
-        std::filesystem::remove(path, ec);
+    // Disk session open is skipped on Android load gold (PlatformLimits).
+    if (PlatformLimits::get().allowLoadDiskSelfCheck()) {
+        auto& store = DevTraceStore::get();
+        bool const opened = store.beginSession("cycle-selfcheck5", 2);
+        expect(opened, "open-session");
+        if (opened) {
+            expect(store.beginAttempt(0), "begin-attempt");
+            // Without recordEnable, beginPress no-ops — still exercise store chain.
+            expect(rec.beginPress(0, true, 10, 10) == 0 || DevConfig::recordEnable(), "begin-gate");
+            store.closeSession();
+            auto path = store.tracesDir() / "session-cycle-selfcheck5.json";
+            std::error_code ec;
+            std::filesystem::remove(path, ec);
+        }
     }
 
     expect(AssistVerdict::name(AssistReason::PassSpam) != nullptr, "verdict-name");
