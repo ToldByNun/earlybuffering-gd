@@ -185,8 +185,10 @@ private:
     bool m_pendingReleaseP1 = true;
     bool m_pendingReleaseHold = false;
     bool m_pendingReleaseContinuous = false;
-    int m_pendingReleaseTick = 0;      // preferred / earliest force point
-    int m_pendingReleaseLatest = 0;    // must release by here if still holding
+    int m_pendingReleaseArmTick = 0;       // attemptTick when release was armed
+    int m_pendingReleaseUserUpTick = -1;   // -1 = user still holding; else let-go tick
+    int m_pendingReleaseMaxExtend = 0;     // max ticks to keep Jump down AFTER user-up
+    int m_pendingReleaseTick = 0;          // absolute deadline (= userUp + maxExtend)
     float m_lastPlayerX = 0.f;
     GameModeKind m_lastMode = GameModeKind::Cube;
     int m_startSnapshotSlot = -1;

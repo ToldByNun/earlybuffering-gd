@@ -153,8 +153,13 @@ void AssistController::onCheckpointLoad() {
     // Trigger world: keep store + in-flight baker; only reset abs attempt tick.
     SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint", false);
     clearBuffer();
-    m_pendingRelease = false;
-    m_pendingReleaseHold = false;
+    this->m_pendingRelease = false;
+    this->m_pendingReleaseHold = false;
+    this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseArmTick = 0;
+    this->m_pendingReleaseUserUpTick = -1;
+    this->m_pendingReleaseMaxExtend = 0;
+    this->m_pendingReleaseTick = 0;
     m_outcomePending = false;
     this->m_attemptTick = 0;
     this->m_startSnapshotTaken = false;
@@ -182,12 +187,18 @@ void AssistController::syncButtonState(PlayLayer* playLayer) {
     for (int i = 0; i < 2; ++i) {
         auto* p = players[i];
         if (!p) continue;
+        // Extend-hold after user release: Jump stays down until flushPendingRelease.
+        if (this->m_pendingRelease
+            && this->m_pendingReleaseP1 == (i == 0)
+            && !this->m_userHolding[i]) {
+            continue;
+        }
         auto it = p->m_holdingButtons.find(static_cast<int>(PlayerButton::Jump));
         bool const gdDown = it != p->m_holdingButtons.end() && it->second;
-        if (gdDown && !m_userHolding[i]) {
-            m_injecting = true;
+        if (gdDown && !this->m_userHolding[i]) {
+            this->m_injecting = true;
             p->releaseButton(PlayerButton::Jump);
-            m_injecting = false;
+            this->m_injecting = false;
             AssistLog::debug(fmt::format("button sync: released stuck jump button (p{})", i + 1));
         }
     }
@@ -204,8 +215,10 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseArmTick = 0;
+    this->m_pendingReleaseUserUpTick = -1;
+    this->m_pendingReleaseMaxExtend = 0;
     this->m_pendingReleaseTick = 0;
-    this->m_pendingReleaseLatest = 0;
     m_assistTouchedRun = false;
     m_savesAttempt = 0;
     DivergenceTracker::get().clear();
@@ -929,6 +942,12 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
 
     this->clearBuffer();
     this->m_pendingRelease = false;
+    this->m_pendingReleaseHold = false;
+    this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseArmTick = 0;
+    this->m_pendingReleaseUserUpTick = -1;
+    this->m_pendingReleaseMaxExtend = 0;
+    this->m_pendingReleaseTick = 0;
     {
         LagProbe::Scope const s("eb.saveCounterClear");
         SaveFrameCounter::get().clear();
@@ -941,41 +960,59 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
 
 void AssistController::flushPendingRelease(PlayLayer* playLayer) {
     if (!this->m_pendingRelease || !playLayer) return;
-    if (this->m_attemptTick < this->m_pendingReleaseTick) return;
 
     bool const p1 = this->m_pendingReleaseP1;
     bool const holding = this->userHolding(p1);
+    auto* p = p1 ? playLayer->m_player1 : playLayer->m_player2;
 
-    if (this->m_pendingReleaseHold) {
-        auto* p = p1 ? playLayer->m_player1 : playLayer->m_player2;
-        if (p && p->m_isDashing
-            && this->m_attemptTick < this->m_pendingReleaseTick + 90) {
-            return;
-        }
-    }
-
-    // User already released inside the safe window — nothing to inject.
-    if (!holding) {
-        this->m_pendingRelease = false;
-        this->m_pendingReleaseHold = false;
-        this->m_pendingReleaseContinuous = false;
+    // HARD RULE: while the user still holds Jump, never inject a release.
+    if (holding) {
         return;
     }
 
-    // Continuous: allow hold until releaseLatest; tap modes: release at preferred.
-    if (this->m_pendingReleaseContinuous
-        && this->m_attemptTick < this->m_pendingReleaseLatest) {
+    // First physics tick after user-up: start the extend budget (max X ticks).
+    if (this->m_pendingReleaseUserUpTick < 0) {
+        this->m_pendingReleaseUserUpTick = this->m_attemptTick;
+        this->m_pendingReleaseTick =
+            this->m_pendingReleaseUserUpTick + this->m_pendingReleaseMaxExtend;
+        AssistLog::debug(fmt::format(
+            "hold-assist: user-up @{} extend≤{} deadline={}",
+            this->m_pendingReleaseUserUpTick,
+            this->m_pendingReleaseMaxExtend,
+            this->m_pendingReleaseTick
+        ));
+    }
+
+    bool gameDown = false;
+    if (p) {
+        auto it = p->m_holdingButtons.find(static_cast<int>(PlayerButton::Jump));
+        gameDown = it != p->m_holdingButtons.end() && it->second;
+    }
+    if (!gameDown) {
+        this->m_pendingRelease = false;
+        this->m_pendingReleaseHold = false;
+        this->m_pendingReleaseContinuous = false;
+        this->m_pendingReleaseUserUpTick = -1;
+        this->m_pendingReleaseMaxExtend = 0;
+        return;
+    }
+
+    // Still inside the post-release extend window — keep Jump down.
+    if (this->m_attemptTick < this->m_pendingReleaseTick) {
         return;
     }
 
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseUserUpTick = -1;
+    this->m_pendingReleaseMaxExtend = 0;
     this->m_injecting = true;
     playLayer->handleButton(false, JUMP_BUTTON, p1);
     this->m_injecting = false;
     AssistLog::debug(fmt::format(
-        "hold-assist: injected release @{} (p{})", this->m_attemptTick, p1 ? 1 : 2
+        "hold-assist: injected release @{} (p{}) [extend done]",
+        this->m_attemptTick, p1 ? 1 : 2
     ));
 }
 
@@ -1095,10 +1132,8 @@ void AssistController::fireBuffered(
     int const delayed = std::max(0, this->m_attemptTick - this->m_buffer.pressTick);
     int const planId = this->m_buffer.planId;
     bool const expectOrb = this->m_buffer.requireOrb;
-    int releaseAfter = this->m_buffer.releaseAfter;
-    int releaseLatest = this->m_buffer.releaseLatest;
-    if (releaseAfter < 0) releaseAfter = requireHold ? 40 : 1;
-    if (releaseLatest < releaseAfter) releaseLatest = releaseAfter;
+    // Max post-release extend = this press's tick window (e.g. Ticks=4 → ≤4).
+    int const extendCap = std::max(0, this->m_buffer.limit);
 
     this->inject(playLayer, this->m_buffer.down);
     AssistLog::printSavedPress(
@@ -1125,28 +1160,44 @@ void AssistController::fireBuffered(
 
     this->clearBuffer();
 
-    // After assisted press: schedule safe release (preferred / force-at-latest).
+    // After assisted press:
+    // - While user holds: never force-release.
+    // - After they let go: optional short extend ≤ tick window (not every time).
+    // - If user already up at fire: release next tick (swallowed release).
     if (wasPress) {
-        this->m_pendingRelease = true;
-        this->m_pendingReleaseP1 = player1;
-        this->m_pendingReleaseHold = requireHold;
-        this->m_pendingReleaseContinuous = continuous;
         if (letGo) {
-            // User already up — release next tick (buffer swallowed their release).
-            this->m_pendingReleaseTick = this->m_attemptTick + 1;
-            this->m_pendingReleaseLatest = this->m_attemptTick + 1;
-        }
-        else {
-            this->m_pendingReleaseTick = this->m_attemptTick + releaseAfter;
-            this->m_pendingReleaseLatest = this->m_attemptTick + releaseLatest;
+            this->m_pendingRelease = true;
+            this->m_pendingReleaseP1 = player1;
+            this->m_pendingReleaseHold = false;
+            this->m_pendingReleaseContinuous = false;
+            this->m_pendingReleaseArmTick = this->m_attemptTick;
+            this->m_pendingReleaseUserUpTick = this->m_attemptTick;
+            this->m_pendingReleaseMaxExtend = 0;
+            this->m_pendingReleaseTick = this->m_attemptTick; // flush ASAP
             AssistLog::debug(fmt::format(
-                "hold-assist: arm release [{},{}] @fire={} cont={}",
-                this->m_pendingReleaseTick,
-                this->m_pendingReleaseLatest,
+                "hold-assist: arm release ASAP (user already up) @fire={}",
+                this->m_attemptTick
+            ));
+        }
+        else if (requireHold || expectOrb || continuous) {
+            // Only orb/dash/continuous gets post-release extend assist.
+            this->m_pendingRelease = true;
+            this->m_pendingReleaseP1 = player1;
+            this->m_pendingReleaseHold = requireHold;
+            this->m_pendingReleaseContinuous = continuous;
+            this->m_pendingReleaseArmTick = this->m_attemptTick;
+            this->m_pendingReleaseUserUpTick = -1;
+            this->m_pendingReleaseMaxExtend = extendCap;
+            this->m_pendingReleaseTick = 0; // set on user-up
+            AssistLog::debug(fmt::format(
+                "hold-assist: arm extend-after-release max={} @fire={} hold={} cont={}",
+                extendCap,
                 this->m_attemptTick,
+                requireHold ? 1 : 0,
                 continuous ? 1 : 0
             ));
         }
+        // else: plain Delay tap — user owns hold+release fully (no pending).
     }
 }
 
@@ -1795,6 +1846,8 @@ bool AssistController::onHandleButton(
         this->m_pendingRelease = false;
         this->m_pendingReleaseHold = false;
         this->m_pendingReleaseContinuous = false;
+        this->m_pendingReleaseUserUpTick = -1;
+        this->m_pendingReleaseMaxExtend = 0;
         AssistLog::debug("hold-assist: cancel pending release (re-click)");
     }
 
@@ -1873,6 +1926,22 @@ bool AssistController::onHandleButton(
             this->m_buffer.releaseSeen = true;
             this->m_buffer.releaseTick = effectTick;
             this->m_log.noteInput(effectTick, false);
+            return false;
+        }
+
+        // Extend-hold: user let go — swallow so Jump can stay down ≤ maxExtend ticks.
+        if (this->m_pendingRelease && this->m_pendingReleaseP1 == player1) {
+            if (this->m_pendingReleaseUserUpTick < 0) {
+                this->m_pendingReleaseUserUpTick = this->m_attemptTick;
+                this->m_pendingReleaseTick =
+                    this->m_pendingReleaseUserUpTick + this->m_pendingReleaseMaxExtend;
+            }
+            AssistLog::debug(fmt::format(
+                "hold-assist: swallow user release @{} extend≤{} deadline={}",
+                this->m_attemptTick,
+                this->m_pendingReleaseMaxExtend,
+                this->m_pendingReleaseTick
+            ));
             return false;
         }
 

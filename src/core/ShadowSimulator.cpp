@@ -2350,6 +2350,8 @@ SimPlan ShadowSimulator::plan(
         plan.delay = chosen;
         plan.jumpTick = cands[static_cast<size_t>(chosen)].jumpTick;
         plan.nowIsSafe = false;
+        plan.activatedRing = plan.activatedRing
+            || cands[static_cast<size_t>(chosen)].activatedRing;
         if (plan.releaseAfter < 0 && cands[static_cast<size_t>(chosen)].releaseAfter >= 0) {
             plan.releaseAfter = cands[static_cast<size_t>(chosen)].releaseAfter;
             plan.releaseEarliest = plan.releaseAfter;
@@ -2357,6 +2359,22 @@ SimPlan ShadowSimulator::plan(
         }
         plan.requireHold = plan.requireHold
             || cands[static_cast<size_t>(chosen)].requireHold;
+    }
+
+    // Dash orbs: sim keeps Jump down via tapRelease exceptions, but live inject
+    // used to default releaseAfter=1 and cancel the dash. Force hold when the
+    // winning cand dashed.
+    if (chosen >= 0 && chosen <= limit) {
+        auto const& win = cands[static_cast<size_t>(chosen)];
+        if (win.raw.wasDashing) {
+            plan.requireHold = true;
+            plan.activatedRing = true;
+            if (plan.releaseAfter < 40) plan.releaseAfter = 40;
+            if (plan.releaseEarliest < 0 || plan.releaseEarliest > plan.releaseAfter) {
+                plan.releaseEarliest = plan.releaseAfter;
+            }
+            if (plan.releaseLatest < 120) plan.releaseLatest = 120;
+        }
     }
 
     AssistLog::debug(fmt::format(
