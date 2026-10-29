@@ -1,33 +1,37 @@
 # EarlyBuffer
 
-**Geode** mod for **Geometry Dash 2.2081** -- early-input forgiveness assist.
+**Geode** mod for **Geometry Dash 2.2081** — early-input forgiveness assist.
 
-When you click a little early, EarlyBuffer buffers the press and fires on the first shadow-simulated safe tick. It is an assist tool, not an autoplayer and not late-forgiveness (it does not rewind time for late clicks).
+When you click a little early, EarlyBuffer buffers the press and fires on the first shadow-simulated safe tick. It is an **assist**, not an autoplayer and not late-forgiveness (it does not rewind time for late clicks).
 
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Target | GD 2.2081 / Geode 5.11.1+ |
+| Version | **1.2.0** |
+| Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows, macOS, iOS, Android (CI) |
 | License | [MIT](LICENSE) |
+| Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
+
+> **Last 2.2081 release.** **v1.2.0** is the final EarlyBuffer line targeting Geometry Dash **2.2081**. Newer GD versions will need a separate port / major bump — do not expect this package to load on other game builds.
 
 ## What it does
 
-- **Live / Hybrid** -- plan each click with a shadow physics sim (threat zones, optional orb windows). Hopeless clicks still pass through; your input is never blocked.
-- **Replay / BruteForce** -- bake click *windows* from an imported macro or a serial main-thread search. These are timing maps, not a live multi-click bot queue.
-- **Safe Mode** -- when assist is on (or has touched a run), progress / bests / percentage are not saved as legit clears.
-- **Scope gates** -- platformer hard-off; optional practice / startpos / percent window; up to six float "assist off" percent ranges.
-- **Learning** -- per-level bias / trust (never changes your tick window; does not self-reinforce from inject "saves").
+- **Live / Hybrid** — plan each click with a shadow physics sim (threat zones, optional orb windows). Hopeless clicks still pass through; your input is never blocked.
+- **Replay / BruteForce** — bake click *windows* from an imported macro or a serial main-thread search. These are timing maps, not a live multi-click bot queue.
+- **Trigger World Bake** — cache spawn-timed static mover / toggle poses so the shadow sim can collide them instead of treating every mover as unknown (see settings + [`docs/assist_reference.md`](docs/assist_reference.md)).
+- **Safe Mode** — when assist is on (or has touched a run), progress / bests / percentage are not saved as legit clears.
+- **Scope gates** — platformer hard-off; optional practice / startpos / percent window; up to six float “assist off” percent ranges.
+- **Learning** — per-level bias / trust (never changes your tick window; does not self-reinforce from inject “saves”).
+- **Self-bake** — optional practice (and normal) recording of vanilla clicks into the bake map, with idle merge/refine.
 
 Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_reference.md).
 
 ## Install
 
-1. Install [Geode](https://geode-sdk.org/) for GD 2.2081.
-2. Download the latest `.geode` from [Releases](https://github.com/ToldByNun/frirecracker/releases) (or build locally).
-3. Drop it into your Geode mods folder, or use the `geode` CLI.
-
-Dependency: **geode.node-ids** >= v1.23.3 (Geode will prompt).
+1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
+2. Install from the **Geode Index**, or download the **v1.2.0** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases).
+3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (Geode will prompt).
 
 ## Build
 
@@ -42,22 +46,28 @@ CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/wor
 
 ## Settings (quick)
 
-Open Geode -> EarlyBuffer -> Settings. Highlights:
+Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
 
-- **Enabled / Preset / Assist Mode** -- master control and Live / Hybrid / Replay / BruteForce
-- **Safe Mode / Overlay / Pause UI** -- publish-safe defaults; hide chrome when you want a clean pause menu
-- **Assist Off Ranges** -- six From/To percent slots (`-1` = unused); assist forced off inside those ranges
-- **Tick window / orbs / CPS / budgets** -- timing and CPU limits
+- **Enabled / Preset / Assist Mode** — master control and Live / Hybrid / Replay / BruteForce
+- **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
+- **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
+- **Assist Off Ranges** — six From/To percent slots (`-1` = unused); assist forced off inside those ranges
+- **Tick window / orbs / CPS / budgets** — timing and CPU limits
+- **Save Feedback** — separate Sound / Color / Counter toggles when a delayed click is injected
 
 Hotkeys are configurable (defaults include F6 preset cycle, Ctrl+Shift+M assist mode, and more).
 
-## Honesty: authorship and AI use
+## Development status
 
-**Product direction is human.** Feature ideas, constraints ("no midpoint", main-thread bake only, percent disable ranges, Safe Mode rules, honest Replay/Brute wording, and so on) and iterative critique come from the maintainer.
+EarlyBuffer **1.2.0** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not a abandoned prototype — while remembering it will not track newer game builds.
 
-**Implementation and docs are AI-assisted.** Substantially all C++, `mod.json`, README, and reference docs in this repository were written with AI coding tools (Cursor) under that direction -- not as unaided hand-authored code.
+## Authorship and AI use
 
-Please treat the project accordingly: review PRs carefully, prefer small diffs, and do not assume every line has been line-by-line human-audited for every edge case. Bug reports and careful reviews are especially welcome.
+**Product direction is human.** Feature goals, constraints, and iterative review come from the maintainer (Audesign).
+
+**Implementation used AI coding tools** (Cursor and similar) as a drafting aid. **Every line shipped in this release was reviewed by the maintainer**, and behavior is **tested thoroughly and re-tested as features evolve** (playtesting, crash/lag probes, and automated self-checks). AI did not replace ownership, review, or QA.
+
+Bug reports with GD / Geode / platform / steps (and crashlogs when relevant) are welcome.
 
 ## Contributing
 
@@ -65,8 +75,8 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 
 ## Support and ethics
 
-- This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop's rules -- use Safe Mode, practice, and your own judgment.
-- Issues: GitHub Issues. Geode in-mod page: `support.md`.
+- This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
+- Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
 
 ## Credits
 
@@ -74,4 +84,4 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - Built on [Geode](https://geode-sdk.org/) and Geometry Dash bindings
 - Replay import uses [GDReplayFormat](https://github.com/maxnut/GDReplayFormat) (libGDR)
 
-> Formerly developed under the working names *frirecracker* / *EarlyBuffer*.
+Working-tree / early development also used the names *frirecracker* and *EarlyGrace*; the published mod is **EarlyBuffer** (`audesign.earlybuffer`).

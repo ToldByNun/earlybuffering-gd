@@ -1,6 +1,6 @@
 # EarlyBuffer Assist Reference
 
-Rebuild / harden guide for Geometry Dash 2.2081 (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X.
+Planner / settings contract for **EarlyBuffer v1.2.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -50,6 +50,8 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Camera/pulse/song → `Ignore`. Group-follow → `StaticMove`; player-coupled → `DynamicFollow`; touch → `DynamicOther`.
 
+**Self-check / manual matrix:** `TriggerWorldStore::selfCheck` + `TriggerClassify::selfCheck` run at mod load (and PlanGold). With `debug-logging`, the banner lists edge cases: static corridor, follow-player Unknown, cache-hit 2nd enter, skip-dynamic on, quit mid-build, death/reset LagProbe without `eb.triggerBake.build` inside the death episode.
+
 ## Not in scope
 
 - Late-forgiveness (rewind time for late clicks)
@@ -85,7 +87,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | preset | string | Tight | Tight/Normal/Wide/Max/Off | | Main — fills defaults |
 | safe-mode | bool | true | | | Main — block saves when assist enabled |
 | debug-logging | bool | true | | | Main |
-| perf-trace | bool | true | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
+| perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
+| lag-probe | bool | true | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
 | show-overlay | bool | true | | | Ingame |
 | show-trajectory | bool | false | | | Visual |
 | show-pause-bake | bool | true | | | Ingame — pause status lines only |
@@ -266,4 +269,4 @@ clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. Platformer
 
 ## Authorship
 
-Design requirements: maintainer. Spec text and implementation: AI-assisted (see repository README).
+Design and review: maintainer (Audesign). Drafting used AI tools; every shipped line is human-reviewed and actively tested (see repository README).

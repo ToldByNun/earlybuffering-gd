@@ -52,6 +52,16 @@ void AssistLog::printBanner() {
         StageConfig::assistModeName(StageConfig::assistMode()),
         StageConfig::assistModeHint(StageConfig::assistMode())
     );
+    if (StageConfig::debugLogging()) {
+        log::info("[{}] Trigger-world manual edge matrix:", modTag());
+        log::info("[{}]   1) static move corridor — bake ready → Include, pose follows keys", modTag());
+        log::info("[{}]   2) follow-player spike — DynamicFollow → Unknown (skip-dynamic on)", modTag());
+        log::info("[{}]   3) cache hit 2nd enter — loadOrBuild, no rebuild / no hitch", modTag());
+        log::info("[{}]   4) skip-dynamic on — no live probe; targets stay Unknown", modTag());
+        log::info("[{}]   5) quit mid-build — cancel, save dirty partial, clear", modTag());
+        log::info("[{}]   6) death/reset LagProbe — no eb.triggerBake.build inside death episode", modTag());
+        log::info("[{}]      (build only via tickSlice / loadOrBuild; death cancels, reset may resume)", modTag());
+    }
     log::info("======================");
 }
 

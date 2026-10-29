@@ -8,9 +8,9 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.1.0",
+	"version": "v1.2.0",
 	"developer": "Audesign",
-	"description": "Early-input forgiveness assist for GD 2.2081. Buffers early jumps and fires on the first shadow-safe tick. Not an autoplayer; Safe Mode recommended.",
+	"description": "Early-input forgiveness assist for GD 2.2081 (final release for this game version). Buffers early jumps and fires on the first shadow-safe tick. Not an autoplayer; Safe Mode recommended.",
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"
 	},

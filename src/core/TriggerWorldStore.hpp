@@ -80,6 +80,10 @@ public:
 
     std::string statusLine() const;
 
+    // Headless: samplePose hold/before/after, writePose(null), kind round-trip.
+    // Leaves the singleton cleared (safe at mod load before any level).
+    static bool selfCheck(std::string& report);
+
 private:
     TriggerWorldStore() = default;
 

@@ -209,6 +209,84 @@ std::string TriggerWorldStore::statusLine() const {
     );
 }
 
+bool TriggerWorldStore::selfCheck(std::string& report) {
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += ", ";
+        report += name;
+    };
+
+    // Null-safe write (apply/restore identity without a live GameObject).
+    TriggerPose dummy{};
+    dummy.tick = 0;
+    dummy.x = 1.f;
+    dummy.y = 2.f;
+    dummy.rotation = 3.f;
+    dummy.scaleX = 1.f;
+    dummy.scaleY = 1.f;
+    dummy.active = true;
+    TriggerWorldStore::writePose(nullptr, dummy);
+    expect(true, "writePose-null");
+
+    expect(TriggerClassify::classify(nullptr) == TriggerKind::Ignore, "classify-null");
+
+    auto& store = TriggerWorldStore::get();
+    store.clear();
+
+    TriggerWorldData data;
+    data.levelKey = "__selfcheck__";
+    data.tps = 240.0;
+    data.version = kFileVersion;
+
+    TriggerTrack track;
+    track.uniqueId = 42;
+    track.objectId = 1;
+    track.kind = TriggerKind::StaticMove;
+    track.ready = true;
+    track.keys.push_back(TriggerPose{ 10, 100.f, 200.f, 0.f, 1.f, 1.f, true });
+    track.keys.push_back(TriggerPose{ 20, 150.f, 200.f, 45.f, 1.f, 1.f, true });
+    data.tracks.push_back(track);
+
+    // Not-ready track must not sample.
+    TriggerTrack pending;
+    pending.uniqueId = 99;
+    pending.objectId = 2;
+    pending.kind = TriggerKind::StaticToggle;
+    pending.ready = false;
+    pending.keys.push_back(TriggerPose{ 0, 0.f, 0.f, 0.f, 1.f, 1.f, false });
+    data.tracks.push_back(pending);
+
+    store.setData(std::move(data));
+
+    TriggerPose out{};
+    expect(!store.samplePose(42, 5, out), "before-first");
+    expect(store.samplePose(42, 10, out) && out.x == 100.f && out.y == 200.f, "at-first");
+    expect(store.samplePose(42, 15, out) && out.x == 100.f, "hold-mid");
+    expect(store.samplePose(42, 20, out) && out.x == 150.f && out.rotation == 45.f, "at-last");
+    expect(store.samplePose(42, 99, out) && out.x == 150.f, "past-last-hold");
+    expect(!store.samplePose(999, 10, out), "missing-id");
+    expect(!store.samplePose(99, 0, out), "not-ready");
+
+    expect(store.readyTrackCount() == 1, "ready-count");
+    expect(TriggerClassify::isStatic(TriggerKind::StaticToggle), "static-toggle");
+    expect(
+        std::string(TriggerClassify::kindName(TriggerKind::StaticToggle)) == "StaticToggle",
+        "kind-name-toggle"
+    );
+
+    store.clear();
+    expect(!store.loaded() && !store.hasTracks(), "cleared");
+
+    if (fails == 0) {
+        report = "TriggerWorldStore selfCheck OK";
+        return true;
+    }
+    report = fmt::format("TriggerWorldStore selfCheck {} fails: {}", fails, report);
+    return false;
+}
+
 Result<> TriggerWorldStore::writeFile() const {
     (void)file::createDirectoryAll(TriggerWorldStore::triggersDir());
 

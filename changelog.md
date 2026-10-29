@@ -1,6 +1,8 @@
 # Changelog
 
-## v1.2.0 (unreleased)
+## v1.2.0
+
+**Final EarlyBuffer release for Geometry Dash 2.2081.** Newer GD builds need a separate port.
 
 ### Pause settings (EB)
 
@@ -17,54 +19,57 @@
 - Defaults match old `both` (sound+color on, counter off). Re-check toggles if you previously used off/sound/icon-only.
 - **Counter**: hollow ring + `+N` in GD font at the assisted click, colored by frames saved (1–8 palette); stays until death/restart; max 64 markers.
 
-### Perf Trace
+### Trigger World Bake
 
-- New **Perf Trace** setting (default on): times assist hot paths (`plan`, trajectory rebuild, save feedback, evacuate, …).
-- Spikes (≥4 ms our work / ≥1 ms section) and periodic summaries go to the Geode console and `earlybuffer-perf.log` in the mod save folder.
-- Save-cue console spam gated behind Debug Logging (was logging every inject).
+- Settings: **Trigger World Bake** + **Skip Dynamic** (defaults on).
+- Content-keyed cache (`triggers/*.json`): spawn-timed static Move/Rotate/Scale/Toggle keyframes for the shadow sim.
+- Budgeted build on enter (`tickSlice`); apply + restore transforms during plan; ready tracks promote from Unknown-on-overlap to Include.
+- Player-follow / toggle-orb stay dynamic (Unknown unless optional live probe with skip-dynamic off).
+- Lifecycle: loadOrBuild on enter; keep on checkpoint; cancel on death (resume if empty); save on quit/complete.
 
-### Crash fix: restart / checkpoint
+### Perf / Lag Probe
 
-- Evacuate shadow+snapshot ghosts from section vectors before `resetLevel` / checkpoint load (fixes `sortSectionVector` AV after sim). Cancel in-flight bake on those paths.
-- Do not call bare `removeObjectFromSection` on ghosts (null section slots AV); scrub section cells by pointer and only try-remove when indices/slots are valid.
+- **Perf Trace** (default off): times assist hot paths; spikes → console + `earlybuffer-perf.log`.
+- **Lag Probe** (default on): death/reset/checkpoint episode timings → `earlybuffer-lagprobe.log` (legend included).
+- Save-cue console spam gated behind Debug Logging.
+
+### Crash / hitch fixes
+
+- Evacuate shadow+snapshot ghosts from section vectors before `resetLevel` / checkpoint load.
+- Safer ghost scrub (no bare `removeObjectFromSection` on null slots); quit detach without extra retains.
+- Death path stays lean (no refine / disk on destroyPlayer); self-bake merge/refine amortized on idle ticks.
 
 ### Adaptive robust window + latency cost
 
-- Smart settings: **Robust Window (±k)** (`0` = auto from mode/speed/dt variance) and optional **firstDt jitter** (±3% re-sim of top cand).
-- `betterCand` ranks by `endX − latencyWeight·delay` after surviveBin; per-mode defaults (Wave 1.0 … Cube 0.25), overwriteable under each mode.
+- Smart settings: **Robust Window (±k)** (`0` = auto from mode/speed/dt variance) and optional **firstDt jitter**.
+- `betterCand` ranks by `endX − latencyWeight·delay` after surviveBin; per-mode defaults (Wave 1.0 … Cube 0.25).
 
-### Live bake-prior
+### Live bake-prior / smart / learning
 
-- Nearby BakeMap window becomes a Live prefer delay band (after d0/orb); early-exit when a robust prefer delay is found.
-
-### Smart bake-chain + learning histogram
-
+- Nearby BakeMap window becomes a Live prefer delay band; early-exit when a robust prefer delay is found.
 - `planSequence` scores `d0` using next bake/self-bake follow-up clicks when available.
-- Per-spot click-earliness histogram (−8…+8); Laplace modal biases delay; decay + thin-hist explore.
+- Per-spot click-earliness histogram; Laplace modal; decay + gated explore (no Wave/spam ±1 explore when intent would Pass).
 
 ### Divergence / UNTRUST
 
-- Outcome `planDelay` is real Delay vs Pass; `onRealDeath` notes pending outcomes into `DivergenceTracker`.
-- Live/Hybrid-live: `simUntrusted` → force Pass + overlay `UNTRUST pass` (blocks explore).
-- Soft warn shortens planner `capMul` (0.85×).
+- Outcome tracking into `DivergenceTracker`; Live/Hybrid-live `simUntrusted` → force Pass + overlay hint.
+- Soft warn shortens planner `capMul`.
 
 ### Self-bake
 
-- Settings: **Self-Bake (Practice)** on by default; optional normal-mode; optional refine.
+- **Self-Bake (Practice)** on by default; optional normal-mode; optional refine.
 - Vanilla clicks → BakeMap (`method=self`); assist injects never recorded.
-- Budgeted refine expands earliest/latest from start snapshot when assist did not touch the run (skip/cancel-safe).
+- Death/reset merge-only (idle drain); checkpoint/complete/quit may refine when safe.
 
 ### Bake verify
 
-- `findNear` prefers matching game mode, then falls back (legacy maps).
-- Hybrid/Replay/Brute: one-shot live `verifyDelay` (clearsThreat) before using a bake window.
-- Verify fail → Hybrid falls through to Live; Replay/Brute Pass.
+- `findNear` prefers matching game mode, then falls back.
+- Hybrid/Replay/Brute: one-shot live `verifyDelay` before using a bake window.
 
-### Settings
+### Settings / docs
 
-- Regrouped Geode settings: **General** → **Assist Scope** → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal**.
-- Moved practice / startpos / percent / off-ranges under Assist Scope; `auto-tune` + `assist-verify` under Learning; plan budgets under Algorithm.
-- Buried `stage-index` and deprecated `swallow-hopeless` under Internal.
+- Regrouped Geode settings; Trigger World group; Internal for buried keys.
+- README / about / support / contributing updated for Index release; repo `earlybuffering-gd`.
 
 ## v1.1.0
 

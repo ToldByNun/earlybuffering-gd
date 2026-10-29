@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Geometry Dash **2.2081**
+- Geometry Dash **2.2081** (this mod line does **not** support other GD versions)
 - [Geode](https://geode-sdk.org/) **5.11.1+** (SDK + CLI)
 - CMake 3.21+ and a **C++23** toolchain (MSVC on Windows)
 
@@ -31,7 +31,7 @@ Local development is primarily **Windows**. Multi-platform binaries are produced
 
 ## After install
 
-1. Enable the mod in Geode.
+1. Enable **EarlyBuffer** (`audesign.earlybuffer`) in Geode.
 2. Ensure **geode.node-ids** is installed.
 3. Prefer **Safe Mode** on for online / rated play.
 4. Platformer levels: assist stays off by design.

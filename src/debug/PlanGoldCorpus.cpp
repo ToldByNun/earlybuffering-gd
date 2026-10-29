@@ -4,6 +4,8 @@
 #include "../core/ClickIntentGuard.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
+#include "../core/TriggerClassify.hpp"
+#include "../core/TriggerWorldStore.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
 #include <fmt/format.h>
 
@@ -28,6 +30,10 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistLearning::exploreGateSelfCheck(exploreReport), "learn-explore-gate");
     std::string intentReport;
     expect(ClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
+    std::string classifyReport;
+    expect(TriggerClassify::selfCheck(classifyReport), "trigger-classify");
+    std::string twReport;
+    expect(TriggerWorldStore::selfCheck(twReport), "trigger-world-store");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";
