@@ -68,15 +68,23 @@ public:
     size_t trackCount() const { return this->m_data.tracks.size(); }
     size_t readyTrackCount() const;
 
-    // Sample pose at absTick (hold last; before first key → false = keep baseline).
-    bool samplePose(int uniqueId, int absTick, TriggerPose& out) const;
+    // Map live attempt tick → store/bake tick using data().tps and liveSimDt.
+    // Identity when authorTps * liveSimDt ≈ 1.
+    int remapLiveTick(int liveAbsTick) const;
+    int remapLiveTick(int liveAbsTick, float liveSimDt) const;
+
+    // Sample at live absTick (remaps to store tick first).
+    // Hold last; before first key → false = keep baseline.
+    bool samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const;
+    // Sample with an already-remapped store tick (tests / bakers).
+    bool samplePoseAtStoreTick(int uniqueId, int storeTick, TriggerPose& out) const;
 
     // Write a sampled pose onto a live GameObject (position/rot/scale/visible).
     static void writePose(GameObject* obj, TriggerPose const& pose);
 
-    // Apply all ready Static* tracks at absTick. Walks objectLayer once.
+    // Apply all ready Static* tracks at live absTick (remapped). Walks objectLayer.
     // Returns number of objects written. No-op if store empty / bake off caller.
-    int applyAtTick(PlayLayer* layer, int absTick);
+    int applyAtTick(PlayLayer* layer, int liveAbsTick);
 
     std::string statusLine() const;
 

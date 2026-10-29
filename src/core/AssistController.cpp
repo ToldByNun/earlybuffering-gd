@@ -72,8 +72,8 @@ static void fillBakePreferBand(
     auto const& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) return;
 
-    double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
-    int const approxFrame = static_cast<int>(std::lround(attemptTick * (tps * simDt)));
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    int const approxFrame = AssistClock::get().remapTick(tps, attemptTick, simDt);
     auto const* win = bake.findNear(
         player->getPositionX(), approxFrame, down, !player1,
         StageConfig::kindOf(player)
@@ -81,7 +81,8 @@ static void fillBakePreferBand(
     if (!win) return;
 
     auto frameToTick = [&](int frame) -> int {
-        double const ticksPerBakeFrame = 1.0 / (tps * simDt);
+        double const scale = tps * static_cast<double>(simDt);
+        double const ticksPerBakeFrame = (scale > 0.0) ? (1.0 / scale) : 1.0;
         int const delta = static_cast<int>(std::lround(
             (frame - win->nominalFrame) * ticksPerBakeFrame
         ));
@@ -109,8 +110,8 @@ static bool nearBakeWindowHint(
     if (!player || simDt <= 0.f) return false;
     auto const& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) return false;
-    double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
-    int const approxFrame = static_cast<int>(std::lround(attemptTick * (tps * simDt)));
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    int const approxFrame = AssistClock::get().remapTick(tps, attemptTick, simDt);
     return bake.findNear(
         player->getPositionX(), approxFrame, down, !player1,
         StageConfig::kindOf(player)
@@ -1403,8 +1404,8 @@ bool AssistController::tryBakeAssist(
         return true; // Hybrid → live
     }
 
-    double tps = bake.data().tps > 0.0 ? bake.data().tps : 240.0;
-    int approxFrame = static_cast<int>(std::lround(m_attemptTick * (tps * m_simDt)));
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    int approxFrame = AssistClock::get().remapTick(tps, this->m_attemptTick, this->m_simDt);
     auto const kind = StageConfig::kindOf(player);
     auto const* win = bake.findNear(
         player->getPositionX(), approxFrame, down, !player1, kind
@@ -1420,9 +1421,12 @@ bool AssistController::tryBakeAssist(
 
     // Map bake frames onto attempt ticks using bake TPS vs current sim dt.
     auto frameToTick = [&](int frame) -> int {
-        if (m_simDt <= 0.f) return effectTick + (frame - win->nominalFrame);
-        double ticksPerBakeFrame = 1.0 / (tps * m_simDt);
-        int delta = static_cast<int>(std::lround((frame - win->nominalFrame) * ticksPerBakeFrame));
+        if (this->m_simDt <= 0.f) return effectTick + (frame - win->nominalFrame);
+        double const scale = tps * static_cast<double>(this->m_simDt);
+        double const ticksPerBakeFrame = (scale > 0.0) ? (1.0 / scale) : 1.0;
+        int delta = static_cast<int>(std::lround(
+            (frame - win->nominalFrame) * ticksPerBakeFrame
+        ));
         return effectTick + delta;
     };
 

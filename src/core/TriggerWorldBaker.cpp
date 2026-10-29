@@ -212,8 +212,11 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
     this->m_layer = layer;
     this->m_phase = Phase::Collect;
 
+    // Author tracks in sim TPS (1/m_simDt), never warped wall TPS.
     this->m_tps = AssistController::get().estimatedTps();
-    if (this->m_tps < 60.0 || this->m_tps > 480.0) this->m_tps = 240.0;
+    if (this->m_tps < 60.0 || this->m_tps > 480.0) {
+        this->m_tps = 240.0;
+    }
 
     if (layer->m_level) {
         this->m_levelKey = LevelProfile::makeKey(layer->m_level);

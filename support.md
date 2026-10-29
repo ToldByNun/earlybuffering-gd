@@ -1,8 +1,9 @@
 # Support
 
+- **Discord:** [https://discord.gg/HAjrey6ykc](https://discord.gg/HAjrey6ykc) — questions, feedback, and discussion.
 - **Bugs / crashes:** open a [GitHub issue](https://github.com/ToldByNun/earlybuffering-gd/issues) with GD version (**2.2081**), Geode version, platform, and steps. Attach Geode crashlogs when possible. For death/reset hitch reports, enable **Lag Probe** and attach `earlybuffer-lagprobe.log` from the mod save folder.
 - **Settings questions:** see the in-mod setting descriptions and [`docs/assist_reference.md`](https://github.com/ToldByNun/earlybuffering-gd/blob/main/docs/assist_reference.md).
 - **Fair play:** use **Safe Mode**; do not expect assisted runs to be valid for leaderboards or community standards.
 - **Version:** **v1.2.0** is the final EarlyBuffer package for **GD 2.2081**. Issues on other GD builds are out of scope for this line.
 
-Maintainer: **Audesign**. The project uses AI-assisted drafting under human design direction; every shipped line is reviewed and the mod is actively tested. Prefer reproducible reports over vague “it lags” notes.
+Maintainer: **Audesign**. Prefer reproducible reports (steps, logs, settings) over vague “it lags” notes.

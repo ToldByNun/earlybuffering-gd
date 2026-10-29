@@ -1,4 +1,6 @@
 #include "TriggerWorldStore.hpp"
+#include "AssistClock.hpp"
+#include "AssistController.hpp"
 #include "LevelProfile.hpp"
 #include "../debug/AssistLog.hpp"
 
@@ -6,6 +8,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cmath>
 
 using namespace geode::prelude;
 
@@ -125,27 +128,44 @@ size_t TriggerWorldStore::readyTrackCount() const {
     return n;
 }
 
-bool TriggerWorldStore::samplePose(int uniqueId, int absTick, TriggerPose& out) const {
+int TriggerWorldStore::remapLiveTick(int liveAbsTick) const {
+    return this->remapLiveTick(liveAbsTick, AssistController::get().simDt());
+}
+
+int TriggerWorldStore::remapLiveTick(int liveAbsTick, float liveSimDt) const {
+    double tps = this->m_data.tps;
+    if (tps <= 0.0) tps = AssistClock::kNominalTps;
+    return AssistClock::get().remapTick(tps, liveAbsTick, liveSimDt);
+}
+
+bool TriggerWorldStore::samplePoseAtStoreTick(
+    int uniqueId, int storeTick, TriggerPose& out
+) const {
     auto const* track = this->findTrack(uniqueId);
     if (!track || !track->ready || track->keys.empty()) return false;
 
     // keys assumed sorted ascending by tick (baker writes them that way).
     auto const& keys = track->keys;
     // Before first key: leave capture baseline (caller skips write).
-    if (absTick < keys.front().tick) return false;
-    if (absTick >= keys.back().tick) {
+    if (storeTick < keys.front().tick) return false;
+    if (storeTick >= keys.back().tick) {
         out = keys.back();
         return true;
     }
 
-    // Last key with tick <= absTick (hold). Linear lerp optional later.
+    // Last key with tick <= storeTick (hold). Linear lerp optional later.
     TriggerPose const* best = &keys.front();
     for (auto const& key : keys) {
-        if (key.tick > absTick) break;
+        if (key.tick > storeTick) break;
         best = &key;
     }
     out = *best;
     return true;
+}
+
+bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const {
+    int const storeTick = this->remapLiveTick(liveAbsTick);
+    return this->samplePoseAtStoreTick(uniqueId, storeTick, out);
 }
 
 void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
@@ -261,13 +281,36 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
     store.setData(std::move(data));
 
     TriggerPose out{};
-    expect(!store.samplePose(42, 5, out), "before-first");
-    expect(store.samplePose(42, 10, out) && out.x == 100.f && out.y == 200.f, "at-first");
-    expect(store.samplePose(42, 15, out) && out.x == 100.f, "hold-mid");
-    expect(store.samplePose(42, 20, out) && out.x == 150.f && out.rotation == 45.f, "at-last");
-    expect(store.samplePose(42, 99, out) && out.x == 150.f, "past-last-hold");
-    expect(!store.samplePose(999, 10, out), "missing-id");
-    expect(!store.samplePose(99, 0, out), "not-ready");
+    // Raw store-tick sampling (no live clock).
+    expect(!store.samplePoseAtStoreTick(42, 5, out), "before-first");
+    expect(
+        store.samplePoseAtStoreTick(42, 10, out) && out.x == 100.f && out.y == 200.f,
+        "at-first"
+    );
+    expect(store.samplePoseAtStoreTick(42, 15, out) && out.x == 100.f, "hold-mid");
+    expect(
+        store.samplePoseAtStoreTick(42, 20, out) && out.x == 150.f && out.rotation == 45.f,
+        "at-last"
+    );
+    expect(store.samplePoseAtStoreTick(42, 99, out) && out.x == 150.f, "past-last-hold");
+    expect(!store.samplePoseAtStoreTick(999, 10, out), "missing-id");
+    expect(!store.samplePoseAtStoreTick(99, 0, out), "not-ready");
+
+    // Remap: store @ 240tps, live simDt = 1/120 → live 100 → store 200.
+    expect(store.remapLiveTick(100, 1.f / 240.f) == 100, "remap-identity");
+    expect(store.remapLiveTick(100, 1.f / 120.f) == 200, "remap-2x-live-dt");
+    // live 10 @ 2x dt → store 20 → last key pose.
+    expect(
+        store.samplePoseAtStoreTick(42, store.remapLiveTick(10, 1.f / 120.f), out)
+            && out.x == 150.f,
+        "remap-then-sample"
+    );
+    // live 10 @ nominal → store 10 → first key.
+    expect(
+        store.samplePoseAtStoreTick(42, store.remapLiveTick(10, 1.f / 240.f), out)
+            && out.x == 100.f,
+        "remap-id-sample"
+    );
 
     expect(store.readyTrackCount() == 1, "ready-count");
     expect(TriggerClassify::isStatic(TriggerKind::StaticToggle), "static-toggle");

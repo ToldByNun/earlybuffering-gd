@@ -1,4 +1,5 @@
 #include "SelfBakeRecorder.hpp"
+#include "AssistClock.hpp"
 #include "AssistController.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
@@ -83,13 +84,13 @@ void SelfBakeRecorder::noteVanillaInput(
         }
     }
 
-    double tps = 240.0;
+    double tps = AssistClock::kNominalTps;
     auto const& bake = BakeMap::get();
     if (bake.loaded() && bake.data().tps > 0.0) tps = bake.data().tps;
-    if (simDt <= 0.f) simDt = 1.f / 240.f;
+    if (simDt <= 0.f) simDt = static_cast<float>(1.0 / AssistClock::kNominalTps);
 
     Sample s;
-    s.frame = static_cast<int>(std::lround(attemptTick * (tps * simDt)));
+    s.frame = AssistClock::get().remapTick(tps, attemptTick, simDt);
     s.x = player->getPositionX();
     s.mode = StageConfig::kindOf(player);
     s.down = down;

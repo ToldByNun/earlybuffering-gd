@@ -1,8 +1,8 @@
 # EarlyBuffer
 
-**Geode** mod for **Geometry Dash 2.2081** — early-input forgiveness assist.
+**Click early. Still live.**
 
-When you click a little early, EarlyBuffer buffers the press and fires on the first shadow-simulated safe tick. It is an **assist**, not an autoplayer and not late-forgiveness (it does not rewind time for late clicks).
+Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBuffer holds the press and fires on the first physics tick a shadow sim still calls safe. Assist, not autoplayer. No late-forgiveness (it does not rewind time for late clicks).
 
 | | |
 |---|---|
@@ -76,11 +76,12 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 ## Support and ethics
 
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
+- Discord: [https://discord.gg/HAjrey6ykc](https://discord.gg/HAjrey6ykc)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
 
 ## Credits
 
-- Maintainer / design: **Audesign** ([ToldByNun](https://github.com/ToldByNun))
+- Maintainer / design / engineering: **Audesign** ([ToldByNun](https://github.com/ToldByNun))
 - Built on [Geode](https://geode-sdk.org/) and Geometry Dash bindings
 - Replay import uses [GDReplayFormat](https://github.com/maxnut/GDReplayFormat) (libGDR)
 

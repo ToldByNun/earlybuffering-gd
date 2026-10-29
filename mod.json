@@ -10,7 +10,22 @@
 	"name": "EarlyBuffer",
 	"version": "v1.2.0",
 	"developer": "Audesign",
-	"description": "Early-input forgiveness assist for GD 2.2081 (final release for this game version). Buffers early jumps and fires on the first shadow-safe tick. Not an autoplayer; Safe Mode recommended.",
+	"description": "Click early — still live. EarlyBuffer holds your jump and fires it on the first physics tick a shadow sim still calls safe. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 release · Safe Mode on by default.",
+	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
+	"links": {
+		"source": "https://github.com/ToldByNun/earlybuffering-gd",
+		"community": "https://discord.gg/HAjrey6ykc"
+	},
+	"issues": {
+		"info": "Report bugs on GitHub Issues (include GD 2.2081, Geode version, platform, steps, crashlog). For chat / questions, use the Discord.",
+		"url": "https://github.com/ToldByNun/earlybuffering-gd/issues"
+	},
+	"tags": [
+		"gameplay",
+		"utility",
+		"offline",
+		"cheat"
+	],
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"
 	},

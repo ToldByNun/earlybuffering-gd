@@ -83,6 +83,8 @@ public:
     BufferedInput const& buffer() const;
     int attemptTick() const;
     float lastDt() const;
+    // Physics step quantum after timeWarp strip (plan / remap).
+    float simDt() const { return this->m_simDt; }
     // Physics TPS = 1/m_simDt (timeWarp stripped). Authors bake/trigger keys.
     double estimatedTps() const;
     // Raw update TPS = 1/m_lastDt (debug/overlay only — never author keys).

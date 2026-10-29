@@ -1,4 +1,5 @@
 #include "TrajectoryVisualizer.hpp"
+#include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
 #include "../core/ShadowSimulator.hpp"
@@ -194,20 +195,20 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         return;
     }
 
-    float dt = AssistController::get().lastDt();
-    if (dt <= 0.f) dt = 1.f / 240.f;
-    float tw = layer->m_gameState.m_timeWarp;
-    if (tw > 0.f) dt /= tw;
+    float dt = AssistController::get().simDt();
+    if (dt <= 0.f) dt = static_cast<float>(1.0 / AssistClock::kNominalTps);
 
     auto model = ShadowSimulator::modelFor(player, StageConfig::ticksAll());
     auto params = StageConfig::paramsFor(player);
     int liveLimit = params.overwrite ? params.ticks : StageConfig::ticksAll();
 
     auto& bake = BakeMap::get();
-    double bakeTps = bake.loaded() && bake.data().tps > 0.0 ? bake.data().tps : 240.0;
-    int approxFrame = static_cast<int>(std::lround(
-        AssistController::get().attemptTick() * (bakeTps * dt)
-    ));
+    double bakeTps = bake.loaded() && bake.data().tps > 0.0
+        ? bake.data().tps
+        : AssistClock::kNominalTps;
+    int approxFrame = AssistClock::get().remapTick(
+        bakeTps, AssistController::get().attemptTick(), dt
+    );
 
     auto const* win = bake.loaded()
         ? bake.findNear(

@@ -533,6 +533,7 @@ Result<int> BakeMap::bakeBrute(
     if (!layer->m_player1) return Err("No player");
 
     bakeRadius = resolveRadius(bakeRadius, BakeMethod::BruteForce);
+    // Same physics quantum as live plan (AssistClock / estimatedTps = 1/simDt).
     double tps = AssistController::get().estimatedTps();
     if (tps < 60.0 || tps > 480.0) tps = 240.0;
     float const dt = static_cast<float>(1.0 / tps);
