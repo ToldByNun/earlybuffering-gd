@@ -283,6 +283,41 @@ void PauseActionBridge::importConfig() {
     FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
 }
 
+void PauseActionBridge::stubDevAction(char const* name) {
+    AssistLog::info(fmt::format(
+        "Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
+        name ? name : "?"
+    ));
+}
+
+void PauseActionBridge::devStartRecord() {
+    PauseActionBridge::stubDevAction("Start Dev Recording");
+}
+
+void PauseActionBridge::devStopRecord() {
+    PauseActionBridge::stubDevAction("Stop Dev Recording");
+}
+
+void PauseActionBridge::devEvalLast() {
+    PauseActionBridge::stubDevAction("Eval Last Attempt");
+}
+
+void PauseActionBridge::devEvalSession() {
+    PauseActionBridge::stubDevAction("Eval Session");
+}
+
+void PauseActionBridge::devExportSession() {
+    PauseActionBridge::stubDevAction("Export Dev Session");
+}
+
+void PauseActionBridge::devClearTraces() {
+    PauseActionBridge::stubDevAction("Clear Dev Traces");
+}
+
+void PauseActionBridge::devCopyReport() {
+    PauseActionBridge::stubDevAction("Copy Last Dev Report");
+}
+
 void PauseActionBridge::openModSettings() {
     if (InLevelSettingsFilterKeeper::isOpen()) return;
     auto* mod = Mod::get();

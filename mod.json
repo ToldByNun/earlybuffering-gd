@@ -105,7 +105,7 @@
 		"show-pause-hub": {
 			"type": "bool",
 			"name": "Pause EB Button",
-			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Bake, Ingame, Assist, Visual, Modes, Keys). Off = open settings only from the Geode menu.",
+			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Bake, Ingame, Assist, Visual, Modes, Keys, Dev). Off = open settings only from the Geode menu.",
 			"default": true
 		},
 		"title-bake-actions": {
@@ -1074,6 +1074,77 @@
 			"description": "Shows or hides trajectory / click-window paths.",
 			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
+		},
+		"title-dev": {
+			"type": "title",
+			"name": "Dev Lab",
+			"description": "Developer forensics: record assist decision traces, evaluate counterfactual delays, export reports. Not for normal play — leave recording off unless you are debugging timing."
+		},
+		"title-dev-session": {
+			"type": "title",
+			"name": "Dev Session",
+			"description": "Recording controls for the Dev Lab session. Wired in later commits; buttons log a stub message until then."
+		},
+		"dev-record-enable": {
+			"type": "bool",
+			"name": "Dev Record Enable",
+			"description": "Master switch for Dev Lab recording. Off = no trace overhead beyond a cheap enable check. On alone does not start a session until Start Recording is used (later commits).",
+			"default": false
+		},
+		"dev-record-count": {
+			"type": "int",
+			"name": "Dev Record Count",
+			"description": "How many sealed attempts to capture in one Dev session (1–50). Default 10. Used once the session controller lands.",
+			"default": 10,
+			"min": 1,
+			"max": 50
+		},
+		"title-dev-actions": {
+			"type": "title",
+			"name": "Dev Actions",
+			"description": "Session, eval, and export actions. Safe no-ops until the Dev Lab pipeline is wired."
+		},
+		"dev-start-record-action": {
+			"type": "custom:eb-action",
+			"name": "Start Dev Recording",
+			"description": "Starts a Dev Lab recording session (stub until session controller). Requires Dev Record Enable.",
+			"button-text": "start"
+		},
+		"dev-stop-record-action": {
+			"type": "custom:eb-action",
+			"name": "Stop Dev Recording",
+			"description": "Stops and seals the current Dev Lab session (stub until session controller).",
+			"button-text": "stop"
+		},
+		"dev-eval-last-action": {
+			"type": "custom:eb-action",
+			"name": "Eval Last Attempt",
+			"description": "Runs counterfactual delay eval on the last sealed attempt (stub until eval engine).",
+			"button-text": "eval"
+		},
+		"dev-eval-session-action": {
+			"type": "custom:eb-action",
+			"name": "Eval Session",
+			"description": "Runs eval across every sealed attempt in the open session (stub until eval engine).",
+			"button-text": "eval all"
+		},
+		"dev-export-session-action": {
+			"type": "custom:eb-action",
+			"name": "Export Dev Session",
+			"description": "Logs/copies the path to the current Dev session JSON (stub until trace store).",
+			"button-text": "export"
+		},
+		"dev-clear-traces-action": {
+			"type": "custom:eb-action",
+			"name": "Clear Dev Traces",
+			"description": "Deletes files under the Dev traces folder only (stub until trace store). Never touches other mod files.",
+			"button-text": "clear"
+		},
+		"dev-copy-report-action": {
+			"type": "custom:eb-action",
+			"name": "Copy Last Dev Report",
+			"description": "Copies the last Dev report summary to the clipboard (stub until report formatter).",
+			"button-text": "copy"
 		},
 		"title-internal": {
 			"type": "title",

@@ -18,6 +18,7 @@ char const* InLevelSettingsFilter::categoryName(SettingsCategory cat) {
         case SettingsCategory::Visual: return "Visual";
         case SettingsCategory::Modes: return "Modes";
         case SettingsCategory::Keys: return "Keys";
+        case SettingsCategory::Dev: return "Dev";
         case SettingsCategory::Count: break;
     }
     return "?";
@@ -62,6 +63,10 @@ SettingsCategory InLevelSettingsFilter::categoryForKey(std::string const& key) {
     if (key == "title-keys" || key.rfind("hotkey-", 0) == 0
         || key == "title-internal" || key == "stage-index" || key == "swallow-hopeless") {
         return SettingsCategory::Keys;
+    }
+    // Dev Lab keys: title-dev* and every setting/action prefixed with "dev-".
+    if (key.rfind("title-dev", 0) == 0 || key.rfind("dev-", 0) == 0) {
+        return SettingsCategory::Dev;
     }
     return SettingsCategory::Assist;
 }
@@ -428,11 +433,18 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("save-icon-color") == SettingsCategory::Visual, "cat-save-icon-color");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Keys, "cat-hotkey-keys");
+    expect(categoryForKey("title-dev") == SettingsCategory::Dev, "cat-title-dev");
+    expect(categoryForKey("dev-record-enable") == SettingsCategory::Dev, "cat-dev-record");
+    expect(categoryForKey("dev-start-record-action") == SettingsCategory::Dev, "cat-dev-start");
+    expect(keepKey("dev-record-enable", SettingsCategory::Dev), "keep-dev-on-dev");
+    expect(!keepKey("dev-record-enable", SettingsCategory::Assist), "drop-dev-on-assist");
+    expect(!keepKey("dev-record-enable"), "legacy-drop-dev");
     expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");
     expect(!keepKey("import-bake-replay", SettingsCategory::Main), "drop-import-on-main");
 
-    expect(static_cast<int>(SettingsCategory::Count) == 7, "cat-count-7");
+    expect(static_cast<int>(SettingsCategory::Count) == 8, "cat-count-8");
     expect(std::strcmp(categoryName(SettingsCategory::Bake), "Bake") == 0, "cat-name-bake");
+    expect(std::strcmp(categoryName(SettingsCategory::Dev), "Dev") == 0, "cat-name-dev");
 
     expect(preservedContentY(100.f, 800.f, 400.f) == 500.f, "scroll-shrink");
     expect(preservedContentY(0.f, 100.f, 100.f) == 0.f, "scroll-same");

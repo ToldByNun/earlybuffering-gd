@@ -13,6 +13,7 @@ enum class SettingsCategory : int {
     Visual,
     Modes,
     Keys,
+    Dev,
     Count
 };
 

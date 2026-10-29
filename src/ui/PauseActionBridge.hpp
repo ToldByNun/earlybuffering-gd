@@ -23,7 +23,16 @@ public:
     static void exportConfig();
     static void importConfig();
 
-    // Geode ModSettingsPopup with Main/Bake/Ingame/Assist/Visual/Modes/Keys switcher.
+    // Dev Lab actions (Commit 1 stubs — log only until session/eval/trace land).
+    static void devStartRecord();
+    static void devStopRecord();
+    static void devEvalLast();
+    static void devEvalSession();
+    static void devExportSession();
+    static void devClearTraces();
+    static void devCopyReport();
+
+    // Geode ModSettingsPopup with Main/Bake/Ingame/Assist/Visual/Modes/Keys/Dev switcher.
     static void openModSettings();
     // Same as openModSettings (EB pause button). No-op if already open.
     static void openHub();
@@ -34,6 +43,7 @@ private:
     PauseActionBridge() = delete;
 
     static void handleImportedPath(std::filesystem::path const& path);
+    static void stubDevAction(char const* name);
 };
 
 #endif // EARLYBUFFER_UI_PAUSEACTIONBRIDGE_HPP

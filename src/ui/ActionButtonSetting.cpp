@@ -86,6 +86,34 @@ void fireSettingAction(std::string const& key) {
         PauseActionBridge::importConfig();
         return;
     }
+    if (key == "dev-start-record-action") {
+        PauseActionBridge::devStartRecord();
+        return;
+    }
+    if (key == "dev-stop-record-action") {
+        PauseActionBridge::devStopRecord();
+        return;
+    }
+    if (key == "dev-eval-last-action") {
+        PauseActionBridge::devEvalLast();
+        return;
+    }
+    if (key == "dev-eval-session-action") {
+        PauseActionBridge::devEvalSession();
+        return;
+    }
+    if (key == "dev-export-session-action") {
+        PauseActionBridge::devExportSession();
+        return;
+    }
+    if (key == "dev-clear-traces-action") {
+        PauseActionBridge::devClearTraces();
+        return;
+    }
+    if (key == "dev-copy-report-action") {
+        PauseActionBridge::devCopyReport();
+        return;
+    }
 }
 
 } // namespace
