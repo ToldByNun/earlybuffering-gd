@@ -1231,13 +1231,13 @@
 		"dev-eval-last-action": {
 			"type": "custom:eb-action",
 			"name": "Eval Last Attempt",
-			"description": "Runs counterfactual delay eval on the last sealed attempt (stub until eval engine).",
+			"description": "Runs counterfactual delay eval on the latest attempt with a planFinished witness. Requires being in a level.",
 			"button-text": "eval"
 		},
 		"dev-eval-session-action": {
 			"type": "custom:eb-action",
 			"name": "Eval Session",
-			"description": "Runs eval across every sealed attempt in the open session (stub until eval engine).",
+			"description": "Runs eval on every attempt in the open session that has a planFinished witness. Last report kept for overlay/clipboard.",
 			"button-text": "eval all"
 		},
 		"dev-export-session-action": {
@@ -1255,7 +1255,7 @@
 		"dev-copy-report-action": {
 			"type": "custom:eb-action",
 			"name": "Copy Last Dev Report",
-			"description": "Copies the last Dev report summary to the clipboard (stub until report formatter).",
+			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
 			"button-text": "copy"
 		},
 		"title-internal": {

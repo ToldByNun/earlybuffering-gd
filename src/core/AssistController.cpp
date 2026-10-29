@@ -23,6 +23,8 @@
 #include "../dev/DevClockContract.hpp"
 #include "../dev/DevConfig.hpp"
 #include "../dev/DevCycleRecorder.hpp"
+#include "../dev/DevReport.hpp"
+#include "../ui/DevOverlay.hpp"
 #include "../ui/SaveFeedback.hpp"
 #include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
@@ -1192,6 +1194,13 @@ void AssistController::updateOverlay() {
             }
         }
     }
+    if (DevOverlay::shouldShow()) {
+        auto const devLine = DevOverlay::line();
+        if (!devLine.empty()) {
+            if (!this->m_overlayText.empty()) this->m_overlayText += " || ";
+            this->m_overlayText += devLine;
+        }
+    }
     StatusOverlay::update(m_overlayText);
 }
 
@@ -1395,6 +1404,15 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     {
         LagProbe::Scope const s("eb.devSealDeath");
         DevCycleRecorder::get().sealAttemptWithOutcomes("death", false);
+    }
+    if (DevConfig::evalOnDeath() && DevCycleRecorder::get().isRecording()) {
+        std::string evalErr;
+        if (DevReport::evalLastAttempt(evalErr)) {
+            this->updateOverlay();
+        }
+        else if (!evalErr.empty()) {
+            AssistLog::debug(fmt::format("Dev Lab eval-on-death: {}", evalErr));
+        }
     }
 
     if (StageConfig::autoTune() && LevelProfile::get().loaded()) {

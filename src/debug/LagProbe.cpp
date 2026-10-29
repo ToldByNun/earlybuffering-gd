@@ -136,6 +136,7 @@ void LagProbe::writeLegend() {
     this->appendLine("  eb.saveFeedbackReset        SaveFeedback::reset");
     this->appendLine("  eb.clickGuardReset          ClickIntentGuard::reset");
     this->appendLine("  eb.updateOverlay            status overlay string refresh");
+    this->appendLine("  eb.dev.eval                 Dev Lab counterfactual grid eval");
     this->appendLine("  vanilla.PlayLayer::resetLevel   GD attempt rebuild (often huge)");
     this->appendLine("  vanilla.loadFromCheckpoint  GD checkpoint apply");
     this->appendLine("  eb.onCheckpointLoad         our checkpoint-side flush");

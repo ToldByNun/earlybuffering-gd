@@ -9,8 +9,10 @@
 #include "../debug/AssistLog.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevConfig.hpp"
+#include "../dev/DevReport.hpp"
 #include "../dev/DevSession.hpp"
 #include "../dev/DevTraceStore.hpp"
+#include "../ui/DevOverlay.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -338,11 +340,47 @@ void PauseActionBridge::devStopRecord() {
 }
 
 void PauseActionBridge::devEvalLast() {
-    PauseActionBridge::stubDevAction("Eval Last Attempt");
+    std::string err;
+    if (!DevReport::evalLastAttempt(err)) {
+        AssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            err.empty() ? "Eval Last Attempt failed." : err.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    AssistController::get().updateOverlay();
+    auto const& r = DevReport::last();
+    AssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
+    FLAlertLayer::create(
+        "EarlyBuffer Dev",
+        r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str(),
+        "OK"
+    )->show();
 }
 
 void PauseActionBridge::devEvalSession() {
-    PauseActionBridge::stubDevAction("Eval Session");
+    std::string err;
+    int count = 0;
+    if (!DevReport::evalSession(err, &count)) {
+        AssistLog::info(fmt::format("Dev Lab: Eval Session failed: {}", err));
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            err.empty() ? "Eval Session failed." : err.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    AssistController::get().updateOverlay();
+    auto const& r = DevReport::last();
+    auto const msg = fmt::format(
+        "Evaluated {} attempt(s).\n{}",
+        count,
+        r.overlayLine
+    );
+    AssistLog::info(fmt::format("Dev Lab: Eval Session → {}", msg));
+    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devExportSession() {
@@ -378,7 +416,26 @@ void PauseActionBridge::devClearTraces() {
 }
 
 void PauseActionBridge::devCopyReport() {
-    PauseActionBridge::stubDevAction("Copy Last Dev Report");
+    if (!DevReport::hasLast()) {
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            "No Dev report yet. Run Eval Last / Eval Session first.",
+            "OK"
+        )->show();
+        return;
+    }
+    auto const& r = DevReport::last();
+    // Clipboard = same overlay field string (contract A names only).
+    std::string const text = r.overlayLine.empty()
+        ? DevReport::formatOverlayLine(r)
+        : r.overlayLine;
+    clipboard::write(text);
+    AssistLog::info(fmt::format("Dev Lab: copied report → {}", text));
+    FLAlertLayer::create(
+        "EarlyBuffer Dev",
+        fmt::format("Copied to clipboard:\n{}", text).c_str(),
+        "OK"
+    )->show();
 }
 
 void PauseActionBridge::openModSettings() {
