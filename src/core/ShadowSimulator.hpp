@@ -1,6 +1,7 @@
 #ifndef EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
 #define EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
 
+#include "AssistVerdict.hpp"
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
 
@@ -54,6 +55,7 @@ struct ActWindow {
 
 struct SimPlan {
     PlanAction action = PlanAction::Pass;
+    AssistReason reason = AssistReason::None;
     int delay = 0;
     int jumpTick = 0;
     bool nowIsSafe = false;

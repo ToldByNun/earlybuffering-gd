@@ -10,7 +10,7 @@
 	"name": "EarlyBuffer",
 	"version": "v1.2.0",
 	"developer": "Audesign",
-	"description": "Click early — still live. EarlyBuffer holds your jump and fires it on the first physics tick a shadow sim still calls safe. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 release · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 release · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -21,10 +21,11 @@
 		"url": "https://github.com/ToldByNun/earlybuffering-gd/issues"
 	},
 	"tags": [
-		"gameplay",
-		"utility",
-		"offline",
-		"cheat"
+		"Gameplay",
+		"Utility",
+		"Offline",
+		"Enhancement",
+		"Cheat"
 	],
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"

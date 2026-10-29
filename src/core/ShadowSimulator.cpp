@@ -1699,7 +1699,11 @@ SimPlan ShadowSimulator::plan(
     SimPlan plan;
     plan.smartDepthUsed = 1;
     plan.planId = s_planId++;
-    if (!layer || !real || !this->m_shadow || limit < 0 || dt <= 0.f) return plan;
+    if (!layer || !real || !this->m_shadow || limit < 0 || dt <= 0.f) {
+        plan.action = PlanAction::Pass;
+        plan.reason = AssistReason::PassInvalidArgs;
+        return plan;
+    }
     if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
 
     Model model = modelFor(real, limit, options.capMul);
@@ -1836,14 +1840,15 @@ SimPlan ShadowSimulator::plan(
             this->m_simulating = false;
             this->parkGhosts();
             plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassNoThreat;
             plan.delay = 0;
             plan.nowIsSafe = true;
             plan.threatCleared = true;
             plan.jumpTick = c0.jumpTick;
             plan.activatedRing = c0.activatedRing;
             AssistLog::debug(fmt::format(
-                "PLAN id={} Pass no-threat limit={} budgetHit={}",
-                plan.planId, limit, plan.budgetHit
+                "PLAN id={} Pass no-threat verdict={} limit={} budgetHit={}",
+                plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit
             ));
             return plan;
         }
@@ -1863,6 +1868,7 @@ SimPlan ShadowSimulator::plan(
             this->m_simulating = false;
             this->parkGhosts();
             plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassWaveProximity;
             plan.delay = 0;
             plan.nowIsSafe = c0.viable;
             plan.threatCleared = c0.clearsThreat || !zone.valid;
@@ -1870,8 +1876,8 @@ SimPlan ShadowSimulator::plan(
             plan.activatedRing = c0.activatedRing;
             plan.threatZone = zone;
             AssistLog::debug(fmt::format(
-                "PLAN id={} Pass wave-hazard-proximity prox={:.0f} zone={} budgetHit={}",
-                plan.planId, proxX, zone.valid, plan.budgetHit
+                "PLAN id={} Pass wave-hazard-proximity verdict={} prox={:.0f} zone={} budgetHit={}",
+                plan.planId, AssistVerdict::name(plan.reason), proxX, zone.valid, plan.budgetHit
             ));
             return plan;
         }
@@ -2035,6 +2041,7 @@ SimPlan ShadowSimulator::plan(
             this->m_simulating = false;
             this->parkGhosts();
             plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassWaveFutile;
             plan.delay = 0;
             plan.nowIsSafe = cands[0].viable;
             plan.threatCleared = cands[0].clearsThreat || !zone.valid;
@@ -2042,8 +2049,8 @@ SimPlan ShadowSimulator::plan(
             plan.activatedRing = cands[0].activatedRing;
             plan.threatZone = zone;
             AssistLog::debug(fmt::format(
-                "PLAN id={} Pass wave-futile-delay bin={} gain={:.1f} budgetHit={}",
-                plan.planId, bestBin, bestGain, plan.budgetHit
+                "PLAN id={} Pass wave-futile-delay verdict={} bin={} gain={:.1f} budgetHit={}",
+                plan.planId, AssistVerdict::name(plan.reason), bestBin, bestGain, plan.budgetHit
             ));
             return plan;
         }
@@ -2343,16 +2350,20 @@ SimPlan ShadowSimulator::plan(
 
     if (chosen < 0) {
         plan.action = PlanAction::Pass;
+        plan.reason = plan.budgetHit
+            ? AssistReason::PassBudget
+            : AssistReason::PassHopeless;
         plan.delay = 0;
         AssistLog::debug(fmt::format(
-            "PLAN id={} Pass limit={} budgetHit={} orbIntent={}",
-            plan.planId, limit, plan.budgetHit, orbIntent
+            "PLAN id={} Pass verdict={} limit={} budgetHit={} orbIntent={}",
+            plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit, orbIntent
         ));
         return plan;
     }
 
     if (doPass || chosen == 0) {
         plan.action = PlanAction::Pass;
+        plan.reason = AssistReason::PassD0Safe;
         plan.delay = 0;
         plan.nowIsSafe = cands[0].viable;
         plan.jumpTick = cands[0].jumpTick;
@@ -2360,6 +2371,12 @@ SimPlan ShadowSimulator::plan(
     }
     else {
         plan.action = PlanAction::Delay;
+        plan.reason = AssistVerdict::inferDelayReason(
+            plan.activatedRing
+                || cands[static_cast<size_t>(chosen)].activatedRing,
+            plan.requireOrb,
+            hasPrefer
+        );
         plan.delay = chosen;
         plan.jumpTick = cands[static_cast<size_t>(chosen)].jumpTick;
         plan.nowIsSafe = false;
@@ -2390,10 +2407,20 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
+    if (plan.action == PlanAction::Delay && plan.reason == AssistReason::None) {
+        plan.reason = AssistVerdict::inferDelayReason(
+            plan.activatedRing, plan.requireOrb, hasPrefer
+        );
+    }
+    if (plan.action == PlanAction::Pass && plan.reason == AssistReason::None) {
+        plan.reason = AssistReason::PassUnknown;
+    }
+
     AssistLog::debug(fmt::format(
-        "PLAN id={} {} delay={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
+        "PLAN id={} {} verdict={} delay={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         plan.planId,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
+        AssistVerdict::name(plan.reason),
         plan.delay, plan.activatedRing, plan.orbUseful, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
@@ -2545,6 +2572,7 @@ SimPlan ShadowSimulator::planSequence(
 
     if (best.d0 == 0) {
         single.action = PlanAction::Pass;
+        single.reason = AssistReason::PassD0Safe;
         single.delay = 0;
         single.nowIsSafe = true;
     }
@@ -2552,10 +2580,16 @@ SimPlan ShadowSimulator::planSequence(
         single.action = PlanAction::Delay;
         single.delay = best.d0;
         single.nowIsSafe = false;
+        if (!AssistVerdict::isDelay(single.reason)) {
+            single.reason = AssistVerdict::inferDelayReason(
+                single.activatedRing, single.requireOrb, false
+            );
+        }
     }
     AssistLog::debug(fmt::format(
-        "planSequence id={} depth={} d0={} allowed={} combos={} bakeChain={}",
-        single.planId, depth, best.d0, allowed.size(), combos, useBakeChain
+        "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={}",
+        single.planId, depth, best.d0, AssistVerdict::name(single.reason),
+        allowed.size(), combos, useBakeChain
     ));
     return single;
 }

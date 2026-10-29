@@ -156,6 +156,7 @@ private:
     void beginOutcome(SimPlan const& plan, int effectTick);
     void pollOutcome(PlayLayer* playLayer);
     void logPlan(SimPlan const& plan, char const* kind);
+    void noteVerdict(AssistReason reason, char const* where);
 
     void recordDecision(
         PlayLayer* playLayer, PlayerObject* player, bool down,
@@ -207,6 +208,7 @@ private:
     bool m_outcomePlanDelay = false; // true if plan was Delay (not Pass)
     float m_outcomeStartX = 0.f;
     bool m_untrustPassHint = false; // overlay: forced Pass under simUntrusted
+    AssistReason m_lastVerdict = AssistReason::None;
     bool m_assistTouchedRun = false;
     int m_savesAttempt = 0;
     int m_savesLevel = 0;

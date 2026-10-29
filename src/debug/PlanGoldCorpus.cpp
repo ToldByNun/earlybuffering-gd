@@ -2,6 +2,7 @@
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/AssistLearning.hpp"
+#include "../core/AssistVerdict.hpp"
 #include "../core/ClickIntentGuard.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
@@ -37,6 +38,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(TriggerWorldStore::selfCheck(twReport), "trigger-world-store");
     std::string clockReport;
     expect(AssistClock::selfCheck(clockReport), "assist-clock");
+    std::string verdictReport;
+    expect(AssistVerdict::selfCheck(verdictReport), "assist-verdict");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";
