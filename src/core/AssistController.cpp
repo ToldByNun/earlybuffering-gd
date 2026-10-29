@@ -539,6 +539,8 @@ bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
     bool const opp = plan.foresightOrbPad || plan.usedOrbWindow;
     if (plan.budgetHit && opp) return true;
     if (plan.unknown && opp) return true;
+    // Continuous: idle safer + ascent helped in eval but pick starved → soft hold.
+    if (plan.continuous && plan.idleSafer && plan.ascentUseful) return true;
     return false;
 }
 
@@ -598,6 +600,16 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     unknownOrb.unknown = true;
     unknownOrb.usedOrbWindow = true;
     expect(shouldArmHoldUntilSafe(unknownOrb), "arm-unknown-orb");
+
+    SimPlan idleAscent;
+    idleAscent.action = PlanAction::Pass;
+    idleAscent.reason = AssistReason::PassHopeless;
+    idleAscent.continuous = true;
+    idleAscent.idleSafer = true;
+    idleAscent.ascentUseful = true;
+    expect(shouldArmHoldUntilSafe(idleAscent), "arm-idle-ascent");
+    idleAscent.continuous = false;
+    expect(!shouldArmHoldUntilSafe(idleAscent), "no-arm-idle-cube");
 
     SimPlan etaPlan;
     etaPlan.dMin = 6;

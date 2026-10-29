@@ -75,6 +75,10 @@ struct SimPlan {
     bool foresightOrbPad = false; // TravelForesight orb/pad in travel cone
     bool threatCleared = false;
     bool orbUseful = false;
+    // Continuous miss-assist: idle (no press) safer than d0 press, and some
+    // later delay in-window improves survival (ascent/hold). → Delay not Pass.
+    bool idleSafer = false;
+    bool ascentUseful = false;
     bool requireOrb = false;
     bool requireHold = false;
     int dMin = -1;
@@ -206,6 +210,34 @@ public:
         int bestSurviveBin,
         float bestEndXGain,
         bool foresightOrbPad
+    );
+
+    // Continuous idleSafer / ascentUseful (pure; PlanGold / regressionSelfCheck).
+    // Baseline idle safer than d0 press (dies later / further / not at all).
+    static bool classifyIdleSafer(
+        bool continuous,
+        bool pressDown,
+        bool baselineDied,
+        int baselineDeathTick,
+        float baselineDeathX,
+        bool d0Died,
+        int d0DeathTick,
+        float d0DeathX
+    );
+    // Some delay > 0 improves on d0 (viable, or better bin / endX).
+    static bool classifyAscentUseful(
+        bool continuous,
+        bool pressDown,
+        bool d0Viable,
+        int d0SurviveBin,
+        float d0EndX,
+        bool laterViable,
+        int laterSurviveBin,
+        float laterEndX
+    );
+    // Overhead / ceiling-style death relative to player Y.
+    static bool deathLooksLikeAscent(
+        float playerY, float deathY, bool upsideDown, float marginY = 20.f
     );
 
     // Prefer short release for continuous; mid-window for tap modes.

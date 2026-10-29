@@ -1215,6 +1215,56 @@ bool ShadowSimulator::shouldWaveFutileDelayPass(
     return true;
 }
 
+bool ShadowSimulator::deathLooksLikeAscent(
+    float playerY, float deathY, bool upsideDown, float marginY
+) {
+    if (marginY < 0.f) marginY = 0.f;
+    if (upsideDown) {
+        // Flipped: "ceiling" is below in world Y.
+        return deathY < playerY - marginY;
+    }
+    return deathY > playerY + marginY;
+}
+
+bool ShadowSimulator::classifyIdleSafer(
+    bool continuous,
+    bool pressDown,
+    bool baselineDied,
+    int baselineDeathTick,
+    float baselineDeathX,
+    bool d0Died,
+    int d0DeathTick,
+    float d0DeathX
+) {
+    if (!continuous || !pressDown) return false;
+    // Idle must look better than pressing now.
+    if (!d0Died) return false;
+    if (!baselineDied) return true;
+    if (baselineDeathTick < 0 || d0DeathTick < 0) return !baselineDied;
+    if (baselineDeathTick > d0DeathTick) return true;
+    if (baselineDeathTick == d0DeathTick && baselineDeathX > d0DeathX + 8.f) {
+        return true;
+    }
+    return false;
+}
+
+bool ShadowSimulator::classifyAscentUseful(
+    bool continuous,
+    bool pressDown,
+    bool d0Viable,
+    int d0SurviveBin,
+    float d0EndX,
+    bool laterViable,
+    int laterSurviveBin,
+    float laterEndX
+) {
+    if (!continuous || !pressDown) return false;
+    if (laterViable && !d0Viable) return true;
+    if (laterSurviveBin > d0SurviveBin) return true;
+    if (laterViable && laterEndX > d0EndX + kFutileEndXGain) return true;
+    return false;
+}
+
 int ShadowSimulator::pickPreferredRelease(int earliest, int latest, bool continuous) {
     if (earliest < 0) return -1;
     if (latest < earliest) latest = earliest;
@@ -1843,6 +1893,18 @@ SimPlan ShadowSimulator::plan(
         cands[0] = c0;
         candReady[0] = 1;
 
+        // Continuous: idle (baseline) safer than d0 press → miss-assist may Delay.
+        plan.idleSafer = classifyIdleSafer(
+            model.continuous,
+            down,
+            plan.baselineDeathTick >= 0,
+            plan.baselineDeathTick,
+            plan.baselineDeathX,
+            c0.raw.died,
+            c0.raw.died ? c0.raw.deathTick : -1,
+            c0.raw.died ? c0.raw.deathX : c0.endX
+        );
+
         // No threat target: baseline survives and no orb/pad ahead.
         // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
         bool const noThreat = !c0.raw.died && !zone.valid;
@@ -1948,7 +2010,8 @@ SimPlan ShadowSimulator::plan(
             kHazardProximityXMax
         );
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
-        if (shouldWaveHazardProximityPass(
+        // idleSafer: do not early-Pass — pressing now dies while idle lives; search delays.
+        if (!plan.idleSafer && shouldWaveHazardProximityPass(
                 isWave, nearHazard, noOrbTarget, plan.foresightOrbPad
             )) {
             this->m_simAbsTick = -1;
@@ -2122,6 +2185,27 @@ SimPlan ShadowSimulator::plan(
     }
     bool orbIntent = orbAssist && (orbHint.found || spatialHint || anyActivation);
 
+    // Continuous ascentUseful: any later delay beats d0 (viable / bin / endX).
+    {
+        auto const& c0ref = cands[0];
+        for (int d = 1; d <= limit; ++d) {
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (classifyAscentUseful(
+                    model.continuous,
+                    down,
+                    c0ref.viable,
+                    c0ref.surviveBin,
+                    c0ref.endX,
+                    c.viable,
+                    c.surviveBin,
+                    c.endX
+                )) {
+                plan.ascentUseful = true;
+                break;
+            }
+        }
+    }
+
     // Wave: no delay improves surviveBin / endX → Pass (avoid phase-shift "assists").
     {
         bool const isWave = real && real->m_isDart;
@@ -2134,7 +2218,7 @@ SimPlan ShadowSimulator::plan(
             float const gain = c.endX - baseEnd;
             if (gain > bestGain) bestGain = gain;
         }
-        if (shouldWaveFutileDelayPass(
+        if (!plan.idleSafer && shouldWaveFutileDelayPass(
                 isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad
             )) {
             this->m_simAbsTick = -1;
@@ -2447,6 +2531,26 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
+    // Continuous miss-assist: idle safer + ascent helps → Delay, not Pass/hopeless.
+    // No forever block: only when a later viable cand exists in-window.
+    if (plan.idleSafer && plan.ascentUseful
+        && (doPass || chosen <= 0)) {
+        std::vector<int> pool;
+        for (int d = 1; d <= limit; ++d) pool.push_back(d);
+        int forced = legacyPick
+            ? pickLatestRobust(pool, false)
+            : pickRobust(pool, false, true);
+        if (forced > 0) {
+            chosen = forced;
+            doPass = false;
+            applyChosenMeta(chosen);
+            AssistLog::debug(fmt::format(
+                "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
+                plan.planId, chosen
+            ));
+        }
+    }
+
     // G0 A/B: on disagreement with earliest-viable (legacy), fair coin + log arm.
     if (StageConfig::assistVerifyAb()) {
         int legacy = -1;
@@ -2632,13 +2736,15 @@ SimPlan ShadowSimulator::plan(
 
     bool const orbIntentOut = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
     AssistLog::debug(fmt::format(
-        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
+        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight={} idleSafer={} ascent={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         plan.planId,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         AssistVerdict::name(plan.reason),
         plan.delay,
         orbIntentOut ? 1 : 0,
         plan.foresightOrbPad ? 1 : 0,
+        plan.idleSafer ? 1 : 0,
+        plan.ascentUseful ? 1 : 0,
         plan.activatedRing, plan.orbUseful, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
@@ -3113,6 +3219,48 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(
         !shouldWaveFutileDelayPass(true, false, 0, 12.f, false),
         "wave-futile-gain"
+    );
+
+    // Continuous idleSafer / ascentUseful
+    expect(
+        classifyIdleSafer(true, true, false, -1, 0.f, true, 4, 100.f),
+        "idle-safer-alive"
+    );
+    expect(
+        !classifyIdleSafer(false, true, false, -1, 0.f, true, 4, 100.f),
+        "idle-safer-not-cube"
+    );
+    expect(
+        !classifyIdleSafer(true, true, false, -1, 0.f, false, -1, 0.f),
+        "idle-safer-d0-safe"
+    );
+    expect(
+        classifyIdleSafer(true, true, true, 10, 200.f, true, 3, 100.f),
+        "idle-safer-later-death"
+    );
+    expect(
+        deathLooksLikeAscent(100.f, 140.f, false),
+        "ascent-death-above"
+    );
+    expect(
+        !deathLooksLikeAscent(100.f, 105.f, false),
+        "ascent-death-near"
+    );
+    expect(
+        deathLooksLikeAscent(100.f, 60.f, true),
+        "ascent-death-flipped"
+    );
+    expect(
+        classifyAscentUseful(true, true, false, 0, 50.f, true, 0, 50.f),
+        "ascent-later-viable"
+    );
+    expect(
+        classifyAscentUseful(true, true, true, 0, 50.f, true, 2, 50.f),
+        "ascent-better-bin"
+    );
+    expect(
+        !classifyAscentUseful(true, true, true, 1, 50.f, true, 1, 52.f),
+        "ascent-no-gain"
     );
 
     expect(pickPreferredRelease(2, 10, true) == 2, "pref-rel-cont");

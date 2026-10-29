@@ -139,7 +139,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 3. d0 press baseline -> ThreatZone clusterGapX=50
 4. **no-threat Pass (G2)**: baseline did not die, zone invalid, no orb/pad hint → run `OpportunityProbe` (foresight already forces search; else cheap `d=mid` / `d=limit` sims). Pass only if probe empty; else full cand search. Budget starve with no probes → `PassBudget`.
 4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). **`foresightOrbPad` blocks this Pass** (keep searching for the orb). Runs after foresight/orb checks.
-4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further.
+4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further. Skipped when `idleSafer`.
+4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay (preferLater/latest) instead of Pass/hopeless. No forever block if nothing in-window is viable; controller may Soft Hold when both flags set. Wave proximity/futile early-Pass skipped when `idleSafer`.
 5. eval delays under tick + sim-budget-us
 6. orbIntent: Legacy earliest ±k act; New preferLater in band; optional firstDt ±3% jitter
 7. else d0 clearsThreat -> Pass; else New preferLater / Legacy latest ±k-robust (orb: earliest act)
@@ -281,7 +282,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
-| Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity → arm buffer (`holdUntilSafe`), replan each tick ≤`limit`. Delay confirm updates `fireTick`; opportunity clear + safe → inject now (never drop the click); deadline → fire. Overlay `HUS` + `HOLD~`. |
+| Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`), replan each tick ≤`limit`. Delay confirm updates `fireTick`; opportunity clear + safe → inject now (never drop the click); deadline → fire. Overlay `HUS` + `HOLD~`. |
+| Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
 
 Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold).
 
@@ -303,6 +305,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
+| Ship/Wave: idle lives, press-now dies, later delay clears | Delay/HUS (`idleSafer`+`ascent`) | Same | PLAN log `idleSafer=1 ascent=1` |
 | Single early click, empty ring | Reach plan (not spam Pass) | Same | |
 | UNTRUST + orb foresight | Soft: Delay/HUS allowed | Same | Hard UNTRUST Pass only without orb |
 | Low-trust spot + orb foresight | Soft: plan allowed | Same | Orb overrides trust Pass |
