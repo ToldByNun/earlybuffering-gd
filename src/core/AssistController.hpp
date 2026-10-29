@@ -50,6 +50,10 @@ struct BufferedInput {
     // Soft hold: foresight/opportunity but no hard Delay yet — replan until
     // Delay confirms, opportunity clears, or pressTick+limit deadline.
     bool holdUntilSafe = false;
+    // HUS replan cadence (C11): skip full plan() unless interval / ΔX / foresight edge.
+    int husLastReplanTick = -1;
+    float husLastReplanX = 0.f;
+    bool husLastForesight = false;
 };
 
 class AssistController {
@@ -122,6 +126,18 @@ public:
     // unknown+foresight — never past limit. Pure helpers for PlanGold.
     static bool shouldArmHoldUntilSafe(SimPlan const& plan);
     static int holdUntilSafeEtaTicks(SimPlan const& plan, int limit);
+    // Full plan() only every N ticks, on ΔX, foresight edge, first call, or near deadline.
+    static constexpr int kHusReplanEveryTicks = 3;
+    static constexpr float kHusReplanDeltaX = 8.f;
+    static bool shouldReplanHoldUntilSafe(
+        int attemptTick,
+        int lastReplanTick,
+        float x,
+        float lastReplanX,
+        bool foresightNow,
+        bool foresightLast,
+        int remainingTicks
+    );
     static bool holdUntilSafeSelfCheck(std::string& report);
 
     // Recheck slide: at most +kRecheckMaxSlide later than oldFire (non-orb).
@@ -175,7 +191,7 @@ private:
         int limit,
         SimPlan const& plan
     );
-    // Per-tick replan while holdUntilSafe buffer is armed.
+    // Cadenced replan while holdUntilSafe buffer is armed (not every tick).
     void tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player);
 
     void recordDecision(

@@ -474,6 +474,14 @@ bool StageConfig::assistVerifyAb() {
     return g_cachedAssistVerify == "ab";
 }
 int StageConfig::tickBudgetPerPress() { ensureCache(); return g_cachedTickBudget; }
+int StageConfig::husReplanBudgetUs() {
+    int const full = simBudgetUs();
+    if (full <= 0) return 200; // unlimited wall → still cap HUS slice
+    return std::max(200, full / 2);
+}
+int StageConfig::husReplanTickBudget() {
+    return std::max(200, tickBudgetPerPress() / 4);
+}
 bool StageConfig::assistOnlyPractice() { ensureCache(); return g_cachedAssistOnlyPractice; }
 bool StageConfig::assistStartposOnly() { ensureCache(); return g_cachedAssistStartposOnly; }
 int StageConfig::assistPercentMin() { ensureCache(); return g_cachedAssistPercentMin; }

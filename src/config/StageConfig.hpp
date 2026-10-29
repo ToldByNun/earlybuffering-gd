@@ -134,6 +134,10 @@ public:
     static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
     static int minClickIntervalMs(); // 0 = off; skip assist (click still passes)
     static int tickBudgetPerPress();
+    // Hold-Until-Safe replan caps (derived from sim-budget-us / tick-budget).
+    // Defaults: budgetUs = max(200, sim/2), tickBudget = max(200, tick/4).
+    static int husReplanBudgetUs();
+    static int husReplanTickBudget();
     static int deathSlack();
     static int lookAheadCap();
 

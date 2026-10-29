@@ -11,6 +11,7 @@
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
+#include "TravelForesight.hpp"
 #include "TriggerWorldBaker.hpp"
 #include "TriggerWorldStore.hpp"
 #include <chrono>
@@ -619,11 +620,60 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     expect(holdUntilSafeEtaTicks(midPlan, 16) == 8, "eta-mid-16");
     expect(holdUntilSafeEtaTicks(midPlan, 0) == 0, "eta-limit0");
 
+    // Cadence: first call / interval / ΔX / foresight edge / near deadline.
+    expect(
+        shouldReplanHoldUntilSafe(10, -1, 0.f, 0.f, false, false, 8),
+        "replan-first"
+    );
+    expect(
+        !shouldReplanHoldUntilSafe(11, 10, 100.f, 100.f, false, false, 8),
+        "replan-skip-1"
+    );
+    expect(
+        !shouldReplanHoldUntilSafe(12, 10, 100.f, 100.f, false, false, 8),
+        "replan-skip-2"
+    );
+    expect(
+        shouldReplanHoldUntilSafe(13, 10, 100.f, 100.f, false, false, 8),
+        "replan-every-3"
+    );
+    expect(
+        shouldReplanHoldUntilSafe(11, 10, 110.f, 100.f, false, false, 8),
+        "replan-delta-x"
+    );
+    expect(
+        shouldReplanHoldUntilSafe(11, 10, 100.f, 100.f, true, false, 8),
+        "replan-foresight-edge"
+    );
+    expect(
+        shouldReplanHoldUntilSafe(11, 10, 100.f, 100.f, false, false, 2),
+        "replan-near-deadline"
+    );
+    expect(kHusReplanEveryTicks == 3, "hus-every-const");
+    expect(kHusReplanDeltaX == 8.f, "hus-dx-const");
+
     if (fails == 0) {
         report = "holdUntilSafeSelfCheck OK";
         return true;
     }
     report = fmt::format("holdUntilSafeSelfCheck {} fails: {}", fails, report);
+    return false;
+}
+
+bool AssistController::shouldReplanHoldUntilSafe(
+    int attemptTick,
+    int lastReplanTick,
+    float x,
+    float lastReplanX,
+    bool foresightNow,
+    bool foresightLast,
+    int remainingTicks
+) {
+    if (lastReplanTick < 0) return true;
+    if (remainingTicks <= 2) return true;
+    if (foresightNow != foresightLast) return true;
+    if (std::fabs(x - lastReplanX) >= kHusReplanDeltaX) return true;
+    if (attemptTick - lastReplanTick >= kHusReplanEveryTicks) return true;
     return false;
 }
 
@@ -657,6 +707,9 @@ bool AssistController::armHoldUntilSafe(
     this->m_buffer.dMax = plan.dMax;
     this->m_buffer.planId = plan.planId;
     this->m_buffer.holdUntilSafe = true;
+    this->m_buffer.husLastReplanTick = -1; // force first cadence replan
+    this->m_buffer.husLastReplanX = this->m_buffer.decisionX;
+    this->m_buffer.husLastForesight = plan.foresightOrbPad || plan.usedOrbWindow;
     this->m_buffer.fireTick = std::min(
         this->m_buffer.fireTick, effectTick + limit
     );
@@ -699,9 +752,39 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     }
 
     int const remLimit = std::max(1, remaining);
+    float const x = player->getPositionX();
+    // Cheap foresight edge (no full plan) so cadence can wake on orb/pad enter/leave.
+    int const slack = StageConfig::deathSlack();
+    bool const foresightNow = StageConfig::assistOrbs()
+        && TravelForesight::hasOrbOrPadAhead(
+            playLayer, player, remLimit, this->m_simDt, slack
+        );
+
+    if (!shouldReplanHoldUntilSafe(
+            this->m_attemptTick,
+            this->m_buffer.husLastReplanTick,
+            x,
+            this->m_buffer.husLastReplanX,
+            foresightNow,
+            this->m_buffer.husLastForesight,
+            remaining
+        )) {
+        this->m_buffer.fireTick = deadline;
+        this->noteVerdict(AssistReason::HoldPending, "hus-skip");
+        LagProbe::get().mark(
+            "hus.replan.skip",
+            fmt::format("t={} rem={}", this->m_attemptTick, remaining)
+        );
+        return;
+    }
+
+    LagProbe::Scope const husScope("eb.hus.replan", fmt::format(
+        "rem={} foresight={}", remaining, foresightNow ? 1 : 0
+    ));
+
     PlanOptions opts;
-    opts.budgetUs = std::max(200, StageConfig::simBudgetUs() / 2);
-    opts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
+    opts.budgetUs = StageConfig::husReplanBudgetUs();
+    opts.tickBudget = StageConfig::husReplanTickBudget();
     opts.capMul = StageConfig::autoTune()
         ? LevelProfile::get().capMul(this->m_buffer.mode)
         : 1.f;
@@ -714,6 +797,11 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     auto re = ShadowSimulator::get().plan(
         playLayer, player, true, remLimit, this->m_simDt, this->m_simDt, opts
     );
+
+    this->m_buffer.husLastReplanTick = this->m_attemptTick;
+    this->m_buffer.husLastReplanX = x;
+    this->m_buffer.husLastForesight = foresightNow
+        || re.foresightOrbPad || re.usedOrbWindow;
 
     if (re.action == PlanAction::Delay && re.delay > 0) {
         int delay = MissAssistContracts::clampDelayToWindow(re.delay, remLimit);
@@ -773,9 +861,23 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         return;
     }
 
-    // Still uncertain — park fire at deadline (window cap).
+    // Budget exhaust / still uncertain: park at deadline (never hang).
+    // PassBudget on HUS does not drop the click — window-cap fire later.
     this->m_buffer.fireTick = deadline;
-    this->noteVerdict(AssistReason::HoldPending, "hus-wait");
+    if (re.budgetHit || re.reason == AssistReason::PassBudget) {
+        LagProbe::get().mark(
+            "hus.replan.budget",
+            fmt::format("t={} rem={}", this->m_attemptTick, remaining)
+        );
+        this->noteVerdict(AssistReason::HoldPending, "hus-budget");
+        AssistLog::debug(fmt::format(
+            "HOLD-UNTIL-SAFE budget exhaust → deadline={} (never hang)",
+            deadline
+        ));
+    }
+    else {
+        this->noteVerdict(AssistReason::HoldPending, "hus-wait");
+    }
 }
 
 int AssistController::estimateRobustK(PlayerObject* player, float dtVariance) {

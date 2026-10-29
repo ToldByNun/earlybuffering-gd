@@ -119,8 +119,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited |
-| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass |
+| sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)` |
+| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Press plan full; HUS replan `max(200, tick/4)`; BakeVerifier ≤1200 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |
 | smart-depth | int | 1 | 1 | 3 | Smart |
@@ -274,7 +274,7 @@ Before `resetLevel` / checkpoint load: `evacuateGhosts` pulls all owned ghosts o
 
 ## Constants
 
-clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. Platformer: assist off.
+clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. HUS replan every 3 ticks / ΔX≥8 / foresight edge / rem≤2; caps `husReplanBudgetUs` / `husReplanTickBudget`. Platformer: assist off.
 
 ## Miss-assist contracts (v1.2.1)
 
@@ -289,7 +289,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
-| Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`), replan each tick ≤`limit`. Delay confirm updates `fireTick`; opportunity clear + safe → inject now (never drop the click); deadline → fire. Overlay `HUS` + `HOLD~`. |
+| Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2) with reduced caps — never hang: budget exhaust parks at deadline. Delay confirm updates `fireTick`; opportunity clear + safe → inject now; deadline → fire. Overlay `HUS` + `HOLD~`. |
 | Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
 | Bake / Hybrid | Hybrid verify-fail / past-latest / missing → Live (no bake Pass). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
 
@@ -308,7 +308,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Scene | Expect (New) | Expect (Legacy) | Notes |
 |-------|--------------|-----------------|-------|
 | Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
-| Budget starve mid-search + foresight orb | `HUS` → replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass while opportunity open |
+| Budget starve mid-search + foresight orb | `HUS` → cadenced replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass / never hang; LagProbe `eb.hus.replan` |
 | Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
