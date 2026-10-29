@@ -20,6 +20,8 @@
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
+#include "../dev/DevConfig.hpp"
+#include "../dev/DevCycleRecorder.hpp"
 #include "../ui/SaveFeedback.hpp"
 #include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
@@ -717,6 +719,14 @@ bool AssistController::armHoldUntilSafe(
 
     this->m_outcomePlanDelay = eta > 0;
     this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
+    DevCycleRecorder::get().noteDelayArm(
+        AssistReason::HoldPending,
+        "hus-arm",
+        eta,
+        this->m_buffer.fireTick,
+        plan.planId,
+        DevEventSource::Live
+    );
     this->noteVerdict(AssistReason::HoldPending, "hus-arm");
     AssistLog::debug(fmt::format(
         "HOLD-UNTIL-SAFE arm eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
@@ -1815,6 +1825,7 @@ bool AssistController::tryBakeAssist(
         }
         handled = true;
         this->m_lastBakeHint = reason;
+        DevCycleRecorder::get().noteGatePass(bakeReason, reason);
         this->noteVerdict(bakeReason, reason);
         return true;
     };
@@ -1824,6 +1835,7 @@ bool AssistController::tryBakeAssist(
         if (bakeOnly) {
             handled = true;
             this->m_lastBakeHint = mode == AssistMode::BruteForce ? "brute missing" : "bake missing";
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassBakeMissing, "bake-missing");
             this->noteVerdict(AssistReason::PassBakeMissing, "bake-missing");
             return true; // pass through — nothing to assist with
         }
@@ -1840,6 +1852,7 @@ bool AssistController::tryBakeAssist(
         if (bakeOnly) {
             handled = true;
             this->m_lastBakeHint = "no window";
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassBakeNoWindow, "bake-no-window");
             this->noteVerdict(AssistReason::PassBakeNoWindow, "bake-no-window");
             return true;
         }
@@ -1900,6 +1913,7 @@ bool AssistController::tryBakeAssist(
         AssistLog::debug(fmt::format(
             "bake: in window [{},{}] verify ok → pass", win->earliest, win->latest
         ));
+        DevCycleRecorder::get().noteGatePass(AssistReason::PassBakeInWindow, "bake-in-window");
         this->noteVerdict(AssistReason::PassBakeInWindow, "bake-in-window");
         return true;
     }
@@ -1947,6 +1961,14 @@ bool AssistController::tryBakeAssist(
         down ? "press" : "release", delay, win->earliest, win->latest,
         this->m_buffer.fireTick
     ));
+    DevCycleRecorder::get().noteDelayArm(
+        AssistReason::DelayPrefer,
+        "bake-delay",
+        delay,
+        this->m_buffer.fireTick,
+        0,
+        DevEventSource::Bake
+    );
     this->noteVerdict(AssistReason::DelayPrefer, "bake-delay");
     this->updateOverlay();
     return false;
@@ -1955,6 +1977,7 @@ bool AssistController::tryBakeAssist(
 bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt) {
     int const limit = this->activeLimit(player);
     if (limit <= 0) {
+        DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
         this->noteVerdict(AssistReason::PassLimitZero, "press-limit0");
         return true;
     }
@@ -1985,6 +2008,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
             dummy.reason = AssistReason::PassUntrust;
             dummy.firstDeathTick = -1;
             dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassUntrust, "press-untrust");
             this->noteVerdict(AssistReason::PassUntrust, "press-untrust");
             this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
             this->updateOverlay();
@@ -2009,6 +2033,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
         dummy.reason = AssistReason::PassSpam;
         dummy.firstDeathTick = -1;
         dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "press-spam");
         this->noteVerdict(AssistReason::PassSpam, "press-spam");
         this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
         this->updateOverlay();
@@ -2030,6 +2055,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
                 dummy.action = PlanAction::Pass;
                 dummy.reason = AssistReason::PassLowTrust;
                 dummy.firstDeathTick = -1;
+                DevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust, "press-low-trust");
                 this->noteVerdict(AssistReason::PassLowTrust, "press-low-trust");
                 this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
                 this->updateOverlay();
@@ -2077,6 +2103,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     this->logPlan(plan, "press");
     this->m_outcomePlayer1 = player1;
     this->beginOutcome(plan, effectTick);
+    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit);
 
     if (plan.action != PlanAction::Delay) {
         if (shouldArmHoldUntilSafe(plan)) {
@@ -2088,6 +2115,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
         }
+        DevCycleRecorder::get().notePassThrough(passReason, "press-plan");
         this->noteVerdict(passReason, "press-plan");
         this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
         // Vanilla/Pass click timing — feed earliness histogram (never inject saves).
@@ -2116,7 +2144,13 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
                     bakePrefer,
                     spot->diedAfterAssist
                 )) {
-                off += (std::rand() % 3) - 1;
+                // Dev recording + disable-random: keep live/eval deterministic.
+                bool const freezeRand = DevConfig::recordEnable()
+                    && DevConfig::disableRandom()
+                    && DevCycleRecorder::get().isRecording();
+                if (!freezeRand) {
+                    off += (std::rand() % 3) - 1;
+                }
                 AssistLog::debug(fmt::format(
                     "learn: hist explore ±1 @{} histN={}",
                     LevelProfile::spotBucket(x), spot->histN
@@ -2164,6 +2198,9 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
                 "ASSIST press verify-fail delay={} → Pass (refuse lethal assist)",
                 delay
             ));
+            DevCycleRecorder::get().notePassThrough(
+                AssistReason::PassHopeless, "press-verify-fail"
+            );
             this->noteVerdict(AssistReason::PassHopeless, "press-verify-fail");
             this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
             return true;
@@ -2233,6 +2270,14 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
         );
     }
+    DevCycleRecorder::get().noteDelayArm(
+        delayReason,
+        "press-delay",
+        delay,
+        this->m_buffer.fireTick,
+        plan.planId,
+        DevEventSource::Live
+    );
     this->noteVerdict(delayReason, "press-delay");
     this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     this->updateOverlay();
@@ -2242,6 +2287,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
 bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt) {
     int const limit = this->activeLimit(player);
     if (limit <= 0) {
+        DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");
         this->noteVerdict(AssistReason::PassLimitZero, "release-limit0");
         return true;
     }
@@ -2265,6 +2311,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
         if (!nearOrb) {
             AssistLog::debug("UNTRUST pass (release)");
             this->m_untrustPassHint = true;
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassUntrust, "release-untrust");
             this->noteVerdict(AssistReason::PassUntrust, "release-untrust");
             this->updateOverlay();
             return true;
@@ -2284,6 +2331,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
                 "intent: spam Pass release (mode={}, tick={})",
                 StageConfig::kindName(kind), effectTick
             ));
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
             this->noteVerdict(AssistReason::PassSpam, "release-spam");
             this->updateOverlay();
             return true;
@@ -2299,6 +2347,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
                     "learned: low trust @{} (release)", LevelProfile::spotBucket(x)
                 ));
                 AssistLearning::decaySpot(kind, x);
+                DevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust, "release-low-trust");
                 this->noteVerdict(AssistReason::PassLowTrust, "release-low-trust");
                 this->updateOverlay();
                 return true;
@@ -2325,12 +2374,14 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     );
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
+    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit);
 
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
         }
+        DevCycleRecorder::get().notePassThrough(passReason, "release-plan");
         this->noteVerdict(passReason, "release-plan");
         this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
         return true;
@@ -2354,7 +2405,12 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
                     bakePrefer,
                     spot->diedAfterAssist
                 )) {
-                off += (std::rand() % 3) - 1;
+                bool const freezeRand = DevConfig::recordEnable()
+                    && DevConfig::disableRandom()
+                    && DevCycleRecorder::get().isRecording();
+                if (!freezeRand) {
+                    off += (std::rand() % 3) - 1;
+                }
                 AssistLog::debug(fmt::format(
                     "learn: hist explore ±1 release @{} histN={}",
                     LevelProfile::spotBucket(x), spot->histN
@@ -2398,6 +2454,14 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
         );
     }
+    DevCycleRecorder::get().noteDelayArm(
+        delayReason,
+        "release-delay",
+        delay,
+        this->m_buffer.fireTick,
+        plan.planId,
+        DevEventSource::Live
+    );
     this->noteVerdict(delayReason, "release-delay");
     this->recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     this->updateOverlay();
@@ -2448,6 +2512,13 @@ bool AssistController::onHandleButton(
         return passThrough;
     };
 
+    int const playerIndex = player1 ? 0 : 1;
+    auto beginDevPress = [&]() {
+        DevCycleRecorder::get().beginPress(
+            playerIndex, down, effectTick, this->m_attemptTick, DevEventSource::Live
+        );
+    };
+
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
@@ -2459,13 +2530,15 @@ bool AssistController::onHandleButton(
                     std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(),
                     minMs
                 ));
+                beginDevPress();
+                DevCycleRecorder::get().noteGatePass(AssistReason::PassDebounce, "debounce");
                 this->noteVerdict(AssistReason::PassDebounce, "debounce");
                 return finish(true);
             }
         }
         this->noteUserClick();
         ClickIntentGuard::get().notePress(
-            player1 ? 0 : 1, effectTick, StageConfig::kindOf(player)
+            playerIndex, effectTick, StageConfig::kindOf(player)
         );
     }
 
@@ -2529,21 +2602,28 @@ bool AssistController::onHandleButton(
         }
 
         if (!this->shouldAssistPlayer(player) || !StageConfig::assistRelease()) {
+            beginDevPress();
             if (this->cpsLimited()) {
+                DevCycleRecorder::get().noteGatePass(AssistReason::PassCps, "release-cps");
                 this->noteVerdict(AssistReason::PassCps, "release-cps");
             }
             else if (AssistScopeGate::blockReason(playLayer, player)) {
+                DevCycleRecorder::get().noteGatePass(AssistReason::PassScope, "release-scope");
                 this->noteVerdict(AssistReason::PassScope, "release-scope");
             }
             else {
+                DevCycleRecorder::get().noteGatePass(AssistReason::PassAssistOff, "release-off");
                 this->noteVerdict(AssistReason::PassAssistOff, "release-off");
             }
             return finish(true);
         }
         if (this->m_attemptTick <= 2) {
+            beginDevPress();
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassEarlyAttempt, "release-early");
             this->noteVerdict(AssistReason::PassEarlyAttempt, "release-early");
             return finish(true);
         }
+        beginDevPress();
         bool const pass = this->planRelease(playLayer, player, player1, effectTick, firstDt);
         if (pass) this->m_log.noteInput(effectTick, false);
         return finish(pass);
@@ -2561,21 +2641,28 @@ bool AssistController::onHandleButton(
     }
 
     if (!this->shouldAssistPlayer(player) || !StageConfig::assistPress()) {
+        beginDevPress();
         if (this->cpsLimited()) {
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassCps, "press-cps");
             this->noteVerdict(AssistReason::PassCps, "press-cps");
         }
         else if (AssistScopeGate::blockReason(playLayer, player)) {
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassScope, "press-scope");
             this->noteVerdict(AssistReason::PassScope, "press-scope");
         }
         else {
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassAssistOff, "press-off");
             this->noteVerdict(AssistReason::PassAssistOff, "press-off");
         }
         return finish(true);
     }
     if (this->m_attemptTick <= 2) {
+        beginDevPress();
+        DevCycleRecorder::get().noteGatePass(AssistReason::PassEarlyAttempt, "press-early");
         this->noteVerdict(AssistReason::PassEarlyAttempt, "press-early");
         return finish(true);
     }
+    beginDevPress();
     bool const pass = this->planPress(playLayer, player, player1, effectTick, firstDt);
     if (pass) this->m_log.noteInput(effectTick, true);
     return finish(pass);

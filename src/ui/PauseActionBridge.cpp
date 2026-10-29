@@ -8,6 +8,8 @@
 #include "../core/ReplayImport.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../config/StageConfig.hpp"
+#include "../dev/DevConfig.hpp"
+#include "../dev/DevTraceStore.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -291,11 +293,52 @@ void PauseActionBridge::stubDevAction(char const* name) {
 }
 
 void PauseActionBridge::devStartRecord() {
-    PauseActionBridge::stubDevAction("Start Dev Recording");
+    if (!DevConfig::recordEnable()) {
+        AssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            "Turn on Dev Record Enable first, then Start Recording.",
+            "OK"
+        )->show();
+        return;
+    }
+    auto& store = DevTraceStore::get();
+    if (!store.beginSession("", DevConfig::recordCount())) {
+        AssistLog::info("Dev Lab: beginSession failed");
+        return;
+    }
+    store.setLevelMeta("", "", false, false, "");
+    if (!store.beginAttempt(AssistController::get().attemptTick())) {
+        AssistLog::info("Dev Lab: beginAttempt failed");
+        return;
+    }
+    AssistLog::info(fmt::format(
+        "Dev Lab: recording session {} (target {})",
+        store.session().sessionId,
+        store.session().recordingsTarget
+    ));
+    auto const startMsg = fmt::format(
+        "Recording started.\nSession {}\nTarget {} attempts.",
+        store.session().sessionId,
+        store.session().recordingsTarget
+    );
+    FLAlertLayer::create("EarlyBuffer Dev", startMsg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devStopRecord() {
-    PauseActionBridge::stubDevAction("Stop Dev Recording");
+    auto& store = DevTraceStore::get();
+    if (!store.isOpen()) {
+        AssistLog::info("Dev Lab: no open session to stop");
+        return;
+    }
+    if (store.hasOpenAttempt()) {
+        (void)store.sealAttempt("manual", false);
+    }
+    auto const path = store.sessionPath();
+    store.closeSession();
+    AssistLog::info(fmt::format("Dev Lab: session sealed → {}", path.string()));
+    auto const stopMsg = fmt::format("Recording stopped.\n{}", path.string());
+    FLAlertLayer::create("EarlyBuffer Dev", stopMsg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devEvalLast() {

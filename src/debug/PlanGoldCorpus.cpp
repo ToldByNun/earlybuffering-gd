@@ -14,6 +14,7 @@
 #include "../core/TriggerWorldStore.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
 #include "../dev/DevConfig.hpp"
+#include "../dev/DevCycleRecorder.hpp"
 #include "../dev/DevTraceStore.hpp"
 #include <fmt/format.h>
 
@@ -60,6 +61,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(DevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;
     expect(DevTraceStore::selfCheck(devTraceReport), "dev-trace-store");
+    std::string devCycleReport;
+    expect(DevCycleRecorder::selfCheck(devCycleReport), "dev-cycle-recorder");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";
