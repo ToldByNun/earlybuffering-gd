@@ -7,6 +7,7 @@
 
 #include <Geode/Geode.hpp>
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <string>
 
@@ -45,6 +46,8 @@ struct BufferedInput {
     int releaseEarliest = -1;
     int releaseLatest = -1;
     int planId = 0;
+    // Dev Lab: pressId of the armed cycle (0 = not tracing). Survives until fire.
+    int64_t devPressId = 0;
     bool awaitingOutcome = false;
     int outcomeUntilTick = 0;
     // Soft hold: foresight/opportunity but no hard Delay yet — replan until

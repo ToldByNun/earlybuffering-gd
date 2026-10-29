@@ -171,6 +171,7 @@ void AssistController::onCheckpointLoad() {
     this->m_startSnapshotTaken = false;
     this->m_startSnapshotSlot = -1;
     ClickIntentGuard::get().reset();
+    DevCycleRecorder::get().noteCheckpoint(0);
     LagProbe::get().mark(
         "triggerWorld.checkpoint",
         "keep store / no rebuild / attemptTick=0"
@@ -178,6 +179,7 @@ void AssistController::onCheckpointLoad() {
 }
 
 void AssistController::onLevelComplete(PlayLayer* playLayer) {
+    DevCycleRecorder::get().sealAttemptWithOutcomes("complete", true);
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "complete");
     LevelProfile::get().save();
     BakeMap::get().save();
@@ -217,6 +219,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
         LagProbe::Scope const s("eb.flushSegment");
         SelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
     }
+    // If death already sealed the attempt, open the next; else seal as reset.
+    DevCycleRecorder::get().onAttemptReset(0);
     clearBuffer();
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
@@ -288,6 +292,8 @@ void AssistController::onLevelQuit() {
     // Tear down UI/sim WHILE PlayLayer is still alive. Leaving nodes in
     // objectLayer for setNextScene → ~GameObject / CCObject::release AVs.
     auto* playLayer = PlayLayer::get();
+    // Dev traces must flush BEFORE ghost evacuate / detach (partial OK).
+    DevCycleRecorder::get().flushQuit();
     TriggerWorldBaker::get().cancel();
     SelfBakeRecorder::get().cancelRefine();
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "quit");
@@ -719,7 +725,7 @@ bool AssistController::armHoldUntilSafe(
 
     this->m_outcomePlanDelay = eta > 0;
     this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
-    DevCycleRecorder::get().noteDelayArm(
+    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
         AssistReason::HoldPending,
         "hus-arm",
         eta,
@@ -756,6 +762,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             "HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={})",
             this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit
         ));
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::HoldPending,
+            "hus-deadline",
+            this->m_attemptTick
+        );
         this->m_buffer.holdUntilSafe = false;
         this->m_buffer.fireTick = this->m_attemptTick;
         this->fireBuffered(playLayer, player, false);
@@ -781,6 +793,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             remaining
         )) {
         this->m_buffer.fireTick = deadline;
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::HoldPending,
+            "hus-skip",
+            this->m_buffer.fireTick
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-skip");
         LagProbe::get().mark(
             "hus.replan.skip",
@@ -848,6 +866,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
                 re.activatedRing, re.requireOrb, false
             );
         }
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            delayReason,
+            "hus-confirm",
+            this->m_buffer.fireTick
+        );
         this->noteVerdict(delayReason, "hus-confirm");
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE confirm Delay +{} fire={} deadline={}",
@@ -880,6 +904,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             "hus.replan.budget",
             fmt::format("t={} rem={}", this->m_attemptTick, remaining)
         );
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::HoldPending,
+            "hus-budget",
+            this->m_buffer.fireTick
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-budget");
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE budget exhaust → deadline={} (never hang)",
@@ -887,6 +917,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         ));
     }
     else {
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::HoldPending,
+            "hus-wait",
+            this->m_buffer.fireTick
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-wait");
     }
 }
@@ -1346,6 +1382,12 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
         this->m_outcomePending = false;
     }
 
+    // Seal Dev attempt on death (outcomes + flush). Next attempt opens on reset.
+    {
+        LagProbe::Scope const s("eb.devSealDeath");
+        DevCycleRecorder::get().sealAttemptWithOutcomes("death", false);
+    }
+
     if (StageConfig::autoTune() && LevelProfile::get().loaded()) {
         if (auto* dec = this->m_log.findForDeath(this->m_attemptTick)) {
             LagProbe::Scope const s("eb.learnDeath", fmt::format(
@@ -1480,6 +1522,9 @@ void AssistController::fireBuffered(
             int const oldFire = this->m_buffer.fireTick;
             this->m_buffer.fireTick = absMin;
             ++this->m_buffer.rechecks;
+            DevCycleRecorder::get().noteRecheck(
+                this->m_buffer.devPressId, oldFire, absMin, "orb-dmin"
+            );
             if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
                 auto const detail = fmt::format(
                     "recheck: oldFire={}→newFire={} (orb-dMin wait tick={})",
@@ -1546,6 +1591,9 @@ void AssistController::fireBuffered(
                     this->m_buffer.fireTick = accepted;
                     this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
                     this->m_buffer.planDelay = re.delay;
+                    DevCycleRecorder::get().noteRecheck(
+                        this->m_buffer.devPressId, oldFire, accepted, "slide"
+                    );
                     if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
                         auto const detail = fmt::format(
                             "recheck: oldFire={}→newFire={} jump={} Δ={} (tick={})",
@@ -1572,8 +1620,11 @@ void AssistController::fireBuffered(
     int const delayed = std::max(0, this->m_attemptTick - this->m_buffer.pressTick);
     int const planId = this->m_buffer.planId;
     bool const expectOrb = this->m_buffer.requireOrb;
+    int64_t const devPressId = this->m_buffer.devPressId;
     // Max post-release extend = this press's tick window (e.g. Ticks=4 → ≤4).
     int const extendCap = std::max(0, this->m_buffer.limit);
+
+    DevCycleRecorder::get().noteFire(devPressId, this->m_attemptTick);
 
     this->inject(playLayer, this->m_buffer.down);
     AssistLog::printSavedPress(
@@ -1961,7 +2012,7 @@ bool AssistController::tryBakeAssist(
         down ? "press" : "release", delay, win->earliest, win->latest,
         this->m_buffer.fireTick
     ));
-    DevCycleRecorder::get().noteDelayArm(
+    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
         AssistReason::DelayPrefer,
         "bake-delay",
         delay,
@@ -2270,7 +2321,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
         );
     }
-    DevCycleRecorder::get().noteDelayArm(
+    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
         delayReason,
         "press-delay",
         delay,
@@ -2454,7 +2505,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
         );
     }
-    DevCycleRecorder::get().noteDelayArm(
+    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
         delayReason,
         "release-delay",
         delay,
