@@ -67,6 +67,8 @@ void ShadowSimulator::detach(bool layerDying) {
     m_activatedRing = false;
     m_ringCount = 0;
     m_deathObject = nullptr;
+    this->m_simAbsTick = -1;
+    this->m_simTickBase = 0;
     m_saved.clear();
     this->m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
@@ -255,6 +257,8 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_activatedRing = false;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
+    this->m_simAbsTick = -1;
+    this->m_simTickBase = 0;
     // If a sim aborted after applyAtTick moved solids, put them back before
     // we drop the snapshot — reset/checkpoint must not inherit drifted poses.
     if (!this->m_savedTransforms.empty() && layer) {
@@ -568,9 +572,32 @@ void ShadowSimulator::clearCollisionLogs(PlayerObject* s) {
     s->m_lastCollisionRight = -1;
 }
 
+void ShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick) {
+    if (!layer || absTick < 0) return;
+    if (!StageConfig::triggerBake()) return;
+    if (this->m_savedTransforms.empty()) return;
+
+    auto& store = TriggerWorldStore::get();
+    if (!store.loaded() || !store.hasTracks()) return;
+
+    LagProbe::Scope const lagScope("eb.trigger.apply");
+    // Hot path: only objects captured at beginCapture (ready Static* tracks).
+    // Store::applyAtTick walks objectLayer; we reuse capture pointers instead.
+    for (auto const& st : this->m_savedTransforms) {
+        auto* obj = st.obj;
+        if (!obj || obj->m_uniqueID != st.uniqueId) continue;
+        TriggerPose pose{};
+        if (!store.samplePose(st.uniqueId, absTick, pose)) continue;
+        TriggerWorldStore::writePose(obj, pose);
+    }
+}
+
 void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt) {
     // Always use the full step dt here — tiny CBF remainders launch slopes
     // and also under-detect orb/spike overlaps.
+    if (this->m_simAbsTick >= 0) {
+        this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
+    }
     hideGhost(s);
     clearCollisionLogs(s);
     layer->checkCollisions(s, dt, false);
@@ -578,10 +605,13 @@ void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt
 }
 
 void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepDt, float dt) {
+    if (this->m_simAbsTick >= 0) {
+        this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
+    }
     hideGhost(s);
     s->update(stepDt);
     hideGhost(s);
-    if (m_dead) return;
+    if (this->m_dead) return;
     clearCollisionLogs(s);
     float colDt = stepDt;
     if (colDt < dt) colDt = dt; // same rule as pre-collide: never a tiny remainder
@@ -1076,7 +1106,8 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
         if (spend()) break;
         float const stepDt = (t == 0) ? firstDt : dt;
         r.ticksRan = t + 1;
-        m_orbOverlapTick = false;
+        this->m_orbOverlapTick = false;
+        this->m_simAbsTick = this->m_simTickBase + t;
 
         if (t < delay) {
             stepPreCollide(layer, s, dt);
@@ -1202,6 +1233,7 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
             --(*tickBudgetLeft);
         }
         float const stepDt = (t == 0) ? firstDt : dt;
+        this->m_simAbsTick = this->m_simTickBase + t;
         stepPhysics(layer, s, stepDt, dt);
         r.ticksRan = t + 1;
         r.endX = s->getPositionX();
@@ -1248,7 +1280,8 @@ ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
             --(*tickBudgetLeft);
         }
         float const stepDt = (t == 0) ? firstDt : dt;
-        m_orbOverlapTick = false;
+        this->m_orbOverlapTick = false;
+        this->m_simAbsTick = this->m_simTickBase + t;
 
         stepPreCollide(layer, s, dt);
         bool const touchPre = m_orbOverlapTick
@@ -1363,6 +1396,8 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
         return real == layer->m_player1 || real == layer->m_player2;
     };
 
+    this->m_simTickBase = std::max(0, options.attemptStartTick);
+    this->m_simAbsTick = -1;
     m_simulating = true;
     beginCapture(layer);
 
@@ -1381,6 +1416,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
         }
         if (tickBudget <= 0 || wallExceeded()) {
             out.budgetHit = true;
+            this->m_simAbsTick = -1;
             restoreCapture(layer);
             m_simulating = false;
             parkGhosts();
@@ -1426,6 +1462,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
 
     if (tickBudget <= 0 || wallExceeded()) out.budgetHit = true;
 
+    this->m_simAbsTick = -1;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();
@@ -1474,6 +1511,8 @@ SimPlan ShadowSimulator::plan(
         return real == layer->m_player1 || real == layer->m_player2;
     };
 
+    this->m_simTickBase = std::max(0, options.attemptStartTick);
+    this->m_simAbsTick = -1;
     m_simulating = true;
     beginCapture(layer);
 
@@ -1574,6 +1613,7 @@ SimPlan ShadowSimulator::plan(
         bool const noThreat = !c0.raw.died && !zone.valid;
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
+            this->m_simAbsTick = -1;
             restoreCapture(layer);
             this->m_simulating = false;
             this->parkGhosts();
@@ -1600,6 +1640,7 @@ SimPlan ShadowSimulator::plan(
         );
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
         if (shouldWaveHazardProximityPass(isWave, nearHazard, noOrbTarget)) {
+            this->m_simAbsTick = -1;
             restoreCapture(layer);
             this->m_simulating = false;
             this->parkGhosts();
@@ -1771,6 +1812,7 @@ SimPlan ShadowSimulator::plan(
             if (gain > bestGain) bestGain = gain;
         }
         if (shouldWaveFutileDelayPass(isWave, orbIntent, bestBin, bestGain)) {
+            this->m_simAbsTick = -1;
             restoreCapture(layer);
             this->m_simulating = false;
             this->parkGhosts();
@@ -2076,6 +2118,7 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
+    this->m_simAbsTick = -1;
     restoreCapture(layer);
     this->m_simulating = false;
     this->parkGhosts();
@@ -2318,11 +2361,14 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
         ++nextEv;
     }
 
+    this->m_simTickBase = std::max(0, startTick);
+    this->m_simAbsTick = -1;
     m_simulating = true;
     beginCapture(layer);
 
     for (int t = 0; t < maxTicks; ++t) {
         int const absTick = startTick + t;
+        this->m_simAbsTick = absTick;
 
         while (nextEv < timeline.size() && effectiveTick(timeline[nextEv]) == absTick) {
             if (timeline[nextEv].down) s->pushButton(PlayerButton::Jump);
@@ -2346,6 +2392,7 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
 
     out.activatedRing = m_activatedRing;
     out.ringCount = m_ringCount;
+    this->m_simAbsTick = -1;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();
@@ -2381,10 +2428,13 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
         else s->releaseButton(btn);
     };
 
+    this->m_simTickBase = 0;
+    this->m_simAbsTick = -1;
     m_simulating = true;
     beginCapture(layer);
 
     for (int frame = 0; frame <= untilFrame; ++frame) {
+        this->m_simAbsTick = frame;
         while (nextEv < events.size() && events[nextEv].frame == frame) {
             applyEv(events[nextEv]);
             ++nextEv;
@@ -2404,6 +2454,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
         }
     }
 
+    this->m_simAbsTick = -1;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();
@@ -2439,11 +2490,14 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
         else s->releaseButton(btn);
     };
 
+    this->m_simTickBase = 0;
+    this->m_simAbsTick = -1;
     m_simulating = true;
     beginCapture(layer);
 
     out.points.push_back(s->getPosition());
     for (int frame = 0; frame <= untilFrame; ++frame) {
+        this->m_simAbsTick = frame;
         while (nextEv < events.size() && events[nextEv].frame == frame) {
             applyEv(events[nextEv]);
             ++nextEv;
@@ -2457,6 +2511,7 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
         }
     }
 
+    this->m_simAbsTick = -1;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();

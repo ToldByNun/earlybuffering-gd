@@ -32,7 +32,7 @@ When enabled, static move/rotate/scale trigger motion is cached per level conten
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Save on quit/complete when dirty (not on death).
 
-`ShadowSimulator::beginCapture` snapshots position/rotation/scale/visible for every **ready Static*** track object (`eb.trigger.capture`). `restoreCapture` restores those transforms **before** activation flags; `evacuateGhosts` also restores if a sim aborted mid-apply (`eb.trigger.restore`). Stale pointers skipped via `m_uniqueID` check.
+`ShadowSimulator::beginCapture` snapshots position/rotation/scale/visible for every **ready Static*** track object (`eb.trigger.capture`). During sim, `stepPhysics` / `stepPreCollide` call `applyTriggerWorldAtTick` with absolute attempt tick (`m_simTickBase + t`, from `PlanOptions.attemptStartTick` / replay start). That samples hold-keyframes via `TriggerWorldStore::samplePose` and writes via `writePose` / capture-list pointers (`eb.trigger.apply`). `TriggerWorldStore::applyAtTick` is the full objectLayer walk (debug / non-hot). Tick before first key → leave capture baseline; past last → hold. `restoreCapture` restores transforms **before** activation flags; `evacuateGhosts` also restores if a sim aborted mid-apply (`eb.trigger.restore`). Stale pointers skipped via `m_uniqueID` check.
 
 Classifier (`TriggerClassify`): **only lethal-motion candidates** — Move/Rotate/Scale/Spawn/Follow (901/1346/2067/1268/1347/1585/1817). Camera/pulse/song/etc. → always `Ignore`.
 

@@ -127,6 +127,7 @@ void LagProbe::writeLegend() {
     this->appendLine("  eb.selfBake.idleRefine      amortized window refine (few sims/tick)");
     this->appendLine("  eb.selfBake.flushMergeOnly  quit/complete force-merge, no refine");
     this->appendLine("  eb.trigger.capture          snapshot transforms for bake tracks");
+    this->appendLine("  eb.trigger.apply            write baked poses at abs tick (sim)");
     this->appendLine("  eb.trigger.restore          restore transforms after sim / evacuate");
     this->appendLine("  eb.saveFeedbackReset        SaveFeedback::reset");
     this->appendLine("  eb.clickGuardReset          ClickIntentGuard::reset");

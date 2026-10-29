@@ -339,6 +339,8 @@ private:
     // Snapshot/restore world transforms for TriggerWorldStore ready tracks.
     void captureTriggerTransforms(PlayLayer* layer);
     void restoreTriggerTransforms(GJBaseGameLayer* layer);
+    // Apply TriggerWorldStore poses for m_simAbsTick using capture-list pointers.
+    void applyTriggerWorldAtTick(PlayLayer* layer, int absTick);
     void copyWaveTrail(PlayerObject* dst, PlayerObject* src);
     static void clearCollisionLogs(PlayerObject* s);
     void stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt);
@@ -363,6 +365,10 @@ private:
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
+    // Absolute attempt tick for the current sim step (−1 = do not apply bake).
+    int m_simAbsTick = -1;
+    // Absolute tick corresponding to t=0 inside runOne / baseline / orb scan.
+    int m_simTickBase = 0;
 };
 
 #endif // EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP

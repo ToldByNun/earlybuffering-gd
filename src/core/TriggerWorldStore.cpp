@@ -130,10 +130,8 @@ bool TriggerWorldStore::samplePose(int uniqueId, int absTick, TriggerPose& out) 
 
     // keys assumed sorted ascending by tick (baker writes them that way).
     auto const& keys = track->keys;
-    if (absTick <= keys.front().tick) {
-        out = keys.front();
-        return true;
-    }
+    // Before first key: leave capture baseline (caller skips write).
+    if (absTick < keys.front().tick) return false;
     if (absTick >= keys.back().tick) {
         out = keys.back();
         return true;
@@ -147,6 +145,54 @@ bool TriggerWorldStore::samplePose(int uniqueId, int absTick, TriggerPose& out) 
     }
     out = *best;
     return true;
+}
+
+void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
+    if (!obj) return;
+    if (!pose.active) {
+        obj->setVisible(false);
+        return;
+    }
+    obj->setVisible(true);
+    obj->setPosition({ pose.x, pose.y });
+    obj->m_positionX = pose.x;
+    obj->m_positionY = pose.y;
+    obj->setRotation(pose.rotation);
+    obj->setScaleX(pose.scaleX);
+    obj->setScaleY(pose.scaleY);
+}
+
+int TriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
+    if (!layer || !this->m_loaded || this->m_data.tracks.empty()) return 0;
+    if (!layer->m_objectLayer) return 0;
+
+    // Build uniqueId → object once per call (caller may prefer ShadowSimulator's
+    // capture list for the hot path — see applyTriggerWorldAtTick).
+    auto* children = layer->m_objectLayer->getChildren();
+    if (!children) return 0;
+
+    int applied = 0;
+    for (auto const& track : this->m_data.tracks) {
+        if (!track.ready || track.keys.empty()) continue;
+        if (!TriggerClassify::isStatic(track.kind)) continue;
+
+        TriggerPose pose{};
+        if (!this->samplePose(track.uniqueId, absTick, pose)) continue;
+
+        GameObject* obj = nullptr;
+        for (unsigned i = 0; i < children->count(); ++i) {
+            auto* candidate = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+            if (!candidate) continue;
+            if (candidate->m_uniqueID != track.uniqueId) continue;
+            obj = candidate;
+            break;
+        }
+        if (!obj) continue;
+
+        TriggerWorldStore::writePose(obj, pose);
+        ++applied;
+    }
+    return applied;
 }
 
 std::string TriggerWorldStore::statusLine() const {

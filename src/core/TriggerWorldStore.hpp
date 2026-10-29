@@ -9,6 +9,8 @@
 #include <vector>
 
 class GJGameLevel;
+class GameObject;
+class PlayLayer;
 
 // One sampled pose for a moved/rotated/scaled object at an absolute attempt tick.
 struct TriggerPose {
@@ -66,8 +68,15 @@ public:
     size_t trackCount() const { return this->m_data.tracks.size(); }
     size_t readyTrackCount() const;
 
-    // Sample pose at absTick (hold first/last). false if no track or empty keys.
+    // Sample pose at absTick (hold last; before first key → false = keep baseline).
     bool samplePose(int uniqueId, int absTick, TriggerPose& out) const;
+
+    // Write a sampled pose onto a live GameObject (position/rot/scale/visible).
+    static void writePose(GameObject* obj, TriggerPose const& pose);
+
+    // Apply all ready Static* tracks at absTick. Walks objectLayer once.
+    // Returns number of objects written. No-op if store empty / bake off caller.
+    int applyAtTick(PlayLayer* layer, int absTick);
 
     std::string statusLine() const;
 
