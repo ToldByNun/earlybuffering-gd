@@ -213,6 +213,17 @@ public:
     // Overlay serializable blob fields onto a ghost (eval restore path).
     static void applyPlayerBlob(PlayerObject* dst, DevPlayerBlob const& blob);
 
+    // Commit 11: write dual/orbs/triggers/mover poses from witness into the
+    // layer/ghosts, bookkeeping on restore. Snapshots prior world state for
+    // finishEvalWorldRestore. Does not run physics.
+    void applyEvalWorldRestore(
+        PlayLayer* layer,
+        DevLiveWitness const& witness,
+        DevEvalRestore& restore
+    );
+    // Undo layer mutations from applyEvalWorldRestore (transforms + orb flags).
+    void finishEvalWorldRestore(PlayLayer* layer);
+
     // Counterfactual delay d on witness stamp; steps from DevClockContract::stepSchedule.
     EvalFromFreezeResult evalDelayFromFreeze(
         PlayLayer* layer,

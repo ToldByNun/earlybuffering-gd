@@ -410,6 +410,22 @@ static matjson::Value witnessToJson(DevLiveWitness const& w) {
         for (int id : w.orbIds) orbs.push_back(id);
         j["orbIds"] = orbs;
     }
+    if (!w.moverPoses.empty()) {
+        std::vector<matjson::Value> poses;
+        poses.reserve(w.moverPoses.size());
+        for (auto const& p : w.moverPoses) {
+            matjson::Value pj = matjson::Value::object();
+            pj["id"] = p.uniqueId;
+            pj["x"] = p.x;
+            pj["y"] = p.y;
+            pj["r"] = p.rotation;
+            pj["sx"] = p.scaleX;
+            pj["sy"] = p.scaleY;
+            pj["a"] = p.active;
+            poses.push_back(pj);
+        }
+        j["moverPoses"] = poses;
+    }
     if (!w.triggerStoreKey.empty()) j["triggerStoreKey"] = w.triggerStoreKey;
     j["triggerStoreVersion"] = w.triggerStoreVersion;
     j["triggerApplyTick"] = w.triggerApplyTick;
@@ -478,6 +494,19 @@ static bool witnessFromJson(
     if (j.contains("orbIds") && j["orbIds"].isArray()) {
         for (auto const& oj : j["orbIds"].asArray().unwrap()) {
             w.orbIds.push_back(static_cast<int>(oj.asInt().unwrapOr(0)));
+        }
+    }
+    if (j.contains("moverPoses") && j["moverPoses"].isArray()) {
+        for (auto const& pj : j["moverPoses"].asArray().unwrap()) {
+            DevObjectPose p;
+            p.uniqueId = static_cast<int>(pj["id"].asInt().unwrapOr(0));
+            p.x = static_cast<float>(pj["x"].asDouble().unwrapOr(0.0));
+            p.y = static_cast<float>(pj["y"].asDouble().unwrapOr(0.0));
+            p.rotation = static_cast<float>(pj["r"].asDouble().unwrapOr(0.0));
+            p.scaleX = static_cast<float>(pj["sx"].asDouble().unwrapOr(1.0));
+            p.scaleY = static_cast<float>(pj["sy"].asDouble().unwrapOr(1.0));
+            p.active = pj["a"].asBool().unwrapOr(true);
+            w.moverPoses.push_back(p);
         }
     }
     if (j.contains("triggerStoreKey")) {

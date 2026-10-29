@@ -3465,6 +3465,163 @@ void ShadowSimulator::applyPlayerBlob(PlayerObject* dst, DevPlayerBlob const& bl
     hideGhost(dst);
 }
 
+void ShadowSimulator::applyEvalWorldRestore(
+    PlayLayer* layer,
+    DevLiveWitness const& witness,
+    DevEvalRestore& restore
+) {
+    if (!layer) return;
+
+    // Snapshot live activated-ID map + clear per-run object flag saves.
+    this->m_saved.clear();
+    this->m_savedTransforms.clear();
+    this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
+
+    // --- Dual ghost ---
+    if (witness.dual.present && this->m_evalGhosts[1]) {
+        applyPlayerBlob(this->m_evalGhosts[1], witness.dual);
+        DevEvalRestore::noteDualWritten(restore, witness.dual);
+    }
+
+    // --- Orbs: set activated ID set + mark matching objects claimed ---
+    {
+        bool const wantOrbs = DevLiveWitness::hasWorldDep(
+            witness, DevWitnessCategory::Orbs
+        );
+        if (wantOrbs || !witness.orbIds.empty()) {
+            layer->m_gameState.m_activatedObjectIDs.clear();
+            auto* children = layer->m_objectLayer
+                ? layer->m_objectLayer->getChildren()
+                : nullptr;
+            for (int uid : witness.orbIds) {
+                if (uid == 0) continue;
+                layer->m_gameState.m_activatedObjectIDs[{ uid, 0 }] = 1;
+                if (!children) continue;
+                for (unsigned i = 0; i < children->count(); ++i) {
+                    auto* obj = typeinfo_cast<EnhancedGameObject*>(
+                        children->objectAtIndex(i)
+                    );
+                    if (!obj || obj->m_uniqueID != uid) continue;
+                    this->noteActivated(obj);
+                    obj->m_activated = true;
+                    obj->m_isActivated = true;
+                    if (auto* ring = typeinfo_cast<RingObject*>(obj)) {
+                        ring->m_claimTouch = true;
+                    }
+                    break;
+                }
+            }
+            DevEvalRestore::noteOrbsWritten(restore, witness.orbIds);
+        }
+    }
+
+    // --- Triggers: spool store poses at witness apply tick ---
+    if (witness.triggerCanSpool) {
+        this->captureTriggerTransforms(layer);
+        int const tick = witness.triggerApplyTick >= 0
+            ? witness.triggerApplyTick
+            : witness.clock.effectTick;
+        TriggerWorldStore::get().applyAtTick(layer, tick);
+        DevEvalRestore::noteTriggersSpooled(
+            restore,
+            witness.triggerStoreKey,
+            witness.triggerStoreVersion,
+            tick
+        );
+    }
+
+    // --- Movers: freeze-world poses, else digest-only ---
+    if (witness.freezeWorld) {
+        auto* children = layer->m_objectLayer
+            ? layer->m_objectLayer->getChildren()
+            : nullptr;
+        if (children) {
+            for (auto const& pose : witness.moverPoses) {
+                GameObject* obj = nullptr;
+                for (unsigned i = 0; i < children->count(); ++i) {
+                    auto* candidate = typeinfo_cast<GameObject*>(
+                        children->objectAtIndex(i)
+                    );
+                    if (!candidate) continue;
+                    if (candidate->m_uniqueID != pose.uniqueId) continue;
+                    obj = candidate;
+                    break;
+                }
+                if (!obj) continue;
+
+                bool already = false;
+                for (auto const& st : this->m_savedTransforms) {
+                    if (st.uniqueId == pose.uniqueId) {
+                        already = true;
+                        break;
+                    }
+                }
+                if (!already) {
+                    SavedTransform st;
+                    st.uniqueId = obj->m_uniqueID;
+                    st.obj = obj;
+                    st.x = obj->getPositionX();
+                    st.y = obj->getPositionY();
+                    st.rotation = obj->getRotation();
+                    st.scaleX = obj->getScaleX();
+                    st.scaleY = obj->getScaleY();
+                    st.nodeVisible = obj->isVisible();
+                    this->m_savedTransforms.push_back(st);
+                }
+
+                TriggerPose tp;
+                tp.tick = 0;
+                tp.x = pose.x;
+                tp.y = pose.y;
+                tp.rotation = pose.rotation;
+                tp.scaleX = pose.scaleX;
+                tp.scaleY = pose.scaleY;
+                tp.active = pose.active;
+                TriggerWorldStore::writePose(obj, tp);
+            }
+        }
+        DevEvalRestore::noteMoversPosesWritten(
+            restore,
+            witness.moverPoses,
+            witness.hasHazardDigest ? witness.hazardDigest : 0
+        );
+    }
+    else if (witness.hasHazardDigest) {
+        DevEvalRestore::noteMoversDigestOnly(restore, witness.hazardDigest);
+    }
+}
+
+void ShadowSimulator::finishEvalWorldRestore(PlayLayer* layer) {
+    if (!layer) {
+        this->m_saved.clear();
+        this->m_savedTransforms.clear();
+        this->m_savedActivatedIDs.clear();
+        return;
+    }
+    {
+        LagProbe::Scope const scope("eb.trigger.restore");
+        this->restoreTriggerTransforms(layer);
+    }
+    for (auto const& s : this->m_saved) {
+        if (!s.obj) continue;
+        s.obj->m_activated = s.activated;
+        s.obj->m_activatedByPlayer1 = s.p1;
+        s.obj->m_activatedByPlayer2 = s.p2;
+        s.obj->m_poweredOn = s.poweredOn;
+        s.obj->m_state = s.state;
+        s.obj->m_isActivated = s.isActivated;
+        s.obj->m_visible = s.egoVisible;
+        s.obj->setOpacity(s.opacity);
+        s.obj->setVisible(s.nodeVisible);
+        if (s.isRing) {
+            static_cast<RingObject*>(s.obj)->m_claimTouch = s.claimTouch;
+        }
+    }
+    this->m_saved.clear();
+    layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
+    this->m_savedActivatedIDs.clear();
+}
+
 ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
     PlayLayer* layer,
     DevLiveWitness const& witness,
@@ -3503,16 +3660,7 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
     PlayerObject* ghost = this->m_evalGhosts[0];
     applyPlayerBlob(ghost, witness.player);
     DevEvalRestore::notePlayerWritten(out.restore, witness.player);
-    if (witness.dual.present && this->m_evalGhosts[1]) {
-        applyPlayerBlob(this->m_evalGhosts[1], witness.dual);
-        DevEvalRestore::noteDualWritten(out.restore, witness.dual);
-    }
-    if (witness.hasHazardDigest) {
-        DevEvalRestore::noteMoversDigestOnly(out.restore, witness.hazardDigest);
-    }
-    if (!witness.orbIds.empty()) {
-        DevEvalRestore::noteOrbsWritten(out.restore, witness.orbIds);
-    }
+    this->applyEvalWorldRestore(layer, witness, out.restore);
 
     this->m_evalActive = ghost;
     this->m_simulating = true;
@@ -3597,6 +3745,7 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
     this->m_simAbsTick = -1;
     this->m_simulating = false;
     this->m_evalActive = nullptr;
+    this->finishEvalWorldRestore(layer);
     // Park eval ghost (same evacuate rules as shadow).
     if (auto* pl = PlayLayer::get()) {
         if (pl == this->m_hostLayer) {
@@ -3609,6 +3758,11 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
     ghost->setPosition({ 0.f, 105.f });
     ghost->m_position = cocos2d::CCPoint{ 0.f, 105.f };
     hideGhost(ghost);
+    if (this->m_evalGhosts[1]) {
+        hideGhost(this->m_evalGhosts[1]);
+        this->m_evalGhosts[1]->setPosition({ 0.f, 105.f });
+        this->m_evalGhosts[1]->m_position = cocos2d::CCPoint{ 0.f, 105.f };
+    }
     return out;
 }
 
