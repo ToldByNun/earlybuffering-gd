@@ -8,6 +8,7 @@
 #include "../core/OpportunityProbe.hpp"
 #include "../core/DivergenceTracker.hpp"
 #include "../core/ClickIntentGuard.hpp"
+#include "../core/SaveDropPaths.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/TriggerClassify.hpp"
@@ -48,6 +49,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistLearning::exploreGateSelfCheck(exploreReport), "learn-explore-gate");
     std::string intentReport;
     expect(ClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
+    std::string saveDropReport;
+    expect(SaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
     std::string classifyReport;
     expect(TriggerClassify::selfCheck(classifyReport), "trigger-classify");
     std::string twReport;
