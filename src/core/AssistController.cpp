@@ -917,12 +917,15 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
 }
 
 void AssistController::logPlan(SimPlan const& plan, char const* kind) {
+    bool const orbIntent = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
     AssistLog::debug(fmt::format(
-        "PLAN id={} kind={} action={} verdict={} delay={} requireOrb={} hold={} dMin={} dMax={} budgetHit={}",
+        "PLAN id={} kind={} action={} verdict={} delay={} orbIntent={} foresight=na requireOrb={} hold={} dMin={} dMax={} budgetHit={}",
         plan.planId, kind,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         AssistVerdict::name(plan.reason),
-        plan.delay, plan.requireOrb, plan.requireHold, plan.dMin, plan.dMax, plan.budgetHit
+        plan.delay,
+        orbIntent ? 1 : 0,
+        plan.requireOrb, plan.requireHold, plan.dMin, plan.dMax, plan.budgetHit
     ));
 }
 

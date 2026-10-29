@@ -267,6 +267,40 @@ Before `resetLevel` / checkpoint load: `evacuateGhosts` pulls all owned ghosts o
 
 clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. Platformer: assist off.
 
+## Miss-assist contracts (v1.2.1)
+
+Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` / presets are tick windows.
+
+### Guarantees
+
+| Id | Rule |
+|----|------|
+| G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
+| G1 Prefer (New) | When Pick Mode is **New**, choose best viable delay in `0..limit` (full pool compare). Pass only if best is `0` or hopeless. |
+| G1 Legacy | Pick Mode **Legacy** keeps 1.2.0 feel: `d0` viable → Pass; else earliest viable in window (not full pool best). |
+| G2 | `Pass no-threat` only after foresight + opportunity probe agree the corridor is empty (foresight lands in a later change). |
+| G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
+
+Executable pure fixtures: `MissAssistContracts::selfCheck` (via PlanGold). Planner still emits `foresight=na` until TravelForesight ships.
+
+### Manual playtest matrix
+
+| Scene | Expect (New) | Expect (Legacy) | Notes |
+|-------|--------------|-----------------|-------|
+| Cube orb, limit 16, press ~10 ticks early | Delay/HOLD, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` or `PASS d0-safe` |
+| Cube spike jump early, d0 would die | Delay until landable ≤limit | Same (earliest viable) | |
+| Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
+| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | |
+| Wave + orb in travel cone | Delay/Hold, not spam Pass | Orb path may still Delay | |
+| Dash orb | `requireHold`, no abort while held | Same | |
+| Ideal d=6, limit=4, d=4 survives | Delay ≤4 | Delay ≤4 if d0 unsafe; Pass if d0 safe | Never fire at 6 |
+| “10 frames” early @60fps into ticks=16 | Usually Pass (outside window) | Same | Remap frames→ticks before blaming assist |
+| MH speedhack ≠1 | Delays in sim ticks via AssistClock | Same | |
+| Dual linked | Both must clear | Same | |
+| Death / respawn | Buffer clear, assist re-attaches | Same | |
+
+Debug: enable **Debug Logging**; look for `PLAN id=… verdict=… delay=… orbIntent=… foresight=…` and `VERDICT …`. No `ASSIST press +N` means the press never armed a buffer.
+
 ## Authorship
 
 Design and review: maintainer (Audesign). Drafting used AI tools; every shipped line is human-reviewed and actively tested (see repository README).

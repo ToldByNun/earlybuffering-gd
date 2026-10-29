@@ -2416,12 +2416,15 @@ SimPlan ShadowSimulator::plan(
         plan.reason = AssistReason::PassUnknown;
     }
 
+    bool const orbIntentOut = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
     AssistLog::debug(fmt::format(
-        "PLAN id={} {} verdict={} delay={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
+        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight=na ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         plan.planId,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         AssistVerdict::name(plan.reason),
-        plan.delay, plan.activatedRing, plan.orbUseful, plan.requireHold,
+        plan.delay,
+        orbIntentOut ? 1 : 0,
+        plan.activatedRing, plan.orbUseful, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
     ));

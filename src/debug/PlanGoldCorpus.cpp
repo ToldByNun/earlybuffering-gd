@@ -3,6 +3,7 @@
 #include "../core/AssistController.hpp"
 #include "../core/AssistLearning.hpp"
 #include "../core/AssistVerdict.hpp"
+#include "../core/MissAssistContracts.hpp"
 #include "../core/ClickIntentGuard.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
@@ -40,6 +41,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistClock::selfCheck(clockReport), "assist-clock");
     std::string verdictReport;
     expect(AssistVerdict::selfCheck(verdictReport), "assist-verdict");
+    std::string missReport;
+    expect(MissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";
