@@ -70,6 +70,7 @@ struct SimPlan {
     bool budgetHit = false;
     bool activatedRing = false;
     bool usedOrbWindow = false;
+    bool foresightOrbPad = false; // TravelForesight orb/pad in travel cone
     bool threatCleared = false;
     bool orbUseful = false;
     bool requireOrb = false;

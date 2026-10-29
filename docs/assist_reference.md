@@ -281,7 +281,11 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G2 | `Pass no-threat` only after foresight + opportunity probe agree the corridor is empty (foresight lands in a later change). |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 
-Executable pure fixtures: `MissAssistContracts::selfCheck` (via PlanGold). Planner still emits `foresight=na` until TravelForesight ships.
+Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::selfCheck` (via PlanGold).
+
+### TravelForesight
+
+`TravelForesight` replaces the old fixed `(limit+8)*5.5` ahead-X for orb hints. Ahead distance = clamp(`speedMul * (5.5/(1/240)) * (limit+slack)*simDt + 16`, 60…320). Scans **orbs and jump pads**; skips activated / claimed. `ShadowSimulator::spatialOrbHint` and controller spam overrides use the same cone. `PLAN` / `logPlan` emit `foresight=0|1` from `SimPlan.foresightOrbPad`.
 
 ### Manual playtest matrix
 

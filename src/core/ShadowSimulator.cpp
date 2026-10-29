@@ -1,10 +1,10 @@
 #include "ShadowSimulator.hpp"
 #include "BakeMap.hpp"
+#include "TravelForesight.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
-#include "../config/StageConfig.hpp"
 #include "TriggerWorldStore.hpp"
 
 #include <algorithm>
@@ -1148,42 +1148,13 @@ ThreatZone ShadowSimulator::buildThreatZone(PlayLayer* layer, float deathX, Game
 }
 
 bool ShadowSimulator::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit, float dt) {
-    if (!layer || !real || !layer->m_objectLayer || dt <= 0.f) return false;
-    float const aheadX = std::clamp(static_cast<float>(limit + 8) * 5.5f, 60.f, 220.f);
-    float const px = real->getPositionX();
-    float const py = real->getPositionY();
-    float const yReach = real->m_isShip || real->m_isDart || real->m_isSwing ? 120.f : 90.f;
-
-    auto* children = layer->m_objectLayer->getChildren();
-    if (!children) return false;
-    for (unsigned i = 0; i < children->count(); ++i) {
-        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
-        if (!obj) continue;
-        switch (obj->m_objectType) {
-            case GameObjectType::YellowJumpRing:
-            case GameObjectType::PinkJumpRing:
-            case GameObjectType::RedJumpRing:
-            case GameObjectType::GravityRing:
-            case GameObjectType::GreenRing:
-            case GameObjectType::DropRing:
-            case GameObjectType::DashRing:
-            case GameObjectType::GravityDashRing:
-            case GameObjectType::SpiderOrb:
-            case GameObjectType::CustomRing:
-                break;
-            default:
-                continue;
-        }
-        if (obj->m_isActivated || (typeinfo_cast<RingObject*>(obj) && static_cast<RingObject*>(obj)->m_claimTouch)) {
-            continue;
-        }
-        float const ox = obj->getPositionX();
-        float const oy = obj->getPositionY();
-        if (ox < px - 10.f || ox > px + aheadX) continue;
-        if (std::fabs(oy - py) > yReach) continue;
-        return true;
+    if (!layer || !real || dt <= 0.f) return false;
+    int slack = 0;
+    if (real) {
+        slack = StageConfig::paramsFor(real).slack;
     }
-    return false;
+    // Dt-/speed-aware orb + jump-pad cone (replaces fixed (limit+8)*5.5).
+    return TravelForesight::hasOrbOrPadAhead(layer, real, limit, dt, slack);
 }
 
 bool ShadowSimulator::spatialHazardProximity(
@@ -1758,7 +1729,8 @@ SimPlan ShadowSimulator::plan(
         restoreCapture(layer);
         beginCapture(layer);
         if (orbHint.found) plan.usedOrbWindow = true;
-        spatialHint = spatialOrbHint(layer, real, limit, dt);
+        spatialHint = this->spatialOrbHint(layer, real, limit, dt);
+        plan.foresightOrbPad = spatialHint;
     }
 
     ThreatZone zone{};
@@ -1847,8 +1819,9 @@ SimPlan ShadowSimulator::plan(
             plan.jumpTick = c0.jumpTick;
             plan.activatedRing = c0.activatedRing;
             AssistLog::debug(fmt::format(
-                "PLAN id={} Pass no-threat verdict={} limit={} budgetHit={}",
-                plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit
+                "PLAN id={} Pass no-threat verdict={} foresight={} limit={} budgetHit={}",
+                plan.planId, AssistVerdict::name(plan.reason),
+                plan.foresightOrbPad ? 1 : 0, limit, plan.budgetHit
             ));
             return plan;
         }
@@ -2418,12 +2391,13 @@ SimPlan ShadowSimulator::plan(
 
     bool const orbIntentOut = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
     AssistLog::debug(fmt::format(
-        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight=na ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
+        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         plan.planId,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         AssistVerdict::name(plan.reason),
         plan.delay,
         orbIntentOut ? 1 : 0,
+        plan.foresightOrbPad ? 1 : 0,
         plan.activatedRing, plan.orbUseful, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget

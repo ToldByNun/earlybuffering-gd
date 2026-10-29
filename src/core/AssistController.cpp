@@ -123,6 +123,7 @@ static bool nearOrbOrPadHint(
 ) {
     if (!StageConfig::assistOrbs()) return false;
     if (!playLayer || !player || limit <= 0 || simDt <= 0.f) return false;
+    // Same TravelForesight cone as ShadowSimulator::spatialOrbHint (orbs + pads).
     return ShadowSimulator::spatialOrbHint(playLayer, player, limit, simDt);
 }
 
@@ -919,12 +920,13 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
 void AssistController::logPlan(SimPlan const& plan, char const* kind) {
     bool const orbIntent = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
     AssistLog::debug(fmt::format(
-        "PLAN id={} kind={} action={} verdict={} delay={} orbIntent={} foresight=na requireOrb={} hold={} dMin={} dMax={} budgetHit={}",
+        "PLAN id={} kind={} action={} verdict={} delay={} orbIntent={} foresight={} requireOrb={} hold={} dMin={} dMax={} budgetHit={}",
         plan.planId, kind,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         AssistVerdict::name(plan.reason),
         plan.delay,
         orbIntent ? 1 : 0,
+        plan.foresightOrbPad ? 1 : 0,
         plan.requireOrb, plan.requireHold, plan.dMin, plan.dMax, plan.budgetHit
     ));
 }
