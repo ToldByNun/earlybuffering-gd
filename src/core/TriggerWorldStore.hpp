@@ -41,7 +41,7 @@ struct TriggerWorldData {
 
 // Content-keyed cache of static trigger motion.
 // Disk: {saveDir}/triggers/{fullKey}.json
-// Commit 3: data model + load/save only (apply/build come later).
+// Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
 class TriggerWorldStore {
 public:
     static constexpr int kFileVersion = 1;

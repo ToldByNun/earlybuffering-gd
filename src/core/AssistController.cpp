@@ -9,6 +9,7 @@
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
+#include "TriggerWorldBaker.hpp"
 #include "TriggerWorldStore.hpp"
 #include <chrono>
 #include <cstring>
@@ -238,9 +239,15 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
         BakeMap::get().loadForLevel(playLayer->m_level);
         if (StageConfig::triggerBake()) {
+            TriggerWorldBaker::get().cancel();
             TriggerWorldStore::get().loadForLevel(playLayer->m_level);
+            // Cache miss → kinematic static bake (Commit 6 sync; Commit 7 slices).
+            if (!TriggerWorldStore::get().hasTracks()) {
+                TriggerWorldBaker::get().start(playLayer);
+            }
         }
         else {
+            TriggerWorldBaker::get().cancel();
             TriggerWorldStore::get().clear();
         }
     }
@@ -250,6 +257,7 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 void AssistController::onLevelQuit() {
     // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
     // detach() unlinks then releases — never release while still parented.
+    TriggerWorldBaker::get().cancel();
     SelfBakeRecorder::get().cancelRefine();
     SelfBakeRecorder::get().flushMergeOnly(PlayLayer::get(), "quit");
     SelfBakeRecorder::get().onLevelQuit();
@@ -667,6 +675,14 @@ void AssistController::updateOverlay() {
         if (!smartBit.empty()) m_overlayText += " | " + smartBit;
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
+        if (StageConfig::triggerBake()) {
+            std::string const tw = TriggerWorldBaker::get().running()
+                ? TriggerWorldBaker::get().statusLine()
+                : TriggerWorldStore::get().statusLine();
+            if (!tw.empty() && tw != "trigger-world: off") {
+                m_overlayText += " | " + tw;
+            }
+        }
         if (StageConfig::assistOrbs()) m_overlayText += " | orbs";
         if (StageConfig::assistVerifyAb()) m_overlayText += " | VERIFY AB ON";
         if (!StageConfig::safeMode() && StageConfig::isEnabled()) m_overlayText += " | UNSAFE";

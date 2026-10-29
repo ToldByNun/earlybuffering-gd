@@ -31,6 +31,7 @@ TriggerKind TriggerWorldStore::kindFromString(std::string const& name) {
     if (name == "StaticRotate") return TriggerKind::StaticRotate;
     if (name == "StaticScale") return TriggerKind::StaticScale;
     if (name == "StaticSpawn") return TriggerKind::StaticSpawn;
+    if (name == "StaticToggle") return TriggerKind::StaticToggle;
     if (name == "DynamicFollow") return TriggerKind::DynamicFollow;
     if (name == "DynamicOther") return TriggerKind::DynamicOther;
     return TriggerKind::Ignore;

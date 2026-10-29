@@ -23,6 +23,11 @@ bool TriggerClassify::isSpawnTriggerId(int objectId) {
     return objectId == 1268;
 }
 
+bool TriggerClassify::isToggleTriggerId(int objectId) {
+    // Classic Toggle — enables/disables target group (solids/hazards on/off).
+    return objectId == 1049;
+}
+
 bool TriggerClassify::isFollowTriggerId(int objectId) {
     // 1347 Advanced Follow, 1585 Follow Player Y, 1817 Follow.
     return objectId == 1347 || objectId == 1585 || objectId == 1817;
@@ -43,7 +48,7 @@ bool TriggerClassify::isNonLethalTriggerId(int objectId) {
         case 29:
         case 1006:
         case 1007:
-        case 1049:
+        // 1049 Toggle is collision-relevant — not listed here.
         case 1520:
         case 1818:
         case 3605:
@@ -62,6 +67,7 @@ bool TriggerClassify::isLethalMotionCandidateId(int objectId) {
         || TriggerClassify::isRotateTriggerId(objectId)
         || TriggerClassify::isScaleTriggerId(objectId)
         || TriggerClassify::isSpawnTriggerId(objectId)
+        || TriggerClassify::isToggleTriggerId(objectId)
         || TriggerClassify::isFollowTriggerId(objectId);
 }
 
@@ -69,7 +75,8 @@ bool TriggerClassify::isStatic(TriggerKind kind) {
     return kind == TriggerKind::StaticMove
         || kind == TriggerKind::StaticRotate
         || kind == TriggerKind::StaticScale
-        || kind == TriggerKind::StaticSpawn;
+        || kind == TriggerKind::StaticSpawn
+        || kind == TriggerKind::StaticToggle;
 }
 
 bool TriggerClassify::isDynamic(TriggerKind kind) {
@@ -92,6 +99,7 @@ char const* TriggerClassify::kindName(TriggerKind kind) {
         case TriggerKind::StaticRotate: return "StaticRotate";
         case TriggerKind::StaticScale: return "StaticScale";
         case TriggerKind::StaticSpawn: return "StaticSpawn";
+        case TriggerKind::StaticToggle: return "StaticToggle";
         case TriggerKind::DynamicFollow: return "DynamicFollow";
         case TriggerKind::DynamicOther: return "DynamicOther";
         default: return "?";
@@ -111,11 +119,13 @@ bool TriggerClassify::dependsOnLivePlayer(MotionHints const& hints) {
 bool TriggerClassify::hasNonPlayerDynamicHints(MotionHints const& hints) {
     // Touch start time depends on when the player hits the trigger — not bakeable
     // as a fixed absolute timeline from attempt 0 without knowing touch tick.
-    bool const motionId = TriggerClassify::isMoveTriggerId(hints.objectId)
+    bool const collisionId = TriggerClassify::isMoveTriggerId(hints.objectId)
         || TriggerClassify::isRotateTriggerId(hints.objectId)
         || TriggerClassify::isScaleTriggerId(hints.objectId)
-        || TriggerClassify::isFollowTriggerId(hints.objectId);
-    if (hints.touchTriggered && motionId) return true;
+        || TriggerClassify::isFollowTriggerId(hints.objectId)
+        || TriggerClassify::isToggleTriggerId(hints.objectId)
+        || TriggerClassify::isSpawnTriggerId(hints.objectId);
+    if (hints.touchTriggered && collisionId) return true;
     return false;
 }
 
@@ -173,6 +183,9 @@ TriggerKind TriggerClassify::classifyHints(MotionHints const& hints) {
     }
     if (TriggerClassify::isSpawnTriggerId(id)) {
         return TriggerKind::StaticSpawn;
+    }
+    if (TriggerClassify::isToggleTriggerId(id)) {
+        return TriggerKind::StaticToggle;
     }
 
     return TriggerKind::Ignore;
@@ -325,6 +338,25 @@ bool TriggerClassify::selfCheck(std::string& report) {
     expect(
         TriggerClassify::classifyHints(pulse) == TriggerKind::Ignore,
         "pulse-ignore"
+    );
+
+    // Toggle enables/disables groups — must not be Ignore.
+    MotionHints toggle{};
+    toggle.isEffect = true;
+    toggle.objectId = 1049;
+    toggle.spawnTriggered = true;
+    expect(
+        TriggerClassify::classifyHints(toggle) == TriggerKind::StaticToggle,
+        "static-toggle"
+    );
+
+    MotionHints touchToggle{};
+    touchToggle.isEffect = true;
+    touchToggle.objectId = 1049;
+    touchToggle.touchTriggered = true;
+    expect(
+        TriggerClassify::classifyHints(touchToggle) == TriggerKind::DynamicOther,
+        "touch-toggle-dynamic"
     );
 
     if (fails == 0) {

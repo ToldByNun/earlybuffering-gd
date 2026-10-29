@@ -6,17 +6,19 @@
 class GameObject;
 
 // How a GameObject / EffectGameObject relates to Trigger World Bake.
-// Only collision-relevant motion (move/rotate/scale/spawn of solids/hazards)
-// is ever Static* or Dynamic*. Camera, pulse, song, shake, etc. → Ignore.
+// Collision-relevant: move/rotate/scale/spawn/toggle of solids/hazards.
+// Camera, pulse, song, shake, etc. → Ignore.
 //
 // Important: "follow another group/object" is STATIC (deterministic chain).
 // Only follow/lock that depends on the live PLAYER is Dynamic*.
+// Toggle (1049) is NOT Ignore — it enables/disables collideables.
 enum class TriggerKind {
     Ignore = 0,
     StaticMove,
     StaticRotate,
     StaticScale,
     StaticSpawn,
+    StaticToggle,
     DynamicFollow,
     DynamicOther
 };
@@ -63,11 +65,14 @@ public:
     static bool isRotateTriggerId(int objectId);
     static bool isScaleTriggerId(int objectId);
     static bool isSpawnTriggerId(int objectId);
+    // Toggle group on/off (collision-relevant visibility/active).
+    static bool isToggleTriggerId(int objectId);
     // Follow-family IDs (may be group-follow = static, or player-follow = dynamic).
     static bool isFollowTriggerId(int objectId);
     // Explicit Follow Player Y (always player-coupled).
     static bool isFollowPlayerTriggerId(int objectId);
     static bool isNonLethalTriggerId(int objectId);
+    // Collision-relevant candidates (motion + toggle), not camera/cosmetic.
     static bool isLethalMotionCandidateId(int objectId);
 
     static bool selfCheck(std::string& report);
