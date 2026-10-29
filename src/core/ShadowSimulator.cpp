@@ -1605,6 +1605,10 @@ static bool betterCand(
 ) {
     if (a.viable != b.viable) return a.viable && !b.viable;
     if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
+    // Alive beats "cleared zone then died" — deathX>zone still viable but not equal.
+    if (preferLater && a.raw.died != b.raw.died) {
+        return !a.raw.died && b.raw.died;
+    }
     if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
     if (a.surviveTicks != b.surviveTicks) return a.surviveTicks > b.surviveTicks;
     if (preferLater) {
@@ -1697,14 +1701,16 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     out.diedBeforeAction = r.diedBeforeAction;
     out.clearsThreat = clearsThreatOf(r, zone);
     out.unknown = r.unknown || r.unknownTrunc;
+    // Survive-only: never ok a bake delay that dies in sim.
     bool viable = false;
-    if (r.unknownTrunc) {
-        if (!zone.valid) viable = true;
-        else if (r.died) viable = r.deathX > zone.endX;
-        else viable = r.endX > zone.endX || out.clearsThreat;
+    if (r.diedBeforeAction || r.died) {
+        viable = false;
+    }
+    else if (r.unknownTrunc) {
+        viable = !zone.valid || out.clearsThreat || r.endX > zone.endX;
     }
     else {
-        viable = out.clearsThreat && !r.diedBeforeAction;
+        viable = !zone.valid || out.clearsThreat || r.zoneCleared;
     }
 
     if (viable && linkedDual()) {
@@ -1716,7 +1722,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
             );
             restoreCapture(layer);
             beginCapture(layer);
-            if (!clearsThreatOf(r2, zone) || r2.diedBeforeAction) {
+            if (r2.died || r2.diedBeforeAction || !clearsThreatOf(r2, zone)) {
                 viable = false;
                 out.clearsThreat = false;
             }
@@ -1856,15 +1862,20 @@ SimPlan ShadowSimulator::plan(
 
     auto finalizeViable = [&](Cand& c, int releaseAfter) {
         c.clearsThreat = clearsThreatOf(c.raw, zone);
-        if (c.unknownTrunc) {
-            if (!zone.valid) c.viable = true;
-            else if (c.raw.died) c.viable = c.deathX > zone.endX;
-            else c.viable = c.raw.endX > zone.endX || c.clearsThreat;
+        // Delay-viable ONLY if the sim survives. Death-past-zone used to count
+        // as "clear" and caused +N Delay that still died (early or late).
+        // Uncertain → not Delay-viable (Pass / keep searching), never assist into death.
+        if (c.diedBeforeAction || c.raw.died) {
+            c.viable = false;
+        }
+        else if (c.unknownTrunc) {
+            c.viable = !zone.valid || c.clearsThreat || c.raw.endX > zone.endX;
         }
         else {
-            c.viable = c.clearsThreat && !c.diedBeforeAction;
+            c.viable = !zone.valid || c.clearsThreat || c.raw.zoneCleared
+                || c.surviveBin >= 1;
         }
-        // Linked dual: other player's shadow must also clear the same zone.
+        // Linked dual: other player's shadow must also survive the same plan.
         if (c.viable && linkedDual()) {
             PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
             if (other && tickBudget > 0) {
@@ -1874,7 +1885,8 @@ SimPlan ShadowSimulator::plan(
                 );
                 restoreCapture(layer);
                 beginCapture(layer);
-                if (!clearsThreatOf(r2, zone) || r2.diedBeforeAction) {
+                if (r2.died || r2.diedBeforeAction
+                    || !clearsThreatOf(r2, zone)) {
                     c.viable = false;
                     c.clearsThreat = false;
                 }
@@ -2145,11 +2157,12 @@ SimPlan ShadowSimulator::plan(
         cands[static_cast<size_t>(d)] = c;
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
-        // Orb foresight / orb-window: keep searching outside prefer so activation
-        // cands are not discarded (orb order is before prefer, but act can lie past band).
-        bool const preferExitOk = MissAssistContracts::preferBandEarlyExitAllowed(
-            orbAssist, orbHint.found, spatialHint, plan.foresightOrbPad
-        );
+        // New (preferLater): never early-exit — later-in-window cands must be ranked.
+        // Legacy: orb foresight still blocks exit so activations outside prefer stay.
+        bool const preferExitOk = options.legacyPick
+            && MissAssistContracts::preferBandEarlyExitAllowed(
+                orbAssist, orbHint.found, spatialHint, plan.foresightOrbPad
+            );
         if (hasPrefer && preferExitOk && !plan.budgetHit
             && d == preferLastInOrder && preferBandRobust()) {
             AssistLog::debug(fmt::format(
@@ -2161,8 +2174,10 @@ SimPlan ShadowSimulator::plan(
         if (hasPrefer && !preferExitOk && d == preferLastInOrder
             && preferBandRobust()) {
             AssistLog::debug(fmt::format(
-                "PLAN id={} prefer-band early-exit suppressed (orb foresight) [{},{}]",
-                plan.planId, preferLo, preferHi
+                "PLAN id={} prefer-band early-exit suppressed ({} ) [{},{}]",
+                plan.planId,
+                options.legacyPick ? "orb foresight" : "new preferLater",
+                preferLo, preferHi
             ));
         }
     }
@@ -2509,31 +2524,60 @@ SimPlan ShadowSimulator::plan(
         }
     }
     else {
-        // New (G1): full pool, preferLater when survival tied — no d0 auto Pass.
-        std::vector<int> pool;
-        for (int d = 0; d <= limit; ++d) pool.push_back(d);
-        for (;;) {
-            chosen = pickRobust(pool, false, true);
-            if (chosen < 0) break;
-            int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
-            if (jitterOk(chosen, releaseAfter)) break;
-            cands[static_cast<size_t>(chosen)].viable = false;
-            chosen = -1;
+        // New (G1): d0 survived → Pass (never delay into a late death).
+        // Else preferLater among survivors only (±k-robust).
+        if (cands[0].viable) {
+            int releaseAfter = cands[0].requireHold ? 40 : -1;
+            if (jitterOk(0, releaseAfter)) {
+                doPass = true;
+                chosen = 0;
+                plan.threatCleared = true;
+                plan.nowIsSafe = true;
+            }
+            else {
+                cands[0].viable = false;
+            }
         }
-        if (chosen == 0) {
-            doPass = true;
-            plan.threatCleared = true;
-            plan.nowIsSafe = cands[0].viable;
+        if (!doPass) {
+            std::vector<int> pool;
+            for (int d = 0; d <= limit; ++d) pool.push_back(d);
+            for (;;) {
+                chosen = pickRobust(pool, false, true);
+                if (chosen < 0) break;
+                int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
+                if (jitterOk(chosen, releaseAfter)) break;
+                cands[static_cast<size_t>(chosen)].viable = false;
+                chosen = -1;
+            }
+            if (chosen == 0) {
+                doPass = true;
+                plan.threatCleared = true;
+                plan.nowIsSafe = cands[0].viable;
+            }
+            applyChosenMeta(chosen);
         }
-        applyChosenMeta(chosen);
     }
 
     // G1 window-cap assert.
     if (chosen > limit) chosen = limit;
+    // Hard gate: never arm a Delay the sim marked as death.
+    if (chosen > 0 && chosen <= limit) {
+        auto const& ch = cands[static_cast<size_t>(chosen)];
+        if (!ch.viable || ch.raw.died || ch.diedBeforeAction) {
+            AssistLog::debug(fmt::format(
+                "PLAN id={} reject lethal Delay +{} → Pass",
+                plan.planId, chosen
+            ));
+            chosen = -1;
+            doPass = false;
+            plan.requireOrb = false;
+        }
+    }
     if (chosen < 0) {
         // Partial budget: if any activation survived, take earliest act ≤ limit.
         if (plan.budgetHit && actMin >= 0 && actMin <= limit
-            && cands[static_cast<size_t>(actMin)].viable) {
+            && cands[static_cast<size_t>(actMin)].viable
+            && !cands[static_cast<size_t>(actMin)].raw.died) {
             chosen = actMin;
             doPass = false;
             applyChosenMeta(chosen);
@@ -2546,7 +2590,7 @@ SimPlan ShadowSimulator::plan(
     }
 
     // Continuous miss-assist: idle safer + ascent helps → Delay, not Pass/hopeless.
-    // No forever block: only when a later viable cand exists in-window.
+    // Only when a later *surviving* cand exists in-window.
     if (plan.idleSafer && plan.ascentUseful
         && (doPass || chosen <= 0)) {
         std::vector<int> pool;
@@ -2554,7 +2598,9 @@ SimPlan ShadowSimulator::plan(
         int forced = legacyPick
             ? pickLatestRobust(pool, false)
             : pickRobust(pool, false, true);
-        if (forced > 0) {
+        if (forced > 0
+            && cands[static_cast<size_t>(forced)].viable
+            && !cands[static_cast<size_t>(forced)].raw.died) {
             chosen = forced;
             doPass = false;
             applyChosenMeta(chosen);
@@ -2562,6 +2608,15 @@ SimPlan ShadowSimulator::plan(
                 "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
                 plan.planId, chosen
             ));
+        }
+    }
+    // Re-assert lethal gate after idleSafer / budget-partial.
+    if (chosen > 0 && chosen <= limit) {
+        auto const& ch = cands[static_cast<size_t>(chosen)];
+        if (!ch.viable || ch.raw.died || ch.diedBeforeAction) {
+            chosen = -1;
+            doPass = false;
+            plan.requireOrb = false;
         }
     }
 
@@ -2635,8 +2690,9 @@ SimPlan ShadowSimulator::plan(
             beginCapture(layer);
             ++plan.candidatesTried;
 
-            bool const ok = clearsThreatOf(r, zone) && !r.diedBeforeAction
-                && (!r.died || r.unknownTrunc || (zone.valid && r.deathX > zone.endX));
+            // Hold branch must survive — same rule as Delay-viable.
+            bool const ok = !r.died && !r.diedBeforeAction
+                && (clearsThreatOf(r, zone) || !zone.valid || r.unknownTrunc);
             if (!ok) continue;
 
             int const sTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;

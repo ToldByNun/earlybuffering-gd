@@ -283,24 +283,25 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 }
 
 void AssistController::onLevelQuit() {
-    // Tear down UI/sim WHILE PlayLayer is still alive. Leaving ghosts in
-    // objectLayer for setNextScene caused ~PlayerObject → CCObject::release AVs.
+    // Tear down UI/sim WHILE PlayLayer is still alive. Leaving nodes in
+    // objectLayer for setNextScene → ~GameObject / CCObject::release AVs.
     auto* playLayer = PlayLayer::get();
     TriggerWorldBaker::get().cancel();
     SelfBakeRecorder::get().cancelRefine();
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "quit");
     SelfBakeRecorder::get().onLevelQuit();
     SaveFeedback::get().reset();
-    SaveFrameCounter::get().detach(true);
     ClickIntentGuard::get().reset();
-    TrajectoryVisualizer::get().detach(true);
-    StatusOverlay::detach(true);
+    // Prefer live detach (removeFromParent) while PlayLayer exists.
+    bool const layerAlive = playLayer != nullptr;
+    SaveFrameCounter::get().detach(!layerAlive);
+    TrajectoryVisualizer::get().detach(!layerAlive);
+    StatusOverlay::detach(!layerAlive);
 
     if (playLayer) {
         ShadowSimulator::get().evacuateGhosts(playLayer);
     }
-    // removeFromParentAndCleanup now — not detach(true) which left ghosts for
-    // the dying tree (crash in CCObject::release during PlayerObject dtor).
+    // removeFromParentAndCleanup now — never leave ghosts for setNextScene.
     ShadowSimulator::get().detach(false);
 
     // Persist then clear. Skip PerfTrace sync flush here — large logs were
@@ -921,12 +922,12 @@ int AssistController::acceptRecheckSlide(
     proposedFire = std::min(proposedFire, deadline);
     if (proposedFire <= attemptTick) return -1;
 
-    // Miss-assist: never slide earlier than the armed fire (that re-created
-    // "delayed but still too early"). Orb may wait for dMin (later only).
+    // Never slide earlier than the armed fire (undo wait → early death).
+    // Never slide more than +k later without a fresh plan (late death).
+    // Orb may wait further for dMin (caller).
     if (!requireOrb && proposedFire < oldFire) {
         return -1;
     }
-    // Cap late slides. Orb may wait further for dMin.
     if (!requireOrb && proposedFire > oldFire + kRecheckMaxSlide) {
         proposedFire = oldFire + kRecheckMaxSlide;
     }
@@ -949,15 +950,15 @@ bool AssistController::recheckSlideSelfCheck(std::string& report) {
 
     // planOk false → reject
     expect(acceptRecheckSlide(10, 8, 12, 20, 1, 20, false, false) < 0, "reject-bad-plan");
-    // Late slide capped at +2
+    // Late slide capped at +2 (avoid late death from huge replan swings)
     expect(acceptRecheckSlide(10, 8, 20, 30, 0, 30, false, true) == 12, "cap-slide-plus2");
-    // Early slide (earlier than oldFire) rejected — miss-assist must not undo wait
+    // Early slide (earlier than oldFire) rejected
     expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, false, true) < 0, "early-slide-reject");
-    // robustK: absMax 20, k=2 → safeMax 18
+    // robustK: absMax 20, k=2 → safeMax 18, then +2 cap from oldFire=10 → 12
     expect(acceptRecheckSlide(10, 8, 19, 20, 2, 30, false, true) == 12, "robust-then-cap");
     // past attempt → reject
     expect(acceptRecheckSlide(10, 12, 12, 20, 0, 20, false, true) < 0, "not-future");
-    // orb: allow large late slide (dMin wait); early still ok only via dMin path
+    // orb: allow large late slide (dMin wait)
     expect(acceptRecheckSlide(10, 8, 18, 20, 0, 20, true, true) == 18, "orb-allow-late");
     expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, true, true) == 11, "orb-early-for-dmin");
     // same fire → reject (inject instead)
@@ -1498,11 +1499,13 @@ void AssistController::fireBuffered(
                 this->m_simDt, this->m_simDt, opts
             );
 
+            // Surviving Delay only — never slide into a lethal / hopeless replan.
             bool const planOk =
                 re.action == PlanAction::Delay
                 && re.delay > 0
                 && !re.budgetHit
-                && (re.threatCleared || re.requireOrb || this->m_buffer.requireOrb);
+                && re.threatCleared
+                && (re.requireOrb || this->m_buffer.requireOrb || !re.unknown);
 
             if (planOk) {
                 int const jumpRel = re.jumpTick > 0 ? re.jumpTick : re.delay;
@@ -2092,6 +2095,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     }
 
     int delay = plan.delay;
+    int const plannedDelay = plan.delay;
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
@@ -2115,14 +2119,52 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
                     LevelProfile::spotBucket(x), spot->histN
                 ));
             }
-            delay = delay + off;
+            // After assist deaths at this spot, nudge later — never pull earlier.
+            if (spot->diedAfterAssist > 0 && off < 1) {
+                off = 1;
+            }
+            delay = plannedDelay + off;
+        }
+        // Miss-assist: learning must not undo the planner wait (caused +N then die).
+        if (delay < plannedDelay) {
+            AssistLog::debug(fmt::format(
+                "learn: floor delay {}→{} (never earlier than plan)",
+                delay, plannedDelay
+            ));
+            delay = plannedDelay;
         }
         // Clamp bias into activation window when requireOrb
         if (plan.requireOrb && plan.dMin >= 0 && plan.dMax >= plan.dMin) {
             delay = std::max(plan.dMin, std::min(plan.dMax, delay));
+            // Still never earlier than plan when plan was already in-window.
+            if (plannedDelay >= plan.dMin && delay < plannedDelay) {
+                delay = plannedDelay;
+            }
         }
         delay = MissAssistContracts::clampDelayToWindow(delay, limit);
         if (delay < 1) delay = 1;
+    }
+
+    // Hard refuse: never arm a Delay the live verify cannot survive.
+    if (delay > 0 && this->m_simDt > 0.f) {
+        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
+        PlanOptions vopts = opts;
+        vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
+        vopts.budgetUs = StageConfig::husReplanBudgetUs();
+        vopts.maxBranches = 0;
+        vopts.smartDepth = 1;
+        auto const vr = ShadowSimulator::get().verifyDelay(
+            playLayer, player, true, delay, limit, this->m_simDt, fd, vopts
+        );
+        if (!vr.ok) {
+            AssistLog::debug(fmt::format(
+                "ASSIST press verify-fail delay={} → Pass (refuse lethal assist)",
+                delay
+            ));
+            this->noteVerdict(AssistReason::PassHopeless, "press-verify-fail");
+            this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
+            return true;
+        }
     }
 
     this->m_buffer = {};
@@ -2292,6 +2334,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     }
 
     int delay = plan.delay;
+    int const plannedDelay = plan.delay;
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
@@ -2314,7 +2357,13 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
                     LevelProfile::spotBucket(x), spot->histN
                 ));
             }
-            delay = delay + off;
+            if (spot->diedAfterAssist > 0 && off < 1) {
+                off = 1;
+            }
+            delay = plannedDelay + off;
+        }
+        if (delay < plannedDelay) {
+            delay = plannedDelay;
         }
         delay = MissAssistContracts::clampDelayToWindow(delay, limit);
         if (delay < 1) delay = 1;

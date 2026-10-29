@@ -285,11 +285,12 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Prefer (New) | Setting `assist-pick` = **New** (default): best viable in `0..limit` with **preferLater** when survival ties (miss-assist waits more). Pass only if best is `0` or hopeless. |
+| G1 Prefer (New) | Setting `assist-pick` = **New** (default): **Delay-viable = sim survives** (death-past-zone alone is not enough). d0 survived → Pass; else preferLater among survivors. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2) with reduced caps — never hang: budget exhaust parks at deadline. Delay confirm updates `fireTick`; opportunity clear + safe → inject now; deadline → fire. Overlay `HUS` + `HOLD~`. |
+| No lethal assist | Learning never pulls earlier than the plan; recheck slides ≤+2 later (never earlier); only surviving Delays arm; verify-fail → Pass (vanilla). |
 | Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
 | Bake / Hybrid | Hybrid verify-fail / past-latest / missing → Live (no bake Pass). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
 

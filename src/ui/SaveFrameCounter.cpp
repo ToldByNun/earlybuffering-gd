@@ -70,12 +70,15 @@ void SaveFrameCounter::detach(bool layerDying) {
     if (!this->m_root) return;
     if (layerDying) {
         // Drop OUR retain only; stay parented so PlayLayer teardown frees once.
+        // Do not removeFromParent here — setNextScene is already destroying the tree.
         this->m_root->release();
         this->m_root = nullptr;
         return;
     }
+    // Live quit: strip markers then destroy root while objectLayer is alive.
+    this->m_root->removeAllChildrenWithCleanup(true);
     if (this->m_root->getParent()) {
-        this->m_root->removeFromParent();
+        this->m_root->removeFromParentAndCleanup(true);
     }
     this->m_root->release();
     this->m_root = nullptr;

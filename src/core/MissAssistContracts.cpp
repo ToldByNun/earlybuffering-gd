@@ -188,6 +188,7 @@ bool MissAssistContracts::selfCheck(std::string& report) {
         "new-clamped-still-delay"
     );
 
+    // Legacy-only helper: New pick never early-exits (wired in plan()).
     expect(
         MissAssistContracts::preferBandEarlyExitAllowed(false, true, true, true),
         "prefer-exit-no-orb-assist"

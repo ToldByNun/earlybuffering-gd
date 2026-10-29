@@ -140,9 +140,9 @@ public:
     );
     static bool holdUntilSafeSelfCheck(std::string& report);
 
-    // Recheck slide: at most +kRecheckMaxSlide later than oldFire (non-orb).
-    // Never past absMax - robustK. Returns accepted fire tick, or -1 = reject.
-    static constexpr int kRecheckMaxSlide = 2;
+    // Recheck slide: never earlier than oldFire (non-orb). Later up to
+    // deadline/absMax (miss-assist may need more than +2). Returns -1 = reject.
+    static constexpr int kRecheckMaxSlide = 2; // kept for docs / callers; late uncapped
     static int acceptRecheckSlide(
         int oldFire,
         int attemptTick,
