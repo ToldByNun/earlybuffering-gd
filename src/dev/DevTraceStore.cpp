@@ -576,6 +576,38 @@ static matjson::Value eventToJson(DevDecisionEvent const& e) {
             j["diffs"] = dj;
         }
     }
+    if (!e.candNotes.empty() || e.candNotesTruncated) {
+        std::vector<matjson::Value> notes;
+        notes.reserve(e.candNotes.size());
+        for (auto const& n : e.candNotes) {
+            matjson::Value nj = matjson::Value::object();
+            nj["delay"] = n.delay;
+            nj["status"] = DevRejectLedger::statusId(n.status);
+            nj["rejectCode"] = DevRejectLedger::rejectCodeId(n.rejectCode);
+            if (!n.detail.empty()) nj["detail"] = n.detail;
+            if (n.hasScores) {
+                nj["surviveBin"] = n.surviveBin;
+                nj["endX"] = n.endX;
+                nj["latencyTerm"] = n.latencyTerm;
+                nj["threatCleared"] = n.threatCleared;
+                nj["score"] = n.score;
+            }
+            notes.push_back(nj);
+        }
+        j["candNotes"] = notes;
+        if (e.candNotesTruncated) j["candNotesTruncated"] = true;
+    }
+    if (!e.attribution.empty()) {
+        std::vector<matjson::Value> attrs;
+        attrs.reserve(e.attribution.size());
+        for (auto const& a : e.attribution) {
+            matjson::Value aj = matjson::Value::object();
+            aj["code"] = DevRejectLedger::attributionId(a.code);
+            if (!a.detail.empty()) aj["detail"] = a.detail;
+            attrs.push_back(aj);
+        }
+        j["attribution"] = attrs;
+    }
     return j;
 }
 
@@ -675,6 +707,55 @@ static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::str
                 else d.kind = DevDiffKind::Mismatch;
                 e.diffs.push_back(d);
             }
+        }
+    }
+    if (j.contains("candNotes") && j["candNotes"].isArray()) {
+        for (auto const& nj : j["candNotes"].asArray().unwrap()) {
+            DevRejectLedger::CandNote n;
+            n.delay = static_cast<int>(nj["delay"].asInt().unwrapOr(0));
+            auto st = std::string(nj["status"].asString().unwrapOr("skipped"));
+            auto rc = std::string(nj["rejectCode"].asString().unwrapOr("not-viable"));
+            if (!DevRejectLedger::parseStatus(st, n.status)) {
+                err = "bad-cand-status";
+                return false;
+            }
+            if (!DevRejectLedger::parseRejectCode(rc, n.rejectCode)) {
+                err = "bad-reject-code";
+                return false;
+            }
+            if (nj.contains("detail")) {
+                n.detail = std::string(nj["detail"].asString().unwrapOr(""));
+            }
+            if (nj.contains("surviveBin") || nj.contains("endX") || nj.contains("score")) {
+                n.hasScores = true;
+                n.surviveBin = static_cast<int>(nj["surviveBin"].asInt().unwrapOr(0));
+                n.endX = static_cast<float>(nj["endX"].asDouble().unwrapOr(0.0));
+                n.latencyTerm = static_cast<float>(
+                    nj["latencyTerm"].asDouble().unwrapOr(0.0)
+                );
+                n.threatCleared = nj.contains("threatCleared")
+                    ? nj["threatCleared"].asBool().unwrapOr(false)
+                    : false;
+                n.score = static_cast<float>(nj["score"].asDouble().unwrapOr(0.0));
+            }
+            e.candNotes.push_back(std::move(n));
+        }
+    }
+    e.candNotesTruncated = j.contains("candNotesTruncated")
+        ? j["candNotesTruncated"].asBool().unwrapOr(false)
+        : false;
+    if (j.contains("attribution") && j["attribution"].isArray()) {
+        for (auto const& aj : j["attribution"].asArray().unwrap()) {
+            DevRejectLedger::AttributionNote a;
+            auto code = std::string(aj["code"].asString().unwrapOr(""));
+            if (!DevRejectLedger::parseAttribution(code, a.code)) {
+                err = "bad-attribution";
+                return false;
+            }
+            if (aj.contains("detail")) {
+                a.detail = std::string(aj["detail"].asString().unwrapOr(""));
+            }
+            e.attribution.push_back(std::move(a));
         }
     }
     return true;

@@ -8,6 +8,8 @@
 #include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
 #include "TriggerWorldStore.hpp"
+#include "../dev/DevConfig.hpp"
+#include "../dev/DevRejectLedger.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1600,11 +1602,14 @@ struct Cand {
     int delay = 0;
     bool viable = false;
     bool diedBeforeAction = false;
+    bool dualFailed = false;
     bool clearsThreat = false;
     bool unknownTrunc = false;
     bool activatedRing = false;
     bool orbUseful = false;
     bool requireHold = false;
+    bool robustKFailed = false;
+    bool verifyFailed = false;
     int releaseAfter = -1; // ticks after press; -1 = auto tap / unknown
     int surviveBin = 0;
     int surviveTicks = 0;
@@ -1778,6 +1783,16 @@ SimPlan ShadowSimulator::plan(
     if (!layer || !real || !this->m_shadow || limit < 0 || dt <= 0.f) {
         plan.action = PlanAction::Pass;
         plan.reason = AssistReason::PassInvalidArgs;
+        if (limit >= 0) {
+            DevRejectLedger::BuildInput emptyIn;
+            emptyIn.limit = limit;
+            emptyIn.doPass = true;
+            emptyIn.chosenDelay = 0;
+            emptyIn.includeScores = DevConfig::recordCands();
+            auto led = DevRejectLedger::build(emptyIn);
+            plan.candNotes = std::move(led.notes);
+            plan.candNotesTruncated = led.truncated;
+        }
         return plan;
     }
     if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
@@ -1858,6 +1873,49 @@ SimPlan ShadowSimulator::plan(
     std::vector<Cand> cands(static_cast<size_t>(limit) + 1);
     std::vector<char> candReady(static_cast<size_t>(limit) + 1, 0);
 
+    int ledgerActMin = -1;
+    int ledgerActMax = -1;
+    bool ledgerOrbIntent = false;
+    bool ledgerPreferEarlyExit = false;
+
+    auto publishLedger = [&](
+        int chosenDelay,
+        bool doPassFlag,
+        DevRejectLedger::EarlyExit early
+    ) {
+        DevRejectLedger::BuildInput in;
+        in.limit = limit;
+        in.chosenDelay = chosenDelay;
+        in.doPass = doPassFlag;
+        in.latencyWeight = latencyWeight;
+        in.orbIntent = ledgerOrbIntent;
+        in.actMin = ledgerActMin;
+        in.actMax = ledgerActMax;
+        in.legacyPick = options.legacyPick;
+        in.earlyExit = early;
+        in.includeScores = DevConfig::recordCands();
+        in.snaps.assign(static_cast<size_t>(limit) + 1, {});
+        for (int d = 0; d <= limit; ++d) {
+            if (!candReady[static_cast<size_t>(d)]) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            auto& s = in.snaps[static_cast<size_t>(d)];
+            s.evaluated = true;
+            s.viable = c.viable;
+            s.diedBeforeAction = c.diedBeforeAction;
+            s.dualFailed = c.dualFailed;
+            s.unknownTrunc = c.unknownTrunc;
+            s.clearsThreat = c.clearsThreat;
+            s.activatedRing = c.activatedRing;
+            s.robustKFailed = c.robustKFailed;
+            s.verifyFailed = c.verifyFailed;
+            s.surviveBin = c.surviveBin;
+            s.endX = c.endX;
+        }
+        auto led = DevRejectLedger::build(in);
+        plan.candNotes = std::move(led.notes);
+        plan.candNotesTruncated = led.truncated;
+    };
+
     auto evalDelay = [&](int d, int releaseAfter) -> Cand {
         Cand c;
         c.delay = d;
@@ -1914,6 +1972,7 @@ SimPlan ShadowSimulator::plan(
                     || !clearsThreatOf(r2, zone)) {
                     c.viable = false;
                     c.clearsThreat = false;
+                    c.dualFailed = true;
                 }
             }
         }
@@ -2030,6 +2089,13 @@ SimPlan ShadowSimulator::plan(
                     plan.planId, AssistVerdict::name(plan.reason),
                     plan.foresightOrbPad ? 1 : 0, probeCount, plan.budgetHit, limit
                 ));
+                publishLedger(
+                    0,
+                    true,
+                    plan.budgetHit
+                        ? DevRejectLedger::EarlyExit::Budget
+                        : DevRejectLedger::EarlyExit::NoThreat
+                );
                 return plan;
             }
             AssistLog::debug(fmt::format(
@@ -2068,6 +2134,7 @@ SimPlan ShadowSimulator::plan(
                 "PLAN id={} Pass wave-hazard-proximity verdict={} prox={:.0f} zone={} budgetHit={}",
                 plan.planId, AssistVerdict::name(plan.reason), proxX, zone.valid, plan.budgetHit
             ));
+            publishLedger(0, true, DevRejectLedger::EarlyExit::WaveProximity);
             return plan;
         }
     }
@@ -2138,6 +2205,7 @@ SimPlan ShadowSimulator::plan(
         }
         if (tickBudget <= 0 || wallExceeded()) {
             plan.budgetHit = true;
+            // Remaining delays stay unevaluated → budget-not-reached in ledger.
             break;
         }
         auto c = evalDelay(d, -1);
@@ -2194,6 +2262,7 @@ SimPlan ShadowSimulator::plan(
                 "PLAN id={} prefer-band early-exit [{},{}] after {} cands",
                 plan.planId, preferLo, preferHi, plan.candidatesTried
             ));
+            ledgerPreferEarlyExit = true;
             break;
         }
         if (hasPrefer && !preferExitOk && d == preferLastInOrder
@@ -2238,6 +2307,7 @@ SimPlan ShadowSimulator::plan(
         if (c.activatedRing) anyActivation = true;
     }
     bool orbIntent = orbAssist && (orbHint.found || spatialHint || anyActivation);
+    ledgerOrbIntent = orbIntent;
 
     // Continuous ascentUseful: any later delay beats d0 (viable / bin / endX).
     {
@@ -2291,6 +2361,7 @@ SimPlan ShadowSimulator::plan(
                 "PLAN id={} Pass wave-futile-delay verdict={} bin={} gain={:.1f} budgetHit={}",
                 plan.planId, AssistVerdict::name(plan.reason), bestBin, bestGain, plan.budgetHit
             ));
+            publishLedger(0, true, DevRejectLedger::EarlyExit::WaveFutile);
             return plan;
         }
     }
@@ -2390,6 +2461,8 @@ SimPlan ShadowSimulator::plan(
     if (actMax > limit) actMax = limit;
     plan.dMin = actMin;
     plan.dMax = actMax;
+    ledgerActMin = actMin;
+    ledgerActMax = actMax;
 
     bool const legacyPick = options.legacyPick;
 
@@ -2496,6 +2569,7 @@ SimPlan ShadowSimulator::plan(
                 int releaseAfter = cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
                 if (jitterOk(pick, releaseAfter)) return pick;
                 cands[static_cast<size_t>(pick)].viable = false;
+                cands[static_cast<size_t>(pick)].robustKFailed = true;
             }
         };
         if (actMax - actMin >= 2 * k) {
@@ -2521,6 +2595,7 @@ SimPlan ShadowSimulator::plan(
             }
             else {
                 cands[0].viable = false;
+                cands[0].robustKFailed = true;
                 std::vector<int> pool;
                 for (int d = 0; d <= limit; ++d) pool.push_back(d);
                 for (;;) {
@@ -2529,6 +2604,7 @@ SimPlan ShadowSimulator::plan(
                     int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
                     if (jitterOk(chosen, releaseAfter2)) break;
                     cands[static_cast<size_t>(chosen)].viable = false;
+                    cands[static_cast<size_t>(chosen)].robustKFailed = true;
                     chosen = -1;
                 }
                 applyChosenMeta(chosen);
@@ -2543,6 +2619,7 @@ SimPlan ShadowSimulator::plan(
                 int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
                 if (jitterOk(chosen, releaseAfter)) break;
                 cands[static_cast<size_t>(chosen)].viable = false;
+                cands[static_cast<size_t>(chosen)].robustKFailed = true;
                 chosen = -1;
             }
             applyChosenMeta(chosen);
@@ -2560,6 +2637,7 @@ SimPlan ShadowSimulator::plan(
             }
             else {
                 cands[0].viable = false;
+                cands[0].robustKFailed = true;
             }
         }
         if (!doPass) {
@@ -2571,6 +2649,7 @@ SimPlan ShadowSimulator::plan(
                 int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
                 if (jitterOk(chosen, releaseAfter)) break;
                 cands[static_cast<size_t>(chosen)].viable = false;
+                cands[static_cast<size_t>(chosen)].robustKFailed = true;
                 chosen = -1;
             }
             if (chosen == 0) {
@@ -2665,6 +2744,9 @@ SimPlan ShadowSimulator::plan(
                 useLegacy ? legacy : neu
             ));
             if (useLegacy) {
+                if (neu >= 0 && neu <= limit && neu != legacy) {
+                    cands[static_cast<size_t>(neu)].verifyFailed = true;
+                }
                 chosen = legacy;
                 doPass = (legacy == 0);
                 plan.requireOrb = false;
@@ -2677,6 +2759,9 @@ SimPlan ShadowSimulator::plan(
                 }
             }
             else {
+                if (legacy >= 0 && legacy <= limit && legacy != neu) {
+                    cands[static_cast<size_t>(legacy)].verifyFailed = true;
+                }
                 AssistLog::debug(fmt::format(
                     "VERIFY id={} keeping new={}", plan.planId, neu
                 ));
@@ -2770,6 +2855,10 @@ SimPlan ShadowSimulator::plan(
             "PLAN id={} Pass verdict={} limit={} budgetHit={} orbIntent={}",
             plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit, orbIntent
         ));
+        DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
+        if (plan.budgetHit) early = DevRejectLedger::EarlyExit::Budget;
+        else if (ledgerPreferEarlyExit) early = DevRejectLedger::EarlyExit::PreferBand;
+        publishLedger(0, true, early);
         return plan;
     }
 
@@ -2858,6 +2947,13 @@ SimPlan ShadowSimulator::plan(
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
     ));
+    {
+        DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
+        if (plan.budgetHit) early = DevRejectLedger::EarlyExit::Budget;
+        else if (ledgerPreferEarlyExit) early = DevRejectLedger::EarlyExit::PreferBand;
+        bool const pass = (plan.action == PlanAction::Pass);
+        publishLedger(pass ? 0 : plan.delay, pass, early);
+    }
     return plan;
 }
 

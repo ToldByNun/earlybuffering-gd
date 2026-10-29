@@ -42,6 +42,13 @@ public:
         PlayLayer* layer,
         PlayerObject* player
     );
+    // After learning/verify adjusts the armed delay relative to plan.delay.
+    void noteLearningOnPlan(
+        int plannedDelay,
+        int finalDelay,
+        bool floored,
+        bool verifyRefused
+    );
     void notePassThrough(AssistReason reason, char const* where);
     // Returns pressId of the armed cycle (0 if not recording).
     int64_t noteDelayArm(

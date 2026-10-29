@@ -2201,6 +2201,8 @@ bool AssistController::planPress(
 
     int delay = plan.delay;
     int const plannedDelay = plan.delay;
+    bool learningFloored = false;
+    bool learningNudged = false;
     if (StageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
@@ -2243,6 +2245,7 @@ bool AssistController::planPress(
                 delay, plannedDelay
             ));
             delay = plannedDelay;
+            learningFloored = true;
         }
         // Clamp bias into activation window when requireOrb
         if (plan.requireOrb && plan.dMin >= 0 && plan.dMax >= plan.dMin) {
@@ -2250,10 +2253,17 @@ bool AssistController::planPress(
             // Still never earlier than plan when plan was already in-window.
             if (plannedDelay >= plan.dMin && delay < plannedDelay) {
                 delay = plannedDelay;
+                learningFloored = true;
             }
         }
         delay = MissAssistContracts::clampDelayToWindow(delay, limit);
         if (delay < 1) delay = 1;
+        learningNudged = (delay != plannedDelay) && !learningFloored;
+        if (learningNudged || learningFloored) {
+            DevCycleRecorder::get().noteLearningOnPlan(
+                plannedDelay, delay, learningFloored, false
+            );
+        }
     }
 
     // Hard refuse: never arm a Delay the live verify cannot survive.
@@ -2272,6 +2282,9 @@ bool AssistController::planPress(
                 "ASSIST press verify-fail delay={} → Pass (refuse lethal assist)",
                 delay
             ));
+            DevCycleRecorder::get().noteLearningOnPlan(
+                plannedDelay, delay, false, true
+            );
             DevCycleRecorder::get().notePassThrough(
                 AssistReason::PassHopeless, "press-verify-fail"
             );

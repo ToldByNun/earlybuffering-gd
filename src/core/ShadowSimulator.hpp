@@ -7,6 +7,7 @@
 #include "../dev/DevClockContract.hpp"
 #include "../dev/DevEvalRestore.hpp"
 #include "../dev/DevLiveWitness.hpp"
+#include "../dev/DevRejectLedger.hpp"
 
 #include <Geode/Geode.hpp>
 #include <cstdint>
@@ -97,6 +98,9 @@ struct SimPlan {
     int smartDepthUsed = 1;
     int smartCombosUsed = 0;
     ThreatZone threatZone{};
+    // Commit 12: one note per delay 0..limit after plan/planSequence entry.
+    std::vector<DevRejectLedger::CandNote> candNotes;
+    bool candNotesTruncated = false;
 };
 
 struct InputEvent {

@@ -3,6 +3,7 @@
 
 #include "DevClockContract.hpp"
 #include "DevLiveWitness.hpp"
+#include "DevRejectLedger.hpp"
 #include "DevStateDiff.hpp"
 
 #include <cstdint>
@@ -66,6 +67,11 @@ struct DevDecisionEvent {
     bool approx = false;
     std::string evalSuppressedReason;
     std::vector<DevDiffEntry> diffs;
+
+    // Commit 12: reject ledger + attribution on planFinished (gate-pass: empty notes).
+    std::vector<DevRejectLedger::CandNote> candNotes;
+    bool candNotesTruncated = false;
+    std::vector<DevRejectLedger::AttributionNote> attribution;
 };
 
 struct DevAttempt {

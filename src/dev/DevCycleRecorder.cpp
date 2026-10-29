@@ -1,6 +1,7 @@
 #include "DevCycleRecorder.hpp"
 #include "DevConfig.hpp"
 #include "DevLiveWitness.hpp"
+#include "DevRejectLedger.hpp"
 #include "DevStateDiff.hpp"
 
 #include <Geode/Geode.hpp>
@@ -124,7 +125,13 @@ void DevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
     auto* w = this->appendTo(
         *cycle, DevEventKind::GatePass, cycle->lastEventId, 0, reason, where
     );
-    if (w) cycle->hasGate = true;
+    if (!w) return;
+    // Gate-pass: empty candNotes; attribution is the full reason.
+    DevRejectLedger::AttributionInput attrIn;
+    attrIn.gatePass = true;
+    attrIn.hasPlanFinished = false;
+    w->attribution = DevRejectLedger::buildAttribution(attrIn);
+    cycle->hasGate = true;
 }
 
 void DevCycleRecorder::notePlanFinished(
@@ -191,8 +198,94 @@ void DevCycleRecorder::notePlanFinished(
         }
     }
 
+    // Commit 12: full per-delay ledger from plan(); attribution filled later with eval.
+    w->candNotes = plan.candNotes;
+    w->candNotesTruncated = plan.candNotesTruncated;
+    {
+        DevRejectLedger::AttributionInput attrIn;
+        attrIn.hasPlanFinished = true;
+        attrIn.plannedDelay = plan.delay;
+        attrIn.notReproducible = w->hasFidelity
+            && w->fidelity == DevFidelity::NotReproducible;
+        attrIn.approx = w->hasFidelity && w->approx;
+        attrIn.claimsAllowed = w->hasFidelity && w->claimsAllowed;
+        DevRejectLedger::Ledger led;
+        led.notes = w->candNotes;
+        led.truncated = w->candNotesTruncated;
+        attrIn.ledger = &led;
+        w->attribution = DevRejectLedger::buildAttribution(attrIn);
+    }
+
     cycle->planId = plan.planId;
     cycle->hasPlan = true;
+}
+
+void DevCycleRecorder::noteLearningOnPlan(
+    int plannedDelay,
+    int finalDelay,
+    bool floored,
+    bool verifyRefused
+) {
+    auto* cycle = this->ensureActiveTracked();
+    if (!cycle || !this->canWriteActive()) return;
+    if (!cycle->hasPlan) return;
+
+    auto* attempt = DevTraceStore::get().currentAttempt();
+    if (!attempt) return;
+    DevDecisionEvent* planEv = nullptr;
+    for (auto& ev : attempt->events) {
+        if (ev.pressId == cycle->pressId
+            && ev.kind == DevEventKind::PlanFinished) {
+            planEv = &ev;
+        }
+    }
+    if (!planEv) return;
+
+    bool const nudged = finalDelay != plannedDelay && !floored && !verifyRefused;
+    if (nudged || floored || verifyRefused) {
+        DevRejectLedger::AttributionInput attrIn;
+        attrIn.hasPlanFinished = true;
+        attrIn.plannedDelay = plannedDelay;
+        attrIn.learningNudged = nudged;
+        attrIn.learningFloored = floored;
+        attrIn.verifyRefused = verifyRefused;
+        attrIn.notReproducible = planEv->hasFidelity
+            && planEv->fidelity == DevFidelity::NotReproducible;
+        attrIn.approx = planEv->hasFidelity && planEv->approx;
+        attrIn.claimsAllowed = planEv->hasFidelity && planEv->claimsAllowed;
+        DevRejectLedger::Ledger led;
+        led.notes = planEv->candNotes;
+        led.truncated = planEv->candNotesTruncated;
+        attrIn.ledger = &led;
+        auto extra = DevRejectLedger::buildAttribution(attrIn);
+        // Merge without duplicating codes already present.
+        for (auto& a : extra) {
+            bool dup = false;
+            for (auto const& existing : planEv->attribution) {
+                if (existing.code == a.code) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) planEv->attribution.push_back(std::move(a));
+        }
+        if (nudged && finalDelay >= 0
+            && finalDelay < static_cast<int>(planEv->candNotes.size())) {
+            // Planner chosen stays; mark the final delay as learning-displaced
+            // only when it was evaluated and not the planner pick.
+            auto& note = planEv->candNotes[static_cast<size_t>(finalDelay)];
+            if (note.status != DevRejectLedger::Status::Chosen
+                && note.rejectCode != DevRejectLedger::RejectCode::LearningDisplaced) {
+                if (note.status == DevRejectLedger::Status::Evaluated
+                    || note.status == DevRejectLedger::Status::Rejected) {
+                    note.rejectCode = DevRejectLedger::RejectCode::LearningDisplaced;
+                    note.detail = DevRejectLedger::clampDetail(fmt::format(
+                        "learn {}→{}", plannedDelay, finalDelay
+                    ));
+                }
+            }
+        }
+    }
 }
 
 void DevCycleRecorder::notePassThrough(AssistReason reason, char const* where) {
