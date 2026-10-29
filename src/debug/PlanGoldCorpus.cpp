@@ -49,6 +49,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(TravelForesight::selfCheck(foresightReport), "travel-foresight");
     std::string probeReport;
     expect(OpportunityProbe::selfCheck(probeReport), "opportunity-probe");
+    std::string husReport;
+    expect(AssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";

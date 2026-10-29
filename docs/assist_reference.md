@@ -143,7 +143,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 5. eval delays under tick + sim-budget-us
 6. orbIntent: earliest +/-k robust activation (NO midpoint); optional firstDt ±3% jitter on top cand
 7. else d0 clearsThreat -> Pass; else earliest +/-k robust viable
-8. budgetHit -> Pass; linked dual both clear
+8. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
 
 Lexico: orbUseful > surviveBin > endX−λ·delay > earliest. Bins 24/48/96. k from `robust-k` or auto (mode/speed/dtVariance). λ = ModeParams.latencyWeight.
 
@@ -280,8 +280,9 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else earliest ±k-robust viable in window (not full pool best). Orb activation band still applies. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
+| Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity → arm buffer (`holdUntilSafe`), replan each tick ≤`limit`. Delay confirm updates `fireTick`; opportunity clear + safe → inject now (never drop the click); deadline → fire. Overlay `HUS` + `HOLD~`. |
 
-Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::selfCheck` (via PlanGold).
+Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold).
 
 ### TravelForesight
 
@@ -295,7 +296,8 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 
 | Scene | Expect (New) | Expect (Legacy) | Notes |
 |-------|--------------|-----------------|-------|
-| Cube orb, limit 16, press ~10 ticks early | Delay/HOLD, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` or `PASS d0-safe` |
+| Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
+| Budget starve mid-search + foresight orb | `HUS` → replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass while opportunity open |
 | Cube spike jump early, d0 would die | Delay until landable ≤limit | Same (earliest viable) | |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | |

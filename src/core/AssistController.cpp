@@ -518,6 +518,239 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
     return false;
 }
 
+bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
+    if (plan.action == PlanAction::Delay) return false;
+    if (plan.reason == AssistReason::PassBudget) return true;
+    bool const opp = plan.foresightOrbPad || plan.usedOrbWindow;
+    if (plan.budgetHit && opp) return true;
+    if (plan.unknown && opp) return true;
+    return false;
+}
+
+int AssistController::holdUntilSafeEtaTicks(SimPlan const& plan, int limit) {
+    if (limit <= 0) return 0;
+    int eta = 0;
+    if (plan.dMin > 0) {
+        eta = plan.dMin;
+    }
+    else if (plan.delay > 0) {
+        eta = plan.delay;
+    }
+    else {
+        eta = std::max(1, limit / 2);
+    }
+    eta = MissAssistContracts::clampDelayToWindow(eta, limit);
+    if (eta < 1) eta = 1;
+    return eta;
+}
+
+bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    SimPlan budgetPass;
+    budgetPass.action = PlanAction::Pass;
+    budgetPass.reason = AssistReason::PassBudget;
+    expect(shouldArmHoldUntilSafe(budgetPass), "arm-budget");
+
+    SimPlan delayOk;
+    delayOk.action = PlanAction::Delay;
+    delayOk.delay = 4;
+    delayOk.reason = AssistReason::DelayThreat;
+    expect(!shouldArmHoldUntilSafe(delayOk), "no-arm-delay");
+
+    SimPlan noThreat;
+    noThreat.action = PlanAction::Pass;
+    noThreat.reason = AssistReason::PassNoThreat;
+    expect(!shouldArmHoldUntilSafe(noThreat), "no-arm-no-threat");
+
+    SimPlan foresightBudget;
+    foresightBudget.action = PlanAction::Pass;
+    foresightBudget.reason = AssistReason::PassHopeless;
+    foresightBudget.budgetHit = true;
+    foresightBudget.foresightOrbPad = true;
+    expect(shouldArmHoldUntilSafe(foresightBudget), "arm-foresight-budget");
+
+    SimPlan unknownOrb;
+    unknownOrb.action = PlanAction::Pass;
+    unknownOrb.reason = AssistReason::PassD0Safe;
+    unknownOrb.unknown = true;
+    unknownOrb.usedOrbWindow = true;
+    expect(shouldArmHoldUntilSafe(unknownOrb), "arm-unknown-orb");
+
+    SimPlan etaPlan;
+    etaPlan.dMin = 6;
+    expect(holdUntilSafeEtaTicks(etaPlan, 4) == 4, "eta-clamp-6-to-4");
+    expect(holdUntilSafeEtaTicks(etaPlan, 16) == 6, "eta-dmin-6");
+    SimPlan midPlan;
+    expect(holdUntilSafeEtaTicks(midPlan, 16) == 8, "eta-mid-16");
+    expect(holdUntilSafeEtaTicks(midPlan, 0) == 0, "eta-limit0");
+
+    if (fails == 0) {
+        report = "holdUntilSafeSelfCheck OK";
+        return true;
+    }
+    report = fmt::format("holdUntilSafeSelfCheck {} fails: {}", fails, report);
+    return false;
+}
+
+bool AssistController::armHoldUntilSafe(
+    PlayLayer* playLayer,
+    PlayerObject* player,
+    bool player1,
+    int effectTick,
+    int limit,
+    SimPlan const& plan
+) {
+    (void)playLayer;
+    if (!player || limit <= 0) return true; // fall through vanilla
+
+    int const eta = holdUntilSafeEtaTicks(plan, limit);
+    this->m_buffer = {};
+    this->m_buffer.state = BufferState::Buffered;
+    this->m_buffer.down = true;
+    this->m_buffer.player1 = player1;
+    this->m_buffer.pressTick = effectTick;
+    this->m_buffer.limit = limit;
+    this->m_buffer.planDelay = eta;
+    this->m_buffer.fireTick = effectTick + eta;
+    this->m_buffer.expectedJumpTick = this->m_buffer.fireTick;
+    this->m_buffer.continuous = plan.continuous;
+    this->m_buffer.decisionX = player->getPositionX();
+    this->m_buffer.mode = StageConfig::kindOf(player);
+    this->m_buffer.requireOrb = plan.requireOrb || plan.foresightOrbPad || plan.usedOrbWindow;
+    this->m_buffer.requireHold = plan.requireHold;
+    this->m_buffer.dMin = plan.dMin;
+    this->m_buffer.dMax = plan.dMax;
+    this->m_buffer.planId = plan.planId;
+    this->m_buffer.holdUntilSafe = true;
+    this->m_buffer.fireTick = std::min(
+        this->m_buffer.fireTick, effectTick + limit
+    );
+
+    this->m_outcomePlanDelay = eta > 0;
+    this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
+    this->noteVerdict(AssistReason::HoldPending, "hus-arm");
+    AssistLog::debug(fmt::format(
+        "HOLD-UNTIL-SAFE arm eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
+        eta, limit,
+        plan.foresightOrbPad ? 1 : 0,
+        plan.usedOrbWindow ? 1 : 0,
+        plan.budgetHit ? 1 : 0,
+        plan.planId
+    ));
+    this->recordDecision(playLayer, player, true, plan, effectTick, eta, limit);
+    this->updateOverlay();
+    return false; // swallow
+}
+
+void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player) {
+    if (!playLayer || !player) return;
+    if (this->m_buffer.state != BufferState::Buffered) return;
+    if (!this->m_buffer.holdUntilSafe) return;
+    if (this->m_simDt <= 0.f) return;
+
+    int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
+    int const remaining = deadline - this->m_attemptTick;
+
+    // Never wait past the window — fire at deadline.
+    if (remaining <= 0 || this->m_attemptTick >= deadline) {
+        AssistLog::debug(fmt::format(
+            "HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={})",
+            this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit
+        ));
+        this->m_buffer.holdUntilSafe = false;
+        this->m_buffer.fireTick = this->m_attemptTick;
+        this->fireBuffered(playLayer, player, false);
+        return;
+    }
+
+    int const remLimit = std::max(1, remaining);
+    PlanOptions opts;
+    opts.budgetUs = std::max(200, StageConfig::simBudgetUs() / 2);
+    opts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
+    opts.capMul = StageConfig::autoTune()
+        ? LevelProfile::get().capMul(this->m_buffer.mode)
+        : 1.f;
+    opts.maxBranches = 2;
+    opts.smartDepth = 1;
+    opts.legacyPick = StageConfig::assistPickLegacy();
+    opts.attemptStartTick = this->m_attemptTick;
+    fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
+
+    auto re = ShadowSimulator::get().plan(
+        playLayer, player, true, remLimit, this->m_simDt, this->m_simDt, opts
+    );
+
+    if (re.action == PlanAction::Delay && re.delay > 0) {
+        int delay = MissAssistContracts::clampDelayToWindow(re.delay, remLimit);
+        if (delay < 1) delay = 1;
+        int const jumpRel = re.jumpTick > 0 ? re.jumpTick : delay;
+        int proposed = resolveFireTick(
+            this->m_attemptTick, delay, jumpRel, re.requireOrb || this->m_buffer.requireOrb
+        );
+        proposed = std::min(proposed, deadline);
+        if (proposed < this->m_attemptTick) proposed = this->m_attemptTick;
+
+        // Prefer not sliding earlier than current tentative fire unless orb window.
+        if (!re.requireOrb && !this->m_buffer.requireOrb
+            && proposed < this->m_buffer.fireTick
+            && this->m_buffer.fireTick <= deadline) {
+            proposed = this->m_buffer.fireTick;
+        }
+
+        this->m_buffer.fireTick = proposed;
+        this->m_buffer.planDelay = MissAssistContracts::clampDelayToWindow(
+            this->m_attemptTick - this->m_buffer.pressTick + delay,
+            this->m_buffer.limit
+        );
+        this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
+        this->m_buffer.requireOrb = this->m_buffer.requireOrb || re.requireOrb;
+        this->m_buffer.requireHold = re.requireHold;
+        if (re.dMin >= 0) this->m_buffer.dMin = re.dMin;
+        if (re.dMax >= 0) this->m_buffer.dMax = re.dMax;
+        this->m_buffer.holdUntilSafe = false; // hard Delay confirmed
+        AssistReason delayReason = re.reason;
+        if (!AssistVerdict::isDelay(delayReason)) {
+            delayReason = AssistVerdict::inferDelayReason(
+                re.activatedRing, re.requireOrb, false
+            );
+        }
+        this->noteVerdict(delayReason, "hus-confirm");
+        AssistLog::debug(fmt::format(
+            "HOLD-UNTIL-SAFE confirm Delay +{} fire={} deadline={}",
+            delay, this->m_buffer.fireTick, deadline
+        ));
+        return;
+    }
+
+    // Opportunity gone and now looks safe → inject now (never drop the click).
+    bool const clearOpp = !re.foresightOrbPad && !re.usedOrbWindow && !re.budgetHit;
+    bool const safeNow = re.reason == AssistReason::PassNoThreat
+        || re.reason == AssistReason::PassD0Safe
+        || (re.action == PlanAction::Pass && re.nowIsSafe && clearOpp);
+    if (safeNow) {
+        AssistLog::debug(fmt::format(
+            "HOLD-UNTIL-SAFE flush Pass now @{} reason={}",
+            this->m_attemptTick, AssistVerdict::name(re.reason)
+        ));
+        this->m_buffer.holdUntilSafe = false;
+        this->m_buffer.fireTick = this->m_attemptTick;
+        this->fireBuffered(playLayer, player, false);
+        return;
+    }
+
+    // Still uncertain — park fire at deadline (window cap).
+    this->m_buffer.fireTick = deadline;
+    this->noteVerdict(AssistReason::HoldPending, "hus-wait");
+}
+
 int AssistController::estimateRobustK(PlayerObject* player, float dtVariance) {
     int forced = StageConfig::robustK();
     if (forced > 0) return std::clamp(forced, 1, 3);
@@ -665,7 +898,10 @@ void AssistController::updateOverlay() {
     }
     auto const stage = StageConfig::fromSettings();
     char const* state = "idle";
-    if (m_buffer.state == BufferState::Buffered) state = m_buffer.down ? "buffer press" : "buffer release";
+    if (m_buffer.state == BufferState::Buffered) {
+        if (m_buffer.holdUntilSafe) state = "HUS";
+        else state = m_buffer.down ? "buffer press" : "buffer release";
+    }
     else if (m_buffer.state == BufferState::FiredHolding) state = "hold";
 
     if (!stage.enabled) {
@@ -1378,16 +1614,22 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     }
 
     if (this->m_buffer.state == BufferState::Buffered) {
-        bool const due = shouldFireBuffered(
-            this->m_attemptTick,
-            this->m_buffer.fireTick,
-            this->m_buffer.pressTick,
-            this->m_buffer.planDelay,
-            this->m_buffer.limit
-        );
-        if (due) {
-            PerfTrace::Scope const scope("fireBuffered");
-            this->fireBuffered(playLayer, player);
+        if (this->m_buffer.holdUntilSafe) {
+            PerfTrace::Scope const scope("tickHoldUntilSafe");
+            this->tickHoldUntilSafe(playLayer, player);
+        }
+        if (this->m_buffer.state == BufferState::Buffered) {
+            bool const due = shouldFireBuffered(
+                this->m_attemptTick,
+                this->m_buffer.fireTick,
+                this->m_buffer.pressTick,
+                this->m_buffer.planDelay,
+                this->m_buffer.limit
+            );
+            if (due) {
+                PerfTrace::Scope const scope("fireBuffered");
+                this->fireBuffered(playLayer, player);
+            }
         }
     }
     else if (this->m_buffer.state != BufferState::Idle) {
@@ -1670,6 +1912,11 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     this->beginOutcome(plan, effectTick);
 
     if (plan.action != PlanAction::Delay) {
+        if (shouldArmHoldUntilSafe(plan)) {
+            return this->armHoldUntilSafe(
+                playLayer, player, player1, effectTick, limit, plan
+            );
+        }
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;

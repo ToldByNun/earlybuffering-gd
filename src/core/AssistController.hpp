@@ -47,6 +47,9 @@ struct BufferedInput {
     int planId = 0;
     bool awaitingOutcome = false;
     int outcomeUntilTick = 0;
+    // Soft hold: foresight/opportunity but no hard Delay yet — replan until
+    // Delay confirms, opportunity clears, or pressTick+limit deadline.
+    bool holdUntilSafe = false;
 };
 
 class AssistController {
@@ -115,6 +118,12 @@ public:
     );
     static bool fireTickSelfCheck(std::string& report);
 
+    // Soft Hold-Until-Safe (press): arm when PassBudget / budget+foresight /
+    // unknown+foresight — never past limit. Pure helpers for PlanGold.
+    static bool shouldArmHoldUntilSafe(SimPlan const& plan);
+    static int holdUntilSafeEtaTicks(SimPlan const& plan, int limit);
+    static bool holdUntilSafeSelfCheck(std::string& report);
+
     // Recheck slide: at most +kRecheckMaxSlide later than oldFire (non-orb).
     // Never past absMax - robustK. Returns accepted fire tick, or -1 = reject.
     static constexpr int kRecheckMaxSlide = 2;
@@ -157,6 +166,17 @@ private:
     void pollOutcome(PlayLayer* playLayer);
     void logPlan(SimPlan const& plan, char const* kind);
     void noteVerdict(AssistReason reason, char const* where);
+    // Arm soft hold buffer (swallows press). Returns false for onHandleButton.
+    bool armHoldUntilSafe(
+        PlayLayer* playLayer,
+        PlayerObject* player,
+        bool player1,
+        int effectTick,
+        int limit,
+        SimPlan const& plan
+    );
+    // Per-tick replan while holdUntilSafe buffer is armed.
+    void tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player);
 
     void recordDecision(
         PlayLayer* playLayer, PlayerObject* player, bool down,
