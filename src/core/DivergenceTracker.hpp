@@ -10,6 +10,7 @@ public:
     bool simUntrusted() const { return m_untrusted; }
     void clear();
     std::string overlayBit() const;
+    static bool selfCheck(std::string& report);
 private:
     static constexpr int N = 48;
     bool m_bad[N]{};

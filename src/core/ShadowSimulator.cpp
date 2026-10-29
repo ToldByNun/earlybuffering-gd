@@ -1540,10 +1540,22 @@ static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const
     return r.deathX > zone.endX;
 }
 
-static bool betterCand(Cand const& a, Cand const& b, float latencyWeight) {
+// preferLater: miss-assist New — when survival is tied, wait more (early press)
+// instead of λ/earliest which fired too soon and still died.
+static bool betterCand(
+    Cand const& a, Cand const& b, float latencyWeight, bool preferLater
+) {
     if (a.viable != b.viable) return a.viable && !b.viable;
     if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
     if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
+    if (a.surviveTicks != b.surviveTicks) return a.surviveTicks > b.surviveTicks;
+    if (preferLater) {
+        // Meaningful endX lead still wins; else later delay (more hold).
+        float const dx = a.endX - b.endX;
+        if (dx > 8.f) return true;
+        if (dx < -8.f) return false;
+        return a.delay > b.delay;
+    }
     float const scoreA = a.endX - latencyWeight * static_cast<float>(a.delay);
     float const scoreB = b.endX - latencyWeight * static_cast<float>(b.delay);
     if (scoreA != scoreB) return scoreA > scoreB;
@@ -2150,7 +2162,7 @@ SimPlan ShadowSimulator::plan(
         c.orbUseful = true;
     }
 
-    auto pickRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
+    auto pickRobust = [&](std::vector<int> const& pool, bool needActivation, bool preferLater) -> int {
         if (pool.empty()) return -1;
         int const k = robustK;
         int best = -1;
@@ -2175,7 +2187,7 @@ SimPlan ShadowSimulator::plan(
                 }
             }
             if (!ok) continue;
-            if (!have || betterCand(c, bestC, latencyWeight)) {
+            if (!have || betterCand(c, bestC, latencyWeight, preferLater)) {
                 best = d;
                 bestC = c;
                 have = true;
@@ -2187,7 +2199,7 @@ SimPlan ShadowSimulator::plan(
                 auto const& c = cands[static_cast<size_t>(d)];
                 if (!c.viable) continue;
                 if (needActivation && !c.activatedRing) continue;
-                if (!have || betterCand(c, bestC, latencyWeight)) {
+                if (!have || betterCand(c, bestC, latencyWeight, preferLater)) {
                     best = d;
                     bestC = c;
                     have = true;
@@ -2232,7 +2244,7 @@ SimPlan ShadowSimulator::plan(
 
     bool const legacyPick = options.legacyPick;
 
-    // Legacy non-orb: earliest ±k-robust (then earliest viable) — not full lexico.
+    // Legacy orb: earliest ±k-robust activation (first hit in band).
     auto pickEarliestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         if (pool.empty()) return -1;
         int const k = robustK;
@@ -2269,6 +2281,45 @@ SimPlan ShadowSimulator::plan(
         return -1;
     };
 
+    // Legacy/non-orb miss-assist: latest ±k-robust (then latest viable).
+    // Earliest-viable jumped too soon after a short delay and still died.
+    auto pickLatestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
+        if (pool.empty()) return -1;
+        int const k = robustK;
+        int best = -1;
+        for (int d : pool) {
+            if (d < 0 || d > limit) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable) continue;
+            if (needActivation && !c.activatedRing) continue;
+            bool ok = true;
+            for (int e = d - k; e <= d + k; ++e) {
+                if (e < 0 || e > limit) continue;
+                auto const& n = cands[static_cast<size_t>(e)];
+                if (!n.viable) {
+                    ok = false;
+                    break;
+                }
+                if (needActivation && !n.activatedRing) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
+            if (best < 0 || d > best) best = d;
+        }
+        if (best >= 0) return best;
+        for (int i = static_cast<int>(pool.size()) - 1; i >= 0; --i) {
+            int const d = pool[static_cast<size_t>(i)];
+            if (d < 0 || d > limit) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable) continue;
+            if (needActivation && !c.activatedRing) continue;
+            return d;
+        }
+        return -1;
+    };
+
     auto applyChosenMeta = [&](int pick) {
         if (pick < 0 || pick > limit) return;
         auto const& c = cands[static_cast<size_t>(pick)];
@@ -2288,10 +2339,10 @@ SimPlan ShadowSimulator::plan(
         int const k = robustK;
         auto tryPick = [&](std::vector<int> const& p) -> int {
             for (;;) {
-                // Orb window: Legacy earliest-first; New full lexico in band.
+                // Orb window: Legacy earliest-first; New preferLater lexico in band.
                 int pick = legacyPick
                     ? pickEarliestRobust(p, true)
-                    : pickRobust(p, true);
+                    : pickRobust(p, true, true);
                 if (pick < 0) return -1;
                 int releaseAfter = cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
                 if (jitterOk(pick, releaseAfter)) return pick;
@@ -2310,7 +2361,7 @@ SimPlan ShadowSimulator::plan(
         }
     }
     else if (legacyPick) {
-        // Legacy: d0 viable → Pass (no pool compare). Else earliest viable in window.
+        // Legacy: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
         if (cands[0].viable) {
             int releaseAfter = cands[0].requireHold ? 40 : -1;
             if (jitterOk(0, releaseAfter)) {
@@ -2324,7 +2375,7 @@ SimPlan ShadowSimulator::plan(
                 std::vector<int> pool;
                 for (int d = 0; d <= limit; ++d) pool.push_back(d);
                 for (;;) {
-                    chosen = pickEarliestRobust(pool, false);
+                    chosen = pickLatestRobust(pool, false);
                     if (chosen < 0) break;
                     int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
                     if (jitterOk(chosen, releaseAfter2)) break;
@@ -2338,7 +2389,7 @@ SimPlan ShadowSimulator::plan(
             std::vector<int> pool;
             for (int d = 0; d <= limit; ++d) pool.push_back(d);
             for (;;) {
-                chosen = pickEarliestRobust(pool, false);
+                chosen = pickLatestRobust(pool, false);
                 if (chosen < 0) break;
                 int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
                 if (jitterOk(chosen, releaseAfter)) break;
@@ -2349,11 +2400,11 @@ SimPlan ShadowSimulator::plan(
         }
     }
     else {
-        // New (G1): full pool prefer-delay — no d0-viable auto Pass.
+        // New (G1): full pool, preferLater when survival tied — no d0 auto Pass.
         std::vector<int> pool;
         for (int d = 0; d <= limit; ++d) pool.push_back(d);
         for (;;) {
-            chosen = pickRobust(pool, false);
+            chosen = pickRobust(pool, false, true);
             if (chosen < 0) break;
             int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
             if (jitterOk(chosen, releaseAfter)) break;

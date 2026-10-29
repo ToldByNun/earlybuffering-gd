@@ -6,6 +6,7 @@
 #include "../core/MissAssistContracts.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
+#include "../core/DivergenceTracker.hpp"
 #include "../core/ClickIntentGuard.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
@@ -51,6 +52,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(OpportunityProbe::selfCheck(probeReport), "opportunity-probe");
     std::string husReport;
     expect(AssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe");
+    std::string divReport;
+    expect(DivergenceTracker::selfCheck(divReport), "divergence-clear");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";

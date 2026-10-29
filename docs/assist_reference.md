@@ -141,25 +141,25 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). Runs **after** foresight/orb checks.
 4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, all surviveBin ≤0 and best endX gain &lt; 8 → Pass
 5. eval delays under tick + sim-budget-us
-6. orbIntent: earliest +/-k robust activation (NO midpoint); optional firstDt ±3% jitter on top cand
-7. else d0 clearsThreat -> Pass; else earliest +/-k robust viable
+6. orbIntent: Legacy earliest ±k act; New preferLater in band; optional firstDt ±3% jitter
+7. else d0 clearsThreat -> Pass; else New preferLater / Legacy latest ±k-robust (orb: earliest act)
 8. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
 
-Lexico: orbUseful > surviveBin > endX−λ·delay > earliest. Bins 24/48/96. k from `robust-k` or auto (mode/speed/dtVariance). λ = ModeParams.latencyWeight.
+Lexico (New): orbUseful > surviveBin > surviveTicks > endX(±8) > **later** delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2
 
 `ClickIntentGuard` ring of recent Jump presses per player (P1/P2 independent).
 
-Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean ≤ mode max, low σ, no mid-spam pause) **or** **very dense** (need+2). First 1–2 clicks and pause-then-resume → assist allowed.
+Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean ≤ mode max, low σ, no mid-spam pause) **or** **very dense** (need+2). **Never Pass** for empty ring, a solitary click, or when max gap ≫ local mean (absolute pause vs mode threshold **or** relative outlier). First 1–2 clicks and pause-then-resume → assist allowed.
 
-**Do not Pass** (allow assist) when spatial orb/pad ahead **or** a BakeMap window is nearby. Portal/teleport corridor spam looks rhythmic → Pass unless orb/pad.
+**Do not Pass** (allow assist) when spatial orb/pad ahead **or** a BakeMap window is nearby. Portal/teleport corridor spam looks rhythmic → Pass unless orb/pad. Gate Pass sets overlay `PASS spam` / `VERDICT pass-spam`.
 
 Continuous modes also Pass release assist during spam. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
 ## Divergence / UNTRUST
 
-`DivergenceTracker` ring (48): bad if delayed assist died, or orb expected but missed (death or delayed-for-orb). Warn ≥35%/n≥8; UNTRUST ≥45%/n≥12. `pollOutcome` uses real `planDelay`; `onRealDeath` notes pending outcomes. Live/Hybrid-live: `simUntrusted` → force Pass + overlay `UNTRUST pass` (no explore). `shouldWarn` soft: `capMul *= 0.85`. Clear on attempt reset only.
+`DivergenceTracker` ring (48): bad if delayed assist died, or orb expected but missed (death or delayed-for-orb). Warn ≥35%/n≥8; UNTRUST ≥45%/n≥12. `pollOutcome` uses real `planDelay`; `onRealDeath` notes pending outcomes. Live/Hybrid-live: `simUntrusted` → hard Pass + overlay `UNTRUST pass` / `PASS untrust` **unless** TravelForesight orb/pad ahead — then soft (allow Delay / Soft Hold). Low-trust spot Pass uses the same orb override. `shouldWarn` soft: `capMul *= 0.85`. `clear()` on attempt reset (and PlanGold `DivergenceTracker::selfCheck`).
 
 ## effectTick attribution
 
@@ -195,8 +195,9 @@ When arming a Delay press, `planDelay = plan.delay` and `expectedJumpTick = effe
 - Non-orb and `jumpTick > delay` → `fireTick = effectTick + jumpTick` (inject when the jump matters, not one frame early).
 - Orb / `jumpTick <= delay` → `fireTick = effectTick + delay` (activation window wins; hold covers lag).
 - Always clamp to `pressTick + limit`.
+- **`dMin`/`dMax` clamp only when `requireOrb`** — incidental activation bands from other cands must not collapse a threat Delay (Legacy and New). Otherwise `planDelay=+4` while `fireTick` snapped to an early orb cand → jump almost now.
 
-`shouldFireBuffered`: fire when `attemptTick >= fireTick`, or on the last tick of the window if `planDelay` is already met (late-fire guard). SaveFeedback `+N` uses actual `attemptTick - pressTick` at inject, not `planDelay`.
+`shouldFireBuffered`: fire when `attemptTick >= fireTick`, or on the last tick of the window if `planDelay` is already met (late-fire guard). SaveFeedback `+N` is **physics ticks** held back (`attemptTick - pressTick` at inject), not 60fps display frames (~4 ticks ≈ 1 frame @240tps).
 
 Helpers: `AssistController::resolveFireTick` / `shouldFireBuffered` / `fireTickSelfCheck`.
 
@@ -207,7 +208,7 @@ Before inject, live recheck may slide `fireTick`. Rules (`acceptRecheckSlide`):
 - Plan must be Delay, `delay > 0`, `!budgetHit`, and (`threatCleared` or orb).
 - Cap late slides to `oldFire + 2` (non-orb); orb may wait for `dMin`.
 - Never past `absMax - robustK` (collapsed margin falls back to `absMax`).
-- Clamp to `pressTick + limit`. Early slides (earlier fire) allowed.
+- Clamp to `pressTick + limit`. **Non-orb: reject early slides** (must not undo the planned wait).
 - Log `recheck: oldFire→newFire` via AssistLog + PerfTrace.
 - CPS / mode-change force-fire: `allowRecheck=false` (inject immediately).
 
@@ -233,7 +234,7 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 `robust-k` 0 → auto (`ShadowSimulator::autoRobustK`): Wave/Ship/Swing start at 2; speed >1.1 → ≥2, >1.5 → 3; relative dt EMA >0.08 bumps +1 (cap 3). **Wave + spam-dense** (ClickIntentGuard density, even when orb forces assist): keep ≥2; if speed >1.05 → **3**. Fixed 1–3 overrides auto. `robust-jitter`: after pick, re-run with firstDt×0.97/1.03; fail → mark non-viable and re-pick.
 
-`ModeParams.latencyWeight` (defaults Cube 0.25 … Wave 1.0) enters `betterCand` as `endX − λ·delay`. On Wave spam-dense assists only, λ is scaled ×0.65 so earliest-bias does not phase-shift corridors.
+`ModeParams.latencyWeight` still softens Wave spam-dense assists (λ ×0.65). New miss-assist pick uses **preferLater** (surviveTicks / endX±8 / later delay) instead of earliest-λ bias.
 
 **ticks-wave default stays 2** (Tight feel, not autoplay). With auto k=2..3, full ±k neighbors often do not fit in a 2-tick window — `pickRobust` falls back to earliest viable. Use Normal/Wide/Max (wave 4/8/8) when you want real ±k margin in spam. Max uses ticks-all=16 but ticks-wave=8 on purpose (wave windows stay shorter than cube).
 
@@ -276,8 +277,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Prefer (New) | Setting `assist-pick` = **New** (default): choose best viable delay in `0..limit` (full pool lexico). Pass only if best is `0` or hopeless. |
-| G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else earliest ±k-robust viable in window (not full pool best). Orb activation band still applies. |
+| G1 Prefer (New) | Setting `assist-pick` = **New** (default): best viable in `0..limit` with **preferLater** when survival ties (miss-assist waits more). Pass only if best is `0` or hopeless. |
+| G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity → arm buffer (`holdUntilSafe`), replan each tick ≤`limit`. Delay confirm updates `fireTick`; opportunity clear + safe → inject now (never drop the click); deadline → fire. Overlay `HUS` + `HOLD~`. |
@@ -298,10 +299,13 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 |-------|--------------|-----------------|-------|
 | Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
 | Budget starve mid-search + foresight orb | `HUS` → replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass while opportunity open |
-| Cube spike jump early, d0 would die | Delay until landable ≤limit | Same (earliest viable) | |
+| Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
-| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | |
+| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` |
 | Wave + orb in travel cone | Delay/Hold, not spam Pass | Orb path may still Delay | |
+| Single early click, empty ring | Reach plan (not spam Pass) | Same | |
+| UNTRUST + orb foresight | Soft: Delay/HUS allowed | Same | Hard UNTRUST Pass only without orb |
+| Low-trust spot + orb foresight | Soft: plan allowed | Same | Orb overrides trust Pass |
 | Dash orb | `requireHold`, no abort while held | Same | |
 | Ideal d=6, limit=4, d=4 survives | Delay ≤4 | Delay ≤4 if d0 unsafe; Pass if d0 safe | Never fire at 6 |
 | “10 frames” early @60fps into ticks=16 | Usually Pass (outside window) | Same | Remap frames→ticks before blaming assist |

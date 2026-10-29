@@ -114,9 +114,14 @@ bool ClickIntentGuard::evaluateSpam(
     float const stddev = std::sqrt(var);
 
     float const maxMean = spamMaxMeanGap(mode);
-    // Pause mid-spam: a gap much larger than the rhythmic mean → not Pass.
+    // Pause mid-spam: a gap much larger than the mode threshold → not Pass.
     // Portal/teleport corridor spam still looks regular (short gaps).
     if (maxGap > static_cast<int>(maxMean * 2.5f) + 2) {
+        return false;
+    }
+    // Relative outlier: gap ≫ local mean → solitary resume / burst+pause, never Pass
+    // (including veryDense trains that ended with a long idle).
+    if (mean > 0.5f && static_cast<float>(maxGap) > mean * 2.0f + 1.f) {
         return false;
     }
 
@@ -180,6 +185,11 @@ bool ClickIntentGuard::selfCheck(std::string& report) {
         int const t[] = { 100, 103, 106, 126 };
         expect(!evaluateSpam(t, 4, 126, GameModeKind::Wave), "pause-mid");
     }
+    // Gaps ≫ mean inside window (dense train then idle) → never Pass, even if veryDense
+    {
+        int const t[] = { 112, 113, 114, 115, 116, 121 };
+        expect(!evaluateSpam(t, 6, 121, GameModeKind::Wave), "gap-vs-mean");
+    }
     // Very dense irregular-ish but count high → Pass
     {
         int const t[] = { 100, 101, 102, 103, 104 };
@@ -196,6 +206,16 @@ bool ClickIntentGuard::selfCheck(std::string& report) {
     {
         int const t[] = { 50, 100, 103, 106 };
         expect(evaluateSpam(t, 4, 106, GameModeKind::Wave), "old-ignored");
+    }
+
+    // Empty ring / solitary press → never Pass (early miss-assist must reach plan)
+    {
+        auto& g = get();
+        g.reset();
+        expect(!g.shouldPassThrough(0, 50, GameModeKind::Wave), "empty-ring");
+        g.notePress(0, 50, GameModeKind::Cube);
+        expect(!g.shouldPassThrough(0, 50, GameModeKind::Cube), "one-in-ring");
+        g.reset();
     }
 
     // Context overload: orb / bake force assist-allowed

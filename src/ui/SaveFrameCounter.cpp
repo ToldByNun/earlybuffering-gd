@@ -145,10 +145,10 @@ void SaveFrameCounter::addOutlinedLabel(
 CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
     int const bucket = bucketFrames(delayTicks);
     auto const rgb = colorForBucket(bucket);
-    // 1..7 → "+N"; 8 or more → "8+" (same purple bucket / 8-tick cue).
+    // 1..7 → "+Nt"; 8 or more → "8+t" (physics ticks, not 60fps frames).
     std::string const text = (delayTicks >= 8)
-        ? std::string("8+")
-        : fmt::format("+{}", std::max(delayTicks, 1));
+        ? std::string("8+t")
+        : fmt::format("+{}t", std::max(delayTicks, 1));
 
     auto* marker = CCNode::create();
     if (!marker) return nullptr;

@@ -3,7 +3,7 @@
 
 #include <Geode/Geode.hpp>
 
-// World-space +N frames-saved markers at assisted click positions.
+// World-space +N markers at assisted click positions (N = physics ticks held).
 // Markers persist until clear() (death / attempt reset) or detach() (level quit).
 class SaveFrameCounter {
 public:
@@ -15,7 +15,7 @@ public:
     void detach(bool layerDying);
     void clear();
 
-    // delayTicks = frames held back. Color/sound bucket 1..8; label +1..+7 or 8+.
+    // delayTicks = physics ticks held back (not 60fps frames). Bucket/label 1..8.
     void spawn(PlayLayer* layer, cocos2d::CCPoint worldPos, int delayTicks);
 
     // Exposed for selfCheck / tests.

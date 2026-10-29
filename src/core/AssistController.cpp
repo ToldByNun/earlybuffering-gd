@@ -510,6 +510,21 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
     expect(!shouldFireBuffered(11, 14, 5, 3, 8), "not-last-chance");
     expect(shouldFireBuffered(13, 14, 5, 3, 8), "at-deadline");
 
+    // Non-orb Delay must keep planned fire even when incidental act band is early.
+    // (Mirrors planPress: only requireOrb may clamp to dMin/dMax.)
+    {
+        int const effect = 100;
+        int const delay = 4;
+        int const jump = 4;
+        int fire = resolveFireTick(effect, delay, jump, false);
+        expect(fire == 104, "non-orb-fire-at-delay");
+        // Incidental orb band [0,1] must NOT collapse fire when !requireOrb.
+        int const dMax = 1;
+        int collapsed = std::min(fire, effect + dMax);
+        expect(collapsed == 101, "demo-bad-clamp");
+        expect(fire == 104, "non-orb-ignores-incidental-dmax");
+    }
+
     if (fails == 0) {
         report = "fireTickSelfCheck OK";
         return true;
@@ -792,7 +807,12 @@ int AssistController::acceptRecheckSlide(
     proposedFire = std::min(proposedFire, deadline);
     if (proposedFire <= attemptTick) return -1;
 
-    // Cap late slides only (earlier rechecks stay useful). Orb may wait for dMin.
+    // Miss-assist: never slide earlier than the armed fire (that re-created
+    // "delayed but still too early"). Orb may wait for dMin (later only).
+    if (!requireOrb && proposedFire < oldFire) {
+        return -1;
+    }
+    // Cap late slides. Orb may wait further for dMin.
     if (!requireOrb && proposedFire > oldFire + kRecheckMaxSlide) {
         proposedFire = oldFire + kRecheckMaxSlide;
     }
@@ -817,14 +837,15 @@ bool AssistController::recheckSlideSelfCheck(std::string& report) {
     expect(acceptRecheckSlide(10, 8, 12, 20, 1, 20, false, false) < 0, "reject-bad-plan");
     // Late slide capped at +2
     expect(acceptRecheckSlide(10, 8, 20, 30, 0, 30, false, true) == 12, "cap-slide-plus2");
-    // Early slide (earlier than oldFire) allowed
-    expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, false, true) == 11, "early-slide-ok");
+    // Early slide (earlier than oldFire) rejected — miss-assist must not undo wait
+    expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, false, true) < 0, "early-slide-reject");
     // robustK: absMax 20, k=2 → safeMax 18
     expect(acceptRecheckSlide(10, 8, 19, 20, 2, 30, false, true) == 12, "robust-then-cap");
     // past attempt → reject
     expect(acceptRecheckSlide(10, 12, 12, 20, 0, 20, false, true) < 0, "not-future");
-    // orb: allow large late slide (dMin wait)
+    // orb: allow large late slide (dMin wait); early still ok only via dMin path
     expect(acceptRecheckSlide(10, 8, 18, 20, 0, 20, true, true) == 18, "orb-allow-late");
+    expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, true, true) == 11, "orb-early-for-dmin");
     // same fire → reject (inject instead)
     expect(acceptRecheckSlide(12, 8, 12, 20, 0, 20, false, true) < 0, "noop-reject");
     // deadline clamp
@@ -1300,6 +1321,18 @@ void AssistController::fireBuffered(
 ) {
     int const elapsed = this->m_attemptTick - this->m_buffer.pressTick;
     int const remaining = this->m_buffer.limit - elapsed;
+
+    // Soft path (physics due / recheck): never inject before fireTick.
+    // Force paths (CPS / mode-change / HUS deadline) pass allowRecheck=false.
+    if (allowRecheck
+        && this->m_buffer.fireTick > this->m_attemptTick
+        && remaining > 0) {
+        AssistLog::debug(fmt::format(
+            "fireBuffered: not due yet attempt={} fire={} — wait",
+            this->m_attemptTick, this->m_buffer.fireTick
+        ));
+        return;
+    }
 
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
     // Skipped for CPS / mode-change force-fire.
@@ -1812,48 +1845,54 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
+    bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
+    bool const nearBake = nearBakeWindowHint(
+        player, player1, true, effectTick, this->m_simDt
+    );
 
-    // Live/Hybrid-live: sim mismatch ring → force Pass (no explore under UNTRUST).
+    // Live/Hybrid-live: sim mismatch → hard Pass, unless orb/pad ahead
+    // (allow Delay / Soft Hold — solitary early orb miss must still assist).
     if (DivergenceTracker::get().simUntrusted()) {
-        AssistLog::debug("UNTRUST pass (press)");
-        this->m_untrustPassHint = true;
+        if (!nearOrb) {
+            AssistLog::debug("UNTRUST pass (press)");
+            this->m_untrustPassHint = true;
+            SimPlan dummy;
+            dummy.action = PlanAction::Pass;
+            dummy.reason = AssistReason::PassUntrust;
+            dummy.firstDeathTick = -1;
+            dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            this->noteVerdict(AssistReason::PassUntrust, "press-untrust");
+            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+            this->updateOverlay();
+            return true;
+        }
+        AssistLog::debug("UNTRUST soft (press orb foresight — allow plan)");
+        this->m_untrustPassHint = false;
+    }
+    else {
+        this->m_untrustPassHint = false;
+    }
+
+    // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
+    if (ClickIntentGuard::get().shouldPassThrough(
+            slot, effectTick, kind, nearOrb, nearBake
+        )) {
+        AssistLog::debug(fmt::format(
+            "intent: spam Pass (mode={}, tick={})", StageConfig::kindName(kind), effectTick
+        ));
         SimPlan dummy;
         dummy.action = PlanAction::Pass;
-        dummy.reason = AssistReason::PassUntrust;
+        dummy.reason = AssistReason::PassSpam;
         dummy.firstDeathTick = -1;
         dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-        this->noteVerdict(AssistReason::PassUntrust, "press-untrust");
+        this->noteVerdict(AssistReason::PassSpam, "press-spam");
         this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
         this->updateOverlay();
         return true;
     }
-    this->m_untrustPassHint = false;
 
-    // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
-    {
-        bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
-        bool const nearBake = nearBakeWindowHint(
-            player, player1, true, effectTick, this->m_simDt
-        );
-        if (ClickIntentGuard::get().shouldPassThrough(
-                slot, effectTick, kind, nearOrb, nearBake
-            )) {
-            AssistLog::debug(fmt::format(
-                "intent: spam Pass (mode={}, tick={})", StageConfig::kindName(kind), effectTick
-            ));
-            SimPlan dummy;
-            dummy.action = PlanAction::Pass;
-            dummy.reason = AssistReason::PassSpam;
-            dummy.firstDeathTick = -1;
-            dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            this->noteVerdict(AssistReason::PassSpam, "press-spam");
-            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
-            return true;
-        }
-    }
-
-    // Low trust at this spot → pass through (unless explore roll).
-    if (StageConfig::autoTune() && profile.loaded()) {
+    // Low trust at this spot → pass through (unless explore roll or orb ahead).
+    if (StageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= LevelProfile::TRUST_PASS_MIN_N
                 && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD
@@ -1869,6 +1908,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
                 dummy.firstDeathTick = -1;
                 this->noteVerdict(AssistReason::PassLowTrust, "press-low-trust");
                 this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+                this->updateOverlay();
                 return true;
             }
         }
@@ -1981,29 +2021,44 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     this->m_buffer.mode = kind;
     this->m_buffer.requireOrb = plan.requireOrb;
     this->m_buffer.requireHold = plan.requireHold;
-    this->m_buffer.dMin = plan.dMin;
-    this->m_buffer.dMax = plan.dMax;
-    this->m_buffer.releaseAfter = plan.releaseAfter;
-    this->m_buffer.releaseEarliest = plan.releaseEarliest;
-    this->m_buffer.releaseLatest = plan.releaseLatest;
-    this->m_buffer.planId = plan.planId;
-
-    // Keep fire inside activation window
-    if (plan.dMin >= 0) {
-        this->m_buffer.fireTick = std::max(this->m_buffer.fireTick, effectTick + plan.dMin);
+    // Orb activation band only constrains fire when we are waiting FOR the orb.
+    // Incidental actMin/actMax from other cands must not collapse a threat Delay
+    // (that made +N feedback lie while the jump fired almost immediately).
+    if (plan.requireOrb) {
+        this->m_buffer.dMin = plan.dMin;
+        this->m_buffer.dMax = plan.dMax;
+        if (plan.dMin >= 0) {
+            this->m_buffer.fireTick = std::max(
+                this->m_buffer.fireTick, effectTick + plan.dMin
+            );
+        }
+        if (plan.dMax >= 0) {
+            this->m_buffer.fireTick = std::min(
+                this->m_buffer.fireTick, effectTick + plan.dMax
+            );
+        }
     }
-    if (plan.dMax >= 0) {
-        this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + plan.dMax);
+    else {
+        this->m_buffer.dMin = -1;
+        this->m_buffer.dMax = -1;
     }
     // Never arm past the forgiveness deadline.
     this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + limit);
+    // Non-orb: never fire earlier than planned delay (guards incidental clamps).
+    if (!plan.requireOrb && this->m_buffer.fireTick < effectTick + delay) {
+        this->m_buffer.fireTick = effectTick + delay;
+        this->m_buffer.fireTick = std::min(
+            this->m_buffer.fireTick, effectTick + limit
+        );
+    }
 
     AssistLog::debug(fmt::format(
-        "ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} win=[{},{}] fire={} jump={}",
+        "ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} win=[{},{}] fire={} jump={} orb={}",
         delay, plan.planId, plan.activatedRing, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter,
-        plan.dMin, plan.dMax,
-        this->m_buffer.fireTick, this->m_buffer.expectedJumpTick
+        this->m_buffer.dMin, this->m_buffer.dMax,
+        this->m_buffer.fireTick, this->m_buffer.expectedJumpTick,
+        plan.requireOrb ? 1 : 0
     ));
     AssistReason delayReason = plan.reason;
     if (!AssistVerdict::isDelay(delayReason)) {
@@ -2035,23 +2090,27 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
+    bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
+    bool const nearBake = nearBakeWindowHint(
+        player, player1, false, effectTick, this->m_simDt
+    );
 
     if (DivergenceTracker::get().simUntrusted()) {
-        AssistLog::debug("UNTRUST pass (release)");
-        this->m_untrustPassHint = true;
-        this->noteVerdict(AssistReason::PassUntrust, "release-untrust");
-        this->updateOverlay();
-        return true;
+        if (!nearOrb) {
+            AssistLog::debug("UNTRUST pass (release)");
+            this->m_untrustPassHint = true;
+            this->noteVerdict(AssistReason::PassUntrust, "release-untrust");
+            this->updateOverlay();
+            return true;
+        }
+        AssistLog::debug("UNTRUST soft (release orb foresight — allow plan)");
+        this->m_untrustPassHint = false;
     }
 
     // Continuous spam: do not delay releases either (would steal hold state).
     bool const continuous =
         player->m_isDart || player->m_isShip || player->m_isSwing;
     if (continuous) {
-        bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
-        bool const nearBake = nearBakeWindowHint(
-            player, player1, false, effectTick, this->m_simDt
-        );
         if (ClickIntentGuard::get().shouldPassThrough(
                 slot, effectTick, kind, nearOrb, nearBake
             )) {
@@ -2060,11 +2119,12 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
                 StageConfig::kindName(kind), effectTick
             ));
             this->noteVerdict(AssistReason::PassSpam, "release-spam");
+            this->updateOverlay();
             return true;
         }
     }
 
-    if (StageConfig::autoTune() && profile.loaded()) {
+    if (StageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= LevelProfile::TRUST_PASS_MIN_N
                 && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD
@@ -2074,6 +2134,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
                 ));
                 AssistLearning::decaySpot(kind, x);
                 this->noteVerdict(AssistReason::PassLowTrust, "release-low-trust");
+                this->updateOverlay();
                 return true;
             }
         }

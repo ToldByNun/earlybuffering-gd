@@ -41,3 +41,39 @@ std::string DivergenceTracker::overlayBit() const {
         mismatchRate() * 100.f
     );
 }
+
+bool DivergenceTracker::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    auto& d = get();
+    d.clear();
+    expect(!d.simUntrusted(), "fresh-clear");
+    expect(d.mismatchRate() == 0.f, "fresh-rate");
+    expect(!d.shouldWarn(), "fresh-warn");
+
+    // 12 delayed deaths → UNTRUST (≥45% / n≥12).
+    for (int i = 0; i < 12; ++i) {
+        d.note(true, true, false, false);
+    }
+    expect(d.simUntrusted(), "untrust-after-12");
+    expect(d.shouldWarn(), "warn-after-12");
+
+    d.clear();
+    expect(!d.simUntrusted(), "clear-resets-untrust");
+    expect(d.mismatchRate() == 0.f, "clear-resets-rate");
+    expect(!d.shouldWarn(), "clear-resets-warn");
+
+    if (fails == 0) {
+        report = "DivergenceTracker selfCheck OK";
+        return true;
+    }
+    report = fmt::format("DivergenceTracker {} fails: {}", fails, report);
+    return false;
+}
