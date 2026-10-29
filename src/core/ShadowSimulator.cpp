@@ -70,6 +70,9 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
     this->m_triggerWorldAppliedThisTick = false;
+    this->m_dynamicTargetIds.clear();
+    this->m_dynamicFollowJobs.clear();
+    this->m_liveDynamicAppliedIds.clear();
     m_saved.clear();
     this->m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
@@ -261,6 +264,9 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
     this->m_triggerWorldAppliedThisTick = false;
+    this->m_dynamicTargetIds.clear();
+    this->m_dynamicFollowJobs.clear();
+    this->m_liveDynamicAppliedIds.clear();
     // If a sim aborted after applyAtTick moved solids, put them back before
     // we drop the snapshot — reset/checkpoint must not inherit drifted poses.
     if (!this->m_savedTransforms.empty() && layer) {
@@ -453,19 +459,18 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     if (!layer || !StageConfig::triggerBake()) return;
 
     auto& store = TriggerWorldStore::get();
-    if (!store.loaded() || !store.hasTracks()) return;
-
     LagProbe::Scope const scope("eb.trigger.capture");
 
-    // Collect uniqueIds we may move this sim.
+    // Collect uniqueIds we may move this sim (ready static bake tracks).
     std::vector<int> wanted;
-    wanted.reserve(store.trackCount());
-    for (auto const& track : store.data().tracks) {
-        if (!track.ready || track.keys.empty()) continue;
-        if (!TriggerClassify::isStatic(track.kind)) continue;
-        wanted.push_back(track.uniqueId);
+    if (store.loaded() && store.hasTracks()) {
+        wanted.reserve(store.trackCount());
+        for (auto const& track : store.data().tracks) {
+            if (!track.ready || track.keys.empty()) continue;
+            if (!TriggerClassify::isStatic(track.kind)) continue;
+            wanted.push_back(track.uniqueId);
+        }
     }
-    if (wanted.empty()) return;
 
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children) return;
@@ -493,6 +498,143 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     }
 }
 
+bool ShadowSimulator::isDynamicTriggerTarget(int uniqueId) const {
+    return this->m_dynamicTargetIds.find(uniqueId) != this->m_dynamicTargetIds.end();
+}
+
+bool ShadowSimulator::liveDynamicApplied(int uniqueId) const {
+    return this->m_liveDynamicAppliedIds.find(uniqueId) != this->m_liveDynamicAppliedIds.end();
+}
+
+void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
+    this->m_dynamicTargetIds.clear();
+    this->m_dynamicFollowJobs.clear();
+    this->m_liveDynamicAppliedIds.clear();
+    if (!layer || !StageConfig::triggerBake()) return;
+
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    if (!children) return;
+
+    bool const wantJobs = !StageConfig::triggerBakeSkipDynamic();
+
+    // Index solids once for group membership.
+    std::vector<GameObject*> solids;
+    solids.reserve(static_cast<size_t>(children->count()));
+    for (unsigned i = 0; i < children->count(); ++i) {
+        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+        if (!obj) continue;
+        if (typeinfo_cast<PlayerObject*>(obj)) continue;
+        solids.push_back(obj);
+    }
+
+    for (unsigned i = 0; i < children->count(); ++i) {
+        if (this->m_dynamicFollowJobs.size() >= kMaxDynamicFollowJobs) break;
+        auto* effect = typeinfo_cast<EffectGameObject*>(children->objectAtIndex(i));
+        if (!effect) continue;
+
+        TriggerKind const kind = TriggerClassify::classify(effect);
+        if (kind != TriggerKind::DynamicFollow) continue;
+
+        // Rotate-follow / non-positional: mark targets Unknown, no cheap probe.
+        bool const rotateOnly = effect->m_rotateFollowP1 || effect->m_rotateFollowP2;
+        bool const followY = TriggerClassify::isFollowPlayerTriggerId(effect->m_objectID);
+        bool const targetPlayer = effect->m_targetPlayer1 || effect->m_targetPlayer2;
+        bool const lockX = effect->m_lockToPlayerX || targetPlayer;
+        bool const lockY = effect->m_lockToPlayerY || targetPlayer || followY;
+        bool const probeable = !rotateOnly && (lockX || lockY);
+
+        int const groupId = effect->m_targetGroupID;
+        if (groupId <= 0) continue;
+
+        DynamicFollowJob job;
+        job.effectUniqueId = effect->m_uniqueID;
+        job.effect = effect;
+        job.lockX = lockX;
+        job.lockY = lockY;
+        job.followPlayerY = followY;
+        job.offsetX = effect->m_moveOffset.x;
+        job.offsetY = followY
+            ? static_cast<float>(effect->m_followYOffset)
+            : effect->m_moveOffset.y;
+
+        for (auto* obj : solids) {
+            if (!obj || !obj->belongsToGroup(groupId)) continue;
+            if (obj == effect) continue;
+            this->m_dynamicTargetIds.insert(obj->m_uniqueID);
+
+            if (!wantJobs || !probeable) continue;
+            if (job.targets.size() >= kMaxDynamicTargetsPerJob) break;
+
+            SavedTransform st;
+            st.uniqueId = obj->m_uniqueID;
+            st.obj = obj;
+            st.x = obj->getPositionX();
+            st.y = obj->getPositionY();
+            st.rotation = obj->getRotation();
+            st.scaleX = obj->getScaleX();
+            st.scaleY = obj->getScaleY();
+            st.nodeVisible = obj->isVisible();
+            job.targets.push_back(st);
+
+            // Also restore via shared transform list if not already snapshotted.
+            bool already = false;
+            for (auto const& saved : this->m_savedTransforms) {
+                if (saved.uniqueId == st.uniqueId) { already = true; break; }
+            }
+            if (!already) {
+                this->m_savedTransforms.push_back(st);
+            }
+        }
+
+        if (wantJobs && probeable && !job.targets.empty()) {
+            this->m_dynamicFollowJobs.push_back(std::move(job));
+        }
+    }
+}
+
+void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost) {
+    this->m_liveDynamicAppliedIds.clear();
+    if (!layer || !ghost) return;
+    if (!StageConfig::triggerBake()) return;
+    if (StageConfig::triggerBakeSkipDynamic()) return;
+    // Dual follow is ambiguous (P1 vs P2) — leave Unknown.
+    if (layer->m_gameState.m_isDualMode && layer->m_player2) return;
+    if (this->m_dynamicFollowJobs.empty()) return;
+
+    float const gx = ghost->getPositionX();
+    float const gy = ghost->getPositionY();
+
+    for (auto& job : this->m_dynamicFollowJobs) {
+        auto* effect = job.effect;
+        if (!effect || effect->m_uniqueID != job.effectUniqueId) continue;
+
+        for (auto const& t : job.targets) {
+            auto* obj = t.obj;
+            if (!obj || obj->m_uniqueID != t.uniqueId) continue;
+
+            float x = t.x;
+            float y = t.y;
+            if (job.followPlayerY || job.lockY) {
+                y = gy + job.offsetY;
+            }
+            if (job.lockX) {
+                x = gx + job.offsetX;
+            }
+
+            TriggerPose pose{};
+            pose.tick = this->m_simAbsTick >= 0 ? this->m_simAbsTick : 0;
+            pose.x = x;
+            pose.y = y;
+            pose.rotation = t.rotation;
+            pose.scaleX = t.scaleX;
+            pose.scaleY = t.scaleY;
+            pose.active = t.nodeVisible;
+            TriggerWorldStore::writePose(obj, pose);
+            this->m_liveDynamicAppliedIds.insert(t.uniqueId);
+        }
+    }
+}
+
 void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
     (void)layer;
     if (this->m_savedTransforms.empty()) return;
@@ -517,8 +659,12 @@ void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
 void ShadowSimulator::beginCapture(PlayLayer* layer) {
     this->m_saved.clear();
     this->m_savedTransforms.clear();
+    this->m_dynamicTargetIds.clear();
+    this->m_dynamicFollowJobs.clear();
+    this->m_liveDynamicAppliedIds.clear();
     this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
     this->captureTriggerTransforms(layer);
+    this->captureDynamicFollows(layer);
 }
 
 void ShadowSimulator::restoreCapture(PlayLayer* layer) {
@@ -526,6 +672,9 @@ void ShadowSimulator::restoreCapture(PlayLayer* layer) {
         LagProbe::Scope const scope("eb.trigger.restore");
         this->restoreTriggerTransforms(layer);
     }
+    this->m_dynamicFollowJobs.clear();
+    this->m_dynamicTargetIds.clear();
+    this->m_liveDynamicAppliedIds.clear();
 
     for (auto const& s : this->m_saved) {
         if (!s.obj) continue;
@@ -600,8 +749,10 @@ void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt
     // Always use the full step dt here — tiny CBF remainders launch slopes
     // and also under-detect orb/spike overlaps.
     this->m_triggerWorldAppliedThisTick = false;
+    this->m_liveDynamicAppliedIds.clear();
     if (this->m_simAbsTick >= 0) {
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
+        this->applyLiveDynamicNear(layer, s);
     }
     hideGhost(s);
     clearCollisionLogs(s);
@@ -611,8 +762,10 @@ void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt
 
 void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepDt, float dt) {
     this->m_triggerWorldAppliedThisTick = false;
+    this->m_liveDynamicAppliedIds.clear();
     if (this->m_simAbsTick >= 0) {
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
+        this->applyLiveDynamicNear(layer, s);
     }
     hideGhost(s);
     s->update(stepDt);

@@ -258,11 +258,12 @@ std::vector<GameObject*> TriggerWorldBaker::objectsInGroup(int groupId) const {
 void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     if (!effect) return;
 
-    TriggerKind const kind = TriggerClassify::classify(effect);
-    if (TriggerClassify::isDynamic(kind)) {
-        ++this->m_skippedDynamic;
-        return;
-    }
+        TriggerKind const kind = TriggerClassify::classify(effect);
+        // Follow-player / Dynamic* never enter static JSON (live probe only).
+        if (TriggerClassify::isDynamic(kind)) {
+            ++this->m_skippedDynamic;
+            return;
+        }
     if (!TriggerClassify::isStatic(kind)) return;
     if (kind == TriggerKind::StaticSpawn) return;
     if (TriggerWorldBaker::isFollowLikeStatic(effect, kind)) {

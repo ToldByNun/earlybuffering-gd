@@ -7,6 +7,7 @@
 #include <Geode/Geode.hpp>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 
@@ -115,6 +116,10 @@ public:
     bool triggerWorldAppliedThisTick() const {
         return this->m_triggerWorldAppliedThisTick;
     }
+    // Object is targeted by a player-coupled DynamicFollow (sim collision gate).
+    bool isDynamicTriggerTarget(int uniqueId) const;
+    // Cheap live probe wrote a pose for this id on the current sim step.
+    bool liveDynamicApplied(int uniqueId) const;
     bool isShadow(PlayerObject* p) const { return p && p == m_shadow; }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* p) const;
@@ -317,6 +322,18 @@ private:
         bool nodeVisible = true;
     };
 
+    // Cheap live DynamicFollow job (not written to static JSON).
+    struct DynamicFollowJob {
+        int effectUniqueId = 0;
+        EffectGameObject* effect = nullptr;
+        bool lockX = false;
+        bool lockY = false;
+        bool followPlayerY = false;
+        float offsetX = 0.f;
+        float offsetY = 0.f;
+        std::vector<SavedTransform> targets;
+    };
+
     static void hideGhost(PlayerObject* p);
     static bool tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* obj);
     static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self);
@@ -345,6 +362,10 @@ private:
     void restoreTriggerTransforms(GJBaseGameLayer* layer);
     // Apply TriggerWorldStore poses for m_simAbsTick using capture-list pointers.
     void applyTriggerWorldAtTick(PlayLayer* layer, int absTick);
+    // Scan player-coupled follow effects; record target ids (+ jobs if probe on).
+    void captureDynamicFollows(PlayLayer* layer);
+    // Cheap ghost-relative pose write when skip-dynamic is false (dual → no-op).
+    void applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost);
     void copyWaveTrail(PlayerObject* dst, PlayerObject* src);
     static void clearCollisionLogs(PlayerObject* s);
     void stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt);
@@ -375,6 +396,13 @@ private:
     int m_simTickBase = 0;
     // Set when applyTriggerWorldAtTick runs for this step (SimCollisionPolicy).
     bool m_triggerWorldAppliedThisTick = false;
+    // uniqueIds targeted by DynamicFollow (Unknown unless live probe applied).
+    std::unordered_set<int> m_dynamicTargetIds;
+    std::vector<DynamicFollowJob> m_dynamicFollowJobs;
+    std::unordered_set<int> m_liveDynamicAppliedIds;
+
+    static constexpr size_t kMaxDynamicFollowJobs = 32;
+    static constexpr size_t kMaxDynamicTargetsPerJob = 64;
 };
 
 #endif // EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP

@@ -16,16 +16,27 @@ bool SimCollisionPolicy::isSpeedPortalId(int objectId) {
 SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
     if (!obj) return SimObjectAction::Skip;
 
-    // Ready static bake track + apply this sim tick → trust collision (Include).
-    // Partial build (!ready) and dynamics stay on the base path / Unknown.
-    if (StageConfig::triggerBake()
-        && ShadowSimulator::get().isSimulating()
-        && ShadowSimulator::get().triggerWorldAppliedThisTick()) {
-        auto const* track = TriggerWorldStore::get().findTrack(obj->m_uniqueID);
-        if (track
-            && track->ready
-            && TriggerClassify::isStatic(track->kind)) {
-            return SimObjectAction::Include;
+    auto& sim = ShadowSimulator::get();
+    if (StageConfig::triggerBake() && sim.isSimulating()) {
+        // Ready static bake track + apply this sim tick → Include.
+        if (sim.triggerWorldAppliedThisTick()) {
+            auto const* track = TriggerWorldStore::get().findTrack(obj->m_uniqueID);
+            if (track
+                && track->ready
+                && TriggerClassify::isStatic(track->kind)) {
+                return SimObjectAction::Include;
+            }
+        }
+
+        // Player-coupled follow targets: never trust editor pose.
+        // skip-dynamic (default) / dual / probe miss → Unknown.
+        // skip-dynamic off + cheap live probe applied → Include.
+        if (sim.isDynamicTriggerTarget(obj->m_uniqueID)) {
+            if (!StageConfig::triggerBakeSkipDynamic()
+                && sim.liveDynamicApplied(obj->m_uniqueID)) {
+                return SimObjectAction::Include;
+            }
+            return SimObjectAction::UnknownOnOverlap;
         }
     }
 
@@ -91,7 +102,8 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
     if (warned) return false;
     warned = true;
     AssistLog::info(
-        "sim: limited (dynamic/unbaked movers → unknown; ready static bake → include)"
+        "sim: limited (follow-player/dynamic → unknown unless live probe; "
+        "ready static bake → include)"
     );
     return true;
 }
