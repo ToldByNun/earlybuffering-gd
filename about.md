@@ -45,7 +45,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 | Mode | Behavior |
 |------|----------|
-| **New** (default) | Best viable delay in `0..Limit`; when survival ties, **prefer later** (miss-assist waits more). |
+| **New** (default) | Surviving delays only; **Smart Prediction** picks the delay with the best predicted exit (not fixed mid/latest). |
 | **Legacy** | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
 
 Neither mode waits past your Limit (G1 window-cap).
@@ -82,6 +82,6 @@ Every important setting has plain-language info text in the mod (what it does, w
 
 - **Source:** [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd)
 - **Bugs:** [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues)
-- **Chat:** [Discord](https://discord.gg/HAjrey6ykc)
+- **Chat:** [Discord](https://discord.gg/QJuTDkmPcf)
 
 Use Safe Mode. Practice. Don’t drop assisted runs on rated / online like they’re clean.

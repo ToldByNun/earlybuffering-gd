@@ -2063,7 +2063,10 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     );
 
     auto const t0 = std::chrono::steady_clock::now();
-    auto plan = (opts.smartDepth > 1)
+    // New pick always runs planSequence exit-predict (even at smartDepth 1).
+    // Legacy stays on single plan() unless Smart Depth > 1.
+    bool const useSequence = !opts.legacyPick || opts.smartDepth > 1;
+    auto plan = useSequence
         ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
     int const planUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(

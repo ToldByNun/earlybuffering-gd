@@ -147,13 +147,14 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 4. **no-threat Pass (G2)**: baseline did not die, zone invalid, no orb/pad hint → run `OpportunityProbe` (foresight already forces search; else cheap `d=mid` / `d=limit` sims). Pass only if probe empty; else full cand search. Budget starve with no probes → `PassBudget`.
 4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). **`foresightOrbPad` blocks this Pass** (keep searching for the orb). Runs after foresight/orb checks.
 4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further. Skipped when `idleSafer`.
-4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay (preferLater/latest) instead of Pass/hopeless. No forever block if nothing in-window is viable; controller may Soft Hold when both flags set. Wave proximity/futile early-Pass skipped when `idleSafer`.
+4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay (New outcome / Legacy latest) instead of Pass/hopeless. No forever block if nothing in-window is viable; controller may Soft Hold when both flags set. Wave proximity/futile early-Pass skipped when `idleSafer`.
 5. eval delays under tick + sim-budget-us
-6. orbIntent: Legacy earliest ±k act; New preferLater in band; optional firstDt ±3% jitter
-7. else d0 clearsThreat -> Pass; else New preferLater / Legacy latest ±k-robust (orb: earliest act)
-8. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
+6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter
+7. else d0 survived -> Pass; else New outcome / Legacy latest ±k-robust
+8. New: `planSequence` exit-predict over survivor band (horizon replay; smartDepth≥2 adds multi-jump)
+9. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
 
-Lexico (New): orbUseful > surviveBin > surviveTicks > endX(±8) > **later** delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
+Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2
 
@@ -242,7 +243,7 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 `robust-k` 0 → auto (`ShadowSimulator::autoRobustK`): Wave/Ship/Swing start at 2; speed >1.1 → ≥2, >1.5 → 3; relative dt EMA >0.08 bumps +1 (cap 3). **Wave + spam-dense** (ClickIntentGuard density, even when orb forces assist): keep ≥2; if speed >1.05 → **3**. Fixed 1–3 overrides auto. `robust-jitter`: after pick, re-run with firstDt×0.97/1.03; fail → mark non-viable and re-pick.
 
-`ModeParams.latencyWeight` still softens Wave spam-dense assists (λ ×0.65). New miss-assist pick uses **preferLater** (surviveTicks / endX±8 / later delay) instead of earliest-λ bias.
+`ModeParams.latencyWeight` still softens Wave spam-dense assists (λ ×0.65). New miss-assist pick uses **outcome / exit prediction** (surviveTicks / endX−λ·delay / horizon replay) instead of fixed mid or latest.
 
 **ticks-wave default stays 2** (Tight feel, not autoplay). With auto k=2..3, full ±k neighbors often do not fit in a 2-tick window — `pickRobust` falls back to earliest viable. Use Normal/Wide/Max (wave 4/8/8) when you want real ±k margin in spam. Max uses ticks-all=16 but ticks-wave=8 on purpose (wave windows stay shorter than cube).
 
@@ -285,7 +286,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Prefer (New) | Setting `assist-pick` = **New** (default): **Delay-viable = sim survives** (death-past-zone alone is not enough). d0 survived → Pass; else preferLater among survivors. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
+| G1 Prefer (New) | Setting `assist-pick` = **New** (default): **Delay-viable = sim survives**. d0 survived → Pass; else **exit prediction** ranks survivor delays by horizon outcome (survive / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |

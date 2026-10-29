@@ -49,7 +49,7 @@ CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/wor
 Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
 
 - **Enabled / Preset / Assist Mode** — master control and Live / Hybrid / Replay / BruteForce
-- **Pick Mode** (`assist-pick`) — **New** (prefer-later miss-assist) vs **Legacy** (1.2.0 feel)
+- **Pick Mode** (`assist-pick`) — **New** (exit prediction) vs **Legacy** (1.2.0 feel)
 - **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
 - **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
 - **Assist Off Ranges** — six From/To percent slots (`-1` = unused); assist forced off inside those ranges
@@ -77,7 +77,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 ## Support and ethics
 
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
-- Discord: [https://discord.gg/HAjrey6ykc](https://discord.gg/HAjrey6ykc)
+- Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
 - **Changelog:** see [`changelog.md`](changelog.md) — **v1.2.1** adds miss-assist Pick Mode, Pass-verdict overlay, TravelForesight / Hold-Until-Safe (still GD **2.2081** only).
 

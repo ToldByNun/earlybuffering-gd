@@ -14,7 +14,7 @@
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
-		"community": "https://discord.gg/HAjrey6ykc"
+		"community": "https://discord.gg/QJuTDkmPcf"
 	},
 	"issues": {
 		"info": "Report bugs on GitHub Issues (include GD 2.2081, Geode version, platform, steps, crashlog). For chat / questions, use the Discord.",
@@ -446,7 +446,7 @@
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window (G1). New (default) = best viable in 0..Limit with prefer-later when survival ties (miss-assist waits more). Legacy = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust viable (orb band still earliest activation). Never waits past your Limit. Overlay / VERDICT show Pass-Delay reasons.",
+			"description": "How Live/Hybrid picks a delay inside your tick window (G1). New (default) = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Legacy = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). Never waits past your Limit.",
 			"one-of": [
 				"New",
 				"Legacy"
@@ -518,7 +518,7 @@
 		"smart-depth": {
 			"type": "int",
 			"name": "Smart Depth (Jumps Ahead)",
-			"description": "How many jumps ahead Live/Hybrid may look. 1 = classic single-click assist (lightest). 2–3 = plans sequences so the first delay stays sensible further ahead — smarter but heavier. Replay/Brute ignore this.",
+			"description": "How many jumps ahead Live/Hybrid may look. With Pick=New, depth 1 still exit-predicts the first delay over the survivor band (single-press horizon). 2–3 also search follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
 			"default": 1,
 			"min": 1,
 			"max": 3

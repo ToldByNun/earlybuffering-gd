@@ -39,7 +39,7 @@ struct PlanOptions {
     // ClickIntentGuard density (assist still running, e.g. orb) → wider auto k,
     // slightly softer Wave λ so earliest-delay bias does not phase-shift spam.
     bool spamDense = false;
-    // true = 1.2.0 earliest / d0-Pass pick; false = New prefer-delay pool best.
+    // true = 1.2.0 earliest / d0-Pass pick; false = New outcome/exit prediction.
     bool legacyPick = false;
 };
 

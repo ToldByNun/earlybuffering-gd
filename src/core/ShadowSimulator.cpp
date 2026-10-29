@@ -1598,29 +1598,22 @@ static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const
     return r.deathX > zone.endX;
 }
 
-// preferLater: miss-assist New — when survival is tied, wait more (early press)
-// instead of λ/earliest which fired too soon and still died.
+// New (preferOutcome): rank by predicted exit — surviveBin/ticks, then
+// endX − λ·delay (how far the jump carries). No fixed mid/latest.
 static bool betterCand(
-    Cand const& a, Cand const& b, float latencyWeight, bool preferLater
+    Cand const& a, Cand const& b, float latencyWeight, bool preferOutcome
 ) {
     if (a.viable != b.viable) return a.viable && !b.viable;
     if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
-    // Alive beats "cleared zone then died" — deathX>zone still viable but not equal.
-    if (preferLater && a.raw.died != b.raw.died) {
+    if (preferOutcome && a.raw.died != b.raw.died) {
         return !a.raw.died && b.raw.died;
     }
     if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
     if (a.surviveTicks != b.surviveTicks) return a.surviveTicks > b.surviveTicks;
-    if (preferLater) {
-        // Meaningful endX lead still wins; else later delay (more hold).
-        float const dx = a.endX - b.endX;
-        if (dx > 8.f) return true;
-        if (dx < -8.f) return false;
-        return a.delay > b.delay;
-    }
     float const scoreA = a.endX - latencyWeight * static_cast<float>(a.delay);
     float const scoreB = b.endX - latencyWeight * static_cast<float>(b.delay);
     if (scoreA != scoreB) return scoreA > scoreB;
+    // Weak early bias when prediction ties (gap-jump height).
     return a.delay < b.delay;
 }
 
@@ -2157,7 +2150,7 @@ SimPlan ShadowSimulator::plan(
         cands[static_cast<size_t>(d)] = c;
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
-        // New (preferLater): never early-exit — later-in-window cands must be ranked.
+        // New: never early-exit — full survivor band needed for outcome / exit predict.
         // Legacy: orb foresight still blocks exit so activations outside prefer stay.
         bool const preferExitOk = options.legacyPick
             && MissAssistContracts::preferBandEarlyExitAllowed(
@@ -2176,7 +2169,7 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} prefer-band early-exit suppressed ({} ) [{},{}]",
                 plan.planId,
-                options.legacyPick ? "orb foresight" : "new preferLater",
+                options.legacyPick ? "orb foresight" : "new outcome",
                 preferLo, preferHi
             ));
         }
@@ -2286,7 +2279,7 @@ SimPlan ShadowSimulator::plan(
         c.orbUseful = true;
     }
 
-    auto pickRobust = [&](std::vector<int> const& pool, bool needActivation, bool preferLater) -> int {
+    auto pickRobust = [&](std::vector<int> const& pool, bool needActivation, bool preferOutcome) -> int {
         if (pool.empty()) return -1;
         int const k = robustK;
         int best = -1;
@@ -2311,7 +2304,7 @@ SimPlan ShadowSimulator::plan(
                 }
             }
             if (!ok) continue;
-            if (!have || betterCand(c, bestC, latencyWeight, preferLater)) {
+            if (!have || betterCand(c, bestC, latencyWeight, preferOutcome)) {
                 best = d;
                 bestC = c;
                 have = true;
@@ -2323,7 +2316,7 @@ SimPlan ShadowSimulator::plan(
                 auto const& c = cands[static_cast<size_t>(d)];
                 if (!c.viable) continue;
                 if (needActivation && !c.activatedRing) continue;
-                if (!have || betterCand(c, bestC, latencyWeight, preferLater)) {
+                if (!have || betterCand(c, bestC, latencyWeight, preferOutcome)) {
                     best = d;
                     bestC = c;
                     have = true;
@@ -2463,7 +2456,7 @@ SimPlan ShadowSimulator::plan(
         int const k = robustK;
         auto tryPick = [&](std::vector<int> const& p) -> int {
             for (;;) {
-                // Orb window: Legacy earliest-first; New preferLater lexico in band.
+                // Orb window: Legacy earliest-first; New outcome/exit rank ±k.
                 int pick = legacyPick
                     ? pickEarliestRobust(p, true)
                     : pickRobust(p, true, true);
@@ -2524,8 +2517,7 @@ SimPlan ShadowSimulator::plan(
         }
     }
     else {
-        // New (G1): d0 survived → Pass (never delay into a late death).
-        // Else preferLater among survivors only (±k-robust).
+        // New (G1): d0 survived → Pass. Else best predicted exit among survivors (±k).
         if (cands[0].viable) {
             int releaseAfter = cands[0].requireHold ? 40 : -1;
             if (jitterOk(0, releaseAfter)) {
@@ -2777,6 +2769,21 @@ SimPlan ShadowSimulator::plan(
         }
         plan.requireHold = plan.requireHold
             || cands[static_cast<size_t>(chosen)].requireHold;
+        // Non-orb: publish survivor band for planSequence exit prediction.
+        if (!plan.requireOrb) {
+            int sLo = -1;
+            int sHi = -1;
+            for (int d = 0; d <= limit; ++d) {
+                auto const& c = cands[static_cast<size_t>(d)];
+                if (!c.viable || c.raw.died) continue;
+                if (sLo < 0) sLo = d;
+                sHi = d;
+            }
+            if (sLo >= 0) {
+                plan.dMin = sLo;
+                plan.dMax = sHi;
+            }
+        }
     }
 
     // Dash orbs: sim keeps Jump down via tapRelease exceptions, but live inject
@@ -2828,7 +2835,24 @@ SimPlan ShadowSimulator::planSequence(
 ) {
     auto single = plan(layer, real, down, limit, dt, firstDt, options);
     int const depth = std::clamp(options.smartDepth, 1, 3);
-    if (depth <= 1 || !down) {
+    bool const newPick = !options.legacyPick;
+
+    // Exit prediction: among candidate first delays, pick the one whose
+    // horizon replay actually survives / reaches furthest (not mid/latest).
+    std::vector<int> allowed;
+    if (single.action == PlanAction::Pass) {
+        allowed.push_back(0);
+    }
+    else {
+        int lo = single.dMin >= 0 ? single.dMin : single.delay;
+        int hi = single.dMax >= 0 ? single.dMax : single.delay;
+        for (int d = std::max(0, lo); d <= std::min(limit, hi); ++d) {
+            allowed.push_back(d);
+        }
+        if (allowed.empty()) allowed.push_back(single.delay);
+    }
+    bool const wantExitPredict = newPick && down && allowed.size() > 1;
+    if ((!wantExitPredict && depth <= 1) || !down) {
         single.smartDepthUsed = 1;
         return single;
     }
@@ -2840,17 +2864,6 @@ SimPlan ShadowSimulator::planSequence(
 
     int slot = captureSnapshot(real);
     if (slot < 0) return single;
-
-    std::vector<int> allowed;
-    if (single.action == PlanAction::Pass) {
-        allowed.push_back(0);
-    }
-    else {
-        int lo = single.dMin >= 0 ? single.dMin : single.delay;
-        int hi = single.dMax >= 0 ? single.dMax : single.delay;
-        for (int d = std::max(0, lo); d <= std::min(limit, hi); ++d) allowed.push_back(d);
-        if (allowed.empty()) allowed.push_back(single.delay);
-    }
 
     struct Best {
         bool found = false;
@@ -2871,23 +2884,23 @@ SimPlan ShadowSimulator::planSequence(
     // Smart bake-chain: fix follow-up clicks from BakeMap when available.
     GameModeKind const kind = StageConfig::kindOf(real);
     bool const player2 = layer && layer->m_player2 && real == layer->m_player2;
-    auto followUps = BakeMap::get().loaded()
+    int const chainDepth = std::max(0, depth - 1);
+    auto followUps = (BakeMap::get().loaded() && chainDepth > 0)
         ? BakeMap::get().nextClicksAfter(
-            real->getPositionX(), true, player2, kind, std::min(depth - 1, 2)
+            real->getPositionX(), true, player2, kind, std::min(chainDepth, 2)
           )
         : std::vector<BakedClick const*>{};
 
-    // Drop follow-ups that change mode or lie beyond the smart horizon (by X).
     float const speed = std::max(0.5f, real->m_playerSpeed * 311.2f * std::max(dt, 1.f / 240.f));
     std::vector<BakedClick const*> chain;
     for (auto const* c : followUps) {
         if (!c) continue;
-        if (c->mode != kind) break; // mode change aborts chain
+        if (c->mode != kind) break;
         float const dx = c->x - real->getPositionX();
         int const eta = static_cast<int>(std::lround(dx / speed));
         if (eta <= 0 || eta >= horizon) continue;
         chain.push_back(c);
-        if (static_cast<int>(chain.size()) >= depth - 1) break;
+        if (static_cast<int>(chain.size()) >= chainDepth) break;
     }
     bool const useBakeChain = !chain.empty();
 
@@ -2900,7 +2913,6 @@ SimPlan ShadowSimulator::planSequence(
             for (auto const* c : chain) {
                 float const dx = c->x - real->getPositionX();
                 int tFollow = std::max(d0 + minGap, static_cast<int>(std::lround(dx / speed)));
-                // Prefer nominal frame center of bake window when convertible.
                 int const midFrame = (c->earliest + c->latest) / 2;
                 int const approxNow = options.attemptStartTick;
                 if (midFrame > approxNow) {
@@ -2916,11 +2928,10 @@ SimPlan ShadowSimulator::planSequence(
             float const lat = std::max(0.f, options.latencyWeight);
             sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
             if (rr.activatedRing) sc += 5000;
-            // Reachability of next bake reference X.
             if (!chain.empty() && survived) {
                 float const targetX = chain.front()->x;
                 if (rr.endX + BakeMap::LOOKUP_X_TOL >= targetX) sc += 20000;
-                else sc -= 10000; // missed next window
+                else sc -= 10000;
             }
             if (!best.found || sc > best.score) {
                 best = { true, d0, sc, survived };
@@ -2929,16 +2940,18 @@ SimPlan ShadowSimulator::planSequence(
         }
 
         {
+            // Single-press exit probe: which first delay actually clears ahead?
             std::vector<InputEvent> tl;
             pushTap(tl, d0, tap);
             auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
             ++combos;
-            int sc = (!rr.died || rr.unknown) ? 100000 : rr.deathTick * 50;
+            bool const survived = !rr.died || rr.unknown;
+            int sc = survived ? 100000 : rr.deathTick * 50;
             float const lat = std::max(0.f, options.latencyWeight);
             sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
             if (rr.activatedRing) sc += 5000;
             if (!best.found || sc > best.score) {
-                best = { true, d0, sc, !rr.died || rr.unknown };
+                best = { true, d0, sc, survived };
             }
         }
         if (depth >= 2) {
@@ -2948,20 +2961,28 @@ SimPlan ShadowSimulator::planSequence(
                 pushTap(tl2, d1, tap);
                 auto rr2 = replay(layer, slot, 0, tl2, dt, horizon, false, 0);
                 ++combos;
-                int sc2 = (!rr2.died || rr2.unknown) ? 100000 : rr2.deathTick * 50;
+                bool const survived2 = !rr2.died || rr2.unknown;
+                int sc2 = survived2 ? 100000 : rr2.deathTick * 50;
                 float const lat2 = std::max(0.f, options.latencyWeight);
                 sc2 += static_cast<int>(rr2.endX - lat2 * static_cast<float>(d0));
                 if (rr2.activatedRing) sc2 += 5000;
                 if (!best.found || sc2 > best.score) {
-                    best = { true, d0, sc2, !rr2.died || rr2.unknown };
+                    best = { true, d0, sc2, survived2 };
                 }
             }
         }
     }
 
-    single.smartDepthUsed = depth;
+    single.smartDepthUsed = std::max(depth, wantExitPredict ? 1 : depth);
     single.smartCombosUsed = combos;
-    if (!best.found || !best.survived) return single;
+    // Only accept a predicted exit that actually survived the horizon.
+    if (!best.found || !best.survived) {
+        AssistLog::debug(fmt::format(
+            "planSequence id={} no surviving exit — keep plan delay={}",
+            single.planId, single.delay
+        ));
+        return single;
+    }
     if (std::find(allowed.begin(), allowed.end(), best.d0) == allowed.end()) return single;
 
     if (best.d0 == 0) {
@@ -2981,9 +3002,9 @@ SimPlan ShadowSimulator::planSequence(
         }
     }
     AssistLog::debug(fmt::format(
-        "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={}",
+        "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={} exitPredict={}",
         single.planId, depth, best.d0, AssistVerdict::name(single.reason),
-        allowed.size(), combos, useBakeChain
+        allowed.size(), combos, useBakeChain, wantExitPredict ? 1 : 0
     ));
     return single;
 }
