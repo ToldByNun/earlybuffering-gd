@@ -86,6 +86,7 @@ bool g_cachedSelfBakeRefine = true;
 bool g_cachedTriggerBake = true;
 bool g_cachedTriggerBakeSkipDynamic = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
+bool g_cachedAssistPickLegacy = false;
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
 int g_cachedCpsLimit = 0;
@@ -260,6 +261,13 @@ void StageConfig::refreshCache() {
     }
     catch (...) {
         g_cachedAssistMode = AssistMode::Hybrid;
+    }
+    try {
+        auto pickStr = mod->getSettingValue<std::string>("assist-pick");
+        g_cachedAssistPickLegacy = (pickStr == "Legacy");
+    }
+    catch (...) {
+        g_cachedAssistPickLegacy = false;
     }
 
     for (int i = 0; i < MODE_COUNT; ++i) {
@@ -438,6 +446,16 @@ bool StageConfig::selfBakeRefine() { ensureCache(); return g_cachedSelfBakeRefin
 bool StageConfig::triggerBake() { ensureCache(); return g_cachedTriggerBake; }
 bool StageConfig::triggerBakeSkipDynamic() { ensureCache(); return g_cachedTriggerBakeSkipDynamic; }
 AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode; }
+
+bool StageConfig::assistPickLegacy() {
+    ensureCache();
+    return g_cachedAssistPickLegacy;
+}
+
+char const* StageConfig::assistPickName() {
+    ensureCache();
+    return g_cachedAssistPickLegacy ? "Legacy" : "New";
+}
 int StageConfig::simBudgetUs() { ensureCache(); return g_cachedSimBudgetUs; }
 int StageConfig::bakeRadius() { ensureCache(); return g_cachedBakeRadius; }
 int StageConfig::cpsLimit() { ensureCache(); return g_cachedCpsLimit; }

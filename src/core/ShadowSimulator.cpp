@@ -2019,7 +2019,15 @@ SimPlan ShadowSimulator::plan(
             break;
         }
         auto c = evalDelay(d, -1);
-        if (c.diedBeforeAction) break;
+        if (c.diedBeforeAction) {
+            // RC6: mark non-viable and keep searching later delays.
+            finalizeViable(c, -1);
+            cands[static_cast<size_t>(d)] = c;
+            if (d >= 0 && d <= limit) {
+                candReady[static_cast<size_t>(d)] = 1;
+            }
+            continue;
+        }
 
         if (c.raw.died && !c.diedBeforeAction && down
             && (model.continuous || real->m_isRobot) && options.maxBranches > 0) {
@@ -2129,16 +2137,14 @@ SimPlan ShadowSimulator::plan(
     for (auto& c : cands) {
         c.orbUseful = false;
         if (!orbAssist || !c.activatedRing || !c.viable) continue;
+        // Viable activation is useful for ranking — do not require spatialHint
+        // when d0 already "safe" but missed the ring (orb-miss G1).
         if (!cands[0].clearsThreat) {
             c.orbUseful = true;
             continue;
         }
-        if (cands[0].viable && !cands[0].activatedRing && (orbHint.found || spatialHint)) {
+        if (!cands[0].activatedRing) {
             c.orbUseful = true;
-            continue;
-        }
-        if (cands[0].viable && !cands[0].activatedRing) {
-            c.orbUseful = false;
             continue;
         }
         c.orbUseful = true;
@@ -2218,8 +2224,59 @@ SimPlan ShadowSimulator::plan(
             actMax = d;
         }
     }
+    // Window-cap: activation band never reported past limit.
+    if (actMin > limit) actMin = limit;
+    if (actMax > limit) actMax = limit;
     plan.dMin = actMin;
     plan.dMax = actMax;
+
+    bool const legacyPick = options.legacyPick;
+
+    // Legacy non-orb: earliest ±k-robust (then earliest viable) — not full lexico.
+    auto pickEarliestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
+        if (pool.empty()) return -1;
+        int const k = robustK;
+        int best = -1;
+        for (int d : pool) {
+            if (d < 0 || d > limit) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable) continue;
+            if (needActivation && !c.activatedRing) continue;
+            bool ok = true;
+            for (int e = d - k; e <= d + k; ++e) {
+                if (e < 0 || e > limit) continue;
+                auto const& n = cands[static_cast<size_t>(e)];
+                if (!n.viable) {
+                    ok = false;
+                    break;
+                }
+                if (needActivation && !n.activatedRing) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
+            if (best < 0 || d < best) best = d;
+        }
+        if (best >= 0) return best;
+        for (int d : pool) {
+            if (d < 0 || d > limit) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable) continue;
+            if (needActivation && !c.activatedRing) continue;
+            return d;
+        }
+        return -1;
+    };
+
+    auto applyChosenMeta = [&](int pick) {
+        if (pick < 0 || pick > limit) return;
+        auto const& c = cands[static_cast<size_t>(pick)];
+        plan.threatCleared = c.clearsThreat;
+        plan.activatedRing = c.activatedRing;
+        plan.requireHold = c.requireHold;
+        plan.orbUseful = c.orbUseful;
+    };
 
     int chosen = -1;
     bool doPass = false;
@@ -2231,7 +2288,10 @@ SimPlan ShadowSimulator::plan(
         int const k = robustK;
         auto tryPick = [&](std::vector<int> const& p) -> int {
             for (;;) {
-                int pick = pickRobust(p, true);
+                // Orb window: Legacy earliest-first; New full lexico in band.
+                int pick = legacyPick
+                    ? pickEarliestRobust(p, true)
+                    : pickRobust(p, true);
                 if (pick < 0) return -1;
                 int releaseAfter = cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
                 if (jitterOk(pick, releaseAfter)) return pick;
@@ -2244,46 +2304,52 @@ SimPlan ShadowSimulator::plan(
             chosen = tryPick(interior);
         }
         if (chosen < 0) chosen = tryPick(pool);
-        // No midpoint: earliest ±k-robust, else earliest viable (pickRobust fallback).
         if (chosen >= 0) {
-            auto const& c = cands[static_cast<size_t>(chosen)];
-            plan.orbUseful = c.orbUseful;
+            applyChosenMeta(chosen);
             plan.requireOrb = true;
-            plan.requireHold = c.requireHold;
-            plan.activatedRing = c.activatedRing;
-            plan.threatCleared = c.clearsThreat;
         }
     }
-    else if (cands[0].viable) {
-        int releaseAfter = cands[0].requireHold ? 40 : -1;
-        if (jitterOk(0, releaseAfter)) {
-            doPass = true;
-            chosen = 0;
-            plan.threatCleared = true;
-            plan.nowIsSafe = true;
+    else if (legacyPick) {
+        // Legacy: d0 viable → Pass (no pool compare). Else earliest viable in window.
+        if (cands[0].viable) {
+            int releaseAfter = cands[0].requireHold ? 40 : -1;
+            if (jitterOk(0, releaseAfter)) {
+                doPass = true;
+                chosen = 0;
+                plan.threatCleared = true;
+                plan.nowIsSafe = true;
+            }
+            else {
+                cands[0].viable = false;
+                std::vector<int> pool;
+                for (int d = 0; d <= limit; ++d) pool.push_back(d);
+                for (;;) {
+                    chosen = pickEarliestRobust(pool, false);
+                    if (chosen < 0) break;
+                    int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
+                    if (jitterOk(chosen, releaseAfter2)) break;
+                    cands[static_cast<size_t>(chosen)].viable = false;
+                    chosen = -1;
+                }
+                applyChosenMeta(chosen);
+            }
         }
         else {
-            cands[0].viable = false;
             std::vector<int> pool;
             for (int d = 0; d <= limit; ++d) pool.push_back(d);
             for (;;) {
-                chosen = pickRobust(pool, false);
+                chosen = pickEarliestRobust(pool, false);
                 if (chosen < 0) break;
-                int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
-                if (jitterOk(chosen, releaseAfter2)) break;
+                int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
+                if (jitterOk(chosen, releaseAfter)) break;
                 cands[static_cast<size_t>(chosen)].viable = false;
                 chosen = -1;
             }
-            if (chosen >= 0) {
-                auto const& c = cands[static_cast<size_t>(chosen)];
-                plan.threatCleared = c.clearsThreat;
-                plan.activatedRing = c.activatedRing;
-                plan.requireHold = c.requireHold;
-                plan.orbUseful = c.orbUseful;
-            }
+            applyChosenMeta(chosen);
         }
     }
     else {
+        // New (G1): full pool prefer-delay — no d0-viable auto Pass.
         std::vector<int> pool;
         for (int d = 0; d <= limit; ++d) pool.push_back(d);
         for (;;) {
@@ -2294,12 +2360,28 @@ SimPlan ShadowSimulator::plan(
             cands[static_cast<size_t>(chosen)].viable = false;
             chosen = -1;
         }
-        if (chosen >= 0) {
-            auto const& c = cands[static_cast<size_t>(chosen)];
-            plan.threatCleared = c.clearsThreat;
-            plan.activatedRing = c.activatedRing;
-            plan.requireHold = c.requireHold;
-            plan.orbUseful = c.orbUseful;
+        if (chosen == 0) {
+            doPass = true;
+            plan.threatCleared = true;
+            plan.nowIsSafe = cands[0].viable;
+        }
+        applyChosenMeta(chosen);
+    }
+
+    // G1 window-cap assert.
+    if (chosen > limit) chosen = limit;
+    if (chosen < 0) {
+        // Partial budget: if any activation survived, take earliest act ≤ limit.
+        if (plan.budgetHit && actMin >= 0 && actMin <= limit
+            && cands[static_cast<size_t>(actMin)].viable) {
+            chosen = actMin;
+            doPass = false;
+            applyChosenMeta(chosen);
+            plan.requireOrb = true;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} budget-partial actMin={} pick={}",
+                plan.planId, actMin, chosen
+            ));
         }
     }
 

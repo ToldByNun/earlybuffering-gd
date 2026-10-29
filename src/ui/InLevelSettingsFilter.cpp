@@ -418,6 +418,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("show-pause-hub") == SettingsCategory::Ingame, "cat-hub-ingame");
     expect(categoryForKey("cycle-preset-action") == SettingsCategory::Assist, "cat-cycle-preset");
     expect(categoryForKey("assist-mode") == SettingsCategory::Assist, "cat-assist-mode");
+    expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
     expect(categoryForKey("debug-logging") == SettingsCategory::Main, "cat-debug-main");
     expect(categoryForKey("perf-trace") == SettingsCategory::Main, "cat-perf-main");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");

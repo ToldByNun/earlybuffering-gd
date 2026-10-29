@@ -126,6 +126,9 @@ public:
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
     static char const* assistModeHint(AssistMode mode);
+    // Assist pick inside the tick window: New (default) vs Legacy (1.2.0).
+    static bool assistPickLegacy();
+    static char const* assistPickName();
     static int simBudgetUs();
     static int bakeRadius();
     static int cpsLimit(); // 0 = off; assist pauses while CPS >= this

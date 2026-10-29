@@ -15,6 +15,7 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     root["ticks-wave"] = mod->getSettingValue<int64_t>("ticks-wave");
     root["death-slack"] = mod->getSettingValue<int64_t>("death-slack");
     root["assist-mode"] = mod->getSettingValue<std::string>("assist-mode");
+    root["assist-pick"] = mod->getSettingValue<std::string>("assist-pick");
     root["assist-orbs"] = mod->getSettingValue<bool>("assist-orbs");
     root["tick-budget"] = mod->getSettingValue<int64_t>("tick-budget");
     root["sim-budget-us"] = mod->getSettingValue<int64_t>("sim-budget-us");
@@ -50,7 +51,7 @@ geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
             try { mod->setSettingValue<bool>(k, root[k].asBool().unwrapOr(false)); } catch (...) {}
         }
     };
-    applyS("preset"); applyS("assist-mode");
+    applyS("preset"); applyS("assist-mode"); applyS("assist-pick");
     applyI("ticks-all"); applyI("ticks-wave"); applyI("death-slack");
     applyI("tick-budget"); applyI("sim-budget-us"); applyI("smart-depth");
     applyI("robust-k");

@@ -276,8 +276,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Prefer (New) | When Pick Mode is **New**, choose best viable delay in `0..limit` (full pool compare). Pass only if best is `0` or hopeless. |
-| G1 Legacy | Pick Mode **Legacy** keeps 1.2.0 feel: `d0` viable → Pass; else earliest viable in window (not full pool best). |
+| G1 Prefer (New) | Setting `assist-pick` = **New** (default): choose best viable delay in `0..limit` (full pool lexico). Pass only if best is `0` or hopeless. |
+| G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else earliest ±k-robust viable in window (not full pool best). Orb activation band still applies. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 

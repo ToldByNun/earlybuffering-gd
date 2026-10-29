@@ -6,6 +6,7 @@
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
+#include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
 #include "LevelProfile.hpp"
@@ -725,6 +726,7 @@ void AssistController::updateOverlay() {
             }
         }
         if (StageConfig::assistOrbs()) m_overlayText += " | orbs";
+        this->m_overlayText += fmt::format(" | pick={}", StageConfig::assistPickName());
         if (StageConfig::assistVerifyAb()) m_overlayText += " | VERIFY AB ON";
         if (!StageConfig::safeMode() && StageConfig::isEnabled()) m_overlayText += " | UNSAFE";
         if (auto* pl = PlayLayer::get()) {
@@ -1106,6 +1108,7 @@ void AssistController::fireBuffered(
                 : 1.f;
             opts.maxBranches = 2;
             opts.smartDepth = 1;
+            opts.legacyPick = StageConfig::assistPickLegacy();
             fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, this->m_buffer.down, remaining,
@@ -1642,6 +1645,7 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     opts.smartCombos = StageConfig::smartCombos();
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
+    opts.legacyPick = StageConfig::assistPickLegacy();
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
@@ -1709,7 +1713,8 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
         if (plan.requireOrb && plan.dMin >= 0 && plan.dMax >= plan.dMin) {
             delay = std::max(plan.dMin, std::min(plan.dMax, delay));
         }
-        delay = std::max(1, std::min(limit, delay));
+        delay = MissAssistContracts::clampDelayToWindow(delay, limit);
+        if (delay < 1) delay = 1;
     }
 
     this->m_buffer = {};
@@ -1836,6 +1841,7 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     }
     opts.maxBranches = 4;
     opts.attemptStartTick = effectTick;
+    opts.legacyPick = StageConfig::assistPickLegacy();
     bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind
     );
@@ -1881,7 +1887,8 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
             }
             delay = delay + off;
         }
-        delay = std::max(1, std::min(limit, delay));
+        delay = MissAssistContracts::clampDelayToWindow(delay, limit);
+        if (delay < 1) delay = 1;
     }
 
     this->m_buffer = {};

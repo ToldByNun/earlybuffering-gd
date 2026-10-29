@@ -443,6 +443,16 @@
 			],
 			"default": "Hybrid"
 		},
+		"assist-pick": {
+			"type": "string",
+			"name": "Pick Mode",
+			"description": "How Live/Hybrid picks a delay inside your tick window. New = compare the full window pool and take the best viable timing (prefer-delay). Legacy = 1.2.0 feel: if delay 0 is already safe, click now; otherwise take the earliest viable delay (not the pool best). Never waits past your Limit.",
+			"one-of": [
+				"New",
+				"Legacy"
+			],
+			"default": "New"
+		},
 		"bake-radius": {
 			"type": "int",
 			"name": "Bake Radius",
