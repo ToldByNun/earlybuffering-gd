@@ -22,6 +22,8 @@ public:
 
     static TriggerWorldBaker& get();
 
+    // onLevelInit: load cache; queue budgeted build on miss. No-op if bake off.
+    void loadOrBuild(PlayLayer* layer);
     // Queue a cache-miss build. Work runs via tickSlice (physics tick).
     bool start(PlayLayer* layer);
     void cancel();
@@ -31,6 +33,8 @@ public:
 
     // Amortized collect/bake/commit. Safe no-op when idle.
     void tickSlice();
+    // After death-cancel: resume build if store still empty (reset path).
+    void resumeIfEmpty(PlayLayer* layer);
 
 private:
     enum class Phase {

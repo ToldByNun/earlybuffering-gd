@@ -28,23 +28,34 @@ Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (def
 
 Settings (Trigger World): `trigger-bake` (default on), `trigger-bake-skip-dynamic` (default on).
 
-When enabled, static move/rotate/scale/toggle motion is cached per level content key (`triggers/{fullKey}.json` under the mod save dir). On level enter: `TriggerWorldStore::loadForLevel`; on cache miss `TriggerWorldBaker` queues a **budgeted** build (`tickSlice` each physics tick, ~750µs / few effects — no enter hitch). Spawn-timed StaticMove/Rotate/Scale/Toggle → linear keyframes (caps `kMaxTracks`/`kMaxKeysPerTrack`, TPS from assist or 240). Partial ready tracks publish as slices finish. Group-follow / touch / toggle-orb / enter-X auto are skipped for the static cache. Overlay shows `trigger-world: building N%`.
+When enabled, static move/rotate/scale/toggle motion is cached per level content key (`triggers/{fullKey}.json` under the mod save dir). Overlay shows `trigger-world: …`.
 
-**Sim collision:** if a ready Static* track exists for an object and `applyTriggerWorldAtTick` ran this sim step → `SimCollisionPolicy` returns `Include` (even AnimatedHazard / CollisionObject / etc.). Objects targeted by **player-coupled DynamicFollow** are never trusted at editor pose: with `trigger-bake-skip-dynamic` (default) → `UnknownOnOverlap`; with skip off, a **cheap live probe** snaps lock-to-player / Follow Player Y targets to the ghost (+ offset) and then `Include`. Dual-mode follow and rotate-follow stay Unknown (no probe). **Follow-player is never written to the static JSON.** Not-ready static tracks / other unknowns keep prior gating. Off `trigger-bake` = clear store / legacy Unknown-on-overlap. Cancel on quit / death (no death flush).
+**Lifecycle**
 
-JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Save on quit/complete when dirty (not on death).
+| Event | Trigger world |
+|-------|----------------|
+| Level enter (`onLevelInit`) | `TriggerWorldBaker::loadOrBuild` — load JSON; on miss queue budgeted `tickSlice` build |
+| Physics tick | `tickSlice` (~750µs); sim apply uses `attemptStartTick + t` |
+| Checkpoint | **Keep** store + baker; reset `attemptTick` only (no rebuild) |
+| Death | Cancel in-flight slices (no disk flush); `resetAttempt` **resumes** build if store still empty |
+| Complete | `save` if dirty (no clear) |
+| Quit | Cancel → `save` if dirty → `clear` |
+| `trigger-bake` off | Clear store; no build |
 
-`ShadowSimulator::beginCapture` snapshots position/rotation/scale/visible for every **ready Static*** track object (`eb.trigger.capture`). During sim, `stepPhysics` / `stepPreCollide` call `applyTriggerWorldAtTick` with absolute attempt tick (`m_simTickBase + t`, from `PlanOptions.attemptStartTick` / replay start). That samples hold-keyframes via `TriggerWorldStore::samplePose` and writes via `writePose` / capture-list pointers (`eb.trigger.apply`). `TriggerWorldStore::applyAtTick` is the full objectLayer walk (debug / non-hot). Tick before first key → leave capture baseline; past last → hold. `restoreCapture` restores transforms **before** activation flags; `evacuateGhosts` also restores if a sim aborted mid-apply (`eb.trigger.restore`). Stale pointers skipped via `m_uniqueID` check.
+**Sim collision:** ready Static* track + apply this step → `Include`. DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay Unknown. **Follow-player never enters static JSON.**
 
-Classifier (`TriggerClassify`): **collision-relevant** — Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Toggle trigger is bakeable as `StaticToggle` (pose `a`/visible) when spawn-timed. **Toggle orb (1594)** → always `DynamicOther` (player hit spawns/despawns groups). Camera/pulse/song/etc. → always `Ignore`.
+JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Baker: spawn-timed StaticMove/Rotate/Scale/Toggle (linear); group-follow / touch / toggle-orb / enter-X skipped.
 
-**Static vs player-dynamic:** Following **another group/object** (e.g. group 6 follows group 5 that moved +10/−100) is `StaticMove` — the chain is deterministic and bakeable. Only motion that depends on the **live player** is `DynamicFollow` (lock-to-player, rotate-follow P1/P2, target-player flags, Follow Player Y `1585`, lock-to-camera on movers). Touch-triggered motion/toggle start → `DynamicOther`. Unknown effect IDs → `Ignore`. `TriggerClassify::selfCheck` runs at mod load. Baker never enqueues Dynamic* regardless of `trigger-bake-skip-dynamic`.
+`ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
+
+Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Camera/pulse/song → `Ignore`. Group-follow → `StaticMove`; player-coupled → `DynamicFollow`; touch → `DynamicOther`.
 
 ## Not in scope
 
 - Late-forgiveness (rewind time for late clicks)
 - Enabling raw `triggerObject` during live plan (mutates the real level)
 - Multi-click injection queue beyond Smart d0 selection
+- Perfect spawn-DAG / every 2.2 trigger flavour in the static baker (unknown statics stay DynamicOther / Unknown until supported)
 
 ## Pause / settings UI
 

@@ -161,6 +161,44 @@ std::string TriggerWorldBaker::statusLine() const {
     return TriggerWorldStore::get().statusLine();
 }
 
+void TriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
+    this->cancel();
+    if (!layer || !layer->m_level) {
+        TriggerWorldStore::get().clear();
+        return;
+    }
+    if (!StageConfig::triggerBake()) {
+        TriggerWorldStore::get().clear();
+        this->m_status.clear();
+        return;
+    }
+
+    {
+        LagProbe::Scope const lagScope("eb.triggerBake.load");
+        TriggerWorldStore::get().loadForLevel(layer->m_level);
+    }
+
+    if (TriggerWorldStore::get().hasTracks()) {
+        this->m_status = TriggerWorldStore::get().statusLine();
+        AssistLog::debug(fmt::format(
+            "TRIGGER-WORLD: cache hit ({})",
+            this->m_status
+        ));
+        return;
+    }
+
+    this->start(layer);
+}
+
+void TriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
+    if (!layer || !StageConfig::triggerBake()) return;
+    if (this->m_running) return;
+    auto& store = TriggerWorldStore::get();
+    if (!store.loaded() || store.hasTracks()) return;
+    AssistLog::debug("TRIGGER-WORLD: resume build after empty cancel");
+    this->start(layer);
+}
+
 bool TriggerWorldBaker::start(PlayLayer* layer) {
     if (!layer) return false;
     if (!StageConfig::triggerBake()) return false;

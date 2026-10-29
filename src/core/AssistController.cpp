@@ -146,19 +146,30 @@ void AssistController::clearBuffer() { m_buffer = {}; }
 
 void AssistController::onCheckpointLoad() {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
+    // Trigger world: keep store + in-flight baker; only reset abs attempt tick.
     SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint", false);
     clearBuffer();
     m_pendingRelease = false;
     m_pendingReleaseHold = false;
     m_outcomePending = false;
+    this->m_attemptTick = 0;
+    this->m_startSnapshotTaken = false;
+    this->m_startSnapshotSlot = -1;
     ClickIntentGuard::get().reset();
+    LagProbe::get().mark(
+        "triggerWorld.checkpoint",
+        "keep store / no rebuild / attemptTick=0"
+    );
 }
 
 void AssistController::onLevelComplete(PlayLayer* playLayer) {
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "complete");
     LevelProfile::get().save();
     BakeMap::get().save();
-    TriggerWorldStore::get().save();
+    {
+        LagProbe::Scope const s("eb.triggerBake.save");
+        TriggerWorldStore::get().save();
+    }
 }
 
 void AssistController::syncButtonState(PlayLayer* playLayer) {
@@ -225,6 +236,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
         LagProbe::Scope const s("eb.updateOverlay");
         updateOverlay();
     }
+    // Death may have cancelled an in-flight trigger bake — resume if still empty.
+    TriggerWorldBaker::get().resumeIfEmpty(playLayer);
 }
 
 void AssistController::onLevelInit(PlayLayer* playLayer) {
@@ -238,18 +251,7 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
         BakeMap::get().loadForLevel(playLayer->m_level);
-        if (StageConfig::triggerBake()) {
-            TriggerWorldBaker::get().cancel();
-            TriggerWorldStore::get().loadForLevel(playLayer->m_level);
-            // Cache miss → kinematic static bake (Commit 6 sync; Commit 7 slices).
-            if (!TriggerWorldStore::get().hasTracks()) {
-                TriggerWorldBaker::get().start(playLayer);
-            }
-        }
-        else {
-            TriggerWorldBaker::get().cancel();
-            TriggerWorldStore::get().clear();
-        }
+        TriggerWorldBaker::get().loadOrBuild(playLayer);
     }
     updateOverlay();
 }
@@ -272,7 +274,10 @@ void AssistController::onLevelQuit() {
     // hitching quits; pending lines flush on next enable / natural batch.
     LevelProfile::get().save();
     BakeMap::get().save();
-    TriggerWorldStore::get().save();
+    {
+        LagProbe::Scope const s("eb.triggerBake.save");
+        TriggerWorldStore::get().save();
+    }
     LevelProfile::get().clear();
     TriggerWorldStore::get().clear();
 
