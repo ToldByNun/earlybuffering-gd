@@ -16,6 +16,7 @@
 #include "../dev/DevClockContract.hpp"
 #include "../dev/DevConfig.hpp"
 #include "../dev/DevCycleRecorder.hpp"
+#include "../dev/DevEvalEngine.hpp"
 #include "../dev/DevEvalRestore.hpp"
 #include "../dev/DevLiveWitness.hpp"
 #include "../dev/DevStateDiff.hpp"
@@ -57,6 +58,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(DevEvalRestore::selfCheck(devRestoreReport), "dev-eval-restore");
     std::string devDiffReport;
     expect(DevStateDiff::selfCheck(devDiffReport), "dev-state-diff");
+    std::string devEvalReport;
+    expect(DevEvalEngine::selfCheck(devEvalReport), "dev-eval-engine");
     std::string verdictReport;
     expect(AssistVerdict::selfCheck(verdictReport), "assist-verdict");
     std::string missReport;

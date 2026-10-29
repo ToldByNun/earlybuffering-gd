@@ -53,6 +53,12 @@ void ShadowSimulator::attach(PlayLayer* layer) {
         auto const id = fmt::format("earlybuffer-snapshot-{}", i);
         m_snapshots[i] = makeHidden(id.c_str());
     }
+    for (int i = 0; i < DEV_EVAL_SLOTS; ++i) {
+        auto const id = fmt::format("earlybuffer-eval-{}", i);
+        m_evalGhosts[i] = makeHidden(id.c_str());
+    }
+    m_evalActive = nullptr;
+    m_evalAbort = false;
     m_nextSnapshot = 0;
     m_hostLayer = layer;
 }
@@ -113,6 +119,9 @@ void ShadowSimulator::detach(bool layerDying) {
     };
     kill(this->m_shadow);
     for (auto& s : this->m_snapshots) kill(s);
+    for (auto& e : this->m_evalGhosts) kill(e);
+    this->m_evalActive = nullptr;
+    this->m_evalAbort = false;
 }
 
 bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
@@ -121,7 +130,14 @@ bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
     for (auto* s : m_snapshots) {
         if (p == s) return true;
     }
+    for (auto* e : m_evalGhosts) {
+        if (p == e) return true;
+    }
     return false;
+}
+
+void ShadowSimulator::abortEval() {
+    this->m_evalAbort = true;
 }
 
 bool ShadowSimulator::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* obj) {
@@ -166,7 +182,7 @@ void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, Shado
 
     // Only match our known ghost pointers by raw address. Section slots can hold
     // freed/poison entries (0xFFF…); typeinfo_cast on those AVs (read @ -1).
-    GameObject* ghosts[1 + SNAPSHOT_SLOTS]{};
+    GameObject* ghosts[1 + SNAPSHOT_SLOTS + DEV_EVAL_SLOTS]{};
     int ghostCount = 0;
     if (self->m_shadow) {
         ghosts[ghostCount++] = self->m_shadow;
@@ -174,6 +190,10 @@ void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, Shado
     for (auto* slot : self->m_snapshots) {
         if (!slot) continue;
         ghosts[ghostCount++] = slot;
+    }
+    for (auto* eg : self->m_evalGhosts) {
+        if (!eg) continue;
+        ghosts[ghostCount++] = eg;
     }
     if (ghostCount <= 0) return;
 
@@ -315,6 +335,9 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     for (auto* slot : this->m_snapshots) {
         noteIndexed(slot);
     }
+    for (auto* eg : this->m_evalGhosts) {
+        noteIndexed(eg);
+    }
     LagProbe::get().mark("evacuate.indexed", anyIndexed ? "yes" : "no");
     if (anyIndexed) {
         LagProbe::Scope const s("eb.evacuate.scrub");
@@ -326,6 +349,9 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
         ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
         for (auto* slot : this->m_snapshots) {
             ShadowSimulator::tryRemoveFromSection(layer, slot);
+        }
+        for (auto* eg : this->m_evalGhosts) {
+            ShadowSimulator::tryRemoveFromSection(layer, eg);
         }
     }
 
@@ -356,12 +382,18 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
         for (auto* slot : this->m_snapshots) {
             evac(slot);
         }
+        for (auto* eg : this->m_evalGhosts) {
+            evac(eg);
+        }
     }
+    this->m_evalActive = nullptr;
+    // Cancel in-flight eval loop; next evalDelayFromFreeze clears the flag.
+    this->m_evalAbort = true;
 }
 
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {
-    // Only the active sim body drives m_dead; snapshots are frozen copies.
-    if (p == m_shadow) {
+    // Active sim body (live shadow or eval ghost) drives m_dead.
+    if (p == m_shadow || (m_evalActive && p == m_evalActive)) {
         m_dead = true;
         m_deathObject = object;
     }
@@ -3386,6 +3418,230 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     if (fails == 0) report = "regressionSelfCheck OK (bins+zone+5 snaps)";
     else report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
     return fails == 0;
+}
+
+void ShadowSimulator::applyPlayerBlob(PlayerObject* dst, DevPlayerBlob const& blob) {
+    if (!dst || !blob.present) return;
+    dst->setPosition({ blob.x, blob.y });
+    dst->m_position = cocos2d::CCPoint{ blob.x, blob.y };
+    dst->setRotation(blob.rotation);
+    dst->setScaleX(blob.scaleX);
+    dst->setScaleY(blob.scaleY);
+    dst->m_yVelocity = blob.yVelocity;
+    dst->m_fallSpeed = blob.fallSpeed;
+    dst->m_gravity = blob.gravity;
+    dst->m_gravityMod = blob.gravityMod;
+    dst->m_speedMultiplier = blob.speedMultiplier;
+    dst->m_playerSpeed = blob.playerSpeed;
+    dst->m_vehicleSize = blob.vehicleSize;
+    dst->m_platformerXVelocity = blob.platformerXVelocity;
+    dst->m_isUpsideDown = blob.isUpsideDown;
+    dst->m_isSideways = blob.isSideways;
+    dst->m_isGoingLeft = blob.isGoingLeft;
+    dst->m_isShip = blob.isShip;
+    dst->m_isBall = blob.isBall;
+    dst->m_isBird = blob.isBird;
+    dst->m_isSwing = blob.isSwing;
+    dst->m_isDart = blob.isDart;
+    dst->m_isRobot = blob.isRobot;
+    dst->m_isSpider = blob.isSpider;
+    dst->m_isSecondPlayer = blob.isSecondPlayer;
+    dst->m_isPlatformer = blob.isPlatformer;
+    dst->m_isDashing = blob.isDashing;
+    dst->m_isOnGround = blob.isOnGround;
+    dst->m_isOnGround2 = blob.isOnGround2;
+    dst->m_isOnSlope = blob.isOnSlope;
+    dst->m_wasOnSlope = blob.wasOnSlope;
+    dst->m_jumpBuffered = blob.jumpBuffered;
+    dst->m_wasJumpBuffered = blob.wasJumpBuffered;
+    dst->m_stateRingJump = blob.stateRingJump;
+    dst->m_hasEverJumped = blob.hasEverJumped;
+    dst->m_hasEverHitRing = blob.hasEverHitRing;
+    dst->m_isLocked = blob.isLocked;
+    dst->m_controlsDisabled = blob.controlsDisabled;
+    dst->m_maybeIsFalling = blob.maybeIsFalling;
+    dst->m_maybeIsBoosted = blob.maybeIsBoosted;
+    dst->m_isDead = false;
+    hideGhost(dst);
+}
+
+ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
+    PlayLayer* layer,
+    DevLiveWitness const& witness,
+    int delay,
+    int horizonTicks,
+    bool down,
+    int* tickBudgetLeft
+) {
+    EvalFromFreezeResult out;
+    out.evalSimPathId = DevSimPathId::EvalDelayFromFreeze;
+    this->m_evalAbort = false;
+
+    if (!witness.valid || !witness.clock.valid
+        || !DevClockContract::get().clockOk(witness.clock)) {
+        out.clockMismatch = true;
+        return out;
+    }
+    if (!layer || !this->m_evalGhosts[0] || layer != this->m_hostLayer) {
+        return out;
+    }
+    if (!witness.player.present) {
+        return out;
+    }
+    if (delay < 0) delay = 0;
+    if (horizonTicks < 0) horizonTicks = 0;
+
+    auto& clock = DevClockContract::get();
+    auto steps = clock.stepSchedule(witness.clock, delay, horizonTicks);
+    out.stepScheduleHash = clock.hashSteps(steps);
+    if (steps.empty()) return out;
+
+    out.restore = DevEvalRestore::beginFromWitness(
+        witness, DevSimPathId::EvalDelayFromFreeze
+    );
+
+    PlayerObject* ghost = this->m_evalGhosts[0];
+    applyPlayerBlob(ghost, witness.player);
+    DevEvalRestore::notePlayerWritten(out.restore, witness.player);
+    if (witness.dual.present && this->m_evalGhosts[1]) {
+        applyPlayerBlob(this->m_evalGhosts[1], witness.dual);
+        DevEvalRestore::noteDualWritten(out.restore, witness.dual);
+    }
+    if (witness.hasHazardDigest) {
+        DevEvalRestore::noteMoversDigestOnly(out.restore, witness.hazardDigest);
+    }
+    if (!witness.orbIds.empty()) {
+        DevEvalRestore::noteOrbsWritten(out.restore, witness.orbIds);
+    }
+
+    this->m_evalActive = ghost;
+    this->m_simulating = true;
+    this->m_dead = false;
+    this->m_jumped = false;
+    this->m_unknown = false;
+    this->m_activatedRing = false;
+    this->m_ringCount = 0;
+    this->m_deathObject = nullptr;
+    this->m_simTickBase = witness.clock.effectTick;
+
+    ghost->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
+
+    bool acted = false;
+    out.actionTick = delay;
+    out.ran = true;
+
+    auto spend = [&]() -> bool {
+        if (!tickBudgetLeft) return false;
+        if (*tickBudgetLeft <= 0) return true;
+        --(*tickBudgetLeft);
+        return false;
+    };
+
+    int const n = static_cast<int>(steps.size());
+    for (int t = 0; t < n; ++t) {
+        if (this->m_evalAbort) {
+            out.aborted = true;
+            break;
+        }
+        if (spend()) {
+            out.budgetHit = true;
+            break;
+        }
+        float const stepDt = steps[static_cast<size_t>(t)];
+        out.ticksRan = t + 1;
+        this->m_orbOverlapTick = false;
+        this->m_simAbsTick = this->m_simTickBase + t;
+        this->m_triggerWorldAppliedThisTick = false;
+
+        if (t < delay) {
+            stepPreCollide(layer, ghost, witness.clock.simDt);
+            if (this->m_dead) {
+                out.died = true;
+                out.deathTick = t;
+                out.endX = ghost->getPositionX();
+                break;
+            }
+            if (this->m_unknown) {
+                out.unknown = true;
+                break;
+            }
+        }
+
+        if (!acted && t == delay) {
+            acted = true;
+            if (down) {
+                ghost->pushButton(PlayerButton::Jump);
+                ghost->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
+            }
+            else {
+                ghost->releaseButton(PlayerButton::Jump);
+                ghost->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+            }
+        }
+
+        stepPhysics(layer, ghost, stepDt, witness.clock.simDt);
+        if (this->m_dead) {
+            out.died = true;
+            out.deathTick = t;
+            out.endX = ghost->getPositionX();
+            break;
+        }
+        if (this->m_unknown) {
+            out.unknown = true;
+            out.endX = ghost->getPositionX();
+            break;
+        }
+        out.endX = ghost->getPositionX();
+    }
+
+    this->m_simAbsTick = -1;
+    this->m_simulating = false;
+    this->m_evalActive = nullptr;
+    // Park eval ghost (same evacuate rules as shadow).
+    if (auto* pl = PlayLayer::get()) {
+        if (pl == this->m_hostLayer) {
+            tryRemoveFromSection(pl, ghost);
+        }
+    }
+    ghost->m_outerSectionIndex = -1;
+    ghost->m_innerSectionIndex = -1;
+    ghost->m_middleSectionIndex = -1;
+    ghost->setPosition({ 0.f, 105.f });
+    ghost->m_position = cocos2d::CCPoint{ 0.f, 105.f };
+    hideGhost(ghost);
+    return out;
+}
+
+ShadowSimulator::EvalFromFreezeResult ShadowSimulator::replayActualFire(
+    PlayLayer* layer,
+    DevLiveWitness const& witness,
+    int actualFireTickAbs,
+    int horizonTicks,
+    bool down,
+    int* tickBudgetLeft
+) {
+    EvalFromFreezeResult out;
+    out.evalSimPathId = DevSimPathId::ReplayActualFire;
+    this->m_evalAbort = false;
+
+    if (!witness.valid || !witness.clock.valid
+        || !DevClockContract::get().clockOk(witness.clock)) {
+        out.clockMismatch = true;
+        return out;
+    }
+    // Delay from effectTick to actual fire (clamped ≥ 0).
+    int delay = actualFireTickAbs - witness.clock.effectTick;
+    if (delay < 0) delay = 0;
+
+    // Reuse the schedule path but retag evalSimPathId / restore path id.
+    out = this->evalDelayFromFreeze(
+        layer, witness, delay, horizonTicks, down, tickBudgetLeft
+    );
+    out.evalSimPathId = DevSimPathId::ReplayActualFire;
+    if (out.restore.valid) {
+        out.restore.evalSimPathId = DevSimPathId::ReplayActualFire;
+    }
+    return out;
 }
 
 

@@ -4,6 +4,9 @@
 #include "AssistVerdict.hpp"
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
+#include "../dev/DevClockContract.hpp"
+#include "../dev/DevEvalRestore.hpp"
+#include "../dev/DevLiveWitness.hpp"
 
 #include <Geode/Geode.hpp>
 #include <cstdint>
@@ -106,6 +109,8 @@ struct InputEvent {
 class ShadowSimulator {
 public:
     static constexpr int SNAPSHOT_SLOTS = 16;
+    // Permanent eval ghosts (Commit 9) — not the 16 live snapshot slots.
+    static constexpr int DEV_EVAL_SLOTS = 2;
     static constexpr float kClusterGapX = 50.f;
     static constexpr int kWindowMarginK = 1;
     static constexpr int kDefaultTickBudget = 4000;
@@ -187,6 +192,50 @@ public:
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
         float dt, float firstDt, PlanOptions const& options = {}
     );
+
+    // --- Dev Lab eval (Commit 9): clock-bound stepSchedule, own ghosts ---
+    struct EvalFromFreezeResult {
+        bool ran = false;
+        bool clockMismatch = false;
+        bool aborted = false;
+        bool died = false;
+        int deathTick = -1;
+        float endX = 0.f;
+        bool unknown = false;
+        bool budgetHit = false;
+        int ticksRan = 0;
+        int actionTick = -1; // schedule index where input fired
+        uint64_t stepScheduleHash = 0;
+        DevSimPathId evalSimPathId = DevSimPathId::None;
+        DevEvalRestore restore{};
+    };
+
+    // Overlay serializable blob fields onto a ghost (eval restore path).
+    static void applyPlayerBlob(PlayerObject* dst, DevPlayerBlob const& blob);
+
+    // Counterfactual delay d on witness stamp; steps from DevClockContract::stepSchedule.
+    EvalFromFreezeResult evalDelayFromFreeze(
+        PlayLayer* layer,
+        DevLiveWitness const& witness,
+        int delay,
+        int horizonTicks,
+        bool down,
+        int* tickBudgetLeft = nullptr
+    );
+
+    // Replay actualFireTick (absolute) on the same stamp — not a delay search.
+    EvalFromFreezeResult replayActualFire(
+        PlayLayer* layer,
+        DevLiveWitness const& witness,
+        int actualFireTickAbs,
+        int horizonTicks,
+        bool down,
+        int* tickBudgetLeft = nullptr
+    );
+
+    // Quit / reset: abort an in-flight eval loop.
+    void abortEval();
+    bool evalAbortRequested() const { return this->m_evalAbort; }
 
     // Build hazard cluster around a death X / object (public for tests/logging).
     static ThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
@@ -424,6 +473,10 @@ private:
 
     PlayerObject* m_shadow = nullptr;
     PlayerObject* m_snapshots[SNAPSHOT_SLOTS] = {};
+    PlayerObject* m_evalGhosts[DEV_EVAL_SLOTS] = {};
+    // Active body for markDead during evalDelayFromFreeze / replayActualFire.
+    PlayerObject* m_evalActive = nullptr;
+    bool m_evalAbort = false;
     // Layer that owns the ghost children. resetLevel runs during PlayLayer::init
     // (setupHasCompleted) before onLevelInit/attach — evacuate must no-op then.
     GJBaseGameLayer* m_hostLayer = nullptr;

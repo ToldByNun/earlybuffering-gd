@@ -295,6 +295,7 @@ void AssistController::onLevelQuit() {
     auto* playLayer = PlayLayer::get();
     // Dev traces must flush BEFORE ghost evacuate / detach (partial OK).
     DevCycleRecorder::get().flushQuit();
+    ShadowSimulator::get().abortEval();
     TriggerWorldBaker::get().cancel();
     SelfBakeRecorder::get().cancelRefine();
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "quit");
