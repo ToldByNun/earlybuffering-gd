@@ -16,6 +16,7 @@
 #include "../dev/DevClockContract.hpp"
 #include "../dev/DevConfig.hpp"
 #include "../dev/DevCycleRecorder.hpp"
+#include "../dev/DevLiveWitness.hpp"
 #include "../dev/DevTraceStore.hpp"
 #include <fmt/format.h>
 
@@ -48,6 +49,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistClock::selfCheck(clockReport), "assist-clock");
     std::string devClockReport;
     expect(DevClockContract::selfCheck(devClockReport), "dev-clock-contract");
+    std::string devWitnessReport;
+    expect(DevLiveWitness::selfCheck(devWitnessReport), "dev-live-witness");
     std::string verdictReport;
     expect(AssistVerdict::selfCheck(verdictReport), "assist-verdict");
     std::string missReport;

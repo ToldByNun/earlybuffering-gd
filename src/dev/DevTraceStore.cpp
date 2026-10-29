@@ -4,6 +4,7 @@
 #include <Geode/utils/file.hpp>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fmt/format.h>
 #include <fstream>
@@ -297,6 +298,208 @@ static bool clockStampFromJson(
     return true;
 }
 
+static matjson::Value playerBlobToJson(DevPlayerBlob const& b) {
+    matjson::Value j = matjson::Value::object();
+    j["present"] = b.present;
+    if (!b.present) return j;
+    j["x"] = b.x;
+    j["y"] = b.y;
+    j["rotation"] = b.rotation;
+    j["scaleX"] = b.scaleX;
+    j["scaleY"] = b.scaleY;
+    j["yVelocity"] = b.yVelocity;
+    j["fallSpeed"] = b.fallSpeed;
+    j["gravity"] = b.gravity;
+    j["gravityMod"] = b.gravityMod;
+    j["speedMultiplier"] = b.speedMultiplier;
+    j["playerSpeed"] = b.playerSpeed;
+    j["vehicleSize"] = b.vehicleSize;
+    j["platformerXVelocity"] = b.platformerXVelocity;
+    j["isUpsideDown"] = b.isUpsideDown;
+    j["isSideways"] = b.isSideways;
+    j["isGoingLeft"] = b.isGoingLeft;
+    j["isShip"] = b.isShip;
+    j["isBall"] = b.isBall;
+    j["isBird"] = b.isBird;
+    j["isSwing"] = b.isSwing;
+    j["isDart"] = b.isDart;
+    j["isRobot"] = b.isRobot;
+    j["isSpider"] = b.isSpider;
+    j["isSecondPlayer"] = b.isSecondPlayer;
+    j["isPlatformer"] = b.isPlatformer;
+    j["isDashing"] = b.isDashing;
+    j["isOnGround"] = b.isOnGround;
+    j["isOnGround2"] = b.isOnGround2;
+    j["isOnSlope"] = b.isOnSlope;
+    j["wasOnSlope"] = b.wasOnSlope;
+    j["jumpBuffered"] = b.jumpBuffered;
+    j["wasJumpBuffered"] = b.wasJumpBuffered;
+    j["stateRingJump"] = b.stateRingJump;
+    j["hasEverJumped"] = b.hasEverJumped;
+    j["hasEverHitRing"] = b.hasEverHitRing;
+    j["isLocked"] = b.isLocked;
+    j["controlsDisabled"] = b.controlsDisabled;
+    j["maybeIsFalling"] = b.maybeIsFalling;
+    j["maybeIsBoosted"] = b.maybeIsBoosted;
+    return j;
+}
+
+static void playerBlobFromJson(matjson::Value const& j, DevPlayerBlob& b) {
+    b = {};
+    b.present = j.contains("present") ? j["present"].asBool().unwrapOr(false) : false;
+    if (!b.present) return;
+    auto f = [&](char const* k, float& out) {
+        if (j.contains(k)) out = static_cast<float>(j[k].asDouble().unwrapOr(0.0));
+    };
+    auto bo = [&](char const* k, bool& out) {
+        if (j.contains(k)) out = j[k].asBool().unwrapOr(false);
+    };
+    f("x", b.x); f("y", b.y); f("rotation", b.rotation);
+    f("scaleX", b.scaleX); f("scaleY", b.scaleY);
+    f("yVelocity", b.yVelocity); f("fallSpeed", b.fallSpeed);
+    f("gravity", b.gravity); f("gravityMod", b.gravityMod);
+    f("speedMultiplier", b.speedMultiplier); f("playerSpeed", b.playerSpeed);
+    f("vehicleSize", b.vehicleSize); f("platformerXVelocity", b.platformerXVelocity);
+    bo("isUpsideDown", b.isUpsideDown); bo("isSideways", b.isSideways);
+    bo("isGoingLeft", b.isGoingLeft); bo("isShip", b.isShip); bo("isBall", b.isBall);
+    bo("isBird", b.isBird); bo("isSwing", b.isSwing); bo("isDart", b.isDart);
+    bo("isRobot", b.isRobot); bo("isSpider", b.isSpider);
+    bo("isSecondPlayer", b.isSecondPlayer); bo("isPlatformer", b.isPlatformer);
+    bo("isDashing", b.isDashing); bo("isOnGround", b.isOnGround);
+    bo("isOnGround2", b.isOnGround2); bo("isOnSlope", b.isOnSlope);
+    bo("wasOnSlope", b.wasOnSlope); bo("jumpBuffered", b.jumpBuffered);
+    bo("wasJumpBuffered", b.wasJumpBuffered); bo("stateRingJump", b.stateRingJump);
+    bo("hasEverJumped", b.hasEverJumped); bo("hasEverHitRing", b.hasEverHitRing);
+    bo("isLocked", b.isLocked); bo("controlsDisabled", b.controlsDisabled);
+    bo("maybeIsFalling", b.maybeIsFalling); bo("maybeIsBoosted", b.maybeIsBoosted);
+}
+
+static matjson::Value witnessToJson(DevLiveWitness const& w) {
+    matjson::Value j = matjson::Value::object();
+    j["playerBlobSchema"] = fmt::format("{:016x}", w.playerBlobSchema);
+    j["freezeWorld"] = w.freezeWorld;
+    j["player"] = playerBlobToJson(w.player);
+    if (w.dual.present) j["dual"] = playerBlobToJson(w.dual);
+    if (w.clock.valid) j["clock"] = clockStampToJson(w.clock);
+
+    std::vector<matjson::Value> cats;
+    cats.reserve(w.categories.size());
+    for (auto const& c : w.categories) {
+        matjson::Value cj = matjson::Value::object();
+        cj["category"] = DevLiveWitness::categoryId(c.category);
+        cj["status"] = DevLiveWitness::statusId(c.status);
+        if (c.digest != 0) {
+            cj["digest"] = fmt::format("{:016x}", c.digest);
+        }
+        if (c.digestMismatch) cj["digestMismatch"] = true;
+        cats.push_back(cj);
+    }
+    j["categories"] = cats;
+
+    std::vector<matjson::Value> deps;
+    for (int d : w.worldDeps) {
+        deps.push_back(DevLiveWitness::categoryId(
+            static_cast<DevWitnessCategory>(d)
+        ));
+    }
+    j["worldDeps"] = deps;
+
+    if (!w.orbIds.empty()) {
+        std::vector<matjson::Value> orbs;
+        orbs.reserve(w.orbIds.size());
+        for (int id : w.orbIds) orbs.push_back(id);
+        j["orbIds"] = orbs;
+    }
+    if (!w.triggerStoreKey.empty()) j["triggerStoreKey"] = w.triggerStoreKey;
+    j["triggerStoreVersion"] = w.triggerStoreVersion;
+    j["triggerApplyTick"] = w.triggerApplyTick;
+    j["triggerCanSpool"] = w.triggerCanSpool;
+    if (w.hasHazardDigest) {
+        j["hazardDigest"] = fmt::format("{:016x}", w.hazardDigest);
+    }
+    return j;
+}
+
+static bool witnessFromJson(
+    matjson::Value const& j, DevLiveWitness& w, std::string& err
+) {
+    w = {};
+    w.valid = true;
+    if (j.contains("playerBlobSchema")) {
+        auto s = std::string(j["playerBlobSchema"].asString().unwrapOr("0"));
+        w.playerBlobSchema = std::strtoull(s.c_str(), nullptr, 16);
+    }
+    w.freezeWorld = j.contains("freezeWorld")
+        ? j["freezeWorld"].asBool().unwrapOr(false)
+        : false;
+    if (j.contains("player")) playerBlobFromJson(j["player"], w.player);
+    if (j.contains("dual")) playerBlobFromJson(j["dual"], w.dual);
+    if (j.contains("clock")) {
+        std::string clockErr;
+        if (!clockStampFromJson(j["clock"], w.clock, clockErr)) {
+            err = clockErr.empty() ? "bad-witness-clock" : clockErr;
+            return false;
+        }
+    }
+    if (j.contains("categories") && j["categories"].isArray()) {
+        for (auto const& cj : j["categories"].asArray().unwrap()) {
+            DevWitnessCategoryEntry e;
+            auto cat = std::string(cj["category"].asString().unwrapOr(""));
+            auto st = std::string(cj["status"].asString().unwrapOr("absent"));
+            if (!DevLiveWitness::parseCategory(cat, e.category)) {
+                err = "bad-witness-category";
+                return false;
+            }
+            if (!DevLiveWitness::parseStatus(st, e.status)) {
+                err = "bad-witness-status";
+                return false;
+            }
+            if (cj.contains("digest")) {
+                auto ds = std::string(cj["digest"].asString().unwrapOr("0"));
+                e.digest = std::strtoull(ds.c_str(), nullptr, 16);
+            }
+            e.digestMismatch = cj.contains("digestMismatch")
+                ? cj["digestMismatch"].asBool().unwrapOr(false)
+                : false;
+            w.categories.push_back(e);
+        }
+    }
+    if (j.contains("worldDeps") && j["worldDeps"].isArray()) {
+        for (auto const& dj : j["worldDeps"].asArray().unwrap()) {
+            auto name = std::string(dj.asString().unwrapOr(""));
+            DevWitnessCategory c;
+            if (!DevLiveWitness::parseCategory(name, c)) {
+                err = "bad-worldDep";
+                return false;
+            }
+            w.worldDeps.insert(static_cast<int>(c));
+        }
+    }
+    if (j.contains("orbIds") && j["orbIds"].isArray()) {
+        for (auto const& oj : j["orbIds"].asArray().unwrap()) {
+            w.orbIds.push_back(static_cast<int>(oj.asInt().unwrapOr(0)));
+        }
+    }
+    if (j.contains("triggerStoreKey")) {
+        w.triggerStoreKey = std::string(j["triggerStoreKey"].asString().unwrapOr(""));
+    }
+    w.triggerStoreVersion = j.contains("triggerStoreVersion")
+        ? static_cast<int>(j["triggerStoreVersion"].asInt().unwrapOr(0))
+        : 0;
+    w.triggerApplyTick = j.contains("triggerApplyTick")
+        ? static_cast<int>(j["triggerApplyTick"].asInt().unwrapOr(-1))
+        : -1;
+    w.triggerCanSpool = j.contains("triggerCanSpool")
+        ? j["triggerCanSpool"].asBool().unwrapOr(false)
+        : false;
+    if (j.contains("hazardDigest")) {
+        auto hs = std::string(j["hazardDigest"].asString().unwrapOr("0"));
+        w.hazardDigest = std::strtoull(hs.c_str(), nullptr, 16);
+        w.hasHazardDigest = true;
+    }
+    return true;
+}
+
 static matjson::Value eventToJson(DevDecisionEvent const& e) {
     matjson::Value j = matjson::Value::object();
     j["eventId"] = e.eventId;
@@ -318,6 +521,9 @@ static matjson::Value eventToJson(DevDecisionEvent const& e) {
     if (!e.endReason.empty()) j["endReason"] = e.endReason;
     if (e.hasClockStamp && e.clockStamp.valid) {
         j["clock"] = clockStampToJson(e.clockStamp);
+    }
+    if (e.hasWitness && e.witness.valid) {
+        j["witness"] = witnessToJson(e.witness);
     }
     return j;
 }
@@ -372,6 +578,14 @@ static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::str
             return false;
         }
         e.hasClockStamp = true;
+    }
+    if (j.contains("witness")) {
+        std::string witnessErr;
+        if (!witnessFromJson(j["witness"], e.witness, witnessErr)) {
+            err = witnessErr.empty() ? "bad-witness" : witnessErr;
+            return false;
+        }
+        e.hasWitness = true;
     }
     return true;
 }

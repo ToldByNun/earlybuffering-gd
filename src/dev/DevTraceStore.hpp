@@ -2,6 +2,7 @@
 #define DEV_TRACE_STORE_HPP
 
 #include "DevClockContract.hpp"
+#include "DevLiveWitness.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -52,6 +53,10 @@ struct DevDecisionEvent {
     // Commit 6: clock stamp on planFinished (eval binds the same stamp).
     bool hasClockStamp = false;
     DevClockContract::Stamp clockStamp{};
+
+    // Commit 7: live witness at plan time (no restore yet).
+    bool hasWitness = false;
+    DevLiveWitness witness{};
 };
 
 struct DevAttempt {

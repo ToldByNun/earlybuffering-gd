@@ -2,9 +2,13 @@
 #define DEV_CYCLE_RECORDER_HPP
 
 #include "DevClockContract.hpp"
+#include "DevLiveWitness.hpp"
 #include "DevTraceStore.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/ShadowSimulator.hpp"
+
+class PlayLayer;
+class PlayerObject;
 
 #include <cstdint>
 #include <string>
@@ -34,7 +38,9 @@ public:
         SimPlan const& plan,
         int effectTick,
         int limit,
-        DevClockContract::Stamp const& clock
+        DevClockContract::Stamp const& clock,
+        PlayLayer* layer,
+        PlayerObject* player
     );
     void notePassThrough(AssistReason reason, char const* where);
     // Returns pressId of the armed cycle (0 if not recording).

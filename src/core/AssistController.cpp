@@ -2174,7 +2174,9 @@ bool AssistController::planPress(
         ? DevSimPathId::PlanSequence
         : DevSimPathId::Plan;
     clock.effectTick = effectTick;
-    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock);
+    DevCycleRecorder::get().notePlanFinished(
+        plan, effectTick, limit, clock, playLayer, player
+    );
 
     if (plan.action != PlanAction::Delay) {
         if (shouldArmHoldUntilSafe(plan)) {
@@ -2455,7 +2457,9 @@ bool AssistController::planRelease(
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
-    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock);
+    DevCycleRecorder::get().notePlanFinished(
+        plan, effectTick, limit, clock, playLayer, player
+    );
 
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;

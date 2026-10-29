@@ -1,9 +1,13 @@
 #include "DevCycleRecorder.hpp"
 #include "DevConfig.hpp"
+#include "DevLiveWitness.hpp"
 
+#include <Geode/Geode.hpp>
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
+
+using namespace geode::prelude;
 
 DevCycleRecorder& DevCycleRecorder::get() {
     static DevCycleRecorder inst;
@@ -126,7 +130,9 @@ void DevCycleRecorder::notePlanFinished(
     SimPlan const& plan,
     int effectTick,
     int limit,
-    DevClockContract::Stamp const& clock
+    DevClockContract::Stamp const& clock,
+    PlayLayer* layer,
+    PlayerObject* player
 ) {
     (void)limit;
     auto* cycle = this->ensureActiveTracked();
@@ -149,6 +155,22 @@ void DevCycleRecorder::notePlanFinished(
     if (w->hasClockStamp) {
         w->clockStamp.effectTick = effectTick;
     }
+
+    PlayerObject* player2 = nullptr;
+    if (layer && layer->m_player2) {
+        player2 = layer->m_player2;
+    }
+    w->witness = DevLiveWitness::capture(
+        layer,
+        player,
+        player2,
+        plan,
+        w->hasClockStamp ? w->clockStamp : clock,
+        effectTick,
+        DevConfig::freezeWorld()
+    );
+    w->hasWitness = w->witness.valid;
+
     cycle->planId = plan.planId;
     cycle->hasPlan = true;
 }
