@@ -8,6 +8,7 @@
 #include "debug/LagProbe.hpp"
 #include "debug/PerfTrace.hpp"
 #include "debug/PlanGoldCorpus.hpp"
+#include "dev/DevConfig.hpp"
 #include "ui/ActionButtonSetting.hpp"
 #include "ui/InLevelSettingsFilter.hpp"
 #include "ui/StatusOverlay.hpp"
@@ -29,6 +30,7 @@ static void syncLagProbe() {
 static void onAnySetting() {
     if (StageConfig::isApplying()) return;
     StageConfig::refreshCache();
+    DevConfig::refreshCache();
     syncPerfTrace();
     syncLagProbe();
     AssistController::get().updateOverlay();
@@ -44,6 +46,7 @@ $on_mod(Loaded) {
 
     // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
     StageConfig::refreshCache();
+    DevConfig::refreshCache();
     syncPerfTrace();
     syncLagProbe();
     AssistLog::printBanner();
@@ -221,6 +224,28 @@ $on_mod(Loaded) {
         onAnySetting();
     });
     listenForSettingChanges<std::string>("assist-verify", [](std::string) {
+        onAnySetting();
+    });
+
+    // Dev Lab (Commit 2 cache; session/eval still stubbed).
+    watchBool("dev-record-enable");
+    watchInt("dev-record-count");
+    watchBool("dev-record-include-pass");
+    watchBool("dev-count-empty-attempts");
+    watchBool("dev-freeze-world");
+    watchBool("dev-disable-random");
+    watchBool("dev-eval-on-death");
+    watchInt("dev-eval-horizon");
+    watchInt("dev-eval-tail");
+    watchBool("dev-eval-require-deps");
+    watchBool("dev-record-cands");
+    watchInt("dev-eval-budget-us");
+    watchInt("dev-eval-tick-budget");
+    watchBool("dev-overlay");
+    listenForSettingChanges<std::string>("dev-eval-grid", [](std::string) {
+        onAnySetting();
+    });
+    listenForSettingChanges<std::string>("dev-objective", [](std::string) {
         onAnySetting();
     });
     watchBool("save-feedback-sound");

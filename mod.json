@@ -1099,6 +1099,118 @@
 			"min": 1,
 			"max": 50
 		},
+		"dev-record-include-pass": {
+			"type": "bool",
+			"name": "Dev Record Include Pass",
+			"description": "When recording, also trace gate Passes (CPS/scope/spam) so cause analysis is complete. Off = only Delay arms and related fire/outcome events.",
+			"default": true
+		},
+		"dev-count-empty-attempts": {
+			"type": "bool",
+			"name": "Dev Count Empty Attempts",
+			"description": "Count sealed attempts with zero pressObserved toward Record Count. Default off — empty deaths do not burn a session slot.",
+			"default": false
+		},
+		"dev-freeze-world": {
+			"type": "bool",
+			"name": "Dev Freeze World",
+			"description": "Capture nearby object poses / restoreable world state for high-fidelity eval. Off = player+clock digest only (playerOnlyApproximated). Heavier CPU/IO when on.",
+			"default": false
+		},
+		"dev-disable-random": {
+			"type": "bool",
+			"name": "Dev Disable Random",
+			"description": "While recording, force explore / verify-AB off random so live and eval match. Default on. Turn off only if you intentionally want stochastic assist while tracing.",
+			"default": true
+		},
+		"title-dev-eval": {
+			"type": "title",
+			"name": "Dev Eval",
+			"description": "Counterfactual delay grid, horizon, objective, and budgets. Claims require fidelity labels — see docs/dev_lab.md once shipped."
+		},
+		"dev-eval-on-death": {
+			"type": "bool",
+			"name": "Dev Eval On Death",
+			"description": "Automatically run counterfactual eval when an attempt seals with death (if a session is recording / has traces). Off = only Eval actions.",
+			"default": true
+		},
+		"dev-eval-grid": {
+			"type": "string",
+			"name": "Dev Eval Grid",
+			"description": "Which delays to evaluate. band (default) = survivors ±k plus planned/0 — cheaper. full = every delay 0..limit (required for idealDelay eligibility). sparse = 0, mid, limit, planned±2.",
+			"one-of": [
+				"full",
+				"band",
+				"sparse"
+			],
+			"default": "band"
+		},
+		"dev-eval-horizon": {
+			"type": "int",
+			"name": "Dev Eval Horizon",
+			"description": "Primary survival horizon in physics ticks after the action tick. Default 48. bestSurvivingDelay uses this window only.",
+			"default": 48,
+			"min": 1,
+			"max": 320
+		},
+		"dev-eval-tail": {
+			"type": "int",
+			"name": "Dev Eval Tail",
+			"description": "Extra physics ticks after the primary horizon with no further assist input. Used by horizon_clear_v1 and shown on samples. 0 = no tail probe.",
+			"default": 48,
+			"min": 0,
+			"max": 320
+		},
+		"dev-objective": {
+			"type": "string",
+			"name": "Dev Objective",
+			"description": "Named scoring function for bestEvaluatedDelay. survive_then_endx_v1 (default) = survive primary then endX then earlier delay — never writes idealDelay. planner_mirror_v1 = live planner order. horizon_clear_v1 = only path that may set idealDelay when eligibility holds.",
+			"one-of": [
+				"survive_then_endx_v1",
+				"planner_mirror_v1",
+				"horizon_clear_v1"
+			],
+			"default": "survive_then_endx_v1"
+		},
+		"dev-eval-require-deps": {
+			"type": "bool",
+			"name": "Dev Eval Require Deps",
+			"description": "Hard-fail (notReproducible, suppress claims) when dual/triggers/clock deps marked by the live cycle are unrestored. Default on. Off allows more playerOnlyApproximated runs.",
+			"default": true
+		},
+		"dev-record-cands": {
+			"type": "bool",
+			"name": "Dev Record Candidates",
+			"description": "When recording after plan(), store per-delay reject ledger notes (and scores). Default on. Off keeps codes thinner but hurts why-not analysis.",
+			"default": true
+		},
+		"dev-eval-budget-us": {
+			"type": "int",
+			"name": "Dev Eval Budget (µs)",
+			"description": "Soft wall-clock cap for one eval pass (microseconds). 0 = no wall clock limit (tick budget still applies). Partial grids set objectivePartial.",
+			"default": 2000,
+			"min": 0,
+			"max": 20000
+		},
+		"dev-eval-tick-budget": {
+			"type": "int",
+			"name": "Dev Eval Tick Budget",
+			"description": "Hard cap on physics ticks simulated during one eval pass across the delay grid. Higher = more complete; lower = fewer hitches.",
+			"default": 8000,
+			"min": 500,
+			"max": 50000
+		},
+		"title-dev-overlay": {
+			"type": "title",
+			"name": "Dev Overlay",
+			"description": "In-level Dev HUD (REC k/N, fidelity, bestSurv / bestEval). Off by default."
+		},
+		"dev-overlay": {
+			"type": "bool",
+			"name": "Dev Overlay",
+			"description": "Show Dev Lab overlay lines while a session is active or a report is available. Off = no HUD.",
+			"default": false
+		},
 		"title-dev-actions": {
 			"type": "title",
 			"name": "Dev Actions",

@@ -13,6 +13,7 @@
 #include "../core/TriggerClassify.hpp"
 #include "../core/TriggerWorldStore.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
+#include "../dev/DevConfig.hpp"
 #include <fmt/format.h>
 
 bool PlanGoldCorpus::run(std::string& report) {
@@ -54,6 +55,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe");
     std::string divReport;
     expect(DivergenceTracker::selfCheck(divReport), "divergence-clear");
+    std::string devConfigReport;
+    expect(DevConfig::selfCheck(devConfigReport), "dev-config");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";
