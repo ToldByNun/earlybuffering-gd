@@ -21,6 +21,7 @@
 #include "../dev/DevLiveWitness.hpp"
 #include "../dev/DevObjective.hpp"
 #include "../dev/DevRejectLedger.hpp"
+#include "../dev/DevSession.hpp"
 #include "../dev/DevStateDiff.hpp"
 #include "../dev/DevTraceStore.hpp"
 #include <fmt/format.h>
@@ -66,6 +67,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(DevObjective::selfCheck(devObjectiveReport), "dev-objective");
     std::string devLedgerReport;
     expect(DevRejectLedger::selfCheck(devLedgerReport), "dev-reject-ledger");
+    std::string devSessionReport;
+    expect(DevSession::selfCheck(devSessionReport), "dev-session");
     std::string verdictReport;
     expect(AssistVerdict::selfCheck(verdictReport), "assist-verdict");
     std::string missReport;

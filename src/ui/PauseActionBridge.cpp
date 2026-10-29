@@ -9,6 +9,7 @@
 #include "../debug/AssistLog.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevConfig.hpp"
+#include "../dev/DevSession.hpp"
 #include "../dev/DevTraceStore.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
@@ -101,6 +102,9 @@ void PauseActionBridge::refreshPauseLabels(PauseLayer* self) {
                 bake.progress().done.load(),
                 bake.progress().total.load()
             ).c_str());
+        }
+        else if (DevSession::get().isRecording()) {
+            st->setString(DevSession::get().statusLine().c_str());
         }
         else {
             st->setString(bake.pauseStatusLine().c_str());
@@ -302,42 +306,34 @@ void PauseActionBridge::devStartRecord() {
         )->show();
         return;
     }
-    auto& store = DevTraceStore::get();
-    if (!store.beginSession("", DevConfig::recordCount())) {
-        AssistLog::info("Dev Lab: beginSession failed");
+    if (!DevSession::get().start()) {
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            "Could not start Dev Lab recording session.",
+            "OK"
+        )->show();
         return;
     }
-    store.setLevelMeta("", "", false, false, "");
-    if (!store.beginAttempt(AssistController::get().attemptTick())) {
-        AssistLog::info("Dev Lab: beginAttempt failed");
-        return;
-    }
-    AssistLog::info(fmt::format(
-        "Dev Lab: recording session {} (target {})",
-        store.session().sessionId,
-        store.session().recordingsTarget
-    ));
+    auto const& s = DevTraceStore::get().session();
     auto const startMsg = fmt::format(
-        "Recording started.\nSession {}\nTarget {} attempts.",
-        store.session().sessionId,
-        store.session().recordingsTarget
+        "Recording started (rolling last {}).\nSession {}\nDoes not auto-stop.",
+        s.recordingsTarget,
+        s.sessionId
     );
     FLAlertLayer::create("EarlyBuffer Dev", startMsg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devStopRecord() {
-    auto& store = DevTraceStore::get();
-    if (!store.isOpen()) {
+    if (!DevSession::get().isRecording() && !DevTraceStore::get().isOpen()) {
         AssistLog::info("Dev Lab: no open session to stop");
+        FLAlertLayer::create("EarlyBuffer Dev", "No session is recording.", "OK")->show();
         return;
     }
-    if (store.hasOpenAttempt()) {
-        (void)store.sealAttempt("manual", false);
-    }
-    auto const path = store.sessionPath();
-    store.closeSession();
-    AssistLog::info(fmt::format("Dev Lab: session sealed → {}", path.string()));
-    auto const stopMsg = fmt::format("Recording stopped.\n{}", path.string());
+    auto const path = DevSession::get().sessionPath();
+    DevSession::get().stop();
+    auto const stopMsg = path.empty()
+        ? std::string("Recording stopped.")
+        : fmt::format("Recording stopped.\n{}", path.string());
     FLAlertLayer::create("EarlyBuffer Dev", stopMsg.c_str(), "OK")->show();
 }
 
@@ -350,11 +346,35 @@ void PauseActionBridge::devEvalSession() {
 }
 
 void PauseActionBridge::devExportSession() {
-    PauseActionBridge::stubDevAction("Export Dev Session");
+    auto& store = DevTraceStore::get();
+    if (!store.isOpen()) {
+        AssistLog::info("Dev Lab: no open session to export");
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            "No open Dev session. Start Recording first.",
+            "OK"
+        )->show();
+        return;
+    }
+    (void)store.flush();
+    auto const path = store.sessionPath();
+    AssistLog::info(fmt::format("Dev Lab: session export path {}", path.string()));
+    auto const msg = fmt::format(
+        "Session JSON:\n{}\nAttempts kept: {}/{} (rolling)",
+        path.string(),
+        store.session().recordingsDone,
+        store.session().recordingsTarget
+    );
+    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devClearTraces() {
-    PauseActionBridge::stubDevAction("Clear Dev Traces");
+    int const n = DevSession::get().clearTraces();
+    auto const msg = fmt::format(
+        "Cleared {} session file(s) under devtraces/.",
+        n
+    );
+    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devCopyReport() {

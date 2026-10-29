@@ -10,6 +10,7 @@
 #include <fstream>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 using namespace geode::prelude;
 
@@ -782,6 +783,7 @@ static matjson::Value sessionToJsonValue(DevSessionFile const& session) {
         aj["startTick"] = a.startTick;
         aj["endReason"] = a.endReason;
         aj["sealed"] = a.sealed;
+        aj["counted"] = a.counted;
         std::vector<matjson::Value> evs;
         evs.reserve(a.events.size());
         for (auto const& e : a.events) {
@@ -853,6 +855,7 @@ bool DevTraceStore::sessionFromJsonString(
             ? std::string(aj["endReason"].asString().unwrapOr(""))
             : "";
         a.sealed = aj.contains("sealed") ? aj["sealed"].asBool().unwrapOr(false) : false;
+        a.counted = aj.contains("counted") ? aj["counted"].asBool().unwrapOr(false) : false;
         if (aj.contains("events") && aj["events"].isArray()) {
             for (auto const& ej : aj["events"]) {
                 DevDecisionEvent e;
@@ -938,10 +941,16 @@ bool DevTraceStore::beginAttempt(int startTick) {
     if (!this->m_open) return false;
     if (this->hasOpenAttempt()) return false;
 
+    int64_t nextId = 1;
+    for (auto const& existing : this->m_session.attempts) {
+        if (existing.attemptId >= nextId) nextId = existing.attemptId + 1;
+    }
+
     DevAttempt a;
-    a.attemptId = static_cast<int64_t>(this->m_session.attempts.size()) + 1;
+    a.attemptId = nextId;
     a.startTick = startTick;
     a.sealed = false;
+    a.counted = false;
     this->m_session.attempts.push_back(std::move(a));
     this->m_nextEventId = 1;
     return true;
@@ -974,13 +983,50 @@ DevDecisionEvent* DevTraceStore::appendEvent(DevDecisionEvent event) {
     return &attempt->events.back();
 }
 
+void DevTraceStore::trimRollingWindow() {
+    int const target = this->m_session.recordingsTarget;
+    if (target < 1) return;
+
+    // Indices of sealed+counted attempts (ascending = oldest first).
+    std::vector<size_t> countedIdx;
+    for (size_t i = 0; i < this->m_session.attempts.size(); ++i) {
+        auto const& a = this->m_session.attempts[i];
+        if (a.sealed && a.counted) countedIdx.push_back(i);
+    }
+    if (static_cast<int>(countedIdx.size()) <= target) {
+        this->m_session.recordingsDone = static_cast<int>(countedIdx.size());
+        return;
+    }
+
+    // Keep from the Nth-last counted attempt onward (drop older attempts).
+    size_t const keepFrom = countedIdx[
+        countedIdx.size() - static_cast<size_t>(target)
+    ];
+    if (keepFrom == 0) {
+        this->m_session.recordingsDone = target;
+        return;
+    }
+    this->m_session.attempts.erase(
+        this->m_session.attempts.begin(),
+        this->m_session.attempts.begin()
+            + static_cast<std::ptrdiff_t>(keepFrom)
+    );
+    int kept = 0;
+    for (auto const& a : this->m_session.attempts) {
+        if (a.sealed && a.counted) ++kept;
+    }
+    this->m_session.recordingsDone = kept;
+}
+
 bool DevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed) return false;
     attempt->endReason = std::move(endReason);
     attempt->sealed = true;
+    attempt->counted = countTowardTarget;
     if (countTowardTarget) {
         ++this->m_session.recordingsDone;
+        this->trimRollingWindow();
     }
     return this->flush();
 }

@@ -79,6 +79,8 @@ struct DevAttempt {
     int startTick = 0;
     std::string endReason; // death|complete|quit|manual|empty
     bool sealed = false;
+    // True when seal counted toward the rolling window (pressObserved / empty-count).
+    bool counted = false;
     std::vector<DevDecisionEvent> events;
 };
 
@@ -148,10 +150,15 @@ public:
     // Appends event; assigns eventId/attemptId if zero; cycleId defaults to pressId.
     DevDecisionEvent* appendEvent(DevDecisionEvent event);
 
-    // Seal current attempt, bump recordingsDone when it counts, flush.
+    // Seal current attempt, bump recordingsDone when it counts, rolling-trim, flush.
+    // Never auto-stops the session — keeps only the last recordingsTarget counted attempts.
     bool sealAttempt(std::string endReason, bool countTowardTarget);
     bool flush();
     void closeSession();
+
+    // Drop oldest counted sealed attempts until recordingsDone <= recordingsTarget.
+    // Also drops sealed attempts that fall before the retained window.
+    void trimRollingWindow();
 
     DevSessionFile const& session() const { return this->m_session; }
     DevAttempt* currentAttempt();

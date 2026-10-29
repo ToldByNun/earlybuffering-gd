@@ -1083,18 +1083,18 @@
 		"title-dev-session": {
 			"type": "title",
 			"name": "Dev Session",
-			"description": "Recording controls for the Dev Lab session. Wired in later commits; buttons log a stub message until then."
+			"description": "Start/Stop recording. Keeps a rolling window of the last N counted attempts — does not auto-stop."
 		},
 		"dev-record-enable": {
 			"type": "bool",
 			"name": "Dev Record Enable",
-			"description": "Master switch for Dev Lab recording. Off = no trace overhead beyond a cheap enable check. On alone does not start a session until Start Recording is used (later commits).",
+			"description": "Master switch for Dev Lab recording. Off = no trace overhead beyond a cheap enable check. On alone does not start a session until Start Recording is used.",
 			"default": false
 		},
 		"dev-record-count": {
 			"type": "int",
 			"name": "Dev Record Count",
-			"description": "How many sealed attempts to capture in one Dev session (1–50). Default 10. Used once the session controller lands.",
+			"description": "Rolling window size (1–50, default 10): keep only the last N counted sealed attempts. Recording does not stop at N — older attempts are dropped.",
 			"default": 10,
 			"min": 1,
 			"max": 50
@@ -1219,13 +1219,13 @@
 		"dev-start-record-action": {
 			"type": "custom:eb-action",
 			"name": "Start Dev Recording",
-			"description": "Starts a Dev Lab recording session (stub until session controller). Requires Dev Record Enable.",
+			"description": "Starts a Dev Lab recording session (rolling last N). Requires Dev Record Enable. Does not auto-stop.",
 			"button-text": "start"
 		},
 		"dev-stop-record-action": {
 			"type": "custom:eb-action",
 			"name": "Stop Dev Recording",
-			"description": "Stops and seals the current Dev Lab session (stub until session controller).",
+			"description": "Stops and seals the current Dev Lab session, writing the session JSON under devtraces/.",
 			"button-text": "stop"
 		},
 		"dev-eval-last-action": {
@@ -1243,13 +1243,13 @@
 		"dev-export-session-action": {
 			"type": "custom:eb-action",
 			"name": "Export Dev Session",
-			"description": "Logs/copies the path to the current Dev session JSON (stub until trace store).",
+			"description": "Shows the path to the current Dev session JSON under mod save dir /devtraces/.",
 			"button-text": "export"
 		},
 		"dev-clear-traces-action": {
 			"type": "custom:eb-action",
 			"name": "Clear Dev Traces",
-			"description": "Deletes files under the Dev traces folder only (stub until trace store). Never touches other mod files.",
+			"description": "Stops recording if active and deletes session-*.json under devtraces/ only. Never touches other mod files.",
 			"button-text": "clear"
 		},
 		"dev-copy-report-action": {
