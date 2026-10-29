@@ -26,6 +26,8 @@
 - Budgeted build on enter (`tickSlice`); apply + restore transforms during plan; ready tracks promote from Unknown-on-overlap to Include.
 - Player-follow / toggle-orb stay dynamic (Unknown unless optional live probe with skip-dynamic off).
 - Lifecycle: loadOrBuild on enter; keep on checkpoint; cancel on death (resume if empty); save on quit/complete.
+- Apply perf: near-ghost-first + per-tick object/time caps (far movers hold last pose).
+- Settings info texts rewritten for plain-language high/low tradeoffs.
 
 ### Perf / Lag Probe
 

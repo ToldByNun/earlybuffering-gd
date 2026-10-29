@@ -603,14 +603,25 @@ void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost
 
     float const gx = ghost->getPositionX();
     float const gy = ghost->getPositionY();
+    auto const wall0 = std::chrono::steady_clock::now();
+    size_t applied = 0;
 
     for (auto& job : this->m_dynamicFollowJobs) {
+        if (applied >= kMaxApplyPerTick) break;
         auto* effect = job.effect;
         if (!effect || effect->m_uniqueID != job.effectUniqueId) continue;
 
         for (auto const& t : job.targets) {
+            if (applied >= kMaxApplyPerTick) break;
+            auto const us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - wall0
+            ).count();
+            if (us >= kApplyBudgetUs) break;
+
             auto* obj = t.obj;
             if (!obj || obj->m_uniqueID != t.uniqueId) continue;
+            // Prefer targets near the ghost; far follow targets stay Unknown.
+            if (std::fabs(obj->getPositionX() - gx) > kApplyMarginX) continue;
 
             float x = t.x;
             float y = t.y;
@@ -631,6 +642,7 @@ void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost
             pose.active = t.nodeVisible;
             TriggerWorldStore::writePose(obj, pose);
             this->m_liveDynamicAppliedIds.insert(t.uniqueId);
+            ++applied;
         }
     }
 }
@@ -723,7 +735,9 @@ void ShadowSimulator::clearCollisionLogs(PlayerObject* s) {
     s->m_lastCollisionRight = -1;
 }
 
-void ShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick) {
+void ShadowSimulator::applyTriggerWorldAtTick(
+    PlayLayer* layer, int absTick, PlayerObject* ghost
+) {
     this->m_triggerWorldAppliedThisTick = false;
     if (!layer || absTick < 0) return;
     if (!StageConfig::triggerBake()) return;
@@ -733,15 +747,46 @@ void ShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick) {
     if (!store.loaded() || !store.hasTracks()) return;
 
     LagProbe::Scope const lagScope("eb.trigger.apply");
-    // Hot path: only objects captured at beginCapture (ready Static* tracks).
-    // Store::applyAtTick walks objectLayer; we reuse capture pointers instead.
+
+    float const gx = ghost ? ghost->getPositionX() : 0.f;
+    struct Cand {
+        SavedTransform const* st = nullptr;
+        float dist = 0.f;
+        bool near = false;
+    };
+    std::vector<Cand> cands;
+    cands.reserve(this->m_savedTransforms.size());
     for (auto const& st : this->m_savedTransforms) {
         auto* obj = st.obj;
         if (!obj || obj->m_uniqueID != st.uniqueId) continue;
-        TriggerPose pose{};
-        if (!store.samplePose(st.uniqueId, absTick, pose)) continue;
-        TriggerWorldStore::writePose(obj, pose);
+        Cand c;
+        c.st = &st;
+        c.dist = std::fabs(obj->getPositionX() - gx);
+        c.near = c.dist <= kApplyMarginX;
+        cands.push_back(c);
     }
+    // Near objects first, then closer far objects — skip remainder if budget/cap.
+    std::sort(cands.begin(), cands.end(), [](Cand const& a, Cand const& b) {
+        if (a.near != b.near) return a.near && !b.near;
+        return a.dist < b.dist;
+    });
+
+    auto const wall0 = std::chrono::steady_clock::now();
+    size_t applied = 0;
+    for (auto const& c : cands) {
+        if (applied >= kMaxApplyPerTick) break;
+        auto const us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - wall0
+        ).count();
+        if (us >= kApplyBudgetUs) break;
+
+        auto* obj = c.st->obj;
+        TriggerPose pose{};
+        if (!store.samplePose(c.st->uniqueId, absTick, pose)) continue;
+        TriggerWorldStore::writePose(obj, pose);
+        ++applied;
+    }
+    // Far / over-budget tracks hold last written pose (or capture baseline).
     this->m_triggerWorldAppliedThisTick = true;
 }
 
@@ -751,7 +796,7 @@ void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt
     this->m_triggerWorldAppliedThisTick = false;
     this->m_liveDynamicAppliedIds.clear();
     if (this->m_simAbsTick >= 0) {
-        this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
+        this->applyTriggerWorldAtTick(layer, this->m_simAbsTick, s);
         this->applyLiveDynamicNear(layer, s);
     }
     hideGhost(s);
@@ -764,7 +809,7 @@ void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepD
     this->m_triggerWorldAppliedThisTick = false;
     this->m_liveDynamicAppliedIds.clear();
     if (this->m_simAbsTick >= 0) {
-        this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
+        this->applyTriggerWorldAtTick(layer, this->m_simAbsTick, s);
         this->applyLiveDynamicNear(layer, s);
     }
     hideGhost(s);

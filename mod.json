@@ -22,13 +22,13 @@
 		"enabled": {
 			"type": "bool",
 			"name": "Enabled",
-			"description": "Master toggle. Also cycled to OFF by the preset hotkey.",
+			"description": "Turns EarlyBuffer on or off. When off, the game plays completely vanilla. The preset hotkey can also cycle to Off.",
 			"default": true
 		},
 		"preset": {
 			"type": "string",
 			"name": "Preset",
-			"description": "Fills the default window / slack / look-ahead. Per-mode overwrites are kept. Cycle in-game with the hotkey (F6).",
+			"description": "Quick starting point for how early a click may be delayed (Tight = small window, Max = large). Changing preset fills the default tick windows; your per-mode overwrites stay. Higher presets forgive more early clicks but may feel floaty. Cycle in-game with F6.",
 			"one-of": [
 				"Tight",
 				"Normal",
@@ -41,166 +41,166 @@
 		"safe-mode": {
 			"type": "bool",
 			"name": "Safe Mode",
-			"description": "Do not save progress / bests / percentage while the assist is enabled.",
+			"description": "When on, assisted or enabled runs do not save progress, bests, or percentage as a normal clear. Keep on for online/rated play. Off only if you accept that assisted runs may still write progress.",
 			"default": true
 		},
 		"show-overlay": {
 			"type": "bool",
 			"name": "In-Level Overlay",
-			"description": "On-screen status while playing (mode, buffer, learn, VERIFY/UNSAFE, perf, saves). Off = no in-level overlay. Pause bake/assist buttons are separate.",
+			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate.",
 			"default": true
 		},
 		"debug-logging": {
 			"type": "bool",
 			"name": "Debug Logging",
-			"description": "Log SAVED lines and planner decisions to the Geode console.",
+			"description": "Writes planner / SAVED lines to the Geode console. On = useful when tuning; Off = quieter console. Does not change assist strength.",
 			"default": true
 		},
 		"perf-trace": {
 			"type": "bool",
 			"name": "Perf Trace",
-			"description": "Time assist hot paths every physics tick. Writes to %LOCALAPPDATA%/GeometryDash/geode/mods/audesign.earlybuffer/earlybuffer-perf.log. Noisy — prefer Lag Probe for death spikes.",
+			"description": "Times assist work every physics tick and can write earlybuffer-perf.log. On = noisy and a bit of overhead — use only when hunting hitch causes. Prefer Lag Probe for death/reset lag.",
 			"default": false
 		},
 		"lag-probe": {
 			"type": "bool",
 			"name": "Lag Probe",
-			"description": "Log timed death/reset/checkpoint episodes to earlybuffer-lagprobe.log in the mod save folder (%LOCALAPPDATA%/GeometryDash/geode/mods/audesign.earlybuffer/). Leave ON while reproducing death lag spikes — file includes a full legend.",
+			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
 			"default": true
 		},
 		"show-trajectory": {
 			"type": "bool",
 			"name": "Trajectory Visualizer",
-			"description": "Draw predicted paths: gray=no click, green=earliest window, yellow=nominal, red=latest. Shows how big the click window is. Toggle: Ctrl+Shift+T.",
+			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
 		"show-pause-bake": {
 			"type": "bool",
 			"name": "Pause Bake Status",
-			"description": "Show compact mode/bake status lines on the pause screen (top-left). Bake actions are under EB → Bake — no side button stacks.",
+			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
 			"default": true
 		},
 		"show-pause-assist": {
 			"type": "bool",
 			"name": "Pause Assist Buttons (legacy)",
-			"description": "Unused. Assist actions and toggles live under EB settings (Assist page + Main/Visual). Kept so old configs still load.",
+			"description": "Unused legacy toggle. Assist actions are under EB → Assist. Kept so old configs still load.",
 			"default": false
 		},
 		"show-pause-hub": {
 			"type": "bool",
 			"name": "Pause EB Button",
-			"description": "Show a top-right EarlyBuffer (EB) button on pause. Opens Geode settings with pages: Main, Bake, Ingame, Assist, Visual, Modes, Keys.",
+			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Bake, Ingame, Assist, Visual, Modes, Keys). Off = open settings only from the Geode menu.",
 			"default": true
 		},
 		"title-bake-actions": {
 			"type": "title",
 			"name": "Bake Actions",
-			"description": "Import a replay, bake windows, or cancel. Shown on the Bake settings page."
+			"description": "Import a replay, build click windows, or cancel a bake. Used on the Bake settings page."
 		},
 		"import-bake-replay": {
 			"type": "custom:eb-action",
 			"name": "Import Bake Replay",
-			"description": "Pick a GDR / MHR / SLC replay for Bake Map windows. Button shows import, or the loaded file name.",
+			"description": "Choose a GDR / MHR / SLC replay so Bake Map can build click windows from it. The button shows import or the loaded file name.",
 			"button-text": "import"
 		},
 		"cycle-assist-mode": {
 			"type": "custom:eb-action",
 			"name": "Cycle Assist Mode",
-			"description": "Live → Replay → Hybrid → BruteForce. Button shows the current mode.",
+			"description": "Cycles Live → Replay → Hybrid → BruteForce. The button shows the current mode.",
 			"button-text": "cycle"
 		},
 		"bake-map-action": {
 			"type": "custom:eb-action",
 			"name": "Bake Map",
-			"description": "Bake click windows from the imported replay (needs Import Bake Replay first).",
+			"description": "Builds click-timing windows from the imported replay (import a replay first). Safe to cancel mid-bake.",
 			"button-text": "bake"
 		},
 		"brute-bake-action": {
 			"type": "custom:eb-action",
 			"name": "Brute Bake",
-			"description": "Explore safe click timings through the level (no replay required).",
+			"description": "Searches safe click timings through the level without a replay. Heavier than Bake Map; cancel if it takes too long.",
 			"button-text": "brute"
 		},
 		"cancel-bake-action": {
 			"type": "custom:eb-action",
 			"name": "Cancel Bake",
-			"description": "Stop an in-progress bake. Enabled only while baking.",
+			"description": "Stops an in-progress bake. Only active while baking.",
 			"button-text": "cancel"
 		},
 		"title-assist-actions": {
 			"type": "title",
 			"name": "Assist Actions",
-			"description": "Quick actions for preset / learning / config. Shown on the Assist settings page."
+			"description": "Quick actions for preset, learning reset, and config files. Used on the Assist settings page."
 		},
 		"cycle-preset-action": {
 			"type": "custom:eb-action",
 			"name": "Cycle Preset",
-			"description": "Tight → Normal → Wide → Max → Off. Button shows the current preset.",
+			"description": "Cycles Tight → Normal → Wide → Max → Off. Same idea as F6.",
 			"button-text": "cycle"
 		},
 		"reset-learn-action": {
 			"type": "custom:eb-action",
 			"name": "Reset Level Learning",
-			"description": "Clear the auto-tune profile for the current level (bias, trust, spots).",
+			"description": "Clears learned bias/trust for the current level so auto-tune starts fresh. Does not change your tick window settings.",
 			"button-text": "reset"
 		},
 		"export-config-action": {
 			"type": "custom:eb-action",
 			"name": "Export Config",
-			"description": "Save EarlyBuffer settings to a JSON file.",
+			"description": "Saves your EarlyBuffer settings to a JSON file you can back up or share.",
 			"button-text": "export"
 		},
 		"import-config-action": {
 			"type": "custom:eb-action",
 			"name": "Import Config",
-			"description": "Load EarlyBuffer settings from a JSON file.",
+			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
 			"button-text": "import"
 		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",
-			"description": "Play a per-tick MP3 cue (+1…+7, +8+) when assist injects a delayed click.",
+			"description": "Plays a short sound when assist delays your click (cue scales with how many ticks were saved). Off = silent. Does not change timing.",
 			"default": true
 		},
 		"save-feedback-color": {
 			"type": "bool",
 			"name": "Save Feedback Color",
-			"description": "Flash the player icon with Save Icon Color when assist injects a delayed click.",
+			"description": "Flashes your icon with Save Icon Color when a delayed click is injected. Off = no flash.",
 			"default": true
 		},
 		"save-feedback-counter": {
 			"type": "bool",
 			"name": "Save Feedback Counter",
-			"description": "Show a world-space circle and +N frames-saved label at the click position (clears on death / restart).",
+			"description": "Spawns a world +N marker at the click (how many frames of earliness were forgiven). Clears on death/restart. Off = no markers. Slightly more visual clutter when on.",
 			"default": false
 		},
 		"save-icon-color": {
 			"type": "color",
 			"name": "Save Icon Color",
-			"description": "Color flashed onto the player icon when Save Feedback Color is on.",
+			"description": "Color used for the icon flash when Save Feedback Color is on.",
 			"default": "#7CFF4A"
 		},
 		"title-scope": {
 			"type": "title",
 			"name": "Assist Scope",
-			"description": "Where Live/Hybrid assist is allowed (practice, startpos, percent window, off-ranges). Platformer is always blocked."
+			"description": "Where assist is allowed: practice, start-pos, percent window, and off-ranges. Platformer is always blocked."
 		},
 		"assist-only-practice": {
 			"type": "bool",
 			"name": "Assist Only in Practice",
-			"description": "When on, Live/Hybrid assist only runs in practice mode. Part of Assist Scope.",
+			"description": "On = Live/Hybrid only work in practice. Off = also in normal mode (still respect Safe Mode and percent rules).",
 			"default": false
 		},
 		"assist-startpos-only": {
 			"type": "bool",
 			"name": "Assist Only from Start Pos / Test",
-			"description": "When on, assist only in test/start-pos mode. Part of Assist Scope.",
+			"description": "On = assist only in start-pos / test mode. Off = allowed anywhere in the percent window.",
 			"default": false
 		},
 		"assist-percent-min": {
 			"type": "int",
 			"name": "Assist Percent Min",
-			"description": "Assist only at or above this percent (0–100). Pair with Assist Percent Max. Use Disable Ranges below for holes inside this window.",
+			"description": "Lowest percent where assist may run (0–100). Raise this to keep the start of the level fully vanilla. Pair with Assist Percent Max. Use Off Ranges below for holes inside the window.",
 			"default": 0,
 			"min": 0,
 			"max": 100
@@ -208,7 +208,7 @@
 		"assist-percent-max": {
 			"type": "int",
 			"name": "Assist Percent Max",
-			"description": "Assist only at or below this percent (0–100).",
+			"description": "Highest percent where assist may run (0–100). Lower this to stop assisting near the end (e.g. last % for a clean finish).",
 			"default": 100,
 			"min": 0,
 			"max": 100
@@ -216,12 +216,12 @@
 		"title-assist-off": {
 			"type": "title",
 			"name": "Assist Off Ranges (%)",
-			"description": "Inclusive percent holes where assist is forced off (inside the Assist Percent Min/Max window). -1 = unused slot."
+			"description": "Percent holes where assist is forced off (even inside Min–Max). Set From/To for a range; leave -1 to ignore that slot. Inclusive."
 		},
 		"assist-off-1-from": {
 			"type": "float",
 			"name": "Range 1 From",
-			"description": "Start of percent window where assist is OFF. -1 = slot unused. Inclusive with Range 1 To.",
+			"description": "Start of off-range 1 (%). -1 = unused. Inclusive with Range 1 To. Example: 40–55 turns assist off in that band.",
 			"default": -1,
 			"min": -1,
 			"max": 100,
@@ -234,7 +234,7 @@
 		"assist-off-1-to": {
 			"type": "float",
 			"name": "Range 1 To",
-			"description": "End of percent window where assist is OFF. -1 = slot unused.",
+			"description": "End of off-range 1 (%). -1 = unused.",
 			"default": -1,
 			"min": -1,
 			"max": 100,
@@ -254,7 +254,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "Start of off-range 2 (%). -1 = unused."
 		},
 		"assist-off-2-to": {
 			"type": "float",
@@ -266,7 +267,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "End of off-range 2 (%). -1 = unused."
 		},
 		"assist-off-3-from": {
 			"type": "float",
@@ -278,7 +280,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "Start of off-range 3 (%). -1 = unused."
 		},
 		"assist-off-3-to": {
 			"type": "float",
@@ -290,7 +293,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "End of off-range 3 (%). -1 = unused."
 		},
 		"assist-off-4-from": {
 			"type": "float",
@@ -302,7 +306,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "Start of off-range 4 (%). -1 = unused."
 		},
 		"assist-off-4-to": {
 			"type": "float",
@@ -314,7 +319,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "End of off-range 4 (%). -1 = unused."
 		},
 		"assist-off-5-from": {
 			"type": "float",
@@ -326,7 +332,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "Start of off-range 5 (%). -1 = unused."
 		},
 		"assist-off-5-to": {
 			"type": "float",
@@ -338,7 +345,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "End of off-range 5 (%). -1 = unused."
 		},
 		"assist-off-6-from": {
 			"type": "float",
@@ -350,7 +358,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "Start of off-range 6 (%). -1 = unused."
 		},
 		"assist-off-6-to": {
 			"type": "float",
@@ -362,7 +371,8 @@
 				"slider": true,
 				"slider-step": 0.01,
 				"input": true
-			}
+			},
+			"description": "End of off-range 6 (%). -1 = unused."
 		},
 		"title-window": {
 			"type": "title",
@@ -371,7 +381,7 @@
 		"ticks-all": {
 			"type": "int",
 			"name": "Ticks (Default)",
-			"description": "Max delay in physics ticks (~240/s, so 4 ticks ≈ 1 frame at 60fps) for every mode without an overwrite. Wave uses 'Ticks (Wave)' below.",
+			"description": "How early a click may be delayed for modes without their own overwrite (physics ticks; ~240/s, so ~4 ticks ≈ 1 frame at 60fps). Higher = more forgiveness, but clicks can feel later/floaty. Lower = snappier, less help. Wave uses Ticks (Wave) unless Wave Overwrite is on.",
 			"default": 2,
 			"min": 0,
 			"max": 32
@@ -379,7 +389,7 @@
 		"ticks-wave": {
 			"type": "int",
 			"name": "Ticks (Wave default)",
-			"description": "Default window for wave when Wave → Overwrite is off. Keep 2 for Tight feel; use 4+ (Normal/Wide) if you want full ±robust-k neighbors in spam. Max preset uses 8 for wave (not 16).",
+			"description": "Default delay window for wave when Wave → Overwrite is off. Wave is sensitive: higher values forgive more spam/early taps but can phase-shift into spikes; keep low (2) for a tight feel, raise (4–8) if you want a wider window.",
 			"default": 2,
 			"min": 0,
 			"max": 32
@@ -387,12 +397,12 @@
 		"title-algorithm": {
 			"type": "title",
 			"name": "Algorithm",
-			"description": "Planner mode, bake radius, CPS gates, budgets, press/release. Smart multi-jump is the next section."
+			"description": "How the planner decides delays: mode, bake radius, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section."
 		},
 		"death-slack": {
 			"type": "int",
 			"name": "Death Slack",
-			"description": "Extra ticks of look-ahead after a planned jump (not the hazard zone). Threat clear uses clustered spike X (zoneEndX), not this. 2 is the recommended default.",
+			"description": "Extra look-ahead after a planned jump (not the spike zone itself). Higher = simulates a bit further past the click (more CPU, can see later gaps). Lower = shorter sims. 2 is a solid default.",
 			"default": 2,
 			"min": 0,
 			"max": 16
@@ -400,7 +410,7 @@
 		"look-ahead-cap": {
 			"type": "int",
 			"name": "Look-Ahead Cap",
-			"description": "How many physics ticks each candidate is simulated. 0 = automatic (jump modes ~96, hold modes ~6× window). Higher = sees bigger gaps, more CPU.",
+			"description": "How far each candidate is simulated (physics ticks). 0 = automatic (good default). Higher = sees bigger gaps ahead, more CPU and can feel slower on weak PCs. Lower (or small auto) = faster plans, may miss distant threats.",
 			"default": 0,
 			"min": 0,
 			"max": 240
@@ -408,7 +418,7 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Live = plan each click. Replay = windows from imported macro. Hybrid = bake if near, else live. BruteForce = use Brute Bake map (no replay — explores safe click timings through the level).",
+			"description": "Live = plan every click now. Replay = use windows from an imported macro bake. Hybrid = use a nearby bake window when it verifies, else Live. BruteForce = use a Brute Bake map (no replay). Replay/Brute are timing maps, not a bot that clicks for you.",
 			"one-of": [
 				"Live",
 				"Replay",
@@ -420,7 +430,7 @@
 		"bake-radius": {
 			"type": "int",
 			"name": "Bake Radius",
-			"description": "Max frames to shift each click when baking. 0 = auto (Replay/Hybrid: max(ticks,8); BruteForce: max(ticks*4,32)).",
+			"description": "When baking, how many frames each click may shift while searching a window. 0 = automatic. Higher = wider searched windows (more bake time). Lower = tighter/faster bake, may miss some timings.",
 			"default": 0,
 			"min": 0,
 			"max": 128
@@ -428,7 +438,7 @@
 		"cps-limit": {
 			"type": "int",
 			"name": "CPS Limit",
-			"description": "Pause assist while your click rate is at or above this (clicks per second, 1s window). 0 = off. Assist turns back on when CPS drops below the limit.",
+			"description": "While your recent click rate is at or above this (clicks/sec), assist pauses so spam stays vanilla. 0 = off. Higher limit = assist keeps working during denser clicking; lower = assist backs off sooner.",
 			"default": 0,
 			"min": 0,
 			"max": 40
@@ -436,7 +446,7 @@
 		"min-click-interval-ms": {
 			"type": "int",
 			"name": "Min Click Interval (ms)",
-			"description": "If you press again within this many ms, assist skips that press (vanilla click still goes through — never blocks your input). 0 = off. Try 30–80ms.",
+			"description": "If you press again within this many milliseconds, assist skips that press (your vanilla click still goes through — never blocked). 0 = off. Higher = more spam left vanilla; lower = assist tries more often. Try 30–80ms if spam feels over-assisted.",
 			"default": 0,
 			"min": 0,
 			"max": 500
@@ -444,13 +454,13 @@
 		"assist-orbs": {
 			"type": "bool",
 			"name": "Orb Assist",
-			"description": "When on, prefer delays that activate a needed orb (activation window). Does not force decoy orbs if you are already safe. Off = threat-zone planner only.",
+			"description": "On = planner prefers delays that hit a needed orb when one matters. Off = only hazard/threat logic (orbs ignored for timing). On helps orb sections; off if orb logic feels wrong on a level.",
 			"default": true
 		},
 		"sim-budget-us": {
 			"type": "int",
 			"name": "Sim Budget (µs)",
-			"description": "Max microseconds the planner may spend per click. On hit it shortens branches then the horizon. 0 = unlimited. 1500 ≈ 1.5ms.",
+			"description": "Soft time cap per click for the planner (microseconds). 1500 ≈ 1.5ms. Higher = more thorough search, more CPU hitch risk. Lower = snappier but may Pass sooner. 0 = no wall-clock limit (tick budget still applies).",
 			"default": 1500,
 			"min": 0,
 			"max": 10000
@@ -458,7 +468,7 @@
 		"tick-budget": {
 			"type": "int",
 			"name": "Plan Tick Budget",
-			"description": "Max physics ticks the live planner may simulate per press (deterministic). Default 4000. Exhausted budget → Pass.",
+			"description": "Hard cap on how many physics ticks the planner may simulate per press. Higher = smarter/longer search. Lower = less CPU; if exhausted, assist Passes (vanilla click). Default 4000 is balanced.",
 			"default": 4000,
 			"min": 500,
 			"max": 20000
@@ -466,13 +476,13 @@
 		"assist-press": {
 			"type": "bool",
 			"name": "Assist Presses",
-			"description": "Delay or swallow jump presses.",
+			"description": "On = jump presses can be delayed by assist. Off = presses are always immediate (releases may still be assisted if Assist Releases is on).",
 			"default": true
 		},
 		"assist-release": {
 			"type": "bool",
 			"name": "Assist Releases",
-			"description": "Delay or swallow jump releases (wave / ship / robot short-hops).",
+			"description": "On = jump releases can be delayed (useful for wave/ship/robot short-hops). Off = releases are immediate.",
 			"default": true
 		},
 		"title-smart": {
@@ -482,7 +492,7 @@
 		"smart-depth": {
 			"type": "int",
 			"name": "Smart Depth (Jumps Ahead)",
-			"description": "How many jumps into the future Live/Hybrid may plan. 1 = classic single-click assist. 2–3 = search sequences so the first delay stays realistic further ahead. Replay/BruteForce ignore this.",
+			"description": "How many jumps ahead Live/Hybrid may look. 1 = classic single-click assist (lightest). 2–3 = plans sequences so the first delay stays sensible further ahead — smarter but heavier. Replay/Brute ignore this.",
 			"default": 1,
 			"min": 1,
 			"max": 3
@@ -490,7 +500,7 @@
 		"smart-combos": {
 			"type": "int",
 			"name": "Smart Combos",
-			"description": "Max click-timing combinations tested per press when Smart Depth > 1. Higher = smarter, more CPU. Capped further by Sim Budget.",
+			"description": "Max timing combinations tested when Smart Depth > 1. Higher = smarter sequences, more CPU. Lower = faster, may pick a weaker first delay. Also limited by Sim Budget.",
 			"default": 48,
 			"min": 8,
 			"max": 256
@@ -498,7 +508,7 @@
 		"smart-horizon": {
 			"type": "int",
 			"name": "Smart Horizon (Ticks)",
-			"description": "How far (physics ticks @ ~240/s) the multi-jump search simulates. 0 = auto (~180–240). Only used when Smart Depth > 1.",
+			"description": "How far (ticks) the multi-jump search looks. 0 = automatic. Higher = plans further ahead (more CPU). Lower = shorter foresight. Only used when Smart Depth > 1.",
 			"default": 0,
 			"min": 0,
 			"max": 320
@@ -506,7 +516,7 @@
 		"robust-k": {
 			"type": "int",
 			"name": "Robust Window (±k)",
-			"description": "Neighbor ticks that must also be viable around a pick. 0 = auto from mode / speed / frame-time variance (1–3). Fixed 1 matches classic earliest±1.",
+			"description": "Neighbor ticks around a pick that must also be safe (±k). 0 = automatic from mode/speed/frame jitter (recommended). Higher fixed k = safer but may delay more / Pass more. 1 ≈ classic earliest±1.",
 			"default": 0,
 			"min": 0,
 			"max": 3
@@ -514,62 +524,62 @@
 		"robust-jitter": {
 			"type": "bool",
 			"name": "Robust firstDt Jitter",
-			"description": "Before committing a Delay, re-sim the top candidate with first physics dt ±3%. Rejects fragile timings under frame-time wobble. Off by default (extra sims).",
+			"description": "Before locking a Delay, re-check with slightly shorter/longer first frame time (±3%). On = rejects fragile timings (extra sims, safer under unstable FPS). Off = fewer sims, default.",
 			"default": false
 		},
 		"title-learning": {
 			"type": "title",
 			"name": "Learning",
-			"description": "Per-level bias/trust learning and self-bake. Window ticks are never changed by learning."
+			"description": "Per-level learning and optional self-bake. Learning never changes your tick window numbers — only soft bias/trust."
 		},
 		"auto-tune": {
 			"type": "bool",
 			"name": "Auto-Tune Per Level",
-			"description": "Learn bias / trust / look-ahead per level and spot as you play. The window (ticks) is never changed. Toggle: Ctrl+Shift+L. Reset current level: Ctrl+Shift+R. Profiles save under the mod save folder.",
+			"description": "Learns gentle bias/trust per level and spot as you play (never changes the tick window). On = adapts over attempts. Off = no learning. Toggle: Ctrl+Shift+L. Reset level: Ctrl+Shift+R.",
 			"default": true
 		},
 		"self-bake": {
 			"type": "bool",
 			"name": "Self-Bake (Practice)",
-			"description": "Record your vanilla practice clicks into the bake map (method=self). Assist injects are never recorded. Default on for practice.",
+			"description": "In practice, records your normal (non-assist) clicks into the bake map for later Hybrid/Replay help. Assist injects are never recorded. On = builds a personal map; Off = no recording.",
 			"default": true
 		},
 		"self-bake-normal": {
 			"type": "bool",
 			"name": "Self-Bake in Normal Mode",
-			"description": "Also record vanilla clicks outside practice. Off = practice only (recommended).",
+			"description": "Also record vanilla clicks outside practice. Off (recommended) = practice only so normal runs stay cleaner.",
 			"default": false,
 			"enable-if": "self-bake"
 		},
 		"self-bake-refine": {
 			"type": "bool",
 			"name": "Self-Bake Refine Windows",
-			"description": "On segment end, binary-search earliest/latest around each recorded click (budgeted, needs start snapshot, skips if assist touched the run). Off = point windows only.",
+			"description": "After a segment, may widen recorded click windows (budgeted; skipped if assist touched the run). On = better windows over time; Off = point windows only (less CPU).",
 			"default": true,
 			"enable-if": "self-bake"
 		},
 		"title-trigger-world": {
 			"type": "title",
 			"name": "Trigger World",
-			"description": "Precompute static move/rotate/scale trigger motion into a cache (loaded on level enter). Dynamic triggers (follow player, etc.) stay live-only or unknown."
+			"description": "Caches moving/toggling solids for the shadow sim so plans see them more accurately. Follow-player style triggers stay special-cased."
 		},
 		"trigger-bake": {
 			"type": "bool",
 			"name": "Trigger World Bake",
-			"description": "Cache static trigger motion for this level (content-keyed). On enter: load if present, otherwise build once. Applied during shadow sim so movers are not Unknown. Off = legacy Unknown-on-overlap for triggers.",
+			"description": "On = load/build a cache of static movers/toggles for this level and use it in the shadow sim (better plans on moving ground). Off = old behavior (movers often treated as unknown). First enter of a level may build in the background.",
 			"default": true
 		},
 		"trigger-bake-skip-dynamic": {
 			"type": "bool",
 			"name": "Skip Dynamic Triggers",
-			"description": "Do not bake or live-probe follow-player / camera-follow / touch-path-dependent triggers (weaker PCs). They stay Unknown in sim. Off = attempt cheap live handling later. Recommended on.",
+			"description": "On (recommended) = do not try to simulate follow-player / click-timed toggles in the cache (they stay unknown — safer/lighter). Off = attempt a cheap live snap to the ghost for simple lock/follow-Y cases (can help, but dual/rotate-follow still unknown).",
 			"default": true,
 			"enable-if": "trigger-bake"
 		},
 		"assist-verify": {
 			"type": "string",
 			"name": "Assist Verify",
-			"description": "Debug A/B: when legacy earliest-survive disagrees with the zone/orb planner, flip a coin, log VERIFY arm + PLAN/OUTCOME (uses 2× tick budget). Prefer off for normal play.",
+			"description": "Debug only: when two planners disagree, randomly try one and log VERIFY lines (uses extra budget). Prefer Off for normal play.",
 			"one-of": [
 				"off",
 				"ab"
@@ -583,12 +593,13 @@
 		"cube-enable": {
 			"type": "bool",
 			"name": "Enable Cube",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Cube mode. Off = vanilla in Cube."
 		},
 		"cube-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Cube",
-			"description": "Use the Cube values below instead of the preset / defaults.",
+			"description": "On = use the Cube ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset.",
 			"default": false
 		},
 		"cube-ticks": {
@@ -597,12 +608,13 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "cube-overwrite"
+			"enable-if": "cube-overwrite",
+			"description": "Max delay window for Cube (physics ticks). Higher = more early-click forgiveness in Cube; lower = snappier. Only used when Overwrite Cube is on."
 		},
 		"cube-cap": {
 			"type": "int",
 			"name": "Cube Look-Ahead",
-			"description": "0 = use the global look-ahead (or auto).",
+			"description": "How far Cube candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on.",
 			"default": 0,
 			"min": 0,
 			"max": 240,
@@ -611,7 +623,7 @@
 		"cube-slack": {
 			"type": "int",
 			"name": "Cube Slack",
-			"description": "-1 = use global Death Slack.",
+			"description": "Extra look-ahead after a Cube jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on.",
 			"default": -1,
 			"min": -1,
 			"max": 16,
@@ -620,7 +632,7 @@
 		"cube-latency": {
 			"type": "float",
 			"name": "Cube Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Cube default 0.25.",
+			"description": "How strongly Cube prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.25. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.25,
 			"min": 0,
 			"max": 2,
@@ -633,12 +645,14 @@
 		"ship-enable": {
 			"type": "bool",
 			"name": "Enable Ship",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Ship mode. Off = vanilla in Ship."
 		},
 		"ship-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Ship",
-			"default": false
+			"default": false,
+			"description": "On = use the Ship ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"ship-ticks": {
 			"type": "int",
@@ -646,7 +660,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "ship-overwrite"
+			"enable-if": "ship-overwrite",
+			"description": "Max delay window for Ship (physics ticks). Higher = more early-click forgiveness in Ship; lower = snappier. Only used when Overwrite Ship is on."
 		},
 		"ship-cap": {
 			"type": "int",
@@ -654,7 +669,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "ship-overwrite"
+			"enable-if": "ship-overwrite",
+			"description": "How far Ship candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"ship-slack": {
 			"type": "int",
@@ -662,12 +678,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "ship-overwrite"
+			"enable-if": "ship-overwrite",
+			"description": "Extra look-ahead after a Ship jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"ship-latency": {
 			"type": "float",
 			"name": "Ship Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Ship default 0.75.",
+			"description": "How strongly Ship prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.75. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.75,
 			"min": 0,
 			"max": 2,
@@ -680,12 +697,14 @@
 		"ball-enable": {
 			"type": "bool",
 			"name": "Enable Ball",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Ball mode. Off = vanilla in Ball."
 		},
 		"ball-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Ball",
-			"default": false
+			"default": false,
+			"description": "On = use the Ball ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"ball-ticks": {
 			"type": "int",
@@ -693,7 +712,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "ball-overwrite"
+			"enable-if": "ball-overwrite",
+			"description": "Max delay window for Ball (physics ticks). Higher = more early-click forgiveness in Ball; lower = snappier. Only used when Overwrite Ball is on."
 		},
 		"ball-cap": {
 			"type": "int",
@@ -701,7 +721,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "ball-overwrite"
+			"enable-if": "ball-overwrite",
+			"description": "How far Ball candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"ball-slack": {
 			"type": "int",
@@ -709,12 +730,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "ball-overwrite"
+			"enable-if": "ball-overwrite",
+			"description": "Extra look-ahead after a Ball jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"ball-latency": {
 			"type": "float",
 			"name": "Ball Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Ball default 0.35.",
+			"description": "How strongly Ball prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.35. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.35,
 			"min": 0,
 			"max": 2,
@@ -727,12 +749,14 @@
 		"ufo-enable": {
 			"type": "bool",
 			"name": "Enable UFO",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in UFO mode. Off = vanilla in UFO."
 		},
 		"ufo-overwrite": {
 			"type": "bool",
 			"name": "Overwrite UFO",
-			"default": false
+			"default": false,
+			"description": "On = use the UFO ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"ufo-ticks": {
 			"type": "int",
@@ -740,7 +764,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "ufo-overwrite"
+			"enable-if": "ufo-overwrite",
+			"description": "Max delay window for UFO (physics ticks). Higher = more early-click forgiveness in UFO; lower = snappier. Only used when Overwrite UFO is on."
 		},
 		"ufo-cap": {
 			"type": "int",
@@ -748,7 +773,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "ufo-overwrite"
+			"enable-if": "ufo-overwrite",
+			"description": "How far UFO candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"ufo-slack": {
 			"type": "int",
@@ -756,12 +782,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "ufo-overwrite"
+			"enable-if": "ufo-overwrite",
+			"description": "Extra look-ahead after a UFO jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"ufo-latency": {
 			"type": "float",
 			"name": "UFO Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. UFO default 0.35.",
+			"description": "How strongly UFO prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.35. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.35,
 			"min": 0,
 			"max": 2,
@@ -774,12 +801,14 @@
 		"wave-enable": {
 			"type": "bool",
 			"name": "Enable Wave",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Wave mode. Off = vanilla in Wave."
 		},
 		"wave-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Wave",
-			"default": false
+			"default": false,
+			"description": "On = use the Wave ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"wave-ticks": {
 			"type": "int",
@@ -787,7 +816,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "wave-overwrite"
+			"enable-if": "wave-overwrite",
+			"description": "Max delay window for Wave (physics ticks). Higher = more early-click forgiveness in Wave; lower = snappier. Only used when Overwrite Wave is on."
 		},
 		"wave-cap": {
 			"type": "int",
@@ -795,7 +825,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "wave-overwrite"
+			"enable-if": "wave-overwrite",
+			"description": "How far Wave candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"wave-slack": {
 			"type": "int",
@@ -803,12 +834,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "wave-overwrite"
+			"enable-if": "wave-overwrite",
+			"description": "Extra look-ahead after a Wave jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"wave-latency": {
 			"type": "float",
 			"name": "Wave Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Wave default 1.0.",
+			"description": "How strongly Wave prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 1. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 1.0,
 			"min": 0,
 			"max": 2,
@@ -821,12 +853,14 @@
 		"robot-enable": {
 			"type": "bool",
 			"name": "Enable Robot",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Robot mode. Off = vanilla in Robot."
 		},
 		"robot-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Robot",
-			"default": false
+			"default": false,
+			"description": "On = use the Robot ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"robot-ticks": {
 			"type": "int",
@@ -834,7 +868,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "robot-overwrite"
+			"enable-if": "robot-overwrite",
+			"description": "Max delay window for Robot (physics ticks). Higher = more early-click forgiveness in Robot; lower = snappier. Only used when Overwrite Robot is on."
 		},
 		"robot-cap": {
 			"type": "int",
@@ -842,7 +877,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "robot-overwrite"
+			"enable-if": "robot-overwrite",
+			"description": "How far Robot candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"robot-slack": {
 			"type": "int",
@@ -850,12 +886,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "robot-overwrite"
+			"enable-if": "robot-overwrite",
+			"description": "Extra look-ahead after a Robot jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"robot-latency": {
 			"type": "float",
 			"name": "Robot Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Robot default 0.4.",
+			"description": "How strongly Robot prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.4. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.4,
 			"min": 0,
 			"max": 2,
@@ -868,12 +905,14 @@
 		"spider-enable": {
 			"type": "bool",
 			"name": "Enable Spider",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Spider mode. Off = vanilla in Spider."
 		},
 		"spider-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Spider",
-			"default": false
+			"default": false,
+			"description": "On = use the Spider ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"spider-ticks": {
 			"type": "int",
@@ -881,7 +920,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "spider-overwrite"
+			"enable-if": "spider-overwrite",
+			"description": "Max delay window for Spider (physics ticks). Higher = more early-click forgiveness in Spider; lower = snappier. Only used when Overwrite Spider is on."
 		},
 		"spider-cap": {
 			"type": "int",
@@ -889,7 +929,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "spider-overwrite"
+			"enable-if": "spider-overwrite",
+			"description": "How far Spider candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"spider-slack": {
 			"type": "int",
@@ -897,12 +938,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "spider-overwrite"
+			"enable-if": "spider-overwrite",
+			"description": "Extra look-ahead after a Spider jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"spider-latency": {
 			"type": "float",
 			"name": "Spider Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Spider default 0.4.",
+			"description": "How strongly Spider prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.4. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.4,
 			"min": 0,
 			"max": 2,
@@ -915,12 +957,14 @@
 		"swing-enable": {
 			"type": "bool",
 			"name": "Enable Swing",
-			"default": true
+			"default": true,
+			"description": "Allow assist while you are in Swing mode. Off = vanilla in Swing."
 		},
 		"swing-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Swing",
-			"default": false
+			"default": false,
+			"description": "On = use the Swing ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
 		},
 		"swing-ticks": {
 			"type": "int",
@@ -928,7 +972,8 @@
 			"default": 2,
 			"min": 0,
 			"max": 32,
-			"enable-if": "swing-overwrite"
+			"enable-if": "swing-overwrite",
+			"description": "Max delay window for Swing (physics ticks). Higher = more early-click forgiveness in Swing; lower = snappier. Only used when Overwrite Swing is on."
 		},
 		"swing-cap": {
 			"type": "int",
@@ -936,7 +981,8 @@
 			"default": 0,
 			"min": 0,
 			"max": 240,
-			"enable-if": "swing-overwrite"
+			"enable-if": "swing-overwrite",
+			"description": "How far Swing candidates are simulated. 0 = use global Look-Ahead (or auto). Higher = sees further, more CPU. Only with Overwrite on."
 		},
 		"swing-slack": {
 			"type": "int",
@@ -944,12 +990,13 @@
 			"default": -1,
 			"min": -1,
 			"max": 16,
-			"enable-if": "swing-overwrite"
+			"enable-if": "swing-overwrite",
+			"description": "Extra look-ahead after a Swing jump. -1 = use global Death Slack. Higher = slightly longer sims. Only with Overwrite on."
 		},
 		"swing-latency": {
 			"type": "float",
 			"name": "Swing Latency Weight",
-			"description": "Planner prefers endX − weight·delay. Higher = earlier clicks. Swing default 0.85.",
+			"description": "How strongly Swing prefers earlier clicks among equally safe timings (0 = ignore delay, higher = pick earlier). Default 0.85. Higher can feel more responsive but may be less optimal for distance. Only with Overwrite on.",
 			"default": 0.85,
 			"min": 0,
 			"max": 2,
@@ -957,59 +1004,60 @@
 		},
 		"title-keys": {
 			"type": "title",
-			"name": "Keybinds"
+			"name": "Keybinds",
+			"description": "In-game hotkeys. Change bindings here; they apply while playing."
 		},
 		"hotkey-cycle": {
 			"type": "keybind",
 			"name": "Cycle Preset",
-			"description": "Cycle Tight → Normal → Wide → Max → Off.",
+			"description": "Cycles preset Tight → Normal → Wide → Max → Off (same as Cycle Preset).",
 			"default": "F6",
 			"category": "gameplay"
 		},
 		"hotkey-debug": {
 			"type": "keybind",
 			"name": "Toggle Debug Logging",
-			"description": "Toggle debug SAVED-press logging.",
+			"description": "Toggles Debug Logging on/off.",
 			"default": "Ctrl+Shift+D",
 			"category": "gameplay"
 		},
 		"hotkey-reset-level": {
 			"type": "keybind",
 			"name": "Reset Level Learning",
-			"description": "Clear the auto-tune profile for the current level (bias, trust, spots).",
+			"description": "Clears learning data for the current level.",
 			"default": "Ctrl+Shift+R",
 			"category": "gameplay"
 		},
 		"hotkey-auto-tune": {
 			"type": "keybind",
 			"name": "Toggle Smart Learning",
-			"description": "Toggle Auto-Tune / smart learning (bias, trust, look-ahead per spot). Does not change the tick window.",
+			"description": "Toggles Auto-Tune / smart learning (does not change tick windows).",
 			"default": "Ctrl+Shift+L",
 			"category": "gameplay"
 		},
 		"hotkey-assist-mode": {
 			"type": "keybind",
 			"name": "Cycle Assist Mode",
-			"description": "Cycle Live → Replay → Hybrid → BruteForce.",
+			"description": "Cycles Live → Replay → Hybrid → BruteForce.",
 			"default": "Ctrl+Shift+M",
 			"category": "gameplay"
 		},
 		"hotkey-trajectory": {
 			"type": "keybind",
 			"name": "Toggle Trajectory Viz",
-			"description": "Show/hide debug trajectories and click-window paths (green earliest … red latest).",
+			"description": "Shows or hides trajectory / click-window paths.",
 			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
 		},
 		"title-internal": {
 			"type": "title",
 			"name": "Internal",
-			"description": "Kept for old configs / preset sync. Prefer the Preset dropdown and ignore these."
+			"description": "Internal keys for old configs / preset sync. Prefer the Preset dropdown; you usually can ignore this section."
 		},
 		"stage-index": {
 			"type": "int",
 			"name": "Preset Index (internal)",
-			"description": "Internal mirror of Preset (0=Tight … 3=Max, 4=Off). Written by F6 / applyPreset — do not edit; use the Preset dropdown.",
+			"description": "Internal copy of Preset (0=Tight … 4=Off). Do not edit — use the Preset dropdown or F6.",
 			"default": 0,
 			"min": 0,
 			"max": 4
@@ -1017,7 +1065,7 @@
 		"swallow-hopeless": {
 			"type": "bool",
 			"name": "Swallow If Hopeless (deprecated)",
-			"description": "Deprecated unused — the mod never blocks your clicks. Kept so old configs still load.",
+			"description": "Deprecated and unused — EarlyBuffer never blocks your clicks. Kept so old configs still load.",
 			"default": false
 		}
 	},

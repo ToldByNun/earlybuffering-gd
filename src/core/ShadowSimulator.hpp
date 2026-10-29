@@ -360,8 +360,8 @@ private:
     // Snapshot/restore world transforms for TriggerWorldStore ready tracks.
     void captureTriggerTransforms(PlayLayer* layer);
     void restoreTriggerTransforms(GJBaseGameLayer* layer);
-    // Apply TriggerWorldStore poses for m_simAbsTick using capture-list pointers.
-    void applyTriggerWorldAtTick(PlayLayer* layer, int absTick);
+    // Apply TriggerWorldStore poses for m_simAbsTick (near ghost first, capped).
+    void applyTriggerWorldAtTick(PlayLayer* layer, int absTick, PlayerObject* ghost);
     // Scan player-coupled follow effects; record target ids (+ jobs if probe on).
     void captureDynamicFollows(PlayLayer* layer);
     // Cheap ghost-relative pose write when skip-dynamic is false (dual → no-op).
@@ -403,6 +403,10 @@ private:
 
     static constexpr size_t kMaxDynamicFollowJobs = 32;
     static constexpr size_t kMaxDynamicTargetsPerJob = 64;
+    // Perf: prefer objects near ghost X; stop after count or wall-clock budget.
+    static constexpr size_t kMaxApplyPerTick = 96;
+    static constexpr float kApplyMarginX = 420.f;
+    static constexpr int kApplyBudgetUs = 350;
 };
 
 #endif // EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
