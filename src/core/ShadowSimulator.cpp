@@ -752,7 +752,8 @@ void ShadowSimulator::applyTriggerWorldAtTick(
     struct Cand {
         SavedTransform const* st = nullptr;
         float dist = 0.f;
-        bool near = false;
+        // Named isNear — Windows headers define `near` as a macro.
+        bool isNear = false;
     };
     std::vector<Cand> cands;
     cands.reserve(this->m_savedTransforms.size());
@@ -762,12 +763,12 @@ void ShadowSimulator::applyTriggerWorldAtTick(
         Cand c;
         c.st = &st;
         c.dist = std::fabs(obj->getPositionX() - gx);
-        c.near = c.dist <= kApplyMarginX;
+        c.isNear = c.dist <= kApplyMarginX;
         cands.push_back(c);
     }
     // Near objects first, then closer far objects — skip remainder if budget/cap.
     std::sort(cands.begin(), cands.end(), [](Cand const& a, Cand const& b) {
-        if (a.near != b.near) return a.near && !b.near;
+        if (a.isNear != b.isNear) return a.isNear && !b.isNear;
         return a.dist < b.dist;
     });
 
