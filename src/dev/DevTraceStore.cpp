@@ -525,6 +525,28 @@ static matjson::Value eventToJson(DevDecisionEvent const& e) {
     if (e.hasWitness && e.witness.valid) {
         j["witness"] = witnessToJson(e.witness);
     }
+    if (e.hasFidelity) {
+        j["fidelity"] = DevStateDiff::fidelityId(e.fidelity);
+        j["claimsAllowed"] = e.claimsAllowed;
+        j["approx"] = e.approx;
+        if (!e.evalSuppressedReason.empty()) {
+            j["evalSuppressedReason"] = e.evalSuppressedReason;
+        }
+        if (!e.diffs.empty()) {
+            std::vector<matjson::Value> dj;
+            dj.reserve(e.diffs.size());
+            for (auto const& d : e.diffs) {
+                matjson::Value item = matjson::Value::object();
+                item["category"] = DevLiveWitness::categoryId(d.category);
+                item["fieldOrObjectId"] = d.fieldOrObjectId;
+                item["liveValue"] = d.liveValue;
+                item["restoredValue"] = d.restoredValue;
+                item["kind"] = DevStateDiff::diffKindId(d.kind);
+                dj.push_back(item);
+            }
+            j["diffs"] = dj;
+        }
+    }
     return j;
 }
 
@@ -586,6 +608,45 @@ static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::str
             return false;
         }
         e.hasWitness = true;
+    }
+    if (j.contains("fidelity")) {
+        e.hasFidelity = true;
+        auto fid = std::string(j["fidelity"].asString().unwrapOr(""));
+        if (!DevStateDiff::parseFidelity(fid, e.fidelity)) {
+            err = "bad-fidelity";
+            return false;
+        }
+        e.claimsAllowed = j.contains("claimsAllowed")
+            ? j["claimsAllowed"].asBool().unwrapOr(false)
+            : false;
+        e.approx = j.contains("approx") ? j["approx"].asBool().unwrapOr(false) : false;
+        if (j.contains("evalSuppressedReason")) {
+            e.evalSuppressedReason = std::string(
+                j["evalSuppressedReason"].asString().unwrapOr("")
+            );
+        }
+        if (j.contains("diffs") && j["diffs"].isArray()) {
+            for (auto const& item : j["diffs"].asArray().unwrap()) {
+                DevDiffEntry d;
+                auto cat = std::string(item["category"].asString().unwrapOr(""));
+                if (!DevLiveWitness::parseCategory(cat, d.category)) {
+                    err = "bad-diff-category";
+                    return false;
+                }
+                d.fieldOrObjectId = std::string(
+                    item["fieldOrObjectId"].asString().unwrapOr("")
+                );
+                d.liveValue = std::string(item["liveValue"].asString().unwrapOr(""));
+                d.restoredValue = std::string(
+                    item["restoredValue"].asString().unwrapOr("")
+                );
+                auto kind = std::string(item["kind"].asString().unwrapOr("mismatch"));
+                if (kind == "unrestored") d.kind = DevDiffKind::Unrestored;
+                else if (kind == "digestOnly") d.kind = DevDiffKind::DigestOnly;
+                else d.kind = DevDiffKind::Mismatch;
+                e.diffs.push_back(d);
+            }
+        }
     }
     return true;
 }

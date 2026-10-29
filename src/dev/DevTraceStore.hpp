@@ -3,6 +3,7 @@
 
 #include "DevClockContract.hpp"
 #include "DevLiveWitness.hpp"
+#include "DevStateDiff.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -57,6 +58,14 @@ struct DevDecisionEvent {
     // Commit 7: live witness at plan time (no restore yet).
     bool hasWitness = false;
     DevLiveWitness witness{};
+
+    // Commit 8: fidelity / claims (witness-gate at plan; full classify post-restore).
+    bool hasFidelity = false;
+    DevFidelity fidelity = DevFidelity::NotReproducible;
+    bool claimsAllowed = false;
+    bool approx = false;
+    std::string evalSuppressedReason;
+    std::vector<DevDiffEntry> diffs;
 };
 
 struct DevAttempt {

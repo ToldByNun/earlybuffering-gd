@@ -1,6 +1,7 @@
 #include "DevCycleRecorder.hpp"
 #include "DevConfig.hpp"
 #include "DevLiveWitness.hpp"
+#include "DevStateDiff.hpp"
 
 #include <Geode/Geode.hpp>
 #include <cstring>
@@ -170,6 +171,25 @@ void DevCycleRecorder::notePlanFinished(
         DevConfig::freezeWorld()
     );
     w->hasWitness = w->witness.valid;
+
+    // Commit 8: suppress claims early when the witness alone is notReproducible.
+    if (w->hasWitness) {
+        DevClassifyOptions opts;
+        opts.requireDeps = DevConfig::evalRequireDeps();
+        opts.freezeWorld = DevConfig::freezeWorld();
+        opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
+        DevClassifyResult const gate = DevStateDiff::classifyWitnessGate(
+            w->witness, opts
+        );
+        if (!gate.evalSuppressedReason.empty()) {
+            w->hasFidelity = true;
+            w->fidelity = gate.fidelity;
+            w->claimsAllowed = gate.claimsAllowed;
+            w->approx = gate.approx;
+            w->evalSuppressedReason = gate.evalSuppressedReason;
+            w->diffs = gate.diffs;
+        }
+    }
 
     cycle->planId = plan.planId;
     cycle->hasPlan = true;
