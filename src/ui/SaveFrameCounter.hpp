@@ -15,7 +15,7 @@ public:
     void detach(bool layerDying);
     void clear();
 
-    // delayTicks = frames held back. Color from bucket 1..8; label shows +N (capped 99).
+    // delayTicks = frames held back. Color/sound bucket 1..8; label +1..+7 or 8+.
     void spawn(PlayLayer* layer, cocos2d::CCPoint worldPos, int delayTicks);
 
     // Exposed for selfCheck / tests.

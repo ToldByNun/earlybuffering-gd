@@ -57,47 +57,60 @@ void ShadowSimulator::attach(PlayLayer* layer) {
 
 void ShadowSimulator::detach(bool layerDying) {
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
-    m_simulating = false;
-    m_applyingRing = false;
-    m_orbScanning = false;
-    m_orbOverlapTick = false;
-    m_dead = false;
-    m_jumped = false;
-    m_unknown = false;
-    m_activatedRing = false;
-    m_ringCount = 0;
-    m_deathObject = nullptr;
+    this->m_simulating = false;
+    this->m_applyingRing = false;
+    this->m_orbScanning = false;
+    this->m_orbOverlapTick = false;
+    this->m_dead = false;
+    this->m_jumped = false;
+    this->m_unknown = false;
+    this->m_activatedRing = false;
+    this->m_ringCount = 0;
+    this->m_deathObject = nullptr;
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
     this->m_triggerWorldAppliedThisTick = false;
     this->m_dynamicTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
-    m_saved.clear();
+    this->m_saved.clear();
     this->m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
-    m_savedActivatedIDs.clear();
+    this->m_savedActivatedIDs.clear();
     // Clear host first so a nested evacuate (if any) sees "not attached".
-    m_hostLayer = nullptr;
+    this->m_hostLayer = nullptr;
 
-    auto kill = [layerDying](PlayerObject*& p) {
+    auto sanitize = [](PlayerObject* p) {
         if (!p) return;
+        p->m_outerSectionIndex = -1;
+        p->m_innerSectionIndex = -1;
+        p->m_middleSectionIndex = -1;
+        if (p->m_touchingRings) {
+            p->m_touchingRings->removeAllObjects();
+        }
+        if (p->m_waveTrail) {
+            p->m_waveTrail->reset();
+        }
+        p->setVisible(false);
+    };
+
+    auto kill = [&](PlayerObject*& p) {
+        if (!p) return;
+        sanitize(p);
         if (layerDying) {
-            // Quit / scene change: parent tree will destroy children. Only null
-            // our pointer — never release or removeFromParent here (both have
-            // caused ~PlayerObject → CCObject::release AVs in setNextScene).
-            p->setVisible(false);
+            // Parent tree is already tearing down — do not removeFromParent /
+            // release (double-free in ~PlayerObject during setNextScene).
             p = nullptr;
             return;
         }
-        // Mid-level reattach: unlink; addChild was the only retain.
+        // Normal quit / reattach: destroy while PlayLayer is still alive.
         if (p->getParent()) {
             p->removeFromParentAndCleanup(true);
         }
         p = nullptr;
     };
-    kill(m_shadow);
-    for (auto& s : m_snapshots) kill(s);
+    kill(this->m_shadow);
+    for (auto& s : this->m_snapshots) kill(s);
 }
 
 bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {

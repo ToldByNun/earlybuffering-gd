@@ -3,6 +3,7 @@
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <fmt/format.h>
+#include <string>
 
 using namespace geode::prelude;
 
@@ -144,7 +145,10 @@ void SaveFrameCounter::addOutlinedLabel(
 CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
     int const bucket = bucketFrames(delayTicks);
     auto const rgb = colorForBucket(bucket);
-    int const shown = std::min(std::max(delayTicks, 1), 99);
+    // 1..7 → "+N"; 8 or more → "8+" (same purple bucket / 8-tick cue).
+    std::string const text = (delayTicks >= 8)
+        ? std::string("8+")
+        : fmt::format("+{}", std::max(delayTicks, 1));
 
     auto* marker = CCNode::create();
     if (!marker) return nullptr;
@@ -198,7 +202,6 @@ CCNode* SaveFrameCounter::makeMarker(CCPoint worldPos, int delayTicks) {
     );
     marker->addChild(draw);
 
-    auto const text = fmt::format("+{}", shown);
     addOutlinedLabel(
         marker,
         text.c_str(),

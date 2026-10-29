@@ -253,6 +253,11 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
         LagProbe::Scope const s("eb.updateOverlay");
         updateOverlay();
     }
+    // If ghosts were torn down mid-attempt, re-attach so assist works again.
+    if (playLayer && !ShadowSimulator::get().isAttachedTo(playLayer)) {
+        AssistLog::debug("resetAttempt: shadow missing — re-attach");
+        ShadowSimulator::get().attach(playLayer);
+    }
     // Death may have cancelled an in-flight trigger bake — resume if still empty.
     TriggerWorldBaker::get().resumeIfEmpty(playLayer);
 }
@@ -274,18 +279,25 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
 }
 
 void AssistController::onLevelQuit() {
-    // Tear down UI/sim refs BEFORE PlayLayer destroys its node tree.
-    // detach() unlinks then releases — never release while still parented.
+    // Tear down UI/sim WHILE PlayLayer is still alive. Leaving ghosts in
+    // objectLayer for setNextScene caused ~PlayerObject → CCObject::release AVs.
+    auto* playLayer = PlayLayer::get();
     TriggerWorldBaker::get().cancel();
     SelfBakeRecorder::get().cancelRefine();
-    SelfBakeRecorder::get().flushMergeOnly(PlayLayer::get(), "quit");
+    SelfBakeRecorder::get().flushMergeOnly(playLayer, "quit");
     SelfBakeRecorder::get().onLevelQuit();
     SaveFeedback::get().reset();
     SaveFrameCounter::get().detach(true);
     ClickIntentGuard::get().reset();
     TrajectoryVisualizer::get().detach(true);
     StatusOverlay::detach(true);
-    ShadowSimulator::get().detach(true);
+
+    if (playLayer) {
+        ShadowSimulator::get().evacuateGhosts(playLayer);
+    }
+    // removeFromParentAndCleanup now — not detach(true) which left ghosts for
+    // the dying tree (crash in CCObject::release during PlayerObject dtor).
+    ShadowSimulator::get().detach(false);
 
     // Persist then clear. Skip PerfTrace sync flush here — large logs were
     // hitching quits; pending lines flush on next enable / natural batch.
@@ -299,19 +311,24 @@ void AssistController::onLevelQuit() {
     TriggerWorldStore::get().clear();
 
     // Quiet reset — overlay already detached
-    clearBuffer();
-    m_pendingRelease = false;
-    m_attemptTick = 0;
-    m_inRealUpdate = false;
-    m_subDtSeen = 0.f;
-    m_modeKnown = false;
-    m_startSnapshotTaken = false;
-    m_startSnapshotSlot = -1;
-    m_lastBakeHint.clear();
-    m_log.clear();
-    m_clickTimes.clear();
-    m_cpsLocked = false;
-    m_userHolding[0] = m_userHolding[1] = false;
+    this->clearBuffer();
+    this->m_pendingRelease = false;
+    this->m_pendingReleaseHold = false;
+    this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseUserUpTick = -1;
+    this->m_pendingReleaseMaxExtend = 0;
+    this->m_pendingReleaseTick = 0;
+    this->m_attemptTick = 0;
+    this->m_inRealUpdate = false;
+    this->m_subDtSeen = 0.f;
+    this->m_modeKnown = false;
+    this->m_startSnapshotTaken = false;
+    this->m_startSnapshotSlot = -1;
+    this->m_lastBakeHint.clear();
+    this->m_log.clear();
+    this->m_clickTimes.clear();
+    this->m_cpsLocked = false;
+    this->m_userHolding[0] = this->m_userHolding[1] = false;
 }
 
 geode::Result<> AssistController::ensureStartSnapshot(PlayLayer* layer) {

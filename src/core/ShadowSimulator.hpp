@@ -109,8 +109,14 @@ public:
     static ShadowSimulator& get();
 
     void attach(PlayLayer* layer);
+    // layerDying=true: only drop pointers (parent tree already tearing down).
+    // Prefer detach(false) from onQuit after evacuateGhosts — removes ghosts
+    // while PlayLayer is still alive (avoids ~PlayerObject release AVs).
     void detach(bool layerDying = false);
 
+    bool isAttachedTo(GJBaseGameLayer* layer) const {
+        return layer && this->m_hostLayer == layer;
+    }
     bool isSimulating() const { return m_simulating; }
     // True after applyTriggerWorldAtTick ran for the current sim step.
     bool triggerWorldAppliedThisTick() const {

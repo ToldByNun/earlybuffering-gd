@@ -453,6 +453,10 @@ class $modify(EbPlayLayer, PlayLayer) {
         PlayLayer::onQuit();
     }
 
+    // Do NOT hook onExit → onLevelQuit. GD can call onExit around death/retry
+    // UI without leaving the level; that tore down ghosts and killed assist
+    // until a full re-enter. Quit cleanup stays in onQuit only.
+
     void destroyPlayer(PlayerObject* player, GameObject* object) {
         auto& sim = ShadowSimulator::get();
 
