@@ -18,8 +18,10 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
+#include <filesystem>
 #include <optional>
 #include <string>
+#include <system_error>
 
 #ifdef GEODE_IS_WINDOWS
 # ifndef WIN32_LEAN_AND_MEAN
@@ -304,16 +306,34 @@ void PauseActionBridge::exportConfig() {
     auto path = PauseActionBridgeDetail::pickSaveJsonWin32(true);
     if (!path) return;
     auto r = ConfigBundle::exportTo(*path);
-    if (r.isErr()) FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
-    else FLAlertLayer::create("EarlyBuffer", "Config exported.", "OK")->show();
+    if (r.isErr()) {
+        FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
+    }
+    else {
+        FLAlertLayer::create("EarlyBuffer", "Config exported.", "OK")->show();
+    }
 #else
-    auto path = Mod::get()->getSaveDir() / "earlybuffer-config.json";
+    auto& drops = SaveDropPaths::get();
+    std::string dirErr;
+    if (!drops.ensureDirs(dirErr)) {
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    auto const path = drops.configPath();
     auto r = ConfigBundle::exportTo(path);
-    FLAlertLayer::create(
-        "EarlyBuffer",
-        r.isOk() ? fmt::format("Exported to {}", path.string()).c_str() : r.unwrapErr().c_str(),
-        "OK"
-    )->show();
+    std::string msg;
+    if (r.isOk()) {
+        msg = fmt::format("Config exported to:\n{}", path.string());
+    }
+    else {
+        msg = r.unwrapErr();
+        if (msg.empty()) msg = "Config export failed.";
+    }
+    FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
 #endif
 }
 
@@ -322,14 +342,56 @@ void PauseActionBridge::importConfig() {
     auto path = PauseActionBridgeDetail::pickSaveJsonWin32(false);
     if (!path) return;
     auto r = ConfigBundle::importFrom(*path);
-#else
-    auto path = Mod::get()->getSaveDir() / "earlybuffer-config.json";
-    auto r = ConfigBundle::importFrom(path);
-#endif
     if (r.isErr()) {
         FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
         return;
     }
+#else
+    auto& drops = SaveDropPaths::get();
+    std::string dirErr;
+    if (!drops.ensureDirs(dirErr)) {
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    auto const path = drops.configPath();
+    std::error_code ec;
+    bool const exists = std::filesystem::is_regular_file(path, ec) && !ec;
+    if (!exists) {
+        auto const msg = fmt::format(
+            "No config file found.\n\n"
+            "Place earlybuffer-config.json at:\n{}\n\n"
+            "Export Config writes that path; "
+            "copy it via a file manager or ADB, then Import again.",
+            path.string()
+        );
+        FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
+        return;
+    }
+    auto const sz = std::filesystem::file_size(path, ec);
+    if (ec || sz == 0) {
+        auto const emptyMsg = fmt::format(
+            "Config file is empty or unreadable:\n{}",
+            path.string()
+        );
+        FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
+        return;
+    }
+    auto r = ConfigBundle::importFrom(path);
+    if (r.isErr()) {
+        // Corrupt JSON / open failure — keep ConfigBundle text, add path.
+        auto const badMsg = fmt::format(
+            "{}\n\nFile:\n{}",
+            r.unwrapErr(),
+            path.string()
+        );
+        FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
+        return;
+    }
+#endif
     AssistController::get().updateOverlay();
     FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
 }
