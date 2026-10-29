@@ -5,6 +5,7 @@
 #include "../core/AssistVerdict.hpp"
 #include "../core/MissAssistContracts.hpp"
 #include "../core/TravelForesight.hpp"
+#include "../core/OpportunityProbe.hpp"
 #include "../core/ClickIntentGuard.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
@@ -46,6 +47,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(MissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string foresightReport;
     expect(TravelForesight::selfCheck(foresightReport), "travel-foresight");
+    std::string probeReport;
+    expect(OpportunityProbe::selfCheck(probeReport), "opportunity-probe");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";

@@ -137,8 +137,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 1. tickBudget from opts (default 4000); if verifyAb then *2
 2. modelFor; capture state
 3. d0 press baseline -> ThreatZone clusterGapX=50
-4. **no-threat Pass**: baseline did not die, zone invalid, no orb/pad hint → Pass (skip further cands)
-4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam)
+4. **no-threat Pass (G2)**: baseline did not die, zone invalid, no orb/pad hint → run `OpportunityProbe` (foresight already forces search; else cheap `d=mid` / `d=limit` sims). Pass only if probe empty; else full cand search. Budget starve with no probes → `PassBudget`.
+4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). Runs **after** foresight/orb checks.
 4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, all surviveBin ≤0 and best endX gain &lt; 8 → Pass
 5. eval delays under tick + sim-budget-us
 6. orbIntent: earliest +/-k robust activation (NO midpoint); optional firstDt ±3% jitter on top cand
@@ -278,7 +278,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
 | G1 Prefer (New) | When Pick Mode is **New**, choose best viable delay in `0..limit` (full pool compare). Pass only if best is `0` or hopeless. |
 | G1 Legacy | Pick Mode **Legacy** keeps 1.2.0 feel: `d0` viable → Pass; else earliest viable in window (not full pool best). |
-| G2 | `Pass no-threat` only after foresight + opportunity probe agree the corridor is empty (foresight lands in a later change). |
+| G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 
 Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::selfCheck` (via PlanGold).
@@ -286,6 +286,10 @@ Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::se
 ### TravelForesight
 
 `TravelForesight` replaces the old fixed `(limit+8)*5.5` ahead-X for orb hints. Ahead distance = clamp(`speedMul * (5.5/(1/240)) * (limit+slack)*simDt + 16`, 60…320). Scans **orbs and jump pads**; skips activated / claimed. `ShadowSimulator::spatialOrbHint` and controller spam overrides use the same cone. `PLAN` / `logPlan` emit `foresight=0|1` from `SimPlan.foresightOrbPad`.
+
+### OpportunityProbe (G2)
+
+Before blind `Pass no-threat`, `OpportunityProbe` forces further search when foresight/orb-window/d0-ring hits, or when a cheap sim at `mid=limit/2` or `limit` shows ring activation, higher surviveBin, or endX gain ≥ 8. Orb coast scan length = `limit+slack+4`; if empty, a budget-capped **press-to-reach** scan holds Jump. Fixtures: `OpportunityProbe::selfCheck`.
 
 ### Manual playtest matrix
 

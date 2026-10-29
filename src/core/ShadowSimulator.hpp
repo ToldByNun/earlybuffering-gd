@@ -357,9 +357,12 @@ private:
         float dt, float firstDt, Model const& model, int* tickBudgetLeft
     );
 
+    // holdJump=true: keep Jump held while coasting (press-to-reach orbs).
+    // holdJump=false: Jump = !down (legacy coast / release scan).
     OrbWindow scanOrbWindow(
         PlayLayer* layer, PlayerObject* real, bool down,
-        int scanTicks, float dt, float firstDt, int* tickBudgetLeft
+        int scanTicks, float dt, float firstDt, int* tickBudgetLeft,
+        bool holdJump = false
     );
 
     static bool isHazardLike(GameObject* obj);

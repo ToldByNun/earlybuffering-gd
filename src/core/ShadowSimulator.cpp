@@ -1,6 +1,7 @@
 #include "ShadowSimulator.hpp"
 #include "BakeMap.hpp"
 #include "TravelForesight.hpp"
+#include "OpportunityProbe.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -1445,22 +1446,25 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
 
 ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
     PlayLayer* layer, PlayerObject* real, bool down,
-    int scanTicks, float dt, float firstDt, int* tickBudgetLeft
+    int scanTicks, float dt, float firstDt, int* tickBudgetLeft,
+    bool holdJump
 ) {
     OrbWindow win;
-    if (!layer || !real || !m_shadow || scanTicks <= 0) return win;
+    if (!layer || !real || !this->m_shadow || scanTicks <= 0) return win;
 
-    copyPlayerState(m_shadow, real);
-    m_dead = false;
-    m_jumped = false;
-    m_unknown = false;
-    m_activatedRing = false;
-    m_ringCount = 0;
-    m_orbOverlapTick = false;
-    m_deathObject = nullptr;
+    this->copyPlayerState(this->m_shadow, real);
+    this->m_dead = false;
+    this->m_jumped = false;
+    this->m_unknown = false;
+    this->m_activatedRing = false;
+    this->m_ringCount = 0;
+    this->m_orbOverlapTick = false;
+    this->m_deathObject = nullptr;
 
-    auto* s = m_shadow;
-    s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
+    auto* s = this->m_shadow;
+    // Press-to-reach: hold Jump. Otherwise legacy coast with Jump = !down.
+    s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] =
+        holdJump ? true : !down;
 
     m_orbScanning = true;
     for (int t = 0; t < scanTicks; ++t) {
@@ -1724,10 +1728,26 @@ SimPlan ShadowSimulator::plan(
     OrbWindow orbHint{};
     bool spatialHint = false;
     if (orbAssist) {
-        int scanTicks = std::max(limit + model.slack + 4, limit + 1);
-        orbHint = scanOrbWindow(layer, real, down, scanTicks, dt, firstDt, &tickBudget);
-        restoreCapture(layer);
-        beginCapture(layer);
+        int const scanTicks = OpportunityProbe::orbScanTicks(limit, model.slack);
+        orbHint = this->scanOrbWindow(
+            layer, real, down, scanTicks, dt, firstDt, &tickBudget, false
+        );
+        this->restoreCapture(layer);
+        this->beginCapture(layer);
+        // Press-to-reach: second scan with Jump held if coast missed (budget-capped).
+        if (!orbHint.found && tickBudget >= OpportunityProbe::kMinBudgetForProbe) {
+            int const reachTicks = OpportunityProbe::pressReachScanTicks(
+                limit, model.slack
+            );
+            auto held = this->scanOrbWindow(
+                layer, real, down, reachTicks, dt, firstDt, &tickBudget, true
+            );
+            this->restoreCapture(layer);
+            this->beginCapture(layer);
+            if (held.found) {
+                orbHint = held;
+            }
+        }
         if (orbHint.found) plan.usedOrbWindow = true;
         spatialHint = this->spatialOrbHint(layer, real, limit, dt);
         plan.foresightOrbPad = spatialHint;
@@ -1735,6 +1755,7 @@ SimPlan ShadowSimulator::plan(
 
     ThreatZone zone{};
     std::vector<Cand> cands(static_cast<size_t>(limit) + 1);
+    std::vector<char> candReady(static_cast<size_t>(limit) + 1, 0);
 
     auto evalDelay = [&](int d, int releaseAfter) -> Cand {
         Cand c;
@@ -1801,33 +1822,106 @@ SimPlan ShadowSimulator::plan(
         }
         finalizeViable(c0, -1);
         cands[0] = c0;
+        candReady[0] = 1;
 
-        // No threat target: baseline survives and no orb/pad ahead → Pass now.
-        // Avoids buffering wave spam / empty corridors with nothing to forgive.
+        // No threat target: baseline survives and no orb/pad ahead.
+        // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
         bool const noThreat = !c0.raw.died && !zone.valid;
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
-            this->m_simAbsTick = -1;
-            restoreCapture(layer);
-            this->m_simulating = false;
-            this->parkGhosts();
-            plan.action = PlanAction::Pass;
-            plan.reason = AssistReason::PassNoThreat;
-            plan.delay = 0;
-            plan.nowIsSafe = true;
-            plan.threatCleared = true;
-            plan.jumpTick = c0.jumpTick;
-            plan.activatedRing = c0.activatedRing;
+            OpportunityProbe::Sample baseSample{};
+            baseSample.activatedRing = c0.activatedRing;
+            baseSample.diedBeforeAction = c0.diedBeforeAction;
+            baseSample.surviveBin = c0.surviveBin;
+            baseSample.endX = c0.endX;
+
+            OpportunityProbe::Sample probeSamples[2];
+            int probeCount = 0;
+            int const mid = OpportunityProbe::midDelay(limit);
+            auto runProbeDelay = [&](int d) {
+                if (d <= 0 || d > limit) return;
+                if (candReady[static_cast<size_t>(d)]) return;
+                if (tickBudget < OpportunityProbe::kMinBudgetForProbe || wallExceeded()) {
+                    plan.budgetHit = true;
+                    return;
+                }
+                auto c = evalDelay(d, -1);
+                if (c.diedBeforeAction) {
+                    // Still record — probe may show nothing useful.
+                    finalizeViable(c, -1);
+                    cands[static_cast<size_t>(d)] = c;
+                    candReady[static_cast<size_t>(d)] = 1;
+                    if (probeCount < 2) {
+                        auto& ps = probeSamples[probeCount++];
+                        ps.activatedRing = c.activatedRing;
+                        ps.diedBeforeAction = c.diedBeforeAction;
+                        ps.surviveBin = c.surviveBin;
+                        ps.endX = c.endX;
+                    }
+                    return;
+                }
+                finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
+                cands[static_cast<size_t>(d)] = c;
+                candReady[static_cast<size_t>(d)] = 1;
+                if (probeCount < 2) {
+                    auto& ps = probeSamples[probeCount++];
+                    ps.activatedRing = c.activatedRing;
+                    ps.diedBeforeAction = c.diedBeforeAction;
+                    ps.surviveBin = c.surviveBin;
+                    ps.endX = c.endX;
+                }
+            };
+
+            if (limit >= 1) {
+                runProbeDelay(mid);
+                if (limit != mid) {
+                    runProbeDelay(limit);
+                }
+            }
+
+            bool const searchFurther = OpportunityProbe::shouldSearchFurther(
+                spatialHint,
+                orbHint.found,
+                c0.activatedRing,
+                baseSample,
+                probeSamples,
+                probeCount
+            );
+
+            if (!searchFurther) {
+                this->m_simAbsTick = -1;
+                this->restoreCapture(layer);
+                this->m_simulating = false;
+                this->parkGhosts();
+                plan.action = PlanAction::Pass;
+                // Wanted probes but could not afford any → PassBudget (C6 may Hold).
+                if (plan.budgetHit && limit >= 1 && probeCount == 0) {
+                    plan.reason = AssistReason::PassBudget;
+                }
+                else {
+                    plan.reason = AssistReason::PassNoThreat;
+                }
+                plan.delay = 0;
+                plan.nowIsSafe = true;
+                plan.threatCleared = true;
+                plan.jumpTick = c0.jumpTick;
+                plan.activatedRing = c0.activatedRing;
+                AssistLog::debug(fmt::format(
+                    "PLAN id={} Pass no-threat verdict={} foresight={} probes={} budgetHit={} limit={}",
+                    plan.planId, AssistVerdict::name(plan.reason),
+                    plan.foresightOrbPad ? 1 : 0, probeCount, plan.budgetHit, limit
+                ));
+                return plan;
+            }
             AssistLog::debug(fmt::format(
-                "PLAN id={} Pass no-threat verdict={} foresight={} limit={} budgetHit={}",
-                plan.planId, AssistVerdict::name(plan.reason),
-                plan.foresightOrbPad ? 1 : 0, limit, plan.budgetHit
+                "PLAN id={} opportunity-probe search-further foresight={} probes={} orbWin={}",
+                plan.planId, plan.foresightOrbPad ? 1 : 0, probeCount, orbHint.found ? 1 : 0
             ));
-            return plan;
         }
 
         // Wave zigzag: hazards in proximity ahead + no orb → Pass even if d0
         // built a distant ThreatZone. Delaying phase-shifts into spikes.
+        // Stays AFTER foresight/orb checks (noOrbTarget already includes foresight).
         bool const isWave = real && real->m_isDart;
         float const proxX = std::clamp(
             static_cast<float>(limit + 4) * 5.5f,
@@ -1917,6 +2011,9 @@ SimPlan ShadowSimulator::plan(
 
     for (int d : order) {
         if (d == 0) continue;
+        if (d >= 0 && d <= limit && candReady[static_cast<size_t>(d)]) {
+            continue; // already filled by OpportunityProbe
+        }
         if (tickBudget <= 0 || wallExceeded()) {
             plan.budgetHit = true;
             break;
