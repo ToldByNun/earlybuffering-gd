@@ -8,9 +8,9 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.2.0",
+	"version": "v1.2.1",
 	"developer": "Audesign",
-	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 release · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick New vs Legacy). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -446,7 +446,7 @@
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window. New = compare the full window pool and take the best viable timing (prefer-delay). Legacy = 1.2.0 feel: if delay 0 is already safe, click now; otherwise take the earliest viable delay (not the pool best). Never waits past your Limit.",
+			"description": "How Live/Hybrid picks a delay inside your tick window (G1). New (default) = best viable in 0..Limit with prefer-later when survival ties (miss-assist waits more). Legacy = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust viable (orb band still earliest activation). Never waits past your Limit. Overlay / VERDICT show Pass-Delay reasons.",
 			"one-of": [
 				"New",
 				"Legacy"

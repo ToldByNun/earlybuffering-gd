@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.1
+
+**Miss-assist / verdict pass for GD 2.2081** (same final game line as 1.2.0).
+
+- **Pass reasons + overlay** — every Pass/Delay stamps `AssistReason` (`VERDICT` / `PLAN … verdict=`).
+- **Pick Mode** (`assist-pick`): **New** (default, prefer-later) vs **Legacy** (d0 Pass / latest ±k-robust).
+- **TravelForesight** + **OpportunityProbe** (G2 no-threat); Wave / spam / UNTRUST soft when orb/pad ahead.
+- **Soft Hold-Until-Safe** with cadenced replan (budget caps; never hang past Limit).
+- Continuous **idleSafer / ascentUseful** (Ship/Wave); Hybrid bake verify-fail → Live foresight.
+- Tick ≠ frame documented; PlanGold self-checks on load.
+
 ## v1.2.0
 
 **Final EarlyBuffer release for Geometry Dash 2.2081.** Newer GD builds need a separate port.

@@ -1,6 +1,6 @@
 # EarlyBuffer Assist Reference
 
-Planner / settings contract for **EarlyBuffer v1.2.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.2.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -293,7 +293,23 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
 | Bake / Hybrid | Hybrid verify-fail / past-latest / missing → Live (no bake Pass). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
 
-Executable pure fixtures: `MissAssistContracts::selfCheck` (incl. prefer early-exit), `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold).
+Executable pure fixtures: `MissAssistContracts::selfCheck` (incl. prefer early-exit), `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold). Self-checks run on mod load (`PlanGoldCorpus`).
+
+### Pass / Delay reasons (G3)
+
+Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown` must not ship.
+
+| Token | Typical cause |
+|-------|----------------|
+| `pass-no-threat` | Empty corridor after foresight + OpportunityProbe |
+| `pass-wave-proximity` / `pass-wave-futile` | Wave spam / no useful delay (blocked by foresight orb) |
+| `pass-d0-safe` | Delay 0 already clears (Legacy preference / New best=0) |
+| `pass-hopeless` / `pass-budget` | Nothing viable / tick wall; may arm HUS if foresight/ascent |
+| `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / trust gates (orb foresight softens) |
+| `pass-limit-zero` / `pass-debounce` / `pass-cps` / `pass-scope` / `pass-assist-off` / `pass-early-attempt` | Hard off / debounce / CPS / scope |
+| `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake paths (Hybrid falls through to Live) |
+| `delay-orb` / `delay-threat` / `delay-prefer` / `delay-generic` | Buffered Delay |
+| `hold-pending` | Soft Hold-Until-Safe (`HOLD~` / `HUS`) |
 
 ### TravelForesight
 

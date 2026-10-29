@@ -2,7 +2,7 @@
 
 Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) development / authorship notes: direction and review are human-led; AI may assist drafting. Prefer small, testable PRs.
 
-**Scope note:** **v1.2.0** targets **GD 2.2081** only (last line for that game build). Work for newer GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
+**Scope note:** **v1.2.1** targets **GD 2.2081** only (last line for that game build). Work for newer GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
 
 ## Setup
 
