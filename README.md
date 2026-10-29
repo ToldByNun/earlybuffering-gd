@@ -7,13 +7,13 @@ Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBu
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.2.1** |
+| Version | **1.2.2** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
-| Platforms | Windows, macOS, iOS, Android (CI) |
+| Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`) |
 | License | [MIT](LICENSE) |
 | Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
 
-> **Last 2.2081 release.** **v1.2.1** is the final EarlyBuffer line targeting Geometry Dash **2.2081** (miss-assist / Pass-verdict on top of 1.2.0). Newer GD versions will need a separate port / major bump — do not expect this package to load on other game builds.
+> **Last 2.2081 line.** **v1.2.2** still targets Geometry Dash **2.2081** only (Android64 packaging + mobile I/O on top of 1.2.1). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android — use a merged / checked package (see `INSTALL.md`).
 
 ## What it does
 
@@ -30,7 +30,7 @@ Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_refe
 ## Install
 
 1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
-2. Install from the **Geode Index**, or download the **v1.2.1** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases).
+2. Install from the **Geode Index**, or download the **v1.2.2** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android).
 3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (Geode will prompt).
 
 ## Build
@@ -60,7 +60,7 @@ Hotkeys are configurable (defaults include F6 preset cycle, Ctrl+Shift+M assist 
 
 ## Development status
 
-EarlyBuffer **1.2.1** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not a abandoned prototype — while remembering it will not track newer game builds.
+EarlyBuffer **1.2.2** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not a abandoned prototype — while remembering it will not track newer game builds.
 
 ## Authorship and AI use
 
@@ -79,7 +79,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.2.1** adds miss-assist Pick Mode, Pass-verdict overlay, TravelForesight / Hold-Until-Safe (still GD **2.2081** only).
+- **Changelog:** see [`changelog.md`](changelog.md) — **v1.2.2** Android64 package / mobile I/O; **v1.2.1** miss-assist Pick Mode / Pass-verdict (still GD **2.2081** only).
 
 ## Credits
 

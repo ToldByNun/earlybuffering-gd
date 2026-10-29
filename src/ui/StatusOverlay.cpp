@@ -1,5 +1,6 @@
 #include "StatusOverlay.hpp"
 #include "../config/StageConfig.hpp"
+#include "../core/PlatformLimits.hpp"
 
 using namespace geode::prelude;
 
@@ -27,7 +28,10 @@ void StatusOverlay::attach(PlayLayer* playLayer) {
     s_label->setID("earlybuffer-status-overlay"_spr);
 
     auto const winSize = CCDirector::sharedDirector()->getWinSize();
-    s_label->setPosition({ 10.f, winSize.height - 10.f });
+    auto& limits = PlatformLimits::get();
+    float const left = limits.overlayLeftInset();
+    float const top = limits.overlayTopInset();
+    s_label->setPosition({ left, winSize.height - top });
 
     g_lastText = "EarlyBuffer";
     g_lastVisible = StageConfig::showOverlay();

@@ -1,6 +1,7 @@
 #include "config/StageConfig.hpp"
 #include "core/AssistController.hpp"
 #include "core/BakeMap.hpp"
+#include "core/SaveDropPaths.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "core/TriggerClassify.hpp"
 #include "core/TriggerWorldStore.hpp"
@@ -49,6 +50,13 @@ $on_mod(Loaded) {
     DevConfig::refreshCache();
     syncPerfTrace();
     syncLagProbe();
+    // Mobile drop folders (replay-drop / config) — soft-fail if save dir is read-only.
+    {
+        std::string dropErr;
+        if (!SaveDropPaths::get().ensureDirs(dropErr) && !dropErr.empty()) {
+            AssistLog::info(fmt::format("WARN SaveDropPaths: {}", dropErr));
+        }
+    }
     AssistLog::printBanner();
     if (StageConfig::perfTrace()) {
         AssistLog::info(fmt::format("PerfTrace logging to {}", PerfTrace::logPath()));

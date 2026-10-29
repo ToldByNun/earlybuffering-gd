@@ -38,6 +38,20 @@ int PlatformLimits::clampTickBudget(int requestedTicks) const {
 #endif
 }
 
+float PlatformLimits::overlayTopInset() const {
+    (void)this;
+#ifdef GEODE_IS_ANDROID
+    return kAndroidOverlayTopInset;
+#else
+    return kDefaultOverlayTopInset;
+#endif
+}
+
+float PlatformLimits::overlayLeftInset() const {
+    (void)this;
+    return kDefaultOverlayLeftInset;
+}
+
 bool PlatformLimits::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -51,14 +65,17 @@ bool PlatformLimits::selfCheck(std::string& report) {
     auto& lim = PlatformLimits::get();
     expect(lim.clampSimBudgetUs(0) == 0, "sim-unlimited");
     expect(lim.clampSimBudgetUs(500) == 500, "sim-below-cap");
+    expect(lim.overlayLeftInset() == kDefaultOverlayLeftInset, "overlay-left");
 #ifdef GEODE_IS_ANDROID
     expect(!lim.allowLoadDiskSelfCheck(), "android-no-disk-gold");
     expect(lim.clampSimBudgetUs(10000) == kAndroidMaxSimBudgetUs, "sim-cap");
     expect(lim.clampTickBudget(20000) == kAndroidMaxTickBudget, "tick-cap");
+    expect(lim.overlayTopInset() == kAndroidOverlayTopInset, "overlay-top-android");
 #else
     expect(lim.allowLoadDiskSelfCheck(), "disk-gold-ok");
     expect(lim.clampSimBudgetUs(10000) == 10000, "sim-passthrough");
     expect(lim.clampTickBudget(20000) == 20000, "tick-passthrough");
+    expect(lim.overlayTopInset() == kDefaultOverlayTopInset, "overlay-top-desktop");
 #endif
 
     if (fails == 0) {

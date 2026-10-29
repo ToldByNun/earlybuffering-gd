@@ -19,6 +19,10 @@ public:
     // Ceiling for StageConfig::tickBudgetPerPress().
     int clampTickBudget(int requestedTicks) const;
 
+    // Status overlay distance from top / left of the win size (points).
+    float overlayTopInset() const;
+    float overlayLeftInset() const;
+
     static bool selfCheck(std::string& report);
 
 private:
@@ -26,6 +30,9 @@ private:
 
     static constexpr int kAndroidMaxSimBudgetUs = 2000;
     static constexpr int kAndroidMaxTickBudget = 2000;
+    static constexpr float kDefaultOverlayTopInset = 10.f;
+    static constexpr float kAndroidOverlayTopInset = 28.f;
+    static constexpr float kDefaultOverlayLeftInset = 10.f;
 };
 
 #endif // EARLYBUFFER_CORE_PLATFORMLIMITS_HPP

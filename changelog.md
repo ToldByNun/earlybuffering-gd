@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.2
+
+**Android64 package + mobile I/O** (still GD **2.2081** only).
+
+- Ship packages must include `audesign.earlybuffer.android64.so` — Windows-only local `.geode` files fail on phone with Geode’s missing-binary error.
+- Maintainer tools: `tools/geode_package_check.py`, `tools/merge_geode_packages.py`; Android build/merge recipe in `INSTALL.md`.
+- Non-Windows replay import via save-dir `replay-drop/`; config import/export uses `earlybuffer-config.json` under the mod save dir with clear path alerts.
+- Dev Copy Report dual-writes clipboard + `earlybuffer-dev-report.txt`.
+- Android: PlanGold skips disk DevTrace self-checks on load; planner sim/tick budgets capped; overlay top inset for notched screens.
+- Do **not** sideload `build/audesign.earlybuffer.geode` (Windows-only) onto Android — merge or use an android64-checked artifact.
+
 ## v1.2.1
 
 **Miss-assist / verdict pass for GD 2.2081** (same final game line as 1.2.0).

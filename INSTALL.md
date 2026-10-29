@@ -163,6 +163,21 @@ Some launchers or forks use a different root — if unsure, use the **Geode mods
 3. Prefer **Safe Mode** on for online / rated play.
 4. Platformer levels: assist stays off by design.
 
+## Android device smoke checklist
+
+Use a **merged** or android64-checked `.geode` only. Tick each item on a 64-bit phone (GD **2.2081** + Geode):
+
+1. **Package gate (PC)** — `python tools/geode_package_check.py <ship.geode> --require android64` exits 0. For dual ships also `--require win`.
+2. **Load** — copy into Geode mods folder; enable EarlyBuffer; **no** `Unable to find platform binary under the name 'audesign.earlybuffer.android64.so'`.
+3. **Live assist (touch)** — short classic level (not platformer); Enabled on; Safe Mode on; Assist Mode Live; early jump → Delay or Pass; overlay updates (proves touch → `handleButton`).
+4. **Settings without keyboard** — Pause → EB → toggle Enabled / Preset (hotkeys optional).
+5. **Config paths** — Export Config → alert shows save-dir path; Import after placing/editing `earlybuffer-config.json` there.
+6. **Replay drop** — place one `.gdr` (or `.gdr2` / `.mhr` / `.json` / `.slc`) in `replay-drop/` under the mod save dir → Import Replay succeeds or clear error (not “Windows-only”).
+7. **Cold start** — force-stop the app; reopen; mod still loads; PlanGold/load stays WARN-only (no crash). Dev Lab unused stays quiet.
+8. **Optional Dev Lab** — if Dev Record Enable is on: Start Recording / Eval Last / Copy Report writes `earlybuffer-dev-report.txt` under the save dir.
+
+If step 2 fails, you installed a Windows-only package — re-merge. If step 3 fails with no overlay and no delay, capture Geode crashlog before changing planner code.
+
 ## CI note
 
 Multi-platform CI builds Windows, macOS, iOS, and Android. iOS GeodeBindings needs an FMOD force-include (see `CMakeLists.txt`) because codegen emits FMOD stubs without including `fmod.h`. Local Android builds above do not require running CI.
