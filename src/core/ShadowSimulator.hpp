@@ -195,12 +195,17 @@ public:
         PlayLayer* layer, PlayerObject* real, float proximityX
     );
 
-    // Pure gates for plan() / selfCheck (no layer).
+    // Pure wave anti-phase gates for plan() / selfCheck (no layer).
+    // foresightOrbPad: TravelForesight orb/pad ahead → never Pass (search/Delay).
     static bool shouldWaveHazardProximityPass(
-        bool isWave, bool nearHazard, bool noOrbTarget
+        bool isWave, bool nearHazard, bool noOrbTarget, bool foresightOrbPad
     );
     static bool shouldWaveFutileDelayPass(
-        bool isWave, bool orbIntent, int bestSurviveBin, float bestEndXGain
+        bool isWave,
+        bool orbIntent,
+        int bestSurviveBin,
+        float bestEndXGain,
+        bool foresightOrbPad
     );
 
     // Prefer short release for continuous; mid-window for tap modes.

@@ -1190,19 +1190,26 @@ bool ShadowSimulator::spatialHazardProximity(
 }
 
 bool ShadowSimulator::shouldWaveHazardProximityPass(
-    bool isWave, bool nearHazard, bool noOrbTarget
+    bool isWave, bool nearHazard, bool noOrbTarget, bool foresightOrbPad
 ) {
     if (!isWave) return false;
     if (!nearHazard) return false;
     if (!noOrbTarget) return false;
+    // Miss-assist: orb/pad in travel cone → keep searching, do not Pass.
+    if (foresightOrbPad) return false;
     return true;
 }
 
 bool ShadowSimulator::shouldWaveFutileDelayPass(
-    bool isWave, bool orbIntent, int bestSurviveBin, float bestEndXGain
+    bool isWave,
+    bool orbIntent,
+    int bestSurviveBin,
+    float bestEndXGain,
+    bool foresightOrbPad
 ) {
     if (!isWave) return false;
     if (orbIntent) return false;
+    if (foresightOrbPad) return false;
     if (bestSurviveBin > 0) return false;
     if (bestEndXGain >= kFutileEndXGain) return false;
     return true;
@@ -1933,7 +1940,7 @@ SimPlan ShadowSimulator::plan(
 
         // Wave zigzag: hazards in proximity ahead + no orb → Pass even if d0
         // built a distant ThreatZone. Delaying phase-shifts into spikes.
-        // Stays AFTER foresight/orb checks (noOrbTarget already includes foresight).
+        // AFTER foresight: foresightOrbPad blocks this Pass (miss-assist orb).
         bool const isWave = real && real->m_isDart;
         float const proxX = std::clamp(
             static_cast<float>(limit + 4) * 5.5f,
@@ -1941,7 +1948,9 @@ SimPlan ShadowSimulator::plan(
             kHazardProximityXMax
         );
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
-        if (shouldWaveHazardProximityPass(isWave, nearHazard, noOrbTarget)) {
+        if (shouldWaveHazardProximityPass(
+                isWave, nearHazard, noOrbTarget, plan.foresightOrbPad
+            )) {
             this->m_simAbsTick = -1;
             restoreCapture(layer);
             this->m_simulating = false;
@@ -2125,7 +2134,9 @@ SimPlan ShadowSimulator::plan(
             float const gain = c.endX - baseEnd;
             if (gain > bestGain) bestGain = gain;
         }
-        if (shouldWaveFutileDelayPass(isWave, orbIntent, bestBin, bestGain)) {
+        if (shouldWaveFutileDelayPass(
+                isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad
+            )) {
             this->m_simAbsTick = -1;
             restoreCapture(layer);
             this->m_simulating = false;
@@ -3062,37 +3073,45 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(kDefaultTickBudget == 4000, "tickBudget");
     expect(kFutileEndXGain == 8.f, "futileEndXGain");
 
-    // Wave proximity / futile-delay gates
+    // Wave proximity / futile-delay gates (+ foresight orb/pad must not Pass)
     expect(
-        shouldWaveHazardProximityPass(true, true, true),
+        shouldWaveHazardProximityPass(true, true, true, false),
         "wave-prox-pass"
     );
     expect(
-        !shouldWaveHazardProximityPass(true, true, false),
-        "wave-prox-orb-blocks"
+        !shouldWaveHazardProximityPass(true, true, false, false),
+        "wave-prox-orb-target-blocks"
     );
     expect(
-        !shouldWaveHazardProximityPass(false, true, true),
+        !shouldWaveHazardProximityPass(true, true, true, true),
+        "wave-prox-foresight-blocks"
+    );
+    expect(
+        !shouldWaveHazardProximityPass(false, true, true, false),
         "wave-prox-not-cube"
     );
     expect(
-        !shouldWaveHazardProximityPass(true, false, true),
+        !shouldWaveHazardProximityPass(true, false, true, false),
         "wave-prox-no-hazard"
     );
     expect(
-        shouldWaveFutileDelayPass(true, false, 0, 3.f),
+        shouldWaveFutileDelayPass(true, false, 0, 3.f, false),
         "wave-futile-pass"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, true, 0, 3.f),
-        "wave-futile-orb"
+        !shouldWaveFutileDelayPass(true, true, 0, 3.f, false),
+        "wave-futile-orb-intent"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, false, 1, 3.f),
+        !shouldWaveFutileDelayPass(true, false, 0, 3.f, true),
+        "wave-futile-foresight"
+    );
+    expect(
+        !shouldWaveFutileDelayPass(true, false, 1, 3.f, false),
         "wave-futile-bin"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, false, 0, 12.f),
+        !shouldWaveFutileDelayPass(true, false, 0, 12.f, false),
         "wave-futile-gain"
     );
 

@@ -138,8 +138,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 2. modelFor; capture state
 3. d0 press baseline -> ThreatZone clusterGapX=50
 4. **no-threat Pass (G2)**: baseline did not die, zone invalid, no orb/pad hint → run `OpportunityProbe` (foresight already forces search; else cheap `d=mid` / `d=limit` sims). Pass only if probe empty; else full cand search. Budget starve with no probes → `PassBudget`.
-4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). Runs **after** foresight/orb checks.
-4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, all surviveBin ≤0 and best endX gain &lt; 8 → Pass
+4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). **`foresightOrbPad` blocks this Pass** (keep searching for the orb). Runs after foresight/orb checks.
+4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further.
 5. eval delays under tick + sim-budget-us
 6. orbIntent: Legacy earliest ±k act; New preferLater in band; optional firstDt ±3% jitter
 7. else d0 clearsThreat -> Pass; else New preferLater / Legacy latest ±k-robust (orb: earliest act)
@@ -301,8 +301,8 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Budget starve mid-search + foresight orb | `HUS` → replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass while opportunity open |
 | Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
-| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` |
-| Wave + orb in travel cone | Delay/Hold, not spam Pass | Orb path may still Delay | |
+| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
+| Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
 | Single early click, empty ring | Reach plan (not spam Pass) | Same | |
 | UNTRUST + orb foresight | Soft: Delay/HUS allowed | Same | Hard UNTRUST Pass only without orb |
 | Low-trust spot + orb foresight | Soft: plan allowed | Same | Orb overrides trust Pass |
