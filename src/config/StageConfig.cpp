@@ -1,4 +1,5 @@
 #include "StageConfig.hpp"
+#include "../core/AssistClock.hpp"
 #include "../core/PlatformLimits.hpp"
 
 #include <Geode/Geode.hpp>
@@ -111,6 +112,7 @@ bool g_cachedSaveFeedbackCounter = false;
 StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
+bool g_cachedWindowUnitFrames = false;
 bool g_cacheInitialized = false;
 bool g_applying = false;
 std::string g_lastSyncedPreset;
@@ -194,8 +196,16 @@ void StageConfig::refreshCache() {
     auto* mod = Mod::get();
     g_cachedStage.index = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("stage-index")), 0, STAGE_COUNT - 1);
     g_cachedStage.enabled = mod->getSettingValue<bool>("enabled");
-    g_cachedStage.ticksAll = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-all")), 0, 32);
-    g_cachedStage.ticksWave = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-wave")), 0, 32);
+    // Wider max when storing display frames (8 frames ≈ 32 ticks @240 TPS).
+    g_cachedStage.ticksAll = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-all")), 0, 48);
+    g_cachedStage.ticksWave = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-wave")), 0, 48);
+    try {
+        auto unit = mod->getSettingValue<std::string>("window-unit");
+        g_cachedWindowUnitFrames = (unit == "Frames");
+    }
+    catch (...) {
+        g_cachedWindowUnitFrames = false;
+    }
 
     g_cachedDebug = mod->getSettingValue<bool>("debug-logging");
     g_cachedPerfTrace = readBool(mod, "perf-trace", false);
@@ -281,7 +291,7 @@ void StageConfig::refreshCache() {
             : g_cachedStage.ticksAll;
         float const latDefault = defaultLatencyWeight(i);
         if (p.overwrite) {
-            p.ticks = clampInt(readInt(mod, ids.ticks, fallbackTicks), 0, 32);
+            p.ticks = clampInt(readInt(mod, ids.ticks, fallbackTicks), 0, 48);
             p.cap = clampInt(readInt(mod, ids.cap, 0), 0, 240);
             int slack = readInt(mod, ids.slack, -1);
             p.slack = slack < 0 ? g_cachedSlack : clampInt(slack, 0, 16);
@@ -293,6 +303,11 @@ void StageConfig::refreshCache() {
             p.cap = g_cachedLookAhead;
             p.slack = g_cachedSlack;
             p.latencyWeight = latDefault;
+        }
+        // Settings store window-unit values; planner always wants physics ticks.
+        // Use g_cachedWindowUnitFrames directly (avoid ensureCache recursion).
+        if (g_cachedWindowUnitFrames && p.ticks > 0) {
+            p.ticks = AssistClock::framesToTicks(p.ticks);
         }
         g_cachedModes[static_cast<size_t>(i)] = p;
     }
@@ -348,14 +363,20 @@ void StageConfig::applyPreset(int index) {
     mod->setSettingValue<int64_t>("stage-index", info.index);
     mod->setSettingValue<std::string>("preset", std::string(PRESET_NAMES[index]));
     mod->setSettingValue<bool>("enabled", info.enabled);
-    mod->setSettingValue<int64_t>("ticks-all", info.ticksAll);
-    mod->setSettingValue<int64_t>("ticks-wave", info.ticksWave);
+    // Presets are authored in physics ticks; store in the user's window unit.
+    int const storeAll = ticksToWindowValue(info.ticksAll);
+    int const storeWave = ticksToWindowValue(info.ticksWave);
+    g_cachedStage.ticksAll = storeAll;
+    g_cachedStage.ticksWave = storeWave;
+    mod->setSettingValue<int64_t>("ticks-all", storeAll);
+    mod->setSettingValue<int64_t>("ticks-wave", storeWave);
     mod->setSettingValue<int64_t>("death-slack", def.slack);
     mod->setSettingValue<int64_t>("look-ahead-cap", def.cap);
     g_lastSyncedPreset = PRESET_NAMES[index];
     g_applying = false;
-
+    // Rebuild per-mode ticks with window-unit conversion.
     refreshCache();
+    g_lastSyncedPreset = PRESET_NAMES[index];
 }
 
 void StageConfig::applyPresetByName(std::string const& name) {
@@ -522,8 +543,31 @@ StageConfig::ColorRgb StageConfig::saveFeedbackColor() {
     ensureCache();
     return g_cachedSaveIconColor;
 }
-int StageConfig::ticksAll() { ensureCache(); return g_cachedStage.ticksAll; }
-int StageConfig::ticksWave() { ensureCache(); return g_cachedStage.ticksWave; }
+bool StageConfig::windowUnitFrames() {
+    ensureCache();
+    return g_cachedWindowUnitFrames;
+}
+
+int StageConfig::windowValueToTicks(int value) {
+    ensureCache();
+    if (value <= 0) return 0;
+    if (!g_cachedWindowUnitFrames) return value;
+    return AssistClock::framesToTicks(value);
+}
+
+int StageConfig::ticksToWindowValue(int ticks) {
+    ensureCache();
+    if (ticks <= 0) return 0;
+    if (!g_cachedWindowUnitFrames) return ticks;
+    return AssistClock::ticksToFrames(ticks);
+}
+
+int StageConfig::ticksAll() {
+    return windowValueToTicks(g_cachedStage.ticksAll);
+}
+int StageConfig::ticksWave() {
+    return windowValueToTicks(g_cachedStage.ticksWave);
+}
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
 int StageConfig::lookAheadCap() { ensureCache(); return g_cachedLookAhead; }
 int StageConfig::stageIndex() { ensureCache(); return g_cachedStage.index; }

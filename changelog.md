@@ -1,15 +1,35 @@
 # Changelog
 
+## Unreleased (working tree)
+
+### Assist clock / first-click
+- Fix hitch poisoning of `m_lastDt` (stuck `simDt≈0.25` → `simTps≈4`, `speedScaleSuspect`) that made opening clicks `pass-hopeless` / useless Delay on Legacy and New. Sane physics samples update EMA both ways; absurd quanta snap planning to nominal 240 TPS.
+- Dev Lab sessions on Dump StartPos / Slaughterhouse showed this clock failure on first DOWN.
+
+### Window unit
+- Setting **Window Unit**: `Ticks` (default) or `Frames` (60fps). Numbers under Default Window / per-mode overwrite convert to physics ticks (1 frame ≈ 4 ticks @240). Planning always uses ticks.
+
 ## v1.2.2
 
 **Android64 package + mobile I/O** (still GD **2.2081** only).
 
-- Ship packages must include `audesign.earlybuffer.android64.so` — Windows-only local `.geode` files fail on phone with Geode’s missing-binary error.
-- Maintainer tools: `tools/geode_package_check.py`, `tools/merge_geode_packages.py`; Android build/merge recipe in `INSTALL.md`.
-- Non-Windows replay import via save-dir `replay-drop/`; config import/export uses `earlybuffer-config.json` under the mod save dir with clear path alerts.
-- Dev Copy Report dual-writes clipboard + `earlybuffer-dev-report.txt`.
-- Android: PlanGold skips disk DevTrace self-checks on load; planner sim/tick budgets capped; overlay top inset for notched screens.
-- Do **not** sideload `build/audesign.earlybuffer.geode` (Windows-only) onto Android — merge or use an android64-checked artifact.
+### Packaging
+- Release `.geode` includes **`audesign.earlybuffer.android64.so`** (and Windows `.dll` when merged). Windows-only local builds fail on phone with Geode’s missing-binary error.
+- Tools: `tools/geode_package_check.py`, `tools/merge_geode_packages.py`. Build/merge + device smoke: `INSTALL.md`. GitHub release notes staging: `releases/v1.2.2.md`.
+
+### Mobile I/O
+- Non-Windows **Import Replay** via save-dir `replay-drop/` (newest `.gdr` / `.gdr2` / `.mhr` / `.json` / `.slc`).
+- Config Export/Import uses `earlybuffer-config.json` under the mod save dir; alerts show the full path.
+- Dev **Copy Report** dual-writes clipboard + `earlybuffer-dev-report.txt`.
+- Drop folders created on mod load when possible.
+
+### Android runtime
+- PlanGold skips disk DevTrace self-checks on load (in-memory checks remain).
+- Planner sim/tick budgets capped on Android (≤ 2000 µs / ≤ 2000 ticks).
+- Status overlay top inset increased for notched screens.
+
+### Build
+- CMake: `comdlg32` stays Win32-only; Android NDK compile fixes (UTF-8 sources, activated-object map key).
 
 ## v1.2.1
 

@@ -394,21 +394,31 @@
 			"type": "title",
 			"name": "Default Window"
 		},
+		"window-unit": {
+			"type": "string",
+			"name": "Window Unit",
+			"description": "Whether Default / per-mode window numbers mean physics Ticks (~240/s) or display Frames (60fps). Planning always runs in ticks; Frames are converted as 1 frame ≈ 4 ticks at 240 TPS. Switch unit, then set the numbers to match how you think about timing.",
+			"one-of": [
+				"Ticks",
+				"Frames"
+			],
+			"default": "Ticks"
+		},
 		"ticks-all": {
 			"type": "int",
-			"name": "Ticks (Default)",
-			"description": "How early a click may be delayed for modes without their own overwrite (physics ticks; ~240/s, so ~4 ticks ≈ 1 frame at 60fps). Higher = more forgiveness, but clicks can feel later/floaty. Lower = snappier, less help. Wave uses Ticks (Wave) unless Wave Overwrite is on.",
+			"name": "Window (Default)",
+			"description": "How early a click may be delayed for modes without their own overwrite. Unit = Window Unit above (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness, floatier feel. Lower = snappier. Wave uses Window (Wave) unless Wave Overwrite is on.",
 			"default": 2,
 			"min": 0,
-			"max": 32
+			"max": 48
 		},
 		"ticks-wave": {
 			"type": "int",
-			"name": "Ticks (Wave default)",
-			"description": "Default delay window for wave when Wave → Overwrite is off. Wave is sensitive: higher values forgive more spam/early taps but can phase-shift into spikes; keep low (2) for a tight feel, raise (4–8) if you want a wider window.",
+			"name": "Window (Wave default)",
+			"description": "Default delay window for wave when Wave → Overwrite is off. Same unit as Window Unit (Ticks or Frames). Wave is sensitive: keep low for a tight feel, raise for a wider window.",
 			"default": 2,
 			"min": 0,
-			"max": 32
+			"max": 48
 		},
 		"title-algorithm": {
 			"type": "title",

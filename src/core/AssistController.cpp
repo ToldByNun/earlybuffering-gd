@@ -1728,10 +1728,34 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
 
     float tw = 1.f;
     if (dt > 0.f) {
-        if (this->m_attemptTick < 5 || dt > 0.6f * this->m_lastDt) this->m_lastDt = dt;
         tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
-        this->m_simDt = this->m_lastDt / tw;
+        float const simSample = dt / tw;
+        // Hitch/pause dumps (e.g. dt=0.25 → 4 TPS) must NOT stick in m_lastDt.
+        // Old logic only updated lastDt when dt grew, so one early hitch poisoned
+        // planning forever (pass-hopeless with simTps≈4 in Dev Lab traces).
+        auto& clock = AssistClock::get();
+        if (clock.isSaneSimDt(simSample)) {
+            if (this->m_lastDt <= 0.f || this->m_attemptTick < 3) {
+                this->m_lastDt = dt;
+            }
+            else {
+                this->m_lastDt += 0.2f * (dt - this->m_lastDt);
+            }
+            this->m_simDt = this->m_lastDt / tw;
+        }
+        else if (this->m_simDt <= 0.f || !clock.isSaneSimDt(this->m_simDt)) {
+            this->m_simDt = AssistClock::kNominalSimDt;
+            this->m_lastDt = this->m_simDt * tw;
+        }
+        float const beforeSnap = this->m_simDt;
+        this->m_simDt = clock.planSimDtOrNominal(this->m_simDt, tw);
+        if (std::fabs(this->m_simDt - beforeSnap) > 1e-7f
+            && !clock.isSaneSimDt(simSample)) {
+            // Keep lastDt coherent with snapped planning quantum after hitch dump.
+            this->m_lastDt = this->m_simDt * tw;
+        }
+
         float const err = dt - this->m_dtEma;
         this->m_dtEma += 0.1f * err;
         float const denom = std::max(this->m_dtEma, 1e-4f);

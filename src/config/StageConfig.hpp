@@ -115,6 +115,11 @@ public:
     static bool isInAssistDisableRange(float percent);
 
     // --- Default Window ---
+    // When true, ticks-all / ticks-wave / per-mode ticks are stored as *display frames*
+    // (60fps) and converted to physics ticks via AssistClock (1 frame ≈ 4 ticks @240).
+    static bool windowUnitFrames();
+    static int windowValueToTicks(int value);
+    static int ticksToWindowValue(int ticks);
     static int ticksAll();
     static int ticksWave();
 

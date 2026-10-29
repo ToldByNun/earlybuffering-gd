@@ -177,6 +177,9 @@ $on_mod(Loaded) {
 
     watchBool("enabled");
     watchInt("ticks-all");
+    listenForSettingChanges<std::string>("window-unit", [](std::string) {
+        onAnySetting();
+    });
     watchInt("ticks-wave");
     watchInt("death-slack");
     watchInt("look-ahead-cap");

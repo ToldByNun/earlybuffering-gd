@@ -18,6 +18,46 @@ double AssistClock::wallTpsFromDt(float lastDt) const {
     return 1.0 / static_cast<double>(lastDt);
 }
 
+bool AssistClock::isSaneSimDt(float simDt) const {
+    if (!std::isfinite(simDt)) return false;
+    return simDt >= AssistClock::kMinSaneSimDt && simDt <= AssistClock::kMaxSaneSimDt;
+}
+
+float AssistClock::planSimDtOrNominal(float simDt, float timeWarp) const {
+    float tw = timeWarp;
+    if (tw <= 0.f) tw = 1.f;
+    if (!this->isSaneSimDt(simDt)) {
+        return AssistClock::kNominalSimDt;
+    }
+    double const tps = this->simTpsFromDt(simDt);
+    // Extreme stuck hitch (e.g. lastDt poisoned to 0.25 → 4 TPS) — never plan with it.
+    if (this->speedScaleSuspect(tw, tps)
+        && (tps < AssistClock::kPlanSnapTpsLo || tps > AssistClock::kPlanSnapTpsHi)) {
+        return AssistClock::kNominalSimDt;
+    }
+    return simDt;
+}
+
+int AssistClock::framesToTicks(int frames) {
+    if (frames <= 0) return 0;
+    double const ticks = static_cast<double>(frames)
+        * (AssistClock::kNominalTps / AssistClock::kDisplayFps);
+    long long const rounded = static_cast<long long>(std::llround(ticks));
+    if (rounded < 0) return 0;
+    if (rounded > 0x7fffffff) return 0x7fffffff;
+    return static_cast<int>(rounded);
+}
+
+int AssistClock::ticksToFrames(int ticks) {
+    if (ticks <= 0) return 0;
+    double const frames = static_cast<double>(ticks)
+        * (AssistClock::kDisplayFps / AssistClock::kNominalTps);
+    long long const rounded = static_cast<long long>(std::llround(frames));
+    if (rounded < 0) return 0;
+    if (rounded > 0x7fffffff) return 0x7fffffff;
+    return static_cast<int>(rounded);
+}
+
 int AssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) const {
     if (liveAbsTick < 0) return 0;
     if (authorTps <= 0.0) authorTps = AssistClock::kNominalTps;
@@ -79,6 +119,21 @@ bool AssistClock::selfCheck(std::string& report) {
     );
     expect(clock.simTpsFromDt(0.f) == AssistClock::kNominalTps, "sim-tps-zero");
     expect(clock.simTpsFromDt(-1.f) == AssistClock::kNominalTps, "sim-tps-neg");
+    expect(clock.isSaneSimDt(AssistClock::kNominalSimDt), "sane-nominal");
+    expect(!clock.isSaneSimDt(0.25f), "sane-reject-hitch");
+    expect(
+        std::fabs(clock.planSimDtOrNominal(0.25f, 1.f) - AssistClock::kNominalSimDt) < 1e-6f,
+        "plan-snap-hitch"
+    );
+    expect(
+        std::fabs(clock.planSimDtOrNominal(AssistClock::kNominalSimDt, 1.f)
+            - AssistClock::kNominalSimDt) < 1e-6f,
+        "plan-keep-nominal"
+    );
+    expect(AssistClock::framesToTicks(1) == 4, "frames-1-to-4-ticks");
+    expect(AssistClock::framesToTicks(8) == 32, "frames-8-to-32-ticks");
+    expect(AssistClock::ticksToFrames(4) == 1, "ticks-4-to-1-frame");
+    expect(AssistClock::ticksToFrames(2) == 1 || AssistClock::ticksToFrames(2) == 0, "ticks-2-round");
 
     // lastDt = 1/120, tw = 2 → simDt = 1/240 → wall 120, sim 240.
     float const lastDt = 1.f / 120.f;
