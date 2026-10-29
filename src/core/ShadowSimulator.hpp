@@ -111,6 +111,10 @@ public:
     void detach(bool layerDying = false);
 
     bool isSimulating() const { return m_simulating; }
+    // True after applyTriggerWorldAtTick ran for the current sim step.
+    bool triggerWorldAppliedThisTick() const {
+        return this->m_triggerWorldAppliedThisTick;
+    }
     bool isShadow(PlayerObject* p) const { return p && p == m_shadow; }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* p) const;
@@ -369,6 +373,8 @@ private:
     int m_simAbsTick = -1;
     // Absolute tick corresponding to t=0 inside runOne / baseline / orb scan.
     int m_simTickBase = 0;
+    // Set when applyTriggerWorldAtTick runs for this step (SimCollisionPolicy).
+    bool m_triggerWorldAppliedThisTick = false;
 };
 
 #endif // EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP

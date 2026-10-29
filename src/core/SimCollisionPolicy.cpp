@@ -1,6 +1,12 @@
 #include "SimCollisionPolicy.hpp"
+#include "ShadowSimulator.hpp"
+#include "TriggerClassify.hpp"
+#include "TriggerWorldStore.hpp"
+#include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
+
 #include <Geode/Geode.hpp>
+
 using namespace geode::prelude;
 
 bool SimCollisionPolicy::isSpeedPortalId(int objectId) {
@@ -9,6 +15,20 @@ bool SimCollisionPolicy::isSpeedPortalId(int objectId) {
 
 SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
     if (!obj) return SimObjectAction::Skip;
+
+    // Ready static bake track + apply this sim tick → trust collision (Include).
+    // Partial build (!ready) and dynamics stay on the base path / Unknown.
+    if (StageConfig::triggerBake()
+        && ShadowSimulator::get().isSimulating()
+        && ShadowSimulator::get().triggerWorldAppliedThisTick()) {
+        auto const* track = TriggerWorldStore::get().findTrack(obj->m_uniqueID);
+        if (track
+            && track->ready
+            && TriggerClassify::isStatic(track->kind)) {
+            return SimObjectAction::Include;
+        }
+    }
+
     if (isSpeedPortalId(obj->m_objectID)) return SimObjectAction::Include;
     switch (obj->m_objectType) {
         case GameObjectType::Solid:
@@ -70,6 +90,8 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
     static bool warned = false;
     if (warned) return false;
     warned = true;
-    AssistLog::info("sim: limited (triggers/movers -> unknown)");
+    AssistLog::info(
+        "sim: limited (dynamic/unbaked movers → unknown; ready static bake → include)"
+    );
     return true;
 }

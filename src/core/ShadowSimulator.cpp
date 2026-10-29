@@ -69,6 +69,7 @@ void ShadowSimulator::detach(bool layerDying) {
     m_deathObject = nullptr;
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
+    this->m_triggerWorldAppliedThisTick = false;
     m_saved.clear();
     this->m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
@@ -259,6 +260,7 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_deathObject = nullptr;
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
+    this->m_triggerWorldAppliedThisTick = false;
     // If a sim aborted after applyAtTick moved solids, put them back before
     // we drop the snapshot — reset/checkpoint must not inherit drifted poses.
     if (!this->m_savedTransforms.empty() && layer) {
@@ -573,6 +575,7 @@ void ShadowSimulator::clearCollisionLogs(PlayerObject* s) {
 }
 
 void ShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick) {
+    this->m_triggerWorldAppliedThisTick = false;
     if (!layer || absTick < 0) return;
     if (!StageConfig::triggerBake()) return;
     if (this->m_savedTransforms.empty()) return;
@@ -590,11 +593,13 @@ void ShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick) {
         if (!store.samplePose(st.uniqueId, absTick, pose)) continue;
         TriggerWorldStore::writePose(obj, pose);
     }
+    this->m_triggerWorldAppliedThisTick = true;
 }
 
 void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt) {
     // Always use the full step dt here — tiny CBF remainders launch slopes
     // and also under-detect orb/spike overlaps.
+    this->m_triggerWorldAppliedThisTick = false;
     if (this->m_simAbsTick >= 0) {
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
     }
@@ -605,6 +610,7 @@ void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt
 }
 
 void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepDt, float dt) {
+    this->m_triggerWorldAppliedThisTick = false;
     if (this->m_simAbsTick >= 0) {
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick);
     }
