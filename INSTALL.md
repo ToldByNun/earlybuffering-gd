@@ -41,7 +41,9 @@ Target Geometry Dash **2.2081** + Geode on device. Modern phones need **Android6
 
 ### Prerequisites
 
-1. Install the [Android NDK](https://developer.android.com/ndk) and set **`ANDROID_NDK_ROOT`** to its extract path.
+1. Install the [Android NDK](https://developer.android.com/ndk) (Geode currently pins an NDK **r29** tree) and set **`ANDROID_NDK_ROOT`** permanently to that folder (User or Machine env). A working local path looks like:
+   `%LOCALAPPDATA%\Android\Sdk\ndk\29.0.14206865`
+   Session-only env vars are lost when the terminal closes — set the User variable or Android builds will fail to configure.
 2. On **Windows**, also install **Ninja** (e.g. `scoop install ninja`).
 3. Install Geode Android loader binaries for the SDK:
 
@@ -92,19 +94,47 @@ For a multi-platform ship zip (Windows + Android64), require both after merge:
 python tools/geode_package_check.py path/to/merged.geode --require win --require android64
 ```
 
-### Merge with Windows (pointer)
+### Merge with Windows (required for dual-platform ships)
 
 A phone-only Android64 `.geode` is enough to test on device. A release that also supports Windows needs both binaries in **one** `.geode`.
 
-High-level steps (full merge helper lands with the merge tooling commit):
+`geode package merge` **mutates its first argument**. Prefer the wrapper (copies inputs, merges into `--output`, then runs the package check):
 
-1. Build Windows: `geode build --config RelWithDebInfo` → `build/audesign.earlybuffer.geode`
-2. Build Android64 as above → `build-android64/audesign.earlybuffer.geode`
-3. Merge with Geode CLI (`geode package merge …` — **mutates the first argument**; copy the Windows zip first if you need to keep it)
-4. Run `tools/geode_package_check.py` with `--require android64` (and `--require win` for dual ships)
-5. Only then install or publish
+```bash
+# 1) Windows package
+geode build --config RelWithDebInfo
+# → build/audesign.earlybuffer.geode  (dll only)
 
-Until the merge helper script exists, prefer a green CI combine artifact **or** run `geode package merge` manually and always run the package check.
+# 2) Android64 package
+geode build -p android64 --config RelWithDebInfo
+# → build-android64/audesign.earlybuffer.geode  (android64.so)
+
+# 3) Merge + gate (fails if android64.so missing)
+python tools/merge_geode_packages.py ^
+  --output releases/audesign.earlybuffer.geode ^
+  build/audesign.earlybuffer.geode ^
+  build-android64/audesign.earlybuffer.geode
+```
+
+Phone-only (no Windows `.dll` required):
+
+```bash
+python tools/merge_geode_packages.py ^
+  --output releases/audesign.earlybuffer-android64.geode ^
+  --allow-missing-win ^
+  --require android64 ^
+  build-android64/audesign.earlybuffer.geode
+```
+
+Manual equivalent (easy to get wrong — wrapper preferred):
+
+```bash
+copy build\audesign.earlybuffer.geode releases\audesign.earlybuffer.geode
+geode package merge releases\audesign.earlybuffer.geode build-android64\audesign.earlybuffer.geode
+python tools/geode_package_check.py releases\audesign.earlybuffer.geode --require win --require android64
+```
+
+**Never** install or publish until the package check exits **0**. A Windows-only `build/audesign.earlybuffer.geode` will fail `--require android64` on purpose.
 
 ### Install on device
 

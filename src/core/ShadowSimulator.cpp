@@ -3591,7 +3591,8 @@ void ShadowSimulator::applyEvalWorldRestore(
                 : nullptr;
             for (int uid : witness.orbIds) {
                 if (uid == 0) continue;
-                layer->m_gameState.m_activatedObjectIDs[{ uid, 0 }] = 1;
+                std::pair<int, int> const activatedKey{ uid, 0 };
+                layer->m_gameState.m_activatedObjectIDs[activatedKey] = 1;
                 if (!children) continue;
                 for (unsigned i = 0; i < children->count(); ++i) {
                     auto* obj = typeinfo_cast<EnhancedGameObject*>(
