@@ -122,7 +122,12 @@ void DevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
     if (w) cycle->hasGate = true;
 }
 
-void DevCycleRecorder::notePlanFinished(SimPlan const& plan, int effectTick, int limit) {
+void DevCycleRecorder::notePlanFinished(
+    SimPlan const& plan,
+    int effectTick,
+    int limit,
+    DevClockContract::Stamp const& clock
+) {
     (void)limit;
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive()) return;
@@ -139,6 +144,11 @@ void DevCycleRecorder::notePlanFinished(SimPlan const& plan, int effectTick, int
     if (!w) return;
     w->effectTick = effectTick;
     w->plannedDelay = plan.delay;
+    w->hasClockStamp = clock.valid;
+    w->clockStamp = clock;
+    if (w->hasClockStamp) {
+        w->clockStamp.effectTick = effectTick;
+    }
     cycle->planId = plan.planId;
     cycle->hasPlan = true;
 }

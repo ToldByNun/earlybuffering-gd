@@ -1,6 +1,8 @@
 #ifndef DEV_TRACE_STORE_HPP
 #define DEV_TRACE_STORE_HPP
 
+#include "DevClockContract.hpp"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -46,6 +48,10 @@ struct DevDecisionEvent {
     int actualFireTick = -1;
     std::string assistReason;
     std::string endReason; // outcome only: death|complete|quit|manual|empty
+
+    // Commit 6: clock stamp on planFinished (eval binds the same stamp).
+    bool hasClockStamp = false;
+    DevClockContract::Stamp clockStamp{};
 };
 
 struct DevAttempt {

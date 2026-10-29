@@ -13,6 +13,7 @@
 #include "../core/TriggerClassify.hpp"
 #include "../core/TriggerWorldStore.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
+#include "../dev/DevClockContract.hpp"
 #include "../dev/DevConfig.hpp"
 #include "../dev/DevCycleRecorder.hpp"
 #include "../dev/DevTraceStore.hpp"
@@ -45,6 +46,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(TriggerWorldStore::selfCheck(twReport), "trigger-world-store");
     std::string clockReport;
     expect(AssistClock::selfCheck(clockReport), "assist-clock");
+    std::string devClockReport;
+    expect(DevClockContract::selfCheck(devClockReport), "dev-clock-contract");
     std::string verdictReport;
     expect(AssistVerdict::selfCheck(verdictReport), "assist-verdict");
     std::string missReport;

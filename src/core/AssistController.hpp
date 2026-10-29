@@ -4,6 +4,7 @@
 #include "DecisionLog.hpp"
 #include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
+#include "../dev/DevClockContract.hpp"
 
 #include <Geode/Geode.hpp>
 #include <chrono>
@@ -167,8 +168,22 @@ private:
     void clearBuffer();
     void inject(GJBaseGameLayer* layer, bool down);
     void syncButtonState(PlayLayer* playLayer);
-    bool planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt);
-    bool planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt);
+    bool planPress(
+        PlayLayer* playLayer,
+        PlayerObject* player,
+        bool player1,
+        int effectTick,
+        float firstDt,
+        DevClockContract::Stamp const& clock
+    );
+    bool planRelease(
+        PlayLayer* playLayer,
+        PlayerObject* player,
+        bool player1,
+        int effectTick,
+        float firstDt,
+        DevClockContract::Stamp const& clock
+    );
     // Returns true if bake handled the input (caller should return that bool).
     // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
     bool tryBakeAssist(

@@ -232,6 +232,71 @@ bool DevTraceStore::validatePressChain(
     return true;
 }
 
+static matjson::Value clockStampToJson(DevClockContract::Stamp const& st) {
+    matjson::Value c = matjson::Value::object();
+    c["clockSchema"] = st.clockSchema;
+    c["timeBasis"] = st.timeBasis;
+    c["attemptTick"] = st.attemptTick;
+    c["effectTick"] = st.effectTick;
+    c["simDt"] = st.simDt;
+    c["firstDt"] = st.firstDt;
+    c["midStep"] = st.midStep;
+    c["continuous"] = st.continuous;
+    c["timeWarp"] = st.timeWarp;
+    c["simTps"] = st.simTps;
+    c["wallDt"] = st.wallDt;
+    c["speedScaleSuspect"] = st.speedScaleSuspect;
+    c["liveSimPathId"] = DevClockContract::simPathId(st.liveSimPathId);
+    return c;
+}
+
+static bool clockStampFromJson(
+    matjson::Value const& j, DevClockContract::Stamp& st, std::string& err
+) {
+    st = {};
+    st.clockSchema = j.contains("clockSchema")
+        ? static_cast<int>(j["clockSchema"].asInt().unwrapOr(0))
+        : 0;
+    st.timeBasis = j.contains("timeBasis")
+        ? std::string(j["timeBasis"].asString().unwrapOr(""))
+        : "";
+    st.attemptTick = j.contains("attemptTick")
+        ? static_cast<int>(j["attemptTick"].asInt().unwrapOr(0))
+        : 0;
+    st.effectTick = j.contains("effectTick")
+        ? static_cast<int>(j["effectTick"].asInt().unwrapOr(0))
+        : 0;
+    st.simDt = j.contains("simDt")
+        ? static_cast<float>(j["simDt"].asDouble().unwrapOr(0.0))
+        : 0.f;
+    st.firstDt = j.contains("firstDt")
+        ? static_cast<float>(j["firstDt"].asDouble().unwrapOr(0.0))
+        : 0.f;
+    st.midStep = j.contains("midStep") ? j["midStep"].asBool().unwrapOr(false) : false;
+    st.continuous = j.contains("continuous")
+        ? j["continuous"].asBool().unwrapOr(false)
+        : false;
+    st.timeWarp = j.contains("timeWarp")
+        ? static_cast<float>(j["timeWarp"].asDouble().unwrapOr(1.0))
+        : 1.f;
+    st.simTps = j.contains("simTps") ? j["simTps"].asDouble().unwrapOr(0.0) : 0.0;
+    st.wallDt = j.contains("wallDt")
+        ? static_cast<float>(j["wallDt"].asDouble().unwrapOr(0.0))
+        : 0.f;
+    st.speedScaleSuspect = j.contains("speedScaleSuspect")
+        ? j["speedScaleSuspect"].asBool().unwrapOr(false)
+        : false;
+    auto path = j.contains("liveSimPathId")
+        ? std::string(j["liveSimPathId"].asString().unwrapOr("none"))
+        : "none";
+    if (!DevClockContract::parseSimPathId(path, st.liveSimPathId)) {
+        err = "bad-liveSimPathId";
+        return false;
+    }
+    st.valid = true;
+    return true;
+}
+
 static matjson::Value eventToJson(DevDecisionEvent const& e) {
     matjson::Value j = matjson::Value::object();
     j["eventId"] = e.eventId;
@@ -251,6 +316,9 @@ static matjson::Value eventToJson(DevDecisionEvent const& e) {
     j["actualFireTick"] = e.actualFireTick;
     if (!e.assistReason.empty()) j["assistReason"] = e.assistReason;
     if (!e.endReason.empty()) j["endReason"] = e.endReason;
+    if (e.hasClockStamp && e.clockStamp.valid) {
+        j["clock"] = clockStampToJson(e.clockStamp);
+    }
     return j;
 }
 
@@ -296,6 +364,14 @@ static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::str
     }
     if (j.contains("endReason")) {
         e.endReason = std::string(j["endReason"].asString().unwrapOr(""));
+    }
+    if (j.contains("clock")) {
+        std::string clockErr;
+        if (!clockStampFromJson(j["clock"], e.clockStamp, clockErr)) {
+            err = clockErr.empty() ? "bad-clock" : clockErr;
+            return false;
+        }
+        e.hasClockStamp = true;
     }
     return true;
 }

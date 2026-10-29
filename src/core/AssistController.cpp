@@ -20,6 +20,7 @@
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
 #include "../debug/PerfTrace.hpp"
+#include "../dev/DevClockContract.hpp"
 #include "../dev/DevConfig.hpp"
 #include "../dev/DevCycleRecorder.hpp"
 #include "../ui/SaveFeedback.hpp"
@@ -409,13 +410,8 @@ bool AssistController::continuousModePlayer(PlayerObject* player) {
 }
 
 int AssistController::resolveEffectTick(int attemptTick, bool midStep, bool continuous) {
-    if (attemptTick < 0) attemptTick = 0;
-    // Continuous: unify mid-step vs between-frames. The old +1 path for
-    // between-frames systematically scheduled fires one tick later than an
-    // otherwise identical mid-step press — fatal in wave spam (±1).
-    // firstDt still carries CBF remainder when midStep.
-    if (continuous) return attemptTick;
-    return midStep ? attemptTick : attemptTick + 1;
+    // Single time basis: DevClockContract (Vertrag C). Live and eval share this.
+    return DevClockContract::get().effectTick(attemptTick, midStep, continuous);
 }
 
 bool AssistController::effectTickSelfCheck(std::string& report) {
@@ -452,6 +448,18 @@ bool AssistController::effectTickSelfCheck(std::string& report) {
     expect(
         resolveEffectTick(42, true, true) == resolveEffectTick(42, true, false),
         "mid-no-double-advance"
+    );
+
+    // Delegation parity with DevClockContract.
+    expect(
+        resolveEffectTick(10, false, false)
+            == DevClockContract::get().effectTick(10, false, false),
+        "delegate-discrete"
+    );
+    expect(
+        resolveEffectTick(10, false, true)
+            == DevClockContract::get().effectTick(10, false, true),
+        "delegate-cont"
     );
 
     if (fails == 0) {
@@ -2025,7 +2033,15 @@ bool AssistController::tryBakeAssist(
     return false;
 }
 
-bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt) {
+bool AssistController::planPress(
+    PlayLayer* playLayer,
+    PlayerObject* player,
+    bool player1,
+    int effectTick,
+    float firstDt,
+    DevClockContract::Stamp const& clockIn
+) {
+    DevClockContract::Stamp clock = clockIn;
     int const limit = this->activeLimit(player);
     if (limit <= 0) {
         DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
@@ -2154,7 +2170,11 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     this->logPlan(plan, "press");
     this->m_outcomePlayer1 = player1;
     this->beginOutcome(plan, effectTick);
-    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit);
+    clock.liveSimPathId = useSequence
+        ? DevSimPathId::PlanSequence
+        : DevSimPathId::Plan;
+    clock.effectTick = effectTick;
+    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock);
 
     if (plan.action != PlanAction::Delay) {
         if (shouldArmHoldUntilSafe(plan)) {
@@ -2335,7 +2355,15 @@ bool AssistController::planPress(PlayLayer* playLayer, PlayerObject* player, boo
     return false;
 }
 
-bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick, float firstDt) {
+bool AssistController::planRelease(
+    PlayLayer* playLayer,
+    PlayerObject* player,
+    bool player1,
+    int effectTick,
+    float firstDt,
+    DevClockContract::Stamp const& clockIn
+) {
+    DevClockContract::Stamp clock = clockIn;
     int const limit = this->activeLimit(player);
     if (limit <= 0) {
         DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");
@@ -2425,7 +2453,9 @@ bool AssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, b
     );
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
-    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit);
+    clock.liveSimPathId = DevSimPathId::Plan;
+    clock.effectTick = effectTick;
+    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock);
 
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
@@ -2595,16 +2625,26 @@ bool AssistController::onHandleButton(
 
     // firstDt: full sim dt between frames; CBF remainder / timeWarp when mid-step.
     // Never fold the remainder into effectTick (that caused ±1 vs between-frames).
+    float tw = playLayer->m_gameState.m_timeWarp;
+    if (tw <= 0.f) tw = 1.f;
     float firstDt = this->m_simDt;
     if (midStep) {
         float rem = this->m_lastDt - this->m_subDtSeen;
         float const minDt = this->m_lastDt * 0.02f;
         if (rem < minDt) rem = minDt;
         if (rem > this->m_lastDt) rem = this->m_lastDt;
-        float tw = playLayer->m_gameState.m_timeWarp;
-        if (tw <= 0.f) tw = 1.f;
         firstDt = rem / tw;
     }
+    DevClockContract::Stamp const clockStamp = DevClockContract::get().makeStamp(
+        this->m_attemptTick,
+        midStep,
+        continuous,
+        this->m_simDt,
+        firstDt,
+        this->m_lastDt,
+        tw,
+        DevSimPathId::None
+    );
 
     // Attribution log only under debug-logging (not every press into perf file).
     if (down && StageConfig::debugLogging()) {
@@ -2675,7 +2715,9 @@ bool AssistController::onHandleButton(
             return finish(true);
         }
         beginDevPress();
-        bool const pass = this->planRelease(playLayer, player, player1, effectTick, firstDt);
+        bool const pass = this->planRelease(
+            playLayer, player, player1, effectTick, firstDt, clockStamp
+        );
         if (pass) this->m_log.noteInput(effectTick, false);
         return finish(pass);
     }
@@ -2714,7 +2756,9 @@ bool AssistController::onHandleButton(
         return finish(true);
     }
     beginDevPress();
-    bool const pass = this->planPress(playLayer, player, player1, effectTick, firstDt);
+    bool const pass = this->planPress(
+        playLayer, player, player1, effectTick, firstDt, clockStamp
+    );
     if (pass) this->m_log.noteInput(effectTick, true);
     return finish(pass);
 }

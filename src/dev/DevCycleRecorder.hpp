@@ -1,6 +1,7 @@
 #ifndef DEV_CYCLE_RECORDER_HPP
 #define DEV_CYCLE_RECORDER_HPP
 
+#include "DevClockContract.hpp"
 #include "DevTraceStore.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/ShadowSimulator.hpp"
@@ -29,7 +30,12 @@ public:
     int64_t activePressId() const { return this->m_activePressId; }
 
     void noteGatePass(AssistReason reason, char const* where);
-    void notePlanFinished(SimPlan const& plan, int effectTick, int limit);
+    void notePlanFinished(
+        SimPlan const& plan,
+        int effectTick,
+        int limit,
+        DevClockContract::Stamp const& clock
+    );
     void notePassThrough(AssistReason reason, char const* where);
     // Returns pressId of the armed cycle (0 if not recording).
     int64_t noteDelayArm(
