@@ -28,6 +28,11 @@ bool TriggerClassify::isToggleTriggerId(int objectId) {
     return objectId == 1049;
 }
 
+bool TriggerClassify::isToggleOrbId(int objectId) {
+    // Custom / toggle orb — player hit toggles target group (spawn/despawn).
+    return objectId == 1594;
+}
+
 bool TriggerClassify::isFollowTriggerId(int objectId) {
     // 1347 Advanced Follow, 1585 Follow Player Y, 1817 Follow.
     return objectId == 1347 || objectId == 1585 || objectId == 1817;
@@ -68,6 +73,7 @@ bool TriggerClassify::isLethalMotionCandidateId(int objectId) {
         || TriggerClassify::isScaleTriggerId(objectId)
         || TriggerClassify::isSpawnTriggerId(objectId)
         || TriggerClassify::isToggleTriggerId(objectId)
+        || TriggerClassify::isToggleOrbId(objectId)
         || TriggerClassify::isFollowTriggerId(objectId);
 }
 
@@ -141,6 +147,11 @@ TriggerKind TriggerClassify::classifyHints(MotionHints const& hints) {
     }
     if (!TriggerClassify::isLethalMotionCandidateId(id)) {
         return TriggerKind::Ignore;
+    }
+
+    // Toggle orb: on/off at player hit time — never a fixed absolute timeline.
+    if (TriggerClassify::isToggleOrbId(id)) {
+        return TriggerKind::DynamicOther;
     }
 
     // Player-coupled → cannot put a single static track in the cache.
@@ -357,6 +368,14 @@ bool TriggerClassify::selfCheck(std::string& report) {
     expect(
         TriggerClassify::classifyHints(touchToggle) == TriggerKind::DynamicOther,
         "touch-toggle-dynamic"
+    );
+
+    MotionHints toggleOrb{};
+    toggleOrb.isEffect = true;
+    toggleOrb.objectId = 1594;
+    expect(
+        TriggerClassify::classifyHints(toggleOrb) == TriggerKind::DynamicOther,
+        "toggle-orb-dynamic"
     );
 
     if (fails == 0) {

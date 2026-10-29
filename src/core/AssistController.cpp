@@ -889,6 +889,8 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     // destroyPlayer hot path — no physics replays, no disk, no bake merge.
     // GD physics is main-thread only; "multithread" death work is not viable.
     // Heavy learning/bake runs on resetAttempt (next attempt), not here.
+    // Drop in-flight trigger-world slices (no flush); partial store may remain.
+    TriggerWorldBaker::get().cancel();
     if (this->m_outcomePending) {
         LagProbe::Scope const s("eb.outcomeNote");
         DivergenceTracker::get().note(
@@ -1174,6 +1176,10 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     {
         PerfTrace::Scope const scope("selfBakeIdle");
         SelfBakeRecorder::get().onPhysicsTick(playLayer);
+    }
+    {
+        PerfTrace::Scope const scope("triggerBakeSlice");
+        TriggerWorldBaker::get().tickSlice();
     }
 
     auto* p1 = playLayer->m_player1;

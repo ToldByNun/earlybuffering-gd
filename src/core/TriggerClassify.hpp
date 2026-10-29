@@ -11,7 +11,8 @@ class GameObject;
 //
 // Important: "follow another group/object" is STATIC (deterministic chain).
 // Only follow/lock that depends on the live PLAYER is Dynamic*.
-// Toggle (1049) is NOT Ignore — it enables/disables collideables.
+// Toggle trigger (1049) is NOT Ignore — enables/disables collideables.
+// Toggle orb (1594) is DynamicOther — player click time turns groups on/off.
 enum class TriggerKind {
     Ignore = 0,
     StaticMove,
@@ -67,6 +68,8 @@ public:
     static bool isSpawnTriggerId(int objectId);
     // Toggle group on/off (collision-relevant visibility/active).
     static bool isToggleTriggerId(int objectId);
+    // Toggle / custom orb — hit by player toggles a group (spawn/despawn solids).
+    static bool isToggleOrbId(int objectId);
     // Follow-family IDs (may be group-follow = static, or player-follow = dynamic).
     static bool isFollowTriggerId(int objectId);
     // Explicit Follow Player Y (always player-coupled).
