@@ -83,7 +83,10 @@ public:
     BufferedInput const& buffer() const;
     int attemptTick() const;
     float lastDt() const;
+    // Physics TPS = 1/m_simDt (timeWarp stripped). Authors bake/trigger keys.
     double estimatedTps() const;
+    // Raw update TPS = 1/m_lastDt (debug/overlay only — never author keys).
+    double wallTps() const;
     int currentCps() const;
     bool cpsLimited() const;
 

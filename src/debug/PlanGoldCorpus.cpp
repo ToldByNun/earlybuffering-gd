@@ -1,4 +1,5 @@
 #include "PlanGoldCorpus.hpp"
+#include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/AssistLearning.hpp"
 #include "../core/ClickIntentGuard.hpp"
@@ -34,6 +35,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(TriggerClassify::selfCheck(classifyReport), "trigger-classify");
     std::string twReport;
     expect(TriggerWorldStore::selfCheck(twReport), "trigger-world-store");
+    std::string clockReport;
+    expect(AssistClock::selfCheck(clockReport), "assist-clock");
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0) report = "PlanGoldCorpus OK";

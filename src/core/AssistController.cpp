@@ -1,4 +1,5 @@
 #include "AssistController.hpp"
+#include "AssistClock.hpp"
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
 #include "AssistScopeGate.hpp"
@@ -136,8 +137,11 @@ int AssistController::attemptTick() const { return m_attemptTick; }
 float AssistController::lastDt() const { return m_lastDt; }
 
 double AssistController::estimatedTps() const {
-    if (m_lastDt <= 0.f) return 240.0;
-    return 1.0 / static_cast<double>(m_lastDt);
+    return AssistClock::get().simTpsFromDt(this->m_simDt);
+}
+
+double AssistController::wallTps() const {
+    return AssistClock::get().wallTpsFromDt(this->m_lastDt);
 }
 
 std::string AssistController::overlayText() const { return m_overlayText; }
@@ -1153,9 +1157,10 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         ~TickEndGuard() { PerfTrace::get().endTick(); }
     } tickEndGuard;
 
+    float tw = 1.f;
     if (dt > 0.f) {
         if (this->m_attemptTick < 5 || dt > 0.6f * this->m_lastDt) this->m_lastDt = dt;
-        float tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
+        tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
         this->m_simDt = this->m_lastDt / tw;
         float const err = dt - this->m_dtEma;
@@ -1164,6 +1169,23 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         this->m_dtVarEma = 0.1f * std::abs(err) / denom + 0.9f * this->m_dtVarEma;
     }
     ++this->m_attemptTick;
+    {
+        double const simTps = AssistClock::get().simTpsFromDt(this->m_simDt);
+        if (AssistClock::get().noteSpeedScale(tw, simTps, this->m_attemptTick)) {
+            AssistLog::debug(fmt::format(
+                "speed-scale: suspect simTps={:.1f} wallTps={:.1f} tw={:.3f} simDt={:.6f} lastDt={:.6f}",
+                simTps,
+                AssistClock::get().wallTpsFromDt(this->m_lastDt),
+                tw,
+                this->m_simDt,
+                this->m_lastDt
+            ));
+            LagProbe::get().mark(
+                "eb.speed.scale",
+                fmt::format("tps={:.1f} tw={:.3f}", simTps, tw)
+            );
+        }
+    }
     if (!playLayer) return;
 
     {
