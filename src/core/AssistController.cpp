@@ -1699,8 +1699,13 @@ bool AssistController::tryBakeAssist(
         AssistLog::debug(fmt::format("bake: {} → {}", reason, hybrid ? "live" : "pass"));
         if (hybrid) {
             handled = false;
-            this->m_lastBakeHint = reason;
-            // Hybrid continues to live plan — do not stamp bake Pass as final verdict.
+            // Live plan() runs TravelForesight + C4–C6 (probe / HUS / idleSafer).
+            this->m_lastBakeHint = fmt::format("{} → live", reason);
+            AssistLog::debug(fmt::format(
+                "bake hybrid: {} — fall through to live (foresight/miss-assist)",
+                reason
+            ));
+            // Do not stamp bake Pass as final verdict — live owns the decision.
             return true;
         }
         handled = true;
@@ -1717,7 +1722,7 @@ bool AssistController::tryBakeAssist(
             this->noteVerdict(AssistReason::PassBakeMissing, "bake-missing");
             return true; // pass through — nothing to assist with
         }
-        return true; // Hybrid → live
+        return fallThroughOrPass("bake missing", AssistReason::PassBakeMissing);
     }
 
     double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
@@ -1733,7 +1738,7 @@ bool AssistController::tryBakeAssist(
             this->noteVerdict(AssistReason::PassBakeNoWindow, "bake-no-window");
             return true;
         }
-        return true; // Hybrid live fallback
+        return fallThroughOrPass("no window", AssistReason::PassBakeNoWindow);
     }
 
     // Map bake frames onto attempt ticks using bake TPS vs current sim dt.
@@ -1766,17 +1771,19 @@ bool AssistController::tryBakeAssist(
         if (delay <= 0) delay = 0;
     }
 
-    // Live re-verify: stale / wrong-mode / route drift → Hybrid live, bake-only Pass.
+    // Live re-verify: stale / wrong-mode / suicidal bake delay → Hybrid live
+    // (foresight + miss-assist), Replay/Brute Pass with reason.
     if (limit > 0 && m_simDt > 0.f) {
         float const fd = (firstDt > 0.f && firstDt <= m_simDt) ? firstDt : m_simDt;
         auto const vr = BakeVerifier::verify(
             playLayer, player, down, delay, limit, m_simDt, fd
         );
         if (!vr.ok) {
-            return fallThroughOrPass(
-                vr.budgetHit ? "verify budget" : "verify fail",
-                AssistReason::PassBakeVerifyFail
-            );
+            char const* why = "verify fail";
+            if (vr.budgetHit) why = "verify budget";
+            else if (vr.diedBeforeAction) why = "verify died-before";
+            else if (!vr.clearsThreat) why = "verify threat";
+            return fallThroughOrPass(why, AssistReason::PassBakeVerifyFail);
         }
     }
 

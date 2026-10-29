@@ -34,6 +34,13 @@ public:
     static ExpectAction newExpect(int bestInWindow, int limit);
     static int newDelay(int bestInWindow, int limit);
 
+    // Prefer-band early-exit (C10): allowed only when orb foresight/window is idle.
+    // When orbAssist && (orbHint|spatial|foresight), keep searching past prefer so
+    // activations outside the bake prefer band are still evaluated (Orb before Prefer).
+    static bool preferBandEarlyExitAllowed(
+        bool orbAssist, bool orbHintFound, bool spatialHint, bool foresightOrbPad
+    );
+
     // One synthetic early-press row for table-driven selfCheck / docs.
     struct EarlyPressCase {
         char const* name = "";

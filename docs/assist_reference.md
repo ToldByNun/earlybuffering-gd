@@ -7,7 +7,7 @@ Planner / settings contract for **EarlyBuffer v1.2.0** on Geometry Dash **2.2081
 | Mode | Role |
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
-| Hybrid | Bake window if near + live verify clearsThreat, else Live. |
+| Hybrid | Bake window if near + live verify clearsThreat, else Live (+ foresight / miss-assist). |
 | Replay | Precomputed click windows from imported macro bake (TAS-like timing map). |
 | BruteForce | Precomputed exhaustive safe timings (TAS-like generator). Not a live multi-click bot queue. |
 
@@ -16,7 +16,14 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 ## Bake verify (Hybrid / Replay / Brute)
 
 `BakeMap::findNear` prefers `BakedClick.mode == kindOf(player)` within 120px X; falls back to any mode if none match.
-Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone + runOne at planned delay). Success = clearsThreat and not diedBeforeAction (linked dual checked). Fail: Hybrid → Live; Replay/Brute → Pass.
+Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone + runOne at planned delay). Success = clearsThreat and not diedBeforeAction (linked dual checked).
+
+| Mode | Verify fail / past window / missing bake |
+|------|------------------------------------------|
+| Hybrid | Fall through to **Live** (`TravelForesight` + OpportunityProbe / HUS / idleSafer). Overlay hint `… → live`. No bake Pass verdict. |
+| Replay / Brute | Pass with reason: `pass-bake-verify-fail`, `pass-bake-past-latest`, `pass-bake-missing`, `pass-bake-no-window`. |
+
+Early-before-window still buffers until bake earliest (clamped to `limit`).
 
 ## Self-bake
 
@@ -229,7 +236,7 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 ## Live bake-prior (prefer band)
 
-`PlanOptions.preferDelayMin/Max` from a nearby BakeMap window (delay ticks). Cand order: d0 → orb window → prefer±k → rest. Early-exit after prefer margin if a ±k-robust prefer delay is viable (`!budgetHit`). Orb-intent still wins final pick over prefer. Empty / out-of-limit band ignored.
+`PlanOptions.preferDelayMin/Max` from a nearby BakeMap window (delay ticks). Cand order: d0 → **orb window** → prefer±k → rest. Early-exit after prefer margin if a ±k-robust prefer delay is viable (`!budgetHit`) — **suppressed** when orb foresight / orb-window is active so activations outside the prefer band are still evaluated. Final pick: orb activation path before prefer/lexico. Empty / out-of-limit band ignored.
 
 ## Adaptive robustK + latency (+ wave spam)
 
@@ -284,8 +291,9 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`), replan each tick ≤`limit`. Delay confirm updates `fireTick`; opportunity clear + safe → inject now (never drop the click); deadline → fire. Overlay `HUS` + `HOLD~`. |
 | Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
+| Bake / Hybrid | Hybrid verify-fail / past-latest / missing → Live (no bake Pass). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
 
-Executable pure fixtures: `MissAssistContracts::selfCheck`, `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold).
+Executable pure fixtures: `MissAssistContracts::selfCheck` (incl. prefer early-exit), `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold).
 
 ### TravelForesight
 
@@ -306,6 +314,9 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
 | Ship/Wave: idle lives, press-now dies, later delay clears | Delay/HUS (`idleSafer`+`ascent`) | Same | PLAN log `idleSafer=1 ascent=1` |
+| Hybrid: bake verify fails near orb | Live foresight plan (Delay/HUS), hint `verify … → live` | Same | No `pass-bake-verify-fail` |
+| Replay: past bake latest | Pass `pass-bake-past-latest` | Same | Bake-only |
+| Prefer band early + orb outside band | Keep searching; orb activation pick | Same | No prefer early-exit |
 | Single early click, empty ring | Reach plan (not spam Pass) | Same | |
 | UNTRUST + orb foresight | Soft: Delay/HUS allowed | Same | Hard UNTRUST Pass only without orb |
 | Low-trust spot + orb foresight | Soft: plan allowed | Same | Orb overrides trust Pass |

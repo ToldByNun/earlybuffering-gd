@@ -43,6 +43,14 @@ int MissAssistContracts::newDelay(int bestInWindow, int limit) {
     return MissAssistContracts::clampDelayToWindow(bestInWindow, limit);
 }
 
+bool MissAssistContracts::preferBandEarlyExitAllowed(
+    bool orbAssist, bool orbHintFound, bool spatialHint, bool foresightOrbPad
+) {
+    if (!orbAssist) return true;
+    if (orbHintFound || spatialHint || foresightOrbPad) return false;
+    return true;
+}
+
 // Table mirrors docs/assist_reference.md "Miss-assist contracts".
 // idealOutside may exceed limit — assist must still clamp.
 static MissAssistContracts::EarlyPressCase const s_cases[] = {
@@ -178,6 +186,27 @@ bool MissAssistContracts::selfCheck(std::string& report) {
     expect(
         MissAssistContracts::newExpect(6, 4) == ExpectAction::Delay,
         "new-clamped-still-delay"
+    );
+
+    expect(
+        MissAssistContracts::preferBandEarlyExitAllowed(false, true, true, true),
+        "prefer-exit-no-orb-assist"
+    );
+    expect(
+        MissAssistContracts::preferBandEarlyExitAllowed(true, false, false, false),
+        "prefer-exit-orb-idle"
+    );
+    expect(
+        !MissAssistContracts::preferBandEarlyExitAllowed(true, true, false, false),
+        "prefer-exit-block-hint"
+    );
+    expect(
+        !MissAssistContracts::preferBandEarlyExitAllowed(true, false, true, false),
+        "prefer-exit-block-spatial"
+    );
+    expect(
+        !MissAssistContracts::preferBandEarlyExitAllowed(true, false, false, true),
+        "prefer-exit-block-foresight"
     );
 
     expect(MissAssistContracts::caseCount() >= 6, "case-count");

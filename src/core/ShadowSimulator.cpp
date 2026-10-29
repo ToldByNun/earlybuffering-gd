@@ -1,5 +1,6 @@
 #include "ShadowSimulator.hpp"
 #include "BakeMap.hpp"
+#include "MissAssistContracts.hpp"
 #include "TravelForesight.hpp"
 #include "OpportunityProbe.hpp"
 #include "../config/StageConfig.hpp"
@@ -2144,12 +2145,25 @@ SimPlan ShadowSimulator::plan(
         cands[static_cast<size_t>(d)] = c;
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
-        if (hasPrefer && !plan.budgetHit && d == preferLastInOrder && preferBandRobust()) {
+        // Orb foresight / orb-window: keep searching outside prefer so activation
+        // cands are not discarded (orb order is before prefer, but act can lie past band).
+        bool const preferExitOk = MissAssistContracts::preferBandEarlyExitAllowed(
+            orbAssist, orbHint.found, spatialHint, plan.foresightOrbPad
+        );
+        if (hasPrefer && preferExitOk && !plan.budgetHit
+            && d == preferLastInOrder && preferBandRobust()) {
             AssistLog::debug(fmt::format(
                 "PLAN id={} prefer-band early-exit [{},{}] after {} cands",
                 plan.planId, preferLo, preferHi, plan.candidatesTried
             ));
             break;
+        }
+        if (hasPrefer && !preferExitOk && d == preferLastInOrder
+            && preferBandRobust()) {
+            AssistLog::debug(fmt::format(
+                "PLAN id={} prefer-band early-exit suppressed (orb foresight) [{},{}]",
+                plan.planId, preferLo, preferHi
+            ));
         }
     }
 
