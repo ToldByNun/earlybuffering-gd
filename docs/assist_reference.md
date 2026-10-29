@@ -91,18 +91,18 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
 | enabled | bool | true | | | Main — master |
-| preset | string | Tight | Tight/Normal/Wide/Max/Off | | Main — fills defaults |
-| safe-mode | bool | true | | | Main — block saves when assist enabled |
-| debug-logging | bool | true | | | Main |
+| preset | string | Normal | Tight/Normal/Wide/Max/Off | | Main — fills defaults |
+| safe-mode | bool | true | | | Main — ON: block saves when enabled or assist-touched; OFF: vanilla progress |
+| debug-logging | bool | false | | | Main |
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
-| lag-probe | bool | true | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
-| show-overlay | bool | true | | | Ingame |
+| lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
+| show-overlay | bool | false | | | Ingame |
 | show-trajectory | bool | false | | | Visual |
-| show-pause-bake | bool | true | | | Ingame — pause status lines only |
+| show-pause-bake | bool | false | | | Ingame — pause status lines only |
 | show-pause-assist | bool | false | | | Ingame — legacy unused (actions under Assist page) |
 | show-pause-hub | bool | true | | | Ingame — EB button |
-| save-feedback-sound | bool | true | | | Visual — per-tick MP3 cue on delayed inject |
-| save-feedback-color | bool | true | | | Visual — flash player icon on delayed inject |
+| save-feedback-sound | bool | false | | | Visual — per-tick MP3 cue on delayed inject |
+| save-feedback-color | bool | false | | | Visual — flash player icon on delayed inject |
 | save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart); palette 1…8 `#ff614e`…`#c069fa`; cap 64 markers |
 | save-icon-color | rgb | #7CFF4A | | | Visual — flash color when save-feedback-color is on |
 | assist-only-practice | bool | false | | | Scope |
@@ -110,11 +110,13 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | assist-percent-min | int | 0 | 0 | 100 | Scope |
 | assist-percent-max | int | 100 | 0 | 100 | Scope |
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
-| ticks-all | int | 2 | 0 | 32 | Window |
-| ticks-wave | int | 2 | 0 | 32 | Window |
+| ticks-all | int | 4 | 0 | 48 | Window |
+| ticks-wave | int | 4 | 0 | 48 | Window |
+| window-unit | string | Ticks | Ticks/Frames | | Window — Frames→×4 ticks @240 |
 | death-slack | int | 2 | 0 | 16 | Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Algorithm — 0=auto |
-| assist-mode | string | Hybrid | Live/Replay/Hybrid/BruteForce | | Algorithm |
+| assist-mode | string | Live | Live/Replay/Hybrid/BruteForce | | Algorithm |
+| assist-pick | string | Legacy | New/Legacy | | Algorithm — G1 pick |
 | bake-radius | int | 0 | 0 | 128 | Algorithm — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
@@ -136,7 +138,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | trigger-bake-skip-dynamic | bool | true | | | Trigger World — do not bake/probe follow-player etc. |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |
 | MODE-enable/overwrite/ticks/cap/slack/latency | mixed | see mod.json | | | Per-mode cube..swing; latencyWeight defaults Cube 0.25 … Wave 1.0 |
-| stage-index | int | 0 | 0 | 4 | Internal — preset mirror |
+| stage-index | int | 1 | 0 | 4 | Internal — preset mirror (1=Normal) |
 | swallow-hopeless | bool | false | | | Internal — deprecated unused |
 
 ## Pseudocode plan()
@@ -245,7 +247,7 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 `ModeParams.latencyWeight` still softens Wave spam-dense assists (λ ×0.65). New miss-assist pick uses **outcome / exit prediction** (surviveTicks / endX−λ·delay / horizon replay) instead of fixed mid or latest.
 
-**ticks-wave default stays 2** (Tight feel, not autoplay). With auto k=2..3, full ±k neighbors often do not fit in a 2-tick window — `pickRobust` falls back to earliest viable. Use Normal/Wide/Max (wave 4/8/8) when you want real ±k margin in spam. Max uses ticks-all=16 but ticks-wave=8 on purpose (wave windows stay shorter than cube).
+**Starter defaults use Normal (ticks-all/wave = 4)** so ±k-robust has room in spam. Tight (2/2) is still available via Preset. With auto k=2..3, a 2-tick window often cannot fit full ±k neighbors — `pickRobust` falls back to earliest viable. Wide/Max use wave 8/8; Max keeps ticks-all=16 but ticks-wave=8 on purpose.
 
 ## LevelProfile JSON
 
@@ -264,7 +266,7 @@ Bake runs serial on the main thread via BakeScheduler (no worker pool).
 ## Reentrancy
 
 While simulating: no sounds/achievements/percentage/particles/trigger side-effects; SimCollisionPolicy filter; orb hold-gate.
-Safe mode + assistTouchedRun block percentage/newbest when assist injected.
+Safe Mode ON + (enabled or assistTouchedRun) blocks percentage/newbest/test-complete. Safe Mode OFF never blocks progress.
 
 Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` / `playerDestroyed` (incl. anticheatSpike).
 Death to an owned ghost as the killer object is swallowed. Real-player deaths are swallowed while
@@ -286,8 +288,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Prefer (New) | Setting `assist-pick` = **New** (default): **Delay-viable = sim survives**. d0 survived → Pass; else **exit prediction** ranks survivor delays by horizon outcome (survive / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
-| G1 Legacy | `assist-pick` = **Legacy**: `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
+| G1 Legacy | Setting `assist-pick` = **Legacy** (default): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
+| G1 Prefer (New) | `assist-pick` = **New**: **Delay-viable = sim survives**. d0 survived → Pass; else **exit prediction** ranks survivor delays by horizon outcome (survive / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2) with reduced caps — never hang: budget exhaust parks at deadline. Delay confirm updates `fireTick`; opportunity clear + safe → inject now; deadline → fire. Overlay `HUS` + `HOLD~`. |

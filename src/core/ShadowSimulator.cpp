@@ -1317,7 +1317,7 @@ int ShadowSimulator::autoRobustKHints(
     int k = kWindowMarginK; // 1
     if (waveLike) k = 2;
     // Wave spam corridors: keep at least 2; at speed bump to 3 so ±1 neighbors
-    // of the pick stay clear (ticks-wave=2 may still fall back — see docs).
+    // of the pick stay clear (Tight ticks-wave=2 may still fall back — see docs).
     if (isWave && spamDense) {
         k = std::max(k, 2);
         if (playerSpeed > 1.05f) k = std::max(k, 3);

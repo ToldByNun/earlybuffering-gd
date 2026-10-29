@@ -531,20 +531,21 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void levelComplete() {
-        // When assist is enabled, never treat the run as legit progress.
-        if (StageConfig::isEnabled()) {
-            m_isTestMode = true;
-        }
-        if (AssistController::get().assistTouchedRun()) {
-            m_isTestMode = true;
+        // Safe Mode ON: treat enabled / assist-touched runs as test (no normal progress).
+        // Safe Mode OFF: allow vanilla progress even if assist injected (user opted in).
+        if (StageConfig::safeMode()
+            && (StageConfig::isEnabled() || AssistController::get().assistTouchedRun())) {
+            this->m_isTestMode = true;
         }
         AssistController::get().onLevelComplete(this);
         PlayLayer::levelComplete();
     }
 
     void showNewBest(bool newReward, int orbs, int diamonds, bool demonKey, bool noRetry, bool noTitle) {
-        if (StageConfig::isEnabled() && StageConfig::safeMode()) return;
-        if (AssistController::get().assistTouchedRun()) return;
+        if (StageConfig::safeMode()
+            && (StageConfig::isEnabled() || AssistController::get().assistTouchedRun())) {
+            return;
+        }
         PlayLayer::showNewBest(newReward, orbs, diamonds, demonKey, noRetry, noTitle);
     }
 
@@ -572,8 +573,11 @@ class $modify(EbPlayLayer, PlayLayer) {
 
 class $modify(EbGJGameLevel, GJGameLevel) {
     void savePercentage(int percent, bool isPracticeMode, int clicks, int attempts, bool isChkValid) {
-        if (StageConfig::isEnabled() && StageConfig::safeMode()) return;
-        if (AssistController::get().assistTouchedRun()) return;
+        // Same Safe Mode contract as PlayLayer::showNewBest / levelComplete.
+        if (StageConfig::safeMode()
+            && (StageConfig::isEnabled() || AssistController::get().assistTouchedRun())) {
+            return;
+        }
         GJGameLevel::savePercentage(percent, isPracticeMode, clicks, attempts, isChkValid);
     }
 };

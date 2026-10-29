@@ -52,25 +52,25 @@
 				"Max",
 				"Off"
 			],
-			"default": "Tight"
+			"default": "Normal"
 		},
 		"safe-mode": {
 			"type": "bool",
 			"name": "Safe Mode",
-			"description": "When on, assisted or enabled runs do not save progress, bests, or percentage as a normal clear. Keep on for online/rated play. Off only if you accept that assisted runs may still write progress.",
+			"description": "ON (recommended): while EarlyBuffer is enabled — or after assist actually delayed a click this attempt — progress, bests, and percentage are not saved as a normal clear. OFF: progress saves like vanilla even if assist fired (you accept that). Rated/online: keep ON.",
 			"default": true
 		},
 		"show-overlay": {
 			"type": "bool",
 			"name": "In-Level Overlay",
 			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate.",
-			"default": true
+			"default": false
 		},
 		"debug-logging": {
 			"type": "bool",
 			"name": "Debug Logging",
 			"description": "Writes planner / SAVED lines to the Geode console. On = useful when tuning; Off = quieter console. Does not change assist strength.",
-			"default": true
+			"default": false
 		},
 		"perf-trace": {
 			"type": "bool",
@@ -82,7 +82,7 @@
 			"type": "bool",
 			"name": "Lag Probe",
 			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
-			"default": true
+			"default": false
 		},
 		"show-trajectory": {
 			"type": "bool",
@@ -94,7 +94,7 @@
 			"type": "bool",
 			"name": "Pause Bake Status",
 			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
-			"default": true
+			"default": false
 		},
 		"show-pause-assist": {
 			"type": "bool",
@@ -176,13 +176,13 @@
 			"type": "bool",
 			"name": "Save Feedback Sound",
 			"description": "Plays a short sound when assist delays your click (cue scales with how many ticks were saved). Off = silent. Does not change timing.",
-			"default": true
+			"default": false
 		},
 		"save-feedback-color": {
 			"type": "bool",
 			"name": "Save Feedback Color",
 			"description": "Flashes your icon with Save Icon Color when a delayed click is injected. Off = no flash.",
-			"default": true
+			"default": false
 		},
 		"save-feedback-counter": {
 			"type": "bool",
@@ -408,7 +408,7 @@
 			"type": "int",
 			"name": "Window (Default)",
 			"description": "How early a click may be delayed for modes without their own overwrite. Unit = Window Unit above (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness, floatier feel. Lower = snappier. Wave uses Window (Wave) unless Wave Overwrite is on.",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 48
 		},
@@ -416,7 +416,7 @@
 			"type": "int",
 			"name": "Window (Wave default)",
 			"description": "Default delay window for wave when Wave → Overwrite is off. Same unit as Window Unit (Ticks or Frames). Wave is sensitive: keep low for a tight feel, raise for a wider window.",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 48
 		},
@@ -444,24 +444,24 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Live = plan every click now. Replay = use windows from an imported macro bake. Hybrid = use a nearby bake window when it verifies, else Live. BruteForce = use a Brute Bake map (no replay). Replay/Brute are timing maps, not a bot that clicks for you.",
+			"description": "Live = plan every click now (best starter default). Replay = use windows from an imported macro bake. Hybrid = use a nearby bake window when it verifies, else Live. BruteForce = use a Brute Bake map (no replay). Replay/Brute are timing maps, not a bot that clicks for you.",
 			"one-of": [
 				"Live",
 				"Replay",
 				"Hybrid",
 				"BruteForce"
 			],
-			"default": "Hybrid"
+			"default": "Live"
 		},
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window (G1). New (default) = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Legacy = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). Never waits past your Limit.",
+			"description": "How Live/Hybrid picks a delay inside your tick window (G1). Legacy (default) = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). New = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Never waits past your Limit.",
 			"one-of": [
 				"New",
 				"Legacy"
 			],
-			"default": "New"
+			"default": "Legacy"
 		},
 		"bake-radius": {
 			"type": "int",
@@ -641,7 +641,7 @@
 		"cube-ticks": {
 			"type": "int",
 			"name": "Cube Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "cube-overwrite",
@@ -693,7 +693,7 @@
 		"ship-ticks": {
 			"type": "int",
 			"name": "Ship Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "ship-overwrite",
@@ -745,7 +745,7 @@
 		"ball-ticks": {
 			"type": "int",
 			"name": "Ball Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "ball-overwrite",
@@ -797,7 +797,7 @@
 		"ufo-ticks": {
 			"type": "int",
 			"name": "UFO Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "ufo-overwrite",
@@ -849,7 +849,7 @@
 		"wave-ticks": {
 			"type": "int",
 			"name": "Wave Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "wave-overwrite",
@@ -901,7 +901,7 @@
 		"robot-ticks": {
 			"type": "int",
 			"name": "Robot Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "robot-overwrite",
@@ -953,7 +953,7 @@
 		"spider-ticks": {
 			"type": "int",
 			"name": "Spider Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "spider-overwrite",
@@ -1005,7 +1005,7 @@
 		"swing-ticks": {
 			"type": "int",
 			"name": "Swing Ticks",
-			"default": 2,
+			"default": 4,
 			"min": 0,
 			"max": 32,
 			"enable-if": "swing-overwrite",
@@ -1277,7 +1277,7 @@
 			"type": "int",
 			"name": "Preset Index (internal)",
 			"description": "Internal copy of Preset (0=Tight … 4=Off). Do not edit — use the Preset dropdown or F6.",
-			"default": 0,
+			"default": 1,
 			"min": 0,
 			"max": 4
 		},

@@ -244,8 +244,8 @@ void StageConfig::refreshCache() {
     }
     loadAssistOffSlots(mod, g_cachedAssistDisableRanges);
     g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", false);
-    g_cachedSaveFeedbackSound = readBool(mod, "save-feedback-sound", true);
-    g_cachedSaveFeedbackColor = readBool(mod, "save-feedback-color", true);
+    g_cachedSaveFeedbackSound = readBool(mod, "save-feedback-sound", false);
+    g_cachedSaveFeedbackColor = readBool(mod, "save-feedback-color", false);
     g_cachedSaveFeedbackCounter = readBool(mod, "save-feedback-counter", false);
     try {
         auto const c = mod->getSettingValue<cocos2d::ccColor3B>("save-icon-color");

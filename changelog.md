@@ -2,6 +2,14 @@
 
 ## Unreleased (working tree)
 
+### Safe Mode progress gate
+- **Safe Mode OFF** now allows percentage / new best / normal complete even when assist delayed a click. Previously `assistTouchedRun` (and enabled→test-mode) always blocked progress regardless of Safe Mode.
+- **Safe Mode ON** (default): still blocks when assist is enabled or this attempt was assist-touched.
+
+### Beginner defaults
+- Preset **Normal**, windows **4/4**, Pick **Legacy**, Assist Mode **Live**, Safe Mode **on**.
+- Visuals / debug off by default: overlay, pause bake status, save-feedback sound/color, debug logging, lag probe.
+
 ### Assist clock / first-click
 - Fix hitch poisoning of `m_lastDt` (stuck `simDt≈0.25` → `simTps≈4`, `speedScaleSuspect`) that made opening clicks `pass-hopeless` / useless Delay on Legacy and New. Sane physics samples update EMA both ways; absurd quanta snap planning to nominal 240 TPS.
 - Dev Lab sessions on Dump StartPos / Slaughterhouse showed this clock failure on first DOWN.
