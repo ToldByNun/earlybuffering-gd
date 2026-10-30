@@ -508,34 +508,24 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     if (!layer || !StageConfig::triggerBake()) return;
 
     auto& store = TriggerWorldStore::get();
+    if (!store.loaded() || !store.bakeComplete() || !store.hasTracks()) return;
+
     LagProbe::Scope const scope("eb.trigger.capture");
 
-    // Collect uniqueIds we may move this sim (ready static bake tracks).
-    std::vector<int> wanted;
-    if (store.loaded() && store.bakeComplete() && store.hasTracks()) {
-        wanted.reserve(store.trackCount());
-        for (auto const& track : store.data().tracks) {
-            if (!track.ready || track.keys.empty()) continue;
-            if (!TriggerClassify::isStatic(track.kind)) continue;
-            wanted.push_back(track.uniqueId);
-        }
-    }
-
+    // Runtime buffer = GD objectLayer stream ∩ full bake index (O(children), not
+    // O(all tracks)). Far movers outside the loaded layer stay on disk only.
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children) return;
 
-    for (unsigned i = 0; i < children->count(); ++i) {
+    unsigned const n = children->count();
+    this->m_savedTransforms.reserve(std::min<size_t>(n, kMaxApplyPerTick * 4));
+    for (unsigned i = 0; i < n; ++i) {
         auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
         if (!obj) continue;
-        int const uid = obj->m_uniqueID;
-        bool hit = false;
-        for (int id : wanted) {
-            if (id == uid) { hit = true; break; }
-        }
-        if (!hit) continue;
+        if (!store.hasReadyStaticTrack(obj->m_uniqueID)) continue;
 
         SavedTransform st;
-        st.uniqueId = uid;
+        st.uniqueId = obj->m_uniqueID;
         st.obj = obj;
         st.x = obj->getPositionX();
         st.y = obj->getPositionY();

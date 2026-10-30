@@ -42,6 +42,11 @@ TriggerKind TriggerWorldStore::kindFromString(std::string const& name) {
 
 void TriggerWorldStore::clampData(TriggerWorldData& data) {
     if (data.tracks.size() > kMaxTracks) {
+        AssistLog::info(fmt::format(
+            "TRIGGER-WORLD: truncating tracks {} → {} (raise kMaxTracks)",
+            data.tracks.size(),
+            kMaxTracks
+        ));
         data.tracks.resize(kMaxTracks);
     }
     for (auto& track : data.tracks) {
@@ -51,8 +56,19 @@ void TriggerWorldStore::clampData(TriggerWorldData& data) {
     }
 }
 
+void TriggerWorldStore::rebuildIndex() {
+    this->m_index.clear();
+    this->m_index.reserve(this->m_data.tracks.size() * 2);
+    for (size_t i = 0; i < this->m_data.tracks.size(); ++i) {
+        int const uid = this->m_data.tracks[i].uniqueId;
+        if (uid == 0) continue;
+        this->m_index[uid] = i;
+    }
+}
+
 void TriggerWorldStore::clear() {
     this->m_data = {};
+    this->m_index.clear();
     this->m_loaded = false;
     this->m_dirty = false;
     this->m_bakeComplete = false;
@@ -66,6 +82,7 @@ void TriggerWorldStore::clearTracks() {
     this->m_data.levelKey = key;
     this->m_data.tps = tps > 0.0 ? tps : 240.0;
     this->m_data.version = version > 0 ? version : kFileVersion;
+    this->m_index.clear();
     this->m_dirty = false;
     this->m_bakeComplete = false;
     this->m_loaded = !key.empty();
@@ -84,6 +101,7 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
 
     auto res = this->readFile();
     if (res.isOk()) {
+        this->rebuildIndex();
         this->m_bakeComplete = !this->m_data.tracks.empty();
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
@@ -130,6 +148,7 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
     if (data.version <= 0) data.version = kFileVersion;
     if (data.tps <= 0.0) data.tps = 240.0;
     this->m_data = std::move(data);
+    this->rebuildIndex();
     this->m_loaded = !this->m_data.levelKey.empty();
     this->m_dirty = true;
     // publishPartial mid-build — not complete until baker finishOk.
@@ -137,10 +156,17 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
 }
 
 TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {
-    for (auto const& track : this->m_data.tracks) {
-        if (track.uniqueId == uniqueId) return &track;
-    }
-    return nullptr;
+    auto it = this->m_index.find(uniqueId);
+    if (it == this->m_index.end()) return nullptr;
+    size_t const i = it->second;
+    if (i >= this->m_data.tracks.size()) return nullptr;
+    return &this->m_data.tracks[i];
+}
+
+bool TriggerWorldStore::hasReadyStaticTrack(int uniqueId) const {
+    auto const* track = this->findTrack(uniqueId);
+    if (!track || !track->ready || track->keys.empty()) return false;
+    return TriggerClassify::isStatic(track->kind);
 }
 
 size_t TriggerWorldStore::readyTrackCount() const {
@@ -207,32 +233,21 @@ void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
 }
 
 int TriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
-    if (!layer || !this->m_loaded || this->m_data.tracks.empty()) return 0;
-    if (!layer->m_objectLayer) return 0;
+    if (!layer || !this->m_loaded || !this->m_bakeComplete) return 0;
+    if (this->m_data.tracks.empty() || !layer->m_objectLayer) return 0;
 
-    // Build uniqueId → object once per call (caller may prefer ShadowSimulator's
-    // capture list for the hot path — see applyTriggerWorldAtTick).
+    // Object-centric: GD objectLayer is the live stream buffer; O(children) lookups.
     auto* children = layer->m_objectLayer->getChildren();
     if (!children) return 0;
 
     int applied = 0;
-    for (auto const& track : this->m_data.tracks) {
-        if (!track.ready || track.keys.empty()) continue;
-        if (!TriggerClassify::isStatic(track.kind)) continue;
-
-        TriggerPose pose{};
-        if (!this->samplePose(track.uniqueId, absTick, pose)) continue;
-
-        GameObject* obj = nullptr;
-        for (unsigned i = 0; i < children->count(); ++i) {
-            auto* candidate = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
-            if (!candidate) continue;
-            if (candidate->m_uniqueID != track.uniqueId) continue;
-            obj = candidate;
-            break;
-        }
+    unsigned const n = children->count();
+    for (unsigned i = 0; i < n; ++i) {
+        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
         if (!obj) continue;
-
+        if (!this->hasReadyStaticTrack(obj->m_uniqueID)) continue;
+        TriggerPose pose{};
+        if (!this->samplePose(obj->m_uniqueID, absTick, pose)) continue;
         TriggerWorldStore::writePose(obj, pose);
         ++applied;
     }

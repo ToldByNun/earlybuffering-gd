@@ -6,6 +6,7 @@
 #include <Geode/Geode.hpp>
 #include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class GJGameLevel;
@@ -40,12 +41,14 @@ struct TriggerWorldData {
 };
 
 // Content-keyed cache of static trigger motion.
-// Disk: {saveDir}/triggers/{fullKey}.json
-// Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
+// Disk: {saveDir}/triggers/{fullKey}.json — full per-level bake.
+// Runtime spool uses only objects currently in objectLayer (GD stream) ∩ index.
 class TriggerWorldStore {
 public:
     static constexpr int kFileVersion = 1;
-    static constexpr size_t kMaxTracks = 2048;
+    // Soft ceiling against pathological RAM — not a design target. Prefer baking all
+    // spoolable Static* targets; raise if a level still truncates.
+    static constexpr size_t kMaxTracks = 131072;
     static constexpr size_t kMaxKeysPerTrack = 8192;
 
     static TriggerWorldStore& get();
@@ -71,6 +74,8 @@ public:
     void setData(TriggerWorldData data);
 
     TriggerTrack const* findTrack(int uniqueId) const;
+    // Ready Static* track present (O(1) index).
+    bool hasReadyStaticTrack(int uniqueId) const;
     size_t trackCount() const { return this->m_data.tracks.size(); }
     size_t readyTrackCount() const;
 
@@ -88,8 +93,8 @@ public:
     // Write a sampled pose onto a live GameObject (position/rot/scale/visible).
     static void writePose(GameObject* obj, TriggerPose const& pose);
 
-    // Apply all ready Static* tracks at live absTick (remapped). Walks objectLayer.
-    // Returns number of objects written. No-op if store empty / bake off caller.
+    // Apply ready Static* poses for objects currently in objectLayer (near-first).
+    // Returns number of objects written. No-op if store empty / incomplete.
     int applyAtTick(PlayLayer* layer, int liveAbsTick);
 
     std::string statusLine() const;
@@ -100,6 +105,8 @@ public:
 
 private:
     TriggerWorldStore() = default;
+
+    void rebuildIndex();
 
     geode::Result<> writeFile() const;
     geode::Result<> readFile();
@@ -113,6 +120,7 @@ private:
     static void clampData(TriggerWorldData& data);
 
     TriggerWorldData m_data;
+    std::unordered_map<int, size_t> m_index;
     bool m_loaded = false;
     mutable bool m_dirty = false;
     bool m_bakeComplete = false;

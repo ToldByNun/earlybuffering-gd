@@ -83,11 +83,13 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 **Sim collision:** ready Static* track + apply this step → `Include`. DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay Unknown. **Follow-player never enters static JSON.**
 
-JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Baker: spawn-timed StaticMove/Rotate/Scale/Toggle (linear); group-follow / touch / toggle-orb / enter-X skipped.
+JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Soft cap **131072** tracks / 8192 keys/track (safety only — bake aims for every spoolable Static* target). Baker: spawn-timed StaticMove/Rotate/Scale/Toggle (linear); group-follow / touch / toggle-orb / enter-X skipped.
 
-**Collect:** waits for `PlayLayer::m_objects` (no premature objectLayer bake); optional spawn-array dedup. Targets via `getGroup` then `belongsToGroup`. Spawn-only absolute timeline (enter-X / touch stay Dynamic / skip).
+**Full bake + stream spool:** Prebake on level load writes the **entire** Static* target set to disk (content key). Runtime does **not** apply all tracks every tick — GD’s `objectLayer` is the live buffer (loaded chunk); capture/apply are object-centric via uniqueId index (O(children)), near-ghost first under budget (~96 / ~350µs). Far tracks stay on disk until their objects enter the layer.
 
-**Integrity:** `publishPartial` mid-build is not `bakeComplete`. Cancel clears partial tracks. Disk `save` and sim spool/apply require `bakeComplete` (finishOk or loaded cache). Overlay `tw empty` until complete ready tracks exist.
+**Collect:** waits for `PlayLayer::m_objects`; optional spawn-array dedup. Targets via `getGroup` then `belongsToGroup`. Spawn-only absolute timeline (enter-X / touch stay Dynamic / skip).
+
+**Integrity:** `publishPartial` mid-build is not `bakeComplete`. Cancel clears partial tracks. Disk `save` and sim spool/apply require `bakeComplete`. Overlay `tw empty` until complete ready tracks exist.
 
 **Empty honesty:** finish log includes `src=` + `gameObjects` / `lethalIds` + skip breakdown. Baker status when empty: `trigger-world: empty (src=… fx=… …)`.
 
