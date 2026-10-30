@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased (working tree)
+## v1.3.0
+
+**Config export, Hybrid lag, beginner defaults, iOS mobile parity** (still GD **2.2081** only).
 
 ### Config export / import (full settings)
 - **ConfigBundle v2**: exports/imports all **130** portable settings under `{ version, settings }` (not the old ~12-key subset).
@@ -38,6 +40,8 @@
 
 ### Window unit
 - Setting **Window Unit**: `Ticks` (default) or `Frames` (60fps). Numbers under Default Window / per-mode overwrite convert to physics ticks (1 frame ≈ 4 ticks @240). Planning always uses ticks.
+
+## Unreleased
 
 ## v1.2.2
 

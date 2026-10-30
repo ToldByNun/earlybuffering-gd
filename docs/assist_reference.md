@@ -1,6 +1,6 @@
 # EarlyBuffer Assist Reference
 
-Planner / settings contract for **EarlyBuffer** on Geometry Dash **2.2081** (Geode; package line **v1.2.2**, working-tree Hybrid / mobile docs below). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.3.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
