@@ -912,22 +912,10 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         return;
     }
 
-    // Hitch ticks: no 4-TPS replan / no false PassNoThreat flush — park at deadline.
-    if (this->m_physicsHitchThisTick) {
-        this->m_buffer.fireTick = deadline;
-        DevCycleRecorder::get().noteHus(
-            this->m_buffer.devPressId,
-            AssistReason::HoldPending,
-            "hus-hitch",
-            this->m_buffer.fireTick
-        );
-        this->noteVerdict(AssistReason::HoldPending, "hus-hitch");
-        LagProbe::get().mark(
-            "hus.replan.hitch",
-            fmt::format("t={} rem={}", this->m_attemptTick, remaining)
-        );
-        return;
-    }
+    // Wall hitch dumps must not skip HUS replan: planningSimDt is already
+    // snapped to nominal, so a replan here is trustworthy. Parking on
+    // m_physicsHitchThisTick froze HOLD~ whenever MH/warp made raw dt look
+    // "insane" while m_simDt stayed 1/240.
 
     int const remLimit = std::max(1, remaining);
     float const x = player->getPositionX();
@@ -1053,12 +1041,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     }
 
     // Opportunity gone and now looks safe → inject now (never drop the click).
-    // Hitch samples never count as soft-safe (false empty-corridor from 4-TPS).
+    // Replan already used planningSimDt (nominal on wall hitch) — soft-safe is real.
     bool const clearOpp = !re.foresightOrbPad && !re.usedOrbWindow && !re.budgetHit;
     bool const softSafe = re.reason == AssistReason::PassNoThreat
         || re.reason == AssistReason::PassD0Safe;
-    bool const safeNow = !this->m_physicsHitchThisTick
-        && (softSafe || (re.action == PlanAction::Pass && re.nowIsSafe && clearOpp));
+    bool const safeNow =
+        softSafe || (re.action == PlanAction::Pass && re.nowIsSafe && clearOpp);
     if (safeNow) {
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE flush Pass now @{} reason={}",
@@ -1754,13 +1742,13 @@ void AssistController::fireBuffered(
     float const planDt = this->planningSimDt(playLayer);
 
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
-    // Skipped for CPS / mode-change force-fire, and on hitch ticks (no 4-TPS replan).
+    // Skipped for CPS / mode-change force-fire. Wall hitch is fine — planDt is
+    // already planningSimDt (nominal snap); skipping recheck here stalled fires.
     if (allowRecheck
         && player
         && remaining > 0
         && this->m_buffer.rechecks < 2
-        && planDt > 0.f
-        && !this->m_physicsHitchThisTick) {
+        && planDt > 0.f) {
         int const absMin = this->m_buffer.dMin >= 0
             ? this->m_buffer.pressTick + this->m_buffer.dMin
             : this->m_buffer.pressTick;
@@ -2493,12 +2481,16 @@ bool AssistController::planPress(
 
     float const planDt = this->planningSimDt(playLayer);
     float planFirstDt = firstDt;
-    bool const hitchSample = this->m_physicsHitchThisTick
-        || !AssistClock::get().isSaneSimDt(firstDt);
     if (planFirstDt <= 0.f || planFirstDt > planDt
         || !AssistClock::get().isSaneSimDt(planFirstDt)) {
         planFirstDt = planDt;
     }
+    // Soft-pass refuse only if the *plan quantum* is still insane after snap
+    // (should not happen). Never use m_physicsHitchThisTick here — raw wall/MH
+    // dt often looks "insane" while planningSimDt is already nominal, and that
+    // was rewriting every PassNoThreat/PassD0Safe → PassUnknown (assist dead).
+    bool const hitchSample = !AssistClock::get().isSaneSimDt(planDt)
+        || !AssistClock::get().isSaneSimDt(planFirstDt);
 
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
@@ -2657,7 +2649,8 @@ bool AssistController::planPress(
     ).count());
     AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
 
-    // Hitch / insane firstDt: never soft-trust empty-corridor Pass.
+    // Hitch / insane plan quantum: never soft-trust empty-corridor Pass.
+    // (planDt/planFirstDt already snapped — hitchSample is almost always false.)
     if (hitchSample
         && (plan.reason == AssistReason::PassNoThreat
             || plan.reason == AssistReason::PassD0Safe)) {
@@ -2666,7 +2659,7 @@ bool AssistController::planPress(
             AssistVerdict::name(plan.reason)
         ));
         plan.reason = AssistReason::PassUnknown;
-        plan.nowIsSafe = false;
+        // Keep nowIsSafe — clearing it armed HUS on intentional Pass + orb.
         LagProbe::get().mark("eb.assist.hitch-soft-pass", "press");
     }
 
@@ -2941,12 +2934,12 @@ bool AssistController::planRelease(
 
     float const planDt = this->planningSimDt(playLayer);
     float planFirstDt = firstDt;
-    bool const hitchSample = this->m_physicsHitchThisTick
-        || !AssistClock::get().isSaneSimDt(firstDt);
     if (planFirstDt <= 0.f || planFirstDt > planDt
         || !AssistClock::get().isSaneSimDt(planFirstDt)) {
         planFirstDt = planDt;
     }
+    bool const hitchSample = !AssistClock::get().isSaneSimDt(planDt)
+        || !AssistClock::get().isSaneSimDt(planFirstDt);
 
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
@@ -3053,7 +3046,7 @@ bool AssistController::planRelease(
 
     auto plan = ShadowSimulator::get().plan(
         playLayer, player, false, limit, planDt, planFirstDt, opts);
-    // Hitch / insane firstDt: never soft-trust empty-corridor Pass.
+    // Hitch / insane plan quantum: never soft-trust empty-corridor Pass.
     if (hitchSample
         && (plan.reason == AssistReason::PassNoThreat
             || plan.reason == AssistReason::PassD0Safe)) {
@@ -3062,7 +3055,6 @@ bool AssistController::planRelease(
             AssistVerdict::name(plan.reason)
         ));
         plan.reason = AssistReason::PassUnknown;
-        plan.nowIsSafe = false;
         LagProbe::get().mark("eb.assist.hitch-soft-pass", "release");
     }
     clock.liveSimPathId = DevSimPathId::Plan;

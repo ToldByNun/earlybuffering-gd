@@ -405,6 +405,10 @@ public:
         bool zoneCleared = false;
         bool wasDashing = false;
         int ringCount = 0;
+        // First orb activation tick within this run (−1 = none). Planning only
+        // treats rings near the action as "this click's orb" — post-horizon
+        // coast hits must not force actMin=0 / Pass.
+        int firstRingTick = -1;
         int jumpTick = -1;
         int deathTick = -1;
         int unknownTick = -1;
@@ -513,7 +517,10 @@ private:
     bool m_jumped = false;
     bool m_unknown = false;
     bool m_activatedRing = false;
+    int m_firstRingTick = -1;
     int m_ringCount = 0;
+    // Cand.activatedRing only if firstRingTick <= delay + this slack.
+    static constexpr int kOrbActionSlack = 8;
     GameObject* m_deathObject = nullptr;
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;

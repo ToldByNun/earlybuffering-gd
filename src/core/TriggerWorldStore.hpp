@@ -85,7 +85,8 @@ public:
     int remapLiveTick(int liveAbsTick, float liveSimDt) const;
 
     // Sample at live absTick (remaps to store tick first).
-    // Hold last; before first key → false = keep baseline.
+    // Between keys: linear lerp (x/y/rot/scale); active hard-steps at next key.
+    // Before first key → false = keep baseline; past last → hold last.
     bool samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const;
     // Sample with an already-remapped store tick (tests / bakers).
     bool samplePoseAtStoreTick(int uniqueId, int storeTick, TriggerPose& out) const;
@@ -99,7 +100,7 @@ public:
 
     std::string statusLine() const;
 
-    // Headless: samplePose hold/before/after, writePose(null), kind round-trip.
+    // Headless: samplePose lerp/before/after, remap insane-snap, writePose(null).
     // Leaves the singleton cleared (safe at mod load before any level).
     static bool selfCheck(std::string& report);
 

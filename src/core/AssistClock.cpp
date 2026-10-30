@@ -61,10 +61,12 @@ int AssistClock::ticksToFrames(int ticks) {
 int AssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) const {
     if (liveAbsTick < 0) return 0;
     if (authorTps <= 0.0) authorTps = AssistClock::kNominalTps;
-    if (liveSimDt <= 0.f) {
-        return liveAbsTick;
+    // Hitch / pause dumps (e.g. 0.25 → 4 TPS) must not blow bake ticks.
+    float dt = liveSimDt;
+    if (!this->isSaneSimDt(dt)) {
+        dt = AssistClock::kNominalSimDt;
     }
-    double const scale = authorTps * static_cast<double>(liveSimDt);
+    double const scale = authorTps * static_cast<double>(dt);
     if (!std::isfinite(scale) || scale <= 0.0) {
         return liveAbsTick;
     }
@@ -152,6 +154,10 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(clock.remapTick(120.0, 100, 1.f / 120.f) == 100, "remap-matched-author");
     expect(clock.remapTick(240.0, -5, 1.f / 240.f) == 0, "remap-neg-live");
     expect(clock.remapTick(0.0, 50, 1.f / 240.f) == 50, "remap-bad-author");
+    // Insane hitch dt snaps to nominal (not 100 * 240 * 0.25 = 6000).
+    expect(clock.remapTick(240.0, 100, 0.25f) == 100, "remap-insane-snap");
+    expect(clock.remapTick(240.0, 100, 0.f) == 100, "remap-zero-snap");
+    expect(clock.remapTick(240.0, 100, -1.f) == 100, "remap-neg-dt-snap");
 
     expect(!clock.speedScaleSuspect(1.f, 240.0), "suspect-nominal");
     expect(!clock.speedScaleSuspect(1.f, 220.0), "suspect-within-band");

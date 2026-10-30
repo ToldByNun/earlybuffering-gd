@@ -12,7 +12,10 @@
 - **Trigger apply nearness:** `applyTriggerWorldAtTick` ranks by `samplePose` X @ absTick (not press/capture live X); missing sample keeps baseline / no false-near.
 - **Hallucination harden (Sevvend session):** mark `candReady` after every evaluated delay (ledger no longer lies `budget-not-reached`); refuse Delay unless chosen cand was evaluated+viable; HUS no longer arms on bare `PassBudget` (needs orb/pad opportunity); post-fire hold-extend only when plan `requireHold` (not every orb/continuous).
 - **Post-click look-ahead:** treat click-caused later death (slope/orb yeet ~15 frames later) as lethal — `runOne`/verify floor ticks after the action; wave/ship caps raised; zone early-exit cannot cut before that horizon. Setting **Post-Click Look-Ahead** (`post-action-horizon`, default 96, 24–240).
-- **Orb force + HUS Pass swallow (session-1793379778097):** do not force `delay-orb` when d0 already survives (`surviveBin≥1`) — that orb click was the lethal input while shadow said all delays safe; HUS never arms when `nowIsSafe` / intentional Pass (budgetHit+orb was swallowing Pass into soft-hold + save-cue).
+- **Orb force restore (de39332 regression):** remove `d0AlreadySafe` / `skipOrbForce` — that gate made every viable d0 skip the orb window and produced zero `delay-orb`. Miss-assist is again `orbIntent && haveActViable` (as before de39332). HUS still never arms on intentional `nowIsSafe` Pass.
+- **Trigger sample lerp + remap harden:** `samplePoseAtStoreTick` lerps between keys (active hard-step); insane `simDt` remaps snap to nominal (no 4-TPS bake-tick blowout).
+- **Hitch false-positive assist kill:** soft-Pass refuse / HUS `hus-hitch` park / recheck-skip no longer key off wall `m_physicsHitchThisTick` when planning dt is already nominal — that rewrote every `pass-no-threat`/`pass-d0-safe` → `pass-unknown` and froze HOLD~.
+- **Post-horizon false orb ring:** cand `activatedRing` only counts hits within `delay+8` — longer post-click look-ahead was marking d0 `ring=true` from later coast orbs (pairs with orb-force restore).
 
 ## v1.3.0
 

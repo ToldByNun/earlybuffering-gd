@@ -75,6 +75,7 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_jumped = false;
     this->m_unknown = false;
     this->m_activatedRing = false;
+    this->m_firstRingTick = -1;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
     this->m_simAbsTick = -1;
@@ -296,6 +297,7 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_jumped = false;
     this->m_unknown = false;
     this->m_activatedRing = false;
+    this->m_firstRingTick = -1;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
     this->m_simAbsTick = -1;
@@ -480,6 +482,15 @@ void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
     if (!multi && shadow->m_touchedRings.count(ring->m_uniqueID)) return;
 
     noteActivated(ring);
+    if (!m_activatedRing) {
+        // Local tick inside runOne / scan (abs − base). Unknown → 0.
+        if (this->m_simAbsTick >= 0 && this->m_simTickBase >= 0) {
+            this->m_firstRingTick = this->m_simAbsTick - this->m_simTickBase;
+        }
+        else {
+            this->m_firstRingTick = 0;
+        }
+    }
     m_activatedRing = true;
     ++m_ringCount;
 
@@ -1360,6 +1371,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     m_jumped = false;
     m_unknown = false;
     m_activatedRing = false;
+    m_firstRingTick = -1;
     m_ringCount = 0;
     m_deathObject = nullptr;
 
@@ -1379,6 +1391,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
 
     auto finish = [&](RunResult out) {
         out.activatedRing = m_activatedRing;
+        out.firstRingTick = m_firstRingTick;
         out.ringCount = m_ringCount;
         out.endX = s->getPositionX();
         out.wasDashing = s->m_isDashing;
@@ -1515,6 +1528,7 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     m_jumped = false;
     m_unknown = false;
     m_activatedRing = false;
+    m_firstRingTick = -1;
     m_ringCount = 0;
     m_deathObject = nullptr;
 
@@ -1564,6 +1578,7 @@ ShadowSimulator::OrbWindow ShadowSimulator::scanOrbWindow(
     this->m_jumped = false;
     this->m_unknown = false;
     this->m_activatedRing = false;
+    this->m_firstRingTick = -1;
     this->m_ringCount = 0;
     this->m_orbOverlapTick = false;
     this->m_deathObject = nullptr;
@@ -1962,12 +1977,24 @@ SimPlan ShadowSimulator::plan(
         ++plan.candidatesTried;
         c.raw = r;
         c.diedBeforeAction = r.diedBeforeAction;
-        c.activatedRing = r.activatedRing;
+        // Only count orb hits near the press as "this click activated the orb".
+        // Post-action-horizon coast often brushes a later orb and used to set
+        // actMin=0 → Pass, killing delay-orb miss-assist.
+        c.activatedRing = r.activatedRing
+            && r.firstRingTick >= 0
+            && r.firstRingTick <= d + ShadowSimulator::kOrbActionSlack;
         c.unknownTrunc = r.unknownTrunc;
         c.endX = r.endX;
         c.deathX = r.deathX;
         c.jumpTick = r.jumped ? r.jumpTick : d;
-        c.surviveTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
+        // Survival bin = how long we actually lived, not when we first cleared
+        // the near zone (ticksBeforeNeutral can be << post-horizon).
+        if (r.died) {
+            c.surviveTicks = r.deathTick >= 0 ? r.deathTick + 1 : r.ticksRan;
+        }
+        else {
+            c.surviveTicks = r.ticksRan;
+        }
         c.surviveBin = surviveBinOf(c.surviveTicks);
         c.requireHold = false; // set only if tap fails and hold-branch wins
         return c;
@@ -2270,11 +2297,18 @@ SimPlan ShadowSimulator::plan(
                 beginCapture(layer);
                 if (!br.died || br.unknownTrunc) {
                     c.raw = br;
-                    c.activatedRing = br.activatedRing;
+                    c.activatedRing = br.activatedRing
+                        && br.firstRingTick >= 0
+                        && br.firstRingTick <= d + ShadowSimulator::kOrbActionSlack;
                     c.unknownTrunc = br.unknownTrunc;
                     c.endX = br.endX;
                     c.deathX = br.deathX;
-                    c.surviveTicks = br.ticksBeforeNeutral > 0 ? br.ticksBeforeNeutral : br.ticksRan;
+                    if (br.died) {
+                        c.surviveTicks = br.deathTick >= 0 ? br.deathTick + 1 : br.ticksRan;
+                    }
+                    else {
+                        c.surviveTicks = br.ticksRan;
+                    }
                     c.surviveBin = surviveBinOf(c.surviveTicks);
                     c.releaseAfter = k;
                     c.requireHold = false;
@@ -2594,16 +2628,12 @@ SimPlan ShadowSimulator::plan(
     bool doPass = false;
     bool haveActViable = actMin >= 0;
 
-    // If delay-0 already survives the post-click horizon, do NOT force an orb
-    // Delay. Waiting for the orb when d0 is already safe is a common
-    // click-caused death (slope/UFO yeet) — planner "survives" but the orb
-    // click is the lethal input.
-    bool const d0AlreadySafe = cands[0].viable
-        && !cands[0].raw.died
-        && !cands[0].diedBeforeAction
-        && cands[0].surviveBin >= 1;
-
-    if (orbIntent && haveActViable && !d0AlreadySafe) {
+    // Restore pre-de39332 miss-assist: always take the orb window when we have
+    // a viable activation band. The d0AlreadySafe / skipOrbForce gates from
+    // "click-caused deaths" converted every surviveBin≥1 d0 into Pass and
+    // wiped delay-orb (sessions after that commit: 0 delays).
+    // Post-horizon false rings are handled separately (firstRingTick slack).
+    if (orbIntent && haveActViable) {
         std::vector<int> pool;
         for (int d = actMin; d <= actMax; ++d) pool.push_back(d);
         int const k = robustK;
@@ -3210,6 +3240,7 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
     m_jumped = false;
     m_unknown = false;
     m_activatedRing = false;
+    m_firstRingTick = -1;
     m_ringCount = 0;
     m_deathObject = nullptr;
 
@@ -3849,6 +3880,7 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
     this->m_jumped = false;
     this->m_unknown = false;
     this->m_activatedRing = false;
+    this->m_firstRingTick = -1;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
     this->m_simTickBase = witness.clock.effectTick;

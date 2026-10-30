@@ -43,7 +43,8 @@ public:
 
     // Map live absolute attempt tick → author/bake tick.
     // bakeTick ≈ round(liveAbsTick * (authorTps * liveSimDt)); identity when
-    // authorTps * liveSimDt ≈ 1.
+    // authorTps * liveSimDt ≈ 1. Insane liveSimDt (hitch / pause) snaps to
+    // nominal so bake ticks do not blow out to 4-TPS scales.
     int remapTick(double authorTps, int liveAbsTick, float liveSimDt) const;
 
     // True when warp is ~1 but sim TPS is far from nominal (MH dt scale).
