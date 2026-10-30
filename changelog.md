@@ -26,6 +26,7 @@
 - **Shared-budget regression:** exhausted Hybrid `usLeft==0` no longer maps to PlanOptions “unlimited” wall (that made verify-fail→Live unbounded). Verify leaves a Live reserve (500µs / 800 ticks); remainder `0` forces a 1µs fast budget exit instead.
 - **Reuse findNear + threatZone:** Hybrid fallthrough copies bake window fields (no vector pointers) and passes verify `threatZone` into Live `plan()` via `seedThreatZone` (skips `buildThreatZone`). Missing-bake path leaves reuse empty; cleared each press.
 - **HybridVerifyCache:** attempt-scoped memo by window fields + delay (no bake-vector pointers); X drift >8px miss; `budgetHit` not stored. Cleared on reset/death.
+- **Hybrid LagProbe + overlay:** standalone `HYBRID eb.hybrid.verify` / `eb.hybrid.live` lines (Lag Probe on, no death episode); overlay prefixes `hy bake […]` vs `hy … → live`. Playtest rows: bake hit / miss / verify-fail→Live / constrained starve.
 
 ### Assist clock / first-click
 - Fix hitch poisoning of `m_lastDt` (stuck `simDt≈0.25` → `simTps≈4`, `speedScaleSuspect`) that made opening clicks `pass-hopeless` / useless Delay on Legacy and New. Sane physics samples update EMA both ways; absurd quanta snap planning to nominal 240 TPS.

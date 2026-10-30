@@ -26,6 +26,15 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **HybridVerifyCache:** within one attempt, memoizes Hybrid `BakeVerifier` results keyed by window fields (`nominalFrame` / earliest / latest / down / p2 / mode) + delay + limit — **no bake-vector pointers**. Hit skips re-sim when player X is within 8px. `budgetHit` results are not cached (envelope is per-press). Cleared on attempt reset and death.
 
+**Hybrid LagProbe / overlay:** with **Lag Probe** on, press path writes standalone lines (no death episode needed):
+
+```
+HYBRID eb.hybrid.verify = 0.40ms | d=3 lim=16 cache=0
+HYBRID eb.hybrid.live   = 1.10ms | vfy=1 remTick=2800 remUs=500
+```
+
+`cache=1` means attempt memo hit. Overlay (In-Level Overlay on): Hybrid shows `hy bake [lo,hi]` on bake success or `hy verify … → live` / `hy bake missing → live` on fallthrough.
+
 | Mode | Verify fail / past window / missing bake |
 |------|------------------------------------------|
 | Hybrid | Fall through to **Live** (`TravelForesight` + OpportunityProbe / HUS / idleSafer). Overlay hint `… → live`. No bake Pass verdict. |
@@ -380,7 +389,10 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
 | Ship/Wave: idle lives, press-now dies, later delay clears | Delay/HUS (`idleSafer`+`ascent`) | Same | PLAN log `idleSafer=1 ascent=1` |
-| Hybrid: bake verify fails near orb | Live foresight plan (Delay/HUS), hint `verify … → live` | Same | No `pass-bake-verify-fail` |
+| Hybrid: bake hit (verify ok, in window) | Overlay `hy bake [lo,hi]`; LagProbe `eb.hybrid.verify` short / `cache=1` on repeat | Same | No Live plan this press |
+| Hybrid: bake miss (no window / missing) | Live plan; overlay map status or `hy … → live`; `eb.hybrid.live` only | Same | No verify scope |
+| Hybrid: bake verify fails near orb | Live foresight plan (Delay/HUS), overlay `hy verify … → live` | Same | No `pass-bake-verify-fail`; LagProbe `eb.hybrid.verify` then `eb.hybrid.live` |
+| Hybrid: constrained-device starve | Verify may `budgetHit` → Live with reserve/remainder; PassBudget/HUS if foresight | Same | Never soft-trust bake; LagProbe remUs/remTick in `eb.hybrid.live` detail |
 | Replay: past bake latest | Pass `pass-bake-past-latest` | Same | Bake-only |
 | Prefer band early + orb outside band | Keep searching; orb activation pick | Same | No prefer early-exit |
 | Single early click, empty ring | Reach plan (not spam Pass) | Same | |

@@ -11,6 +11,10 @@
 // episodes we care about when hunting "I died here and FPS hitch'd":
 //   destroyPlayer → onRealDeath → (later) resetLevel / loadFromCheckpoint
 //
+// Also: Hybrid press scopes `eb.hybrid.verify` / `eb.hybrid.live` log as
+// standalone HYBRID lines when Lag Probe is on (no episode required) so
+// moderate-CPS hitches are visible without dying.
+//
 // Log file (mod save dir):
 //   earlybuffer-lagprobe.log
 // Full path example:
@@ -25,6 +29,7 @@
 //   +12.34ms  |indent| <event> = 1.23ms | detail
 //   +12.34ms  |indent| MARK <event> | detail     (zero-width bookmark)
 //   EPISODE END <name> total=45.67ms
+//   HYBRID <event> = 1.23ms | detail            (press-path, no episode)
 //
 // How to read a spike:
 //   1. Find EPISODE BEGIN death / resetLevel near the hitch.
@@ -33,6 +38,7 @@
 //      GD / other mods — not EarlyBuffer ghosts.
 //   4. GAP lines in earlybuffer-perf.log (if Perf Trace on) measure wall time
 //      BETWEEN physics ticks (includes death anim + other mods).
+//   5. For Hybrid lag without dying: search HYBRID eb.hybrid.verify / .live.
 class LagProbe {
 public:
     class Scope {
@@ -41,10 +47,15 @@ public:
         ~Scope();
         Scope(Scope const&) = delete;
         Scope& operator=(Scope const&) = delete;
+        Scope(Scope&& other) noexcept;
+        Scope& operator=(Scope&& other) noexcept;
 
     private:
         char const* m_name = nullptr;
-        bool m_active = false;
+        std::string m_detail;
+        bool m_active = false;      // nested inside an episode
+        bool m_standalone = false;  // eb.hybrid.* outside episode
+        std::chrono::steady_clock::time_point m_standaloneStart{};
     };
 
     static LagProbe& get();
@@ -66,6 +77,9 @@ public:
     // Instant bookmark at current wall offset (no duration).
     void mark(char const* name, std::string detail = {});
 
+    // Hybrid press path: duration line without an episode.
+    void noteStandalone(char const* name, double ms, std::string detail = {});
+
     // Force disk write (also on episode end).
     void flush();
 
@@ -79,6 +93,8 @@ private:
     void writeLegend();
     double msSinceEpisode() const;
     std::string indent() const;
+
+    static bool isHybridStandaloneName(char const* name);
 
     bool m_enabled = false;
     bool m_episodeOpen = false;

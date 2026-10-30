@@ -1147,7 +1147,19 @@ void AssistController::updateOverlay() {
         else {
             learnBit = "learn OFF";
         }
-        std::string bakeBit = m_lastBakeHint.empty() ? BakeMap::get().statusLine() : m_lastBakeHint;
+        // Hybrid: prefer last press hint (bake [lo,hi] vs "… → live") over map status.
+        std::string bakeBit = m_lastBakeHint.empty()
+            ? BakeMap::get().statusLine()
+            : m_lastBakeHint;
+        if (mode == AssistMode::Hybrid && !m_lastBakeHint.empty()) {
+            // Keep "→ live" readable; prefix so it is not mistaken for Replay bake.
+            if (m_lastBakeHint.find("→ live") != std::string::npos) {
+                bakeBit = fmt::format("hy {}", m_lastBakeHint);
+            }
+            else if (m_lastBakeHint.rfind("bake ", 0) == 0) {
+                bakeBit = fmt::format("hy {}", m_lastBakeHint);
+            }
+        }
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
         int const smartDepth = StageConfig::smartDepth();
         std::string smartBit;
@@ -1958,6 +1970,7 @@ bool AssistController::tryBakeAssist(
                 reason
             ));
             // Do not stamp bake Pass as final verdict — live owns the decision.
+            this->updateOverlay();
             return true;
         }
         handled = true;
@@ -2060,14 +2073,30 @@ bool AssistController::tryBakeAssist(
                 cacheKey, player->getPositionX(), vr
             );
         }
-        if (!cacheHit) {
+        if (cacheHit) {
+            LagProbe::Scope const hyVerify(
+                hybrid ? "eb.hybrid.verify" : nullptr,
+                fmt::format(
+                    "d={} lim={} cache=1 ok={}", delay, limit, vr.ok ? 1 : 0
+                )
+            );
+            (void)hyVerify;
+        }
+        else {
+            LagProbe::Scope const hyVerify(
+                hybrid ? "eb.hybrid.verify" : nullptr,
+                fmt::format("d={} lim={} cache=0", delay, limit)
+            );
             vr = BakeVerifier::verify(
                 playLayer, player, down, delay, limit, this->m_simDt, fd,
                 hybrid ? sharedBudget : nullptr
             );
             if (hybrid) {
-                HybridVerifyCache::get().put(cacheKey, player->getPositionX(), vr);
+                HybridVerifyCache::get().put(
+                    cacheKey, player->getPositionX(), vr
+                );
             }
+            (void)hyVerify;
         }
         if (reuse) reuse->verifyThreat = vr.threatZone;
         if (!vr.ok) {
@@ -2184,6 +2213,17 @@ bool AssistController::planPress(
         shareHybrid ? &hybridReuse : nullptr
     );
     if (bakeHandled) return bakeRet;
+
+    // Times Live fallthrough (verify already paid / skipped). Standalone LagProbe.
+    LagProbe::Scope hyLive(
+        shareHybrid ? "eb.hybrid.live" : nullptr,
+        fmt::format(
+            "vfy={} remTick={} remUs={}",
+            hybridVerifyAttempted ? 1 : 0,
+            pressBudget.tickLeft,
+            pressBudget.usUnlimited ? -1 : pressBudget.usLeft
+        )
+    );
 
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
@@ -2578,6 +2618,16 @@ bool AssistController::planRelease(
         shareHybrid ? &hybridReuse : nullptr
     );
     if (bakeHandled) return bakeRet;
+
+    LagProbe::Scope hyLive(
+        shareHybrid ? "eb.hybrid.live" : nullptr,
+        fmt::format(
+            "vfy={} remTick={} remUs={}",
+            hybridVerifyAttempted ? 1 : 0,
+            pressBudget.tickLeft,
+            pressBudget.usUnlimited ? -1 : pressBudget.usLeft
+        )
+    );
 
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();

@@ -4,6 +4,7 @@
 #include <Geode/Geode.hpp>
 #include <fmt/format.h>
 
+#include <cstring>
 #include <fstream>
 
 using namespace geode::prelude;
@@ -13,18 +14,73 @@ LagProbe& LagProbe::get() {
     return inst;
 }
 
+bool LagProbe::isHybridStandaloneName(char const* name) {
+    if (!name) return false;
+    // eb.hybrid.verify / eb.hybrid.live (and future eb.hybrid.*)
+    return std::strncmp(name, "eb.hybrid.", 10) == 0;
+}
+
 LagProbe::Scope::Scope(char const* name, std::string detail) {
     this->m_name = name;
-    if (!LagProbe::get().enabled()) return;
-    // Only nest when an episode is open (death/reset/checkpoint).
-    if (!LagProbe::get().episodeOpen()) return;
-    this->m_active = true;
-    LagProbe::get().begin(name, std::move(detail));
+    this->m_detail = std::move(detail);
+    if (!LagProbe::get().enabled() || !name) return;
+    if (LagProbe::get().episodeOpen()) {
+        this->m_active = true;
+        LagProbe::get().begin(name, this->m_detail);
+        return;
+    }
+    // Hybrid press scopes: log without a death/reset episode.
+    if (LagProbe::isHybridStandaloneName(name)) {
+        this->m_standalone = true;
+        this->m_standaloneStart = std::chrono::steady_clock::now();
+    }
+}
+
+LagProbe::Scope::Scope(Scope&& other) noexcept
+    : m_name(other.m_name)
+    , m_detail(std::move(other.m_detail))
+    , m_active(other.m_active)
+    , m_standalone(other.m_standalone)
+    , m_standaloneStart(other.m_standaloneStart) {
+    other.m_name = nullptr;
+    other.m_active = false;
+    other.m_standalone = false;
+}
+
+LagProbe::Scope& LagProbe::Scope::operator=(Scope&& other) noexcept {
+    if (this == &other) return *this;
+    if (this->m_active) LagProbe::get().end(this->m_name);
+    else if (this->m_standalone) {
+        double const us = static_cast<double>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - this->m_standaloneStart
+            ).count()
+        );
+        LagProbe::get().noteStandalone(this->m_name, us / 1000.0, this->m_detail);
+    }
+    this->m_name = other.m_name;
+    this->m_detail = std::move(other.m_detail);
+    this->m_active = other.m_active;
+    this->m_standalone = other.m_standalone;
+    this->m_standaloneStart = other.m_standaloneStart;
+    other.m_name = nullptr;
+    other.m_active = false;
+    other.m_standalone = false;
+    return *this;
 }
 
 LagProbe::Scope::~Scope() {
-    if (!this->m_active) return;
-    LagProbe::get().end(this->m_name);
+    if (this->m_active) {
+        LagProbe::get().end(this->m_name);
+        return;
+    }
+    if (!this->m_standalone || !this->m_name) return;
+    double const us = static_cast<double>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - this->m_standaloneStart
+        ).count()
+    );
+    LagProbe::get().noteStandalone(this->m_name, us / 1000.0, this->m_detail);
 }
 
 bool LagProbe::enabled() const {
@@ -137,10 +193,32 @@ void LagProbe::writeLegend() {
     this->appendLine("  eb.clickGuardReset          ClickIntentGuard::reset");
     this->appendLine("  eb.updateOverlay            status overlay string refresh");
     this->appendLine("  eb.dev.eval                 Dev Lab counterfactual grid eval");
+    this->appendLine("  eb.hus.replan               Hold-Until-Safe cadenced replan");
+    this->appendLine("  eb.hybrid.verify            Hybrid BakeVerifier / cache hit");
+    this->appendLine("  eb.hybrid.live              Hybrid Live fallthrough after bake");
     this->appendLine("  vanilla.PlayLayer::resetLevel   GD attempt rebuild (often huge)");
     this->appendLine("  vanilla.loadFromCheckpoint  GD checkpoint apply");
     this->appendLine("  eb.onCheckpointLoad         our checkpoint-side flush");
+    this->appendLine("----------------------------------------------------------------");
+    this->appendLine("HYBRID LINES (no episode — Lag Probe ON, Assist Mode Hybrid)");
+    this->appendLine("  HYBRID eb.hybrid.verify = X.XXms | d=… lim=… cache=0|1");
+    this->appendLine("  HYBRID eb.hybrid.live   = X.XXms | vfy=… remTick=… remUs=…");
+    this->appendLine("  Overlay bake hint: bake [lo,hi] vs \"… → live\" on fallthrough.");
     this->appendLine("================================================================");
+}
+
+void LagProbe::noteStandalone(char const* name, double ms, std::string detail) {
+    if (!this->m_enabled || !name) return;
+    if (detail.empty()) {
+        this->appendLine(fmt::format("HYBRID {} = {:.2f}ms", name, ms));
+    }
+    else {
+        this->appendLine(fmt::format("HYBRID {} = {:.2f}ms | {}", name, ms, detail));
+    }
+    // Flush often so hitch hunts survive a crash mid-level.
+    if (this->m_pendingLines >= 8) {
+        this->flush();
+    }
 }
 
 double LagProbe::msSinceEpisode() const {
