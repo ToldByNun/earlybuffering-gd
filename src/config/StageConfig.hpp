@@ -138,7 +138,7 @@ public:
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
     static char const* assistModeHint(AssistMode mode);
-    // Assist pick inside the tick window: New (default) vs Legacy (1.2.0).
+    // Assist pick inside the tick window: Legacy (default, 1.2.0 feel) vs New.
     static bool assistPickLegacy();
     static char const* assistPickName();
     static int simBudgetUs();

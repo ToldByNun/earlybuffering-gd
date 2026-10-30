@@ -100,19 +100,20 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 ## Pause / settings UI
 
-Pause: optional status lines (`show-pause-bake`) + top-right **EB** (`show-pause-hub`). No side button stacks.
+Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-EB opens the normal Geode ModSettingsPopup with a page switcher:
+EB opens the normal Geode ModSettingsPopup with a chip page switcher:
 
 | Page | Contents |
 |------|----------|
-| Main | Enabled, Preset, Safe Mode, Debug |
-| Bake | Native rows (`eb-action`): Import Bake Replay (button = `import` or `{name.ext}`), Cycle Mode, Bake Map, Brute Bake, Cancel |
-| Ingame | Overlay, pause status/hub toggles |
-| Assist | Action rows (Cycle Preset / Reset Learn / Export·Import) + Scope/Window/Algorithm/Smart/Learning |
-| Visual | Trajectory, Save Feedback / Color |
+| Main | Enabled, Preset, Safe Mode, Assist Mode, overlay/pause chrome, light diagnostics |
+| Scope | Practice / start-pos / percent window / off-ranges |
+| Assist | Action rows (Cycle Preset / Reset Learn / Export·Import) + Window / Algorithm / Smart / Learning / Trigger World |
+| Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius |
 | Modes | Cube…Swing per-mode blocks |
+| Visual | Trajectory, Save Feedback / Color |
 | Keys | Hotkeys + Internal |
+| Dev | Dev Lab session / eval / overlay / actions |
 
 Action rows use custom type `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
 
@@ -175,38 +176,38 @@ Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` witho
 
 ## Settings table
 
-Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ranges) → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal**.
+Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **Assist** (Window / Algorithm / Smart / Learning / Trigger World) → **Bake** → **Modes** → **Visual** → **Keys** → **Dev**.
 
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
 | enabled | bool | true | | | Main — master |
-| preset | string | Normal | Tight/Normal/Wide/Max/Off | | Main — fills defaults |
+| preset | string | Normal | Tight/Normal/Wide/Max/Off | | Main — fills defaults (same as Assist Cycle Preset / F6) |
 | safe-mode | bool | true | | | Main — ON: block saves when enabled or assist-touched; OFF: vanilla progress |
+| assist-mode | string | Live | Live/Replay/Hybrid/BruteForce | | Main — same as Bake Cycle Assist Mode / Ctrl+Shift+M |
 | debug-logging | bool | false | | | Main |
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
-| show-overlay | bool | false | | | Ingame |
+| show-overlay | bool | false | | | Main |
 | show-trajectory | bool | false | | | Visual |
-| show-pause-bake | bool | false | | | Ingame — pause status lines only |
-| show-pause-assist | bool | false | | | Ingame — legacy unused (actions under Assist page) |
-| show-pause-hub | bool | true | | | Ingame — EB button |
+| show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
+| show-pause-assist | bool | false | | | Main — legacy unused (actions under Assist page) |
+| show-pause-hub | bool | true | | | Main — EB button |
 | save-feedback-sound | bool | false | | | Visual — per-tick MP3 cue on delayed inject |
 | save-feedback-color | bool | false | | | Visual — flash player icon on delayed inject |
 | save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart); palette 1…8 `#ff614e`…`#c069fa`; cap 64 markers |
 | save-icon-color | rgb | #7CFF4A | | | Visual — flash color when save-feedback-color is on |
-| assist-only-practice | bool | false | | | Scope |
+| assist-only-practice | bool | false | | | Scope — gates all Assist Modes |
 | assist-startpos-only | bool | false | | | Scope |
 | assist-percent-min | int | 0 | 0 | 100 | Scope |
 | assist-percent-max | int | 100 | 0 | 100 | Scope |
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
-| ticks-all | int | 4 | 0 | 48 | Window |
-| ticks-wave | int | 4 | 0 | 48 | Window |
-| window-unit | string | Ticks | Ticks/Frames | | Window — Frames→×4 ticks @240 |
-| death-slack | int | 2 | 0 | 16 | Algorithm — look-ahead slack, not zone |
-| look-ahead-cap | int | 0 | 0 | 240 | Algorithm — 0=auto |
-| assist-mode | string | Live | Live/Replay/Hybrid/BruteForce | | Algorithm |
-| assist-pick | string | Legacy | New/Legacy | | Algorithm — G1 pick |
-| bake-radius | int | 0 | 0 | 128 | Algorithm — 0=auto |
+| ticks-all | int | 4 | 0 | 48 | Assist / Window |
+| ticks-wave | int | 4 | 0 | 48 | Assist / Window |
+| window-unit | string | Ticks | Ticks/Frames | | Assist / Window — Frames→×4 ticks @240; per-mode `*-ticks` use same unit |
+| death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
+| look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
+| assist-pick | string | Legacy | New/Legacy | | Assist / Algorithm — G1 pick (Legacy default) |
+| bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |

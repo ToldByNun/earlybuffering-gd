@@ -88,7 +88,7 @@ bool g_cachedSelfBakeRefine = true;
 bool g_cachedTriggerBake = true;
 bool g_cachedTriggerBakeSkipDynamic = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
-bool g_cachedAssistPickLegacy = false;
+bool g_cachedAssistPickLegacy = true; // mod.json default Legacy
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
 int g_cachedCpsLimit = 0;
@@ -209,11 +209,11 @@ void StageConfig::refreshCache() {
 
     g_cachedDebug = mod->getSettingValue<bool>("debug-logging");
     g_cachedPerfTrace = readBool(mod, "perf-trace", false);
-    g_cachedLagProbe = readBool(mod, "lag-probe", true);
+    g_cachedLagProbe = readBool(mod, "lag-probe", false);
     g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
     g_cachedShowTrajectory = readBool(mod, "show-trajectory", false);
-    g_cachedShowPauseBake = readBool(mod, "show-pause-bake", true);
+    g_cachedShowPauseBake = readBool(mod, "show-pause-bake", false);
     g_cachedShowPauseHub = readBool(mod, "show-pause-hub", true);
     g_cachedAssistPress = readBool(mod, "assist-press", true);
     g_cachedAssistRelease = readBool(mod, "assist-release", true);
@@ -278,7 +278,8 @@ void StageConfig::refreshCache() {
         g_cachedAssistPickLegacy = (pickStr == "Legacy");
     }
     catch (...) {
-        g_cachedAssistPickLegacy = false;
+        // mod.json default is Legacy.
+        g_cachedAssistPickLegacy = true;
     }
 
     for (int i = 0; i < MODE_COUNT; ++i) {

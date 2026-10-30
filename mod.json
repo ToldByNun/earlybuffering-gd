@@ -87,7 +87,7 @@
 		},
 		"show-pause-bake": {
 			"type": "bool",
-			"name": "Pause Bake Status",
+			"name": "Pause Status Lines",
 			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
 			"default": false
 		},
@@ -123,7 +123,7 @@
 		"assist-only-practice": {
 			"type": "bool",
 			"name": "Assist Only in Practice",
-			"description": "On = Live/Hybrid only work in practice. Off = also in normal mode (still respect Safe Mode and percent rules).",
+			"description": "On = assist is allowed only in Practice Mode (all Assist Modes: Live, Replay, Hybrid, BruteForce). Off = also in normal mode (still respect Safe Mode, start-pos, and percent / off-range rules).",
 			"default": false
 		},
 		"assist-startpos-only": {
@@ -393,7 +393,7 @@
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window (G1). Legacy (default) = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). New = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Never waits past your Limit.",
+			"description": "How Live/Hybrid picks a delay inside your tick window. Legacy (default) = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). New = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Never waits past your Limit.",
 			"one-of": [
 				"New",
 				"Legacy"
@@ -618,7 +618,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "cube-overwrite",
-			"description": "Max delay window for Cube (physics ticks). Higher = more early-click forgiveness in Cube; lower = snappier. Only used when Overwrite Cube is on."
+			"description": "Delay window for Cube when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"cube-cap": {
 			"type": "int",
@@ -670,7 +670,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "ship-overwrite",
-			"description": "Max delay window for Ship (physics ticks). Higher = more early-click forgiveness in Ship; lower = snappier. Only used when Overwrite Ship is on."
+			"description": "Delay window for Ship when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"ship-cap": {
 			"type": "int",
@@ -722,7 +722,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "ball-overwrite",
-			"description": "Max delay window for Ball (physics ticks). Higher = more early-click forgiveness in Ball; lower = snappier. Only used when Overwrite Ball is on."
+			"description": "Delay window for Ball when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"ball-cap": {
 			"type": "int",
@@ -774,7 +774,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "ufo-overwrite",
-			"description": "Max delay window for UFO (physics ticks). Higher = more early-click forgiveness in UFO; lower = snappier. Only used when Overwrite UFO is on."
+			"description": "Delay window for Ufo when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"ufo-cap": {
 			"type": "int",
@@ -826,7 +826,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "wave-overwrite",
-			"description": "Max delay window for Wave (physics ticks). Higher = more early-click forgiveness in Wave; lower = snappier. Only used when Overwrite Wave is on."
+			"description": "Delay window for Wave when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"wave-cap": {
 			"type": "int",
@@ -878,7 +878,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "robot-overwrite",
-			"description": "Max delay window for Robot (physics ticks). Higher = more early-click forgiveness in Robot; lower = snappier. Only used when Overwrite Robot is on."
+			"description": "Delay window for Robot when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"robot-cap": {
 			"type": "int",
@@ -930,7 +930,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "spider-overwrite",
-			"description": "Max delay window for Spider (physics ticks). Higher = more early-click forgiveness in Spider; lower = snappier. Only used when Overwrite Spider is on."
+			"description": "Delay window for Spider when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"spider-cap": {
 			"type": "int",
@@ -982,7 +982,7 @@
 			"min": 0,
 			"max": 32,
 			"enable-if": "swing-overwrite",
-			"description": "Max delay window for Swing (physics ticks). Higher = more early-click forgiveness in Swing; lower = snappier. Only used when Overwrite Swing is on."
+			"description": "Delay window for Swing when Overwrite is on. Same unit as Assist → Window Unit (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness; lower = snappier. Ignored when Overwrite is off (then Default Window / Wave default applies)."
 		},
 		"swing-cap": {
 			"type": "int",
@@ -1069,8 +1069,8 @@
 		},
 		"hotkey-auto-tune": {
 			"type": "keybind",
-			"name": "Toggle Smart Learning",
-			"description": "Toggles Auto-Tune / smart learning (same as Assist → Auto-Tune Per Level). Does not change tick windows.",
+			"name": "Toggle Auto-Tune",
+			"description": "Toggles Auto-Tune Per Level on/off (same as Assist → Auto-Tune Per Level). Does not change tick windows.",
 			"default": "Ctrl+Shift+L",
 			"category": "gameplay"
 		},
@@ -1246,7 +1246,7 @@
 		"title-dev-actions": {
 			"type": "title",
 			"name": "Dev Actions",
-			"description": "Session, eval, and export actions. Safe no-ops until the Dev Lab pipeline is wired."
+			"description": "Start/stop recording, run counterfactual eval, export or clear traces, and copy the last Dev report. Requires Dev Record Enable for recording actions."
 		},
 		"dev-start-record-action": {
 			"type": "custom:eb-action",
