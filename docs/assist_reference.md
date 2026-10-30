@@ -24,6 +24,8 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Hybrid reuse:** `tryBakeAssist` copies findNear window fields into `HybridPressReuse` (no bake-vector pointers) and, on verify fail, the verify `threatZone`. Live uses the copy for near-bake / prefer-band (when verify did not reject) and seeds `PlanOptions.seedThreatZone` so `plan()` skips `buildThreatZone`. Missing / no-window → empty reuse.
 
+**HybridVerifyCache:** within one attempt, memoizes Hybrid `BakeVerifier` results keyed by window fields (`nominalFrame` / earliest / latest / down / p2 / mode) + delay + limit — **no bake-vector pointers**. Hit skips re-sim when player X is within 8px. `budgetHit` results are not cached (envelope is per-press). Cleared on attempt reset and death.
+
 | Mode | Verify fail / past window / missing bake |
 |------|------------------------------------------|
 | Hybrid | Fall through to **Live** (`TravelForesight` + OpportunityProbe / HUS / idleSafer). Overlay hint `… → live`. No bake Pass verdict. |

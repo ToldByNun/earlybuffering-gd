@@ -6,6 +6,7 @@
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
+#include "HybridVerifyCache.hpp"
 #include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
@@ -262,6 +263,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_assistTouchedRun = false;
     m_savesAttempt = 0;
     DivergenceTracker::get().clear();
+    HybridVerifyCache::get().clearAttempt();
     m_attemptTick = 0;
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
@@ -1413,6 +1415,7 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     (void)object;
 
     LagProbe::Scope const deathScope("eb.onRealDeath");
+    HybridVerifyCache::get().clearAttempt();
 
     // destroyPlayer hot path — no physics replays, no disk, no bake merge.
     // GD physics is main-thread only; "multithread" death work is not viable.
@@ -2035,13 +2038,37 @@ bool AssistController::tryBakeAssist(
     // Live re-verify: stale / wrong-mode / suicidal bake delay → Hybrid live
     // (foresight + miss-assist), Replay/Brute Pass with reason.
     // Hybrid: draw from shared press envelope (never soft-trust on budgetHit).
+    // Attempt-scoped HybridVerifyCache skips identical window+delay re-sims.
     if (limit > 0 && this->m_simDt > 0.f) {
         float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
         if (verifyAttempted) *verifyAttempted = true;
-        auto const vr = BakeVerifier::verify(
-            playLayer, player, down, delay, limit, this->m_simDt, fd,
-            hybrid ? sharedBudget : nullptr
-        );
+
+        HybridVerifyCache::Key cacheKey;
+        cacheKey.nominalFrame = win->nominalFrame;
+        cacheKey.earliest = win->earliest;
+        cacheKey.latest = win->latest;
+        cacheKey.delayTicks = delay;
+        cacheKey.limit = limit;
+        cacheKey.down = down;
+        cacheKey.player2 = !player1;
+        cacheKey.mode = kind;
+
+        BakeVerifier::Result vr;
+        bool cacheHit = false;
+        if (hybrid) {
+            cacheHit = HybridVerifyCache::get().tryGet(
+                cacheKey, player->getPositionX(), vr
+            );
+        }
+        if (!cacheHit) {
+            vr = BakeVerifier::verify(
+                playLayer, player, down, delay, limit, this->m_simDt, fd,
+                hybrid ? sharedBudget : nullptr
+            );
+            if (hybrid) {
+                HybridVerifyCache::get().put(cacheKey, player->getPositionX(), vr);
+            }
+        }
         if (reuse) reuse->verifyThreat = vr.threatZone;
         if (!vr.ok) {
             char const* why = "verify fail";
