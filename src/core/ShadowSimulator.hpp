@@ -191,6 +191,8 @@ public:
         bool diedBeforeAction = false;
         bool budgetHit = false;
         bool unknown = false;
+        int ticksSpent = 0; // physics ticks consumed from options.tickBudget
+        int usSpent = 0;    // wall µs for this call (for shared press envelope)
         ThreatZone threatZone{};
     };
     VerifyDelayResult verifyDelay(

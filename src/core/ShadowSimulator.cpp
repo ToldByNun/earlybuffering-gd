@@ -1675,6 +1675,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
 
     Model model = modelFor(real, limit, options.capMul);
     int tickBudget = options.tickBudget > 0 ? options.tickBudget : kDefaultTickBudget;
+    int const tickBudgetStart = tickBudget;
     auto const wall0 = std::chrono::steady_clock::now();
     auto wallExceeded = [&]() -> bool {
         if (options.budgetUs <= 0) return false;
@@ -1682,6 +1683,12 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
             std::chrono::steady_clock::now() - wall0
         ).count();
         return us >= options.budgetUs;
+    };
+    auto fillSpent = [&]() {
+        out.ticksSpent = std::max(0, tickBudgetStart - tickBudget);
+        out.usSpent = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - wall0
+        ).count());
     };
 
     auto linkedDual = [&]() -> bool {
@@ -1717,6 +1724,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
         this->restoreCapture(layer);
         this->m_simulating = false;
         this->parkGhosts();
+        fillSpent();
         return out;
     }
 
@@ -1772,6 +1780,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     this->m_simulating = false;
     this->parkGhosts();
 
+    fillSpent();
     // Budget exhaustion → do not trust bake (caller falls through / Pass).
     out.ok = viable && !out.budgetHit;
     return out;

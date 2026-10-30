@@ -1,6 +1,7 @@
 #ifndef EARLYBUFFER_CORE_ASSISTCONTROLLER_HPP
 #define EARLYBUFFER_CORE_ASSISTCONTROLLER_HPP
 
+#include "BakeVerifier.hpp"
 #include "DecisionLog.hpp"
 #include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
@@ -186,9 +187,14 @@ private:
     );
     // Returns true if bake handled the input (caller should return that bool).
     // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
+    // sharedBudget: Hybrid press envelope (verify spends first; Live uses remainder).
+    // verifyAttempted: set when BakeVerifier::verify ran (Hybrid Live must not
+    // re-force assist via nearBake / prefer-band from the rejected window).
     bool tryBakeAssist(
         PlayLayer* playLayer, PlayerObject* player, bool player1,
-        bool down, int effectTick, float firstDt, bool& handled
+        bool down, int effectTick, float firstDt, bool& handled,
+        PressSimBudget* sharedBudget = nullptr,
+        bool* verifyAttempted = nullptr
     );
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);

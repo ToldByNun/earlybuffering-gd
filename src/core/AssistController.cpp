@@ -107,6 +107,8 @@ static void fillBakePreferBand(
 }
 
 // Nearby bake click → ClickIntentGuard must not Pass (assist allowed).
+// Hybrid callers clear this after bake verify rejects the window (avoid forcing
+// full Live on every moderate-CPS click near a stale bake).
 static bool nearBakeWindowHint(
     PlayerObject* player,
     bool player1,
@@ -1902,9 +1904,12 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
 
 bool AssistController::tryBakeAssist(
     PlayLayer* playLayer, PlayerObject* player, bool player1,
-    bool down, int effectTick, float firstDt, bool& handled
+    bool down, int effectTick, float firstDt, bool& handled,
+    PressSimBudget* sharedBudget,
+    bool* verifyAttempted
 ) {
     handled = false;
+    if (verifyAttempted) *verifyAttempted = false;
     auto mode = StageConfig::assistMode();
     if (mode == AssistMode::Live) return true;
 
@@ -1993,10 +1998,13 @@ bool AssistController::tryBakeAssist(
 
     // Live re-verify: stale / wrong-mode / suicidal bake delay → Hybrid live
     // (foresight + miss-assist), Replay/Brute Pass with reason.
-    if (limit > 0 && m_simDt > 0.f) {
-        float const fd = (firstDt > 0.f && firstDt <= m_simDt) ? firstDt : m_simDt;
+    // Hybrid: draw from shared press envelope (never soft-trust on budgetHit).
+    if (limit > 0 && this->m_simDt > 0.f) {
+        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
+        if (verifyAttempted) *verifyAttempted = true;
         auto const vr = BakeVerifier::verify(
-            playLayer, player, down, delay, limit, m_simDt, fd
+            playLayer, player, down, delay, limit, this->m_simDt, fd,
+            hybrid ? sharedBudget : nullptr
         );
         if (!vr.ok) {
             char const* why = "verify fail";
@@ -2092,9 +2100,22 @@ bool AssistController::planPress(
         return true;
     }
 
+    // Hybrid: one press wall/tick envelope for bake verify + Live fallthrough.
+    PressSimBudget pressBudget;
+    pressBudget.tickLeft = StageConfig::tickBudgetPerPress();
+    {
+        int const fullUs = StageConfig::simBudgetUs();
+        pressBudget.usUnlimited = (fullUs <= 0);
+        pressBudget.usLeft = pressBudget.usUnlimited ? 0 : fullUs;
+    }
+    bool const shareHybrid = StageConfig::assistMode() == AssistMode::Hybrid;
+
     bool bakeHandled = false;
-    bool const bakeRet = tryBakeAssist(
-        playLayer, player, player1, true, effectTick, firstDt, bakeHandled
+    bool hybridVerifyAttempted = false;
+    bool const bakeRet = this->tryBakeAssist(
+        playLayer, player, player1, true, effectTick, firstDt, bakeHandled,
+        shareHybrid ? &pressBudget : nullptr,
+        shareHybrid ? &hybridVerifyAttempted : nullptr
     );
     if (bakeHandled) return bakeRet;
 
@@ -2103,9 +2124,12 @@ bool AssistController::planPress(
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
     bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
-    bool const nearBake = nearBakeWindowHint(
+    // After Hybrid bake verify rejected the window, do not treat near-bake as
+    // spam override — that forced full Live on every ~5 CPS click (main-thread hitch).
+    bool nearBake = nearBakeWindowHint(
         player, player1, true, effectTick, this->m_simDt
     );
+    if (hybridVerifyAttempted) nearBake = false;
 
     // Live/Hybrid-live: sim mismatch → hard Pass, unless orb/pad ahead
     // (allow Delay / Soft Hold — solitary early orb miss must still assist).
@@ -2175,8 +2199,33 @@ bool AssistController::planPress(
     }
 
     PlanOptions opts;
-    opts.budgetUs = StageConfig::simBudgetUs();
-    opts.tickBudget = StageConfig::tickBudgetPerPress();
+    // Hybrid fallthrough: remainder after bake verify (not a second full envelope).
+    // Exhausted remainder (usLeft==0) must NOT map to PlanOptions unlimited.
+    if (shareHybrid) {
+        opts.tickBudget = std::max(0, pressBudget.tickLeft);
+        if (pressBudget.usUnlimited) {
+            opts.budgetUs = 0;
+        }
+        else {
+            opts.budgetUs = std::max(1, pressBudget.usLeft);
+        }
+    }
+    else {
+        opts.budgetUs = StageConfig::simBudgetUs();
+        opts.tickBudget = StageConfig::tickBudgetPerPress();
+    }
+    // Verify already paid this press: hard-cap Live so verify-fail + full plan
+    // cannot hitch the game (~0.75 feel / stutter at moderate CPS).
+    if (shareHybrid && hybridVerifyAttempted) {
+        int const halfTick = std::max(400, StageConfig::tickBudgetPerPress() / 2);
+        opts.tickBudget = std::min(opts.tickBudget, halfTick);
+        if (!pressBudget.usUnlimited) {
+            int const fullUs = StageConfig::simBudgetUs();
+            int const halfUs = std::max(200, fullUs / 2);
+            opts.budgetUs = std::min(opts.budgetUs, halfUs);
+            opts.budgetUs = std::max(1, opts.budgetUs);
+        }
+    }
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     // Soft warn: shorten look-ahead slightly (no hard Pass).
     if (DivergenceTracker::get().shouldWarn()) {
@@ -2194,14 +2243,21 @@ bool AssistController::planPress(
         slot, effectTick, kind
     );
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDense);
-    fillBakePreferBand(
-        opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt
-    );
+    // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
+    if (!hybridVerifyAttempted) {
+        fillBakePreferBand(
+            opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt
+        );
+    }
 
     auto const t0 = std::chrono::steady_clock::now();
     // New pick always runs planSequence exit-predict (even at smartDepth 1).
     // Legacy stays on single plan() unless Smart Depth > 1.
-    bool const useSequence = !opts.legacyPick || opts.smartDepth > 1;
+    // After Hybrid verify, skip exit-predict when wall remainder is tight.
+    bool useSequence = !opts.legacyPick || opts.smartDepth > 1;
+    if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
+        useSequence = false;
+    }
     auto plan = useSequence
         ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
@@ -2429,9 +2485,21 @@ bool AssistController::planRelease(
         return true;
     }
 
+    PressSimBudget pressBudget;
+    pressBudget.tickLeft = StageConfig::tickBudgetPerPress();
+    {
+        int const fullUs = StageConfig::simBudgetUs();
+        pressBudget.usUnlimited = (fullUs <= 0);
+        pressBudget.usLeft = pressBudget.usUnlimited ? 0 : fullUs;
+    }
+    bool const shareHybrid = StageConfig::assistMode() == AssistMode::Hybrid;
+
     bool bakeHandled = false;
-    bool const bakeRet = tryBakeAssist(
-        playLayer, player, player1, false, effectTick, firstDt, bakeHandled
+    bool hybridVerifyAttempted = false;
+    bool const bakeRet = this->tryBakeAssist(
+        playLayer, player, player1, false, effectTick, firstDt, bakeHandled,
+        shareHybrid ? &pressBudget : nullptr,
+        shareHybrid ? &hybridVerifyAttempted : nullptr
     );
     if (bakeHandled) return bakeRet;
 
@@ -2440,9 +2508,10 @@ bool AssistController::planRelease(
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
     bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
-    bool const nearBake = nearBakeWindowHint(
+    bool nearBake = nearBakeWindowHint(
         player, player1, false, effectTick, this->m_simDt
     );
+    if (hybridVerifyAttempted) nearBake = false;
 
     if (DivergenceTracker::get().simUntrusted()) {
         if (!nearOrb) {
@@ -2493,8 +2562,28 @@ bool AssistController::planRelease(
     }
 
     PlanOptions opts;
-    opts.budgetUs = StageConfig::simBudgetUs();
-    opts.tickBudget = StageConfig::tickBudgetPerPress();
+    if (shareHybrid) {
+        opts.tickBudget = std::max(0, pressBudget.tickLeft);
+        if (pressBudget.usUnlimited) {
+            opts.budgetUs = 0;
+        }
+        else {
+            opts.budgetUs = std::max(1, pressBudget.usLeft);
+        }
+    }
+    else {
+        opts.budgetUs = StageConfig::simBudgetUs();
+        opts.tickBudget = StageConfig::tickBudgetPerPress();
+    }
+    if (shareHybrid && hybridVerifyAttempted) {
+        int const halfTick = std::max(400, StageConfig::tickBudgetPerPress() / 2);
+        opts.tickBudget = std::min(opts.tickBudget, halfTick);
+        if (!pressBudget.usUnlimited) {
+            int const fullUs = StageConfig::simBudgetUs();
+            int const halfUs = std::max(200, fullUs / 2);
+            opts.budgetUs = std::max(1, std::min(opts.budgetUs, halfUs));
+        }
+    }
     opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     if (DivergenceTracker::get().shouldWarn()) {
         opts.capMul *= 0.85f;
@@ -2506,9 +2595,11 @@ bool AssistController::planRelease(
         slot, effectTick, kind
     );
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDenseRel);
-    fillBakePreferBand(
-        opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt
-    );
+    if (!hybridVerifyAttempted) {
+        fillBakePreferBand(
+            opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt
+        );
+    }
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
     clock.liveSimPathId = DevSimPathId::Plan;

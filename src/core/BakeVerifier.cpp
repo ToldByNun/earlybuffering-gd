@@ -6,16 +6,37 @@
 
 BakeVerifier::Result BakeVerifier::verify(
     PlayLayer* layer, PlayerObject* player, bool down,
-    int delayTicks, int limit, float dt, float firstDt
+    int delayTicks, int limit, float dt, float firstDt,
+    PressSimBudget* shared
 ) {
     Result out;
     if (!layer || !player || limit < 0 || dt <= 0.f) return out;
 
     PlanOptions opts;
-    opts.budgetUs = StageConfig::simBudgetUs();
+    int const fullTick = StageConfig::tickBudgetPerPress();
+    int const fullUs = StageConfig::simBudgetUs();
     // One candidate + optional linked dual — keep a modest tick slice.
-    int const full = StageConfig::tickBudgetPerPress();
-    opts.tickBudget = full > 0 ? std::min(full, 1200) : 1200;
+    constexpr int kVerifyTickCap = 1200;
+
+    if (shared) {
+        int const tickDraw = std::min(
+            std::max(0, shared->tickLeft - kHybridLiveReserveTicks),
+            kVerifyTickCap
+        );
+        opts.tickBudget = tickDraw;
+        if (shared->usUnlimited) {
+            opts.budgetUs = 0; // user opted out of wall cap
+        }
+        else {
+            int const usDraw = std::max(0, shared->usLeft - kHybridLiveReserveUs);
+            // Never pass 0 into PlanOptions here — that means unlimited.
+            opts.budgetUs = std::max(1, usDraw);
+        }
+    }
+    else {
+        opts.budgetUs = fullUs;
+        opts.tickBudget = fullTick > 0 ? std::min(fullTick, kVerifyTickCap) : kVerifyTickCap;
+    }
 
     auto const r = ShadowSimulator::get().verifyDelay(
         layer, player, down, std::max(0, delayTicks), limit, dt, firstDt, opts
@@ -24,5 +45,14 @@ BakeVerifier::Result BakeVerifier::verify(
     out.clearsThreat = r.clearsThreat;
     out.diedBeforeAction = r.diedBeforeAction;
     out.budgetHit = r.budgetHit;
+    out.ticksSpent = r.ticksSpent;
+    out.usSpent = r.usSpent;
+
+    if (shared) {
+        shared->tickLeft = std::max(0, shared->tickLeft - r.ticksSpent);
+        if (!shared->usUnlimited) {
+            shared->usLeft = std::max(0, shared->usLeft - r.usSpent);
+        }
+    }
     return out;
 }

@@ -16,7 +16,11 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 ## Bake verify (Hybrid / Replay / Brute)
 
 `BakeMap::findNear` prefers `BakedClick.mode == kindOf(player)` within 120px X; falls back to any mode if none match.
-Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone probe + runOne at planned delay; **`delay==0` reuses the d0 runOne** — no second identical sim). Success = clearsThreat and not diedBeforeAction (linked dual still checked once). Budget/wall exhaustion → `budgetHit` (not ok).
+Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone probe + runOne at planned delay; **`delay==0` reuses the d0 runOne** — no second identical sim). Success = clearsThreat and not diedBeforeAction (linked dual still checked once). Budget/wall exhaustion → `budgetHit` (not ok). **Never** soft-trust a bake on `budgetHit`.
+
+**Hybrid shared press budget:** bake verify + Live fallthrough share one wall/tick envelope (`PressSimBudget` = `sim-budget-us` / `tick-budget`). Verify draws first but **leaves a Live reserve** (500µs / 800 ticks); Live gets the remainder — not a second full press plan. **Remainder `usLeft==0` ≠ unlimited** (`PlanOptions.budgetUs<=0` only when the user set `sim-budget-us=0`). Missing / no-window / past-latest skip verify (Live keeps the full envelope). Live arm `verifyDelay` and HUS keep their smaller caps. Replay/Brute keep independent verify caps and Pass-on-fail.
+
+**Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
 | Mode | Verify fail / past window / missing bake |
 |------|------------------------------------------|
@@ -160,7 +164,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
 | sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)` |
-| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Press plan full; HUS replan `max(200, tick/4)`; BakeVerifier ≤1200 |
+| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first). HUS / Live arm verify keep `max(200, tick/4)` |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |
 | smart-depth | int | 1 | 1 | 3 | Smart |
