@@ -20,7 +20,7 @@ The CLI packages and can install the `.geode` into your mods folder.
 
 > Unable to find platform binary under the name 'audesign.earlybuffer.android64.so'
 
-Always verify Android packages with the package check (below) before copying them to a phone.
+Always verify Android / iOS packages with the package check (below) before copying them to a device.
 
 ## CMake
 
@@ -92,6 +92,12 @@ For a multi-platform ship zip (Windows + Android64), require both after merge:
 
 ```bash
 python tools/geode_package_check.py path/to/merged.geode --require win --require android64
+```
+
+Include iOS when the ship zip has the iOS binary:
+
+```bash
+python tools/geode_package_check.py path/to/merged.geode --require win --require android64 --require ios
 ```
 
 ### Merge with Windows (required for dual-platform ships)
@@ -178,6 +184,62 @@ Use a **merged** or android64-checked `.geode` only. Tick each item on a 64-bit 
 
 If step 2 fails, you installed a Windows-only package — re-merge. If step 3 fails with no overlay and no delay, capture Geode crashlog before changing planner code.
 
+## iOS (local / CI)
+
+Target Geometry Dash **2.2081** + Geode on device. Binary name inside the `.geode`:
+
+**`audesign.earlybuffer.ios.dylib`**
+
+(mod id + `.ios.dylib` — do not rename).
+
+### Build (macOS host)
+
+```bash
+geode sdk install-binaries -p ios
+geode build -p ios --config RelWithDebInfo
+# → typically build-ios/audesign.earlybuffer.geode containing audesign.earlybuffer.ios.dylib
+```
+
+CI also builds iOS via [`.github/workflows/multi-platform.yml`](.github/workflows/multi-platform.yml) (macOS runner, `target: iOS`). iOS GeodeBindings needs an FMOD force-include (see `CMakeLists.txt`) because codegen emits FMOD stubs without including `fmod.h`.
+
+### Package check
+
+```bash
+python tools/geode_package_check.py build-ios/audesign.earlybuffer.geode --require ios
+```
+
+Merged multi-platform ship (example):
+
+```bash
+python tools/merge_geode_packages.py ^
+  --output releases/audesign.earlybuffer.geode ^
+  --require android64 --require ios ^
+  build/audesign.earlybuffer.geode ^
+  build-android64/audesign.earlybuffer.geode ^
+  build-ios/audesign.earlybuffer.geode
+```
+
+(`merge_geode_packages.py` still defaults to requiring `android64`; pass `--require ios` explicitly when iOS is in the ship. Use `--allow-missing-win` only for device-only zips.)
+
+### Mobile policy (shared with Android)
+
+iOS uses the same **mobile I/O** path as Android (`SaveDropPaths` under the Geode mod save dir — no Win32 file dialogs) and the same **`PlatformLimits::isConstrainedDevice()`** ceilings (sim ≤2000µs, tick ≤2000, taller overlay inset, no disk PlanGold on load). Alerts show the full path and copy it to the clipboard; use Files / Share / Finder-via-device (see pause Export/Import).
+
+### iOS device smoke checklist
+
+Use a package that passes `--require ios` (and any other platforms you ship). Tick on device (GD **2.2081** + Geode):
+
+1. **Package gate (Mac/PC)** — `python tools/geode_package_check.py <ship.geode> --require ios` exits 0.
+2. **Load** — install into Geode mods; enable EarlyBuffer; **no** missing `audesign.earlybuffer.ios.dylib`.
+3. **Live assist (touch)** — short classic level (not platformer); Enabled on; Safe Mode on; Assist Mode Live; early jump → Delay or Pass; overlay updates.
+4. **Settings without keyboard** — Pause → EB → toggle Enabled / Preset.
+5. **Config paths** — Export Config → alert shows full save-dir path + clipboard copy; Import after placing `earlybuffer-config.json` via Files / Share / Finder.
+6. **Replay drop** — place one `.gdr` (or `.gdr2` / `.mhr` / `.json` / `.slc`) in `replay-drop/` under the mod save dir → Import Replay succeeds or clear error.
+7. **Constrained budgets** — with default sim/tick settings, Hybrid near a bake should not soft-lock; Lag Probe `HYBRID eb.hybrid.*` lines stay under a few ms when on.
+8. **Cold start** — force-quit; reopen; mod still loads; no crash on PlanGold/load.
+
+If step 2 fails, the `.geode` lacks the iOS binary — rebuild/merge. If step 5 fails with no path in the alert, capture a screenshot before changing I/O code.
+
 ## CI note
 
-Multi-platform CI builds Windows, macOS, iOS, and Android. iOS GeodeBindings needs an FMOD force-include (see `CMakeLists.txt`) because codegen emits FMOD stubs without including `fmod.h`. Local Android builds above do not require running CI.
+Multi-platform CI builds Windows, macOS, iOS, and Android. Local Android NDK builds above do not require running CI; local iOS builds need a macOS host + Geode iOS binaries.

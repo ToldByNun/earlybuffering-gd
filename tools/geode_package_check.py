@@ -147,7 +147,7 @@ def check_package(
                     )
                 print(
                     "FAIL: do not install this .geode on a platform that "
-                    "needs a missing binary (e.g. Android64)."
+                    "needs a missing binary (e.g. Android64 / iOS)."
                 )
                 sys.stdout.flush()
                 return 1

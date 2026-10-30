@@ -29,6 +29,7 @@
 - **Hybrid LagProbe + overlay:** standalone `HYBRID eb.hybrid.verify` / `eb.hybrid.live` lines (Lag Probe on, no death episode); overlay prefixes `hy bake […]` vs `hy … → live`. Playtest rows: bake hit / miss / verify-fail→Live / constrained starve.
 - **PlatformLimits:** `isConstrainedDevice()` = **Android + iOS** (not macOS/Windows). Same ceilings as before (sim ≤2000µs, tick ≤2000, overlay top 28, no disk PlanGold on load). SelfCheck reports mobile vs desktop.
 - **Mobile I/O alerts:** Config export/import, replay-drop, Dev session/report show the full `SaveDropPaths` path and **copy it to the clipboard** (best-effort; alert still shows the path if copy fails). Neutral Files / Share / file manager / Finder-via-device wording (no ADB-only instructions). `Mod::get()` null still falls back to `earlybuffer-save`.
+- **iOS packaging docs:** `INSTALL.md` iOS build + smoke checklist; `geode_package_check.py --require ios` (binary `audesign.earlybuffer.ios.dylib`); merge/TEMPLATE examples; README notes iOS shares mobile I/O + constrained budgets with Android.
 
 ### Assist clock / first-click
 - Fix hitch poisoning of `m_lastDt` (stuck `simDt≈0.25` → `simTps≈4`, `speedScaleSuspect`) that made opening clicks `pass-hopeless` / useless Delay on Legacy and New. Sane physics samples update EMA both ways; absurd quanta snap planning to nominal 240 TPS.
