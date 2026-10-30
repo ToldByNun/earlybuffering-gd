@@ -8,6 +8,7 @@
 #include "../core/OpportunityProbe.hpp"
 #include "../core/DivergenceTracker.hpp"
 #include "../core/ClickIntentGuard.hpp"
+#include "../core/ConfigBundleCodec.hpp"
 #include "../core/ConfigBundleKeys.hpp"
 #include "../core/PlatformLimits.hpp"
 #include "../core/SaveDropPaths.hpp"
@@ -55,6 +56,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(SaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
     std::string configKeysReport;
     expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
+    std::string configCodecReport;
+    expect(ConfigBundleCodec::selfCheck(configCodecReport), "config-bundle-codec");
     std::string platformLimitsReport;
     expect(PlatformLimits::selfCheck(platformLimitsReport), "platform-limits");
     std::string classifyReport;
