@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <string>
+#include <vector>
 
 using namespace geode::prelude;
 
@@ -52,9 +53,11 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
                     settings[entry.key] = ConfigBundleCodec::colorToHex(color);
                     break;
                 }
-                case ConfigBundleKeys::Kind::Keybind:
-                    // Keybind export/import lands in Commit 4 (vector<Keybind> → string).
+                case ConfigBundleKeys::Kind::Keybind: {
+                    auto const binds = mod->getSettingValue<std::vector<geode::Keybind>>(entry.key);
+                    settings[entry.key] = ConfigBundleCodec::keybindsToString(binds);
                     break;
+                }
                 default:
                     break;
             }
@@ -168,10 +171,16 @@ static bool applyOneSetting(
                 ++applied;
                 return true;
             }
-            case ConfigBundleKeys::Kind::Keybind:
-                // Commit 4.
-                ++skipped;
-                return false;
+            case ConfigBundleKeys::Kind::Keybind: {
+                std::vector<geode::Keybind> binds;
+                if (!ConfigBundleCodec::jsonToKeybinds(value, binds)) {
+                    ++skipped;
+                    return false;
+                }
+                mod->setSettingValue<std::vector<geode::Keybind>>(entry.key, binds);
+                ++applied;
+                return true;
+            }
             default:
                 ++skipped;
                 return false;
