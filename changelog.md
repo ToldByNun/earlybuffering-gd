@@ -2,6 +2,13 @@
 
 ## Unreleased (working tree)
 
+### Config export / import (full settings)
+- **ConfigBundle v2**: exports/imports all **130** portable settings under `{ version, settings }` (not the old ~12-key subset).
+- Types: bool/int/float/string, color as `#RRGGBB`, keybinds as Geode strings (`F6`, `Ctrl+Shift+D`, multi via ` | `).
+- Import: v1 flat-root still works; merge missing keys; skip bad types; **applying-guard** so preset does not wipe custom ticks / look-ahead.
+- Alerts show version / applied|keys / skipped + path. PlanGold: `ConfigBundleKeys` / `ConfigBundleCodec` / `ConfigBundle` round-trip selfCheck.
+- Docs: `docs/assist_reference.md` Config export/import section.
+
 ### Safe Mode progress gate
 - **Safe Mode OFF** now allows percentage / new best / normal complete even when assist delayed a click. Previously `assistTouchedRun` (and enabled→test-mode) always blocked progress regardless of Safe Mode.
 - **Safe Mode ON** (default): still blocks when assist is enabled or this attempt was assist-touched.

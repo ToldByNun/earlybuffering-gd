@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 using namespace geode::prelude;
@@ -316,4 +317,196 @@ geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
     stats.applied = applied;
     stats.skipped = skipped;
     return Ok();
+}
+
+bool ConfigBundle::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (!ok) {
+            ++fails;
+            report += std::string("FAIL ") + name + "; ";
+        }
+    };
+
+    expect(ConfigBundle::kFormatVersion == 2, "format-v2");
+    expect(ConfigBundleKeys::count() == 130, "keys-130");
+
+    auto* mod = Mod::get();
+    if (!mod) {
+        if (fails == 0) {
+            report = "ConfigBundle selfCheck OK (no mod — structural only)";
+            return true;
+        }
+        report = std::string("ConfigBundle selfCheck fails: ") + report;
+        return false;
+    }
+
+    std::filesystem::path tmp;
+    try {
+        tmp = std::filesystem::temp_directory_path() / "earlybuffer-config-selfcheck.json";
+    }
+    catch (...) {
+        expect(false, "temp-path");
+        report = std::string("ConfigBundle selfCheck fails: ") + report;
+        return false;
+    }
+
+    // Snapshot values we will mutate, then always restore.
+    int64_t snapCap = 0;
+    int64_t snapTicks = 0;
+    int64_t snapStage = 0;
+    std::string snapPreset;
+    try {
+        snapCap = mod->getSettingValue<int64_t>("look-ahead-cap");
+        snapTicks = mod->getSettingValue<int64_t>("ticks-all");
+        snapStage = mod->getSettingValue<int64_t>("stage-index");
+        snapPreset = mod->getSettingValue<std::string>("preset");
+    }
+    catch (...) {
+        expect(false, "snapshot");
+        report = std::string("ConfigBundle selfCheck fails: ") + report;
+        return false;
+    }
+
+    auto restore = [&]() {
+        ConfigBundleApplyGuard guard;
+        try {
+            mod->setSettingValue<int64_t>("look-ahead-cap", snapCap);
+            mod->setSettingValue<int64_t>("ticks-all", snapTicks);
+            mod->setSettingValue<int64_t>("stage-index", snapStage);
+            mod->setSettingValue<std::string>("preset", snapPreset);
+            StageConfig::notePresetSynced(snapPreset);
+        }
+        catch (...) {
+        }
+        guard.release();
+        StageConfig::refreshCache();
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+    };
+
+    // --- Export → mutate → import round-trip ---
+    {
+        StageConfig::beginApplying();
+        try {
+            mod->setSettingValue<int64_t>("look-ahead-cap", 42);
+            mod->setSettingValue<int64_t>("ticks-all", 7);
+        }
+        catch (...) {
+            StageConfig::endApplying();
+            restore();
+            expect(false, "seed-roundtrip");
+            report = std::string("ConfigBundle selfCheck fails: ") + report;
+            return false;
+        }
+        StageConfig::endApplying();
+        StageConfig::refreshCache();
+
+        auto const exp = ConfigBundle::exportTo(tmp);
+        expect(exp.isOk(), "export-ok");
+        if (exp.isOk()) {
+            auto const es = ConfigBundle::lastExportStats();
+            expect(es.version == 2, "export-stats-v2");
+            expect(es.written >= 120, "export-stats-written");
+        }
+
+        StageConfig::beginApplying();
+        try {
+            mod->setSettingValue<int64_t>("look-ahead-cap", 0);
+            mod->setSettingValue<int64_t>("ticks-all", 1);
+        }
+        catch (...) {
+        }
+        StageConfig::endApplying();
+        StageConfig::refreshCache();
+
+        auto const imp = ConfigBundle::importFrom(tmp);
+        expect(imp.isOk(), "import-roundtrip-ok");
+        if (imp.isOk()) {
+            auto const is = ConfigBundle::lastImportStats();
+            expect(is.version == 2, "import-stats-v2");
+            expect(is.applied > 0, "import-stats-applied");
+            try {
+                expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 42, "roundtrip-cap");
+                expect(mod->getSettingValue<int64_t>("ticks-all") == 7, "roundtrip-ticks");
+            }
+            catch (...) {
+                expect(false, "roundtrip-read");
+            }
+        }
+    }
+
+    // --- Preset + custom look-ahead must not be wiped by applyPreset listener ---
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        expect(static_cast<bool>(out), "preset-guard-write");
+        if (out) {
+            // preset Tight would normally rewrite look-ahead-cap via applyPreset;
+            // import must keep sentinel 77 under applying-guard.
+            out << R"({
+  "version": 2,
+  "settings": {
+    "preset": "Tight",
+    "stage-index": 0,
+    "look-ahead-cap": 77,
+    "ticks-all": 11
+  }
+})";
+            out.close();
+
+            auto const imp = ConfigBundle::importFrom(tmp);
+            expect(imp.isOk(), "preset-guard-import");
+            if (imp.isOk()) {
+                try {
+                    expect(
+                        mod->getSettingValue<int64_t>("look-ahead-cap") == 77,
+                        "preset-guard-cap"
+                    );
+                    expect(
+                        mod->getSettingValue<int64_t>("ticks-all") == 11,
+                        "preset-guard-ticks"
+                    );
+                    expect(
+                        mod->getSettingValue<std::string>("preset") == "Tight",
+                        "preset-guard-preset"
+                    );
+                }
+                catch (...) {
+                    expect(false, "preset-guard-read");
+                }
+            }
+        }
+    }
+
+    // --- v1 flat root still applies known keys ---
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (out) {
+            out << R"({"version":1,"look-ahead-cap":55,"ticks-all":3,"preset":"Normal"})";
+            out.close();
+            auto const imp = ConfigBundle::importFrom(tmp);
+            expect(imp.isOk(), "v1-import");
+            if (imp.isOk()) {
+                auto const is = ConfigBundle::lastImportStats();
+                expect(is.version == 1, "v1-stats-version");
+                try {
+                    expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 55, "v1-cap");
+                    expect(mod->getSettingValue<std::string>("preset") == "Normal", "v1-preset");
+                }
+                catch (...) {
+                    expect(false, "v1-read");
+                }
+            }
+        }
+    }
+
+    restore();
+
+    if (fails == 0) {
+        report = "ConfigBundle selfCheck OK";
+        return true;
+    }
+    report = std::string("ConfigBundle selfCheck fails: ") + report;
+    return false;
 }

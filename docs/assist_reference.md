@@ -84,6 +84,44 @@ EB opens the normal Geode ModSettingsPopup with a page switcher:
 
 Action rows use custom type `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
 
+## Config export / import (`ConfigBundle`)
+
+Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Win uses `earlybuffer-config.json` under the Geode mod save dir via `SaveDropPaths`).
+
+### v2 schema
+
+```json
+{
+  "version": 2,
+  "settings": {
+    "enabled": true,
+    "preset": "Normal",
+    "look-ahead-cap": 0,
+    "save-icon-color": "#7CFF4A",
+    "hotkey-cycle": "F6",
+    "hotkey-debug": "Ctrl+Shift+D"
+  }
+}
+```
+
+- **`version`**: `2` (current).
+- **`settings`**: all **130** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **Color**: `"#RRGGBB"` hex.
+- **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
+- Alerts show `version` / `applied|keys` / `skipped` and the file path.
+
+### v1 compatibility
+
+Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` without nested `settings`) still import: known keys apply, unknown keys ignored.
+
+### Merge semantics
+
+- Missing key → leave the live setting unchanged.
+- Wrong JSON type / bad hex / bad keybind → **skip that key** (no `0`/`false` coercion into live settings).
+- Import runs under `StageConfig::beginApplying` / `endApplying` so the preset listener does **not** call `applyPresetByName` and wipe custom ticks / look-ahead.
+- If `preset` is present, it wins over a mismatched `stage-index`; then `notePresetSynced`.
+- PlanGold: `ConfigBundleKeys`, `ConfigBundleCodec`, and `ConfigBundle::selfCheck` (temp-file round-trip + preset/look-ahead-cap guard).
+
 ## Settings table
 
 Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ranges) → **Default Window** → **Algorithm** → **Smart Prediction** → **Learning** → per-mode → **Keybinds** → **Internal**.
