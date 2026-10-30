@@ -33,7 +33,8 @@
 	"settings": {
 		"title-general": {
 			"type": "title",
-			"name": "General"
+			"name": "Main",
+			"description": "On/off, preset, Safe Mode, Assist Mode, pause/overlay chrome, and light diagnostics."
 		},
 		"enabled": {
 			"type": "bool",
@@ -44,7 +45,7 @@
 		"preset": {
 			"type": "string",
 			"name": "Preset",
-			"description": "Quick starting point for how early a click may be delayed (Tight = small window, Max = large). Changing preset fills the default tick windows; your per-mode overwrites stay. Higher presets forgive more early clicks but may feel floaty. Cycle in-game with F6.",
+			"description": "Quick starting point for how early a click may be delayed (Tight = small window, Max = large). Changing preset fills the default tick windows; your per-mode overwrites stay. Same setting as Assist → Cycle Preset and Keys → Cycle Preset (F6).",
 			"one-of": [
 				"Tight",
 				"Normal",
@@ -60,10 +61,40 @@
 			"description": "ON (recommended): while EarlyBuffer is enabled — or after assist actually delayed a click this attempt — progress, bests, and percentage are not saved as a normal clear. OFF: progress saves like vanilla even if assist fired (you accept that). Rated/online: keep ON.",
 			"default": true
 		},
+		"assist-mode": {
+			"type": "string",
+			"name": "Assist Mode",
+			"description": "Live = plan every click now (best starter default). Replay = use windows from an imported macro bake. Hybrid = use a nearby bake window when it verifies, else Live. BruteForce = use a Brute Bake map (no replay). Same setting as Bake → Cycle Assist Mode and Keys → Cycle Assist Mode (Ctrl+Shift+M).",
+			"one-of": [
+				"Live",
+				"Replay",
+				"Hybrid",
+				"BruteForce"
+			],
+			"default": "Live"
+		},
 		"show-overlay": {
 			"type": "bool",
 			"name": "In-Level Overlay",
-			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate.",
+			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
+			"default": false
+		},
+		"show-pause-hub": {
+			"type": "bool",
+			"name": "Pause EB Button",
+			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Scope, Assist, Bake, Modes, Visual, Keys, Dev). Off = open settings only from the Geode menu.",
+			"default": true
+		},
+		"show-pause-bake": {
+			"type": "bool",
+			"name": "Pause Bake Status",
+			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
+			"default": false
+		},
+		"show-pause-assist": {
+			"type": "bool",
+			"name": "Pause Assist Buttons (legacy)",
+			"description": "Unused legacy toggle. Assist actions are under EB → Assist. Kept so old configs still load.",
 			"default": false
 		},
 		"debug-logging": {
@@ -84,121 +115,9 @@
 			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
 			"default": false
 		},
-		"show-trajectory": {
-			"type": "bool",
-			"name": "Trajectory Visualizer",
-			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
-			"default": false
-		},
-		"show-pause-bake": {
-			"type": "bool",
-			"name": "Pause Bake Status",
-			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
-			"default": false
-		},
-		"show-pause-assist": {
-			"type": "bool",
-			"name": "Pause Assist Buttons (legacy)",
-			"description": "Unused legacy toggle. Assist actions are under EB → Assist. Kept so old configs still load.",
-			"default": false
-		},
-		"show-pause-hub": {
-			"type": "bool",
-			"name": "Pause EB Button",
-			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Bake, Ingame, Assist, Visual, Modes, Keys, Dev). Off = open settings only from the Geode menu.",
-			"default": true
-		},
-		"title-bake-actions": {
-			"type": "title",
-			"name": "Bake Actions",
-			"description": "Import a replay, build click windows, or cancel a bake. Used on the Bake settings page."
-		},
-		"import-bake-replay": {
-			"type": "custom:eb-action",
-			"name": "Import Bake Replay",
-			"description": "Choose a GDR / MHR / SLC replay so Bake Map can build click windows from it. The button shows import or the loaded file name.",
-			"button-text": "import"
-		},
-		"cycle-assist-mode": {
-			"type": "custom:eb-action",
-			"name": "Cycle Assist Mode",
-			"description": "Cycles Live → Replay → Hybrid → BruteForce. The button shows the current mode.",
-			"button-text": "cycle"
-		},
-		"bake-map-action": {
-			"type": "custom:eb-action",
-			"name": "Bake Map",
-			"description": "Builds click-timing windows from the imported replay (import a replay first). Safe to cancel mid-bake.",
-			"button-text": "bake"
-		},
-		"brute-bake-action": {
-			"type": "custom:eb-action",
-			"name": "Brute Bake",
-			"description": "Searches safe click timings through the level without a replay. Heavier than Bake Map; cancel if it takes too long.",
-			"button-text": "brute"
-		},
-		"cancel-bake-action": {
-			"type": "custom:eb-action",
-			"name": "Cancel Bake",
-			"description": "Stops an in-progress bake. Only active while baking.",
-			"button-text": "cancel"
-		},
-		"title-assist-actions": {
-			"type": "title",
-			"name": "Assist Actions",
-			"description": "Quick actions for preset, learning reset, and config files. Used on the Assist settings page."
-		},
-		"cycle-preset-action": {
-			"type": "custom:eb-action",
-			"name": "Cycle Preset",
-			"description": "Cycles Tight → Normal → Wide → Max → Off. Same idea as F6.",
-			"button-text": "cycle"
-		},
-		"reset-learn-action": {
-			"type": "custom:eb-action",
-			"name": "Reset Level Learning",
-			"description": "Clears learned bias/trust for the current level so auto-tune starts fresh. Does not change your tick window settings.",
-			"button-text": "reset"
-		},
-		"export-config-action": {
-			"type": "custom:eb-action",
-			"name": "Export Config",
-			"description": "Saves your EarlyBuffer settings to a JSON file you can back up or share.",
-			"button-text": "export"
-		},
-		"import-config-action": {
-			"type": "custom:eb-action",
-			"name": "Import Config",
-			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
-			"button-text": "import"
-		},
-		"save-feedback-sound": {
-			"type": "bool",
-			"name": "Save Feedback Sound",
-			"description": "Plays a short sound when assist delays your click (cue scales with how many ticks were saved). Off = silent. Does not change timing.",
-			"default": false
-		},
-		"save-feedback-color": {
-			"type": "bool",
-			"name": "Save Feedback Color",
-			"description": "Flashes your icon with Save Icon Color when a delayed click is injected. Off = no flash.",
-			"default": false
-		},
-		"save-feedback-counter": {
-			"type": "bool",
-			"name": "Save Feedback Counter",
-			"description": "Spawns a world +N marker at the click (how many frames of earliness were forgiven). Clears on death/restart. Off = no markers. Slightly more visual clutter when on.",
-			"default": false
-		},
-		"save-icon-color": {
-			"type": "color",
-			"name": "Save Icon Color",
-			"description": "Color used for the icon flash when Save Feedback Color is on.",
-			"default": "#7CFF4A"
-		},
 		"title-scope": {
 			"type": "title",
-			"name": "Assist Scope",
+			"name": "Scope",
 			"description": "Where assist is allowed: practice, start-pos, percent window, and off-ranges. Platformer is always blocked."
 		},
 		"assist-only-practice": {
@@ -390,9 +309,39 @@
 			},
 			"description": "End of off-range 6 (%). -1 = unused."
 		},
+		"title-assist-actions": {
+			"type": "title",
+			"name": "Assist Actions",
+			"description": "Quick actions for preset, learning reset, and config files. Cycle Preset edits the same Preset as Main (and F6)."
+		},
+		"cycle-preset-action": {
+			"type": "custom:eb-action",
+			"name": "Cycle Preset",
+			"description": "Cycles Tight → Normal → Wide → Max → Off. Same setting as Main → Preset and Keys → Cycle Preset (F6).",
+			"button-text": "cycle"
+		},
+		"reset-learn-action": {
+			"type": "custom:eb-action",
+			"name": "Reset Level Learning",
+			"description": "Clears learned bias/trust for the current level so auto-tune starts fresh. Does not change your tick window settings.",
+			"button-text": "reset"
+		},
+		"export-config-action": {
+			"type": "custom:eb-action",
+			"name": "Export Config",
+			"description": "Saves your EarlyBuffer settings to a JSON file you can back up or share.",
+			"button-text": "export"
+		},
+		"import-config-action": {
+			"type": "custom:eb-action",
+			"name": "Import Config",
+			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
+			"button-text": "import"
+		},
 		"title-window": {
 			"type": "title",
-			"name": "Default Window"
+			"name": "Window",
+			"description": "Default delay windows for modes without per-mode overwrite. Numbers use Window Unit below."
 		},
 		"window-unit": {
 			"type": "string",
@@ -423,7 +372,7 @@
 		"title-algorithm": {
 			"type": "title",
 			"name": "Algorithm",
-			"description": "How the planner decides delays: mode, bake radius, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section."
+			"description": "How the planner decides delays: pick mode, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section. Bake Radius lives under Bake."
 		},
 		"death-slack": {
 			"type": "int",
@@ -441,18 +390,6 @@
 			"min": 0,
 			"max": 240
 		},
-		"assist-mode": {
-			"type": "string",
-			"name": "Assist Mode",
-			"description": "Live = plan every click now (best starter default). Replay = use windows from an imported macro bake. Hybrid = use a nearby bake window when it verifies, else Live. BruteForce = use a Brute Bake map (no replay). Replay/Brute are timing maps, not a bot that clicks for you.",
-			"one-of": [
-				"Live",
-				"Replay",
-				"Hybrid",
-				"BruteForce"
-			],
-			"default": "Live"
-		},
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
@@ -462,14 +399,6 @@
 				"Legacy"
 			],
 			"default": "Legacy"
-		},
-		"bake-radius": {
-			"type": "int",
-			"name": "Bake Radius",
-			"description": "When baking, how many frames each click may shift while searching a window. 0 = automatic. Higher = wider searched windows (more bake time). Lower = tighter/faster bake, may miss some timings.",
-			"default": 0,
-			"min": 0,
-			"max": 128
 		},
 		"cps-limit": {
 			"type": "int",
@@ -523,7 +452,8 @@
 		},
 		"title-smart": {
 			"type": "title",
-			"name": "Smart Prediction (Live / Hybrid)"
+			"name": "Smart Prediction (Live / Hybrid)",
+			"description": "Multi-jump foresight for Live / Hybrid. Replay/Brute ignore these."
 		},
 		"smart-depth": {
 			"type": "int",
@@ -621,6 +551,49 @@
 				"ab"
 			],
 			"default": "off"
+		},
+		"title-bake-actions": {
+			"type": "title",
+			"name": "Bake",
+			"description": "Import a replay, build click windows, cancel a bake, and set Bake Radius. Cycle Assist Mode is a shortcut for the same Assist Mode as Main."
+		},
+		"import-bake-replay": {
+			"type": "custom:eb-action",
+			"name": "Import Bake Replay",
+			"description": "Choose a GDR / MHR / SLC replay so Bake Map can build click windows from it. The button shows import or the loaded file name.",
+			"button-text": "import"
+		},
+		"cycle-assist-mode": {
+			"type": "custom:eb-action",
+			"name": "Cycle Assist Mode",
+			"description": "Cycles Live → Replay → Hybrid → BruteForce. Same setting as Main → Assist Mode and Keys → Cycle Assist Mode (Ctrl+Shift+M). The button shows the current mode.",
+			"button-text": "cycle"
+		},
+		"bake-map-action": {
+			"type": "custom:eb-action",
+			"name": "Bake Map",
+			"description": "Builds click-timing windows from the imported replay (import a replay first). Safe to cancel mid-bake.",
+			"button-text": "bake"
+		},
+		"brute-bake-action": {
+			"type": "custom:eb-action",
+			"name": "Brute Bake",
+			"description": "Searches safe click timings through the level without a replay. Heavier than Bake Map; cancel if it takes too long.",
+			"button-text": "brute"
+		},
+		"cancel-bake-action": {
+			"type": "custom:eb-action",
+			"name": "Cancel Bake",
+			"description": "Stops an in-progress bake. Only active while baking.",
+			"button-text": "cancel"
+		},
+		"bake-radius": {
+			"type": "int",
+			"name": "Bake Radius",
+			"description": "When baking, how many frames each click may shift while searching a window. 0 = automatic. Higher = wider searched windows (more bake time). Lower = tighter/faster bake, may miss some timings.",
+			"default": 0,
+			"min": 0,
+			"max": 128
 		},
 		"title-cube": {
 			"type": "title",
@@ -1038,52 +1011,101 @@
 			"max": 2,
 			"enable-if": "swing-overwrite"
 		},
+		"show-trajectory": {
+			"type": "bool",
+			"name": "Trajectory Visualizer",
+			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
+			"default": false
+		},
+		"save-feedback-sound": {
+			"type": "bool",
+			"name": "Save Feedback Sound",
+			"description": "Plays a short sound when assist delays your click (cue scales with how many ticks were saved). Off = silent. Does not change timing.",
+			"default": false
+		},
+		"save-feedback-color": {
+			"type": "bool",
+			"name": "Save Feedback Color",
+			"description": "Flashes your icon with Save Icon Color when a delayed click is injected. Off = no flash.",
+			"default": false
+		},
+		"save-feedback-counter": {
+			"type": "bool",
+			"name": "Save Feedback Counter",
+			"description": "Spawns a world +N marker at the click (how many frames of earliness were forgiven). Clears on death/restart. Off = no markers. Slightly more visual clutter when on.",
+			"default": false
+		},
+		"save-icon-color": {
+			"type": "color",
+			"name": "Save Icon Color",
+			"description": "Color used for the icon flash when Save Feedback Color is on.",
+			"default": "#7CFF4A"
+		},
 		"title-keys": {
 			"type": "title",
-			"name": "Keybinds",
-			"description": "In-game hotkeys. Change bindings here; they apply while playing."
+			"name": "Keys",
+			"description": "In-game hotkeys. Each hotkey edits the same setting as the matching Main / Assist / Visual control."
 		},
 		"hotkey-cycle": {
 			"type": "keybind",
 			"name": "Cycle Preset",
-			"description": "Cycles preset Tight → Normal → Wide → Max → Off (same as Cycle Preset).",
+			"description": "Cycles preset Tight → Normal → Wide → Max → Off. Same setting as Main → Preset and Assist → Cycle Preset.",
 			"default": "F6",
 			"category": "gameplay"
 		},
 		"hotkey-debug": {
 			"type": "keybind",
 			"name": "Toggle Debug Logging",
-			"description": "Toggles Debug Logging on/off.",
+			"description": "Toggles Debug Logging on/off (same as Main → Debug Logging).",
 			"default": "Ctrl+Shift+D",
 			"category": "gameplay"
 		},
 		"hotkey-reset-level": {
 			"type": "keybind",
 			"name": "Reset Level Learning",
-			"description": "Clears learning data for the current level.",
+			"description": "Clears learning data for the current level (same as Assist → Reset Level Learning).",
 			"default": "Ctrl+Shift+R",
 			"category": "gameplay"
 		},
 		"hotkey-auto-tune": {
 			"type": "keybind",
 			"name": "Toggle Smart Learning",
-			"description": "Toggles Auto-Tune / smart learning (does not change tick windows).",
+			"description": "Toggles Auto-Tune / smart learning (same as Assist → Auto-Tune Per Level). Does not change tick windows.",
 			"default": "Ctrl+Shift+L",
 			"category": "gameplay"
 		},
 		"hotkey-assist-mode": {
 			"type": "keybind",
 			"name": "Cycle Assist Mode",
-			"description": "Cycles Live → Replay → Hybrid → BruteForce.",
+			"description": "Cycles Live → Replay → Hybrid → BruteForce. Same setting as Main → Assist Mode and Bake → Cycle Assist Mode.",
 			"default": "Ctrl+Shift+M",
 			"category": "gameplay"
 		},
 		"hotkey-trajectory": {
 			"type": "keybind",
 			"name": "Toggle Trajectory Viz",
-			"description": "Shows or hides trajectory / click-window paths.",
+			"description": "Shows or hides trajectory / click-window paths (same as Visual → Trajectory Visualizer).",
 			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
+		},
+		"title-internal": {
+			"type": "title",
+			"name": "Internal",
+			"description": "Internal keys for old configs / preset sync. Prefer Main → Preset; you usually can ignore this section."
+		},
+		"stage-index": {
+			"type": "int",
+			"name": "Preset Index (internal)",
+			"description": "Internal copy of Preset (0=Tight … 4=Off). Do not edit — use the Preset dropdown or F6.",
+			"default": 1,
+			"min": 0,
+			"max": 4
+		},
+		"swallow-hopeless": {
+			"type": "bool",
+			"name": "Swallow If Hopeless (deprecated)",
+			"description": "Deprecated and unused — EarlyBuffer never blocks your clicks. Kept so old configs still load.",
+			"default": false
 		},
 		"title-dev": {
 			"type": "title",
@@ -1267,25 +1289,6 @@
 			"name": "Copy Last Dev Report",
 			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
 			"button-text": "copy"
-		},
-		"title-internal": {
-			"type": "title",
-			"name": "Internal",
-			"description": "Internal keys for old configs / preset sync. Prefer the Preset dropdown; you usually can ignore this section."
-		},
-		"stage-index": {
-			"type": "int",
-			"name": "Preset Index (internal)",
-			"description": "Internal copy of Preset (0=Tight … 4=Off). Do not edit — use the Preset dropdown or F6.",
-			"default": 1,
-			"min": 0,
-			"max": 4
-		},
-		"swallow-hopeless": {
-			"type": "bool",
-			"name": "Swallow If Hopeless (deprecated)",
-			"description": "Deprecated and unused — EarlyBuffer never blocks your clicks. Kept so old configs still load.",
-			"default": false
 		}
 	},
 	"resources": {

@@ -32,7 +32,7 @@ public:
     static void devClearTraces();
     static void devCopyReport();
 
-    // Geode ModSettingsPopup with Main/Bake/Ingame/Assist/Visual/Modes/Keys/Dev switcher.
+    // Geode ModSettingsPopup with Main/Scope/Assist/Bake/Modes/Visual/Keys/Dev switcher.
     static void openModSettings();
     // Same as openModSettings (EB pause button). No-op if already open.
     static void openHub();

@@ -75,8 +75,9 @@ public:
     static void notePresetSynced(std::string const& name);
     static std::string lastSyncedPreset();
 
-    // Setting groups mirror mod.json titles: General → Assist Scope → Window →
-    // Algorithm → Smart → Learning → Trigger World → per-mode → Keybinds → Internal.
+    // Setting groups mirror mod.json / tabs: Main → Scope → Assist (Window /
+    // Algorithm / Smart / Learning / Trigger World) → Bake → Modes → Visual →
+    // Keys → Dev.
 
     // --- General / UI ---
     static bool isEnabled();
