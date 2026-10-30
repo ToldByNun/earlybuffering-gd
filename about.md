@@ -19,7 +19,7 @@ You jump a little soon — the mod holds that press and lands it on the first ph
 
 You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you. It only decides *when* a press you already made is allowed to land — inside the windows and modes you set.
 
-> **v1.2.2** is the current EarlyBuffer package line for **GD 2.2081** (includes Android64). Newer game builds need a separate port.
+> **v1.2.2** is the current EarlyBuffer package line for **GD 2.2081** (Android64 + iOS `.ios.dylib` in a merged package). Newer game builds need a separate port.
 
 ---
 
@@ -45,8 +45,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 | Mode | Behavior |
 |------|----------|
-| **New** (default) | Surviving delays only; **Smart Prediction** picks the delay with the best predicted exit (not fixed mid/latest). |
-| **Legacy** | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
+| **Legacy** (default) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
+| **New** | Surviving delays only; **Smart Prediction** picks the delay with the best predicted exit (not fixed mid/latest). |
 
 Neither mode waits past your Limit (G1 window-cap).
 
@@ -55,25 +55,26 @@ Neither mode waits past your Limit (G1 window-cap).
 ## Modes
 
 - **Live** — plans every press / release from the current state
-- **Hybrid** — nearby bake window when it verifies; otherwise Live (foresight / miss-assist)
+- **Hybrid** — nearby bake window only after live verify clears threat; otherwise Live (foresight / miss-assist). Verify + Live share one press budget — never soft-trust a bake when the sim ran out of time
 - **Replay** — click windows from an imported replay bake
 - **BruteForce** — windows from a no-replay brute bake
 
 Bakes are **timing maps**, not a bot queue. Intent still comes from you.
 
-Contracts G1–G3, Pass-reason list, Hold-Until-Safe: [`docs/assist_reference.md`](docs/assist_reference.md).
+Contracts G1–G3, Pass-reason list, Hold-Until-Safe, Hybrid / mobile: [`docs/assist_reference.md`](docs/assist_reference.md).
 
 ---
 
 ## Defaults that matter
 
-- **Safe Mode** on — assisted / enabled runs should not write normal progress for rated or online play
+- Preset **Normal**, windows **4/4**, Pick **Legacy**, Assist Mode **Live**, **Safe Mode** on
 - **Platformer** hard off
 - **Auto-Tune** / **Self-Bake** off — no per-level learning or practice recording until you turn them on
 - Presets (**Tight → Max**) fill tick windows · F6 cycles · Off kills assist
 - Optional Trigger World Bake so movers aren’t invisible to the shadow
 - Save Feedback: sound / flash / world `+N` and `8+` when a delay actually fired
 - Lag Probe & Perf Trace if you’re hunting hitches
+- **Android + iOS** share the same save-dir I/O and tighter planner ceilings (`INSTALL.md`)
 
 Every important setting has plain-language info text in the mod (what it does, what higher / lower means).
 

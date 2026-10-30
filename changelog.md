@@ -30,6 +30,7 @@
 - **PlatformLimits:** `isConstrainedDevice()` = **Android + iOS** (not macOS/Windows). Same ceilings as before (sim ≤2000µs, tick ≤2000, overlay top 28, no disk PlanGold on load). SelfCheck reports mobile vs desktop.
 - **Mobile I/O alerts:** Config export/import, replay-drop, Dev session/report show the full `SaveDropPaths` path and **copy it to the clipboard** (best-effort; alert still shows the path if copy fails). Neutral Files / Share / file manager / Finder-via-device wording (no ADB-only instructions). `Mod::get()` null still falls back to `earlybuffer-save`.
 - **iOS packaging docs:** `INSTALL.md` iOS build + smoke checklist; `geode_package_check.py --require ios` (binary `audesign.earlybuffer.ios.dylib`); merge/TEMPLATE examples; README notes iOS shares mobile I/O + constrained budgets with Android.
+- **Docs sync:** `docs/assist_reference.md` shared-budget Hybrid policy (not soft-trust), `PlatformLimits` Android+iOS section, beginner defaults (Pick Legacy / Auto-Tune+Self-Bake off). `about.md` Pick/Hybrid/defaults + iOS package line aligned.
 
 ### Assist clock / first-click
 - Fix hitch poisoning of `m_lastDt` (stuck `simDt≈0.25` → `simTps≈4`, `speedScaleSuspect`) that made opening clicks `pass-hopeless` / useless Delay on Legacy and New. Sane physics samples update EMA both ways; absurd quanta snap planning to nominal 240 TPS.

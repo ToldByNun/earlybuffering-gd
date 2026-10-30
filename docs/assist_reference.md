@@ -1,6 +1,6 @@
 # EarlyBuffer Assist Reference
 
-Planner / settings contract for **EarlyBuffer v1.2.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer** on Geometry Dash **2.2081** (Geode; package line **v1.2.2**, working-tree Hybrid / mobile docs below). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -41,6 +41,21 @@ HYBRID eb.hybrid.live   = 1.10ms | vfy=1 remTick=2800 remUs=500
 | Replay / Brute | Pass with reason: `pass-bake-verify-fail`, `pass-bake-past-latest`, `pass-bake-missing`, `pass-bake-no-window`. |
 
 Early-before-window still buffers until bake earliest (clamped to `limit`).
+
+**Shared-budget Hybrid policy (not soft-trust):** a bake is used only when `BakeVerifier` returns ok (`clearsThreat`, not `budgetHit`). Exhausted verify never injects the bake window “on faith.” Live fallthrough always keeps a reserve / remainder under the same press envelope; `usLeft==0` is a tight exit, not unlimited wall. Hitch path after reject: no near-bake spam override, no prefer-band from that window, ≤½ press tick/wall, skip exit-predict if remUs &lt; 600.
+
+## PlatformLimits (Android + iOS)
+
+`PlatformLimits::isConstrainedDevice()` is true on **Android and iOS** only (Windows / macOS passthrough). Same ceilings as the prior Android-only policy:
+
+| Limit | Constrained | Desktop |
+|-------|-------------|---------|
+| `sim-budget-us` clamp | ≤2000 (0 stays unlimited) | as set |
+| `tick-budget` clamp | ≤2000 | as set |
+| Overlay top inset | 28 | 10 |
+| Disk PlanGold on `$on_mod(Loaded)` | no (`allowLoadDiskSelfCheck` false) | yes |
+
+Mobile I/O (Config / replay-drop / Dev report) uses `SaveDropPaths` + path-on-clipboard alerts — see Config section and `INSTALL.md` (iOS smoke + `--require ios`).
 
 ## Self-bake
 
@@ -176,8 +191,8 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)` |
-| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp sim ≤2000µs, tick ≤2000 |
+| sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
+| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first + Live reserve). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp ≤2000 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |
 | smart-depth | int | 1 | 1 | 3 | Smart |
@@ -334,9 +349,9 @@ Before `resetLevel` / checkpoint load: `evacuateGhosts` pulls all owned ghosts o
 
 clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. HUS replan every 3 ticks / ΔX≥8 / foresight edge / rem≤2; caps `husReplanBudgetUs` / `husReplanTickBudget`. Platformer: assist off.
 
-## Miss-assist contracts (v1.2.1)
+## Miss-assist contracts
 
-Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` / presets are tick windows.
+Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` / presets are tick windows. Beginner defaults: Pick **Legacy**, preset **Normal**, windows **4/4**, Assist **Live**, Safe Mode **on**, Auto-Tune / Self-Bake **off**.
 
 ### Guarantees
 
@@ -350,7 +365,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2) with reduced caps — never hang: budget exhaust parks at deadline. Delay confirm updates `fireTick`; opportunity clear + safe → inject now; deadline → fire. Overlay `HUS` + `HOLD~`. |
 | No lethal assist | Learning never pulls earlier than the plan; recheck slides ≤+2 later (never earlier); only surviving Delays arm; verify-fail → Pass (vanilla). |
 | Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
-| Bake / Hybrid | Hybrid verify-fail / past-latest / missing → Live (no bake Pass). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
+| Bake / Hybrid | Hybrid uses bake only after verify ok; **never soft-trust `budgetHit`**. Verify-fail / past-latest / missing → Live under the **shared press budget** (reserve + remainder; hitch caps after reject). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
 
 Executable pure fixtures: `MissAssistContracts::selfCheck` (incl. prefer early-exit), `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold). Self-checks run on mod load (`PlanGoldCorpus`).
 
