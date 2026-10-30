@@ -443,6 +443,10 @@ void StageConfig::toggleShowTrajectory() {
 
 bool StageConfig::isApplying() { return g_applying; }
 
+void StageConfig::beginApplying() { g_applying = true; }
+
+void StageConfig::endApplying() { g_applying = false; }
+
 StageInfo StageConfig::fromSettings() {
     ensureCache();
     return g_cachedStage;
@@ -452,7 +456,51 @@ bool StageConfig::isEnabled() { ensureCache(); return g_cachedStage.enabled; }
 bool StageConfig::debugLogging() { ensureCache(); return g_cachedDebug; }
 bool StageConfig::perfTrace() { ensureCache(); return g_cachedPerfTrace; }
 bool StageConfig::lagProbe() { ensureCache(); return g_cachedLagProbe; }
-bool StageConfig::safeMode() { ensureCache(); return g_cachedSafeMode; }
+bool StageConfig::safeMode() {
+    // Critical for progress gates: always re-read so pause toggles apply mid-run.
+    if (auto* mod = Mod::get()) {
+        try {
+            g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
+            g_cacheInitialized = true;
+            return g_cachedSafeMode;
+        }
+        catch (...) {
+        }
+    }
+    ensureCache();
+    return g_cachedSafeMode;
+}
+
+bool StageConfig::blocksProgressSaves(bool assistTouchedRun) {
+    bool safe = true;
+    bool enabled = true;
+    if (auto* mod = Mod::get()) {
+        try {
+            safe = mod->getSettingValue<bool>("safe-mode");
+            enabled = mod->getSettingValue<bool>("enabled");
+            g_cachedSafeMode = safe;
+            g_cachedStage.enabled = enabled;
+            g_cacheInitialized = true;
+        }
+        catch (...) {
+            ensureCache();
+            safe = g_cachedSafeMode;
+            enabled = g_cachedStage.enabled;
+        }
+    }
+    else {
+        ensureCache();
+        safe = g_cachedSafeMode;
+        enabled = g_cachedStage.enabled;
+    }
+
+    // Safe Mode OFF → never block percentage / bests / normal complete.
+    if (!safe) {
+        return false;
+    }
+    return enabled || assistTouchedRun;
+}
+
 bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
 bool StageConfig::showTrajectory() { ensureCache(); return g_cachedShowTrajectory; }
 bool StageConfig::showPauseBake() { ensureCache(); return g_cachedShowPauseBake; }

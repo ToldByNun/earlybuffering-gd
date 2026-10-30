@@ -531,19 +531,25 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void levelComplete() {
-        // Safe Mode ON: treat enabled / assist-touched runs as test (no normal progress).
-        // Safe Mode OFF: allow vanilla progress even if assist injected (user opted in).
-        if (StageConfig::safeMode()
-            && (StageConfig::isEnabled() || AssistController::get().assistTouchedRun())) {
+        // Safe Mode OFF → never force test mode (progress like vanilla).
+        // Safe Mode ON → enabled or assist-touched runs count as test clears.
+        bool const block = StageConfig::blocksProgressSaves(
+            AssistController::get().assistTouchedRun()
+        );
+        if (block) {
             this->m_isTestMode = true;
+            AssistLog::debug("Safe Mode ON: levelComplete → testMode (no normal progress)");
+        }
+        else {
+            AssistLog::debug("Safe Mode OFF: levelComplete allows normal progress");
         }
         AssistController::get().onLevelComplete(this);
         PlayLayer::levelComplete();
     }
 
     void showNewBest(bool newReward, int orbs, int diamonds, bool demonKey, bool noRetry, bool noTitle) {
-        if (StageConfig::safeMode()
-            && (StageConfig::isEnabled() || AssistController::get().assistTouchedRun())) {
+        if (StageConfig::blocksProgressSaves(AssistController::get().assistTouchedRun())) {
+            AssistLog::debug("Safe Mode ON: showNewBest swallowed");
             return;
         }
         PlayLayer::showNewBest(newReward, orbs, diamonds, demonKey, noRetry, noTitle);
@@ -573,9 +579,8 @@ class $modify(EbPlayLayer, PlayLayer) {
 
 class $modify(EbGJGameLevel, GJGameLevel) {
     void savePercentage(int percent, bool isPracticeMode, int clicks, int attempts, bool isChkValid) {
-        // Same Safe Mode contract as PlayLayer::showNewBest / levelComplete.
-        if (StageConfig::safeMode()
-            && (StageConfig::isEnabled() || AssistController::get().assistTouchedRun())) {
+        // Same contract as PlayLayer::showNewBest / levelComplete (live Safe Mode read).
+        if (StageConfig::blocksProgressSaves(AssistController::get().assistTouchedRun())) {
             return;
         }
         GJGameLevel::savePercentage(percent, isPracticeMode, clicks, attempts, isChkValid);

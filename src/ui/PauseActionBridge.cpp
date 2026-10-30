@@ -14,6 +14,7 @@
 #include "../dev/DevSession.hpp"
 #include "../dev/DevTraceStore.hpp"
 #include "../ui/DevOverlay.hpp"
+#include "../ui/StatusOverlay.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -393,8 +394,31 @@ void PauseActionBridge::importConfig() {
         return;
     }
 #endif
+    // Import runs under applying-guard — sync UI that listeners would have skipped.
+    StatusOverlay::setVisible(StageConfig::showOverlay());
+    {
+        bool const traj = StageConfig::showTrajectory();
+        TrajectoryVisualizer::get().setEnabled(traj);
+        if (traj) {
+            if (auto* pl = PlayLayer::get()) {
+                TrajectoryVisualizer::get().attach(pl);
+            }
+        }
+        else {
+            TrajectoryVisualizer::get().clear();
+        }
+    }
     AssistController::get().updateOverlay();
-    FLAlertLayer::create("EarlyBuffer", "Config imported.", "OK")->show();
+    {
+        auto const st = ConfigBundle::lastImportStats();
+        auto const msg = fmt::format(
+            "Config imported.\nversion={}  applied={}  skipped={}",
+            st.version,
+            st.applied,
+            st.skipped
+        );
+        FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
+    }
 }
 
 void PauseActionBridge::stubDevAction(char const* name) {

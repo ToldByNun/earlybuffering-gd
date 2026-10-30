@@ -5,6 +5,7 @@
 ### Safe Mode progress gate
 - **Safe Mode OFF** now allows percentage / new best / normal complete even when assist delayed a click. Previously `assistTouchedRun` (and enabled→test-mode) always blocked progress regardless of Safe Mode.
 - **Safe Mode ON** (default): still blocks when assist is enabled or this attempt was assist-touched.
+- `StageConfig::blocksProgressSaves` live-reads `safe-mode` / `enabled` at the gate (pause toggle mid-run cannot stick on a stale cache).
 
 ### Beginner defaults
 - Preset **Normal**, windows **4/4**, Pick **Legacy**, Assist Mode **Live**, Safe Mode **on**.

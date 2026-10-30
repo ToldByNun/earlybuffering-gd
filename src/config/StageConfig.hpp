@@ -68,6 +68,9 @@ public:
     static void toggleShowTrajectory();
 
     static bool isApplying();
+    // Bulk setting writes (ConfigBundle import) — suppresses preset / overlay listeners.
+    static void beginApplying();
+    static void endApplying();
     // Remember the last preset we applied so load-time listener spam can't wipe custom ticks.
     static void notePresetSynced(std::string const& name);
     static std::string lastSyncedPreset();
@@ -83,6 +86,9 @@ public:
     // Death/reset/checkpoint episode timings → earlybuffer-lagprobe.log.
     static bool lagProbe();
     static bool safeMode();
+    // Live-reads safe-mode + enabled. false when Safe Mode is OFF (always allow progress).
+    // When Safe Mode is ON: block if assist is enabled or this attempt was assist-touched.
+    static bool blocksProgressSaves(bool assistTouchedRun);
     static bool showOverlay();
     static bool showTrajectory();
     static bool showPauseBake(); // pause-screen bake / mode buttons
