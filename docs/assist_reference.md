@@ -103,7 +103,7 @@ Action rows use custom type `custom:eb-action`: same chrome as bool settings (la
 
 ## Config export / import (`ConfigBundle`)
 
-Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Win uses `earlybuffer-config.json` under the Geode mod save dir via `SaveDropPaths`).
+Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Win uses `earlybuffer-config.json` under the Geode mod save dir via `SaveDropPaths`). Mobile alerts show the **full path**, copy it to the **clipboard** (best-effort), and use Files / Share / file manager / Finder-via-device wording (no ADB-only steps). Dev Copy Report dual-writes report text + path on the clipboard when the file save succeeds.
 
 ### v2 schema
 

@@ -20,6 +20,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/utils/file.hpp>
+#include <Geode/utils/general.hpp>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -88,31 +89,90 @@ public:
     }
 #endif
 
+    // Best-effort path copy. Failure still leaves the path in the alert body.
+    static bool tryCopyPathToClipboard(std::filesystem::path const& path) {
+        auto const s = path.string();
+        if (s.empty()) return false;
+        return clipboard::write(s);
+    }
+
+    static std::string pathClipboardNote(bool clipOk) {
+        return clipOk
+            ? "(Path copied to clipboard.)"
+            : "(Could not copy path to clipboard — copy it from above.)";
+    }
+
+#ifndef GEODE_IS_WINDOWS
+    // Neutral sandbox wording (Files / share / file manager / Finder-via-device).
+    static char const* mobileTransferHint() {
+        return "Use Files, Share, or a file manager "
+               "(on Apple devices: Files app or Finder via the device).";
+    }
+#endif
+
     static std::string formatExportSuccess(std::filesystem::path const& path) {
         auto const st = ConfigBundle::lastExportStats();
+        bool const clipOk = tryCopyPathToClipboard(path);
+#ifndef GEODE_IS_WINDOWS
         return fmt::format(
             "Config exported (v{}).\n"
             "keys={}  skipped={}\n\n"
+            "{}\n"
+            "{}\n\n"
             "{}",
             st.version,
             st.written,
             st.skipped,
-            path.string()
+            path.string(),
+            pathClipboardNote(clipOk),
+            mobileTransferHint()
         );
+#else
+        return fmt::format(
+            "Config exported (v{}).\n"
+            "keys={}  skipped={}\n\n"
+            "{}\n"
+            "{}",
+            st.version,
+            st.written,
+            st.skipped,
+            path.string(),
+            pathClipboardNote(clipOk)
+        );
+#endif
     }
 
     static std::string formatImportSuccess(std::optional<std::filesystem::path> const& path) {
         auto const st = ConfigBundle::lastImportStats();
         if (path) {
+            bool const clipOk = tryCopyPathToClipboard(*path);
+#ifndef GEODE_IS_WINDOWS
             return fmt::format(
                 "Config imported.\n"
                 "version={}  applied={}  skipped={}\n\n"
+                "{}\n"
+                "{}\n\n"
                 "{}",
                 st.version,
                 st.applied,
                 st.skipped,
-                path->string()
+                path->string(),
+                pathClipboardNote(clipOk),
+                mobileTransferHint()
             );
+#else
+            return fmt::format(
+                "Config imported.\n"
+                "version={}  applied={}  skipped={}\n\n"
+                "{}\n"
+                "{}",
+                st.version,
+                st.applied,
+                st.skipped,
+                path->string(),
+                pathClipboardNote(clipOk)
+            );
+#endif
         }
         return fmt::format(
             "Config imported.\n"
@@ -143,13 +203,18 @@ public:
         auto const dir = drops.replayDropDir();
         auto const candidates = drops.listReplayCandidates();
         if (candidates.empty()) {
+            bool const clipOk = tryCopyPathToClipboard(dir);
             auto const msg = fmt::format(
                 "No replay in the drop folder.\n\n"
-                "Copy one file into:\n{}\n\n"
-                "Supported: .gdr .gdr2 .mhr .json .slc\n"
+                "{}\n"
+                "{}\n\n"
+                "{}\n\n"
+                "Put one file there (.gdr .gdr2 .mhr .json .slc).\n"
                 "Empty files are ignored.\n"
                 "If several files are present, Import uses the newest.",
-                dir.string()
+                dir.string(),
+                pathClipboardNote(clipOk),
+                mobileTransferHint()
             );
             FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
             return std::nullopt;
@@ -360,8 +425,22 @@ void PauseActionBridge::exportConfig() {
     if (r.isErr()) {
         auto err = r.unwrapErr();
         if (err.empty()) err = "Config export failed.";
+        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
 #ifndef GEODE_IS_WINDOWS
-        err = fmt::format("{}\n\n{}", err, path->string());
+        err = fmt::format(
+            "{}\n\n{}\n{}\n\n{}",
+            err,
+            path->string(),
+            PauseActionBridgeDetail::pathClipboardNote(clipOk),
+            PauseActionBridgeDetail::mobileTransferHint()
+        );
+#else
+        err = fmt::format(
+            "{}\n\n{}\n{}",
+            err,
+            path->string(),
+            PauseActionBridgeDetail::pathClipboardNote(clipOk)
+        );
 #endif
         FLAlertLayer::create("EarlyBuffer", err.c_str(), "OK")->show();
         return;
@@ -393,21 +472,30 @@ void PauseActionBridge::importConfig() {
     std::error_code ec;
     bool const exists = std::filesystem::is_regular_file(*path, ec) && !ec;
     if (!exists) {
+        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const msg = fmt::format(
             "No config file found.\n\n"
-            "Place earlybuffer-config.json (full settings export) at:\n{}\n\n"
-            "Export Config writes that path. Copy the file with a file manager "
-            "/ Files app / share, then Import again.",
-            path->string()
+            "Place earlybuffer-config.json (full settings export) at:\n"
+            "{}\n"
+            "{}\n\n"
+            "{}\n\n"
+            "Export Config writes that path. Then Import again.",
+            path->string(),
+            PauseActionBridgeDetail::pathClipboardNote(clipOk),
+            PauseActionBridgeDetail::mobileTransferHint()
         );
         FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
         return;
     }
     auto const sz = std::filesystem::file_size(*path, ec);
     if (ec || sz == 0) {
+        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const emptyMsg = fmt::format(
-            "Config file is empty or unreadable:\n{}",
-            path->string()
+            "Config file is empty or unreadable:\n"
+            "{}\n"
+            "{}",
+            path->string(),
+            PauseActionBridgeDetail::pathClipboardNote(clipOk)
         );
         FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
         return;
@@ -415,10 +503,12 @@ void PauseActionBridge::importConfig() {
 #endif
     auto r = ConfigBundle::importFrom(*path);
     if (r.isErr()) {
+        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const badMsg = fmt::format(
-            "{}\n\nFile:\n{}",
+            "{}\n\nFile:\n{}\n{}",
             r.unwrapErr(),
-            path->string()
+            path->string(),
+            PauseActionBridgeDetail::pathClipboardNote(clipOk)
         );
         FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
         return;
@@ -552,9 +642,14 @@ void PauseActionBridge::devExportSession() {
     (void)store.flush();
     auto const path = store.sessionPath();
     AssistLog::info(fmt::format("Dev Lab: session export path {}", path.string()));
+    bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(path);
     auto const msg = fmt::format(
-        "Session JSON:\n{}\nAttempts kept: {}/{} (rolling)",
+        "Session JSON:\n"
+        "{}\n"
+        "{}\n\n"
+        "Attempts kept: {}/{} (rolling)",
         path.string(),
+        PauseActionBridgeDetail::pathClipboardNote(clipOk),
         store.session().recordingsDone,
         store.session().recordingsTarget
     );
@@ -585,8 +680,6 @@ void PauseActionBridge::devCopyReport() {
         ? DevReport::formatOverlayLine(r)
         : r.overlayLine;
 
-    bool const clipOk = clipboard::write(text);
-
     auto& drops = SaveDropPaths::get();
     std::string dirErr;
     bool fileOk = false;
@@ -606,6 +699,13 @@ void PauseActionBridge::devCopyReport() {
         }
     }
 
+    // Clipboard: report text + full path (do not overwrite report with path-only).
+    std::string clipPayload = text;
+    if (fileOk) {
+        clipPayload += fmt::format("\n\n---\nSaved path:\n{}", path.string());
+    }
+    bool const clipOk = clipboard::write(clipPayload);
+
     AssistLog::info(fmt::format(
         "Dev Lab: copy report clip={} file={} → {}",
         clipOk ? "ok" : "fail",
@@ -615,25 +715,45 @@ void PauseActionBridge::devCopyReport() {
 
     std::string msg;
     if (clipOk && fileOk) {
-        msg = fmt::format("Copied / saved to:\n{}\n\n{}", path.string(), text);
+        msg = fmt::format(
+            "Report (+ path) copied to clipboard and saved to:\n"
+            "{}\n"
+            "{}\n\n"
+            "{}",
+            path.string(),
+            PauseActionBridgeDetail::pathClipboardNote(true),
+            text
+        );
+#ifndef GEODE_IS_WINDOWS
+        msg += fmt::format("\n\n{}", PauseActionBridgeDetail::mobileTransferHint());
+#endif
     }
     else if (fileOk && !clipOk) {
         msg = fmt::format(
-            "Clipboard failed; saved to:\n{}\n\n{}",
+            "Clipboard failed; saved to:\n"
+            "{}\n"
+            "{}\n\n"
+            "{}",
             path.string(),
+            PauseActionBridgeDetail::pathClipboardNote(false),
             text
         );
+#ifndef GEODE_IS_WINDOWS
+        msg += fmt::format("\n\n{}", PauseActionBridgeDetail::mobileTransferHint());
+#endif
     }
     else if (clipOk && !fileOk) {
         msg = fmt::format(
-            "Copied to clipboard.\nFile save failed: {}\n\n{}",
+            "Report copied to clipboard.\nFile save failed: {}\n\n{}",
             fileErr,
             text
         );
     }
     else {
         msg = fmt::format(
-            "Copy failed (clipboard and file).\nFile: {}\n\n{}",
+            "Copy failed (clipboard and file).\n"
+            "File: {}\n\n"
+            "{}",
             fileErr,
             text
         );
