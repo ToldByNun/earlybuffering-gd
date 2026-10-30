@@ -8,6 +8,7 @@
 #include "../core/OpportunityProbe.hpp"
 #include "../core/DivergenceTracker.hpp"
 #include "../core/ClickIntentGuard.hpp"
+#include "../core/ConfigBundleKeys.hpp"
 #include "../core/PlatformLimits.hpp"
 #include "../core/SaveDropPaths.hpp"
 #include "../core/ShadowSimulator.hpp"
@@ -52,6 +53,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(ClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
     std::string saveDropReport;
     expect(SaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
+    std::string configKeysReport;
+    expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string platformLimitsReport;
     expect(PlatformLimits::selfCheck(platformLimitsReport), "platform-limits");
     std::string classifyReport;
