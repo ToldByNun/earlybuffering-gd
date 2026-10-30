@@ -1,5 +1,7 @@
 #include "InLevelSettingsFilter.hpp"
 
+#include "../core/ConfigBundleKeys.hpp"
+
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
@@ -9,14 +11,214 @@
 
 using namespace geode::prelude;
 
+// Exhaustive key → tab table (mod.json order). Unknown keys → Count (no Assist dump).
+class SettingsCategoryMap {
+public:
+    struct Entry {
+        char const* key;
+        SettingsCategory cat;
+    };
+
+    static constexpr int kCount = 171;
+
+    static Entry const* begin() { return kEntries; }
+    static Entry const* end() { return kEntries + kCount; }
+
+    static SettingsCategory lookup(std::string const& key) {
+        for (auto const* it = begin(); it != end(); ++it) {
+            if (std::strcmp(it->key, key.c_str()) == 0) return it->cat;
+        }
+        return SettingsCategory::Count;
+    }
+
+private:
+    static Entry const kEntries[kCount];
+
+    SettingsCategoryMap() = delete;
+};
+
+SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryMap::kCount] = {
+    { "title-general", SettingsCategory::Main },
+    { "enabled", SettingsCategory::Main },
+    { "preset", SettingsCategory::Main },
+    { "safe-mode", SettingsCategory::Main },
+    { "show-overlay", SettingsCategory::Main },
+    { "debug-logging", SettingsCategory::Main },
+    { "perf-trace", SettingsCategory::Main },
+    { "lag-probe", SettingsCategory::Main },
+    { "show-trajectory", SettingsCategory::Visual },
+    { "show-pause-bake", SettingsCategory::Main },
+    { "show-pause-assist", SettingsCategory::Main },
+    { "show-pause-hub", SettingsCategory::Main },
+    { "title-bake-actions", SettingsCategory::Bake },
+    { "import-bake-replay", SettingsCategory::Bake },
+    { "cycle-assist-mode", SettingsCategory::Bake },
+    { "bake-map-action", SettingsCategory::Bake },
+    { "brute-bake-action", SettingsCategory::Bake },
+    { "cancel-bake-action", SettingsCategory::Bake },
+    { "title-assist-actions", SettingsCategory::Assist },
+    { "cycle-preset-action", SettingsCategory::Assist },
+    { "reset-learn-action", SettingsCategory::Assist },
+    { "export-config-action", SettingsCategory::Assist },
+    { "import-config-action", SettingsCategory::Assist },
+    { "save-feedback-sound", SettingsCategory::Visual },
+    { "save-feedback-color", SettingsCategory::Visual },
+    { "save-feedback-counter", SettingsCategory::Visual },
+    { "save-icon-color", SettingsCategory::Visual },
+    { "title-scope", SettingsCategory::Scope },
+    { "assist-only-practice", SettingsCategory::Scope },
+    { "assist-startpos-only", SettingsCategory::Scope },
+    { "assist-percent-min", SettingsCategory::Scope },
+    { "assist-percent-max", SettingsCategory::Scope },
+    { "title-assist-off", SettingsCategory::Scope },
+    { "assist-off-1-from", SettingsCategory::Scope },
+    { "assist-off-1-to", SettingsCategory::Scope },
+    { "assist-off-2-from", SettingsCategory::Scope },
+    { "assist-off-2-to", SettingsCategory::Scope },
+    { "assist-off-3-from", SettingsCategory::Scope },
+    { "assist-off-3-to", SettingsCategory::Scope },
+    { "assist-off-4-from", SettingsCategory::Scope },
+    { "assist-off-4-to", SettingsCategory::Scope },
+    { "assist-off-5-from", SettingsCategory::Scope },
+    { "assist-off-5-to", SettingsCategory::Scope },
+    { "assist-off-6-from", SettingsCategory::Scope },
+    { "assist-off-6-to", SettingsCategory::Scope },
+    { "title-window", SettingsCategory::Assist },
+    { "window-unit", SettingsCategory::Assist },
+    { "ticks-all", SettingsCategory::Assist },
+    { "ticks-wave", SettingsCategory::Assist },
+    { "title-algorithm", SettingsCategory::Assist },
+    { "death-slack", SettingsCategory::Assist },
+    { "look-ahead-cap", SettingsCategory::Assist },
+    { "assist-mode", SettingsCategory::Main },
+    { "assist-pick", SettingsCategory::Assist },
+    { "bake-radius", SettingsCategory::Bake },
+    { "cps-limit", SettingsCategory::Assist },
+    { "min-click-interval-ms", SettingsCategory::Assist },
+    { "assist-orbs", SettingsCategory::Assist },
+    { "sim-budget-us", SettingsCategory::Assist },
+    { "tick-budget", SettingsCategory::Assist },
+    { "assist-press", SettingsCategory::Assist },
+    { "assist-release", SettingsCategory::Assist },
+    { "title-smart", SettingsCategory::Assist },
+    { "smart-depth", SettingsCategory::Assist },
+    { "smart-combos", SettingsCategory::Assist },
+    { "smart-horizon", SettingsCategory::Assist },
+    { "robust-k", SettingsCategory::Assist },
+    { "robust-jitter", SettingsCategory::Assist },
+    { "title-learning", SettingsCategory::Assist },
+    { "auto-tune", SettingsCategory::Assist },
+    { "self-bake", SettingsCategory::Assist },
+    { "self-bake-normal", SettingsCategory::Assist },
+    { "self-bake-refine", SettingsCategory::Assist },
+    { "title-trigger-world", SettingsCategory::Assist },
+    { "trigger-bake", SettingsCategory::Assist },
+    { "trigger-bake-skip-dynamic", SettingsCategory::Assist },
+    { "assist-verify", SettingsCategory::Assist },
+    { "title-cube", SettingsCategory::Modes },
+    { "cube-enable", SettingsCategory::Modes },
+    { "cube-overwrite", SettingsCategory::Modes },
+    { "cube-ticks", SettingsCategory::Modes },
+    { "cube-cap", SettingsCategory::Modes },
+    { "cube-slack", SettingsCategory::Modes },
+    { "cube-latency", SettingsCategory::Modes },
+    { "title-ship", SettingsCategory::Modes },
+    { "ship-enable", SettingsCategory::Modes },
+    { "ship-overwrite", SettingsCategory::Modes },
+    { "ship-ticks", SettingsCategory::Modes },
+    { "ship-cap", SettingsCategory::Modes },
+    { "ship-slack", SettingsCategory::Modes },
+    { "ship-latency", SettingsCategory::Modes },
+    { "title-ball", SettingsCategory::Modes },
+    { "ball-enable", SettingsCategory::Modes },
+    { "ball-overwrite", SettingsCategory::Modes },
+    { "ball-ticks", SettingsCategory::Modes },
+    { "ball-cap", SettingsCategory::Modes },
+    { "ball-slack", SettingsCategory::Modes },
+    { "ball-latency", SettingsCategory::Modes },
+    { "title-ufo", SettingsCategory::Modes },
+    { "ufo-enable", SettingsCategory::Modes },
+    { "ufo-overwrite", SettingsCategory::Modes },
+    { "ufo-ticks", SettingsCategory::Modes },
+    { "ufo-cap", SettingsCategory::Modes },
+    { "ufo-slack", SettingsCategory::Modes },
+    { "ufo-latency", SettingsCategory::Modes },
+    { "title-wave", SettingsCategory::Modes },
+    { "wave-enable", SettingsCategory::Modes },
+    { "wave-overwrite", SettingsCategory::Modes },
+    { "wave-ticks", SettingsCategory::Modes },
+    { "wave-cap", SettingsCategory::Modes },
+    { "wave-slack", SettingsCategory::Modes },
+    { "wave-latency", SettingsCategory::Modes },
+    { "title-robot", SettingsCategory::Modes },
+    { "robot-enable", SettingsCategory::Modes },
+    { "robot-overwrite", SettingsCategory::Modes },
+    { "robot-ticks", SettingsCategory::Modes },
+    { "robot-cap", SettingsCategory::Modes },
+    { "robot-slack", SettingsCategory::Modes },
+    { "robot-latency", SettingsCategory::Modes },
+    { "title-spider", SettingsCategory::Modes },
+    { "spider-enable", SettingsCategory::Modes },
+    { "spider-overwrite", SettingsCategory::Modes },
+    { "spider-ticks", SettingsCategory::Modes },
+    { "spider-cap", SettingsCategory::Modes },
+    { "spider-slack", SettingsCategory::Modes },
+    { "spider-latency", SettingsCategory::Modes },
+    { "title-swing", SettingsCategory::Modes },
+    { "swing-enable", SettingsCategory::Modes },
+    { "swing-overwrite", SettingsCategory::Modes },
+    { "swing-ticks", SettingsCategory::Modes },
+    { "swing-cap", SettingsCategory::Modes },
+    { "swing-slack", SettingsCategory::Modes },
+    { "swing-latency", SettingsCategory::Modes },
+    { "title-keys", SettingsCategory::Keys },
+    { "hotkey-cycle", SettingsCategory::Keys },
+    { "hotkey-debug", SettingsCategory::Keys },
+    { "hotkey-reset-level", SettingsCategory::Keys },
+    { "hotkey-auto-tune", SettingsCategory::Keys },
+    { "hotkey-assist-mode", SettingsCategory::Keys },
+    { "hotkey-trajectory", SettingsCategory::Keys },
+    { "title-dev", SettingsCategory::Dev },
+    { "title-dev-session", SettingsCategory::Dev },
+    { "dev-record-enable", SettingsCategory::Dev },
+    { "dev-record-count", SettingsCategory::Dev },
+    { "dev-record-include-pass", SettingsCategory::Dev },
+    { "dev-count-empty-attempts", SettingsCategory::Dev },
+    { "dev-freeze-world", SettingsCategory::Dev },
+    { "dev-disable-random", SettingsCategory::Dev },
+    { "title-dev-eval", SettingsCategory::Dev },
+    { "dev-eval-on-death", SettingsCategory::Dev },
+    { "dev-eval-grid", SettingsCategory::Dev },
+    { "dev-eval-horizon", SettingsCategory::Dev },
+    { "dev-eval-tail", SettingsCategory::Dev },
+    { "dev-objective", SettingsCategory::Dev },
+    { "dev-eval-require-deps", SettingsCategory::Dev },
+    { "dev-record-cands", SettingsCategory::Dev },
+    { "dev-eval-budget-us", SettingsCategory::Dev },
+    { "dev-eval-tick-budget", SettingsCategory::Dev },
+    { "title-dev-overlay", SettingsCategory::Dev },
+    { "dev-overlay", SettingsCategory::Dev },
+    { "title-dev-actions", SettingsCategory::Dev },
+    { "dev-start-record-action", SettingsCategory::Dev },
+    { "dev-stop-record-action", SettingsCategory::Dev },
+    { "dev-eval-last-action", SettingsCategory::Dev },
+    { "dev-eval-session-action", SettingsCategory::Dev },
+    { "dev-export-session-action", SettingsCategory::Dev },
+    { "dev-clear-traces-action", SettingsCategory::Dev },
+    { "dev-copy-report-action", SettingsCategory::Dev },
+    { "title-internal", SettingsCategory::Keys },
+    { "stage-index", SettingsCategory::Keys },
+    { "swallow-hopeless", SettingsCategory::Keys },
+};
+
 char const* InLevelSettingsFilter::categoryName(SettingsCategory cat) {
     switch (cat) {
         case SettingsCategory::Main: return "Main";
-        case SettingsCategory::Bake: return "Bake";
-        case SettingsCategory::Ingame: return "Ingame";
+        case SettingsCategory::Scope: return "Scope";
         case SettingsCategory::Assist: return "Assist";
-        case SettingsCategory::Visual: return "Visual";
+        case SettingsCategory::Bake: return "Bake";
         case SettingsCategory::Modes: return "Modes";
+        case SettingsCategory::Visual: return "Visual";
         case SettingsCategory::Keys: return "Keys";
         case SettingsCategory::Dev: return "Dev";
         case SettingsCategory::Count: break;
@@ -25,50 +227,7 @@ char const* InLevelSettingsFilter::categoryName(SettingsCategory cat) {
 }
 
 SettingsCategory InLevelSettingsFilter::categoryForKey(std::string const& key) {
-    if (key == "title-general" || key == "enabled" || key == "preset"
-        || key == "safe-mode" || key == "debug-logging" || key == "perf-trace") {
-        return SettingsCategory::Main;
-    }
-    if (key == "title-bake-actions" || key == "import-bake-replay"
-        || key == "cycle-assist-mode" || key == "bake-map-action"
-        || key == "brute-bake-action" || key == "cancel-bake-action") {
-        return SettingsCategory::Bake;
-    }
-    if (key == "show-overlay" || key == "show-pause-bake"
-        || key == "show-pause-assist" || key == "show-pause-hub") {
-        return SettingsCategory::Ingame;
-    }
-    if (key == "title-assist-actions" || key == "cycle-preset-action"
-        || key == "reset-learn-action" || key == "export-config-action"
-        || key == "import-config-action") {
-        return SettingsCategory::Assist;
-    }
-    if (key == "show-trajectory"
-        || key == "save-feedback-sound"
-        || key == "save-feedback-color"
-        || key == "save-feedback-counter"
-        || key == "save-icon-color") {
-        return SettingsCategory::Visual;
-    }
-    if (key == "title-cube" || key.rfind("cube-", 0) == 0
-        || key == "title-ship" || key.rfind("ship-", 0) == 0
-        || key == "title-ball" || key.rfind("ball-", 0) == 0
-        || key == "title-ufo" || key.rfind("ufo-", 0) == 0
-        || key == "title-wave" || key.rfind("wave-", 0) == 0
-        || key == "title-robot" || key.rfind("robot-", 0) == 0
-        || key == "title-spider" || key.rfind("spider-", 0) == 0
-        || key == "title-swing" || key.rfind("swing-", 0) == 0) {
-        return SettingsCategory::Modes;
-    }
-    if (key == "title-keys" || key.rfind("hotkey-", 0) == 0
-        || key == "title-internal" || key == "stage-index" || key == "swallow-hopeless") {
-        return SettingsCategory::Keys;
-    }
-    // Dev Lab keys: title-dev* and every setting/action prefixed with "dev-".
-    if (key.rfind("title-dev", 0) == 0 || key.rfind("dev-", 0) == 0) {
-        return SettingsCategory::Dev;
-    }
-    return SettingsCategory::Assist;
+    return SettingsCategoryMap::lookup(key);
 }
 
 bool InLevelSettingsFilter::keepKey(std::string const& key, SettingsCategory cat) {
@@ -78,7 +237,7 @@ bool InLevelSettingsFilter::keepKey(std::string const& key, SettingsCategory cat
 bool InLevelSettingsFilter::keepKey(std::string const& key) {
     auto const c = categoryForKey(key);
     return c == SettingsCategory::Main
-        || c == SettingsCategory::Ingame
+        || c == SettingsCategory::Scope
         || c == SettingsCategory::Assist
         || c == SettingsCategory::Visual
         || c == SettingsCategory::Bake;
@@ -417,34 +576,65 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
         }
     };
 
+    expect(static_cast<int>(SettingsCategory::Count) == 8, "cat-count-8");
+    expect(std::strcmp(categoryName(SettingsCategory::Main), "Main") == 0, "cat-name-main");
+    expect(std::strcmp(categoryName(SettingsCategory::Scope), "Scope") == 0, "cat-name-scope");
+    expect(std::strcmp(categoryName(SettingsCategory::Assist), "Assist") == 0, "cat-name-assist");
+    expect(std::strcmp(categoryName(SettingsCategory::Bake), "Bake") == 0, "cat-name-bake");
+    expect(std::strcmp(categoryName(SettingsCategory::Modes), "Modes") == 0, "cat-name-modes");
+    expect(std::strcmp(categoryName(SettingsCategory::Visual), "Visual") == 0, "cat-name-visual");
+    expect(std::strcmp(categoryName(SettingsCategory::Keys), "Keys") == 0, "cat-name-keys");
+    expect(std::strcmp(categoryName(SettingsCategory::Dev), "Dev") == 0, "cat-name-dev");
+    expect(std::strcmp(categoryName(SettingsCategory::Count), "?") == 0, "cat-name-count");
+
+    // Spot checks for the new IA (no Ingame; no Assist catch-all).
     expect(categoryForKey("enabled") == SettingsCategory::Main, "cat-enabled-main");
+    expect(categoryForKey("assist-mode") == SettingsCategory::Main, "cat-assist-mode-main");
+    expect(categoryForKey("lag-probe") == SettingsCategory::Main, "cat-lag-main");
+    expect(categoryForKey("show-pause-hub") == SettingsCategory::Main, "cat-hub-main");
+    expect(categoryForKey("show-overlay") == SettingsCategory::Main, "cat-overlay-main");
+    expect(categoryForKey("title-scope") == SettingsCategory::Scope, "cat-title-scope");
+    expect(categoryForKey("assist-only-practice") == SettingsCategory::Scope, "cat-practice-scope");
+    expect(categoryForKey("assist-off-1-from") == SettingsCategory::Scope, "cat-off-scope");
     expect(categoryForKey("import-bake-replay") == SettingsCategory::Bake, "cat-import-bake");
-    expect(categoryForKey("bake-map-action") == SettingsCategory::Bake, "cat-bake-map");
-    expect(categoryForKey("show-pause-hub") == SettingsCategory::Ingame, "cat-hub-ingame");
+    expect(categoryForKey("bake-radius") == SettingsCategory::Bake, "cat-bake-radius");
     expect(categoryForKey("cycle-preset-action") == SettingsCategory::Assist, "cat-cycle-preset");
-    expect(categoryForKey("assist-mode") == SettingsCategory::Assist, "cat-assist-mode");
     expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
-    expect(categoryForKey("debug-logging") == SettingsCategory::Main, "cat-debug-main");
-    expect(categoryForKey("perf-trace") == SettingsCategory::Main, "cat-perf-main");
+    expect(categoryForKey("window-unit") == SettingsCategory::Assist, "cat-window-assist");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
-    expect(categoryForKey("save-feedback-sound") == SettingsCategory::Visual, "cat-save-sound");
-    expect(categoryForKey("save-feedback-color") == SettingsCategory::Visual, "cat-save-color");
-    expect(categoryForKey("save-feedback-counter") == SettingsCategory::Visual, "cat-save-counter");
-    expect(categoryForKey("save-icon-color") == SettingsCategory::Visual, "cat-save-icon-color");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Keys, "cat-hotkey-keys");
+    expect(categoryForKey("stage-index") == SettingsCategory::Keys, "cat-stage-keys");
     expect(categoryForKey("title-dev") == SettingsCategory::Dev, "cat-title-dev");
-    expect(categoryForKey("dev-record-enable") == SettingsCategory::Dev, "cat-dev-record");
     expect(categoryForKey("dev-start-record-action") == SettingsCategory::Dev, "cat-dev-start");
+
+    // Unknown keys must not dump onto Assist.
+    expect(categoryForKey("__eb-missing-key__") == SettingsCategory::Count, "unknown-is-count");
+    expect(!keepKey("__eb-missing-key__", SettingsCategory::Assist), "unknown-not-assist");
+
     expect(keepKey("dev-record-enable", SettingsCategory::Dev), "keep-dev-on-dev");
     expect(!keepKey("dev-record-enable", SettingsCategory::Assist), "drop-dev-on-assist");
     expect(!keepKey("dev-record-enable"), "legacy-drop-dev");
+    expect(keepKey("title-scope"), "legacy-keep-scope");
     expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");
     expect(!keepKey("import-bake-replay", SettingsCategory::Main), "drop-import-on-main");
 
-    expect(static_cast<int>(SettingsCategory::Count) == 8, "cat-count-8");
-    expect(std::strcmp(categoryName(SettingsCategory::Bake), "Bake") == 0, "cat-name-bake");
-    expect(std::strcmp(categoryName(SettingsCategory::Dev), "Dev") == 0, "cat-name-dev");
+    // Every table entry maps to a real tab (not Count).
+    int mapped = 0;
+    for (auto const* it = SettingsCategoryMap::begin(); it != SettingsCategoryMap::end(); ++it) {
+        auto const c = categoryForKey(it->key);
+        expect(c == it->cat, it->key);
+        expect(c != SettingsCategory::Count, it->key);
+        ++mapped;
+    }
+    expect(mapped == SettingsCategoryMap::kCount, "map-count-171");
+
+    // Every portable ConfigBundle key must be in the category map.
+    for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
+        auto const c = categoryForKey(it->key);
+        expect(c != SettingsCategory::Count, it->key);
+    }
+    expect(ConfigBundleKeys::count() > 0, "config-keys-nonempty");
 
     expect(preservedContentY(100.f, 800.f, 400.f) == 500.f, "scroll-shrink");
     expect(preservedContentY(0.f, 100.f, 100.f) == 0.f, "scroll-same");

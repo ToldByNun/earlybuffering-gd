@@ -5,13 +5,14 @@
 #include <string>
 
 // Categories for the Geode ModSettingsPopup page switcher (◀ NAME ▶).
+// Commit 1 IA: Ingame folded into Main; Scope is its own page. Count stays 8.
 enum class SettingsCategory : int {
     Main = 0,
-    Bake,
-    Ingame,
+    Scope,
     Assist,
-    Visual,
+    Bake,
     Modes,
+    Visual,
     Keys,
     Dev,
     Count
@@ -22,10 +23,11 @@ enum class SettingsCategory : int {
 class InLevelSettingsFilter {
 public:
     static char const* categoryName(SettingsCategory cat);
+    // Exhaustive map. Unknown keys return SettingsCategory::Count (never Assist dump).
     static SettingsCategory categoryForKey(std::string const& key);
     static bool keepKey(std::string const& key, SettingsCategory cat);
 
-    // Legacy: Main∪Ingame∪Assist∪Visual.
+    // Legacy subset: Main∪Scope∪Assist∪Visual∪Bake (drops Modes/Keys/Dev).
     static bool keepKey(std::string const& key);
 
     static void apply(cocos2d::CCNode* popup, SettingsCategory cat);

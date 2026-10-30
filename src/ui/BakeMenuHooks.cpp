@@ -50,7 +50,7 @@ class $modify(EbPauseLayer, PauseLayer) {
         marker->setID("earlybuffer-pause-ui"_spr);
         host->addChild(marker);
 
-        // Top-right: opens Geode ModSettingsPopup (Main/Bake/Ingame/Assist/…).
+        // Top-right: opens Geode ModSettingsPopup (Main/Scope/Assist/Bake/…).
         if (showHub) {
             auto* spr = CircleButtonSprite::create(
                 CCLabelBMFont::create("EB", "bigFont.fnt"),
