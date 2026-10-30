@@ -20,17 +20,38 @@ private:
     ConfigBundleImportState() = default;
 };
 
+class ConfigBundleExportState {
+public:
+    static ConfigBundle::ExportStats& stats() {
+        static ConfigBundle::ExportStats s;
+        return s;
+    }
+
+private:
+    ConfigBundleExportState() = default;
+};
+
 ConfigBundle::ImportStats ConfigBundle::lastImportStats() {
     return ConfigBundleImportState::stats();
 }
 
+ConfigBundle::ExportStats ConfigBundle::lastExportStats() {
+    return ConfigBundleExportState::stats();
+}
+
 geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
+    auto& stats = ConfigBundleExportState::stats();
+    stats = {};
+    stats.version = ConfigBundle::kFormatVersion;
+
     auto* mod = Mod::get();
     if (!mod) {
         return Err("export: mod unavailable");
     }
 
     matjson::Value settings = matjson::Value::object();
+    int written = 0;
+    int skipped = 0;
 
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
         auto const& entry = *it;
@@ -38,32 +59,40 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
             switch (entry.kind) {
                 case ConfigBundleKeys::Kind::Bool:
                     settings[entry.key] = mod->getSettingValue<bool>(entry.key);
+                    ++written;
                     break;
                 case ConfigBundleKeys::Kind::Int:
                     settings[entry.key] = mod->getSettingValue<int64_t>(entry.key);
+                    ++written;
                     break;
                 case ConfigBundleKeys::Kind::Float:
                     settings[entry.key] = mod->getSettingValue<double>(entry.key);
+                    ++written;
                     break;
                 case ConfigBundleKeys::Kind::String:
                     settings[entry.key] = mod->getSettingValue<std::string>(entry.key);
+                    ++written;
                     break;
                 case ConfigBundleKeys::Kind::Color: {
                     auto const color = mod->getSettingValue<cocos2d::ccColor3B>(entry.key);
                     settings[entry.key] = ConfigBundleCodec::colorToHex(color);
+                    ++written;
                     break;
                 }
                 case ConfigBundleKeys::Kind::Keybind: {
                     auto const binds = mod->getSettingValue<std::vector<geode::Keybind>>(entry.key);
                     settings[entry.key] = ConfigBundleCodec::keybindsToString(binds);
+                    ++written;
                     break;
                 }
                 default:
+                    ++skipped;
                     break;
             }
         }
         catch (...) {
             // Skip one bad key; continue exporting the rest.
+            ++skipped;
         }
     }
 
@@ -79,6 +108,9 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     if (!out) {
         return Err("export write failed");
     }
+
+    stats.written = written;
+    stats.skipped = skipped;
     return Ok();
 }
 

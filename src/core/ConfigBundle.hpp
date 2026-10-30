@@ -17,11 +17,18 @@ public:
         int skipped = 0;
     };
 
+    struct ExportStats {
+        int version = 0;
+        int written = 0;
+        int skipped = 0;
+    };
+
     static geode::Result<> exportTo(std::filesystem::path const& path);
     static geode::Result<> importFrom(std::filesystem::path const& path);
 
-    // Filled by the last successful importFrom (zeros if never imported).
+    // Filled by the last successful importFrom / exportTo (zeros if never run).
     static ImportStats lastImportStats();
+    static ExportStats lastExportStats();
 
 private:
     ConfigBundle() = default;

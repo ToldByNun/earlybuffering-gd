@@ -88,6 +88,41 @@ public:
     }
 #endif
 
+    static std::string formatExportSuccess(std::filesystem::path const& path) {
+        auto const st = ConfigBundle::lastExportStats();
+        return fmt::format(
+            "Config exported (v{}).\n"
+            "keys={}  skipped={}\n\n"
+            "{}",
+            st.version,
+            st.written,
+            st.skipped,
+            path.string()
+        );
+    }
+
+    static std::string formatImportSuccess(std::optional<std::filesystem::path> const& path) {
+        auto const st = ConfigBundle::lastImportStats();
+        if (path) {
+            return fmt::format(
+                "Config imported.\n"
+                "version={}  applied={}  skipped={}\n\n"
+                "{}",
+                st.version,
+                st.applied,
+                st.skipped,
+                path->string()
+            );
+        }
+        return fmt::format(
+            "Config imported.\n"
+            "version={}  applied={}  skipped={}",
+            st.version,
+            st.applied,
+            st.skipped
+        );
+    }
+
 #ifndef GEODE_IS_WINDOWS
     // Non-Win: pick newest replay from SaveDropPaths::replayDropDir().
     // nullopt = user was already alerted (ensureDirs fail / empty folder).
@@ -304,16 +339,10 @@ void PauseActionBridge::toggleTrajectory() {
 }
 
 void PauseActionBridge::exportConfig() {
+    std::optional<std::filesystem::path> path;
 #ifdef GEODE_IS_WINDOWS
-    auto path = PauseActionBridgeDetail::pickSaveJsonWin32(true);
+    path = PauseActionBridgeDetail::pickSaveJsonWin32(true);
     if (!path) return;
-    auto r = ConfigBundle::exportTo(*path);
-    if (r.isErr()) {
-        FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
-    }
-    else {
-        FLAlertLayer::create("EarlyBuffer", "Config exported.", "OK")->show();
-    }
 #else
     auto& drops = SaveDropPaths::get();
     std::string dirErr;
@@ -325,29 +354,30 @@ void PauseActionBridge::exportConfig() {
         )->show();
         return;
     }
-    auto const path = drops.configPath();
-    auto r = ConfigBundle::exportTo(path);
-    std::string msg;
-    if (r.isOk()) {
-        msg = fmt::format("Config exported to:\n{}", path.string());
-    }
-    else {
-        msg = r.unwrapErr();
-        if (msg.empty()) msg = "Config export failed.";
-    }
-    FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
+    path = drops.configPath();
 #endif
+    auto r = ConfigBundle::exportTo(*path);
+    if (r.isErr()) {
+        auto err = r.unwrapErr();
+        if (err.empty()) err = "Config export failed.";
+#ifndef GEODE_IS_WINDOWS
+        err = fmt::format("{}\n\n{}", err, path->string());
+#endif
+        FLAlertLayer::create("EarlyBuffer", err.c_str(), "OK")->show();
+        return;
+    }
+    FLAlertLayer::create(
+        "EarlyBuffer",
+        PauseActionBridgeDetail::formatExportSuccess(*path).c_str(),
+        "OK"
+    )->show();
 }
 
 void PauseActionBridge::importConfig() {
+    std::optional<std::filesystem::path> path;
 #ifdef GEODE_IS_WINDOWS
-    auto path = PauseActionBridgeDetail::pickSaveJsonWin32(false);
+    path = PauseActionBridgeDetail::pickSaveJsonWin32(false);
     if (!path) return;
-    auto r = ConfigBundle::importFrom(*path);
-    if (r.isErr()) {
-        FLAlertLayer::create("EarlyBuffer", r.unwrapErr().c_str(), "OK")->show();
-        return;
-    }
 #else
     auto& drops = SaveDropPaths::get();
     std::string dirErr;
@@ -359,41 +389,41 @@ void PauseActionBridge::importConfig() {
         )->show();
         return;
     }
-    auto const path = drops.configPath();
+    path = drops.configPath();
     std::error_code ec;
-    bool const exists = std::filesystem::is_regular_file(path, ec) && !ec;
+    bool const exists = std::filesystem::is_regular_file(*path, ec) && !ec;
     if (!exists) {
         auto const msg = fmt::format(
             "No config file found.\n\n"
-            "Place earlybuffer-config.json at:\n{}\n\n"
-            "Export Config writes that path; "
-            "copy it via a file manager or ADB, then Import again.",
-            path.string()
+            "Place earlybuffer-config.json (full settings export) at:\n{}\n\n"
+            "Export Config writes that path. Copy the file with a file manager "
+            "/ Files app / share, then Import again.",
+            path->string()
         );
         FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
         return;
     }
-    auto const sz = std::filesystem::file_size(path, ec);
+    auto const sz = std::filesystem::file_size(*path, ec);
     if (ec || sz == 0) {
         auto const emptyMsg = fmt::format(
             "Config file is empty or unreadable:\n{}",
-            path.string()
+            path->string()
         );
         FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
         return;
     }
-    auto r = ConfigBundle::importFrom(path);
+#endif
+    auto r = ConfigBundle::importFrom(*path);
     if (r.isErr()) {
-        // Corrupt JSON / open failure — keep ConfigBundle text, add path.
         auto const badMsg = fmt::format(
             "{}\n\nFile:\n{}",
             r.unwrapErr(),
-            path.string()
+            path->string()
         );
         FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
         return;
     }
-#endif
+
     // Import runs under applying-guard — sync UI that listeners would have skipped.
     StatusOverlay::setVisible(StageConfig::showOverlay());
     {
@@ -409,16 +439,11 @@ void PauseActionBridge::importConfig() {
         }
     }
     AssistController::get().updateOverlay();
-    {
-        auto const st = ConfigBundle::lastImportStats();
-        auto const msg = fmt::format(
-            "Config imported.\nversion={}  applied={}  skipped={}",
-            st.version,
-            st.applied,
-            st.skipped
-        );
-        FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
-    }
+    FLAlertLayer::create(
+        "EarlyBuffer",
+        PauseActionBridgeDetail::formatImportSuccess(path).c_str(),
+        "OK"
+    )->show();
 }
 
 void PauseActionBridge::stubDevAction(char const* name) {
