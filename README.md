@@ -22,8 +22,8 @@ Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBu
 - **Trigger World Bake** — cache spawn-timed static mover / toggle poses so the shadow sim can collide them instead of treating every mover as unknown (see settings + [`docs/assist_reference.md`](docs/assist_reference.md)).
 - **Safe Mode** — when assist is on (or has touched a run), progress / bests / percentage are not saved as legit clears.
 - **Scope gates** — platformer hard-off; optional practice / startpos / percent window; up to six float “assist off” percent ranges.
-- **Learning** — per-level bias / trust (never changes your tick window; does not self-reinforce from inject “saves”).
-- **Self-bake** — optional practice (and normal) recording of vanilla clicks into the bake map, with idle merge/refine.
+- **Learning** — optional per-level bias / trust (off by default; never changes your tick window; does not self-reinforce from inject “saves”).
+- **Self-bake** — optional practice (and normal) recording of vanilla clicks into the bake map (off by default), with idle merge/refine.
 
 Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_reference.md).
 

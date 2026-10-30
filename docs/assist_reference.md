@@ -27,7 +27,7 @@ Early-before-window still buffers until bake earliest (clamped to `limit`).
 
 ## Self-bake
 
-Settings (Learning): `self-bake` (default on, practice), `self-bake-normal` (default off), `self-bake-refine` (default on).
+Settings (Learning): `auto-tune` (default off), `self-bake` (default off, practice), `self-bake-normal` (default off), `self-bake-refine` (default on when self-bake is enabled).
 
 `SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). **Death and reset never refine** (merge-only — refine on the main thread caused 1–2s freezes). Checkpoint / complete / quit may refine when enabled, start snapshot exists, and assist did not touch the run (`refineSelfWindows`, budget 64 sims). Quit cancels in-flight refine.
 
@@ -168,10 +168,10 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | smart-horizon | int | 0 | 0 | 320 | Smart — 0=auto |
 | robust-k | int | 0 | 0 | 3 | Smart — 0=auto (mode/speed/dt var → 1–3) |
 | robust-jitter | bool | false | | | Smart — re-sim top cand at firstDt ±3% |
-| auto-tune | bool | true | | | Learning — never changes ticks; no trust-up from inject saves |
-| self-bake | bool | true | | | Learning — record vanilla clicks in practice |
+| auto-tune | bool | false | | | Learning — never changes ticks; no trust-up from inject saves |
+| self-bake | bool | false | | | Learning — record vanilla clicks in practice |
 | self-bake-normal | bool | false | | | Learning — also record outside practice |
-| self-bake-refine | bool | true | | | Learning — budgeted window search on flush |
+| self-bake-refine | bool | true | | | Learning — budgeted window search on flush (`enable-if` self-bake) |
 | trigger-bake | bool | true | | | Trigger World — static mover cache for shadow sim |
 | trigger-bake-skip-dynamic | bool | true | | | Trigger World — do not bake/probe follow-player etc. |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |

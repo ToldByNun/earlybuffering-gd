@@ -69,6 +69,7 @@ Contracts G1–G3, Pass-reason list, Hold-Until-Safe: [`docs/assist_reference.md
 
 - **Safe Mode** on — assisted / enabled runs should not write normal progress for rated or online play
 - **Platformer** hard off
+- **Auto-Tune** / **Self-Bake** off — no per-level learning or practice recording until you turn them on
 - Presets (**Tight → Max**) fill tick windows · F6 cycles · Off kills assist
 - Optional Trigger World Bake so movers aren’t invisible to the shadow
 - Save Feedback: sound / flash / world `+N` and `8+` when a delay actually fired

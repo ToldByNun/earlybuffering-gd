@@ -566,19 +566,19 @@
 		"title-learning": {
 			"type": "title",
 			"name": "Learning",
-			"description": "Per-level learning and optional self-bake. Learning never changes your tick window numbers — only soft bias/trust."
+			"description": "Optional per-level learning and self-bake (both off by default). Learning never changes your tick window numbers — only soft bias/trust."
 		},
 		"auto-tune": {
 			"type": "bool",
 			"name": "Auto-Tune Per Level",
-			"description": "Learns gentle bias/trust per level and spot as you play (never changes the tick window). On = adapts over attempts. Off = no learning. Toggle: Ctrl+Shift+L. Reset level: Ctrl+Shift+R.",
-			"default": true
+			"description": "Learns gentle bias/trust per level and spot as you play (never changes the tick window). On = adapts over attempts. Off = no learning (starter default). Toggle: Ctrl+Shift+L. Reset level: Ctrl+Shift+R.",
+			"default": false
 		},
 		"self-bake": {
 			"type": "bool",
 			"name": "Self-Bake (Practice)",
-			"description": "In practice, records your normal (non-assist) clicks into the bake map for later Hybrid/Replay help. Assist injects are never recorded. On = builds a personal map; Off = no recording.",
-			"default": true
+			"description": "In practice, records your normal (non-assist) clicks into the bake map for later Hybrid/Replay help. Assist injects are never recorded. On = builds a personal map; Off = no recording (starter default).",
+			"default": false
 		},
 		"self-bake-normal": {
 			"type": "bool",
