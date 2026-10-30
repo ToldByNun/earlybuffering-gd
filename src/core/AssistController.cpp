@@ -1799,12 +1799,15 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     } tickEndGuard;
 
     float tw = 1.f;
+    // Hook dt is GD step units (0.25 @ 240 TPS every tick — not a hitch).
+    // Convert to seconds before sanity / EMA (v1.2.1 passed GD units through;
+    // we keep seconds internally for TPS/bake and reconvert at the ghost).
     float const secDt = AssistClock::gdStepToSeconds(dt);
     if (secDt > 0.f) {
         tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
         float const simSample = secDt / tw;
-        // Hitch/pause dumps must NOT stick in m_lastDt.
+        // Real-seconds hitch/pause dumps must NOT stick in m_lastDt.
         auto& clock = AssistClock::get();
         if (clock.isSaneSimDt(simSample)) {
             if (this->m_lastDt <= 0.f || this->m_attemptTick < 3) {

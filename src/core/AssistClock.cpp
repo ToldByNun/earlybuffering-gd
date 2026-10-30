@@ -30,7 +30,8 @@ float AssistClock::planSimDtOrNominal(float simDt, float timeWarp) const {
         return AssistClock::kNominalSimDt;
     }
     double const tps = this->simTpsFromDt(simDt);
-    // Extreme stuck hitch (e.g. lastDt poisoned to 0.25 → 4 TPS) — never plan with it.
+    // Extreme stuck hitch in *seconds* (e.g. multi-frame pause dump) — never plan with it.
+    // Do NOT treat raw GD step 0.25 here; callers must gdStepToSeconds first.
     if (this->speedScaleSuspect(tw, tps)
         && (tps < AssistClock::kPlanSnapTpsLo || tps > AssistClock::kPlanSnapTpsHi)) {
         return AssistClock::kNominalSimDt;
@@ -60,8 +61,8 @@ int AssistClock::ticksToFrames(int ticks) {
 
 float AssistClock::gdStepToSeconds(float gdDt) {
     if (!(gdDt > 0.f) || !std::isfinite(gdDt)) return 0.f;
-    // GD passes 60Hz-normalized step units (60/240 = 0.25 at 240 TPS) to
-    // PlayerObject::update. If a caller already passed seconds (<= 1/15s), keep it.
+    // GD step units are typically around kNominalGdStep (0.25). Real seconds
+    // at 240 TPS are ~1/240. Anything above the seconds sane max is GD step.
     if (gdDt > AssistClock::kMaxSaneSimDt) {
         return gdDt / static_cast<float>(AssistClock::kDisplayFps);
     }
@@ -70,12 +71,13 @@ float AssistClock::gdStepToSeconds(float gdDt) {
 
 float AssistClock::secondsToGdStep(float secDt) {
     if (!(secDt > 0.f) || !std::isfinite(secDt)) {
-        return AssistClock::kNominalSimDt * static_cast<float>(AssistClock::kDisplayFps);
+        return AssistClock::kNominalGdStep;
     }
-    // If secDt is in seconds (<= 1/15s), scale by 60Hz for PlayerObject::update / checkCollisions.
+    // Seconds-domain planning quanta → GD PlayerObject::update step (1.2.1 contract).
     if (secDt <= AssistClock::kMaxSaneSimDt * 2.f) {
         return secDt * static_cast<float>(AssistClock::kDisplayFps);
     }
+    // Already looks like a GD step (e.g. passthrough / legacy caller).
     return secDt;
 }
 
@@ -141,10 +143,16 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(clock.simTpsFromDt(0.f) == AssistClock::kNominalTps, "sim-tps-zero");
     expect(clock.simTpsFromDt(-1.f) == AssistClock::kNominalTps, "sim-tps-neg");
     expect(clock.isSaneSimDt(AssistClock::kNominalSimDt), "sane-nominal");
-    expect(!clock.isSaneSimDt(0.25f), "sane-reject-hitch");
+    // Raw GD step 0.25 is insane *as seconds* — must convert before sanity.
+    expect(!clock.isSaneSimDt(AssistClock::kNominalGdStep), "sane-reject-raw-gd-step");
     expect(
-        std::fabs(clock.planSimDtOrNominal(0.25f, 1.f) - AssistClock::kNominalSimDt) < 1e-6f,
-        "plan-snap-hitch"
+        std::fabs(clock.planSimDtOrNominal(AssistClock::kNominalGdStep, 1.f)
+            - AssistClock::kNominalSimDt) < 1e-6f,
+        "plan-snap-raw-gd-step"
+    );
+    expect(
+        std::fabs(AssistClock::kNominalGdStep - 0.25f) < 1e-6f,
+        "nominal-gd-step-025"
     );
     expect(
         std::fabs(clock.planSimDtOrNominal(AssistClock::kNominalSimDt, 1.f)
@@ -156,12 +164,21 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(AssistClock::ticksToFrames(4) == 1, "ticks-4-to-1-frame");
     expect(AssistClock::ticksToFrames(2) == 1 || AssistClock::ticksToFrames(2) == 0, "ticks-2-round");
     expect(
-        std::fabs(AssistClock::gdStepToSeconds(0.25f) - AssistClock::kNominalSimDt) < 1e-6f,
+        std::fabs(AssistClock::gdStepToSeconds(AssistClock::kNominalGdStep)
+            - AssistClock::kNominalSimDt) < 1e-6f,
         "gd-step-025-to-sec"
     );
     expect(
-        std::fabs(AssistClock::secondsToGdStep(AssistClock::kNominalSimDt) - 0.25f) < 1e-6f,
+        std::fabs(AssistClock::secondsToGdStep(AssistClock::kNominalSimDt)
+            - AssistClock::kNominalGdStep) < 1e-6f,
         "sec-to-gd-step-025"
+    );
+    // Round-trip: live GD hook dt must equal ghost update dt (v1.2.1 contract).
+    expect(
+        std::fabs(
+            AssistClock::secondsToGdStep(AssistClock::gdStepToSeconds(0.25f)) - 0.25f
+        ) < 1e-6f,
+        "gd-step-roundtrip"
     );
 
     // lastDt = 1/120, tw = 2 → simDt = 1/240 → wall 120, sim 240.

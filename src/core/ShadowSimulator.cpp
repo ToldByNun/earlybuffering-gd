@@ -917,6 +917,8 @@ void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepD
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick, s);
         this->applyLiveDynamicNear(layer, s);
     }
+    // v1.2.1 contract: ghost must see the same GD step units as live
+    // PlayerObject::update (0.25 @ 240 TPS). stepDt/dt are AssistClock seconds.
     float const gdStepDt = AssistClock::secondsToGdStep(stepDt);
     float colDt = stepDt;
     if (colDt < dt) colDt = dt; // same rule as pre-collide: never a tiny remainder

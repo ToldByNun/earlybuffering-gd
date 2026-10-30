@@ -15,12 +15,18 @@ public:
     // |simTps − 240| above this with timeWarp ≈ 1 → speedhack-scale suspect.
     static constexpr double kSuspectAbsDelta = 40.0;
     static constexpr float kWarpNearOne = 0.02f;
-    // Hitch / pause dumps above this sim quantum (~30 TPS) must not poison lastDt.
+    // Sane band for *real-seconds* sim quanta (after gdStepToSeconds).
+    // Live PlayerObject::update gets 60Hz-normalized GD step units (0.25 @ 240 TPS) —
+    // that is NOT a hitch; convert at the hook before applying these bounds.
+    // True hitch/pause dumps in seconds are still > ~1/30s.
     static constexpr float kMaxSaneSimDt = 1.f / 30.f;
     static constexpr float kMinSaneSimDt = 1.f / 480.f;
     // Beyond this band, snap planning quantum to nominal (stuck hitch / absurd scale).
     static constexpr double kPlanSnapTpsLo = 30.0;
     static constexpr double kPlanSnapTpsHi = 480.0;
+    // GD PlayerObject::update / checkCollisions step at nominal 240 TPS (60/240).
+    static constexpr float kNominalGdStep =
+        static_cast<float>(kDisplayFps / kNominalTps);
     // Throttle suspect logs to once per this many attempt ticks while sticky.
     static constexpr int kSuspectLogEveryTicks = 240;
 
@@ -41,9 +47,11 @@ public:
     static int framesToTicks(int frames);
     static int ticksToFrames(int ticks);
 
-    // Geometry Dash scales PlayerObject::update / checkCollisions dt by 60Hz
-    // (0.25 at 240 TPS). Convert at the GD hook boundary so AssistClock /
-    // ShadowSimulator / DevClockContract stay in real seconds (1/240 at 240 TPS).
+    // GD 2.2 passes 60Hz-normalized step units into PlayerObject::update
+    // (kNominalGdStep = 0.25 at 240 TPS). v1.2.1 passed that straight to the
+    // ghost (correct). v1.3.0 mistook 0.25 for a hitch and planned at 1/240s
+    // without reconverting → ghost ~60× too slow. Convert at the boundaries:
+    // hook → seconds (AssistClock / plan / bake), ghost → GD step again.
     static float gdStepToSeconds(float gdDt);
     static float secondsToGdStep(float secDt);
 
