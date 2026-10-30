@@ -1104,31 +1104,33 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
         return std::max(8, static_cast<int>(std::lround(base * capMul)));
     };
 
+    int const postFloor = StageConfig::postActionHorizon();
     if (p->m_isDart) {
         m.continuous = true;
-        m.cap = horizon(std::max(32, x + 16));
+        // Wave corridors need post-click horizon past slope/yeet deaths.
+        m.cap = horizon(std::max(postFloor, x + 48));
     }
     else if (p->m_isShip || p->m_isSwing) {
         m.continuous = true;
-        m.cap = horizon(std::max(64, x * 3));
+        m.cap = horizon(std::max(postFloor, x * 3));
     }
     else if (p->m_isBird) {
         m.continuous = true;
         m.tapRelease = true;
-        m.cap = horizon(std::max(40, x + 20));
+        m.cap = horizon(std::max(postFloor, x + 20));
     }
     else if (p->m_isSpider) {
         m.continuous = true;
         m.tapRelease = true;
-        m.cap = horizon(std::max(36, x + 16));
+        m.cap = horizon(std::max(postFloor, x + 16));
     }
     else if (p->m_isRobot) {
         m.tapRelease = false;
-        m.cap = horizon(150);
+        m.cap = horizon(std::max(150, postFloor));
     }
     else {
         m.tapRelease = true;
-        m.cap = horizon(150);
+        m.cap = horizon(std::max(150, postFloor));
     }
     return m;
 }
@@ -1369,7 +1371,11 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
-    int const maxTicks = delay + std::max(1, model.cap);
+    // Always look at least post-action-horizon past the click — a Delay that
+    // "clears" the near spike but yeets into death 15 frames later is still lethal.
+    int const postFloor = StageConfig::postActionHorizon();
+    int const postAction = std::max(std::max(1, model.cap), postFloor);
+    int const maxTicks = delay + postAction;
 
     auto finish = [&](RunResult out) {
         out.activatedRing = m_activatedRing;
@@ -1489,7 +1495,10 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             }
         }
 
-        if (pastZone && t + 1 - r.ticksBeforeNeutral > 24) {
+        // Do not cut short before the post-click horizon — slope/orb yeets land later.
+        int const afterAction = acted ? (t - delay) : -1;
+        if (pastZone && afterAction >= postFloor
+            && t + 1 - r.ticksBeforeNeutral > 24) {
             return finish(r);
         }
     }
@@ -1512,7 +1521,9 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     auto* s = m_shadow;
     s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
 
-    int const maxTicks = std::max(1, model.cap);
+    int const maxTicks = std::max(
+        1, std::max(model.cap, StageConfig::postActionHorizon())
+    );
     for (int t = 0; t < maxTicks; ++t) {
         if (tickBudgetLeft) {
             if (*tickBudgetLeft <= 0) break;
@@ -2273,6 +2284,9 @@ SimPlan ShadowSimulator::plan(
         }
         finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
         cands[static_cast<size_t>(d)] = c;
+        if (d >= 0 && d <= limit) {
+            candReady[static_cast<size_t>(d)] = 1;
+        }
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
         // New: never early-exit — full survivor band needed for outcome / exit predict.
@@ -2580,7 +2594,16 @@ SimPlan ShadowSimulator::plan(
     bool doPass = false;
     bool haveActViable = actMin >= 0;
 
-    if (orbIntent && haveActViable) {
+    // If delay-0 already survives the post-click horizon, do NOT force an orb
+    // Delay. Waiting for the orb when d0 is already safe is a common
+    // click-caused death (slope/UFO yeet) — planner "survives" but the orb
+    // click is the lethal input.
+    bool const d0AlreadySafe = cands[0].viable
+        && !cands[0].raw.died
+        && !cands[0].diedBeforeAction
+        && cands[0].surviveBin >= 1;
+
+    if (orbIntent && haveActViable && !d0AlreadySafe) {
         std::vector<int> pool;
         for (int d = actMin; d <= actMax; ++d) pool.push_back(d);
         int const k = robustK;
@@ -2688,13 +2711,17 @@ SimPlan ShadowSimulator::plan(
 
     // G1 window-cap assert.
     if (chosen > limit) chosen = limit;
-    // Hard gate: never arm a Delay the sim marked as death.
+    // Hard gate: never arm a Delay the sim marked as death — and never a
+    // delay that was never evaluated (candReady). Unevaluated picks used to
+    // slip through when ledger said budget-not-reached but viable stayed stale.
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.raw.died || ch.diedBeforeAction) {
+        bool const ready = candReady[static_cast<size_t>(chosen)] != 0;
+        if (!ready || !ch.viable || ch.raw.died || ch.diedBeforeAction) {
             AssistLog::debug(fmt::format(
-                "PLAN id={} reject lethal Delay +{} → Pass",
-                plan.planId, chosen
+                "PLAN id={} reject Delay +{} ready={} viable={} died={} → Pass",
+                plan.planId, chosen, ready ? 1 : 0, ch.viable ? 1 : 0,
+                (ch.raw.died || ch.diedBeforeAction) ? 1 : 0
             ));
             chosen = -1;
             doPass = false;
@@ -2702,8 +2729,9 @@ SimPlan ShadowSimulator::plan(
         }
     }
     if (chosen < 0) {
-        // Partial budget: if any activation survived, take earliest act ≤ limit.
+        // Partial budget: only an *evaluated* surviving activation — never invent delay.
         if (plan.budgetHit && actMin >= 0 && actMin <= limit
+            && candReady[static_cast<size_t>(actMin)]
             && cands[static_cast<size_t>(actMin)].viable
             && !cands[static_cast<size_t>(actMin)].raw.died) {
             chosen = actMin;
@@ -2738,10 +2766,11 @@ SimPlan ShadowSimulator::plan(
             ));
         }
     }
-    // Re-assert lethal gate after idleSafer / budget-partial.
+    // Re-assert lethal + evaluated gate after idleSafer / budget-partial.
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.raw.died || ch.diedBeforeAction) {
+        bool const ready = candReady[static_cast<size_t>(chosen)] != 0;
+        if (!ready || !ch.viable || ch.raw.died || ch.diedBeforeAction) {
             chosen = -1;
             doPass = false;
             plan.requireOrb = false;
@@ -3422,6 +3451,12 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(kWindowMarginK == 1, "windowMarginK");
     expect(kDefaultTickBudget == 4000, "tickBudget");
     expect(kFutileEndXGain == 8.f, "futileEndXGain");
+    expect(kDefaultPostActionHorizon >= 96, "post-action-default");
+    expect(
+        StageConfig::postActionHorizon() >= 24
+            && StageConfig::postActionHorizon() <= 240,
+        "post-action-setting-range"
+    );
 
     // Trigger apply nearness: rank by samplePose X @ absTick, not press/capture X.
     // Mover left the ghost at press but returns at delay → must be near by sample.

@@ -384,6 +384,9 @@ public:
         int cap = 48;
         int slack = 2;
     };
+    // Default / floor for StageConfig::postActionHorizon (settings).
+    // ~96 @240 TPS ≈ 0.4s ≈ 24 frames @60.
+    static constexpr int kDefaultPostActionHorizon = 96;
     static Model modelFor(PlayerObject* p, int limit, float capMul = 1.f);
 
     struct OrbWindow {

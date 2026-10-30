@@ -151,6 +151,8 @@ public:
     static int husReplanTickBudget();
     static int deathSlack();
     static int lookAheadCap();
+    // Ticks after the click/release action (click-caused death / yeet horizon).
+    static int postActionHorizon();
 
     // --- Smart Prediction (Live / Hybrid) ---
     // Live/Hybrid multi-jump: 1 = single-click only

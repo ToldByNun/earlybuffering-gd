@@ -112,6 +112,7 @@ bool g_cachedSaveFeedbackCounter = false;
 StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
+int g_cachedPostActionHorizon = 96;
 bool g_cachedWindowUnitFrames = false;
 bool g_cacheInitialized = false;
 bool g_applying = false;
@@ -263,6 +264,9 @@ void StageConfig::refreshCache() {
     }
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
+    g_cachedPostActionHorizon = clampInt(
+        readInt(mod, "post-action-horizon", 96), 24, 240
+    );
     try {
         auto modeStr = mod->getSettingValue<std::string>("assist-mode");
         if (modeStr == "Live") g_cachedAssistMode = AssistMode::Live;
@@ -618,6 +622,10 @@ int StageConfig::ticksWave() {
 }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
 int StageConfig::lookAheadCap() { ensureCache(); return g_cachedLookAhead; }
+int StageConfig::postActionHorizon() {
+    ensureCache();
+    return g_cachedPostActionHorizon;
+}
 int StageConfig::stageIndex() { ensureCache(); return g_cachedStage.index; }
 
 GameModeKind StageConfig::kindOf(PlayerObject* player) {

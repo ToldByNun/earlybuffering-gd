@@ -190,6 +190,7 @@ $on_mod(Loaded) {
     watchInt("ticks-wave");
     watchInt("death-slack");
     watchInt("look-ahead-cap");
+    watchInt("post-action-horizon");
     watchBool("debug-logging");
     watchBool("perf-trace");
     watchBool("lag-probe");

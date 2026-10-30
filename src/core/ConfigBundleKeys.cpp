@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[130];
-    static constexpr int kEntryCount = 130;
+    static ConfigBundleKeys::Entry const kEntries[131];
+    static constexpr int kEntryCount = 131;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[130] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[131] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "preset", ConfigBundleKeys::Kind::String },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
@@ -51,6 +51,7 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[130] = {
     { "ticks-wave", ConfigBundleKeys::Kind::Int },
     { "death-slack", ConfigBundleKeys::Kind::Int },
     { "look-ahead-cap", ConfigBundleKeys::Kind::Int },
+    { "post-action-horizon", ConfigBundleKeys::Kind::Int },
     { "assist-mode", ConfigBundleKeys::Kind::String },
     { "assist-pick", ConfigBundleKeys::Kind::String },
     { "bake-radius", ConfigBundleKeys::Kind::Int },
@@ -181,7 +182,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 130, "count-130");
+    expect(ConfigBundleKeysTable::kEntryCount == 131, "count-131");
     expect(
         ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount,
         "count-api"

@@ -215,7 +215,11 @@ bool AssistController::verifyAssistDelay(
     }
 
     PlanOptions vopts;
-    vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
+    // Need room for post-click horizon (slope/yeet deaths), not just d0 probe.
+    vopts.tickBudget = std::max(
+        StageConfig::postActionHorizon() + 32,
+        StageConfig::tickBudgetPerPress() / 4
+    );
     vopts.budgetUs = StageConfig::husReplanBudgetUs();
     vopts.maxBranches = 0;
     vopts.smartDepth = 1;
@@ -651,8 +655,17 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
 
 bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
     if (plan.action == PlanAction::Delay) return false;
-    if (plan.reason == AssistReason::PassBudget) return true;
+    // Intentional Pass (d0 already safe) must never become HUS just because later
+    // cand slots hit the tick wall — that swallowed clicks + played save-cue.
+    if (plan.nowIsSafe) return false;
+    if (plan.reason == AssistReason::PassD0Safe
+        || plan.reason == AssistReason::PassNoThreat) {
+        return false;
+    }
+    // Never soft-trust a pure budget Pass — only HUS when an orb/pad opportunity
+    // still needs a later replan (otherwise budget→HUS→deadline fire hallucinates).
     bool const opp = plan.foresightOrbPad || plan.usedOrbWindow;
+    if (plan.reason == AssistReason::PassBudget) return opp;
     if (plan.budgetHit && opp) return true;
     if (plan.unknown && opp) return true;
     // Continuous: idle safer + ascent helped in eval but pick starved → soft hold.
@@ -690,7 +703,9 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     SimPlan budgetPass;
     budgetPass.action = PlanAction::Pass;
     budgetPass.reason = AssistReason::PassBudget;
-    expect(shouldArmHoldUntilSafe(budgetPass), "arm-budget");
+    expect(!shouldArmHoldUntilSafe(budgetPass), "no-arm-budget-alone");
+    budgetPass.usedOrbWindow = true;
+    expect(shouldArmHoldUntilSafe(budgetPass), "arm-budget-orb");
 
     SimPlan delayOk;
     delayOk.action = PlanAction::Delay;
@@ -702,6 +717,14 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     noThreat.action = PlanAction::Pass;
     noThreat.reason = AssistReason::PassNoThreat;
     expect(!shouldArmHoldUntilSafe(noThreat), "no-arm-no-threat");
+
+    SimPlan safePassBudget;
+    safePassBudget.action = PlanAction::Pass;
+    safePassBudget.reason = AssistReason::PassUnknown;
+    safePassBudget.nowIsSafe = true;
+    safePassBudget.budgetHit = true;
+    safePassBudget.usedOrbWindow = true;
+    expect(!shouldArmHoldUntilSafe(safePassBudget), "no-arm-safe-pass-hus");
 
     SimPlan foresightBudget;
     foresightBudget.action = PlanAction::Pass;
@@ -1973,26 +1996,26 @@ void AssistController::fireBuffered(
                 this->m_attemptTick
             ));
         }
-        else if (requireHold || expectOrb || continuous) {
-            // Only orb/dash/continuous gets post-release extend assist.
+        else if (requireHold) {
+            // Post-release extend ONLY when the plan required a hold (dash orb).
+            // expectOrb / continuous alone used to always extend ≤ window and
+            // phase-shift wave clicks into spikes after a verified Delay-orb fire.
             this->m_pendingRelease = true;
             this->m_pendingReleaseP1 = player1;
-            this->m_pendingReleaseHold = requireHold;
+            this->m_pendingReleaseHold = true;
             this->m_pendingReleaseContinuous = continuous;
             this->m_pendingReleaseArmTick = this->m_attemptTick;
             this->m_pendingReleaseUserUpTick = -1;
             this->m_pendingReleaseMaxExtend = extendCap;
             this->m_pendingReleaseTick = 0; // set on user-up
             AssistLog::debug(fmt::format(
-                "hold-assist: arm extend-after-release max={} @fire={} hold={} cont={}",
+                "hold-assist: arm extend-after-release max={} @fire={} (requireHold)",
                 extendCap,
-                this->m_attemptTick,
-                requireHold ? 1 : 0,
-                continuous ? 1 : 0
+                this->m_attemptTick
             ));
             DevCycleRecorder::get().noteHoldExtend(devPressId, extendCap);
         }
-        // else: plain Delay tap — user owns hold+release fully (no pending).
+        // else: Delay tap / orb / continuous — user owns hold+release fully.
     }
 }
 

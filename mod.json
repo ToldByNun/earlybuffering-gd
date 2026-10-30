@@ -441,6 +441,14 @@
 			"min": 0,
 			"max": 240
 		},
+		"post-action-horizon": {
+			"type": "int",
+			"name": "Post-Click Look-Ahead",
+			"description": "Physics ticks simulated AFTER the assisted click/release. Catches \"safe\" clicks that yeet into death later (orb/slope, ~15 display frames). Higher = fewer click-caused deaths, more CPU. Lower = snappier plans, may miss late yeets. 96 ≈ 0.4s @240 TPS / ~24 frames @60.",
+			"default": 96,
+			"min": 24,
+			"max": 240
+		},
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",

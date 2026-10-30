@@ -93,7 +93,9 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 **Empty honesty:** finish log includes `src=` + `gameObjects` / `lethalIds` + skip breakdown. Baker status when empty: `trigger-world: empty (src=… fx=… …)`.
 
-**Anti-hallucination (Live Delay):** arm only when `verifyDelay` ok and plan not `budgetHit`; fire-tick re-verifies before inject (fail → cancel, no inject / no save-cue); recheck slides and HUS Delay-confirm require verify; hold-extend aborts early on lethal verify; `SAVED +N` / save-cue only after verified fire with `delayed>0`.
+**Anti-hallucination (Live Delay):** arm only when `verifyDelay` ok and plan not `budgetHit`; fire-tick re-verifies before inject (fail → cancel, no inject / no save-cue); recheck slides and HUS Delay-confirm require verify; hold-extend aborts early on lethal verify; `SAVED +N` / save-cue only after verified fire with `delayed>0`. Chosen Delay must be an **evaluated** viable cand (`candReady`) — never invent a delay the search skipped. HUS arms on budget only with orb/pad opportunity (not bare `PassBudget`). Post-fire jump-extend only when the plan set `requireHold` (dash); orb/continuous Delay no longer auto-extends after user-up.
+
+**Click-caused death = hallucination:** a Delay/Pass that the planner calls safe but the **assisted click** itself puts you on a dying trajectory (orb yeet, slope launch, ~15 display frames later) still counts. `runOne` / verify always simulate at least **Post-Click Look-Ahead** (`post-action-horizon`, default 96) ticks **after** the action; zone early-exit cannot cut before that. Wave/ship/swing model caps also floor at that setting.
 
 **Residual hitch at fire (planSimDtOrNominal):** a wall `dt` dump (e.g. `0.25` → ~4 TPS) must not feed plan / recheck / verify / HUS / hold-extend. Those paths use `AssistClock::planSimDtOrNominal` (via `planningSimDt`); insane `firstDt` snaps to the same quantum. Hitch physics ticks skip fireBuffered recheck and HUS replan (park at deadline). `pass-no-threat` / `pass-d0-safe` from a hitch or insane firstDt sample are rewritten to `pass-unknown` (LagProbe `eb.assist.hitch-soft-pass`) — never soft-trust empty-corridor Pass from 4-TPS physics.
 
@@ -170,7 +172,7 @@ Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Wi
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **130** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **`settings`**: all **131** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
@@ -218,6 +220,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | window-unit | string | Ticks | Ticks/Frames | | Window — Frames→×4 ticks @240 |
 | death-slack | int | 2 | 0 | 16 | Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Algorithm — 0=auto |
+| post-action-horizon | int | 96 | 24 | 240 | Algorithm — ticks after click (yeet / click-caused death) |
 | assist-mode | string | Live | Live/Replay/Hybrid/BruteForce | | Algorithm |
 | assist-pick | string | Legacy | New/Legacy | | Algorithm — G1 pick |
 | bake-radius | int | 0 | 0 | 128 | Algorithm — 0=auto |
@@ -254,7 +257,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further. Skipped when `idleSafer`.
 4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay (New outcome / Legacy latest) instead of Pass/hopeless. No forever block if nothing in-window is viable; controller may Soft Hold when both flags set. Wave proximity/futile early-Pass skipped when `idleSafer`.
 5. eval delays under tick + sim-budget-us
-6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter
+6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter — **skipped when d0 already survives** (`viable` + `surviveBin≥1`); forcing orb Delay when d0 is safe was a common click-caused death (UFO/slope yeet)
 7. else d0 survived -> Pass; else New outcome / Legacy latest ±k-robust
 8. New: `planSequence` exit-predict over survivor band (horizon replay; smartDepth≥2 adds multi-jump)
 9. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
@@ -391,7 +394,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Legacy | Setting `assist-pick` = **Legacy** (default): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
+| G1 Legacy | Setting `assist-pick` = **Legacy** (default): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band earliest activation only when d0 is unsafe. |
 | G1 Prefer (New) | `assist-pick` = **New**: **Delay-viable = sim survives**. d0 survived → Pass; else **exit prediction** ranks survivor delays by horizon outcome (survive / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
@@ -430,7 +433,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 
 | Scene | Expect (New) | Expect (Legacy) | Notes |
 |-------|--------------|-----------------|-------|
-| Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
+| Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 already survives post-click horizon; Delay only if d0 unsafe and orb window has a survivor | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
 | Budget starve mid-search + foresight orb | `HUS` → cadenced replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass / never hang; LagProbe `eb.hus.replan` |
 | Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |

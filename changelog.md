@@ -10,13 +10,16 @@
 - **Anti-hallucination:** Delay arm refuses `plan.budgetHit` and failed `verifyDelay`; fire-tick re-verify before inject (fail → Pass, no save-cue); recheck slide / HUS confirm require verify; hold-extend cuts on lethal verify; no `SAVED +0` on HUS flush.
 - **Residual hitch at fire:** `dt=0.25` spikes no longer feed 4-TPS plan/recheck/verify/HUS (`planSimDtOrNominal` on those paths; hitch ticks skip recheck/HUS replan). Soft `pass-no-threat` / `pass-d0-safe` from hitch samples → `pass-unknown`.
 - **Trigger apply nearness:** `applyTriggerWorldAtTick` ranks by `samplePose` X @ absTick (not press/capture live X); missing sample keeps baseline / no false-near.
+- **Hallucination harden (Sevvend session):** mark `candReady` after every evaluated delay (ledger no longer lies `budget-not-reached`); refuse Delay unless chosen cand was evaluated+viable; HUS no longer arms on bare `PassBudget` (needs orb/pad opportunity); post-fire hold-extend only when plan `requireHold` (not every orb/continuous).
+- **Post-click look-ahead:** treat click-caused later death (slope/orb yeet ~15 frames later) as lethal — `runOne`/verify floor ticks after the action; wave/ship caps raised; zone early-exit cannot cut before that horizon. Setting **Post-Click Look-Ahead** (`post-action-horizon`, default 96, 24–240).
+- **Orb force + HUS Pass swallow (session-1793379778097):** do not force `delay-orb` when d0 already survives (`surviveBin≥1`) — that orb click was the lethal input while shadow said all delays safe; HUS never arms when `nowIsSafe` / intentional Pass (budgetHit+orb was swallowing Pass into soft-hold + save-cue).
 
 ## v1.3.0
 
 **Config export, Hybrid lag, beginner defaults, iOS mobile parity** (still GD **2.2081** only).
 
 ### Config export / import (full settings)
-- **ConfigBundle v2**: exports/imports all **130** portable settings under `{ version, settings }` (not the old ~12-key subset).
+- **ConfigBundle v2**: exports/imports all portable settings under `{ version, settings }` (not the old ~12-key subset; now **131** keys incl. `post-action-horizon`).
 - Types: bool/int/float/string, color as `#RRGGBB`, keybinds as Geode strings (`F6`, `Ctrl+Shift+D`, multi via ` | `).
 - Import: v1 flat-root still works; merge missing keys; skip bad types; **applying-guard** so preset does not wipe custom ticks / look-ahead.
 - Alerts show version / applied|keys / skipped + path. PlanGold: `ConfigBundleKeys` / `ConfigBundleCodec` / `ConfigBundle` round-trip selfCheck.
