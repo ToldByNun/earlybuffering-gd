@@ -8,6 +8,7 @@
 - **TW bake integrity:** cancel drops partial tracks; `save` / spool / apply only when `bakeComplete` (finishOk or disk cache); prevents poisoned partial cache after mid-build cancel.
 - **Full-level TW bake + stream spool:** soft track cap 131072 (was 2048); uniqueId index; capture/apply walk `objectLayer` ∩ bake (GD stream buffer), not O(all tracks).
 - **Anti-hallucination:** Delay arm refuses `plan.budgetHit` and failed `verifyDelay`; fire-tick re-verify before inject (fail → Pass, no save-cue); recheck slide / HUS confirm require verify; hold-extend cuts on lethal verify; no `SAVED +0` on HUS flush.
+- **Residual hitch at fire:** `dt=0.25` spikes no longer feed 4-TPS plan/recheck/verify/HUS (`planSimDtOrNominal` on those paths; hitch ticks skip recheck/HUS replan). Soft `pass-no-threat` / `pass-d0-safe` from hitch samples → `pass-unknown`.
 
 ## v1.3.0
 

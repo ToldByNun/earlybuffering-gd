@@ -95,6 +95,8 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 **Anti-hallucination (Live Delay):** arm only when `verifyDelay` ok and plan not `budgetHit`; fire-tick re-verifies before inject (fail → cancel, no inject / no save-cue); recheck slides and HUS Delay-confirm require verify; hold-extend aborts early on lethal verify; `SAVED +N` / save-cue only after verified fire with `delayed>0`.
 
+**Residual hitch at fire (planSimDtOrNominal):** a wall `dt` dump (e.g. `0.25` → ~4 TPS) must not feed plan / recheck / verify / HUS / hold-extend. Those paths use `AssistClock::planSimDtOrNominal` (via `planningSimDt`); insane `firstDt` snaps to the same quantum. Hitch physics ticks skip fireBuffered recheck and HUS replan (park at deadline). `pass-no-threat` / `pass-d0-safe` from a hitch or insane firstDt sample are rewritten to `pass-unknown` (LagProbe `eb.assist.hitch-soft-pass`) — never soft-trust empty-corridor Pass from 4-TPS physics.
+
 `ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 
 Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Camera/pulse/song → `Ignore`. Group-follow → `StaticMove`; player-coupled → `DynamicFollow`; touch → `DynamicOther`.

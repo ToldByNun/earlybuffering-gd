@@ -202,6 +202,7 @@ private:
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
     // Live verifyDelay wrapper: ok ⇒ viable && !budgetHit. Used at arm / fire / recheck.
+    // Always plans with planSimDtOrNominal (hitch-safe).
     bool verifyAssistDelay(
         PlayLayer* playLayer,
         PlayerObject* player,
@@ -212,6 +213,8 @@ private:
         int attemptStartTick,
         ShadowSimulator::VerifyDelayResult* out = nullptr
     ) const;
+    // Hitch-safe physics quantum for plan / verify / recheck / fire.
+    float planningSimDt(PlayLayer* layer) const;
     // Cancel armed buffer without inject (fire-verify fail / lethal recheck).
     void cancelArmedAssist(char const* where, AssistReason reason);
     bool userHolding(bool player1) const { return m_userHolding[player1 ? 0 : 1]; }
@@ -248,6 +251,8 @@ private:
     float m_simDt = 1.f / 240.f;
     float m_dtEma = 1.f / 240.f;
     float m_dtVarEma = 0.f; // relative |dt−ema|/ema for auto robustK
+    // True when this physics tick's wall dt was an insane hitch/pause dump.
+    bool m_physicsHitchThisTick = false;
     bool m_inRealUpdate = false;
     float m_subDtSeen = 0.f;
     bool m_userHolding[2] = { false, false };

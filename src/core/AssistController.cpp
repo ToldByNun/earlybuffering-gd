@@ -186,6 +186,15 @@ std::string AssistController::overlayText() const { return m_overlayText; }
 
 void AssistController::clearBuffer() { m_buffer = {}; }
 
+float AssistController::planningSimDt(PlayLayer* layer) const {
+    float tw = 1.f;
+    if (layer) {
+        tw = layer->m_gameState.m_timeWarp;
+        if (tw <= 0.f) tw = 1.f;
+    }
+    return AssistClock::get().planSimDtOrNominal(this->m_simDt, tw);
+}
+
 bool AssistController::verifyAssistDelay(
     PlayLayer* playLayer,
     PlayerObject* player,
@@ -198,10 +207,12 @@ bool AssistController::verifyAssistDelay(
 ) const {
     if (out) *out = {};
     if (!playLayer || !player || limit < 0) return false;
-    float const simDt = this->m_simDt;
+    float const simDt = this->planningSimDt(playLayer);
     if (simDt <= 0.f) return false;
     float fd = firstDt;
-    if (fd <= 0.f || fd > simDt) fd = simDt;
+    if (fd <= 0.f || fd > simDt || !AssistClock::get().isSaneSimDt(fd)) {
+        fd = simDt;
+    }
 
     PlanOptions vopts;
     vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
@@ -853,7 +864,9 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     if (!playLayer || !player) return;
     if (this->m_buffer.state != BufferState::Buffered) return;
     if (!this->m_buffer.holdUntilSafe) return;
-    if (this->m_simDt <= 0.f) return;
+
+    float const planDt = this->planningSimDt(playLayer);
+    if (planDt <= 0.f) return;
 
     int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
     int const remaining = deadline - this->m_attemptTick;
@@ -876,13 +889,30 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         return;
     }
 
+    // Hitch ticks: no 4-TPS replan / no false PassNoThreat flush — park at deadline.
+    if (this->m_physicsHitchThisTick) {
+        this->m_buffer.fireTick = deadline;
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::HoldPending,
+            "hus-hitch",
+            this->m_buffer.fireTick
+        );
+        this->noteVerdict(AssistReason::HoldPending, "hus-hitch");
+        LagProbe::get().mark(
+            "hus.replan.hitch",
+            fmt::format("t={} rem={}", this->m_attemptTick, remaining)
+        );
+        return;
+    }
+
     int const remLimit = std::max(1, remaining);
     float const x = player->getPositionX();
     // Cheap foresight edge (no full plan) so cadence can wake on orb/pad enter/leave.
     int const slack = StageConfig::deathSlack();
     bool const foresightNow = StageConfig::assistOrbs()
         && TravelForesight::hasOrbOrPadAhead(
-            playLayer, player, remLimit, this->m_simDt, slack
+            playLayer, player, remLimit, planDt, slack
         );
 
     if (!shouldReplanHoldUntilSafe(
@@ -926,7 +956,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
 
     auto re = ShadowSimulator::get().plan(
-        playLayer, player, true, remLimit, this->m_simDt, this->m_simDt, opts
+        playLayer, player, true, remLimit, planDt, planDt, opts
     );
 
     this->m_buffer.husLastReplanTick = this->m_attemptTick;
@@ -940,7 +970,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         ShadowSimulator::VerifyDelayResult husVr{};
         if (!this->verifyAssistDelay(
                 playLayer, player, true, delay, remLimit,
-                this->m_simDt, this->m_attemptTick, &husVr
+                planDt, this->m_attemptTick, &husVr
             )) {
             AssistLog::debug(fmt::format(
                 "HOLD-UNTIL-SAFE confirm verify-fail delay={} — stay soft",
@@ -1000,10 +1030,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     }
 
     // Opportunity gone and now looks safe → inject now (never drop the click).
+    // Hitch samples never count as soft-safe (false empty-corridor from 4-TPS).
     bool const clearOpp = !re.foresightOrbPad && !re.usedOrbWindow && !re.budgetHit;
-    bool const safeNow = re.reason == AssistReason::PassNoThreat
-        || re.reason == AssistReason::PassD0Safe
-        || (re.action == PlanAction::Pass && re.nowIsSafe && clearOpp);
+    bool const softSafe = re.reason == AssistReason::PassNoThreat
+        || re.reason == AssistReason::PassD0Safe;
+    bool const safeNow = !this->m_physicsHitchThisTick
+        && (softSafe || (re.action == PlanAction::Pass && re.nowIsSafe && clearOpp));
     if (safeNow) {
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE flush Pass now @{} reason={}",
@@ -1632,7 +1664,8 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
 
     // Still inside the post-release extend window — keep Jump down unless lethal.
     if (this->m_attemptTick < this->m_pendingReleaseTick) {
-        if (p && this->m_simDt > 0.f && this->m_pendingReleaseMaxExtend > 0) {
+        float const planDt = this->planningSimDt(playLayer);
+        if (p && planDt > 0.f && this->m_pendingReleaseMaxExtend > 0) {
             int const rem = this->m_pendingReleaseTick - this->m_attemptTick;
             ShadowSimulator::VerifyDelayResult holdVr{};
             bool const holdOk = this->verifyAssistDelay(
@@ -1641,7 +1674,7 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
                 true,
                 0,
                 std::max(1, rem),
-                this->m_simDt,
+                planDt,
                 this->m_attemptTick,
                 &holdVr
             );
@@ -1695,13 +1728,16 @@ void AssistController::fireBuffered(
         return;
     }
 
+    float const planDt = this->planningSimDt(playLayer);
+
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
-    // Skipped for CPS / mode-change force-fire.
+    // Skipped for CPS / mode-change force-fire, and on hitch ticks (no 4-TPS replan).
     if (allowRecheck
         && player
         && remaining > 0
         && this->m_buffer.rechecks < 2
-        && this->m_simDt > 0.f) {
+        && planDt > 0.f
+        && !this->m_physicsHitchThisTick) {
         int const absMin = this->m_buffer.dMin >= 0
             ? this->m_buffer.pressTick + this->m_buffer.dMin
             : this->m_buffer.pressTick;
@@ -1745,7 +1781,7 @@ void AssistController::fireBuffered(
             fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, this->m_buffer.down, remaining,
-                this->m_simDt, this->m_simDt, opts
+                planDt, planDt, opts
             );
 
             // Surviving Delay only — never slide into a lethal / hopeless replan.
@@ -1789,7 +1825,7 @@ void AssistController::fireBuffered(
                         this->m_buffer.down,
                         recheckDelay,
                         remaining,
-                        this->m_simDt,
+                        planDt,
                         this->m_attemptTick,
                         &reVr
                     );
@@ -1852,7 +1888,8 @@ void AssistController::fireBuffered(
 
     // Fire-tick re-verify (current state + trigger spool). Fail → vanilla, no inject/save.
     // Runs for soft and force-fire paths — never inject a lethal assist.
-    if (player && this->m_simDt > 0.f) {
+    // Hitch ticks still verify, but always with planSimDtOrNominal (not 4-TPS).
+    if (player && planDt > 0.f) {
         ShadowSimulator::VerifyDelayResult fireVr{};
         bool const fireOk = this->verifyAssistDelay(
             playLayer,
@@ -1860,7 +1897,7 @@ void AssistController::fireBuffered(
             wasPress,
             0,
             fireLimit > 0 ? fireLimit : this->m_buffer.limit,
-            this->m_simDt,
+            planDt,
             this->m_attemptTick,
             &fireVr
         );
@@ -1967,14 +2004,16 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     } tickEndGuard;
 
     float tw = 1.f;
+    this->m_physicsHitchThisTick = false;
     if (dt > 0.f) {
         tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
         float const simSample = dt / tw;
+        auto& clock = AssistClock::get();
+        this->m_physicsHitchThisTick = !clock.isSaneSimDt(simSample);
         // Hitch/pause dumps (e.g. dt=0.25 → 4 TPS) must NOT stick in m_lastDt.
         // Old logic only updated lastDt when dt grew, so one early hitch poisoned
         // planning forever (pass-hopeless with simTps≈4 in Dev Lab traces).
-        auto& clock = AssistClock::get();
         if (clock.isSaneSimDt(simSample)) {
             if (this->m_lastDt <= 0.f || this->m_attemptTick < 3) {
                 this->m_lastDt = dt;
@@ -2429,16 +2468,25 @@ bool AssistController::planPress(
         )
     );
 
+    float const planDt = this->planningSimDt(playLayer);
+    float planFirstDt = firstDt;
+    bool const hitchSample = this->m_physicsHitchThisTick
+        || !AssistClock::get().isSaneSimDt(firstDt);
+    if (planFirstDt <= 0.f || planFirstDt > planDt
+        || !AssistClock::get().isSaneSimDt(planFirstDt)) {
+        planFirstDt = planDt;
+    }
+
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
-    bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
+    bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, planDt);
     // After Hybrid bake verify rejected the window, do not treat near-bake as
     // spam override — that forced full Live on every ~5 CPS click (main-thread hitch).
     // Reuse findNear result from tryBakeAssist when present (no second lookup).
     bool nearBake = nearBakeWindowHint(
-        player, player1, true, effectTick, this->m_simDt,
+        player, player1, true, effectTick, planDt,
         shareHybrid ? &hybridReuse : nullptr
     );
     if (hybridVerifyAttempted) nearBake = false;
@@ -2559,7 +2607,7 @@ bool AssistController::planPress(
     // Otherwise reuse findNear window fields from tryBakeAssist.
     if (!hybridVerifyAttempted) {
         fillBakePreferBand(
-            opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt,
+            opts, player, player1, true, effectTick, limit, this->m_attemptTick, planDt,
             shareHybrid ? &hybridReuse : nullptr
         );
     }
@@ -2577,12 +2625,27 @@ bool AssistController::planPress(
         useSequence = false;
     }
     auto plan = useSequence
-        ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
-        : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
+        ? ShadowSimulator::get().planSequence(
+            playLayer, player, true, limit, planDt, planFirstDt, opts)
+        : ShadowSimulator::get().plan(
+            playLayer, player, true, limit, planDt, planFirstDt, opts);
     int const planUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0
     ).count());
     AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
+
+    // Hitch / insane firstDt: never soft-trust empty-corridor Pass.
+    if (hitchSample
+        && (plan.reason == AssistReason::PassNoThreat
+            || plan.reason == AssistReason::PassD0Safe)) {
+        AssistLog::debug(fmt::format(
+            "ASSIST refuse {} from hitch sample → PassUnknown",
+            AssistVerdict::name(plan.reason)
+        ));
+        plan.reason = AssistReason::PassUnknown;
+        plan.nowIsSafe = false;
+        LagProbe::get().mark("eb.assist.hitch-soft-pass", "press");
+    }
 
     this->logPlan(plan, "press");
     this->m_outcomePlayer1 = player1;
@@ -2697,13 +2760,10 @@ bool AssistController::planPress(
             this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
             return true;
         }
-        if (this->m_simDt > 0.f) {
-            float const fd = (firstDt > 0.f && firstDt <= this->m_simDt)
-                ? firstDt
-                : this->m_simDt;
+        if (planDt > 0.f) {
             ShadowSimulator::VerifyDelayResult vr{};
             armVerifyOk = this->verifyAssistDelay(
-                playLayer, player, true, delay, limit, fd, effectTick, &vr
+                playLayer, player, true, delay, limit, planFirstDt, effectTick, &vr
             );
             if (!armVerifyOk) {
                 AssistLog::debug(fmt::format(
@@ -2856,13 +2916,22 @@ bool AssistController::planRelease(
         )
     );
 
+    float const planDt = this->planningSimDt(playLayer);
+    float planFirstDt = firstDt;
+    bool const hitchSample = this->m_physicsHitchThisTick
+        || !AssistClock::get().isSaneSimDt(firstDt);
+    if (planFirstDt <= 0.f || planFirstDt > planDt
+        || !AssistClock::get().isSaneSimDt(planFirstDt)) {
+        planFirstDt = planDt;
+    }
+
     auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
-    bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
+    bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, planDt);
     bool nearBake = nearBakeWindowHint(
-        player, player1, false, effectTick, this->m_simDt,
+        player, player1, false, effectTick, planDt,
         shareHybrid ? &hybridReuse : nullptr
     );
     if (hybridVerifyAttempted) nearBake = false;
@@ -2951,7 +3020,7 @@ bool AssistController::planRelease(
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDenseRel);
     if (!hybridVerifyAttempted) {
         fillBakePreferBand(
-            opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt,
+            opts, player, player1, false, effectTick, limit, this->m_attemptTick, planDt,
             shareHybrid ? &hybridReuse : nullptr
         );
     }
@@ -2959,7 +3028,20 @@ bool AssistController::planRelease(
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
-    auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
+    auto plan = ShadowSimulator::get().plan(
+        playLayer, player, false, limit, planDt, planFirstDt, opts);
+    // Hitch / insane firstDt: never soft-trust empty-corridor Pass.
+    if (hitchSample
+        && (plan.reason == AssistReason::PassNoThreat
+            || plan.reason == AssistReason::PassD0Safe)) {
+        AssistLog::debug(fmt::format(
+            "ASSIST refuse {} from hitch sample → PassUnknown",
+            AssistVerdict::name(plan.reason)
+        ));
+        plan.reason = AssistReason::PassUnknown;
+        plan.nowIsSafe = false;
+        LagProbe::get().mark("eb.assist.hitch-soft-pass", "release");
+    }
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     DevCycleRecorder::get().notePlanFinished(
@@ -3032,13 +3114,10 @@ bool AssistController::planRelease(
             this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
             return true;
         }
-        if (this->m_simDt > 0.f) {
-            float const fd = (firstDt > 0.f && firstDt <= this->m_simDt)
-                ? firstDt
-                : this->m_simDt;
+        if (planDt > 0.f) {
             ShadowSimulator::VerifyDelayResult vr{};
             armVerifyOk = this->verifyAssistDelay(
-                playLayer, player, false, delay, limit, fd, effectTick, &vr
+                playLayer, player, false, delay, limit, planFirstDt, effectTick, &vr
             );
             if (!armVerifyOk) {
                 AssistReason const refuse = vr.budgetHit
@@ -3180,15 +3259,21 @@ bool AssistController::onHandleButton(
 
     // firstDt: full sim dt between frames; CBF remainder / timeWarp when mid-step.
     // Never fold the remainder into effectTick (that caused ±1 vs between-frames).
+    // Hitch dumps (e.g. dt=0.25) must not become plan firstDt — snap via planSimDtOrNominal.
     float tw = playLayer->m_gameState.m_timeWarp;
     if (tw <= 0.f) tw = 1.f;
-    float firstDt = this->m_simDt;
+    float const planDtBtn = this->planningSimDt(playLayer);
+    float firstDt = planDtBtn;
     if (midStep) {
         float rem = this->m_lastDt - this->m_subDtSeen;
         float const minDt = this->m_lastDt * 0.02f;
         if (rem < minDt) rem = minDt;
         if (rem > this->m_lastDt) rem = this->m_lastDt;
         firstDt = rem / tw;
+    }
+    if (firstDt <= 0.f || firstDt > planDtBtn
+        || !AssistClock::get().isSaneSimDt(firstDt)) {
+        firstDt = planDtBtn;
     }
     DevClockContract::Stamp const clockStamp = DevClockContract::get().makeStamp(
         this->m_attemptTick,
