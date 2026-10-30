@@ -184,6 +184,7 @@ public:
 
     // Single-candidate bake check: runOne(delay) must clear the threat zone
     // and not die before the action. Used by Hybrid bake verify (O(1) sim).
+    // delay==0 reuses the d0 zone-probe runOne (no duplicate sim).
     struct VerifyDelayResult {
         bool ok = false;
         bool clearsThreat = false;

@@ -19,6 +19,9 @@
 - Visuals / debug off by default: overlay, pause bake status, save-feedback sound/color, debug logging, lag probe.
 - **Auto-Tune Per Level** and **Self-Bake (Practice)** default **off** (less background CPU / no surprise learning). Existing Geode saves keep the user’s prior values.
 
+### Hybrid lag (bake verify)
+- `verifyDelay`: when planned delay is **0**, reuse the d0 zone-probe `runOne` (cuts a duplicate sim on in-window / earliest hits). Linked dual still runs once; budget/wall unchanged (`budgetHit` still refuses bake trust).
+
 ### Assist clock / first-click
 - Fix hitch poisoning of `m_lastDt` (stuck `simDt≈0.25` → `simTps≈4`, `speedScaleSuspect`) that made opening clicks `pass-hopeless` / useless Delay on Legacy and New. Sane physics samples update EMA both ways; absurd quanta snap planning to nominal 240 TPS.
 - Dev Lab sessions on Dump StartPos / Slaughterhouse showed this clock failure on first DOWN.

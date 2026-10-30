@@ -16,7 +16,7 @@ Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, n
 ## Bake verify (Hybrid / Replay / Brute)
 
 `BakeMap::findNear` prefers `BakedClick.mode == kindOf(player)` within 120px X; falls back to any mode if none match.
-Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone + runOne at planned delay). Success = clearsThreat and not diedBeforeAction (linked dual checked).
+Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d0 zone probe + runOne at planned delay; **`delay==0` reuses the d0 runOne** — no second identical sim). Success = clearsThreat and not diedBeforeAction (linked dual still checked once). Budget/wall exhaustion → `budgetHit` (not ok).
 
 | Mode | Verify fail / past window / missing bake |
 |------|------------------------------------------|

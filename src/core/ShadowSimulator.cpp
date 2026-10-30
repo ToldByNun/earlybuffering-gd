@@ -1695,38 +1695,43 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
 
     this->m_simTickBase = std::max(0, options.attemptStartTick);
     this->m_simAbsTick = -1;
-    m_simulating = true;
-    beginCapture(layer);
+    this->m_simulating = true;
+    this->beginCapture(layer);
 
     ThreatZone zone{};
-    {
-        // Probe d0 to build the same threat zone Live uses.
-        auto c0 = runOne(
-            layer, real, down, 0, limit, dt, firstDt, model, -1,
-            nullptr, &tickBudget
-        );
-        restoreCapture(layer);
-        beginCapture(layer);
-        if (c0.died) {
-            zone = buildThreatZone(layer, c0.deathX, c0.deathObject);
-            out.threatZone = zone;
-        }
-        if (tickBudget <= 0 || wallExceeded()) {
-            out.budgetHit = true;
-            this->m_simAbsTick = -1;
-            restoreCapture(layer);
-            m_simulating = false;
-            parkGhosts();
-            return out;
-        }
+    // Probe d0 to build the same threat zone Live uses. When delay==0 the
+    // planned candidate is identical — reuse that runOne (no second sim).
+    auto c0 = this->runOne(
+        layer, real, down, 0, limit, dt, firstDt, model, -1,
+        nullptr, &tickBudget
+    );
+    this->restoreCapture(layer);
+    this->beginCapture(layer);
+    if (c0.died) {
+        zone = buildThreatZone(layer, c0.deathX, c0.deathObject);
+        out.threatZone = zone;
+    }
+    if (tickBudget <= 0 || wallExceeded()) {
+        out.budgetHit = true;
+        this->m_simAbsTick = -1;
+        this->restoreCapture(layer);
+        this->m_simulating = false;
+        this->parkGhosts();
+        return out;
     }
 
-    auto r = runOne(
-        layer, real, down, delay, limit, dt, firstDt, model, -1,
-        zone.valid ? &zone : nullptr, &tickBudget
-    );
-    restoreCapture(layer);
-    beginCapture(layer);
+    RunResult r;
+    if (delay == 0) {
+        r = c0;
+    }
+    else {
+        r = this->runOne(
+            layer, real, down, delay, limit, dt, firstDt, model, -1,
+            zone.valid ? &zone : nullptr, &tickBudget
+        );
+        this->restoreCapture(layer);
+        this->beginCapture(layer);
+    }
 
     out.diedBeforeAction = r.diedBeforeAction;
     out.clearsThreat = clearsThreatOf(r, zone);
@@ -1743,15 +1748,16 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
         viable = !zone.valid || out.clearsThreat || r.zoneCleared;
     }
 
+    // Linked dual: still one runOne for the other player (even when delay==0).
     if (viable && linkedDual()) {
         PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
         if (other && tickBudget > 0 && !wallExceeded()) {
-            auto r2 = runOne(
+            auto r2 = this->runOne(
                 layer, other, down, delay, limit, dt, firstDt, model, -1,
                 zone.valid ? &zone : nullptr, &tickBudget
             );
-            restoreCapture(layer);
-            beginCapture(layer);
+            this->restoreCapture(layer);
+            this->beginCapture(layer);
             if (r2.died || r2.diedBeforeAction || !clearsThreatOf(r2, zone)) {
                 viable = false;
                 out.clearsThreat = false;
@@ -1762,9 +1768,9 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     if (tickBudget <= 0 || wallExceeded()) out.budgetHit = true;
 
     this->m_simAbsTick = -1;
-    restoreCapture(layer);
-    m_simulating = false;
-    parkGhosts();
+    this->restoreCapture(layer);
+    this->m_simulating = false;
+    this->parkGhosts();
 
     // Budget exhaustion → do not trust bake (caller falls through / Pass).
     out.ok = viable && !out.budgetHit;
