@@ -99,6 +99,8 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 `ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 
+**Apply nearness @ samplePose(absTick):** ranking/distance uses `samplePose` X at the sim `absTick`, **not** press/capture `obj->getPositionX()`. Missing sample (before first key) keeps baseline and is not ranked as near (`skipNoSample`; LagProbe under debug-logging). Write reuses the already-sampled pose (no second lookup).
+
 Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Camera/pulse/song → `Ignore`. Group-follow → `StaticMove`; player-coupled → `DynamicFollow`; touch → `DynamicOther`.
 
 **Self-check / manual matrix:** `TriggerWorldStore::selfCheck` + `TriggerWorldBaker::selfCheck` + `TriggerClassify::selfCheck` run at mod load (and PlanGold). With `debug-logging`, the banner lists edge cases: static corridor, follow-player Unknown, cache-hit 2nd enter, skip-dynamic on, quit mid-build, death/reset LagProbe without `eb.triggerBake.build` inside the death episode.

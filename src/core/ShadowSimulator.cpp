@@ -790,18 +790,28 @@ void ShadowSimulator::applyTriggerWorldAtTick(
     float const gx = ghost ? ghost->getPositionX() : 0.f;
     struct Cand {
         SavedTransform const* st = nullptr;
+        TriggerPose pose{};
         float dist = 0.f;
         // Named isNear — Windows headers define `near` as a macro.
         bool isNear = false;
     };
     std::vector<Cand> cands;
     cands.reserve(this->m_savedTransforms.size());
+    int skipNoSample = 0;
     for (auto const& st : this->m_savedTransforms) {
         auto* obj = st.obj;
         if (!obj || obj->m_uniqueID != st.uniqueId) continue;
+        // Nearness from samplePose@absTick — never press/capture obj->getPositionX().
+        // Missing sample (before first key): leave baseline, do not rank as near.
+        TriggerPose pose{};
+        if (!store.samplePose(st.uniqueId, absTick, pose)) {
+            ++skipNoSample;
+            continue;
+        }
         Cand c;
         c.st = &st;
-        c.dist = std::fabs(obj->getPositionX() - gx);
+        c.pose = pose;
+        c.dist = std::fabs(pose.x - gx);
         c.isNear = c.dist <= kApplyMarginX;
         cands.push_back(c);
     }
@@ -821,12 +831,16 @@ void ShadowSimulator::applyTriggerWorldAtTick(
         if (us >= kApplyBudgetUs) break;
 
         auto* obj = c.st->obj;
-        TriggerPose pose{};
-        if (!store.samplePose(c.st->uniqueId, absTick, pose)) continue;
-        TriggerWorldStore::writePose(obj, pose);
+        TriggerWorldStore::writePose(obj, c.pose);
         ++applied;
     }
     // Far / over-budget tracks hold last written pose (or capture baseline).
+    if (skipNoSample > 0 && StageConfig::debugLogging()) {
+        LagProbe::get().mark(
+            "eb.trigger.apply.skipNoSample",
+            fmt::format("n={} abs={}", skipNoSample, absTick)
+        );
+    }
     this->m_triggerWorldAppliedThisTick = true;
 }
 
@@ -3408,6 +3422,30 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(kWindowMarginK == 1, "windowMarginK");
     expect(kDefaultTickBudget == 4000, "tickBudget");
     expect(kFutileEndXGain == 8.f, "futileEndXGain");
+
+    // Trigger apply nearness: rank by samplePose X @ absTick, not press/capture X.
+    // Mover left the ghost at press but returns at delay → must be near by sample.
+    {
+        float const gx = 1000.f;
+        float const pressX = 50.f;
+        float const sampleX = 1000.f;
+        float const pressDist = std::fabs(pressX - gx);
+        float const sampleDist = std::fabs(sampleX - gx);
+        expect(pressDist > kApplyMarginX, "tw-near-press-far");
+        expect(sampleDist <= kApplyMarginX, "tw-near-sample-near");
+        expect(sampleDist < pressDist, "tw-near-sample-ranks-closer");
+    }
+    // Inverse: still near at press but sample already far → must not prefer press.
+    {
+        float const gx = 100.f;
+        float const pressX = 100.f;
+        float const sampleX = 2000.f;
+        float const pressDist = std::fabs(pressX - gx);
+        float const sampleDist = std::fabs(sampleX - gx);
+        expect(pressDist <= kApplyMarginX, "tw-near-press-near");
+        expect(sampleDist > kApplyMarginX, "tw-near-sample-far");
+        expect(sampleDist > pressDist, "tw-near-refuse-press-rank");
+    }
 
     // Wave proximity / futile-delay gates (+ foresight orb/pad must not Pass)
     expect(
