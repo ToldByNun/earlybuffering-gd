@@ -202,34 +202,15 @@ bool TriggerWorldStore::samplePoseAtStoreTick(
         return true;
     }
 
-    // Segment [lo, hi): lo.tick <= storeTick < hi.tick.
-    size_t hi = 0;
-    for (; hi < keys.size(); ++hi) {
-        if (keys[hi].tick > storeTick) break;
+    // Hold last key with tick <= storeTick. Baker already inserts stepped
+    // mid-keys for moves; linear lerp between keys (243415c) shifted solids
+    // / toggles off the live path and collapsed assist into pass-no-threat.
+    TriggerPose const* best = &keys.front();
+    for (auto const& key : keys) {
+        if (key.tick > storeTick) break;
+        best = &key;
     }
-    if (hi == 0 || hi >= keys.size()) {
-        // Defensive: before-first / past-last already handled above.
-        return false;
-    }
-    TriggerPose const& a = keys[hi - 1];
-    TriggerPose const& b = keys[hi];
-    if (storeTick <= a.tick || b.tick <= a.tick) {
-        // Exact key or identical/inverted ticks → hold a (no lerp).
-        out = a;
-        return true;
-    }
-
-    float const t = static_cast<float>(storeTick - a.tick)
-        / static_cast<float>(b.tick - a.tick);
-    out.tick = storeTick;
-    out.x = a.x + (b.x - a.x) * t;
-    out.y = a.y + (b.y - a.y) * t;
-    // Rotation: linear (no shortest-path wrap) — movers rarely cross ±180 mid-key.
-    out.rotation = a.rotation + (b.rotation - a.rotation) * t;
-    out.scaleX = a.scaleX + (b.scaleX - a.scaleX) * t;
-    out.scaleY = a.scaleY + (b.scaleY - a.scaleY) * t;
-    // Active hard-steps at the next key (false→true only when b is reached).
-    out.active = a.active;
+    out = *best;
     return true;
 }
 
@@ -346,14 +327,7 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
         store.samplePoseAtStoreTick(42, 10, out) && out.x == 100.f && out.y == 200.f,
         "at-first"
     );
-    // Mid between 10→20: linear lerp (not hold-at-10).
-    expect(
-        store.samplePoseAtStoreTick(42, 15, out)
-            && std::fabs(out.x - 125.f) < 1e-3f
-            && std::fabs(out.rotation - 22.5f) < 1e-3f
-            && out.active,
-        "lerp-mid"
-    );
+    expect(store.samplePoseAtStoreTick(42, 15, out) && out.x == 100.f, "hold-mid");
     expect(
         store.samplePoseAtStoreTick(42, 20, out) && out.x == 150.f && out.rotation == 45.f,
         "at-last"
@@ -361,31 +335,6 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
     expect(store.samplePoseAtStoreTick(42, 99, out) && out.x == 150.f, "past-last-hold");
     expect(!store.samplePoseAtStoreTick(999, 10, out), "missing-id");
     expect(!store.samplePoseAtStoreTick(99, 0, out), "not-ready");
-
-    // Active hard-step: false at a, true at b → mid stays false until next key.
-    {
-        TriggerTrack step;
-        step.uniqueId = 77;
-        step.objectId = 3;
-        step.kind = TriggerKind::StaticToggle;
-        step.ready = true;
-        step.keys.push_back(TriggerPose{ 0, 0.f, 0.f, 0.f, 1.f, 1.f, false });
-        step.keys.push_back(TriggerPose{ 10, 10.f, 0.f, 0.f, 1.f, 1.f, true });
-        store.m_data.tracks.push_back(std::move(step));
-        store.rebuildIndex();
-        expect(
-            store.samplePoseAtStoreTick(77, 5, out) && !out.active
-                && std::fabs(out.x - 5.f) < 1e-3f,
-            "active-hard-step-mid"
-        );
-        expect(
-            store.samplePoseAtStoreTick(77, 10, out) && out.active && out.x == 10.f,
-            "active-hard-step-at-b"
-        );
-        // Drop temp track so ready-count stays on the StaticMove fixture.
-        store.m_data.tracks.pop_back();
-        store.rebuildIndex();
-    }
 
     // Remap: store @ 240tps, live simDt = 1/120 → live 100 → store 200.
     expect(store.remapLiveTick(100, 1.f / 240.f) == 100, "remap-identity");

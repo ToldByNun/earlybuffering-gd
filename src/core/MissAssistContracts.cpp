@@ -18,15 +18,16 @@ int MissAssistContracts::fireDeadline(int pressTick, int limit) {
 MissAssistContracts::ExpectAction MissAssistContracts::legacyExpect(
     bool d0Viable, int earliestViableDelay
 ) {
-    if (d0Viable) return MissAssistContracts::ExpectAction::Pass;
+    // In-window assist target (>0) wins even when d0 is viable (early click).
     if (earliestViableDelay > 0) return MissAssistContracts::ExpectAction::Delay;
+    (void)d0Viable;
     return MissAssistContracts::ExpectAction::Pass;
 }
 
 int MissAssistContracts::legacyDelay(
     bool d0Viable, int earliestViableDelay, int limit
 ) {
-    if (d0Viable) return 0;
+    (void)d0Viable;
     if (earliestViableDelay <= 0) return 0;
     return MissAssistContracts::clampDelayToWindow(earliestViableDelay, limit);
 }
@@ -57,9 +58,9 @@ static MissAssistContracts::EarlyPressCase const s_cases[] = {
     {
         "early10-limit16-d0-safe-better10",
         16, 10, 10, true, 10,
-        MissAssistContracts::ExpectAction::Pass, 0,
         MissAssistContracts::ExpectAction::Delay, 10,
-        AssistReason::PassD0Safe
+        MissAssistContracts::ExpectAction::Delay, 10,
+        AssistReason::None
     },
     {
         "ideal6-limit4-best4",
@@ -71,9 +72,9 @@ static MissAssistContracts::EarlyPressCase const s_cases[] = {
     {
         "ideal6-limit4-d0-safe-best4",
         4, 6, 4, true, 4,
-        MissAssistContracts::ExpectAction::Pass, 0,
         MissAssistContracts::ExpectAction::Delay, 4,
-        AssistReason::PassD0Safe
+        MissAssistContracts::ExpectAction::Delay, 4,
+        AssistReason::None
     },
     {
         "empty-corridor",
@@ -106,9 +107,9 @@ static MissAssistContracts::EarlyPressCase const s_cases[] = {
     {
         "orb-activation-best12-d0-safe",
         16, 12, 12, true, 12,
-        MissAssistContracts::ExpectAction::Pass, 0,
         MissAssistContracts::ExpectAction::Delay, 12,
-        AssistReason::PassD0Safe
+        MissAssistContracts::ExpectAction::Delay, 12,
+        AssistReason::None
     },
 };
 
@@ -149,12 +150,20 @@ bool MissAssistContracts::selfCheck(std::string& report) {
     expect(MissAssistContracts::fireDeadline(50, 0) == 50, "deadline-limit0");
 
     expect(
-        MissAssistContracts::legacyExpect(true, 10) == ExpectAction::Pass,
-        "legacy-d0-pass"
+        MissAssistContracts::legacyExpect(true, 10) == ExpectAction::Delay,
+        "legacy-better-in-window"
     );
     expect(
-        MissAssistContracts::legacyDelay(true, 10, 16) == 0,
-        "legacy-d0-delay0"
+        MissAssistContracts::legacyDelay(true, 10, 16) == 10,
+        "legacy-better-delay10"
+    );
+    expect(
+        MissAssistContracts::legacyExpect(true, -1) == ExpectAction::Pass,
+        "legacy-d0-only-pass"
+    );
+    expect(
+        MissAssistContracts::legacyDelay(true, -1, 16) == 0,
+        "legacy-d0-only-delay0"
     );
     expect(
         MissAssistContracts::legacyExpect(false, 8) == ExpectAction::Delay,

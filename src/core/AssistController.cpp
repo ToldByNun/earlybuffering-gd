@@ -215,11 +215,9 @@ bool AssistController::verifyAssistDelay(
     }
 
     PlanOptions vopts;
-    // Need room for post-click horizon (slope/yeet deaths), not just d0 probe.
-    vopts.tickBudget = std::max(
-        StageConfig::postActionHorizon() + 32,
-        StageConfig::tickBudgetPerPress() / 4
-    );
+    // Share press envelope — do not force postActionHorizon into verify budget
+    // (that starved verify whenever look-ahead was raised and refused every arm).
+    vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
     vopts.budgetUs = StageConfig::husReplanBudgetUs();
     vopts.maxBranches = 0;
     vopts.smartDepth = 1;
@@ -655,17 +653,16 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
 
 bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
     if (plan.action == PlanAction::Delay) return false;
-    // Intentional Pass (d0 already safe) must never become HUS just because later
-    // cand slots hit the tick wall — that swallowed clicks + played save-cue.
+    // Intentional empty-corridor / d0-safe Pass must never become HUS.
     if (plan.nowIsSafe) return false;
     if (plan.reason == AssistReason::PassD0Safe
         || plan.reason == AssistReason::PassNoThreat) {
         return false;
     }
-    // Never soft-trust a pure budget Pass — only HUS when an orb/pad opportunity
-    // still needs a later replan (otherwise budget→HUS→deadline fire hallucinates).
+    // PassBudget: replan under a soft hold (pre-anti-hallucination). Without this,
+    // postAction/TW budget starvation became a hard vanilla Pass and kill assist.
+    if (plan.reason == AssistReason::PassBudget) return true;
     bool const opp = plan.foresightOrbPad || plan.usedOrbWindow;
-    if (plan.reason == AssistReason::PassBudget) return opp;
     if (plan.budgetHit && opp) return true;
     if (plan.unknown && opp) return true;
     // Continuous: idle safer + ascent helped in eval but pick starved → soft hold.
@@ -703,9 +700,7 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     SimPlan budgetPass;
     budgetPass.action = PlanAction::Pass;
     budgetPass.reason = AssistReason::PassBudget;
-    expect(!shouldArmHoldUntilSafe(budgetPass), "no-arm-budget-alone");
-    budgetPass.usedOrbWindow = true;
-    expect(shouldArmHoldUntilSafe(budgetPass), "arm-budget-orb");
+    expect(shouldArmHoldUntilSafe(budgetPass), "arm-budget");
 
     SimPlan delayOk;
     delayOk.action = PlanAction::Delay;
@@ -2761,20 +2756,17 @@ bool AssistController::planPress(
         }
     }
 
-    // Hard refuse: never arm a Delay the live verify cannot survive / budget-exhausted.
+    // Hard refuse: never arm a Delay the live verify cannot survive.
+    // plan.budgetHit alone is OK when the chosen delay was evaluated (candReady).
     bool armVerifyOk = true;
     if (delay > 0) {
         if (plan.budgetHit) {
+            // Partial search after evaluated Delay pick - still arm; verify below.
+            // Blanket refuse killed every delay-orb in session-1793383734036 (16/16).
             AssistLog::debug(fmt::format(
-                "ASSIST press refuse arm delay={} — plan budgetHit (no soft-trust)",
+                "ASSIST press arm delay={} despite plan budgetHit (chosen cand evaluated)",
                 delay
             ));
-            DevCycleRecorder::get().notePassThrough(
-                AssistReason::PassBudget, "press-arm-budget"
-            );
-            this->noteVerdict(AssistReason::PassBudget, "press-arm-budget");
-            this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
-            return true;
         }
         if (planDt > 0.f) {
             ShadowSimulator::VerifyDelayResult vr{};
@@ -3119,15 +3111,9 @@ bool AssistController::planRelease(
     if (delay > 0) {
         if (plan.budgetHit) {
             AssistLog::debug(fmt::format(
-                "ASSIST release refuse arm delay={} — plan budgetHit",
+                "ASSIST release arm delay={} despite plan budgetHit (chosen cand evaluated)",
                 delay
             ));
-            DevCycleRecorder::get().notePassThrough(
-                AssistReason::PassBudget, "release-arm-budget"
-            );
-            this->noteVerdict(AssistReason::PassBudget, "release-arm-budget");
-            this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
-            return true;
         }
         if (planDt > 0.f) {
             ShadowSimulator::VerifyDelayResult vr{};

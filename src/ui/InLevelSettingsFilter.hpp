@@ -49,6 +49,11 @@ public:
     // Refresh bake status / button enable on the open popup (no-op if closed).
     static void refreshOpen();
 
+    // After ConfigBundle import: pull committed values into open SettingNodeV3 rows
+    // (avoids green "uncommitted" labels), then rebuild the popup next frame so
+    // keybind rows and Apply state match the store. No-op if settings closed.
+    static void reloadAfterImport();
+
     // Scene watchdog: attach tabs whenever EarlyBuffer settings open (Geode menu or EB).
     static void startWatchdog();
 

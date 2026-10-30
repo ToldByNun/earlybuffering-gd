@@ -2,6 +2,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
+#include <Geode/ui/GeodeUI.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
 #include <fmt/format.h>
 #include <cstring>
@@ -469,6 +470,116 @@ bool InLevelSettingsFilterKeeper::isOpen() {
 
 void InLevelSettingsFilterKeeper::refreshOpen() {
     // Action button rows refresh themselves via onTick.
+}
+
+namespace {
+
+// Pull Geode SettingNodeV3 uncommitted UI values from the already-committed store.
+// Without this, setSettingValue leaves open rows green (hasUncommitted) and Apply
+// would write the stale UI values back over the import.
+template <class SettingT>
+bool syncValueNode(SettingNodeV3* sett) {
+    auto* node = typeinfo_cast<SettingValueNodeV3<SettingT>*>(sett);
+    if (!node) return false;
+    node->setValue(node->getSetting()->getValue(), nullptr);
+    return true;
+}
+
+void syncOpenSettingNodesFromStore(CCNode* root, std::string const& ourId) {
+    if (!root) return;
+    std::vector<SettingNodeV3*> settings;
+    ScrollLayer* list = nullptr;
+    FilterWalk::collect(root, settings, list);
+    for (auto* sett : settings) {
+        if (!sett) continue;
+        auto setting = sett->getSetting();
+        if (!setting || setting->getModID() != ourId) continue;
+        if (syncValueNode<BoolSettingV3>(sett)) continue;
+        if (syncValueNode<IntSettingV3>(sett)) continue;
+        if (syncValueNode<FloatSettingV3>(sett)) continue;
+        if (syncValueNode<StringSettingV3>(sett)) continue;
+        if (syncValueNode<Color3BSettingV3>(sett)) continue;
+        if (syncValueNode<Color4BSettingV3>(sett)) continue;
+        // KeybindSettingNodeV3 keeps a private uncommitted vector — rebuilt below.
+    }
+}
+
+} // namespace
+
+void InLevelSettingsFilterKeeper::reloadAfterImport() {
+    auto* scene = CCScene::get();
+    if (!scene) return;
+    auto* mod = Mod::get();
+    if (!mod) return;
+    std::string const ourId = mod->getID();
+
+    auto* keeper = scene->getChildByIDRecursive("earlybuffer-inlevel-settings-filter"_spr);
+    CCNode* popup = keeper ? keeper->getParent() : nullptr;
+    if (!popup) {
+        // Settings may be open from Geode before our keeper attaches.
+        for (auto* child : CCArrayExt<CCNode*>(scene->getChildren())) {
+            auto* alert = typeinfo_cast<FLAlertLayer*>(child);
+            if (!alert) continue;
+            std::vector<SettingNodeV3*> settings;
+            ScrollLayer* list = nullptr;
+            FilterWalk::collect(alert, settings, list);
+            for (auto* sett : settings) {
+                if (!sett) continue;
+                auto s = sett->getSetting();
+                if (s && s->getModID() == ourId) {
+                    popup = alert;
+                    break;
+                }
+            }
+            if (popup) break;
+        }
+    }
+    if (!popup) return;
+
+    syncOpenSettingNodesFromStore(popup, ourId);
+
+    // Rebuild next frame: import runs from a SettingNode button callback, so we
+    // must not destroy the popup until that stack unwinds. Rebuild also refreshes
+    // keybind rows (no public setValue) and clears Apply.
+    Loader::get()->queueInMainThread([] {
+        auto* scene = CCScene::get();
+        if (!scene) return;
+        auto* mod = Mod::get();
+        if (!mod) return;
+
+        CCNode* popup = nullptr;
+        if (auto* keeper = scene->getChildByIDRecursive(
+                "earlybuffer-inlevel-settings-filter"_spr
+            )) {
+            popup = keeper->getParent();
+        }
+        if (!popup) {
+            std::string const ourId = mod->getID();
+            for (auto* child : CCArrayExt<CCNode*>(scene->getChildren())) {
+                auto* alert = typeinfo_cast<FLAlertLayer*>(child);
+                if (!alert) continue;
+                std::vector<SettingNodeV3*> settings;
+                ScrollLayer* list = nullptr;
+                FilterWalk::collect(alert, settings, list);
+                for (auto* sett : settings) {
+                    if (!sett) continue;
+                    auto s = sett->getSetting();
+                    if (s && s->getModID() == ourId) {
+                        popup = alert;
+                        break;
+                    }
+                }
+                if (popup) break;
+            }
+        }
+        if (popup) {
+            popup->removeFromParentAndCleanup(true);
+        }
+        auto* fresh = geode::openSettingsPopup(mod, false);
+        if (fresh) {
+            InLevelSettingsFilterKeeper::attach(fresh);
+        }
+    });
 }
 
 namespace {

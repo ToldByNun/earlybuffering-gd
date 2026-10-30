@@ -798,7 +798,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
 
     LagProbe::Scope const lagScope("eb.trigger.apply");
 
-    float const gx = ghost ? ghost->getPositionX() : 0.f;
+    float const gx = ghost ? ghost->m_position.x : 0.f;
     struct Cand {
         SavedTransform const* st = nullptr;
         TriggerPose pose{};
@@ -879,12 +879,16 @@ void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepD
     }
     hideGhost(s);
     s->update(stepDt);
+    // Ghost PlayerObject::update advances m_position; keep the cocos node aligned
+    // so checkCollisions / endX / TW nearness see the same pose as physics.
+    s->setPosition(s->m_position);
     hideGhost(s);
     if (this->m_dead) return;
     clearCollisionLogs(s);
     float colDt = stepDt;
     if (colDt < dt) colDt = dt; // same rule as pre-collide: never a tiny remainder
     layer->checkCollisions(s, colDt, false);
+    s->setPosition(s->m_position);
     hideGhost(s);
 }
 
@@ -1115,33 +1119,34 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
         return std::max(8, static_cast<int>(std::lround(base * capMul)));
     };
 
-    int const postFloor = StageConfig::postActionHorizon();
+    // Caps stay mode-native (pre-de39332). Post-click look-ahead is applied in
+    // runOne only when a ThreatZone exists — flooring every cap at postAction
+    // burned the press budget on empty-corridor d0 and forced PassBudget.
     if (p->m_isDart) {
         m.continuous = true;
-        // Wave corridors need post-click horizon past slope/yeet deaths.
-        m.cap = horizon(std::max(postFloor, x + 48));
+        m.cap = horizon(std::max(32, x + 16));
     }
     else if (p->m_isShip || p->m_isSwing) {
         m.continuous = true;
-        m.cap = horizon(std::max(postFloor, x * 3));
+        m.cap = horizon(std::max(64, x * 3));
     }
     else if (p->m_isBird) {
         m.continuous = true;
         m.tapRelease = true;
-        m.cap = horizon(std::max(postFloor, x + 20));
+        m.cap = horizon(std::max(40, x + 20));
     }
     else if (p->m_isSpider) {
         m.continuous = true;
         m.tapRelease = true;
-        m.cap = horizon(std::max(postFloor, x + 16));
+        m.cap = horizon(std::max(36, x + 16));
     }
     else if (p->m_isRobot) {
         m.tapRelease = false;
-        m.cap = horizon(std::max(150, postFloor));
+        m.cap = horizon(150);
     }
     else {
         m.tapRelease = true;
-        m.cap = horizon(std::max(150, postFloor));
+        m.cap = horizon(150);
     }
     return m;
 }
@@ -1383,17 +1388,20 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
-    // Always look at least post-action-horizon past the click — a Delay that
-    // "clears" the near spike but yeets into death 15 frames later is still lethal.
+    // Empty corridor (no zone): mode cap only — cheap OpportunityProbe / d0.
+    // Known threat zone: also cover post-click look-ahead for slope/orb yeets.
     int const postFloor = StageConfig::postActionHorizon();
-    int const postAction = std::max(std::max(1, model.cap), postFloor);
+    int const postAction = (zone && zone->valid)
+        ? std::max(std::max(1, model.cap), postFloor)
+        : std::max(1, model.cap);
     int const maxTicks = delay + postAction;
 
     auto finish = [&](RunResult out) {
         out.activatedRing = m_activatedRing;
         out.firstRingTick = m_firstRingTick;
         out.ringCount = m_ringCount;
-        out.endX = s->getPositionX();
+        // Prefer physics pose — ghost node getPosition can lag behind m_position.
+        out.endX = s->m_position.x;
         out.wasDashing = s->m_isDashing;
         out.ticksRan = std::max(out.ticksRan, out.deathTick >= 0 ? out.deathTick + 1 : 0);
         if (out.ticksBeforeNeutral <= 0) out.ticksBeforeNeutral = out.ticksRan;
@@ -1419,7 +1427,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             if (m_dead) {
                 r.died = true;
                 r.deathTick = t;
-                r.deathX = s->getPositionX();
+                r.deathX = s->m_position.x;
                 r.deathObject = m_deathObject;
                 r.diedBeforeAction = true;
                 return finish(r);
@@ -1464,7 +1472,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
         if (m_dead) {
             r.died = true;
             r.deathTick = t;
-            r.deathX = s->getPositionX();
+            r.deathX = s->m_position.x;
             r.deathObject = m_deathObject;
             r.diedBeforeAction = !acted;
             return finish(r);
@@ -1484,7 +1492,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
 
         // G2: after threat zone + settled → neutral (stop extending survive score)
         if (zone && zone->valid && !pastZone) {
-            if (s->getPositionX() > zone->endX) {
+            if (s->m_position.x > zone->endX) {
                 bool settled = false;
                 if (model.continuous) {
                     settledAfterClear++;
@@ -1508,9 +1516,11 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             }
         }
 
-        // Do not cut short before the post-click horizon — slope/orb yeets land later.
+        // After clearing the near zone, keep a short settle; when post-click
+        // look-ahead is armed (zone path), do not exit before that floor.
         int const afterAction = acted ? (t - delay) : -1;
-        if (pastZone && afterAction >= postFloor
+        int const settleNeed = (zone && zone->valid) ? postFloor : 24;
+        if (pastZone && afterAction >= settleNeed
             && t + 1 - r.ticksBeforeNeutral > 24) {
             return finish(r);
         }
@@ -1535,9 +1545,8 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     auto* s = m_shadow;
     s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
 
-    int const maxTicks = std::max(
-        1, std::max(model.cap, StageConfig::postActionHorizon())
-    );
+    // Baseline is an idle probe (no threat zone yet) — keep it at mode cap.
+    int const maxTicks = std::max(1, model.cap);
     for (int t = 0; t < maxTicks; ++t) {
         if (tickBudgetLeft) {
             if (*tickBudgetLeft <= 0) break;
@@ -1547,11 +1556,11 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
         this->m_simAbsTick = this->m_simTickBase + t;
         stepPhysics(layer, s, stepDt, dt);
         r.ticksRan = t + 1;
-        r.endX = s->getPositionX();
+        r.endX = s->m_position.x;
         if (m_dead) {
             r.died = true;
             r.deathTick = t;
-            r.deathX = s->getPositionX();
+            r.deathX = s->m_position.x;
             r.deathObject = m_deathObject;
             return r;
         }
@@ -2066,18 +2075,12 @@ SimPlan ShadowSimulator::plan(
         );
 
         // No threat target: baseline survives and no orb/pad ahead.
-        // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
+        // Warm mid/limit probes into candReady — but do NOT early-return PassNoThreat.
+        // That exit skipped the rest of the window and made Legacy/New unable to
+        // Delay early clicks when only an interior delay beats d0 (non-orb path).
         bool const noThreat = !c0.raw.died && !zone.valid;
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
-        if (noThreat && noOrbTarget) {
-            OpportunityProbe::Sample baseSample{};
-            baseSample.activatedRing = c0.activatedRing;
-            baseSample.diedBeforeAction = c0.diedBeforeAction;
-            baseSample.surviveBin = c0.surviveBin;
-            baseSample.endX = c0.endX;
-
-            OpportunityProbe::Sample probeSamples[2];
-            int probeCount = 0;
+        if (noThreat && noOrbTarget && limit >= 1) {
             int const mid = OpportunityProbe::midDelay(limit);
             auto runProbeDelay = [&](int d) {
                 if (d <= 0 || d > limit) return;
@@ -2087,119 +2090,20 @@ SimPlan ShadowSimulator::plan(
                     return;
                 }
                 auto c = evalDelay(d, -1);
-                if (c.diedBeforeAction) {
-                    // Still record — probe may show nothing useful.
-                    finalizeViable(c, -1);
-                    cands[static_cast<size_t>(d)] = c;
-                    candReady[static_cast<size_t>(d)] = 1;
-                    if (probeCount < 2) {
-                        auto& ps = probeSamples[probeCount++];
-                        ps.activatedRing = c.activatedRing;
-                        ps.diedBeforeAction = c.diedBeforeAction;
-                        ps.surviveBin = c.surviveBin;
-                        ps.endX = c.endX;
-                    }
-                    return;
-                }
                 finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
                 cands[static_cast<size_t>(d)] = c;
                 candReady[static_cast<size_t>(d)] = 1;
-                if (probeCount < 2) {
-                    auto& ps = probeSamples[probeCount++];
-                    ps.activatedRing = c.activatedRing;
-                    ps.diedBeforeAction = c.diedBeforeAction;
-                    ps.surviveBin = c.surviveBin;
-                    ps.endX = c.endX;
-                }
             };
-
-            if (limit >= 1) {
-                runProbeDelay(mid);
-                if (limit != mid) {
-                    runProbeDelay(limit);
-                }
-            }
-
-            bool const searchFurther = OpportunityProbe::shouldSearchFurther(
-                spatialHint,
-                orbHint.found,
-                c0.activatedRing,
-                baseSample,
-                probeSamples,
-                probeCount
-            );
-
-            if (!searchFurther) {
-                this->m_simAbsTick = -1;
-                this->restoreCapture(layer);
-                this->m_simulating = false;
-                this->parkGhosts();
-                plan.action = PlanAction::Pass;
-                // Wanted probes but could not afford any → PassBudget (C6 may Hold).
-                if (plan.budgetHit && limit >= 1 && probeCount == 0) {
-                    plan.reason = AssistReason::PassBudget;
-                }
-                else {
-                    plan.reason = AssistReason::PassNoThreat;
-                }
-                plan.delay = 0;
-                plan.nowIsSafe = true;
-                plan.threatCleared = true;
-                plan.jumpTick = c0.jumpTick;
-                plan.activatedRing = c0.activatedRing;
-                AssistLog::debug(fmt::format(
-                    "PLAN id={} Pass no-threat verdict={} foresight={} probes={} budgetHit={} limit={}",
-                    plan.planId, AssistVerdict::name(plan.reason),
-                    plan.foresightOrbPad ? 1 : 0, probeCount, plan.budgetHit, limit
-                ));
-                publishLedger(
-                    0,
-                    true,
-                    plan.budgetHit
-                        ? DevRejectLedger::EarlyExit::Budget
-                        : DevRejectLedger::EarlyExit::NoThreat
-                );
-                return plan;
-            }
+            runProbeDelay(mid);
+            if (limit != mid) runProbeDelay(limit);
             AssistLog::debug(fmt::format(
-                "PLAN id={} opportunity-probe search-further foresight={} probes={} orbWin={}",
-                plan.planId, plan.foresightOrbPad ? 1 : 0, probeCount, orbHint.found ? 1 : 0
+                "PLAN id={} opportunity-probe warm foresight={} mid={} limit={} budgetHit={}",
+                plan.planId, plan.foresightOrbPad ? 1 : 0, mid, limit, plan.budgetHit ? 1 : 0
             ));
         }
 
-        // Wave zigzag: hazards in proximity ahead + no orb → Pass even if d0
-        // built a distant ThreatZone. Delaying phase-shifts into spikes.
-        // AFTER foresight: foresightOrbPad blocks this Pass (miss-assist orb).
-        bool const isWave = real && real->m_isDart;
-        float const proxX = std::clamp(
-            static_cast<float>(limit + 4) * 5.5f,
-            kHazardProximityXMin,
-            kHazardProximityXMax
-        );
-        bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
-        // idleSafer: do not early-Pass — pressing now dies while idle lives; search delays.
-        if (!plan.idleSafer && shouldWaveHazardProximityPass(
-                isWave, nearHazard, noOrbTarget, plan.foresightOrbPad
-            )) {
-            this->m_simAbsTick = -1;
-            restoreCapture(layer);
-            this->m_simulating = false;
-            this->parkGhosts();
-            plan.action = PlanAction::Pass;
-            plan.reason = AssistReason::PassWaveProximity;
-            plan.delay = 0;
-            plan.nowIsSafe = c0.viable;
-            plan.threatCleared = c0.clearsThreat || !zone.valid;
-            plan.jumpTick = c0.jumpTick;
-            plan.activatedRing = c0.activatedRing;
-            plan.threatZone = zone;
-            AssistLog::debug(fmt::format(
-                "PLAN id={} Pass wave-hazard-proximity verdict={} prox={:.0f} zone={} budgetHit={}",
-                plan.planId, AssistVerdict::name(plan.reason), proxX, zone.valid, plan.budgetHit
-            ));
-            publishLedger(0, true, DevRejectLedger::EarlyExit::WaveProximity);
-            return plan;
-        }
+        // Wave proximity hard-Pass removed — it skipped the window unless an
+        // orb was present. Full search + beatsD0 / wave-futile decide instead.
     }
 
     std::vector<int> order;
@@ -2628,18 +2532,44 @@ SimPlan ShadowSimulator::plan(
     bool doPass = false;
     bool haveActViable = actMin >= 0;
 
-    // Restore pre-de39332 miss-assist: always take the orb window when we have
-    // a viable activation band. The d0AlreadySafe / skipOrbForce gates from
-    // "click-caused deaths" converted every surviveBin≥1 d0 into Pass and
-    // wiped delay-orb (sessions after that commit: 0 delays).
-    // Post-horizon false rings are handled separately (firstRingTick slack).
+    // Strictly better than d0 → early-click forgiveness (any mode, not orb-only).
+    auto beatsD0 = [&](Cand const& c) -> bool {
+        if (!c.viable || c.raw.died || c.diedBeforeAction) return false;
+        if (!cands[0].viable || cands[0].raw.died || cands[0].diedBeforeAction) {
+            return true;
+        }
+        if (c.surviveBin > cands[0].surviveBin) return true;
+        if (c.surviveTicks > cands[0].surviveTicks + 2) return true;
+        if (c.endX > cands[0].endX + kFutileEndXGain) return true;
+        return false;
+    };
+    auto pickBetterThanD0 = [&](bool latest) -> int {
+        std::vector<int> pool;
+        for (int d = 1; d <= limit; ++d) {
+            if (!candReady[static_cast<size_t>(d)]) continue;
+            if (!beatsD0(cands[static_cast<size_t>(d)])) continue;
+            pool.push_back(d);
+        }
+        if (pool.empty()) return -1;
+        for (;;) {
+            int pick = latest
+                ? pickLatestRobust(pool, false)
+                : pickRobust(pool, false, true);
+            if (pick < 0) return -1;
+            int releaseAfter = cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
+            if (jitterOk(pick, releaseAfter)) return pick;
+            cands[static_cast<size_t>(pick)].viable = false;
+            cands[static_cast<size_t>(pick)].robustKFailed = true;
+        }
+    };
+
+    // Orb window first when we have a viable activation band (same as pre-de39332).
     if (orbIntent && haveActViable) {
         std::vector<int> pool;
         for (int d = actMin; d <= actMax; ++d) pool.push_back(d);
         int const k = robustK;
         auto tryPick = [&](std::vector<int> const& p) -> int {
             for (;;) {
-                // Orb window: Legacy earliest-first; New outcome/exit rank ±k.
                 int pick = legacyPick
                     ? pickEarliestRobust(p, true)
                     : pickRobust(p, true, true);
@@ -2662,33 +2592,28 @@ SimPlan ShadowSimulator::plan(
         }
     }
     else if (legacyPick) {
-        // Legacy: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
+        // In-window assist: if a later cand beats d0, Delay (not orb-gated).
+        // Else if d0 viable → Pass. Else latest ±k-robust survivor (miss-assist).
         if (cands[0].viable) {
-            int releaseAfter = cands[0].requireHold ? 40 : -1;
-            if (jitterOk(0, releaseAfter)) {
-                doPass = true;
-                chosen = 0;
-                plan.threatCleared = true;
-                plan.nowIsSafe = true;
-            }
-            else {
-                cands[0].viable = false;
-                cands[0].robustKFailed = true;
-                std::vector<int> pool;
-                for (int d = 0; d <= limit; ++d) pool.push_back(d);
-                for (;;) {
-                    chosen = pickLatestRobust(pool, false);
-                    if (chosen < 0) break;
-                    int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
-                    if (jitterOk(chosen, releaseAfter2)) break;
-                    cands[static_cast<size_t>(chosen)].viable = false;
-                    cands[static_cast<size_t>(chosen)].robustKFailed = true;
-                    chosen = -1;
-                }
+            chosen = pickBetterThanD0(true);
+            if (chosen > 0) {
                 applyChosenMeta(chosen);
             }
+            else {
+                int releaseAfter = cands[0].requireHold ? 40 : -1;
+                if (jitterOk(0, releaseAfter)) {
+                    doPass = true;
+                    chosen = 0;
+                    plan.threatCleared = true;
+                    plan.nowIsSafe = true;
+                }
+                else {
+                    cands[0].viable = false;
+                    cands[0].robustKFailed = true;
+                }
+            }
         }
-        else {
+        if (!doPass && chosen <= 0) {
             std::vector<int> pool;
             for (int d = 0; d <= limit; ++d) pool.push_back(d);
             for (;;) {
@@ -2700,25 +2625,36 @@ SimPlan ShadowSimulator::plan(
                 cands[static_cast<size_t>(chosen)].robustKFailed = true;
                 chosen = -1;
             }
+            if (chosen == 0) {
+                doPass = true;
+                plan.threatCleared = true;
+                plan.nowIsSafe = cands[0].viable;
+            }
             applyChosenMeta(chosen);
         }
     }
     else {
-        // New (G1): d0 survived → Pass. Else best predicted exit among survivors (±k).
+        // New: prefer best exit in window — Delay when best > 0 even if d0 lives.
         if (cands[0].viable) {
-            int releaseAfter = cands[0].requireHold ? 40 : -1;
-            if (jitterOk(0, releaseAfter)) {
-                doPass = true;
-                chosen = 0;
-                plan.threatCleared = true;
-                plan.nowIsSafe = true;
+            chosen = pickBetterThanD0(false);
+            if (chosen > 0) {
+                applyChosenMeta(chosen);
             }
             else {
-                cands[0].viable = false;
-                cands[0].robustKFailed = true;
+                int releaseAfter = cands[0].requireHold ? 40 : -1;
+                if (jitterOk(0, releaseAfter)) {
+                    doPass = true;
+                    chosen = 0;
+                    plan.threatCleared = true;
+                    plan.nowIsSafe = true;
+                }
+                else {
+                    cands[0].viable = false;
+                    cands[0].robustKFailed = true;
+                }
             }
         }
-        if (!doPass) {
+        if (!doPass && chosen <= 0) {
             std::vector<int> pool;
             for (int d = 0; d <= limit; ++d) pool.push_back(d);
             for (;;) {
@@ -2759,19 +2695,43 @@ SimPlan ShadowSimulator::plan(
         }
     }
     if (chosen < 0) {
-        // Partial budget: only an *evaluated* surviving activation — never invent delay.
-        if (plan.budgetHit && actMin >= 0 && actMin <= limit
-            && candReady[static_cast<size_t>(actMin)]
-            && cands[static_cast<size_t>(actMin)].viable
-            && !cands[static_cast<size_t>(actMin)].raw.died) {
-            chosen = actMin;
-            doPass = false;
-            applyChosenMeta(chosen);
-            plan.requireOrb = true;
-            AssistLog::debug(fmt::format(
-                "PLAN id={} budget-partial actMin={} pick={}",
-                plan.planId, actMin, chosen
-            ));
+        // Partial budget: take best *evaluated* survivor in-window (orb or not).
+        if (plan.budgetHit) {
+            if (actMin >= 0 && actMin <= limit
+                && candReady[static_cast<size_t>(actMin)]
+                && cands[static_cast<size_t>(actMin)].viable
+                && !cands[static_cast<size_t>(actMin)].raw.died) {
+                chosen = actMin;
+                doPass = false;
+                applyChosenMeta(chosen);
+                plan.requireOrb = true;
+                AssistLog::debug(fmt::format(
+                    "PLAN id={} budget-partial actMin={} pick={}",
+                    plan.planId, actMin, chosen
+                ));
+            }
+            else {
+                int partial = pickBetterThanD0(legacyPick);
+                if (partial < 0) {
+                    // Any evaluated viable delay > 0.
+                    for (int d = limit; d >= 1; --d) {
+                        if (!candReady[static_cast<size_t>(d)]) continue;
+                        auto const& c = cands[static_cast<size_t>(d)];
+                        if (!c.viable || c.raw.died || c.diedBeforeAction) continue;
+                        partial = d;
+                        break;
+                    }
+                }
+                if (partial > 0) {
+                    chosen = partial;
+                    doPass = false;
+                    applyChosenMeta(chosen);
+                    AssistLog::debug(fmt::format(
+                        "PLAN id={} budget-partial general pick={}",
+                        plan.planId, chosen
+                    ));
+                }
+            }
         }
     }
 

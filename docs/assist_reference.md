@@ -93,9 +93,9 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 **Empty honesty:** finish log includes `src=` + `gameObjects` / `lethalIds` + skip breakdown. Baker status when empty: `trigger-world: empty (src=… fx=… …)`.
 
-**Anti-hallucination (Live Delay):** arm only when `verifyDelay` ok and plan not `budgetHit`; fire-tick re-verifies before inject (fail → cancel, no inject / no save-cue); recheck slides and HUS Delay-confirm require verify; hold-extend aborts early on lethal verify; `SAVED +N` / save-cue only after verified fire with `delayed>0`. Chosen Delay must be an **evaluated** viable cand (`candReady`) — never invent a delay the search skipped. HUS arms on budget only with orb/pad opportunity (not bare `PassBudget`). Post-fire jump-extend only when the plan set `requireHold` (dash); orb/continuous Delay no longer auto-extends after user-up.
+**Anti-hallucination (Live Delay):** arm when `verifyDelay` ok; fire-tick re-verifies before inject (fail → cancel, no inject / no save-cue); recheck slides and HUS Delay-confirm require verify; hold-extend aborts early on lethal verify; `SAVED +N` / save-cue only after verified fire with `delayed>0`. Chosen Delay must be an **evaluated** viable cand (`candReady`) — never invent a delay the search skipped. `plan.budgetHit` alone does **not** refuse arm when that chosen cand was evaluated (partial search of later slots is fine). HUS arms on budget only with orb/pad opportunity (not bare `PassBudget`). Post-fire jump-extend only when the plan set `requireHold` (dash); orb/continuous Delay no longer auto-extends after user-up.
 
-**Click-caused death = hallucination:** a Delay/Pass that the planner calls safe but the **assisted click** itself puts you on a dying trajectory (orb yeet, slope launch, ~15 display frames later) still counts. `runOne` / verify always simulate at least **Post-Click Look-Ahead** (`post-action-horizon`, default 96) ticks **after** the action; zone early-exit cannot cut before that. Wave/ship/swing model caps also floor at that setting.
+**Click-caused death = hallucination:** a Delay/Pass that the planner calls safe but the **assisted click** itself puts you on a dying trajectory (orb yeet, slope launch, ~15 display frames later) still counts. When a **ThreatZone** is already known, `runOne` extends at least **Post-Click Look-Ahead** (`post-action-horizon`, default 96) ticks past the action before zone early-exit. Empty-corridor / d0 probes keep mode-native caps (not floored at look-ahead) so budget starvation cannot force a silent Pass.
 
 **Residual hitch at fire (planSimDtOrNominal):** a wall `dt` dump (e.g. `0.25` → ~4 TPS) must not feed plan / recheck / verify / HUS / hold-extend. Those paths use `AssistClock::planSimDtOrNominal` (via `planningSimDt`); insane `firstDt` snaps to the same quantum. Wall hitch alone does **not** skip fire recheck / HUS replan / soft-Pass — those already run on the snapped planning quantum (MH/warp raw `dt` often looks “insane” while `m_simDt` stays `1/240`). Soft-pass → `pass-unknown` only if the **plan quantum itself** is still insane after snap (LagProbe `eb.assist.hitch-soft-pass`).
 
@@ -103,7 +103,7 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 **Apply nearness @ samplePose(absTick):** ranking/distance uses `samplePose` X at the sim `absTick`, **not** press/capture `obj->getPositionX()`. Missing sample (before first key) keeps baseline and is not ranked as near (`skipNoSample`; LagProbe under debug-logging). Write reuses the already-sampled pose (no second lookup).
 
-**Sample lerp + remap harden:** `samplePoseAtStoreTick` linearly lerps x/y/rotation/scale between adjacent keys (`active` hard-steps at the next key — no shortest-path rotation wrap). `AssistClock::remapTick` / `remapLiveTick` snap insane `liveSimDt` (hitch/pause, e.g. `0.25`) to nominal so bake ticks do not blow out at 4-TPS.
+**Sample hold + remap harden:** `samplePoseAtStoreTick` holds the last key with `tick <= storeTick` (baker already inserts stepped mid-keys for moves — do not lerp between keys). `AssistClock::remapTick` / `remapLiveTick` snap insane `liveSimDt` (hitch/pause, e.g. `0.25`) to nominal so bake ticks do not blow out at 4-TPS.
 
 **Orb activation near action:** cand `activatedRing` only if the first ring hit is within `delay + 8` ticks. Post-click look-ahead often brushes a later orb during coast — that must not set `actMin=0` / `pass-d0-safe` and kill delay-orb miss-assist.
 
@@ -256,10 +256,10 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 1. tickBudget from opts (default 4000); if verifyAb then *2
 2. modelFor; capture state
 3. d0 press baseline -> ThreatZone clusterGapX=50
-4. **no-threat Pass (G2)**: baseline did not die, zone invalid, no orb/pad hint → run `OpportunityProbe` (foresight already forces search; else cheap `d=mid` / `d=limit` sims). Pass only if probe empty; else full cand search. Budget starve with no probes → `PassBudget`.
-4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). **`foresightOrbPad` blocks this Pass** (keep searching for the orb). Runs after foresight/orb checks.
-4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further. Skipped when `idleSafer`.
-4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay (New outcome / Legacy latest) instead of Pass/hopeless. No forever block if nothing in-window is viable; controller may Soft Hold when both flags set. Wave proximity/futile early-Pass skipped when `idleSafer`.
+4. **no-threat warm (G2)**: baseline did not die, zone invalid, no orb/pad → warm `OpportunityProbe` mid/limit into `candReady`, then **always continue** full window search (no early `PassNoThreat` return — that blocked non-orb early-click Delay).
+4b. **wave-hazard-proximity**: no longer a hard Pass. Full search runs; after cands, **wave-futile-delay Pass** if Wave, no orbIntent, no foresight, nothing improves surviveBin/endX. Skipped when `idleSafer`.
+4c. **In-window beats-d0**: Legacy and New Delay when an evaluated cand &gt;0 strictly beats d0 (surviveBin / ticks / endX≥8), even if d0 is viable — early click forgiveness for **all** modes, not orb-gated.
+4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay instead of Pass/hopeless.
 5. eval delays under tick + sim-budget-us
 6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter (always when a viable activation band exists — do not skip for “d0 already safe”)
 7. else d0 survived -> Pass; else New outcome / Legacy latest ±k-robust

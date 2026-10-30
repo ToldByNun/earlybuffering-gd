@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Config import UI
+- **Import applies for real while settings stay open:** after ConfigBundle import, open Mod Settings rows sync from the store and the popup rebuilds next frame — no more green “uncommitted” labels / Apply writing stale values back over the import. Also refreshes `DevConfig` cache.
+
 ### Assist correctness (1.3.1 track)
 - **Dev instrumentation:** session `settingsFingerprint` filled; witness Trigger-World bake/ready/skip counters; DelayArm/Fire/Outcome fields for verify/budgetHit/recheck/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay compact `tw empty|N/M`; Dev Eval `liveVsEvalMismatch` when Live delayed but `bestSurv=none`.
 - **Trigger bake 0-tracks fix:** collect from `m_objects` (wait if not ready — no premature objectLayer); spawn-array dedup only; resolve targets via `getGroup`; skip counters + gameObjects/lethalIds. Spawn-only policy unchanged (enter-X / touch not absolute-timeline).
@@ -13,7 +16,10 @@
 - **Hallucination harden (Sevvend session):** mark `candReady` after every evaluated delay (ledger no longer lies `budget-not-reached`); refuse Delay unless chosen cand was evaluated+viable; HUS no longer arms on bare `PassBudget` (needs orb/pad opportunity); post-fire hold-extend only when plan `requireHold` (not every orb/continuous).
 - **Post-click look-ahead:** treat click-caused later death (slope/orb yeet ~15 frames later) as lethal — `runOne`/verify floor ticks after the action; wave/ship caps raised; zone early-exit cannot cut before that horizon. Setting **Post-Click Look-Ahead** (`post-action-horizon`, default 96, 24–240).
 - **Orb force restore (de39332 regression):** remove `d0AlreadySafe` / `skipOrbForce` — that gate made every viable d0 skip the orb window and produced zero `delay-orb`. Miss-assist is again `orbIntent && haveActViable` (as before de39332). HUS still never arms on intentional `nowIsSafe` Pass.
-- **Trigger sample lerp + remap harden:** `samplePoseAtStoreTick` lerps between keys (active hard-step); insane `simDt` remaps snap to nominal (no 4-TPS bake-tick blowout).
+- **Arm despite partial budgetHit (session-1793383734036):** stop refusing Delay arm solely because `plan.budgetHit` when the chosen cand was already evaluated — that refused 16/16 `delay-orb +1` as `press-arm-budget`. Live `verifyDelay` still gates lethal arms.
+- **Trigger sample remap harden:** insane `simDt` remaps snap to nominal (no 4-TPS bake-tick blowout). **Lerp between keys reverted** — mid-key interpolation shifted TW solids/toggles off the live path and collapsed Live assist into `pass-no-threat` across modes (hold-last-key restored; baker still steps move mid-keys).
+- **Anti-hallucination assist revive:** `postActionHorizon` no longer floors every mode cap / empty-corridor run (only extends sims that already have a ThreatZone); `PassBudget` no longer sets `nowIsSafe` and again arms HUS; verify tick budget no longer forces `postAction+32`; ghost `m_position` synced to node after each sim step (stale `getPosition` starved travel/threats).
+- **General in-window assist (C3–C6 audit):** removed `PassNoThreat` early-return and wave-proximity hard-Pass (both skipped the window unless an orb forced search). Legacy/New now Delay when any evaluated cand **beats d0** (surviveBin/ticks/endX) — early clicks in the window, not orb-only. Budget-partial can pick a general surviving delay, not only `actMin` orb. MissAssistContracts Legacy matches.
 - **Hitch false-positive assist kill:** soft-Pass refuse / HUS `hus-hitch` park / recheck-skip no longer key off wall `m_physicsHitchThisTick` when planning dt is already nominal — that rewrote every `pass-no-threat`/`pass-d0-safe` → `pass-unknown` and froze HOLD~.
 - **Post-horizon false orb ring:** cand `activatedRing` only counts hits within `delay+8` — longer post-click look-ahead was marking d0 `ring=true` from later coast orbs (pairs with orb-force restore).
 

@@ -25,8 +25,8 @@ public:
     // Absolute fire deadline: pressTick + limit (limit <= 0 → pressTick).
     static int fireDeadline(int pressTick, int limit);
 
-    // Legacy (1.2.0 feel): d0 viable → Pass. Else earliest viable in window.
-    // earliestViableDelay: -1 = none; if >= 0 must already be intended in-window.
+    // Legacy: in-window earliestViable > 0 → Delay (even if d0 viable — early click).
+    // Else Pass. earliestViableDelay: -1 = none; if > 0 must already be in-window.
     static ExpectAction legacyExpect(bool d0Viable, int earliestViableDelay);
     static int legacyDelay(bool d0Viable, int earliestViableDelay, int limit);
 
