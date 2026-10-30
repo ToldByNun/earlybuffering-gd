@@ -4,7 +4,9 @@
 
 ### Assist correctness (1.3.1 track)
 - **Dev instrumentation:** session `settingsFingerprint` filled; witness Trigger-World bake/ready/skip counters; DelayArm/Fire/Outcome fields for verify/budgetHit/recheck/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay compact `tw empty|N/M`; Dev Eval `liveVsEvalMismatch` when Live delayed but `bestSurv=none`.
-- **Trigger bake 0-tracks fix:** collect from `m_objects` (fallback objectLayer); resolve targets via `getGroup`; count ignore / no-group / empty-targets / cast-fail skips; empty status + finish log explain why. Spawn-only policy unchanged (enter-X / touch not absolute-timeline).
+- **Trigger bake 0-tracks fix:** collect from `m_objects` (wait if not ready — no premature objectLayer); spawn-array dedup only; resolve targets via `getGroup`; skip counters + gameObjects/lethalIds. Spawn-only policy unchanged (enter-X / touch not absolute-timeline).
+- **TW bake integrity:** cancel drops partial tracks; `save` / spool / apply only when `bakeComplete` (finishOk or disk cache); prevents poisoned 2048-track cache after mid-build cancel.
+- **Anti-hallucination:** Delay arm refuses `plan.budgetHit` and failed `verifyDelay`; fire-tick re-verify before inject (fail → Pass, no save-cue); recheck slide / HUS confirm require verify; hold-extend cuts on lethal verify; no `SAVED +0` on HUS flush.
 
 ## v1.3.0
 

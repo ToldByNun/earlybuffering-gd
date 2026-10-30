@@ -101,19 +101,12 @@ cocos2d::CCArray* TriggerWorldBaker::resolveCollectSource(
 ) const {
     label = "none";
     if (!layer) return nullptr;
-    // Prefer GJBaseGameLayer::m_objects — full level roster including triggers
-    // that may not sit as direct objectLayer children (batches / defer).
+    // Prefer GJBaseGameLayer::m_objects — full level roster. Premature
+    // objectLayer-only collects (m_objects still empty at init) poisoned the
+    // store with spawn-array dumps; wait instead of falling back.
     if (layer->m_objects && layer->m_objects->count() > 0) {
         label = "m_objects";
         return layer->m_objects;
-    }
-    if (layer->m_objectLayer) {
-        if (auto* children = layer->m_objectLayer->getChildren()) {
-            if (children->count() > 0) {
-                label = "objectLayer";
-                return children;
-            }
-        }
     }
     return nullptr;
 }
@@ -138,6 +131,8 @@ void TriggerWorldBaker::clearJob() {
     this->m_skippedNoGroup = 0;
     this->m_skippedEmptyTargets = 0;
     this->m_skippedCastFail = 0;
+    this->m_gameObjectCount = 0;
+    this->m_lethalIdCount = 0;
     this->m_levelKey.clear();
     this->m_tps = 240.0;
 }
@@ -157,6 +152,10 @@ void TriggerWorldBaker::finishCancel() {
     this->m_running = false;
     this->m_progress = 0.f;
     this->m_status = "trigger-world: cancelled";
+    // Drop in-flight partials so cancel cannot leave spoolable/savable poison.
+    if (!TriggerWorldStore::get().bakeComplete()) {
+        TriggerWorldStore::get().clearTracks();
+    }
     this->clearJob();
     AssistLog::debug("TRIGGER-WORLD: bake cancelled");
 }
@@ -174,6 +173,8 @@ void TriggerWorldBaker::finishOk() {
     this->m_lastSkippedCastFail = this->m_skippedCastFail;
     this->m_lastChildCount = this->m_childCount;
     this->m_lastEffectCount = this->m_effects.size();
+    this->m_lastGameObjectCount = this->m_gameObjectCount;
+    this->m_lastLethalIdCount = this->m_lethalIdCount;
     this->m_lastCollectSource = this->m_collectSourceLabel
         ? this->m_collectSourceLabel
         : "none";
@@ -182,10 +183,12 @@ void TriggerWorldBaker::finishOk() {
     size_t const ready = TriggerWorldStore::get().readyTrackCount();
     if (tracks == 0) {
         this->m_status = fmt::format(
-            "trigger-world: empty (src={} fx={} ign={} dyn={} nonSp={} "
-            "noGrp={} emptyT={} cast={})",
+            "trigger-world: empty (src={} fx={} go={} lethal={} ign={} dyn={} "
+            "nonSp={} noGrp={} emptyT={} cast={})",
             this->m_lastCollectSource,
             this->m_lastEffectCount,
+            this->m_lastGameObjectCount,
+            this->m_lastLethalIdCount,
             this->m_lastSkippedIgnore,
             this->m_lastSkippedDynamic,
             this->m_lastSkippedNonSpawn,
@@ -200,7 +203,7 @@ void TriggerWorldBaker::finishOk() {
 
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: baked {} effects → {} tracks ({} ready) @ {:.0f} tps "
-        "(src={} children={} collectedEffects={} "
+        "(src={} children={} gameObjects={} lethalIds={} collectedEffects={} "
         "skip follow={} dynamic={} non-spawn={} ignore={} "
         "no-group={} empty-targets={} cast-fail={})",
         this->m_bakedEffects,
@@ -209,6 +212,8 @@ void TriggerWorldBaker::finishOk() {
         this->m_tps,
         this->m_lastCollectSource,
         this->m_lastChildCount,
+        this->m_lastGameObjectCount,
+        this->m_lastLethalIdCount,
         this->m_lastEffectCount,
         this->m_skippedFollow,
         this->m_skippedDynamic,
@@ -218,6 +223,7 @@ void TriggerWorldBaker::finishOk() {
         this->m_skippedEmptyTargets,
         this->m_skippedCastFail
     ));
+    TriggerWorldStore::get().setBakeComplete(true);
     this->clearJob();
 }
 
@@ -249,13 +255,19 @@ void TriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
         TriggerWorldStore::get().loadForLevel(layer->m_level);
     }
 
-    if (TriggerWorldStore::get().hasTracks()) {
+    if (TriggerWorldStore::get().hasTracks()
+        && TriggerWorldStore::get().bakeComplete()) {
         this->m_status = TriggerWorldStore::get().statusLine();
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: cache hit ({})",
             this->m_status
         ));
         return;
+    }
+    // Incomplete / cancelled partial left on store — rebuild clean.
+    if (TriggerWorldStore::get().hasTracks()
+        && !TriggerWorldStore::get().bakeComplete()) {
+        TriggerWorldStore::get().clearTracks();
     }
 
     this->start(layer);
@@ -265,7 +277,8 @@ void TriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
     if (!layer || !StageConfig::triggerBake()) return;
     if (this->m_running) return;
     auto& store = TriggerWorldStore::get();
-    if (!store.loaded() || store.hasTracks()) return;
+    if (!store.loaded()) return;
+    if (store.hasTracks() && store.bakeComplete()) return;
     AssistLog::debug("TRIGGER-WORLD: resume build after empty cancel");
     this->start(layer);
 }
@@ -305,13 +318,17 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
         this->m_childCount = static_cast<size_t>(this->m_collectSource->count());
         this->m_objects.reserve(this->m_childCount);
         this->m_effects.reserve(256);
+        AssistLog::debug(fmt::format(
+            "TRIGGER-WORLD: bake queued ({} children, src={})",
+            this->m_childCount,
+            this->m_collectSourceLabel
+        ));
     }
-
-    AssistLog::debug(fmt::format(
-        "TRIGGER-WORLD: bake queued ({} children, src={})",
-        this->m_childCount,
-        this->m_collectSourceLabel
-    ));
+    else {
+        // m_objects not ready yet (common right after PlayLayer::init).
+        this->m_status = "trigger-world: waiting objects";
+        AssistLog::debug("TRIGGER-WORLD: bake waiting for m_objects");
+    }
     return true;
 }
 
@@ -635,11 +652,19 @@ void TriggerWorldBaker::tickSlice() {
                     this->m_childCount = static_cast<size_t>(
                         this->m_collectSource->count()
                     );
+                    this->m_objects.reserve(this->m_childCount);
+                    this->m_effects.reserve(256);
+                    AssistLog::debug(fmt::format(
+                        "TRIGGER-WORLD: m_objects ready ({} children)",
+                        this->m_childCount
+                    ));
                 }
             }
             if (!this->m_collectSource) {
-                this->m_phase = Phase::Bake;
-                continue;
+                // Keep waiting — do not bake an empty premature roster.
+                this->m_status = "trigger-world: waiting objects";
+                this->m_progress = 0.f;
+                break;
             }
 
             size_t n = 0;
@@ -655,6 +680,10 @@ void TriggerWorldBaker::tickSlice() {
                 if (!obj) continue;
                 if (typeinfo_cast<PlayerObject*>(obj)) continue;
                 this->m_objects.push_back(obj);
+                ++this->m_gameObjectCount;
+                if (TriggerClassify::isLethalMotionCandidateId(obj->m_objectID)) {
+                    ++this->m_lethalIdCount;
+                }
 
                 if (auto* effect = typeinfo_cast<EffectGameObject*>(obj)) {
                     this->m_effects.push_back(effect);
@@ -672,6 +701,31 @@ void TriggerWorldBaker::tickSlice() {
             this->m_progress = 0.15f * collectFrac;
 
             if (this->m_childIndex >= this->m_childCount) {
+                // Optional: add spawn-array effects missing from m_objects (dedup).
+                if (layer->m_spawnObjectsArray) {
+                    auto* spawnArr = layer->m_spawnObjectsArray;
+                    unsigned const sn = spawnArr->count();
+                    size_t added = 0;
+                    for (unsigned i = 0; i < sn; ++i) {
+                        auto* effect = typeinfo_cast<EffectGameObject*>(
+                            spawnArr->objectAtIndex(i)
+                        );
+                        if (!effect) continue;
+                        bool dup = false;
+                        for (auto* e : this->m_effects) {
+                            if (e && e->m_uniqueID == effect->m_uniqueID) {
+                                dup = true;
+                                break;
+                            }
+                        }
+                        if (dup) continue;
+                        this->m_effects.push_back(effect);
+                        ++added;
+                    }
+                    if (added > 0) {
+                        this->m_collectSourceLabel = "m_objects+spawn";
+                    }
+                }
                 this->m_phase = Phase::Bake;
                 this->m_effectIndex = 0;
             }

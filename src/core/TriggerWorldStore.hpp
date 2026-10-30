@@ -58,10 +58,16 @@ public:
     bool hasTracks() const { return !this->m_data.tracks.empty(); }
     bool dirty() const { return this->m_dirty; }
     void markDirty() { this->m_dirty = true; }
+    // True only after a baker finishOk (or a disk cache load). Cancelled
+    // partials are not complete and must not save / soft-trust as spoolable.
+    bool bakeComplete() const { return this->m_bakeComplete; }
+    void setBakeComplete(bool complete) { this->m_bakeComplete = complete; }
+    // Drop tracks but keep levelKey / loaded (cancel mid-build).
+    void clearTracks();
 
     TriggerWorldData const& data() const { return this->m_data; }
 
-    // Replace in-memory data (baker). Marks dirty. Caps track/key counts.
+    // Replace in-memory data (baker publishPartial). Marks dirty, not complete.
     void setData(TriggerWorldData data);
 
     TriggerTrack const* findTrack(int uniqueId) const;
@@ -109,6 +115,7 @@ private:
     TriggerWorldData m_data;
     bool m_loaded = false;
     mutable bool m_dirty = false;
+    bool m_bakeComplete = false;
 };
 
 #endif // EARLYBUFFER_CORE_TRIGGERWORLDSTORE_HPP

@@ -46,6 +46,8 @@ public:
     size_t lastSkippedCastFail() const { return this->m_lastSkippedCastFail; }
     size_t lastChildCount() const { return this->m_lastChildCount; }
     size_t lastEffectCount() const { return this->m_lastEffectCount; }
+    size_t lastGameObjectCount() const { return this->m_lastGameObjectCount; }
+    size_t lastLethalIdCount() const { return this->m_lastLethalIdCount; }
     char const* lastCollectSource() const { return this->m_lastCollectSource; }
 
     // Amortized collect/bake/commit. Safe no-op when idle.
@@ -136,6 +138,10 @@ private:
     size_t m_lastSkippedCastFail = 0;
     size_t m_lastChildCount = 0;
     size_t m_lastEffectCount = 0;
+    size_t m_lastGameObjectCount = 0;
+    size_t m_lastLethalIdCount = 0;
+    size_t m_gameObjectCount = 0;
+    size_t m_lethalIdCount = 0;
     char const* m_lastCollectSource = "none";
 };
 

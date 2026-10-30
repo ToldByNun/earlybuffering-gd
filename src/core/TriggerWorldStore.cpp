@@ -55,12 +55,27 @@ void TriggerWorldStore::clear() {
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
+    this->m_bakeComplete = false;
+}
+
+void TriggerWorldStore::clearTracks() {
+    std::string const key = this->m_data.levelKey;
+    double const tps = this->m_data.tps;
+    int const version = this->m_data.version;
+    this->m_data = {};
+    this->m_data.levelKey = key;
+    this->m_data.tps = tps > 0.0 ? tps : 240.0;
+    this->m_data.version = version > 0 ? version : kFileVersion;
+    this->m_dirty = false;
+    this->m_bakeComplete = false;
+    this->m_loaded = !key.empty();
 }
 
 void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
+    this->m_bakeComplete = false;
     if (!level) return;
 
     this->m_data.levelKey = LevelProfile::makeKey(level);
@@ -69,6 +84,7 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
 
     auto res = this->readFile();
     if (res.isOk()) {
+        this->m_bakeComplete = !this->m_data.tracks.empty();
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
             this->m_data.levelKey,
@@ -87,6 +103,11 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
 void TriggerWorldStore::save() const {
     if (!this->m_loaded || this->m_data.levelKey.empty()) return;
     if (!this->m_dirty) return;
+    // Never persist cancelled / in-flight partials (poisoned cache).
+    if (!this->m_bakeComplete) {
+        AssistLog::debug("TRIGGER-WORLD: skip save (bake incomplete)");
+        return;
+    }
 
     auto res = this->writeFile();
     if (res.isOk()) {
@@ -111,6 +132,8 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
     this->m_data = std::move(data);
     this->m_loaded = !this->m_data.levelKey.empty();
     this->m_dirty = true;
+    // publishPartial mid-build — not complete until baker finishOk.
+    this->m_bakeComplete = false;
 }
 
 TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {

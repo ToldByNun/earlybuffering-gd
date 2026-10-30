@@ -370,6 +370,7 @@ DevLiveWitness DevLiveWitness::capture(
         );
         w.triggerSkipCastFail = static_cast<int>(baker.lastSkippedCastFail());
         w.triggerCanSpool = tw.loaded()
+            && tw.bakeComplete()
             && tw.hasTracks()
             && tw.readyTrackCount() > 0;
         if (w.triggerCanSpool) {

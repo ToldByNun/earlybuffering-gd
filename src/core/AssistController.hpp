@@ -201,6 +201,19 @@ private:
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
+    // Live verifyDelay wrapper: ok ⇒ viable && !budgetHit. Used at arm / fire / recheck.
+    bool verifyAssistDelay(
+        PlayLayer* playLayer,
+        PlayerObject* player,
+        bool down,
+        int delay,
+        int limit,
+        float firstDt,
+        int attemptStartTick,
+        ShadowSimulator::VerifyDelayResult* out = nullptr
+    ) const;
+    // Cancel armed buffer without inject (fire-verify fail / lethal recheck).
+    void cancelArmedAssist(char const* where, AssistReason reason);
     bool userHolding(bool player1) const { return m_userHolding[player1 ? 0 : 1]; }
     void noteUserClick();
     void pruneClickTimes();

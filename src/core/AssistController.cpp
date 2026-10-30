@@ -3,6 +3,7 @@
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
 #include "AssistScopeGate.hpp"
+#include "AssistVerdict.hpp"
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
@@ -184,6 +185,58 @@ double AssistController::wallTps() const {
 std::string AssistController::overlayText() const { return m_overlayText; }
 
 void AssistController::clearBuffer() { m_buffer = {}; }
+
+bool AssistController::verifyAssistDelay(
+    PlayLayer* playLayer,
+    PlayerObject* player,
+    bool down,
+    int delay,
+    int limit,
+    float firstDt,
+    int attemptStartTick,
+    ShadowSimulator::VerifyDelayResult* out
+) const {
+    if (out) *out = {};
+    if (!playLayer || !player || limit < 0) return false;
+    float const simDt = this->m_simDt;
+    if (simDt <= 0.f) return false;
+    float fd = firstDt;
+    if (fd <= 0.f || fd > simDt) fd = simDt;
+
+    PlanOptions vopts;
+    vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
+    vopts.budgetUs = StageConfig::husReplanBudgetUs();
+    vopts.maxBranches = 0;
+    vopts.smartDepth = 1;
+    vopts.attemptStartTick = std::max(0, attemptStartTick);
+    auto const vr = ShadowSimulator::get().verifyDelay(
+        playLayer, player, down, std::max(0, delay), limit, simDt, fd, vopts
+    );
+    if (out) *out = vr;
+    // verifyDelay sets ok = viable && !budgetHit.
+    return vr.ok;
+}
+
+void AssistController::cancelArmedAssist(char const* where, AssistReason reason) {
+    int64_t const pressId = this->m_buffer.devPressId;
+    AssistLog::debug(fmt::format(
+        "ASSIST cancel armed @{} reason={} press={}",
+        where ? where : "?",
+        AssistVerdict::name(reason),
+        pressId
+    ));
+    if (pressId > 0) {
+        DevCycleRecorder::get().notePassThrough(reason, where ? where : "cancel-armed");
+    }
+    this->noteVerdict(reason, where ? where : "cancel-armed");
+    this->clearBuffer();
+    this->m_pendingRelease = false;
+    this->m_pendingReleaseHold = false;
+    this->m_pendingReleaseContinuous = false;
+    this->m_pendingReleaseUserUpTick = -1;
+    this->m_pendingReleaseMaxExtend = 0;
+    this->m_pendingReleaseTick = 0;
+}
 
 void AssistController::onCheckpointLoad() {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
@@ -769,7 +822,8 @@ bool AssistController::armHoldUntilSafe(
     this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
     {
         DevCycleRecorder::DelayArmMeta meta{};
-        meta.armVerifyOk = true;
+        // HUS may arm under plan budgetHit (recovery), but never claim verify-ok.
+        meta.armVerifyOk = !plan.budgetHit;
         meta.budgetHitAtArm = plan.budgetHit;
         this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
             AssistReason::HoldPending,
@@ -880,9 +934,26 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     this->m_buffer.husLastForesight = foresightNow
         || re.foresightOrbPad || re.usedOrbWindow;
 
-    if (re.action == PlanAction::Delay && re.delay > 0) {
+    if (re.action == PlanAction::Delay && re.delay > 0 && !re.budgetHit) {
         int delay = MissAssistContracts::clampDelayToWindow(re.delay, remLimit);
         if (delay < 1) delay = 1;
+        ShadowSimulator::VerifyDelayResult husVr{};
+        if (!this->verifyAssistDelay(
+                playLayer, player, true, delay, remLimit,
+                this->m_simDt, this->m_attemptTick, &husVr
+            )) {
+            AssistLog::debug(fmt::format(
+                "HOLD-UNTIL-SAFE confirm verify-fail delay={} — stay soft",
+                delay
+            ));
+            DevCycleRecorder::get().noteHus(
+                this->m_buffer.devPressId,
+                AssistReason::HoldPending,
+                "hus-confirm-verify-fail",
+                this->m_buffer.fireTick
+            );
+            return;
+        }
         int const jumpRel = re.jumpTick > 0 ? re.jumpTick : delay;
         int proposed = resolveFireTick(
             this->m_attemptTick, delay, jumpRel, re.requireOrb || this->m_buffer.requireOrb
@@ -1207,7 +1278,7 @@ void AssistController::updateOverlay() {
                 if (!tw.loaded()) {
                     this->m_overlayText += " | tw off";
                 }
-                else if (!tw.hasTracks()) {
+                else if (!tw.bakeComplete() || !tw.hasTracks()) {
                     this->m_overlayText += " | tw empty";
                 }
                 else {
@@ -1559,9 +1630,37 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
         return;
     }
 
-    // Still inside the post-release extend window — keep Jump down.
+    // Still inside the post-release extend window — keep Jump down unless lethal.
     if (this->m_attemptTick < this->m_pendingReleaseTick) {
-        return;
+        if (p && this->m_simDt > 0.f && this->m_pendingReleaseMaxExtend > 0) {
+            int const rem = this->m_pendingReleaseTick - this->m_attemptTick;
+            ShadowSimulator::VerifyDelayResult holdVr{};
+            bool const holdOk = this->verifyAssistDelay(
+                playLayer,
+                p,
+                true,
+                0,
+                std::max(1, rem),
+                this->m_simDt,
+                this->m_attemptTick,
+                &holdVr
+            );
+            if (!holdOk) {
+                AssistLog::debug(fmt::format(
+                    "hold-assist: extend cut @{} (verify fail budgetHit={}) → release now",
+                    this->m_attemptTick,
+                    holdVr.budgetHit ? 1 : 0
+                ));
+                this->m_pendingReleaseTick = this->m_attemptTick;
+                // fall through to inject release
+            }
+            else {
+                return;
+            }
+        }
+        else {
+            return;
+        }
     }
 
     this->m_pendingRelease = false;
@@ -1682,6 +1781,29 @@ void AssistController::fireBuffered(
                     true
                 );
                 if (accepted > 0) {
+                    int const recheckDelay = std::max(0, accepted - this->m_attemptTick);
+                    ShadowSimulator::VerifyDelayResult reVr{};
+                    bool const reOk = this->verifyAssistDelay(
+                        playLayer,
+                        player,
+                        this->m_buffer.down,
+                        recheckDelay,
+                        remaining,
+                        this->m_simDt,
+                        this->m_attemptTick,
+                        &reVr
+                    );
+                    if (!reOk) {
+                        AssistLog::debug(fmt::format(
+                            "recheck: verify-fail oldFire={} proposed={} → cancel",
+                            oldFire, accepted
+                        ));
+                        this->cancelArmedAssist(
+                            "recheck-verify-fail", AssistReason::PassHopeless
+                        );
+                        this->updateOverlay();
+                        return;
+                    }
                     ++this->m_buffer.rechecks;
                     this->m_buffer.fireTick = accepted;
                     this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
@@ -1704,6 +1826,14 @@ void AssistController::fireBuffered(
                     return;
                 }
             }
+            else if (re.action == PlanAction::Pass
+                && re.reason == AssistReason::PassHopeless
+                && !re.budgetHit) {
+                // Confirmed lethal replan while armed → drop buffer (no inject).
+                this->cancelArmedAssist("recheck-hopeless", re.reason);
+                this->updateOverlay();
+                return;
+            }
         }
     }
 
@@ -1718,19 +1848,60 @@ void AssistController::fireBuffered(
     int64_t const devPressId = this->m_buffer.devPressId;
     // Max post-release extend = this press's tick window (e.g. Ticks=4 → ≤4).
     int const extendCap = std::max(0, this->m_buffer.limit);
+    int const fireLimit = std::max(0, remaining);
+
+    // Fire-tick re-verify (current state + trigger spool). Fail → vanilla, no inject/save.
+    // Runs for soft and force-fire paths — never inject a lethal assist.
+    if (player && this->m_simDt > 0.f) {
+        ShadowSimulator::VerifyDelayResult fireVr{};
+        bool const fireOk = this->verifyAssistDelay(
+            playLayer,
+            player,
+            wasPress,
+            0,
+            fireLimit > 0 ? fireLimit : this->m_buffer.limit,
+            this->m_simDt,
+            this->m_attemptTick,
+            &fireVr
+        );
+        if (!fireOk) {
+            AssistLog::debug(fmt::format(
+                "ASSIST fire-verify fail @{} delayWas={} budgetHit={} force={} → Pass (no inject)",
+                this->m_attemptTick,
+                delayed,
+                fireVr.budgetHit ? 1 : 0,
+                allowRecheck ? 0 : 1
+            ));
+            LagProbe::get().mark(
+                "eb.assist.halluc",
+                fmt::format(
+                    "fire-verify-fail press={} tick={} delayed={} budgetHit={}",
+                    devPressId,
+                    this->m_attemptTick,
+                    delayed,
+                    fireVr.budgetHit ? 1 : 0
+                )
+            );
+            this->cancelArmedAssist("fire-verify-fail", AssistReason::PassHopeless);
+            this->updateOverlay();
+            return;
+        }
+    }
 
     DevCycleRecorder::get().noteFire(devPressId, this->m_attemptTick);
 
     this->inject(playLayer, this->m_buffer.down);
-    AssistLog::printSavedPress(
-        delayed, this->m_buffer.pressTick, this->m_attemptTick,
-        this->m_buffer.limit, this->estimatedTps()
-    );
-    if (delayed > 0
-        && (StageConfig::saveFeedbackSound()
+    // Save-cue / SAVED log only for real delayed assists (never +0 HUS flush).
+    if (delayed > 0) {
+        AssistLog::printSavedPress(
+            delayed, this->m_buffer.pressTick, this->m_attemptTick,
+            this->m_buffer.limit, this->estimatedTps()
+        );
+        if (StageConfig::saveFeedbackSound()
             || StageConfig::saveFeedbackIcon()
-            || StageConfig::saveFeedbackCounter())) {
-        SaveFeedback::get().onSave(playLayer, player, delayed);
+            || StageConfig::saveFeedbackCounter()) {
+            SaveFeedback::get().onSave(playLayer, player, delayed);
+        }
     }
     if (!wasPress) {
         AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", this->m_attemptTick));
@@ -2511,34 +2682,49 @@ bool AssistController::planPress(
         }
     }
 
-    // Hard refuse: never arm a Delay the live verify cannot survive.
+    // Hard refuse: never arm a Delay the live verify cannot survive / budget-exhausted.
     bool armVerifyOk = true;
-    if (delay > 0 && this->m_simDt > 0.f) {
-        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
-        PlanOptions vopts = opts;
-        vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
-        vopts.budgetUs = StageConfig::husReplanBudgetUs();
-        vopts.maxBranches = 0;
-        vopts.smartDepth = 1;
-        auto const vr = ShadowSimulator::get().verifyDelay(
-            playLayer, player, true, delay, limit, this->m_simDt, fd, vopts
-        );
-        if (!vr.ok) {
+    if (delay > 0) {
+        if (plan.budgetHit) {
             AssistLog::debug(fmt::format(
-                "ASSIST press verify-fail delay={} → Pass (refuse lethal assist)",
+                "ASSIST press refuse arm delay={} — plan budgetHit (no soft-trust)",
                 delay
             ));
-            DevCycleRecorder::get().noteLearningOnPlan(
-                plannedDelay, delay, false, true
-            );
             DevCycleRecorder::get().notePassThrough(
-                AssistReason::PassHopeless, "press-verify-fail"
+                AssistReason::PassBudget, "press-arm-budget"
             );
-            this->noteVerdict(AssistReason::PassHopeless, "press-verify-fail");
+            this->noteVerdict(AssistReason::PassBudget, "press-arm-budget");
             this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
             return true;
         }
-        armVerifyOk = vr.ok;
+        if (this->m_simDt > 0.f) {
+            float const fd = (firstDt > 0.f && firstDt <= this->m_simDt)
+                ? firstDt
+                : this->m_simDt;
+            ShadowSimulator::VerifyDelayResult vr{};
+            armVerifyOk = this->verifyAssistDelay(
+                playLayer, player, true, delay, limit, fd, effectTick, &vr
+            );
+            if (!armVerifyOk) {
+                AssistLog::debug(fmt::format(
+                    "ASSIST press verify-fail delay={} budgetHit={} → Pass (refuse lethal assist)",
+                    delay,
+                    vr.budgetHit ? 1 : 0
+                ));
+                DevCycleRecorder::get().noteLearningOnPlan(
+                    plannedDelay, delay, false, true
+                );
+                AssistReason const refuse = vr.budgetHit
+                    ? AssistReason::PassBudget
+                    : AssistReason::PassHopeless;
+                DevCycleRecorder::get().notePassThrough(
+                    refuse, "press-verify-fail"
+                );
+                this->noteVerdict(refuse, "press-verify-fail");
+                this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
+                return true;
+            }
+        }
     }
 
     this->m_buffer = {};
@@ -2832,6 +3018,46 @@ bool AssistController::planRelease(
         if (delay < 1) delay = 1;
     }
 
+    bool armVerifyOk = true;
+    if (delay > 0) {
+        if (plan.budgetHit) {
+            AssistLog::debug(fmt::format(
+                "ASSIST release refuse arm delay={} — plan budgetHit",
+                delay
+            ));
+            DevCycleRecorder::get().notePassThrough(
+                AssistReason::PassBudget, "release-arm-budget"
+            );
+            this->noteVerdict(AssistReason::PassBudget, "release-arm-budget");
+            this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
+            return true;
+        }
+        if (this->m_simDt > 0.f) {
+            float const fd = (firstDt > 0.f && firstDt <= this->m_simDt)
+                ? firstDt
+                : this->m_simDt;
+            ShadowSimulator::VerifyDelayResult vr{};
+            armVerifyOk = this->verifyAssistDelay(
+                playLayer, player, false, delay, limit, fd, effectTick, &vr
+            );
+            if (!armVerifyOk) {
+                AssistReason const refuse = vr.budgetHit
+                    ? AssistReason::PassBudget
+                    : AssistReason::PassHopeless;
+                AssistLog::debug(fmt::format(
+                    "ASSIST release verify-fail delay={} → Pass",
+                    delay
+                ));
+                DevCycleRecorder::get().notePassThrough(
+                    refuse, "release-verify-fail"
+                );
+                this->noteVerdict(refuse, "release-verify-fail");
+                this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
+                return true;
+            }
+        }
+    }
+
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
     this->m_buffer.down = false;
@@ -2860,7 +3086,7 @@ bool AssistController::planRelease(
     }
     {
         DevCycleRecorder::DelayArmMeta meta{};
-        meta.armVerifyOk = true;
+        meta.armVerifyOk = armVerifyOk;
         meta.budgetHitAtArm = plan.budgetHit;
         this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
             delayReason,

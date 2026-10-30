@@ -512,7 +512,7 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
 
     // Collect uniqueIds we may move this sim (ready static bake tracks).
     std::vector<int> wanted;
-    if (store.loaded() && store.hasTracks()) {
+    if (store.loaded() && store.bakeComplete() && store.hasTracks()) {
         wanted.reserve(store.trackCount());
         for (auto const& track : store.data().tracks) {
             if (!track.ready || track.keys.empty()) continue;
@@ -793,7 +793,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
     if (this->m_savedTransforms.empty()) return;
 
     auto& store = TriggerWorldStore::get();
-    if (!store.loaded() || !store.hasTracks()) return;
+    if (!store.loaded() || !store.bakeComplete() || !store.hasTracks()) return;
 
     LagProbe::Scope const lagScope("eb.trigger.apply");
 

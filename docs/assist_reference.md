@@ -85,9 +85,13 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Baker: spawn-timed StaticMove/Rotate/Scale/Toggle (linear); group-follow / touch / toggle-orb / enter-X skipped.
 
-**Collect:** prefers `PlayLayer::m_objects` (full roster), falls back to `m_objectLayer` children. Targets resolve via `getGroup` then `belongsToGroup` scan. Spawn-only absolute timeline stays (enter-X / touch stay Dynamic / skip).
+**Collect:** waits for `PlayLayer::m_objects` (no premature objectLayer bake); optional spawn-array dedup. Targets via `getGroup` then `belongsToGroup`. Spawn-only absolute timeline (enter-X / touch stay Dynamic / skip).
 
-**Empty honesty:** finish log includes `src=` + skip breakdown (`ignore` / `dynamic` / `non-spawn` / `no-group` / `empty-targets` / `cast-fail`). Baker status when empty: `trigger-world: empty (src=… fx=… …)` instead of a silent store empty. Overlay stays compact `tw empty`.
+**Integrity:** `publishPartial` mid-build is not `bakeComplete`. Cancel clears partial tracks. Disk `save` and sim spool/apply require `bakeComplete` (finishOk or loaded cache). Overlay `tw empty` until complete ready tracks exist.
+
+**Empty honesty:** finish log includes `src=` + `gameObjects` / `lethalIds` + skip breakdown. Baker status when empty: `trigger-world: empty (src=… fx=… …)`.
+
+**Anti-hallucination (Live Delay):** arm only when `verifyDelay` ok and plan not `budgetHit`; fire-tick re-verifies before inject (fail → cancel, no inject / no save-cue); recheck slides and HUS Delay-confirm require verify; hold-extend aborts early on lethal verify; `SAVED +N` / save-cue only after verified fire with `delayed>0`.
 
 `ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 
