@@ -190,11 +190,13 @@ private:
     // sharedBudget: Hybrid press envelope (verify spends first; Live uses remainder).
     // verifyAttempted: set when BakeVerifier::verify ran (Hybrid Live must not
     // re-force assist via nearBake / prefer-band from the rejected window).
+    // reuse: copy findNear window + verify threatZone for Live (no bake ptrs).
     bool tryBakeAssist(
         PlayLayer* playLayer, PlayerObject* player, bool player1,
         bool down, int effectTick, float firstDt, bool& handled,
         PressSimBudget* sharedBudget = nullptr,
-        bool* verifyAttempted = nullptr
+        bool* verifyAttempted = nullptr,
+        HybridPressReuse* reuse = nullptr
     );
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);

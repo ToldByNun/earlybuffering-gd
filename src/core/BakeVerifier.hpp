@@ -1,6 +1,8 @@
 #ifndef EARLYBUFFER_CORE_BAKEVERIFIER_HPP
 #define EARLYBUFFER_CORE_BAKEVERIFIER_HPP
 
+#include "ShadowSimulator.hpp"
+
 class PlayLayer;
 class PlayerObject;
 
@@ -17,6 +19,17 @@ struct PressSimBudget {
 constexpr int kHybridLiveReserveUs = 500;
 constexpr int kHybridLiveReserveTicks = 800;
 
+// One-press Hybrid fallthrough reuse: copy window fields (no bake-vector ptrs)
+// + verify threat zone. Cleared each press; null/empty on missing-bake path.
+struct HybridPressReuse {
+    bool hasWindow = false;
+    int earliest = 0;      // bake frames
+    int latest = 0;
+    int nominalFrame = 0;
+    double bakeTps = 240.0;
+    ThreatZone verifyThreat{};
+};
+
 // Live re-check of a BakeMap delay before Hybrid/Replay/Brute uses it.
 // One runOne: must clearThreat and not die before the action.
 class BakeVerifier {
@@ -28,6 +41,7 @@ public:
         bool budgetHit = false;
         int ticksSpent = 0;
         int usSpent = 0;
+        ThreatZone threatZone{};
     };
 
     // delayTicks: 0 = fire now (already inside bake window).

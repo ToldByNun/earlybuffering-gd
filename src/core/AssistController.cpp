@@ -65,6 +65,34 @@ static void fillPlanRobustLatency(
 }
 
 // Map a nearby BakeMap window onto delay ticks for Live prefer-band ordering.
+static void fillBakePreferBandFromReuse(
+    PlanOptions& opts,
+    HybridPressReuse const& reuse,
+    int effectTick,
+    int limit,
+    float simDt
+) {
+    if (!reuse.hasWindow || limit <= 0 || simDt <= 0.f) return;
+    double const tps = reuse.bakeTps > 0.0 ? reuse.bakeTps : AssistClock::kNominalTps;
+    auto frameToTick = [&](int frame) -> int {
+        double const scale = tps * static_cast<double>(simDt);
+        double const ticksPerBakeFrame = (scale > 0.0) ? (1.0 / scale) : 1.0;
+        int const delta = static_cast<int>(std::lround(
+            (frame - reuse.nominalFrame) * ticksPerBakeFrame
+        ));
+        return effectTick + delta;
+    };
+
+    int e = frameToTick(reuse.earliest) - effectTick;
+    int l = frameToTick(reuse.latest) - effectTick;
+    if (l < e) std::swap(l, e);
+    e = std::max(0, std::min(limit, e));
+    l = std::max(0, std::min(limit, l));
+    if (e > l) return;
+    opts.preferDelayMin = e;
+    opts.preferDelayMax = l;
+}
+
 static void fillBakePreferBand(
     PlanOptions& opts,
     PlayerObject* player,
@@ -73,8 +101,13 @@ static void fillBakePreferBand(
     int effectTick,
     int limit,
     int attemptTick,
-    float simDt
+    float simDt,
+    HybridPressReuse const* reuse = nullptr
 ) {
+    if (reuse && reuse->hasWindow) {
+        fillBakePreferBandFromReuse(opts, *reuse, effectTick, limit, simDt);
+        return;
+    }
     if (!player || limit <= 0 || simDt <= 0.f) return;
     auto const& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) return;
@@ -87,23 +120,13 @@ static void fillBakePreferBand(
     );
     if (!win) return;
 
-    auto frameToTick = [&](int frame) -> int {
-        double const scale = tps * static_cast<double>(simDt);
-        double const ticksPerBakeFrame = (scale > 0.0) ? (1.0 / scale) : 1.0;
-        int const delta = static_cast<int>(std::lround(
-            (frame - win->nominalFrame) * ticksPerBakeFrame
-        ));
-        return effectTick + delta;
-    };
-
-    int e = frameToTick(win->earliest) - effectTick;
-    int l = frameToTick(win->latest) - effectTick;
-    if (l < e) std::swap(l, e);
-    e = std::max(0, std::min(limit, e));
-    l = std::max(0, std::min(limit, l));
-    if (e > l) return;
-    opts.preferDelayMin = e;
-    opts.preferDelayMax = l;
+    HybridPressReuse tmp;
+    tmp.hasWindow = true;
+    tmp.earliest = win->earliest;
+    tmp.latest = win->latest;
+    tmp.nominalFrame = win->nominalFrame;
+    tmp.bakeTps = tps;
+    fillBakePreferBandFromReuse(opts, tmp, effectTick, limit, simDt);
 }
 
 // Nearby bake click → ClickIntentGuard must not Pass (assist allowed).
@@ -114,8 +137,10 @@ static bool nearBakeWindowHint(
     bool player1,
     bool down,
     int attemptTick,
-    float simDt
+    float simDt,
+    HybridPressReuse const* reuse = nullptr
 ) {
+    if (reuse) return reuse->hasWindow;
     if (!player || simDt <= 0.f) return false;
     auto const& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) return false;
@@ -1906,10 +1931,12 @@ bool AssistController::tryBakeAssist(
     PlayLayer* playLayer, PlayerObject* player, bool player1,
     bool down, int effectTick, float firstDt, bool& handled,
     PressSimBudget* sharedBudget,
-    bool* verifyAttempted
+    bool* verifyAttempted,
+    HybridPressReuse* reuse
 ) {
     handled = false;
     if (verifyAttempted) *verifyAttempted = false;
+    if (reuse) *reuse = {};
     auto mode = StageConfig::assistMode();
     if (mode == AssistMode::Live) return true;
 
@@ -1966,6 +1993,15 @@ bool AssistController::tryBakeAssist(
         return fallThroughOrPass("no window", AssistReason::PassBakeNoWindow);
     }
 
+    // Copy window fields for Live fallthrough (no raw bake-vector pointers).
+    if (reuse) {
+        reuse->hasWindow = true;
+        reuse->earliest = win->earliest;
+        reuse->latest = win->latest;
+        reuse->nominalFrame = win->nominalFrame;
+        reuse->bakeTps = tps;
+    }
+
     // Map bake frames onto attempt ticks using bake TPS vs current sim dt.
     auto frameToTick = [&](int frame) -> int {
         if (this->m_simDt <= 0.f) return effectTick + (frame - win->nominalFrame);
@@ -2006,6 +2042,7 @@ bool AssistController::tryBakeAssist(
             playLayer, player, down, delay, limit, this->m_simDt, fd,
             hybrid ? sharedBudget : nullptr
         );
+        if (reuse) reuse->verifyThreat = vr.threatZone;
         if (!vr.ok) {
             char const* why = "verify fail";
             if (vr.budgetHit) why = "verify budget";
@@ -2112,10 +2149,12 @@ bool AssistController::planPress(
 
     bool bakeHandled = false;
     bool hybridVerifyAttempted = false;
+    HybridPressReuse hybridReuse{};
     bool const bakeRet = this->tryBakeAssist(
         playLayer, player, player1, true, effectTick, firstDt, bakeHandled,
         shareHybrid ? &pressBudget : nullptr,
-        shareHybrid ? &hybridVerifyAttempted : nullptr
+        shareHybrid ? &hybridVerifyAttempted : nullptr,
+        shareHybrid ? &hybridReuse : nullptr
     );
     if (bakeHandled) return bakeRet;
 
@@ -2126,8 +2165,10 @@ bool AssistController::planPress(
     bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
     // After Hybrid bake verify rejected the window, do not treat near-bake as
     // spam override — that forced full Live on every ~5 CPS click (main-thread hitch).
+    // Reuse findNear result from tryBakeAssist when present (no second lookup).
     bool nearBake = nearBakeWindowHint(
-        player, player1, true, effectTick, this->m_simDt
+        player, player1, true, effectTick, this->m_simDt,
+        shareHybrid ? &hybridReuse : nullptr
     );
     if (hybridVerifyAttempted) nearBake = false;
 
@@ -2244,10 +2285,16 @@ bool AssistController::planPress(
     );
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDense);
     // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
+    // Otherwise reuse findNear window fields from tryBakeAssist.
     if (!hybridVerifyAttempted) {
         fillBakePreferBand(
-            opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt
+            opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt,
+            shareHybrid ? &hybridReuse : nullptr
         );
+    }
+    // Verify-fail: seed threat zone so plan() skips buildThreatZone.
+    if (hybridVerifyAttempted && hybridReuse.verifyThreat.valid) {
+        opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
     auto const t0 = std::chrono::steady_clock::now();
@@ -2496,10 +2543,12 @@ bool AssistController::planRelease(
 
     bool bakeHandled = false;
     bool hybridVerifyAttempted = false;
+    HybridPressReuse hybridReuse{};
     bool const bakeRet = this->tryBakeAssist(
         playLayer, player, player1, false, effectTick, firstDt, bakeHandled,
         shareHybrid ? &pressBudget : nullptr,
-        shareHybrid ? &hybridVerifyAttempted : nullptr
+        shareHybrid ? &hybridVerifyAttempted : nullptr,
+        shareHybrid ? &hybridReuse : nullptr
     );
     if (bakeHandled) return bakeRet;
 
@@ -2509,7 +2558,8 @@ bool AssistController::planRelease(
     int const slot = player1 ? 0 : 1;
     bool const nearOrb = nearOrbOrPadHint(playLayer, player, limit, this->m_simDt);
     bool nearBake = nearBakeWindowHint(
-        player, player1, false, effectTick, this->m_simDt
+        player, player1, false, effectTick, this->m_simDt,
+        shareHybrid ? &hybridReuse : nullptr
     );
     if (hybridVerifyAttempted) nearBake = false;
 
@@ -2597,8 +2647,12 @@ bool AssistController::planRelease(
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDenseRel);
     if (!hybridVerifyAttempted) {
         fillBakePreferBand(
-            opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt
+            opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt,
+            shareHybrid ? &hybridReuse : nullptr
         );
+    }
+    if (hybridVerifyAttempted && hybridReuse.verifyThreat.valid) {
+        opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);

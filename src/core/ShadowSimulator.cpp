@@ -1998,7 +1998,13 @@ SimPlan ShadowSimulator::plan(
         plan.firstDeathTick = c0.raw.died ? c0.raw.deathTick : -1;
         plan.firstDeathObject = c0.raw.deathObject;
         if (c0.raw.died) {
-            zone = buildThreatZone(layer, c0.raw.deathX, c0.raw.deathObject);
+            // Hybrid verify already clustered this zone — reuse (skip rebuild).
+            if (options.seedThreatZone.valid) {
+                zone = options.seedThreatZone;
+            }
+            else {
+                zone = buildThreatZone(layer, c0.raw.deathX, c0.raw.deathObject);
+            }
             plan.threatZone = zone;
         }
         finalizeViable(c0, -1);

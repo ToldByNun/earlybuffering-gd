@@ -21,6 +21,12 @@ enum class PlanAction {
     Delay     // wait `delay` ticks, then do it (assist only)
 };
 
+struct ThreatZone {
+    float startX = 0.f;
+    float endX = 0.f;
+    bool valid = false;
+};
+
 struct PlanOptions {
     float capMul = 1.f;
     int maxBranches = 4;
@@ -45,12 +51,9 @@ struct PlanOptions {
     bool spamDense = false;
     // true = 1.2.0 earliest / d0-Pass pick; false = New outcome/exit prediction.
     bool legacyPick = false;
-};
-
-struct ThreatZone {
-    float startX = 0.f;
-    float endX = 0.f;
-    bool valid = false;
+    // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
+    // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
+    ThreatZone seedThreatZone{};
 };
 
 struct ActWindow {

@@ -47,6 +47,7 @@ BakeVerifier::Result BakeVerifier::verify(
     out.budgetHit = r.budgetHit;
     out.ticksSpent = r.ticksSpent;
     out.usSpent = r.usSpent;
+    out.threatZone = r.threatZone;
 
     if (shared) {
         shared->tickLeft = std::max(0, shared->tickLeft - r.ticksSpent);
