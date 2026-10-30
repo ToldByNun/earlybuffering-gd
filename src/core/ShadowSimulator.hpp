@@ -147,12 +147,17 @@ public:
     bool isDynamicTriggerTarget(int uniqueId) const;
     // Cheap live probe wrote a pose for this id on the current sim step.
     bool liveDynamicApplied(int uniqueId) const;
-    bool isShadow(PlayerObject* p) const { return p && p == m_shadow; }
+    bool isShadow(PlayerObject* p) const {
+        return p && (p == m_shadow || (m_evalActive && p == m_evalActive));
+    }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* p) const;
     PlayerObject* shadow() const { return m_shadow; }
     bool isShadowTrail(HardStreak* trail) const {
-        return m_shadow && trail && trail == m_shadow->m_waveTrail;
+        if (!trail) return false;
+        if (m_shadow && trail == m_shadow->m_waveTrail) return true;
+        if (m_evalActive && trail == m_evalActive->m_waveTrail) return true;
+        return false;
     }
 
     void markDead(PlayerObject* p, GameObject* object = nullptr);
@@ -256,6 +261,7 @@ public:
 
     // Quit / reset: abort an in-flight eval loop.
     void abortEval();
+    void clearEvalAbort() { this->m_evalAbort = false; }
     bool evalAbortRequested() const { return this->m_evalAbort; }
 
     // Build hazard cluster around a death X / object (public for tests/logging).
@@ -438,6 +444,7 @@ private:
         float scaleX = 1.f;
         float scaleY = 1.f;
         bool nodeVisible = true;
+        mutable bool dirty = false;
     };
 
     // Cheap live DynamicFollow job (not written to static JSON).
@@ -477,9 +484,11 @@ private:
     static bool isHazardLike(GameObject* obj);
 
     void beginCapture(PlayLayer* layer);
+    void resetCaptureForNextRun(PlayLayer* layer);
     void restoreCapture(PlayLayer* layer);
     // Snapshot/restore world transforms for TriggerWorldStore ready tracks.
     void captureTriggerTransforms(PlayLayer* layer);
+    void resetTriggerTransforms();
     void restoreTriggerTransforms(GJBaseGameLayer* layer);
     // Apply TriggerWorldStore poses for m_simAbsTick (near ghost first, capped).
     void applyTriggerWorldAtTick(PlayLayer* layer, int absTick, PlayerObject* ghost);

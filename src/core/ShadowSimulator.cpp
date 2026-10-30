@@ -1,4 +1,5 @@
 #include "ShadowSimulator.hpp"
+#include "AssistClock.hpp"
 #include "BakeMap.hpp"
 #include "MissAssistContracts.hpp"
 #include "TravelForesight.hpp"
@@ -463,7 +464,7 @@ void ShadowSimulator::noteOrbOverlap() {
 }
 
 void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
-    if (!shadow || !ring || shadow != m_shadow) return;
+    if (!shadow || !ring || (shadow != m_shadow && shadow != m_evalActive)) return;
 
     // Real GD: orbs only fire while Jump is held. Without this, wait-ticks before a
     // delayed press claim the orb early and every orb prediction is wrong.
@@ -511,28 +512,26 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     LagProbe::Scope const scope("eb.trigger.capture");
 
     // Collect uniqueIds we may move this sim (ready static bake tracks).
-    std::vector<int> wanted;
+    std::unordered_set<int> wanted;
     if (store.loaded() && store.hasTracks()) {
         wanted.reserve(store.trackCount());
         for (auto const& track : store.data().tracks) {
             if (!track.ready || track.keys.empty()) continue;
             if (!TriggerClassify::isStatic(track.kind)) continue;
-            wanted.push_back(track.uniqueId);
+            wanted.insert(track.uniqueId);
         }
     }
+    if (wanted.empty()) return;
 
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children) return;
 
+    this->m_savedTransforms.reserve(wanted.size());
     for (unsigned i = 0; i < children->count(); ++i) {
         auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
         if (!obj) continue;
         int const uid = obj->m_uniqueID;
-        bool hit = false;
-        for (int id : wanted) {
-            if (id == uid) { hit = true; break; }
-        }
-        if (!hit) continue;
+        if (wanted.find(uid) == wanted.end()) continue;
 
         SavedTransform st;
         st.uniqueId = uid;
@@ -543,6 +542,7 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
         st.scaleX = obj->getScaleX();
         st.scaleY = obj->getScaleY();
         st.nodeVisible = obj->isVisible();
+        st.dirty = false;
         this->m_savedTransforms.push_back(st);
     }
 }
@@ -566,6 +566,18 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
 
     bool const wantJobs = !StageConfig::triggerBakeSkipDynamic();
 
+    // First collect DynamicFollow effects only; skip the second full-roster scan when none exist.
+    std::vector<EffectGameObject*> followEffects;
+    for (unsigned i = 0; i < children->count(); ++i) {
+        if (followEffects.size() >= kMaxDynamicFollowJobs) break;
+        auto* effect = typeinfo_cast<EffectGameObject*>(children->objectAtIndex(i));
+        if (!effect) continue;
+        if (effect->m_targetGroupID <= 0) continue;
+        if (TriggerClassify::classify(effect) != TriggerKind::DynamicFollow) continue;
+        followEffects.push_back(effect);
+    }
+    if (followEffects.empty()) return;
+
     // Index solids once for group membership.
     std::vector<GameObject*> solids;
     solids.reserve(static_cast<size_t>(children->count()));
@@ -576,13 +588,16 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
         solids.push_back(obj);
     }
 
-    for (unsigned i = 0; i < children->count(); ++i) {
-        if (this->m_dynamicFollowJobs.size() >= kMaxDynamicFollowJobs) break;
-        auto* effect = typeinfo_cast<EffectGameObject*>(children->objectAtIndex(i));
-        if (!effect) continue;
+    std::unordered_set<int> savedTransformIds;
+    if (wantJobs) {
+        savedTransformIds.reserve(this->m_savedTransforms.size() + 64);
+        for (auto const& saved : this->m_savedTransforms) {
+            savedTransformIds.insert(saved.uniqueId);
+        }
+    }
 
-        TriggerKind const kind = TriggerClassify::classify(effect);
-        if (kind != TriggerKind::DynamicFollow) continue;
+    for (auto* effect : followEffects) {
+        if (this->m_dynamicFollowJobs.size() >= kMaxDynamicFollowJobs) break;
 
         // Rotate-follow / non-positional: mark targets Unknown, no cheap probe.
         bool const rotateOnly = effect->m_rotateFollowP1 || effect->m_rotateFollowP2;
@@ -623,14 +638,10 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
             st.scaleX = obj->getScaleX();
             st.scaleY = obj->getScaleY();
             st.nodeVisible = obj->isVisible();
+            st.dirty = false;
             job.targets.push_back(st);
 
-            // Also restore via shared transform list if not already snapshotted.
-            bool already = false;
-            for (auto const& saved : this->m_savedTransforms) {
-                if (saved.uniqueId == st.uniqueId) { already = true; break; }
-            }
-            if (!already) {
+            if (savedTransformIds.insert(st.uniqueId).second) {
                 this->m_savedTransforms.push_back(st);
             }
         }
@@ -690,21 +701,26 @@ void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost
             pose.scaleY = t.scaleY;
             pose.active = t.nodeVisible;
             TriggerWorldStore::writePose(obj, pose);
+            for (auto const& st : this->m_savedTransforms) {
+                if (st.uniqueId == t.uniqueId) {
+                    st.dirty = true;
+                    break;
+                }
+            }
             this->m_liveDynamicAppliedIds.insert(t.uniqueId);
             ++applied;
         }
     }
 }
 
-void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
-    (void)layer;
+void ShadowSimulator::resetTriggerTransforms() {
     if (this->m_savedTransforms.empty()) return;
 
     for (auto const& st : this->m_savedTransforms) {
+        if (!st.dirty) continue;
+        st.dirty = false;
         auto* obj = st.obj;
-        // Stale pointer guard: object must still report the same uniqueId.
-        if (!obj) continue;
-        if (obj->m_uniqueID != st.uniqueId) continue;
+        if (!obj || obj->m_uniqueID != st.uniqueId) continue;
 
         obj->setPosition({ st.x, st.y });
         obj->m_positionX = st.x;
@@ -714,6 +730,11 @@ void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
         obj->setScaleY(st.scaleY);
         obj->setVisible(st.nodeVisible);
     }
+}
+
+void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
+    (void)layer;
+    this->resetTriggerTransforms();
     this->m_savedTransforms.clear();
 }
 
@@ -728,6 +749,32 @@ void ShadowSimulator::beginCapture(PlayLayer* layer) {
     this->captureDynamicFollows(layer);
 }
 
+void ShadowSimulator::resetCaptureForNextRun(PlayLayer* layer) {
+    this->resetTriggerTransforms();
+    this->m_triggerWorldAppliedThisTick = false;
+    this->m_liveDynamicAppliedIds.clear();
+
+    if (!this->m_saved.empty()) {
+        for (auto const& s : this->m_saved) {
+            if (!s.obj) continue;
+            s.obj->m_activated = s.activated;
+            s.obj->m_activatedByPlayer1 = s.p1;
+            s.obj->m_activatedByPlayer2 = s.p2;
+            s.obj->m_poweredOn = s.poweredOn;
+            s.obj->m_state = s.state;
+            s.obj->m_isActivated = s.isActivated;
+            s.obj->m_visible = s.egoVisible;
+            s.obj->setOpacity(s.opacity);
+            s.obj->setVisible(s.nodeVisible);
+            if (s.isRing) static_cast<RingObject*>(s.obj)->m_claimTouch = s.claimTouch;
+        }
+        this->m_saved.clear();
+        if (layer) {
+            layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
+        }
+    }
+}
+
 void ShadowSimulator::restoreCapture(PlayLayer* layer) {
     {
         LagProbe::Scope const scope("eb.trigger.restore");
@@ -736,6 +783,7 @@ void ShadowSimulator::restoreCapture(PlayLayer* layer) {
     this->m_dynamicFollowJobs.clear();
     this->m_dynamicTargetIds.clear();
     this->m_liveDynamicAppliedIds.clear();
+    this->m_triggerWorldAppliedThisTick = false;
 
     for (auto const& s : this->m_saved) {
         if (!s.obj) continue;
@@ -805,14 +853,19 @@ void ShadowSimulator::applyTriggerWorldAtTick(
         bool isNear = false;
     };
     std::vector<Cand> cands;
-    cands.reserve(this->m_savedTransforms.size());
+    cands.reserve(128);
+    constexpr float kCullMarginX = kApplyMarginX * 2.5f;
     for (auto const& st : this->m_savedTransforms) {
         auto* obj = st.obj;
         if (!obj || obj->m_uniqueID != st.uniqueId) continue;
+        float const distNow = std::fabs(obj->getPositionX() - gx);
+        float const distBase = std::fabs(st.x - gx);
+        float const dist = std::min(distNow, distBase);
+        if (dist > kCullMarginX) continue;
         Cand c;
         c.st = &st;
-        c.dist = std::fabs(obj->getPositionX() - gx);
-        c.isNear = c.dist <= kApplyMarginX;
+        c.dist = dist;
+        c.isNear = dist <= kApplyMarginX;
         cands.push_back(c);
     }
     // Near objects first, then closer far objects — skip remainder if budget/cap.
@@ -834,6 +887,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
         TriggerPose pose{};
         if (!store.samplePose(c.st->uniqueId, absTick, pose)) continue;
         TriggerWorldStore::writePose(obj, pose);
+        c.st->dirty = true;
         ++applied;
     }
     // Far / over-budget tracks hold last written pose (or capture baseline).
@@ -849,9 +903,10 @@ void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick, s);
         this->applyLiveDynamicNear(layer, s);
     }
+    float const gdDt = AssistClock::secondsToGdStep(dt);
     hideGhost(s);
     clearCollisionLogs(s);
-    layer->checkCollisions(s, dt, false);
+    layer->checkCollisions(s, gdDt, false);
     hideGhost(s);
 }
 
@@ -862,14 +917,16 @@ void ShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* s, float stepD
         this->applyTriggerWorldAtTick(layer, this->m_simAbsTick, s);
         this->applyLiveDynamicNear(layer, s);
     }
+    float const gdStepDt = AssistClock::secondsToGdStep(stepDt);
+    float colDt = stepDt;
+    if (colDt < dt) colDt = dt; // same rule as pre-collide: never a tiny remainder
+    float const gdColDt = AssistClock::secondsToGdStep(colDt);
     hideGhost(s);
-    s->update(stepDt);
+    s->update(gdStepDt);
     hideGhost(s);
     if (this->m_dead) return;
     clearCollisionLogs(s);
-    float colDt = stepDt;
-    if (colDt < dt) colDt = dt; // same rule as pre-collide: never a tiny remainder
-    layer->checkCollisions(s, colDt, false);
+    layer->checkCollisions(s, gdColDt, false);
     hideGhost(s);
 }
 
@@ -1157,25 +1214,37 @@ ThreatZone ShadowSimulator::buildThreatZone(PlayLayer* layer, float deathX, Game
     auto* children = layer->m_objectLayer->getChildren();
     if (!children) return z;
 
+    struct HazardSpan {
+        float lo = 0.f;
+        float hi = 0.f;
+    };
+    std::vector<HazardSpan> localHazards;
+    localHazards.reserve(128);
+    constexpr float kMaxClusterRadiusX = 800.f;
+    float const winLo = z.startX - kMaxClusterRadiusX;
+    float const winHi = z.endX + kMaxClusterRadiusX;
+    for (unsigned i = 0; i < children->count(); ++i) {
+        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+        if (!isHazardLike(obj)) continue;
+        float const x = obj->getPositionX();
+        if (x < winLo || x > winHi) continue;
+        float half = obj->getContentSize().width * std::fabs(obj->getScaleX()) * 0.5f;
+        if (half < 10.f) half = 10.f;
+        localHazards.push_back({ x - half, x + half });
+    }
+
     bool grew = true;
     int guard = 0;
     while (grew && guard++ < 32) {
         grew = false;
-        for (unsigned i = 0; i < children->count(); ++i) {
-            auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
-            if (!isHazardLike(obj)) continue;
-            float const x = obj->getPositionX();
-            float half = obj->getContentSize().width * std::fabs(obj->getScaleX()) * 0.5f;
-            if (half < 10.f) half = 10.f;
-            float const oLo = x - half;
-            float const oHi = x + half;
-            if (oHi + kClusterGapX < z.startX || oLo - kClusterGapX > z.endX) continue;
-            if (oLo < z.startX) {
-                z.startX = oLo;
+        for (auto const& h : localHazards) {
+            if (h.hi + kClusterGapX < z.startX || h.lo - kClusterGapX > z.endX) continue;
+            if (h.lo < z.startX) {
+                z.startX = h.lo;
                 grew = true;
             }
-            if (oHi > z.endX) {
-                z.endX = oHi;
+            if (h.hi > z.endX) {
+                z.endX = h.hi;
                 grew = true;
             }
         }
@@ -1365,7 +1434,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
-    int const maxTicks = delay + std::max(1, model.cap);
+    int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
 
     auto finish = [&](RunResult out) {
         out.activatedRing = m_activatedRing;
@@ -1384,30 +1453,34 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
         return false;
     };
 
+    if (delay > 0) {
+        this->m_orbOverlapTick = false;
+        this->m_simAbsTick = this->m_simTickBase;
+        stepPreCollide(layer, s, dt);
+        if (m_dead) {
+            r.ticksRan = 1;
+            r.died = true;
+            r.deathTick = 0;
+            r.deathX = s->getPositionX();
+            r.deathObject = m_deathObject;
+            r.diedBeforeAction = true;
+            return finish(r);
+        }
+        if (m_unknown) {
+            r.ticksRan = 1;
+            r.unknown = true;
+            r.unknownTrunc = true;
+            r.unknownTick = 0;
+            return finish(r);
+        }
+    }
+
     for (int t = 0; t < maxTicks; ++t) {
         if (spend()) break;
         float const stepDt = (t == 0) ? firstDt : dt;
         r.ticksRan = t + 1;
         this->m_orbOverlapTick = false;
         this->m_simAbsTick = this->m_simTickBase + t;
-
-        if (t < delay) {
-            stepPreCollide(layer, s, dt);
-            if (m_dead) {
-                r.died = true;
-                r.deathTick = t;
-                r.deathX = s->getPositionX();
-                r.deathObject = m_deathObject;
-                r.diedBeforeAction = true;
-                return finish(r);
-            }
-            if (m_unknown) {
-                r.unknown = true;
-                r.unknownTrunc = true;
-                r.unknownTick = t;
-                return finish(r);
-            }
-        }
 
         if (!acted && t == delay) {
             acted = true;
@@ -1712,8 +1785,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
         layer, real, down, 0, limit, dt, firstDt, model, -1,
         nullptr, &tickBudget
     );
-    this->restoreCapture(layer);
-    this->beginCapture(layer);
+    this->resetCaptureForNextRun(layer);
     if (c0.died) {
         zone = buildThreatZone(layer, c0.deathX, c0.deathObject);
         out.threatZone = zone;
@@ -1737,8 +1809,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
             layer, real, down, delay, limit, dt, firstDt, model, -1,
             zone.valid ? &zone : nullptr, &tickBudget
         );
-        this->restoreCapture(layer);
-        this->beginCapture(layer);
+        this->resetCaptureForNextRun(layer);
     }
 
     out.diedBeforeAction = r.diedBeforeAction;
@@ -1764,8 +1835,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
                 layer, other, down, delay, limit, dt, firstDt, model, -1,
                 zone.valid ? &zone : nullptr, &tickBudget
             );
-            this->restoreCapture(layer);
-            this->beginCapture(layer);
+            this->resetCaptureForNextRun(layer);
             if (r2.died || r2.diedBeforeAction || !clearsThreatOf(r2, zone)) {
                 viable = false;
                 out.clearsThreat = false;
@@ -1846,8 +1916,7 @@ SimPlan ShadowSimulator::plan(
 
     {
         auto base = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
-        restoreCapture(layer);
-        beginCapture(layer);
+        this->resetCaptureForNextRun(layer);
         if (base.died) {
             plan.baselineDeathTick = base.deathTick;
             plan.baselineDeathObject = base.deathObject;
@@ -1863,8 +1932,7 @@ SimPlan ShadowSimulator::plan(
         orbHint = this->scanOrbWindow(
             layer, real, down, scanTicks, dt, firstDt, &tickBudget, false
         );
-        this->restoreCapture(layer);
-        this->beginCapture(layer);
+        this->resetCaptureForNextRun(layer);
         // Press-to-reach: second scan with Jump held if coast missed (budget-capped).
         if (!orbHint.found && tickBudget >= OpportunityProbe::kMinBudgetForProbe) {
             int const reachTicks = OpportunityProbe::pressReachScanTicks(
@@ -1873,8 +1941,7 @@ SimPlan ShadowSimulator::plan(
             auto held = this->scanOrbWindow(
                 layer, real, down, reachTicks, dt, firstDt, &tickBudget, true
             );
-            this->restoreCapture(layer);
-            this->beginCapture(layer);
+            this->resetCaptureForNextRun(layer);
             if (held.found) {
                 orbHint = held;
             }
@@ -1942,8 +2009,7 @@ SimPlan ShadowSimulator::plan(
             layer, real, down, d, limit, dt, firstDt, model, releaseAfter,
             zone.valid ? &zone : nullptr, &tickBudget
         );
-        restoreCapture(layer);
-        beginCapture(layer);
+        this->resetCaptureForNextRun(layer);
         ++plan.candidatesTried;
         c.raw = r;
         c.diedBeforeAction = r.diedBeforeAction;
@@ -1981,8 +2047,7 @@ SimPlan ShadowSimulator::plan(
                     layer, other, down, c.delay, limit, dt, firstDt, model, releaseAfter,
                     zone.valid ? &zone : nullptr, &tickBudget
                 );
-                restoreCapture(layer);
-                beginCapture(layer);
+                this->resetCaptureForNextRun(layer);
                 if (r2.died || r2.diedBeforeAction
                     || !clearsThreatOf(r2, zone)) {
                     c.viable = false;
@@ -2011,10 +2076,10 @@ SimPlan ShadowSimulator::plan(
         cands[0] = c0;
         candReady[0] = 1;
 
-        // Continuous: idle (baseline) safer than d0 press → miss-assist may Delay.
+        // Continuous: idle (baseline) safer than d0 action → miss-assist may Delay.
         plan.idleSafer = classifyIdleSafer(
             model.continuous,
-            down,
+            true,
             plan.baselineDeathTick >= 0,
             plan.baselineDeathTick,
             plan.baselineDeathX,
@@ -2135,8 +2200,8 @@ SimPlan ShadowSimulator::plan(
             kHazardProximityXMax
         );
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
-        // idleSafer: do not early-Pass — pressing now dies while idle lives; search delays.
-        if (!plan.idleSafer && shouldWaveHazardProximityPass(
+        // idleSafer or d0 death: never early-Pass when immediate action dies in sim; search delays.
+        if (!c0.raw.died && !plan.idleSafer && shouldWaveHazardProximityPass(
                 isWave, nearHazard, noOrbTarget, plan.foresightOrbPad
             )) {
             this->m_simAbsTick = -1;
@@ -2251,8 +2316,7 @@ SimPlan ShadowSimulator::plan(
                     layer, real, down, d, limit, dt, firstDt, model, k,
                     zone.valid ? &zone : nullptr, &tickBudget
                 );
-                restoreCapture(layer);
-                beginCapture(layer);
+                this->resetCaptureForNextRun(layer);
                 if (!br.died || br.unknownTrunc) {
                     c.raw = br;
                     c.activatedRing = br.activatedRing;
@@ -2305,8 +2369,7 @@ SimPlan ShadowSimulator::plan(
             layer, real, down, c.delay, limit, dt, firstDt, model, 40,
             zone.valid ? &zone : nullptr, &tickBudget
         );
-        restoreCapture(layer);
-        beginCapture(layer);
+        this->resetCaptureForNextRun(layer);
         Cand h = c;
         h.raw = hold;
         h.activatedRing = hold.activatedRing;
@@ -2352,18 +2415,23 @@ SimPlan ShadowSimulator::plan(
     }
 
     // Wave: no delay improves surviveBin / endX → Pass (avoid phase-shift "assists").
+    // Never discard a surviving delay when d0 actually died in sim.
     {
         bool const isWave = real && real->m_isDart;
         int bestBin = 0;
         float bestGain = 0.f;
         float const baseEnd = cands[0].endX;
+        bool anySavesFromD0Death = false;
         for (int d = 0; d <= limit; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
             if (c.surviveBin > bestBin) bestBin = c.surviveBin;
             float const gain = c.endX - baseEnd;
             if (gain > bestGain) bestGain = gain;
+            if (d > 0 && cands[0].raw.died && c.viable && !c.raw.died) {
+                anySavesFromD0Death = true;
+            }
         }
-        if (!plan.idleSafer && shouldWaveFutileDelayPass(
+        if (!anySavesFromD0Death && !plan.idleSafer && shouldWaveFutileDelayPass(
                 isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad
             )) {
             this->m_simAbsTick = -1;
@@ -2462,8 +2530,7 @@ SimPlan ShadowSimulator::plan(
                 layer, real, down, d, limit, dt, jd, model, releaseAfter,
                 zone.valid ? &zone : nullptr, &tickBudget
             );
-            restoreCapture(layer);
-            beginCapture(layer);
+            this->resetCaptureForNextRun(layer);
             if (!clearsThreatOf(r, zone) || r.diedBeforeAction) return false;
         }
         return true;
@@ -2816,8 +2883,7 @@ SimPlan ShadowSimulator::plan(
                 layer, real, down, chosen, limit, dt, firstDt, model, rel,
                 zone.valid ? &zone : nullptr, &tickBudget
             );
-            restoreCapture(layer);
-            beginCapture(layer);
+            this->resetCaptureForNextRun(layer);
             ++plan.candidatesTried;
 
             // Hold branch must survive — same rule as Delay-viable.
@@ -3792,7 +3858,10 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
 
     ghost->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
 
+    bool const tapRelease = !ghost->m_isDart && !ghost->m_isShip
+        && !ghost->m_isSwing && !ghost->m_isRobot;
     bool acted = false;
+    bool tapReleased = false;
     out.actionTick = delay;
     out.ran = true;
 
@@ -3803,8 +3872,26 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
         return false;
     };
 
+    if (delay > 0) {
+        this->m_orbOverlapTick = false;
+        this->m_simAbsTick = this->m_simTickBase;
+        this->m_triggerWorldAppliedThisTick = false;
+        stepPreCollide(layer, ghost, witness.clock.simDt);
+        if (this->m_dead) {
+            out.ticksRan = 1;
+            out.died = true;
+            out.deathTick = 0;
+            out.endX = ghost->getPositionX();
+        }
+        else if (this->m_unknown) {
+            out.ticksRan = 1;
+            out.unknown = true;
+            out.endX = ghost->getPositionX();
+        }
+    }
+
     int const n = static_cast<int>(steps.size());
-    for (int t = 0; t < n; ++t) {
+    for (int t = 0; t < n && !out.died && !out.unknown; ++t) {
         if (this->m_evalAbort) {
             out.aborted = true;
             break;
@@ -3819,20 +3906,6 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
         this->m_simAbsTick = this->m_simTickBase + t;
         this->m_triggerWorldAppliedThisTick = false;
 
-        if (t < delay) {
-            stepPreCollide(layer, ghost, witness.clock.simDt);
-            if (this->m_dead) {
-                out.died = true;
-                out.deathTick = t;
-                out.endX = ghost->getPositionX();
-                break;
-            }
-            if (this->m_unknown) {
-                out.unknown = true;
-                break;
-            }
-        }
-
         if (!acted && t == delay) {
             acted = true;
             if (down) {
@@ -3842,6 +3915,16 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
             else {
                 ghost->releaseButton(PlayerButton::Jump);
                 ghost->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+            }
+        }
+        else if (acted && down && tapRelease && !tapReleased && this->m_jumped) {
+            bool const touchingOrb = this->m_orbOverlapTick
+                || (ghost->m_touchingRings && ghost->m_touchingRings->count() > 0);
+            bool const dashing = ghost->m_isDashing;
+            bool const justHitOrb = this->m_activatedRing && t <= delay + 4;
+            if (!touchingOrb && !dashing && !justHitOrb) {
+                tapReleased = true;
+                ghost->releaseButton(PlayerButton::Jump);
             }
         }
 

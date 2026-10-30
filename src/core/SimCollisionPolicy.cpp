@@ -66,10 +66,8 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
         case GameObjectType::SpiderOrb:
         case GameObjectType::CustomRing:
         case GameObjectType::Breakable:
-            return SimObjectAction::Include;
         case GameObjectType::AnimatedHazard:
-            // Moving/animated hazards: treat as unknown on overlap (zone may be wrong).
-            return SimObjectAction::UnknownOnOverlap;
+            return SimObjectAction::Include;
         case GameObjectType::CollisionObject:
         case GameObjectType::ShipPortal:
         case GameObjectType::CubePortal:

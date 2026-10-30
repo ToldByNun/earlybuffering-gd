@@ -150,12 +150,9 @@ void DevLiveWitness::fillWorldDeps(
     if (plan.usedOrbWindow || plan.requireOrb || plan.foresightOrbPad) {
         w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Orbs));
     }
-    // Triggers dep when store ready or sim already applied this tick.
+    // Triggers dep only when store has ready tracks that eval can spool.
     auto& tw = TriggerWorldStore::get();
     if (tw.loaded() && tw.hasTracks() && tw.readyTrackCount() > 0) {
-        w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Triggers));
-    }
-    if (ShadowSimulator::get().triggerWorldAppliedThisTick()) {
         w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Triggers));
     }
     // Movers: only when freeze-world is on (poses) or we at least have a digest.

@@ -422,7 +422,7 @@ void AssistController::onSubStep(PlayerObject* player, float dt) {
     if (!this->m_inRealUpdate || dt <= 0.f) return;
     auto* pl = PlayLayer::get();
     if (!pl || player != pl->m_player1) return;
-    this->m_subDtSeen += dt;
+    this->m_subDtSeen += AssistClock::gdStepToSeconds(dt);
 }
 
 bool AssistController::continuousModeKind(GameModeKind kind) {
@@ -1637,6 +1637,7 @@ void AssistController::fireBuffered(
             PlanOptions opts;
             opts.budgetUs = StageConfig::simBudgetUs();
             opts.tickBudget = StageConfig::tickBudgetPerPress() / 4;
+            opts.attemptStartTick = this->m_attemptTick;
             opts.capMul = StageConfig::autoTune()
                 ? LevelProfile::get().capMul(this->m_buffer.mode)
                 : 1.f;
@@ -1765,8 +1766,10 @@ void AssistController::fireBuffered(
                 this->m_attemptTick
             ));
         }
-        else if (requireHold || expectOrb || continuous) {
-            // Only orb/dash/continuous gets post-release extend assist.
+        else if (requireHold) {
+            // Only explicit requireHold (dash orb / robot hold) gets post-release extend.
+            // Continuous modes (Wave/Ship/Swing) plan releases live in planRelease so
+            // letting go never drags the player into ceiling hazards for +limit ticks.
             this->m_pendingRelease = true;
             this->m_pendingReleaseP1 = player1;
             this->m_pendingReleaseHold = requireHold;
@@ -1796,20 +1799,19 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     } tickEndGuard;
 
     float tw = 1.f;
-    if (dt > 0.f) {
+    float const secDt = AssistClock::gdStepToSeconds(dt);
+    if (secDt > 0.f) {
         tw = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (tw <= 0.f) tw = 1.f;
-        float const simSample = dt / tw;
-        // Hitch/pause dumps (e.g. dt=0.25 → 4 TPS) must NOT stick in m_lastDt.
-        // Old logic only updated lastDt when dt grew, so one early hitch poisoned
-        // planning forever (pass-hopeless with simTps≈4 in Dev Lab traces).
+        float const simSample = secDt / tw;
+        // Hitch/pause dumps must NOT stick in m_lastDt.
         auto& clock = AssistClock::get();
         if (clock.isSaneSimDt(simSample)) {
             if (this->m_lastDt <= 0.f || this->m_attemptTick < 3) {
-                this->m_lastDt = dt;
+                this->m_lastDt = secDt;
             }
             else {
-                this->m_lastDt += 0.2f * (dt - this->m_lastDt);
+                this->m_lastDt += 0.2f * (secDt - this->m_lastDt);
             }
             this->m_simDt = this->m_lastDt / tw;
         }
@@ -1819,13 +1821,12 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         }
         float const beforeSnap = this->m_simDt;
         this->m_simDt = clock.planSimDtOrNominal(this->m_simDt, tw);
-        if (std::fabs(this->m_simDt - beforeSnap) > 1e-7f
-            && !clock.isSaneSimDt(simSample)) {
-            // Keep lastDt coherent with snapped planning quantum after hitch dump.
+        if (std::fabs(this->m_simDt - beforeSnap) > 1e-7f) {
+            // Keep lastDt coherent with snapped planning quantum.
             this->m_lastDt = this->m_simDt * tw;
         }
 
-        float const err = dt - this->m_dtEma;
+        float const err = secDt - this->m_dtEma;
         this->m_dtEma += 0.1f * err;
         float const denom = std::max(this->m_dtEma, 1e-4f);
         this->m_dtVarEma = 0.1f * std::abs(err) / denom + 0.9f * this->m_dtVarEma;
@@ -2511,9 +2512,10 @@ bool AssistController::planPress(
         }
     }
 
-    // Hard refuse: never arm a Delay the live verify cannot survive.
+    // If auto-tune shifted delay away from plannedDelay, verify the shifted delay;
+    // when plannedDelay is kept as-is, ShadowSimulator::plan already verified it.
     bool armVerifyOk = true;
-    if (delay > 0 && this->m_simDt > 0.f) {
+    if (delay > 0 && delay != plannedDelay && this->m_simDt > 0.f) {
         float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
         PlanOptions vopts = opts;
         vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
@@ -2525,18 +2527,10 @@ bool AssistController::planPress(
         );
         if (!vr.ok) {
             AssistLog::debug(fmt::format(
-                "ASSIST press verify-fail delay={} → Pass (refuse lethal assist)",
-                delay
+                "ASSIST learning shift {}→{} verify-fail → keep plannedDelay={}",
+                plannedDelay, delay, plannedDelay
             ));
-            DevCycleRecorder::get().noteLearningOnPlan(
-                plannedDelay, delay, false, true
-            );
-            DevCycleRecorder::get().notePassThrough(
-                AssistReason::PassHopeless, "press-verify-fail"
-            );
-            this->noteVerdict(AssistReason::PassHopeless, "press-verify-fail");
-            this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
-            return true;
+            delay = plannedDelay;
         }
         armVerifyOk = vr.ok;
     }
@@ -2963,6 +2957,7 @@ bool AssistController::onHandleButton(
         if (rem < minDt) rem = minDt;
         if (rem > this->m_lastDt) rem = this->m_lastDt;
         firstDt = rem / tw;
+        if (firstDt > this->m_simDt) firstDt = this->m_simDt;
     }
     DevClockContract::Stamp const clockStamp = DevClockContract::get().makeStamp(
         this->m_attemptTick,

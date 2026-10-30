@@ -41,6 +41,12 @@ public:
     static int framesToTicks(int frames);
     static int ticksToFrames(int ticks);
 
+    // Geometry Dash scales PlayerObject::update / checkCollisions dt by 60Hz
+    // (0.25 at 240 TPS). Convert at the GD hook boundary so AssistClock /
+    // ShadowSimulator / DevClockContract stay in real seconds (1/240 at 240 TPS).
+    static float gdStepToSeconds(float gdDt);
+    static float secondsToGdStep(float secDt);
+
     // Map live absolute attempt tick → author/bake tick.
     // bakeTick ≈ round(liveAbsTick * (authorTps * liveSimDt)); identity when
     // authorTps * liveSimDt ≈ 1.

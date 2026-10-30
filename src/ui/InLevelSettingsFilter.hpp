@@ -4,8 +4,8 @@
 #include <Geode/Geode.hpp>
 #include <string>
 
-// Categories for the Geode ModSettingsPopup page switcher (◀ NAME ▶).
-// Commit 1 IA: Ingame folded into Main; Scope is its own page. Count stays 8.
+// Categories for the Geode ModSettingsPopup chip / segment bar.
+// Ingame folded into Main; Scope is its own page. Count stays 8.
 enum class SettingsCategory : int {
     Main = 0,
     Scope,

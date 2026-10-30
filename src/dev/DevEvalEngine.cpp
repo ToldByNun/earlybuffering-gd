@@ -206,6 +206,7 @@ DevEvalEngine::GridReport DevEvalEngine::evalGrid(
     bool anyRan = false;
     bool tailsComplete = true;
 
+    ShadowSimulator::get().clearEvalAbort();
     for (int d : delays) {
         if (ShadowSimulator::get().evalAbortRequested()) break;
         auto raw = ShadowSimulator::get().evalDelayFromFreeze(

@@ -58,6 +58,27 @@ int AssistClock::ticksToFrames(int ticks) {
     return static_cast<int>(rounded);
 }
 
+float AssistClock::gdStepToSeconds(float gdDt) {
+    if (!(gdDt > 0.f) || !std::isfinite(gdDt)) return 0.f;
+    // GD passes 60Hz-normalized step units (60/240 = 0.25 at 240 TPS) to
+    // PlayerObject::update. If a caller already passed seconds (<= 1/15s), keep it.
+    if (gdDt > AssistClock::kMaxSaneSimDt) {
+        return gdDt / static_cast<float>(AssistClock::kDisplayFps);
+    }
+    return gdDt;
+}
+
+float AssistClock::secondsToGdStep(float secDt) {
+    if (!(secDt > 0.f) || !std::isfinite(secDt)) {
+        return AssistClock::kNominalSimDt * static_cast<float>(AssistClock::kDisplayFps);
+    }
+    // If secDt is in seconds (<= 1/15s), scale by 60Hz for PlayerObject::update / checkCollisions.
+    if (secDt <= AssistClock::kMaxSaneSimDt * 2.f) {
+        return secDt * static_cast<float>(AssistClock::kDisplayFps);
+    }
+    return secDt;
+}
+
 int AssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) const {
     if (liveAbsTick < 0) return 0;
     if (authorTps <= 0.0) authorTps = AssistClock::kNominalTps;
@@ -134,6 +155,14 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(AssistClock::framesToTicks(8) == 32, "frames-8-to-32-ticks");
     expect(AssistClock::ticksToFrames(4) == 1, "ticks-4-to-1-frame");
     expect(AssistClock::ticksToFrames(2) == 1 || AssistClock::ticksToFrames(2) == 0, "ticks-2-round");
+    expect(
+        std::fabs(AssistClock::gdStepToSeconds(0.25f) - AssistClock::kNominalSimDt) < 1e-6f,
+        "gd-step-025-to-sec"
+    );
+    expect(
+        std::fabs(AssistClock::secondsToGdStep(AssistClock::kNominalSimDt) - 0.25f) < 1e-6f,
+        "sec-to-gd-step-025"
+    );
 
     // lastDt = 1/120, tw = 2 → simDt = 1/240 → wall 120, sim 240.
     float const lastDt = 1.f / 120.f;
