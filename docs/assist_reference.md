@@ -116,6 +116,25 @@ EB opens the normal Geode ModSettingsPopup with a page switcher:
 
 Action rows use custom type `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
 
+## Dev Lab diagnostics (session JSON)
+
+With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir.
+
+| Field | Where | Meaning |
+|-------|--------|---------|
+| `settingsFingerprint` | session root | Compact preset/mode/pick/ticks/safe/orbs/budgets/trigger-bake/learning summary (always filled on session start / level meta refresh) |
+| `witness.triggerReadyTracks` / `triggerTrackCount` | `planFinished` | Store ready vs total tracks |
+| `witness.triggerBakeEffects` / `triggerBakeChildren` / `triggerCollectedEffects` | `planFinished` | Last bake: effects that produced keys, object-layer children, collected EffectGameObjects |
+| `witness.triggerSkipFollow` / `SkipDynamic` / `SkipNonSpawn` | `planFinished` | Last bake skip counters |
+| `witness.triggerCanSpool` | `planFinished` | `true` only if ready tracks exist |
+| `armVerifyOk` / `budgetHitAtArm` | DelayArm (+ copied on Fire/Outcome) | Live verify passed before arm; plan reported budgetHit |
+| `recheckDelta` | Recheck / Fire / Outcome | Fire-tick slide (per recheck or sum on later events) |
+| `holdExtendMax` | DelayArm / Fire / Outcome | Post-release hold-extend cap when armed |
+| `deathAfterFire` / `ticksToDeath` | Outcome | Death after a real assisted fire; ticks from fire→death |
+| Dev Eval `mismatch liveDelay=N` | overlay / report | Live planned Delay &gt; 0 but eval `bestSurv=none` |
+
+Overlay compact Trigger-World: `tw empty` / `tw N/M` / `tw building %`. LagProbe mark `eb.assist.halluc` on death-after-fire (detail includes press/fire/ticksToDeath).
+
 ## Config export / import (`ConfigBundle`)
 
 Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Win uses `earlybuffer-config.json` under the Geode mod save dir via `SaveDropPaths`). Mobile alerts show the **full path**, copy it to the **clipboard** (best-effort), and use Files / Share / file manager / Finder-via-device wording (no ADB-only steps). Dev Copy Report dual-writes report text + path on the clipboard when the file save succeeds.

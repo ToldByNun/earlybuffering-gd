@@ -31,6 +31,14 @@ public:
     float progress() const { return this->m_progress; }
     std::string statusLine() const;
 
+    // Last finished bake counters (survive clearJob for Dev witness / overlay).
+    size_t lastBakedEffects() const { return this->m_lastBakedEffects; }
+    size_t lastSkippedFollow() const { return this->m_lastSkippedFollow; }
+    size_t lastSkippedDynamic() const { return this->m_lastSkippedDynamic; }
+    size_t lastSkippedNonSpawn() const { return this->m_lastSkippedNonSpawn; }
+    size_t lastChildCount() const { return this->m_lastChildCount; }
+    size_t lastEffectCount() const { return this->m_lastEffectCount; }
+
     // Amortized collect/bake/commit. Safe no-op when idle.
     void tickSlice();
     // After death-cancel: resume build if store still empty (reset path).
@@ -99,6 +107,13 @@ private:
     size_t m_skippedFollow = 0;
     size_t m_skippedDynamic = 0;
     size_t m_skippedNonSpawn = 0;
+
+    size_t m_lastBakedEffects = 0;
+    size_t m_lastSkippedFollow = 0;
+    size_t m_lastSkippedDynamic = 0;
+    size_t m_lastSkippedNonSpawn = 0;
+    size_t m_lastChildCount = 0;
+    size_t m_lastEffectCount = 0;
 };
 
 #endif // EARLYBUFFER_CORE_TRIGGERWORLDBAKER_HPP

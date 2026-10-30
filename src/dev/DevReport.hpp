@@ -32,6 +32,10 @@ public:
     std::string jsonLine;
     bool valid = false;
 
+    // Live armed a Delay but offline eval found no surviving delay (hallucination signal).
+    bool liveVsEvalMismatch = false;
+    int livePlannedDelay = -1;
+
     // Build from an eval grid result. Never writes ideal= unless idealEligible.
     static DevReport fromGrid(
         DevEvalEngine::GridReport const& grid,

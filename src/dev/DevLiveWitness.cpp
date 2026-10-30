@@ -1,6 +1,7 @@
 #include "DevLiveWitness.hpp"
 
 #include "../core/ShadowSimulator.hpp"
+#include "../core/TriggerWorldBaker.hpp"
 #include "../core/TriggerWorldStore.hpp"
 
 #include <Geode/Geode.hpp>
@@ -350,9 +351,18 @@ DevLiveWitness DevLiveWitness::capture(
     // --- triggers ---
     {
         auto& tw = TriggerWorldStore::get();
+        auto& baker = TriggerWorldBaker::get();
         w.triggerStoreKey = tw.data().levelKey;
         w.triggerStoreVersion = tw.data().version;
         w.triggerApplyTick = effectTick;
+        w.triggerTrackCount = static_cast<int>(tw.trackCount());
+        w.triggerReadyTracks = static_cast<int>(tw.readyTrackCount());
+        w.triggerBakeEffects = static_cast<int>(baker.lastBakedEffects());
+        w.triggerBakeChildren = static_cast<int>(baker.lastChildCount());
+        w.triggerCollectedEffects = static_cast<int>(baker.lastEffectCount());
+        w.triggerSkipFollow = static_cast<int>(baker.lastSkippedFollow());
+        w.triggerSkipDynamic = static_cast<int>(baker.lastSkippedDynamic());
+        w.triggerSkipNonSpawn = static_cast<int>(baker.lastSkippedNonSpawn());
         w.triggerCanSpool = tw.loaded()
             && tw.hasTracks()
             && tw.readyTrackCount() > 0;

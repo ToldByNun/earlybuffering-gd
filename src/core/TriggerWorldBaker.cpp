@@ -136,16 +136,24 @@ void TriggerWorldBaker::finishOk() {
     this->m_running = false;
     this->m_progress = 1.f;
     this->m_status = TriggerWorldStore::get().statusLine();
+    this->m_lastBakedEffects = this->m_bakedEffects;
+    this->m_lastSkippedFollow = this->m_skippedFollow;
+    this->m_lastSkippedDynamic = this->m_skippedDynamic;
+    this->m_lastSkippedNonSpawn = this->m_skippedNonSpawn;
+    this->m_lastChildCount = this->m_childCount;
+    this->m_lastEffectCount = this->m_effects.size();
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: baked {} effects → {} tracks ({} ready) @ {:.0f} tps "
-        "(skip follow={} dynamic={} non-spawn={})",
+        "(skip follow={} dynamic={} non-spawn={} children={} collectedEffects={})",
         this->m_bakedEffects,
         TriggerWorldStore::get().trackCount(),
         TriggerWorldStore::get().readyTrackCount(),
         this->m_tps,
         this->m_skippedFollow,
         this->m_skippedDynamic,
-        this->m_skippedNonSpawn
+        this->m_skippedNonSpawn,
+        this->m_lastChildCount,
+        this->m_lastEffectCount
     ));
     this->clearJob();
 }

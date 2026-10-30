@@ -33,7 +33,13 @@ void DevSession::refreshLevelMeta() {
         startPos = layer->m_isTestMode;
         practice = layer->m_isPracticeMode;
     }
-    store.setLevelMeta(std::move(key), std::move(name), startPos, practice, "");
+    store.setLevelMeta(
+        std::move(key),
+        std::move(name),
+        startPos,
+        practice,
+        DevTraceStore::makeSettingsFingerprint()
+    );
 }
 
 bool DevSession::start() {

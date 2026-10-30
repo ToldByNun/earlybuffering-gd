@@ -119,6 +119,12 @@ bool runEvalOnPlanEvent(
         rec = DevSession::get().statusLine();
     }
     out = DevReport::fromGrid(grid, std::move(rec));
+    if (out.valid && planEv.plannedDelay > 0
+        && (!out.hasBestSurviving || out.bestSurvivingDelay < 0)) {
+        out.liveVsEvalMismatch = true;
+        out.livePlannedDelay = planEv.plannedDelay;
+        out.overlayLine = DevReport::formatOverlayLine(out);
+    }
     return out.valid;
 }
 } // namespace
@@ -182,6 +188,10 @@ DevReport DevReport::fromGrid(
         j["evalSuppressedReason"] = grid.fidelity.evalSuppressedReason;
     }
     j["overlay"] = r.overlayLine;
+    if (r.liveVsEvalMismatch) {
+        j["liveVsEvalMismatch"] = true;
+        j["livePlannedDelay"] = r.livePlannedDelay;
+    }
     r.jsonLine = j.dump(0);
     r.valid = true;
     return r;
@@ -204,6 +214,9 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
     if (!r.claimsAllowed) {
         append("bestSurv=none");
         append(fmt::format("bestEval=none obj={}", r.objectiveId));
+        if (r.liveVsEvalMismatch) {
+            append(fmt::format("mismatch liveDelay={}", r.livePlannedDelay));
+        }
         // Never emit ideal= when claims suppressed / not eligible.
         return line;
     }
@@ -213,6 +226,9 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
     }
     else {
         append("bestSurv=none");
+    }
+    if (r.liveVsEvalMismatch) {
+        append(fmt::format("mismatch liveDelay={}", r.livePlannedDelay));
     }
 
     if (r.hasBestEvaluated) {

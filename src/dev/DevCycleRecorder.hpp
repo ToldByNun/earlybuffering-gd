@@ -50,6 +50,14 @@ public:
         bool verifyRefused
     );
     void notePassThrough(AssistReason reason, char const* where);
+
+    // Optional arm diagnostics (verify / budget / hold-extend).
+    struct DelayArmMeta {
+        bool armVerifyOk = true;
+        bool budgetHitAtArm = false;
+        int holdExtendMax = -1;
+    };
+
     // Returns pressId of the armed cycle (0 if not recording).
     int64_t noteDelayArm(
         AssistReason reason,
@@ -57,7 +65,8 @@ public:
         int plannedDelay,
         int plannedFireTick,
         int planId,
-        DevEventSource source = DevEventSource::Live
+        DevEventSource source = DevEventSource::Live,
+        DelayArmMeta meta = {}
     );
 
     void noteRecheck(
@@ -73,11 +82,15 @@ public:
         int fireTick
     );
     void noteFire(int64_t pressId, int actualFireTick);
+    void noteHoldExtend(int64_t pressId, int holdExtendMax);
     void noteCheckpoint(int attemptTick);
 
     // Append outcome for every open cycle in the current attempt, then seal+flush.
     // countTowardTarget follows DevConfig::countEmptyAttempts / has events.
-    bool sealAttemptWithOutcomes(std::string endReason, bool lived);
+    // attemptTick used for deathAfterFire / ticksToDeath when lived=false.
+    bool sealAttemptWithOutcomes(
+        std::string endReason, bool lived, int attemptTick = -1
+    );
     // New attempt under an open session (no-op if none / already open).
     bool beginNewAttempt(int startTick);
     // Death→reset path: seal open attempt if any, then begin the next.
@@ -107,6 +120,11 @@ private:
         bool hasPassThrough = false;
         bool hasFire = false;
         bool hasOutcome = false;
+        bool armVerifyOk = true;
+        bool budgetHitAtArm = false;
+        int holdExtendMax = -1;
+        int actualFireTick = -1;
+        int recheckDelta = 0;
     };
 
     bool canWriteActive() const;
@@ -120,7 +138,9 @@ private:
         AssistReason reason,
         char const* where
     );
-    void writeOutcomesForOpenCycles(std::string const& endReason, bool lived);
+    void writeOutcomesForOpenCycles(
+        std::string const& endReason, bool lived, int attemptTick
+    );
     bool shouldCountAttempt() const;
 
     int64_t m_activePressId = 0;

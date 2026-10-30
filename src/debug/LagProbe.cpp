@@ -196,6 +196,7 @@ void LagProbe::writeLegend() {
     this->appendLine("  eb.hus.replan               Hold-Until-Safe cadenced replan");
     this->appendLine("  eb.hybrid.verify            Hybrid BakeVerifier / cache hit");
     this->appendLine("  eb.hybrid.live              Hybrid Live fallthrough after bake");
+    this->appendLine("  eb.assist.halluc            Death after assisted fire (ticksToDeath)");
     this->appendLine("  vanilla.PlayLayer::resetLevel   GD attempt rebuild (often huge)");
     this->appendLine("  vanilla.loadFromCheckpoint  GD checkpoint apply");
     this->appendLine("  eb.onCheckpointLoad         our checkpoint-side flush");

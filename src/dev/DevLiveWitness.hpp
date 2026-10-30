@@ -125,6 +125,15 @@ public:
     int triggerStoreVersion = 0;
     int triggerApplyTick = -1;
     bool triggerCanSpool = false;
+    // Trigger-World bake / store snapshot for Dev Lab (Commit 1 / 1.3.1).
+    int triggerReadyTracks = 0;
+    int triggerTrackCount = 0;
+    int triggerBakeEffects = 0;
+    int triggerBakeChildren = 0;
+    int triggerCollectedEffects = 0;
+    int triggerSkipFollow = 0;
+    int triggerSkipDynamic = 0;
+    int triggerSkipNonSpawn = 0;
     uint64_t playerBlobSchema = 0;
     uint64_t hazardDigest = 0;
     bool hasHazardDigest = false;

@@ -210,7 +210,9 @@ void AssistController::onCheckpointLoad() {
 }
 
 void AssistController::onLevelComplete(PlayLayer* playLayer) {
-    DevCycleRecorder::get().sealAttemptWithOutcomes("complete", true);
+    DevCycleRecorder::get().sealAttemptWithOutcomes(
+        "complete", true, this->m_attemptTick
+    );
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "complete");
     LevelProfile::get().save();
     BakeMap::get().save();
@@ -765,14 +767,20 @@ bool AssistController::armHoldUntilSafe(
 
     this->m_outcomePlanDelay = eta > 0;
     this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
-    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
-        AssistReason::HoldPending,
-        "hus-arm",
-        eta,
-        this->m_buffer.fireTick,
-        plan.planId,
-        DevEventSource::Live
-    );
+    {
+        DevCycleRecorder::DelayArmMeta meta{};
+        meta.armVerifyOk = true;
+        meta.budgetHitAtArm = plan.budgetHit;
+        this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+            AssistReason::HoldPending,
+            "hus-arm",
+            eta,
+            this->m_buffer.fireTick,
+            plan.planId,
+            DevEventSource::Live,
+            meta
+        );
+    }
     this->noteVerdict(AssistReason::HoldPending, "hus-arm");
     AssistLog::debug(fmt::format(
         "HOLD-UNTIL-SAFE arm eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
@@ -1188,11 +1196,27 @@ void AssistController::updateOverlay() {
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
         if (StageConfig::triggerBake()) {
-            std::string const tw = TriggerWorldBaker::get().running()
-                ? TriggerWorldBaker::get().statusLine()
-                : TriggerWorldStore::get().statusLine();
-            if (!tw.empty() && tw != "trigger-world: off") {
-                m_overlayText += " | " + tw;
+            if (TriggerWorldBaker::get().running()) {
+                this->m_overlayText += fmt::format(
+                    " | tw building {:.0f}%",
+                    TriggerWorldBaker::get().progress() * 100.f
+                );
+            }
+            else {
+                auto& tw = TriggerWorldStore::get();
+                if (!tw.loaded()) {
+                    this->m_overlayText += " | tw off";
+                }
+                else if (!tw.hasTracks()) {
+                    this->m_overlayText += " | tw empty";
+                }
+                else {
+                    this->m_overlayText += fmt::format(
+                        " | tw {}/{}",
+                        tw.readyTrackCount(),
+                        tw.trackCount()
+                    );
+                }
             }
         }
         if (StageConfig::assistOrbs()) m_overlayText += " | orbs";
@@ -1445,7 +1469,9 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     // Seal Dev attempt on death (outcomes + flush). Next attempt opens on reset.
     {
         LagProbe::Scope const s("eb.devSealDeath");
-        DevCycleRecorder::get().sealAttemptWithOutcomes("death", false);
+        DevCycleRecorder::get().sealAttemptWithOutcomes(
+            "death", false, this->m_attemptTick
+        );
     }
     if (DevConfig::evalOnDeath() && DevCycleRecorder::get().isRecording()) {
         std::string evalErr;
@@ -1756,6 +1782,7 @@ void AssistController::fireBuffered(
                 requireHold ? 1 : 0,
                 continuous ? 1 : 0
             ));
+            DevCycleRecorder::get().noteHoldExtend(devPressId, extendCap);
         }
         // else: plain Delay tap — user owns hold+release fully (no pending).
     }
@@ -2164,14 +2191,20 @@ bool AssistController::tryBakeAssist(
         down ? "press" : "release", delay, win->earliest, win->latest,
         this->m_buffer.fireTick
     ));
-    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
-        AssistReason::DelayPrefer,
-        "bake-delay",
-        delay,
-        this->m_buffer.fireTick,
-        0,
-        DevEventSource::Bake
-    );
+    {
+        DevCycleRecorder::DelayArmMeta meta{};
+        meta.armVerifyOk = true;
+        meta.budgetHitAtArm = false;
+        this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+            AssistReason::DelayPrefer,
+            "bake-delay",
+            delay,
+            this->m_buffer.fireTick,
+            0,
+            DevEventSource::Bake,
+            meta
+        );
+    }
     this->noteVerdict(AssistReason::DelayPrefer, "bake-delay");
     this->updateOverlay();
     return false;
@@ -2479,6 +2512,7 @@ bool AssistController::planPress(
     }
 
     // Hard refuse: never arm a Delay the live verify cannot survive.
+    bool armVerifyOk = true;
     if (delay > 0 && this->m_simDt > 0.f) {
         float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
         PlanOptions vopts = opts;
@@ -2504,6 +2538,7 @@ bool AssistController::planPress(
             this->recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
             return true;
         }
+        armVerifyOk = vr.ok;
     }
 
     this->m_buffer = {};
@@ -2569,14 +2604,20 @@ bool AssistController::planPress(
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
         );
     }
-    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
-        delayReason,
-        "press-delay",
-        delay,
-        this->m_buffer.fireTick,
-        plan.planId,
-        DevEventSource::Live
-    );
+    {
+        DevCycleRecorder::DelayArmMeta meta{};
+        meta.armVerifyOk = armVerifyOk;
+        meta.budgetHitAtArm = plan.budgetHit;
+        this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+            delayReason,
+            "press-delay",
+            delay,
+            this->m_buffer.fireTick,
+            plan.planId,
+            DevEventSource::Live,
+            meta
+        );
+    }
     this->noteVerdict(delayReason, "press-delay");
     this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     this->updateOverlay();
@@ -2817,14 +2858,20 @@ bool AssistController::planRelease(
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
         );
     }
-    this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
-        delayReason,
-        "release-delay",
-        delay,
-        this->m_buffer.fireTick,
-        plan.planId,
-        DevEventSource::Live
-    );
+    {
+        DevCycleRecorder::DelayArmMeta meta{};
+        meta.armVerifyOk = true;
+        meta.budgetHitAtArm = plan.budgetHit;
+        this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+            delayReason,
+            "release-delay",
+            delay,
+            this->m_buffer.fireTick,
+            plan.planId,
+            DevEventSource::Live,
+            meta
+        );
+    }
     this->noteVerdict(delayReason, "release-delay");
     this->recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     this->updateOverlay();

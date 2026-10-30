@@ -4,6 +4,7 @@
 #include "DevRejectLedger.hpp"
 #include "DevStateDiff.hpp"
 #include "../core/PlatformLimits.hpp"
+#include "../debug/LagProbe.hpp"
 
 #include <Geode/Geode.hpp>
 #include <cstring>
@@ -310,7 +311,8 @@ int64_t DevCycleRecorder::noteDelayArm(
     int plannedDelay,
     int plannedFireTick,
     int planId,
-    DevEventSource source
+    DevEventSource source,
+    DelayArmMeta meta
 ) {
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive()) return 0;
@@ -334,6 +336,11 @@ int64_t DevCycleRecorder::noteDelayArm(
     }
 
     cycle->source = source;
+    cycle->armVerifyOk = meta.armVerifyOk;
+    cycle->budgetHitAtArm = meta.budgetHitAtArm;
+    if (meta.holdExtendMax >= 0) {
+        cycle->holdExtendMax = meta.holdExtendMax;
+    }
     auto* w = this->appendTo(
         *cycle,
         DevEventKind::DelayArm,
@@ -346,6 +353,10 @@ int64_t DevCycleRecorder::noteDelayArm(
     w->plannedDelay = plannedDelay;
     w->plannedFireTick = plannedFireTick;
     w->source = source;
+    w->hasAssistDiag = true;
+    w->armVerifyOk = meta.armVerifyOk;
+    w->budgetHitAtArm = meta.budgetHitAtArm;
+    w->holdExtendMax = meta.holdExtendMax;
     cycle->hasArm = true;
     return cycle->pressId;
 }
@@ -372,6 +383,13 @@ void DevCycleRecorder::noteRecheck(
     if (!w) return;
     w->plannedFireTick = newFireTick;
     w->actualFireTick = -1;
+    int const delta = newFireTick - oldFireTick;
+    cycle->recheckDelta += delta;
+    w->hasAssistDiag = true;
+    w->recheckDelta = delta;
+    w->armVerifyOk = cycle->armVerifyOk;
+    w->budgetHitAtArm = cycle->budgetHitAtArm;
+    w->holdExtendMax = cycle->holdExtendMax;
     w->assistReason = fmt::format(
         "recheck:{}→{}@{}",
         oldFireTick,
@@ -420,7 +438,20 @@ void DevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
     if (!w) return;
     w->actualFireTick = actualFireTick;
     w->assistReason = fmt::format("fire@{}", actualFireTick);
+    w->hasAssistDiag = true;
+    w->armVerifyOk = cycle->armVerifyOk;
+    w->budgetHitAtArm = cycle->budgetHitAtArm;
+    w->recheckDelta = cycle->recheckDelta;
+    w->holdExtendMax = cycle->holdExtendMax;
+    cycle->actualFireTick = actualFireTick;
     cycle->hasFire = true;
+}
+
+void DevCycleRecorder::noteHoldExtend(int64_t pressId, int holdExtendMax) {
+    auto* cycle = this->tracked(pressId);
+    if (!cycle || !this->isRecording()) return;
+    if (holdExtendMax < 0) return;
+    cycle->holdExtendMax = holdExtendMax;
 }
 
 void DevCycleRecorder::noteCheckpoint(int attemptTick) {
@@ -437,7 +468,7 @@ void DevCycleRecorder::noteCheckpoint(int attemptTick) {
 }
 
 void DevCycleRecorder::writeOutcomesForOpenCycles(
-    std::string const& endReason, bool lived
+    std::string const& endReason, bool lived, int attemptTick
 ) {
     if (!this->isRecording()) return;
     for (auto& pair : this->m_cycles) {
@@ -459,6 +490,11 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(
             if (fw) {
                 fw->actualFireTick = -1;
                 fw->assistReason = fmt::format("fire-cancelled@{}", endReason);
+                fw->hasAssistDiag = true;
+                fw->armVerifyOk = cycle.armVerifyOk;
+                fw->budgetHitAtArm = cycle.budgetHitAtArm;
+                fw->recheckDelta = cycle.recheckDelta;
+                fw->holdExtendMax = cycle.holdExtendMax;
                 cycle.hasFire = true;
             }
         }
@@ -478,6 +514,29 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(
             endReason,
             lived ? "lived" : "died"
         );
+        w->hasAssistDiag = true;
+        w->armVerifyOk = cycle.armVerifyOk;
+        w->budgetHitAtArm = cycle.budgetHitAtArm;
+        w->recheckDelta = cycle.recheckDelta;
+        w->holdExtendMax = cycle.holdExtendMax;
+        if (!lived && cycle.hasArm
+            && cycle.actualFireTick >= 0
+            && attemptTick >= 0) {
+            w->deathAfterFire = true;
+            w->ticksToDeath = std::max(0, attemptTick - cycle.actualFireTick);
+            LagProbe::get().mark(
+                "eb.assist.halluc",
+                fmt::format(
+                    "press={} fire={} deathTick={} ticksToDeath={} recheckΔ={} holdExt={}",
+                    cycle.pressId,
+                    cycle.actualFireTick,
+                    attemptTick,
+                    w->ticksToDeath,
+                    cycle.recheckDelta,
+                    cycle.holdExtendMax
+                )
+            );
+        }
         cycle.hasOutcome = true;
     }
 }
@@ -492,12 +551,14 @@ bool DevCycleRecorder::shouldCountAttempt() const {
     return !attempt->events.empty();
 }
 
-bool DevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool lived) {
+bool DevCycleRecorder::sealAttemptWithOutcomes(
+    std::string endReason, bool lived, int attemptTick
+) {
     if (!DevConfig::recordEnable()) return false;
     auto& store = DevTraceStore::get();
     if (!store.isOpen() || !store.hasOpenAttempt()) return false;
 
-    this->writeOutcomesForOpenCycles(endReason, lived);
+    this->writeOutcomesForOpenCycles(endReason, lived, attemptTick);
     bool const count = this->shouldCountAttempt();
     this->m_cycles.clear();
     this->m_activePressId = 0;
@@ -519,7 +580,7 @@ void DevCycleRecorder::onAttemptReset(int startTick) {
     auto& store = DevTraceStore::get();
     if (!store.isOpen()) return;
     if (store.hasOpenAttempt()) {
-        (void)this->sealAttemptWithOutcomes("reset", false);
+        (void)this->sealAttemptWithOutcomes("reset", false, startTick);
     }
     (void)this->beginNewAttempt(startTick);
 }
@@ -529,7 +590,7 @@ bool DevCycleRecorder::flushQuit() {
     auto& store = DevTraceStore::get();
     if (!store.isOpen()) return false;
     if (store.hasOpenAttempt()) {
-        this->writeOutcomesForOpenCycles("quit", false);
+        this->writeOutcomesForOpenCycles("quit", false, -1);
         bool const count = this->shouldCountAttempt();
         this->m_cycles.clear();
         this->m_activePressId = 0;

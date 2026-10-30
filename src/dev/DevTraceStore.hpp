@@ -52,6 +52,16 @@ struct DevDecisionEvent {
     std::string assistReason;
     std::string endReason; // outcome only: death|complete|quit|manual|empty
 
+    // Assist diagnostics (DelayArm / Recheck / Fire / Outcome) — optional JSON.
+    bool hasAssistDiag = false;
+    bool armVerifyOk = true;
+    bool budgetHitAtArm = false;
+    int recheckDelta = 0;
+    int holdExtendMax = -1;
+    bool deathAfterFire = false;
+    int ticksToDeath = -1;
+    bool liveVsEvalMismatch = false;
+
     // Commit 6: clock stamp on planFinished (eval binds the same stamp).
     bool hasClockStamp = false;
     DevClockContract::Stamp clockStamp{};
@@ -142,6 +152,9 @@ public:
         std::string settingsFingerprint
     );
     void setModVersion(std::string modVersion);
+
+    // Compact portable settings summary for session JSON (never empty when called).
+    static std::string makeSettingsFingerprint();
 
     // New attempt under the open session. Fails if none open or previous unsealed.
     bool beginAttempt(int startTick);

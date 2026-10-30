@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Assist correctness (1.3.1 track)
+- **Dev instrumentation:** session `settingsFingerprint` filled; witness Trigger-World bake/ready/skip counters; DelayArm/Fire/Outcome fields for verify/budgetHit/recheck/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay compact `tw empty|N/M`; Dev Eval `liveVsEvalMismatch` when Live delayed but `bestSurv=none`.
+
 ## v1.3.0
 
 **Config export, Hybrid lag, beginner defaults, iOS mobile parity** (still GD **2.2081** only).
@@ -40,8 +45,6 @@
 
 ### Window unit
 - Setting **Window Unit**: `Ticks` (default) or `Frames` (60fps). Numbers under Default Window / per-mode overwrite convert to physics ticks (1 frame ≈ 4 ticks @240). Planning always uses ticks.
-
-## Unreleased
 
 ## v1.2.2
 

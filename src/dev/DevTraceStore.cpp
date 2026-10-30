@@ -1,4 +1,5 @@
 #include "DevTraceStore.hpp"
+#include "../config/StageConfig.hpp"
 #include "../core/PlatformLimits.hpp"
 
 #include <Geode/Geode.hpp>
@@ -432,6 +433,14 @@ static matjson::Value witnessToJson(DevLiveWitness const& w) {
     j["triggerStoreVersion"] = w.triggerStoreVersion;
     j["triggerApplyTick"] = w.triggerApplyTick;
     j["triggerCanSpool"] = w.triggerCanSpool;
+    j["triggerReadyTracks"] = w.triggerReadyTracks;
+    j["triggerTrackCount"] = w.triggerTrackCount;
+    j["triggerBakeEffects"] = w.triggerBakeEffects;
+    j["triggerBakeChildren"] = w.triggerBakeChildren;
+    j["triggerCollectedEffects"] = w.triggerCollectedEffects;
+    j["triggerSkipFollow"] = w.triggerSkipFollow;
+    j["triggerSkipDynamic"] = w.triggerSkipDynamic;
+    j["triggerSkipNonSpawn"] = w.triggerSkipNonSpawn;
     if (w.hasHazardDigest) {
         j["hazardDigest"] = fmt::format("{:016x}", w.hazardDigest);
     }
@@ -523,6 +532,17 @@ static bool witnessFromJson(
     w.triggerCanSpool = j.contains("triggerCanSpool")
         ? j["triggerCanSpool"].asBool().unwrapOr(false)
         : false;
+    auto ti = [&](char const* k, int& out) {
+        if (j.contains(k)) out = static_cast<int>(j[k].asInt().unwrapOr(0));
+    };
+    ti("triggerReadyTracks", w.triggerReadyTracks);
+    ti("triggerTrackCount", w.triggerTrackCount);
+    ti("triggerBakeEffects", w.triggerBakeEffects);
+    ti("triggerBakeChildren", w.triggerBakeChildren);
+    ti("triggerCollectedEffects", w.triggerCollectedEffects);
+    ti("triggerSkipFollow", w.triggerSkipFollow);
+    ti("triggerSkipDynamic", w.triggerSkipDynamic);
+    ti("triggerSkipNonSpawn", w.triggerSkipNonSpawn);
     if (j.contains("hazardDigest")) {
         auto hs = std::string(j["hazardDigest"].asString().unwrapOr("0"));
         w.hazardDigest = std::strtoull(hs.c_str(), nullptr, 16);
@@ -550,6 +570,15 @@ static matjson::Value eventToJson(DevDecisionEvent const& e) {
     j["actualFireTick"] = e.actualFireTick;
     if (!e.assistReason.empty()) j["assistReason"] = e.assistReason;
     if (!e.endReason.empty()) j["endReason"] = e.endReason;
+    if (e.hasAssistDiag) {
+        j["armVerifyOk"] = e.armVerifyOk;
+        j["budgetHitAtArm"] = e.budgetHitAtArm;
+        j["recheckDelta"] = e.recheckDelta;
+        j["holdExtendMax"] = e.holdExtendMax;
+        j["deathAfterFire"] = e.deathAfterFire;
+        j["ticksToDeath"] = e.ticksToDeath;
+        j["liveVsEvalMismatch"] = e.liveVsEvalMismatch;
+    }
     if (e.hasClockStamp && e.clockStamp.valid) {
         j["clock"] = clockStampToJson(e.clockStamp);
     }
@@ -655,6 +684,32 @@ static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::str
     }
     if (j.contains("endReason")) {
         e.endReason = std::string(j["endReason"].asString().unwrapOr(""));
+    }
+    if (j.contains("armVerifyOk") || j.contains("deathAfterFire")
+        || j.contains("budgetHitAtArm") || j.contains("recheckDelta")
+        || j.contains("holdExtendMax") || j.contains("liveVsEvalMismatch")) {
+        e.hasAssistDiag = true;
+        e.armVerifyOk = j.contains("armVerifyOk")
+            ? j["armVerifyOk"].asBool().unwrapOr(true)
+            : true;
+        e.budgetHitAtArm = j.contains("budgetHitAtArm")
+            ? j["budgetHitAtArm"].asBool().unwrapOr(false)
+            : false;
+        e.recheckDelta = j.contains("recheckDelta")
+            ? static_cast<int>(j["recheckDelta"].asInt().unwrapOr(0))
+            : 0;
+        e.holdExtendMax = j.contains("holdExtendMax")
+            ? static_cast<int>(j["holdExtendMax"].asInt().unwrapOr(-1))
+            : -1;
+        e.deathAfterFire = j.contains("deathAfterFire")
+            ? j["deathAfterFire"].asBool().unwrapOr(false)
+            : false;
+        e.ticksToDeath = j.contains("ticksToDeath")
+            ? static_cast<int>(j["ticksToDeath"].asInt().unwrapOr(-1))
+            : -1;
+        e.liveVsEvalMismatch = j.contains("liveVsEvalMismatch")
+            ? j["liveVsEvalMismatch"].asBool().unwrapOr(false)
+            : false;
     }
     if (j.contains("clock")) {
         std::string clockErr;
@@ -936,6 +991,27 @@ void DevTraceStore::setLevelMeta(
 void DevTraceStore::setModVersion(std::string modVersion) {
     if (!this->m_open) return;
     this->m_session.modVersion = std::move(modVersion);
+}
+
+std::string DevTraceStore::makeSettingsFingerprint() {
+    return fmt::format(
+        "preset={} mode={} pick={} ticks={}/{} unit={} safe={} orbs={} "
+        "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={}",
+        StageConfig::stageLabel(StageConfig::fromSettings()),
+        StageConfig::assistModeName(StageConfig::assistMode()),
+        StageConfig::assistPickName(),
+        StageConfig::ticksAll(),
+        StageConfig::ticksWave(),
+        StageConfig::windowUnitFrames() ? "Frames" : "Ticks",
+        StageConfig::safeMode() ? 1 : 0,
+        StageConfig::assistOrbs() ? 1 : 0,
+        StageConfig::simBudgetUs(),
+        StageConfig::tickBudgetPerPress(),
+        StageConfig::triggerBake() ? 1 : 0,
+        StageConfig::triggerBakeSkipDynamic() ? 1 : 0,
+        StageConfig::autoTune() ? 1 : 0,
+        StageConfig::selfBake() ? 1 : 0
+    );
 }
 
 bool DevTraceStore::beginAttempt(int startTick) {
