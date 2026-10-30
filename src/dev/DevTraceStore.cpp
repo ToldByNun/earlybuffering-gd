@@ -1191,7 +1191,7 @@ bool DevTraceStore::selfCheck(std::string& report) {
     expect(validatePressChain(back.attempts[0].events, 10, err), "json-chain");
 
     // Store API: begin/append/seal/flush (disk) when Mod is available.
-    // Android load path skips disk gold — see PlatformLimits::allowLoadDiskSelfCheck.
+    // Constrained devices (Android/iOS) skip disk gold — PlatformLimits::allowLoadDiskSelfCheck.
     if (PlatformLimits::get().allowLoadDiskSelfCheck()) {
         auto& store = DevTraceStore::get();
         bool const wasOpen = store.isOpen();

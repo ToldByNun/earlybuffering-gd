@@ -177,7 +177,7 @@ Geode setting titles (within pages): **General** → **Assist Scope** (+ Off Ran
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
 | sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)` |
-| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first). HUS / Live arm verify keep `max(200, tick/4)` |
+| tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp sim ≤2000µs, tick ≤2000 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |
 | smart-depth | int | 1 | 1 | 3 | Smart |

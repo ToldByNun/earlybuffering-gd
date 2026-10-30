@@ -553,7 +553,7 @@ bool DevCycleRecorder::selfCheck(std::string& report) {
     rec.m_cycles.clear();
     expect(rec.activePressId() == 0, "clear-active");
 
-    // Disk session open is skipped on Android load gold (PlatformLimits).
+    // Disk session open is skipped on constrained devices (Android/iOS).
     if (PlatformLimits::get().allowLoadDiskSelfCheck()) {
         auto& store = DevTraceStore::get();
         bool const opened = store.beginSession("cycle-selfcheck5", 2);
