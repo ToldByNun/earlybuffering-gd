@@ -363,6 +363,12 @@ DevLiveWitness DevLiveWitness::capture(
         w.triggerSkipFollow = static_cast<int>(baker.lastSkippedFollow());
         w.triggerSkipDynamic = static_cast<int>(baker.lastSkippedDynamic());
         w.triggerSkipNonSpawn = static_cast<int>(baker.lastSkippedNonSpawn());
+        w.triggerSkipIgnore = static_cast<int>(baker.lastSkippedIgnore());
+        w.triggerSkipNoGroup = static_cast<int>(baker.lastSkippedNoGroup());
+        w.triggerSkipEmptyTargets = static_cast<int>(
+            baker.lastSkippedEmptyTargets()
+        );
+        w.triggerSkipCastFail = static_cast<int>(baker.lastSkippedCastFail());
         w.triggerCanSpool = tw.loaded()
             && tw.hasTracks()
             && tw.readyTrackCount() > 0;

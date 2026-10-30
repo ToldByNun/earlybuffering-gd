@@ -16,6 +16,7 @@
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/TriggerClassify.hpp"
+#include "../core/TriggerWorldBaker.hpp"
 #include "../core/TriggerWorldStore.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
 #include "../dev/DevClockContract.hpp"
@@ -67,6 +68,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(TriggerClassify::selfCheck(classifyReport), "trigger-classify");
     std::string twReport;
     expect(TriggerWorldStore::selfCheck(twReport), "trigger-world-store");
+    std::string twBakerReport;
+    expect(TriggerWorldBaker::selfCheck(twBakerReport), "trigger-world-baker");
     std::string clockReport;
     expect(AssistClock::selfCheck(clockReport), "assist-clock");
     std::string devClockReport;

@@ -4,6 +4,7 @@
 
 ### Assist correctness (1.3.1 track)
 - **Dev instrumentation:** session `settingsFingerprint` filled; witness Trigger-World bake/ready/skip counters; DelayArm/Fire/Outcome fields for verify/budgetHit/recheck/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay compact `tw empty|N/M`; Dev Eval `liveVsEvalMismatch` when Live delayed but `bestSurv=none`.
+- **Trigger bake 0-tracks fix:** collect from `m_objects` (fallback objectLayer); resolve targets via `getGroup`; count ignore / no-group / empty-targets / cast-fail skips; empty status + finish log explain why. Spawn-only policy unchanged (enter-X / touch not absolute-timeline).
 
 ## v1.3.0
 

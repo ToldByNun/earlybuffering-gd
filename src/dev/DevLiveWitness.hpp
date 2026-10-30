@@ -134,6 +134,10 @@ public:
     int triggerSkipFollow = 0;
     int triggerSkipDynamic = 0;
     int triggerSkipNonSpawn = 0;
+    int triggerSkipIgnore = 0;
+    int triggerSkipNoGroup = 0;
+    int triggerSkipEmptyTargets = 0;
+    int triggerSkipCastFail = 0;
     uint64_t playerBlobSchema = 0;
     uint64_t hazardDigest = 0;
     bool hasHazardDigest = false;

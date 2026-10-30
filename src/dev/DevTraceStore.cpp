@@ -441,6 +441,10 @@ static matjson::Value witnessToJson(DevLiveWitness const& w) {
     j["triggerSkipFollow"] = w.triggerSkipFollow;
     j["triggerSkipDynamic"] = w.triggerSkipDynamic;
     j["triggerSkipNonSpawn"] = w.triggerSkipNonSpawn;
+    j["triggerSkipIgnore"] = w.triggerSkipIgnore;
+    j["triggerSkipNoGroup"] = w.triggerSkipNoGroup;
+    j["triggerSkipEmptyTargets"] = w.triggerSkipEmptyTargets;
+    j["triggerSkipCastFail"] = w.triggerSkipCastFail;
     if (w.hasHazardDigest) {
         j["hazardDigest"] = fmt::format("{:016x}", w.hazardDigest);
     }
@@ -543,6 +547,10 @@ static bool witnessFromJson(
     ti("triggerSkipFollow", w.triggerSkipFollow);
     ti("triggerSkipDynamic", w.triggerSkipDynamic);
     ti("triggerSkipNonSpawn", w.triggerSkipNonSpawn);
+    ti("triggerSkipIgnore", w.triggerSkipIgnore);
+    ti("triggerSkipNoGroup", w.triggerSkipNoGroup);
+    ti("triggerSkipEmptyTargets", w.triggerSkipEmptyTargets);
+    ti("triggerSkipCastFail", w.triggerSkipCastFail);
     if (j.contains("hazardDigest")) {
         auto hs = std::string(j["hazardDigest"].asString().unwrapOr("0"));
         w.hazardDigest = std::strtoull(hs.c_str(), nullptr, 16);

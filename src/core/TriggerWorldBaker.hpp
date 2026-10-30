@@ -12,8 +12,12 @@ class PlayLayer;
 class GameObject;
 class EffectGameObject;
 
+namespace cocos2d {
+class CCArray;
+}
+
 // Builds static TriggerWorldStore tracks from spawn-timed Move/Rotate/Scale/Toggle.
-// Commit 7: budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
+// Budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
 class TriggerWorldBaker {
 public:
     static constexpr size_t kCollectPerSlice = 256;
@@ -36,13 +40,20 @@ public:
     size_t lastSkippedFollow() const { return this->m_lastSkippedFollow; }
     size_t lastSkippedDynamic() const { return this->m_lastSkippedDynamic; }
     size_t lastSkippedNonSpawn() const { return this->m_lastSkippedNonSpawn; }
+    size_t lastSkippedIgnore() const { return this->m_lastSkippedIgnore; }
+    size_t lastSkippedNoGroup() const { return this->m_lastSkippedNoGroup; }
+    size_t lastSkippedEmptyTargets() const { return this->m_lastSkippedEmptyTargets; }
+    size_t lastSkippedCastFail() const { return this->m_lastSkippedCastFail; }
     size_t lastChildCount() const { return this->m_lastChildCount; }
     size_t lastEffectCount() const { return this->m_lastEffectCount; }
+    char const* lastCollectSource() const { return this->m_lastCollectSource; }
 
     // Amortized collect/bake/commit. Safe no-op when idle.
     void tickSlice();
     // After death-cancel: resume build if store still empty (reset path).
     void resumeIfEmpty(PlayLayer* layer);
+
+    static bool selfCheck(std::string& report);
 
 private:
     enum class Phase {
@@ -70,6 +81,7 @@ private:
     void finishOk();
     void publishPartial();
     void bakeOneEffect(EffectGameObject* effect);
+    cocos2d::CCArray* resolveCollectSource(PlayLayer* layer, char const*& label) const;
 
     TriggerTrack* ensureTrack(GameObject* obj, TriggerKind kind);
     std::vector<GameObject*> objectsInGroup(int groupId) const;
@@ -92,6 +104,8 @@ private:
     Phase m_phase = Phase::Idle;
 
     PlayLayer* m_layer = nullptr;
+    cocos2d::CCArray* m_collectSource = nullptr;
+    char const* m_collectSourceLabel = "none";
     double m_tps = 240.0;
     std::string m_levelKey;
     size_t m_childIndex = 0;
@@ -107,13 +121,22 @@ private:
     size_t m_skippedFollow = 0;
     size_t m_skippedDynamic = 0;
     size_t m_skippedNonSpawn = 0;
+    size_t m_skippedIgnore = 0;
+    size_t m_skippedNoGroup = 0;
+    size_t m_skippedEmptyTargets = 0;
+    size_t m_skippedCastFail = 0;
 
     size_t m_lastBakedEffects = 0;
     size_t m_lastSkippedFollow = 0;
     size_t m_lastSkippedDynamic = 0;
     size_t m_lastSkippedNonSpawn = 0;
+    size_t m_lastSkippedIgnore = 0;
+    size_t m_lastSkippedNoGroup = 0;
+    size_t m_lastSkippedEmptyTargets = 0;
+    size_t m_lastSkippedCastFail = 0;
     size_t m_lastChildCount = 0;
     size_t m_lastEffectCount = 0;
+    char const* m_lastCollectSource = "none";
 };
 
 #endif // EARLYBUFFER_CORE_TRIGGERWORLDBAKER_HPP

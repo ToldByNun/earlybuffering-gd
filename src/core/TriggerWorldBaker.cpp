@@ -95,8 +95,33 @@ cocos2d::CCPoint TriggerWorldBaker::groupCenter(
     };
 }
 
+cocos2d::CCArray* TriggerWorldBaker::resolveCollectSource(
+    PlayLayer* layer,
+    char const*& label
+) const {
+    label = "none";
+    if (!layer) return nullptr;
+    // Prefer GJBaseGameLayer::m_objects — full level roster including triggers
+    // that may not sit as direct objectLayer children (batches / defer).
+    if (layer->m_objects && layer->m_objects->count() > 0) {
+        label = "m_objects";
+        return layer->m_objects;
+    }
+    if (layer->m_objectLayer) {
+        if (auto* children = layer->m_objectLayer->getChildren()) {
+            if (children->count() > 0) {
+                label = "objectLayer";
+                return children;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void TriggerWorldBaker::clearJob() {
     this->m_layer = nullptr;
+    this->m_collectSource = nullptr;
+    this->m_collectSourceLabel = "none";
     this->m_phase = Phase::Idle;
     this->m_childIndex = 0;
     this->m_childCount = 0;
@@ -109,6 +134,10 @@ void TriggerWorldBaker::clearJob() {
     this->m_skippedFollow = 0;
     this->m_skippedDynamic = 0;
     this->m_skippedNonSpawn = 0;
+    this->m_skippedIgnore = 0;
+    this->m_skippedNoGroup = 0;
+    this->m_skippedEmptyTargets = 0;
+    this->m_skippedCastFail = 0;
     this->m_levelKey.clear();
     this->m_tps = 240.0;
 }
@@ -135,25 +164,59 @@ void TriggerWorldBaker::finishCancel() {
 void TriggerWorldBaker::finishOk() {
     this->m_running = false;
     this->m_progress = 1.f;
-    this->m_status = TriggerWorldStore::get().statusLine();
     this->m_lastBakedEffects = this->m_bakedEffects;
     this->m_lastSkippedFollow = this->m_skippedFollow;
     this->m_lastSkippedDynamic = this->m_skippedDynamic;
     this->m_lastSkippedNonSpawn = this->m_skippedNonSpawn;
+    this->m_lastSkippedIgnore = this->m_skippedIgnore;
+    this->m_lastSkippedNoGroup = this->m_skippedNoGroup;
+    this->m_lastSkippedEmptyTargets = this->m_skippedEmptyTargets;
+    this->m_lastSkippedCastFail = this->m_skippedCastFail;
     this->m_lastChildCount = this->m_childCount;
     this->m_lastEffectCount = this->m_effects.size();
+    this->m_lastCollectSource = this->m_collectSourceLabel
+        ? this->m_collectSourceLabel
+        : "none";
+
+    size_t const tracks = TriggerWorldStore::get().trackCount();
+    size_t const ready = TriggerWorldStore::get().readyTrackCount();
+    if (tracks == 0) {
+        this->m_status = fmt::format(
+            "trigger-world: empty (src={} fx={} ign={} dyn={} nonSp={} "
+            "noGrp={} emptyT={} cast={})",
+            this->m_lastCollectSource,
+            this->m_lastEffectCount,
+            this->m_lastSkippedIgnore,
+            this->m_lastSkippedDynamic,
+            this->m_lastSkippedNonSpawn,
+            this->m_lastSkippedNoGroup,
+            this->m_lastSkippedEmptyTargets,
+            this->m_lastSkippedCastFail
+        );
+    }
+    else {
+        this->m_status = TriggerWorldStore::get().statusLine();
+    }
+
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: baked {} effects → {} tracks ({} ready) @ {:.0f} tps "
-        "(skip follow={} dynamic={} non-spawn={} children={} collectedEffects={})",
+        "(src={} children={} collectedEffects={} "
+        "skip follow={} dynamic={} non-spawn={} ignore={} "
+        "no-group={} empty-targets={} cast-fail={})",
         this->m_bakedEffects,
-        TriggerWorldStore::get().trackCount(),
-        TriggerWorldStore::get().readyTrackCount(),
+        tracks,
+        ready,
         this->m_tps,
+        this->m_lastCollectSource,
+        this->m_lastChildCount,
+        this->m_lastEffectCount,
         this->m_skippedFollow,
         this->m_skippedDynamic,
         this->m_skippedNonSpawn,
-        this->m_lastChildCount,
-        this->m_lastEffectCount
+        this->m_skippedIgnore,
+        this->m_skippedNoGroup,
+        this->m_skippedEmptyTargets,
+        this->m_skippedCastFail
     ));
     this->clearJob();
 }
@@ -235,17 +298,19 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
 
     this->m_childCount = 0;
     this->m_childIndex = 0;
-    if (layer->m_objectLayer) {
-        if (auto* children = layer->m_objectLayer->getChildren()) {
-            this->m_childCount = static_cast<size_t>(children->count());
-            this->m_objects.reserve(this->m_childCount);
-            this->m_effects.reserve(256);
-        }
+    char const* label = "none";
+    this->m_collectSource = this->resolveCollectSource(layer, label);
+    this->m_collectSourceLabel = label;
+    if (this->m_collectSource) {
+        this->m_childCount = static_cast<size_t>(this->m_collectSource->count());
+        this->m_objects.reserve(this->m_childCount);
+        this->m_effects.reserve(256);
     }
 
     AssistLog::debug(fmt::format(
-        "TRIGGER-WORLD: bake queued ({} children)",
-        this->m_childCount
+        "TRIGGER-WORLD: bake queued ({} children, src={})",
+        this->m_childCount,
+        this->m_collectSourceLabel
     ));
     return true;
 }
@@ -296,6 +361,22 @@ TriggerTrack* TriggerWorldBaker::ensureTrack(GameObject* obj, TriggerKind kind) 
 std::vector<GameObject*> TriggerWorldBaker::objectsInGroup(int groupId) const {
     std::vector<GameObject*> out;
     if (groupId <= 0) return out;
+
+    // Prefer engine group index — covers objects not visited in collect yet.
+    if (this->m_layer) {
+        if (auto* arr = this->m_layer->getGroup(groupId)) {
+            unsigned const n = arr->count();
+            out.reserve(n);
+            for (unsigned i = 0; i < n; ++i) {
+                auto* obj = typeinfo_cast<GameObject*>(arr->objectAtIndex(i));
+                if (!obj) continue;
+                if (typeinfo_cast<PlayerObject*>(obj)) continue;
+                out.push_back(obj);
+            }
+            if (!out.empty()) return out;
+        }
+    }
+
     for (auto* obj : this->m_objects) {
         if (!obj) continue;
         if (!obj->belongsToGroup(groupId)) continue;
@@ -307,30 +388,50 @@ std::vector<GameObject*> TriggerWorldBaker::objectsInGroup(int groupId) const {
 void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     if (!effect) return;
 
-        TriggerKind const kind = TriggerClassify::classify(effect);
-        // Follow-player / Dynamic* never enter static JSON (live probe only).
-        if (TriggerClassify::isDynamic(kind)) {
-            ++this->m_skippedDynamic;
-            return;
-        }
-    if (!TriggerClassify::isStatic(kind)) return;
-    if (kind == TriggerKind::StaticSpawn) return;
+    TriggerKind const kind = TriggerClassify::classify(effect);
+    if (TriggerClassify::isDynamic(kind)) {
+        ++this->m_skippedDynamic;
+        return;
+    }
+    if (kind == TriggerKind::Ignore) {
+        ++this->m_skippedIgnore;
+        return;
+    }
+    if (!TriggerClassify::isStatic(kind)) {
+        ++this->m_skippedIgnore;
+        return;
+    }
+    if (kind == TriggerKind::StaticSpawn) {
+        ++this->m_skippedIgnore;
+        return;
+    }
     if (TriggerWorldBaker::isFollowLikeStatic(effect, kind)) {
         ++this->m_skippedFollow;
         return;
     }
 
-    if (effect->m_isTouchTriggered) return;
+    // Touch is DynamicOther via classify; keep belt-and-suspenders.
+    if (effect->m_isTouchTriggered) {
+        ++this->m_skippedDynamic;
+        return;
+    }
+    // Spawn-only absolute timeline: enter-X (neither spawn nor touch) is not bakeable.
     if (!effect->m_isSpawnTriggered) {
         ++this->m_skippedNonSpawn;
         return;
     }
 
     int const groupId = effect->m_targetGroupID;
-    if (groupId <= 0) return;
+    if (groupId <= 0) {
+        ++this->m_skippedNoGroup;
+        return;
+    }
 
     auto targets = this->objectsInGroup(groupId);
-    if (targets.empty()) return;
+    if (targets.empty()) {
+        ++this->m_skippedEmptyTargets;
+        return;
+    }
 
     int const startTick = TriggerWorldBaker::durationTicks(
         effect->m_spawnTriggerDelay, this->m_tps
@@ -354,6 +455,7 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     if (kind != TriggerKind::StaticMove
         && kind != TriggerKind::StaticRotate
         && kind != TriggerKind::StaticScale) {
+        ++this->m_skippedIgnore;
         return;
     }
 
@@ -361,8 +463,12 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     if (kind == TriggerKind::StaticRotate) {
         int const centerId = effect->m_centerGroupID;
         if (centerId > 0) {
+            auto centerObjs = this->objectsInGroup(centerId);
+            for (auto* obj : centerObjs) {
+                (void)this->ensureTrack(obj, kind);
+            }
             center = TriggerWorldBaker::groupCenter(
-                centerId, this->m_objects, this->m_live
+                centerId, centerObjs, this->m_live
             );
         }
         else {
@@ -370,7 +476,7 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
                 (void)this->ensureTrack(obj, kind);
             }
             center = TriggerWorldBaker::groupCenter(
-                groupId, this->m_objects, this->m_live
+                groupId, targets, this->m_live
             );
         }
     }
@@ -380,7 +486,10 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     bool relativeScale = false;
     if (kind == TriggerKind::StaticScale) {
         auto* xf = typeinfo_cast<TransformTriggerGameObject*>(effect);
-        if (!xf) return;
+        if (!xf) {
+            ++this->m_skippedCastFail;
+            return;
+        }
         scaleTargetX = xf->m_objectScaleX;
         scaleTargetY = xf->m_objectScaleY;
         if (xf->m_divideX && std::fabs(scaleTargetX) > 1e-6f) {
@@ -438,6 +547,11 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
             }
         }
         bakes.push_back(tb);
+    }
+
+    if (bakes.empty()) {
+        ++this->m_skippedEmptyTargets;
+        return;
     }
 
     int const endTick = startTick + std::max(0, dur);
@@ -509,12 +623,21 @@ void TriggerWorldBaker::tickSlice() {
 
         if (this->m_phase == Phase::Collect) {
             auto* layer = this->m_layer;
-            if (!layer || !layer->m_objectLayer) {
+            if (!layer) {
                 this->m_phase = Phase::Bake;
                 continue;
             }
-            auto* children = layer->m_objectLayer->getChildren();
-            if (!children) {
+            if (!this->m_collectSource) {
+                char const* label = "none";
+                this->m_collectSource = this->resolveCollectSource(layer, label);
+                this->m_collectSourceLabel = label;
+                if (this->m_collectSource) {
+                    this->m_childCount = static_cast<size_t>(
+                        this->m_collectSource->count()
+                    );
+                }
+            }
+            if (!this->m_collectSource) {
                 this->m_phase = Phase::Bake;
                 continue;
             }
@@ -523,16 +646,22 @@ void TriggerWorldBaker::tickSlice() {
             while (this->m_childIndex < this->m_childCount
                 && n < kCollectPerSlice
                 && !budgetHit()) {
-                auto* obj = typeinfo_cast<GameObject*>(
-                    children->objectAtIndex(static_cast<unsigned>(this->m_childIndex))
+                auto* raw = this->m_collectSource->objectAtIndex(
+                    static_cast<unsigned>(this->m_childIndex)
                 );
                 ++this->m_childIndex;
                 ++n;
+                auto* obj = typeinfo_cast<GameObject*>(raw);
                 if (!obj) continue;
                 if (typeinfo_cast<PlayerObject*>(obj)) continue;
                 this->m_objects.push_back(obj);
+
                 if (auto* effect = typeinfo_cast<EffectGameObject*>(obj)) {
                     this->m_effects.push_back(effect);
+                }
+                else if (TriggerClassify::isLethalMotionCandidateId(obj->m_objectID)) {
+                    // Lethal trigger ID without EffectGameObject RTTI — cannot bake.
+                    ++this->m_skippedCastFail;
                 }
             }
 
@@ -584,4 +713,34 @@ void TriggerWorldBaker::tickSlice() {
 
         break;
     }
+}
+
+bool TriggerWorldBaker::selfCheck(std::string& report) {
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += ", ";
+        report += name;
+    };
+
+    expect(TriggerWorldBaker::durationTicks(0.f, 240.0) == 0, "dur-zero");
+    expect(TriggerWorldBaker::durationTicks(1.f, 240.0) == 240, "dur-1s");
+    expect(TriggerWorldBaker::isFollowLikeStatic(nullptr, TriggerKind::StaticMove) == false,
+        "follow-null");
+
+    auto& baker = TriggerWorldBaker::get();
+    expect(!baker.running(), "idle-running");
+    expect(baker.lastCollectSource() != nullptr, "collect-src-ptr");
+
+    // Empty-status format stays parseable when last bake left no tracks.
+    std::string const line = baker.statusLine();
+    expect(!line.empty(), "status-nonempty");
+
+    if (fails == 0) {
+        report = "TriggerWorldBaker selfCheck OK";
+        return true;
+    }
+    report = fmt::format("TriggerWorldBaker selfCheck {} fails: {}", fails, report);
+    return false;
 }

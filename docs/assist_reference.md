@@ -85,11 +85,15 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Baker: spawn-timed StaticMove/Rotate/Scale/Toggle (linear); group-follow / touch / toggle-orb / enter-X skipped.
 
+**Collect:** prefers `PlayLayer::m_objects` (full roster), falls back to `m_objectLayer` children. Targets resolve via `getGroup` then `belongsToGroup` scan. Spawn-only absolute timeline stays (enter-X / touch stay Dynamic / skip).
+
+**Empty honesty:** finish log includes `src=` + skip breakdown (`ignore` / `dynamic` / `non-spawn` / `no-group` / `empty-targets` / `cast-fail`). Baker status when empty: `trigger-world: empty (src=… fx=… …)` instead of a silent store empty. Overlay stays compact `tw empty`.
+
 `ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 
 Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Camera/pulse/song → `Ignore`. Group-follow → `StaticMove`; player-coupled → `DynamicFollow`; touch → `DynamicOther`.
 
-**Self-check / manual matrix:** `TriggerWorldStore::selfCheck` + `TriggerClassify::selfCheck` run at mod load (and PlanGold). With `debug-logging`, the banner lists edge cases: static corridor, follow-player Unknown, cache-hit 2nd enter, skip-dynamic on, quit mid-build, death/reset LagProbe without `eb.triggerBake.build` inside the death episode.
+**Self-check / manual matrix:** `TriggerWorldStore::selfCheck` + `TriggerWorldBaker::selfCheck` + `TriggerClassify::selfCheck` run at mod load (and PlanGold). With `debug-logging`, the banner lists edge cases: static corridor, follow-player Unknown, cache-hit 2nd enter, skip-dynamic on, quit mid-build, death/reset LagProbe without `eb.triggerBake.build` inside the death episode.
 
 ## Not in scope
 
@@ -124,8 +128,8 @@ With **Dev Record** on, each session writes `devtraces/session-*.json` under the
 |-------|--------|---------|
 | `settingsFingerprint` | session root | Compact preset/mode/pick/ticks/safe/orbs/budgets/trigger-bake/learning summary (always filled on session start / level meta refresh) |
 | `witness.triggerReadyTracks` / `triggerTrackCount` | `planFinished` | Store ready vs total tracks |
-| `witness.triggerBakeEffects` / `triggerBakeChildren` / `triggerCollectedEffects` | `planFinished` | Last bake: effects that produced keys, object-layer children, collected EffectGameObjects |
-| `witness.triggerSkipFollow` / `SkipDynamic` / `SkipNonSpawn` | `planFinished` | Last bake skip counters |
+| `witness.triggerBakeEffects` / `triggerBakeChildren` / `triggerCollectedEffects` | `planFinished` | Last bake: effects that produced keys, collect roster size, collected EffectGameObjects |
+| `witness.triggerSkipFollow` / `SkipDynamic` / `SkipNonSpawn` / `SkipIgnore` / `SkipNoGroup` / `SkipEmptyTargets` / `SkipCastFail` | `planFinished` | Last bake skip counters (silent filters now counted) |
 | `witness.triggerCanSpool` | `planFinished` | `true` only if ready tracks exist |
 | `armVerifyOk` / `budgetHitAtArm` | DelayArm (+ copied on Fire/Outcome) | Live verify passed before arm; plan reported budgetHit |
 | `recheckDelta` | Recheck / Fire / Outcome | Fire-tick slide (per recheck or sum on later events) |

@@ -4,6 +4,7 @@
 #include "core/SaveDropPaths.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "core/TriggerClassify.hpp"
+#include "core/TriggerWorldBaker.hpp"
 #include "core/TriggerWorldStore.hpp"
 #include "debug/AssistLog.hpp"
 #include "debug/LagProbe.hpp"
@@ -80,6 +81,12 @@ $on_mod(Loaded) {
     {
         std::string report;
         bool const ok = TriggerWorldStore::selfCheck(report);
+        if (ok) AssistLog::info(report);
+        else AssistLog::info(fmt::format("WARN {}", report));
+    }
+    {
+        std::string report;
+        bool const ok = TriggerWorldBaker::selfCheck(report);
         if (ok) AssistLog::info(report);
         else AssistLog::info(fmt::format("WARN {}", report));
     }
