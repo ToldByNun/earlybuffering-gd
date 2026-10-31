@@ -102,20 +102,20 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-EB opens the normal Geode ModSettingsPopup with a chip page switcher:
+**EB** (and Geode → Mods → EarlyBuffer → Settings) opens the normal Geode `ModSettingsPopup`. EarlyBuffer attaches a **text-only category strip** under the search field (selected = white, idle = grey; no pill / background chrome). Tapping a label filters the scroll list to that page; Geode’s search still runs on the visible rows.
 
-| Page | Contents |
-|------|----------|
-| Main | Enabled, Preset, Safe Mode, Assist Mode, overlay/pause chrome, light diagnostics |
+| Tab | Contents |
+|-----|----------|
+| Main | Enabled, Preset, Safe Mode, Assist Mode, overlay / pause chrome, light diagnostics (`debug-logging`, `perf-trace`, `lag-probe`) |
 | Scope | Practice / start-pos / percent window / off-ranges |
-| Assist | Action rows (Cycle Preset / Reset Learn / Export·Import) + Window / Algorithm / Smart / Learning / Trigger World |
+| Assist | Action rows (Cycle Preset / Reset Learn / Export·Import Config) + Window / Algorithm / Smart / Learning / Trigger World |
 | Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius |
 | Modes | Cube…Swing per-mode blocks |
 | Visual | Trajectory, Save Feedback / Color |
 | Keys | Hotkeys + Internal |
 | Dev | Dev Lab session / eval / overlay / actions |
 
-Action rows use custom type `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
+Every `mod.json` key (including `title-*` and `custom:eb-action`) maps to exactly one tab via `InLevelSettingsFilter` — there is no Assist catch-all dump. Action rows use `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
 
 ## Dev Lab diagnostics (session JSON)
 
@@ -157,10 +157,24 @@ Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Wi
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **126** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows. Unknown / removed keys in old JSON are skipped on import.
+- **`settings`**: all **126** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
+- **Export** reads the committed Geode store only — uncommitted edits still open in the settings UI are not exported.
+
+### Removed keys (old JSON)
+
+These keys were deleted from `mod.json` (unused / deprecated). If an older export still contains them, import **skips** them and applies every other known key:
+
+| Key | Why gone |
+|-----|----------|
+| `show-pause-assist` | Unused legacy pause toggle |
+| `swallow-hopeless` | Deprecated; unused |
+| `dev-record-include-pass` | Cached in DevConfig, never read by recorder |
+| `dev-eval-budget-us` | Cached in DevConfig, never read by eval |
+
+Any other unknown key / wrong type is skipped the same way (`skipped` count in the alert).
 
 ### v1 compatibility
 
@@ -172,6 +186,7 @@ Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` witho
 - Wrong JSON type / bad hex / bad keybind → **skip that key** (no `0`/`false` coercion into live settings).
 - Import runs under `StageConfig::beginApplying` / `endApplying` so the preset listener does **not** call `applyPresetByName` and wipe custom ticks / look-ahead.
 - If `preset` is present, it wins over a mismatched `stage-index`; then `notePresetSynced`.
+- After a successful import: `StageConfig::refreshCache()` + `DevConfig::refreshCache()`, overlay / trajectory sync, then **`InLevelSettingsFilterKeeper::reloadAfterImport`** — if ModSettings is open, store values are pushed into SettingNode drafts and the popup rebuilds next frame (keybinds + Apply cleared; active tab restored). Success alert shows after that sync. Closed popup → next open already reads the store.
 - PlanGold: `ConfigBundleKeys`, `ConfigBundleCodec`, and `ConfigBundle::selfCheck` (temp-file round-trip + preset/look-ahead-cap guard).
 
 ## Settings table

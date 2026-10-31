@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Settings UI overhaul
+- **8-tab chip strip** on Geode `ModSettingsPopup` (Main / Scope / Assist / Bake / Modes / Visual / Keys / Dev): text-only white/grey labels under search; filters rows by exhaustive key→tab map (no Assist catch-all).
+- **Copy / titles:** Main page title, accurate setting names (`assist-only-practice`, Window Unit on per-mode ticks, Dev actions blurb, pause status naming, etc.).
+- **Removed dead keys** (old JSON skips them; other keys still apply): `show-pause-assist`, `swallow-hopeless`, `dev-record-include-pass`, `dev-eval-budget-us`. Portable `ConfigBundle` count **126** (was 130).
+- **Config import UI sync:** after import, refresh Stage/Dev caches; push store → open SettingNodes; rebuild popup next frame so green Apply cannot overwrite the import; restore active tab; success alert after sync. Docs: `docs/assist_reference.md` Pause/settings + Config sections.
+
 ### Assist correctness (1.3.1 track)
 - **Dev instrumentation:** session `settingsFingerprint` filled; witness Trigger-World bake/ready/skip counters; DelayArm/Fire/Outcome fields for verify/budgetHit/recheck/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay compact `tw empty|N/M`; Dev Eval `liveVsEvalMismatch` when Live delayed but `bestSurv=none`.
 
