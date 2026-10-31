@@ -388,9 +388,31 @@ Safe Mode ON + (enabled or assistTouchedRun) blocks percentage/newbest/test-comp
 Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` / `playerDestroyed` (incl. anticheatSpike).
 Death to an owned ghost as the killer object is swallowed. Real-player deaths are swallowed while
 `m_simulating` (anticheat on real players still passes). During sim, `collisionCheckObjects` runs
-only for the shadow. Live collision lists strip owned ghosts. Active shadow is parked off-level
-after each sim (wave trail reset + `removeObjectFromSection`); ghost `update` is no-op unless actively stepping.
-Before `resetLevel` / checkpoint load: `evacuateGhosts` pulls all owned ghosts out of section vectors (avoids `sortSectionVector` AV) and cancels an in-flight bake.
+only for the shadow (filter via a **persistent** scratch `gd::vector`, never a stack temporary — iOS ABI).
+Live collision lists strip owned ghosts. `SimSessionGuard` RAII always `restoreCapture` + clears
+`m_simulating` / `m_applyingRing` and parks owned ghosts (shadow + eval off-level; snapshots scrub+hide)
+after each plan/bake/traj session so live `playerTouchedRing` never sees half-restored claim flags.
+Ring restore uses `typeinfo_cast<RingObject*>`; `m_activatedObjectIDs` is always restored.
+Ghost `update` is no-op unless actively stepping. Before `resetLevel` / checkpoint load:
+`evacuateGhosts` pulls all owned ghosts out of section vectors (avoids `sortSectionVector` AV)
+and cancels an in-flight bake.
+
+### Eclipse / multi-mod coexistence (iOS ring crash)
+
+An iOS SIGBUS inside vanilla `playerTouchedRing` on the **live** path was observed with Eclipse’s
+`PauseBGLHook` on `update` in the same stack. EarlyBuffer is a **plausible contributor** (nested
+shadow sims mutate shared ring claim / activated IDs / section vectors on the same main-thread
+update), not a proven sole cause — **do not “fix Eclipse.”** Isolation goals:
+
+| Check | Expectation |
+| --- | --- |
+| EB off | Crash gone → EB involved; keep isolation |
+| Assist off (EB loaded) | Same |
+| Trajectory / Bake Visualizer off | Rules out traj nested sims |
+| Eclipse off, EB on | If still crashes → EB-only; if gone → multi-mod interaction |
+
+HUS replan refuses to nest a full `plan()` while `PlayerObject::update` is in progress
+(`hus-defer-mid-update`). Prefer A/B the matrix above before filing cross-mod blame.
 
 ## Constants
 

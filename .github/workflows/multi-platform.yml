@@ -54,6 +54,19 @@ jobs:
           target: ${{ matrix.config.target }}
           sdk: given
 
+      - name: Verify iOS dylib signature in package
+        if: matrix.config.name == 'iOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG=$(find . -name 'audesign.earlybuffer.geode' -type f | head -n 1)
+          if [[ -z "${PKG}" ]]; then
+            echo "ERROR: no audesign.earlybuffer.geode after iOS build"
+            exit 1
+          fi
+          echo "Checking ${PKG}"
+          python3 tools/geode_package_check.py "${PKG}" --require ios --check-ios-sign
+
   package:
     name: Package builds
     runs-on: ubuntu-latest

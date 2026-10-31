@@ -30,6 +30,13 @@ PLATFORM_SUFFIX: dict[str, str] = {
 
 DEFAULT_MOD_ID = "audesign.earlybuffer"
 
+# Mach-O (little-endian thin + fat) — used to detect LC_CODE_SIGNATURE on iOS.
+MH_MAGIC_64 = 0xFEEDFACF
+MH_CIGAM_64 = 0xCFFAEDFE
+FAT_MAGIC = 0xCAFEBABE
+FAT_CIGAM = 0xBEBAFECA
+LC_CODE_SIGNATURE = 0x1D
+
 
 def normalize_entry(name: str) -> str:
     """Zip entries may use forward or back slashes; compare basenames only."""
@@ -81,10 +88,77 @@ def list_binaries(zf: zipfile.ZipFile, mod_id: str) -> list[str]:
     return sorted(set(found))
 
 
+def _u32(data: bytes, off: int, *, big_endian: bool) -> int:
+    return int.from_bytes(data[off : off + 4], "big" if big_endian else "little")
+
+
+def mach_o_slice_has_code_signature(data: bytes, offset: int = 0) -> bool:
+    """True if a thin Mach-O at offset has LC_CODE_SIGNATURE."""
+    if len(data) < offset + 32:
+        return False
+    magic = _u32(data, offset, big_endian=False)
+    if magic == MH_MAGIC_64:
+        be = False
+    elif magic == MH_CIGAM_64:
+        be = True
+    else:
+        return False
+    ncmds = _u32(data, offset + 16, big_endian=be)
+    sizeofcmds = _u32(data, offset + 20, big_endian=be)
+    cmd_off = offset + 32
+    end = cmd_off + sizeofcmds
+    if end > len(data) or ncmds > 512:
+        return False
+    for _ in range(ncmds):
+        if cmd_off + 8 > end:
+            return False
+        cmd = _u32(data, cmd_off, big_endian=be)
+        cmdsize = _u32(data, cmd_off + 4, big_endian=be)
+        if cmdsize < 8:
+            return False
+        if cmd == LC_CODE_SIGNATURE:
+            return True
+        cmd_off += cmdsize
+    return False
+
+
+def macho_has_code_signature(data: bytes) -> bool:
+    """True if thin or fat Mach-O has LC_CODE_SIGNATURE on every slice."""
+    if len(data) < 8:
+        return False
+    magic = _u32(data, 0, big_endian=False)
+    if magic in (MH_MAGIC_64, MH_CIGAM_64):
+        return mach_o_slice_has_code_signature(data, 0)
+    if magic == FAT_MAGIC:
+        be = True
+    elif magic == FAT_CIGAM:
+        be = False
+    else:
+        return False
+    nfat = _u32(data, 4, big_endian=be)
+    if nfat == 0 or nfat > 16 or len(data) < 8 + nfat * 20:
+        return False
+    for i in range(nfat):
+        # fat_arch: cputype(4) cpusubtype(4) offset(4) size(4) align(4)
+        base = 8 + i * 20
+        slice_off = _u32(data, base + 8, big_endian=be)
+        if not mach_o_slice_has_code_signature(data, slice_off):
+            return False
+    return True
+
+
+def find_entry(zf: zipfile.ZipFile, basename: str) -> str | None:
+    for raw in zf.namelist():
+        if normalize_entry(raw).lower() == basename.lower():
+            return raw
+    return None
+
+
 def check_package(
     path: Path,
     require: list[str],
     mod_id: str | None,
+    check_ios_sign: bool = False,
 ) -> int:
     if not path.is_file():
         print(f"ERROR: package not found: {path}", file=sys.stderr)
@@ -152,6 +226,41 @@ def check_package(
                 sys.stdout.flush()
                 return 1
 
+            # iOS: Geode dlopen fails with "missing code signature" (dyld may
+            # also print "no such file" as the first tried path) when the
+            # .ios.dylib lacks LC_CODE_SIGNATURE. Check on any host.
+            want_ios_sign = check_ios_sign or ("ios" in require)
+            if want_ios_sign:
+                ios_name = expected_binary(resolved_id, "ios")
+                entry = find_entry(zf, ios_name)
+                if entry is None:
+                    if check_ios_sign:
+                        print(
+                            f"FAIL: --check-ios-sign requires {ios_name} "
+                            "in the package"
+                        )
+                        return 1
+                else:
+                    blob = zf.read(entry)
+                    if len(blob) < 64:
+                        print(
+                            f"FAIL: {ios_name} is empty/truncated "
+                            f"({len(blob)} bytes)"
+                        )
+                        return 1
+                    if not macho_has_code_signature(blob):
+                        print(
+                            f"FAIL: {ios_name} has no LC_CODE_SIGNATURE — "
+                            "iOS Geode will dlopen-fail with "
+                            "'missing code signature' / 'Unable to load the DYLIB'."
+                        )
+                        print(
+                            "  Rebuild on macOS/CI (ldid/codesign POST_BUILD) "
+                            "or re-sign: ldid -S <dylib> / codesign -f -s - <dylib>"
+                        )
+                        return 1
+                    print(f"OK: {ios_name} has LC_CODE_SIGNATURE")
+
             if require:
                 print("OK: all required binaries present")
             return 0
@@ -195,6 +304,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="List binaries and exit 0 even if requirements are missing",
     )
+    p.add_argument(
+        "--check-ios-sign",
+        action="store_true",
+        help=(
+            "Require audesign.earlybuffer.ios.dylib to carry LC_CODE_SIGNATURE "
+            "(also implied by --require ios)"
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -212,10 +329,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list_only:
         # Open and list only; empty require → never fail on missing platforms.
-        code = check_package(args.package, [], args.mod_id)
+        code = check_package(args.package, [], args.mod_id, False)
         return 0 if code in (0, 1) else code
 
-    return check_package(args.package, require_unique, args.mod_id)
+    return check_package(
+        args.package, require_unique, args.mod_id, args.check_ios_sign
+    )
 
 
 if __name__ == "__main__":

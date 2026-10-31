@@ -171,10 +171,18 @@ public:
 
     void markDead(PlayerObject* p, GameObject* object = nullptr);
     // Park ghosts off-level so stray collision cannot fail the real attempt.
+    // Active sim bodies (shadow + eval) move off-level; snapshots scrub+hide only
+    // so captured pose for bake/traj stays intact.
     void parkGhosts();
     // Before PlayLayer::resetLevel / checkpoint reload: pull every owned ghost out of
     // section vectors (sim checkCollisions inserts them; vanilla sortSectionVector AVs).
     void evacuateGhosts(GJBaseGameLayer* layer);
+    // RAII entry/exit used by SimSessionGuard (restore + park always unwind).
+    void beginSession(PlayLayer* layer);
+    void endSession(PlayLayer* layer);
+    // Persistent scratch for collisionCheckObjects filtering — never a stack
+    // gd::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
+    gd::vector<GameObject*>& collisionFilterScratch();
     void noteJump();
     void noteActivated(GameObject* obj);
     // Overlap with UnknownOnOverlap object. Pass obj to flag toggle-target hits.
@@ -593,6 +601,8 @@ private:
     std::unordered_set<int> m_toggleTargetIds;
     std::vector<DynamicFollowJob> m_dynamicFollowJobs;
     std::unordered_set<int> m_liveDynamicAppliedIds;
+    // Reused by GameLayerHooks::collisionCheckObjects (sim + live ghost strip).
+    gd::vector<GameObject*> m_collisionFilterBuf;
 
     void captureToggleUnknownTargets(PlayLayer* layer);
 

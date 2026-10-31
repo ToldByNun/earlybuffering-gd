@@ -57,3 +57,30 @@ if (TARGET GeodeBindings)
 endif()
 
 setup_geode_mod(${PROJECT_NAME})
+
+# iOS: unsigned .ios.dylib fails Geode dlopen with "missing code signature"
+# (dyld may also report "no such file" as the first tried path). Ad-hoc sign
+# after link so the packaged binary always carries LC_CODE_SIGNATURE.
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS)
+    find_program(EB_LDID ldid)
+    find_program(EB_CODESIGN codesign)
+    if (EB_LDID)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${EB_LDID}" -S "$<TARGET_FILE:${PROJECT_NAME}>"
+            COMMENT "EarlyBuffer: ad-hoc sign iOS dylib (ldid)"
+            VERBATIM
+        )
+    elseif (EB_CODESIGN)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${EB_CODESIGN}" -f -s - "$<TARGET_FILE:${PROJECT_NAME}>"
+            COMMENT "EarlyBuffer: ad-hoc sign iOS dylib (codesign)"
+            VERBATIM
+        )
+    else()
+        message(WARNING
+            "EarlyBuffer: no ldid/codesign on PATH — iOS dylib may fail "
+            "Geode dlopen with 'missing code signature'. Install ldid or "
+            "Xcode command-line tools."
+        )
+    endif()
+endif()

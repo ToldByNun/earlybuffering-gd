@@ -4,6 +4,7 @@
 #include "MissAssistContracts.hpp"
 #include "TravelForesight.hpp"
 #include "OpportunityProbe.hpp"
+#include "SimSessionGuard.hpp"
 #include "ToggleOrbSim.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
@@ -265,29 +266,75 @@ void ShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, Shado
 }
 
 void ShadowSimulator::parkGhosts() {
-    // Only the active sim body — snapshots must keep captured state for
-    // bake / outcome verify / trajectory samplePath.
-    if (!this->m_shadow) return;
-
-    if (auto* layer = PlayLayer::get()) {
-        if (layer == this->m_hostLayer) {
-            ShadowSimulator::tryRemoveFromSection(layer, this->m_shadow);
+    auto scrub = [&](PlayerObject* p) {
+        if (!p) return;
+        if (auto* layer = PlayLayer::get()) {
+            if (layer == this->m_hostLayer) {
+                ShadowSimulator::tryRemoveFromSection(layer, p);
+            }
         }
-    }
-    this->m_shadow->m_outerSectionIndex = -1;
-    this->m_shadow->m_innerSectionIndex = -1;
-    this->m_shadow->m_middleSectionIndex = -1;
+        p->m_outerSectionIndex = -1;
+        p->m_innerSectionIndex = -1;
+        p->m_middleSectionIndex = -1;
+        hideGhost(p);
+    };
+    auto parkOffLevel = [&](PlayerObject* p) {
+        if (!p) return;
+        scrub(p);
+        p->setPosition({ 0.f, 105.f });
+        p->m_position = cocos2d::CCPoint{ 0.f, 105.f };
+        p->m_yVelocity = 0.0;
+        p->m_isDead = false;
+        // Wave trail points stay in world space after a sim — clear so leftover
+        // streak geometry cannot interact with live collision/debug paths.
+        if (p->m_waveTrail) {
+            p->m_waveTrail->reset();
+        }
+    };
 
-    this->m_shadow->setPosition({ 0.f, 105.f });
-    this->m_shadow->m_position = cocos2d::CCPoint{ 0.f, 105.f };
-    this->m_shadow->m_yVelocity = 0.0;
-    this->m_shadow->m_isDead = false;
-    // Wave trail points stay in world space after a sim — clear so leftover
-    // streak geometry cannot interact with live collision/debug paths.
-    if (this->m_shadow->m_waveTrail) {
-        this->m_shadow->m_waveTrail->reset();
+    parkOffLevel(this->m_shadow);
+    for (auto* eg : this->m_evalGhosts) {
+        parkOffLevel(eg);
     }
-    hideGhost(this->m_shadow);
+    // Snapshots must keep captured pose for bake / outcome verify / traj
+    // samplePath — scrub+hide only so they leave section vectors.
+    for (auto* slot : this->m_snapshots) {
+        scrub(slot);
+    }
+}
+
+void ShadowSimulator::beginSession(PlayLayer* layer) {
+    this->m_simulating = true;
+    this->m_applyingRing = false;
+    this->beginCapture(layer);
+}
+
+void ShadowSimulator::endSession(PlayLayer* layer) {
+    this->m_simAbsTick = -1;
+    this->m_poseRemapDt = -1.f;
+    this->m_bakeOffline = false;
+    if (layer) {
+        this->restoreCapture(layer);
+    }
+    else {
+        // Still drop claim deltas / flags if the layer vanished mid-sim.
+        ToggleOrbSim::get().restore();
+        this->m_saved.clear();
+        this->m_savedTransforms.clear();
+        this->m_dynamicTargetIds.clear();
+        this->m_toggleTargetIds.clear();
+        this->m_dynamicFollowJobs.clear();
+        this->m_liveDynamicAppliedIds.clear();
+        this->m_toggleUnknownHit = false;
+        this->m_triggerWorldAppliedThisTick = false;
+    }
+    this->m_simulating = false;
+    this->m_applyingRing = false;
+    this->parkGhosts();
+}
+
+gd::vector<GameObject*>& ShadowSimulator::collisionFilterScratch() {
+    return this->m_collisionFilterBuf;
 }
 
 void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
@@ -496,9 +543,14 @@ void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
 
     // Real orb physics. Re-entrancy flag lets the ringJump hook call the original.
     // VFX hooks (spawnCircle, activateObject visuals, particles) stay blocked.
-    m_applyingRing = true;
+    // RAII so a throw / early exit never leaves m_applyingRing stuck (iOS live path).
+    struct ApplyingRingGuard {
+        bool& flag;
+        explicit ApplyingRingGuard(bool& f) : flag(f) { flag = true; }
+        ~ApplyingRingGuard() { flag = false; }
+    };
+    ApplyingRingGuard applyingGuard(m_applyingRing);
     shadow->ringJump(ring, false);
-    m_applyingRing = false;
 
     // Claim for the rest of this run so collision doesn't re-boost every tick.
     // restoreCapture() puts the real orb back afterward.
@@ -842,24 +894,27 @@ void ShadowSimulator::resetCaptureForNextRun(PlayLayer* layer) {
     this->m_triggerWorldAppliedThisTick = false;
     this->m_liveDynamicAppliedIds.clear();
 
-    if (!this->m_saved.empty()) {
-        for (auto const& s : this->m_saved) {
-            if (!s.obj) continue;
-            s.obj->m_activated = s.activated;
-            s.obj->m_activatedByPlayer1 = s.p1;
-            s.obj->m_activatedByPlayer2 = s.p2;
-            s.obj->m_poweredOn = s.poweredOn;
-            s.obj->m_state = s.state;
-            s.obj->m_isActivated = s.isActivated;
-            s.obj->m_visible = s.egoVisible;
-            s.obj->setOpacity(s.opacity);
-            s.obj->setVisible(s.nodeVisible);
-            if (s.isRing) static_cast<RingObject*>(s.obj)->m_claimTouch = s.claimTouch;
+    for (auto const& s : this->m_saved) {
+        if (!s.obj) continue;
+        s.obj->m_activated = s.activated;
+        s.obj->m_activatedByPlayer1 = s.p1;
+        s.obj->m_activatedByPlayer2 = s.p2;
+        s.obj->m_poweredOn = s.poweredOn;
+        s.obj->m_state = s.state;
+        s.obj->m_isActivated = s.isActivated;
+        s.obj->m_visible = s.egoVisible;
+        s.obj->setOpacity(s.opacity);
+        s.obj->setVisible(s.nodeVisible);
+        if (s.isRing) {
+            if (auto* ring = typeinfo_cast<RingObject*>(s.obj)) {
+                ring->m_claimTouch = s.claimTouch;
+            }
         }
-        this->m_saved.clear();
-        if (layer) {
-            layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
-        }
+    }
+    this->m_saved.clear();
+    // Always restore — vanilla may mutate IDs without a SavedObject entry.
+    if (layer) {
+        layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
     }
 }
 
@@ -887,10 +942,17 @@ void ShadowSimulator::restoreCapture(PlayLayer* layer) {
         s.obj->m_visible = s.egoVisible;
         s.obj->setOpacity(s.opacity);
         s.obj->setVisible(s.nodeVisible);
-        if (s.isRing) static_cast<RingObject*>(s.obj)->m_claimTouch = s.claimTouch;
+        if (s.isRing) {
+            if (auto* ring = typeinfo_cast<RingObject*>(s.obj)) {
+                ring->m_claimTouch = s.claimTouch;
+            }
+        }
     }
     this->m_saved.clear();
-    layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
+    // Always restore even when m_saved was empty (Problem C: live ring path).
+    if (layer) {
+        layer->m_gameState.m_activatedObjectIDs = this->m_savedActivatedIDs;
+    }
 }
 
 void ShadowSimulator::copyWaveTrail(PlayerObject* dst, PlayerObject* src) {
@@ -1951,8 +2013,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
 
     this->m_simTickBase = std::max(0, options.attemptStartTick);
     this->m_simAbsTick = -1;
-    this->m_simulating = true;
-    this->beginCapture(layer);
+    SimSessionGuard session(*this, layer);
 
     ThreatZone zone{};
     // Probe d0 to build the same threat zone Live uses. When delay==0 the
@@ -1968,10 +2029,6 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     }
     if (tickBudget <= 0 || wallExceeded()) {
         out.budgetHit = true;
-        this->m_simAbsTick = -1;
-        this->restoreCapture(layer);
-        this->m_simulating = false;
-        this->parkGhosts();
         fillSpent();
         return out;
     }
@@ -2017,11 +2074,6 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     }
 
     if (tickBudget <= 0 || wallExceeded()) out.budgetHit = true;
-
-    this->m_simAbsTick = -1;
-    this->restoreCapture(layer);
-    this->m_simulating = false;
-    this->parkGhosts();
 
     fillSpent();
     // Budget exhaustion → do not trust bake (caller falls through / Pass).
@@ -2084,8 +2136,7 @@ SimPlan ShadowSimulator::plan(
 
     this->m_simTickBase = std::max(0, options.attemptStartTick);
     this->m_simAbsTick = -1;
-    m_simulating = true;
-    beginCapture(layer);
+    SimSessionGuard session(*this, layer);
     bool sawToggleUnknown = false;
     bool const hadToggleTargets = !this->m_toggleTargetIds.empty();
 
@@ -2329,10 +2380,6 @@ SimPlan ShadowSimulator::plan(
             );
 
             if (!searchFurther) {
-                this->m_simAbsTick = -1;
-                this->restoreCapture(layer);
-                this->m_simulating = false;
-                this->parkGhosts();
                 plan.action = PlanAction::Pass;
                 // Wanted probes but could not afford any → PassBudget (C6 may Hold).
                 if (plan.budgetHit && limit >= 1 && probeCount == 0) {
@@ -2380,10 +2427,6 @@ SimPlan ShadowSimulator::plan(
         if (!c0.raw.died && !plan.idleSafer && shouldWaveHazardProximityPass(
                 isWave, nearHazard, noOrbTarget, plan.foresightOrbPad
             )) {
-            this->m_simAbsTick = -1;
-            restoreCapture(layer);
-            this->m_simulating = false;
-            this->parkGhosts();
             plan.action = PlanAction::Pass;
             plan.reason = AssistReason::PassWaveProximity;
             plan.delay = 0;
@@ -2618,10 +2661,6 @@ SimPlan ShadowSimulator::plan(
         if (!anySavesFromD0Death && !plan.idleSafer && shouldWaveFutileDelayPass(
                 isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad
             )) {
-            this->m_simAbsTick = -1;
-            restoreCapture(layer);
-            this->m_simulating = false;
-            this->parkGhosts();
             plan.action = PlanAction::Pass;
             plan.reason = AssistReason::PassWaveFutile;
             plan.delay = 0;
@@ -3119,11 +3158,6 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    this->m_simAbsTick = -1;
-    restoreCapture(layer);
-    this->m_simulating = false;
-    this->parkGhosts();
-
     if (chosen < 0) {
         plan.action = PlanAction::Pass;
         plan.toggleUnknown = sawToggleUnknown;
@@ -3496,39 +3530,36 @@ ShadowSimulator::ReplayResult ShadowSimulator::replay(
 
     this->m_simTickBase = std::max(0, startTick);
     this->m_simAbsTick = -1;
-    m_simulating = true;
-    beginCapture(layer);
+    {
+        SimSessionGuard session(*this, layer);
 
-    for (int t = 0; t < maxTicks; ++t) {
-        int const absTick = startTick + t;
-        this->m_simAbsTick = absTick;
+        for (int t = 0; t < maxTicks; ++t) {
+            int const absTick = startTick + t;
+            this->m_simAbsTick = absTick;
 
-        while (nextEv < timeline.size() && effectiveTick(timeline[nextEv]) == absTick) {
-            if (timeline[nextEv].down) s->pushButton(PlayerButton::Jump);
-            else s->releaseButton(PlayerButton::Jump);
-            ++nextEv;
+            while (nextEv < timeline.size() && effectiveTick(timeline[nextEv]) == absTick) {
+                if (timeline[nextEv].down) s->pushButton(PlayerButton::Jump);
+                else s->releaseButton(PlayerButton::Jump);
+                ++nextEv;
+            }
+
+            stepPhysics(layer, s, dt, dt);
+            out.endX = s->getPositionX();
+            if (m_dead) {
+                out.died = true;
+                out.deathTick = t;
+                out.deathObject = m_deathObject;
+                break;
+            }
+            if (m_unknown) {
+                out.unknown = true;
+                break;
+            }
         }
 
-        stepPhysics(layer, s, dt, dt);
-        out.endX = s->getPositionX();
-        if (m_dead) {
-            out.died = true;
-            out.deathTick = t;
-            out.deathObject = m_deathObject;
-            break;
-        }
-        if (m_unknown) {
-            out.unknown = true;
-            break;
-        }
+        out.activatedRing = m_activatedRing;
+        out.ringCount = m_ringCount;
     }
-
-    out.activatedRing = m_activatedRing;
-    out.ringCount = m_ringCount;
-    this->m_simAbsTick = -1;
-    restoreCapture(layer);
-    m_simulating = false;
-    parkGhosts();
     return out;
 }
 
@@ -3597,96 +3628,90 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = dt; // TW remap must match bake physics, not live hitch dt
     this->m_bakeOffline = true;
-    m_simulating = true;
-    beginCapture(layer);
+    {
+        SimSessionGuard session(*this, layer);
 
-    for (int frame = 0; frame <= untilFrame; ++frame) {
-        this->m_simAbsTick = frame;
+        for (int frame = 0; frame <= untilFrame; ++frame) {
+            this->m_simAbsTick = frame;
 
-        // Clickbots often put press+release on the SAME frame. Apply downs
-        // BEFORE physics so the tick is held; releases AFTER the step.
-        std::vector<ReplayEvent const*> downs;
-        std::vector<ReplayEvent const*> ups;
-        while (nextEv < events.size() && events[nextEv].frame == frame) {
-            auto const& ev = events[nextEv];
-            if (!ev.player2 || applyP2ToShadow) {
-                if (ev.down) downs.push_back(&ev);
-                else ups.push_back(&ev);
+            // Clickbots often put press+release on the SAME frame. Apply downs
+            // BEFORE physics so the tick is held; releases AFTER the step.
+            std::vector<ReplayEvent const*> downs;
+            std::vector<ReplayEvent const*> ups;
+            while (nextEv < events.size() && events[nextEv].frame == frame) {
+                auto const& ev = events[nextEv];
+                if (!ev.player2 || applyP2ToShadow) {
+                    if (ev.down) downs.push_back(&ev);
+                    else ups.push_back(&ev);
+                }
+                ++nextEv;
             }
-            ++nextEv;
-        }
-        for (auto const* ev : downs) applyEv(*ev);
-        bool const jumpHeldThisStep =
-            s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
+            for (auto const* ev : downs) applyEv(*ev);
+            bool const jumpHeldThisStep =
+                s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
 
-        if (sampleFrame >= 0 && frame == sampleFrame) {
-            out.xAtSample = s->getPositionX();
-            out.modeAtSample = StageConfig::kindOf(s);
-            out.sampled = true;
-        }
-
-        // Physics-bypass: N micro-steps at author dt inside one bake tick.
-        for (int sub = 0; sub < substeps; ++sub) {
-            stepPhysics(layer, s, subDt, subDt);
-            if (m_dead) break;
-        }
-        for (auto const* ev : ups) applyEv(*ev);
-
-        // Hard death only — Unknown must not wipe a working replay bake
-        // (toggle-group solids used to abort every click via m_unknown).
-        if (m_unknown) {
-            out.unknown = true;
-        }
-
-        if (onFrame && !onFrame(frame)) {
-            out.died = m_dead;
-            out.deathFrame = frame;
-            out.deathX = s->getPositionX();
-            out.deathY = s->getPositionY();
-            break;
-        }
-
-        int const evThis = static_cast<int>(downs.size() + ups.size());
-        if (traceFrames) {
-            BakeFrameTrace tr;
-            tr.frame = frame;
-            tr.x = s->getPositionX();
-            tr.y = s->getPositionY();
-            tr.yVel = static_cast<float>(s->m_yVelocity);
-            tr.jumpHeld = jumpHeldThisStep;
-            tr.dead = m_dead;
-            tr.unknown = m_unknown;
-            tr.twApplied = this->m_triggerWorldAppliedThisTick;
-            tr.eventsApplied = evThis;
-            tr.mode = static_cast<int>(StageConfig::kindOf(s));
-            if (m_dead && m_deathObject) {
-                tr.deathObjId = m_deathObject->m_uniqueID;
-                tr.deathObjType = static_cast<int>(m_deathObject->m_objectType);
-                tr.deathObjX = m_deathObject->getPositionX();
-                tr.deathObjY = m_deathObject->getPositionY();
+            if (sampleFrame >= 0 && frame == sampleFrame) {
+                out.xAtSample = s->getPositionX();
+                out.modeAtSample = StageConfig::kindOf(s);
+                out.sampled = true;
             }
-            out.frames.push_back(tr);
-        }
 
-        if (m_dead) {
-            out.died = true;
-            out.deathFrame = frame;
-            out.deathX = s->getPositionX();
-            out.deathY = s->getPositionY();
-            if (m_deathObject) {
-                out.deathObjId = m_deathObject->m_uniqueID;
-                out.deathObjType = static_cast<int>(m_deathObject->m_objectType);
+            // Physics-bypass: N micro-steps at author dt inside one bake tick.
+            for (int sub = 0; sub < substeps; ++sub) {
+                stepPhysics(layer, s, subDt, subDt);
+                if (m_dead) break;
             }
-            break;
+            for (auto const* ev : ups) applyEv(*ev);
+
+            // Hard death only — Unknown must not wipe a working replay bake
+            // (toggle-group solids used to abort every click via m_unknown).
+            if (m_unknown) {
+                out.unknown = true;
+            }
+
+            if (onFrame && !onFrame(frame)) {
+                out.died = m_dead;
+                out.deathFrame = frame;
+                out.deathX = s->getPositionX();
+                out.deathY = s->getPositionY();
+                break;
+            }
+
+            int const evThis = static_cast<int>(downs.size() + ups.size());
+            if (traceFrames) {
+                BakeFrameTrace tr;
+                tr.frame = frame;
+                tr.x = s->getPositionX();
+                tr.y = s->getPositionY();
+                tr.yVel = static_cast<float>(s->m_yVelocity);
+                tr.jumpHeld = jumpHeldThisStep;
+                tr.dead = m_dead;
+                tr.unknown = m_unknown;
+                tr.twApplied = this->m_triggerWorldAppliedThisTick;
+                tr.eventsApplied = evThis;
+                tr.mode = static_cast<int>(StageConfig::kindOf(s));
+                if (m_dead && m_deathObject) {
+                    tr.deathObjId = m_deathObject->m_uniqueID;
+                    tr.deathObjType = static_cast<int>(m_deathObject->m_objectType);
+                    tr.deathObjX = m_deathObject->getPositionX();
+                    tr.deathObjY = m_deathObject->getPositionY();
+                }
+                out.frames.push_back(tr);
+            }
+
+            if (m_dead) {
+                out.died = true;
+                out.deathFrame = frame;
+                out.deathX = s->getPositionX();
+                out.deathY = s->getPositionY();
+                if (m_deathObject) {
+                    out.deathObjId = m_deathObject->m_uniqueID;
+                    out.deathObjType = static_cast<int>(m_deathObject->m_objectType);
+                }
+                break;
+            }
         }
     }
-
-    this->m_simAbsTick = -1;
-    this->m_poseRemapDt = -1.f;
-    this->m_bakeOffline = false;
-    restoreCapture(layer);
-    m_simulating = false;
-    parkGhosts();
 
     if (parkedP1 && layer->m_player1) {
         layer->m_player1->setPosition(savedP1);
@@ -3729,30 +3754,25 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
     this->m_simTickBase = 0;
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = dt;
-    m_simulating = true;
-    beginCapture(layer);
+    {
+        SimSessionGuard session(*this, layer);
 
-    out.points.push_back(s->getPosition());
-    for (int frame = 0; frame <= untilFrame; ++frame) {
-        this->m_simAbsTick = frame;
-        while (nextEv < events.size() && events[nextEv].frame == frame) {
-            applyEv(events[nextEv]);
-            ++nextEv;
-        }
-        stepPhysics(layer, s, dt, dt);
         out.points.push_back(s->getPosition());
-        if (m_dead || m_unknown) {
-            out.died = true;
-            out.deathFrame = frame;
-            break;
+        for (int frame = 0; frame <= untilFrame; ++frame) {
+            this->m_simAbsTick = frame;
+            while (nextEv < events.size() && events[nextEv].frame == frame) {
+                applyEv(events[nextEv]);
+                ++nextEv;
+            }
+            stepPhysics(layer, s, dt, dt);
+            out.points.push_back(s->getPosition());
+            if (m_dead || m_unknown) {
+                out.died = true;
+                out.deathFrame = frame;
+                break;
+            }
         }
     }
-
-    this->m_simAbsTick = -1;
-    this->m_poseRemapDt = -1.f;
-    restoreCapture(layer);
-    m_simulating = false;
-    parkGhosts();
     return out;
 }
 

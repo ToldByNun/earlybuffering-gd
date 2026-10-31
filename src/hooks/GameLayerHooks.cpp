@@ -84,6 +84,9 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
             sim.applyRingJump(player, ring);
             return;
         }
+        // Live: null-reject only — never invent a call. Half-restored / poisoned
+        // rings after a nested sim were a SIGBUS source on iOS (Problem C).
+        if (!player || !ring) return;
         GJBaseGameLayer::playerTouchedRing(player, ring);
     }
 
@@ -154,14 +157,24 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
 
     void collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec, int objectsCount, float dt) {
         auto& sim = ShadowSimulator::get();
+        if (!vec || objectsCount <= 0) {
+            GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
+            return;
+        }
 
         // Sim must only collide the shadow — never the real player mid-plan.
+        // Use persistent scratch (not a stack gd::vector): on iOS ARM64 a temporary
+        // gd::vector ABI/lifetime mismatch into playerTouchedRing was a SIGBUS source.
         if (sim.isSimulating()) {
             if (!sim.isShadow(player)) return;
-            gd::vector<GameObject*> extra;
-            extra.reserve(objectsCount);
+            auto& extra = sim.collisionFilterScratch();
+            extra.clear();
+            if (extra.capacity() < static_cast<size_t>(objectsCount)) {
+                extra.reserve(static_cast<size_t>(objectsCount));
+            }
             for (int i = 0; i < objectsCount; i++) {
                 GameObject* obj = vec->at(i);
+                if (!obj) continue;
                 // Never collide the shadow with real P1/P2 or other ghosts —
                 // same spawn pose → instant frame-0 "death" during bake/plan.
                 if (typeinfo_cast<PlayerObject*>(obj)) {
@@ -182,34 +195,40 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                         break;
                 }
             }
-            GJBaseGameLayer::collisionCheckObjects(player, &extra, static_cast<int>(extra.size()), dt);
+            GJBaseGameLayer::collisionCheckObjects(
+                player, &extra, static_cast<int>(extra.size()), dt
+            );
             return;
         }
 
         // Live: strip owned ghosts if they ever appear in the candidate list
         // (invisible PlayerObjects in objectLayer can otherwise kill wave/"to nothing").
-        if (vec && objectsCount > 0) {
-            bool anyGhost = false;
-            for (int i = 0; i < objectsCount; i++) {
-                if (auto* asPl = typeinfo_cast<PlayerObject*>(vec->at(i))) {
-                    if (sim.isOwnedGhost(asPl)) { anyGhost = true; break; }
-                }
+        bool anyGhost = false;
+        for (int i = 0; i < objectsCount; i++) {
+            GameObject* obj = vec->at(i);
+            if (!obj) continue;
+            if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
+                if (sim.isOwnedGhost(asPl)) { anyGhost = true; break; }
             }
-            if (anyGhost) {
-                gd::vector<GameObject*> extra;
+        }
+        if (anyGhost) {
+            auto& extra = sim.collisionFilterScratch();
+            extra.clear();
+            if (extra.capacity() < static_cast<size_t>(objectsCount)) {
                 extra.reserve(static_cast<size_t>(objectsCount));
-                for (int i = 0; i < objectsCount; i++) {
-                    GameObject* obj = vec->at(i);
-                    if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
-                        if (sim.isOwnedGhost(asPl)) continue;
-                    }
-                    extra.push_back(obj);
-                }
-                GJBaseGameLayer::collisionCheckObjects(
-                    player, &extra, static_cast<int>(extra.size()), dt
-                );
-                return;
             }
+            for (int i = 0; i < objectsCount; i++) {
+                GameObject* obj = vec->at(i);
+                if (!obj) continue;
+                if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
+                    if (sim.isOwnedGhost(asPl)) continue;
+                }
+                extra.push_back(obj);
+            }
+            GJBaseGameLayer::collisionCheckObjects(
+                player, &extra, static_cast<int>(extra.size()), dt
+            );
+            return;
         }
         GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
     }

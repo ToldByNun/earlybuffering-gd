@@ -979,6 +979,25 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         return;
     }
 
+    // Never nest a full plan inside PlayerObject::update (Eclipse PauseBGLHook
+    // coexistence / iOS ring SIGBUS). Physics-tick HUS already runs outside update;
+    // this guards any future mid-step call site.
+    if (this->m_inRealUpdate) {
+        this->m_buffer.fireTick = deadline;
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::HoldPending,
+            "hus-defer-mid-update",
+            this->m_buffer.fireTick
+        );
+        this->noteVerdict(AssistReason::HoldPending, "hus-defer-mid-update");
+        LagProbe::get().mark(
+            "hus.replan.defer",
+            fmt::format("t={} rem={}", this->m_attemptTick, remaining)
+        );
+        return;
+    }
+
     LagProbe::Scope const husScope("eb.hus.replan", fmt::format(
         "rem={} foresight={}", remaining, foresightNow ? 1 : 0
     ));

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### iOS / shared collision hardening (Problem C)
+- **`SimSessionGuard` RAII** around plan / verify / bake / traj / replay sessions — always restoreCapture, clear `m_simulating` / `m_applyingRing`, park ghosts (even on early return).
+- Ring restore via **`typeinfo_cast<RingObject*>`**; always restore **`m_activatedObjectIDs`**; `applyRingJump` clears applying-flag with RAII.
+- **`collisionCheckObjects`** uses a persistent filter buffer (no stack `gd::vector`); null-reject live `playerTouchedRing` args.
+- Park/scrub **all** owned ghosts after sim (snapshots scrub+hide only — pose kept for bake/traj).
+- HUS: defer mid-`PlayerObject::update` replan (`hus-defer-mid-update`); Eclipse coexistence A/B matrix in `docs/assist_reference.md`.
+- **iOS load:** CMake POST_BUILD `ldid`/`codesign` ad-hoc sign; `geode_package_check.py --require ios` verifies `LC_CODE_SIGNATURE`; CI iOS job gates on it; `INSTALL.md` covers `missing code signature` / `Unable to load the DYLIB`.
+
 ## v1.3.1
 
 

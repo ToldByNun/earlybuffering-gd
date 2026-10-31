@@ -208,6 +208,8 @@ CI also builds iOS via [`.github/workflows/multi-platform.yml`](.github/workflow
 python tools/geode_package_check.py build-ios/audesign.earlybuffer.geode --require ios
 ```
 
+`--require ios` also verifies the dylib carries **`LC_CODE_SIGNATURE`** (unsigned binaries fail Geode `dlopen` on device). CMake POST_BUILD ad-hoc signs with `ldid` or `codesign -f -s -` on iOS builds.
+
 Merged multi-platform ship (example):
 
 ```bash
@@ -221,6 +223,18 @@ python tools/merge_geode_packages.py ^
 
 (`merge_geode_packages.py` still defaults to requiring `android64`; pass `--require ios` explicitly when iOS is in the ship. Use `--allow-missing-win` only for device-only zips.)
 
+### iOS load errors (UNKNOWN ERROR / Unable to load the DYLIB)
+
+These Geode popups are **package/signing** failures, not assist logic:
+
+| Symptom in the dialog | Cause | Fix |
+| --- | --- | --- |
+| `(no such file)` … `audesign.earlybuffer.ios.dylib` | `.geode` has no iOS binary (Windows-only / Android-only zip), or dyld listed a failed first path | Install a package that passes `--require ios`; never copy a local Windows `build/*.geode` to iOS |
+| `missing code signature` … `.ios.dylib` | Binary present but **unsigned** (no `LC_CODE_SIGNATURE`) | Use CI/macOS build (POST_BUILD signs); or `ldid -S` / `codesign -f -s -` the dylib and re-package |
+| `Unable to load the DYLIB: dlopen(...)` | Same as above (Geode wraps dyld) | Same — package gate + signed iOS binary |
+
+Sideloaded GD (eSign / Feather / etc.) may still need the **launcher to re-sign** mods with the app’s certificate after install. EarlyBuffer cannot bypass OS library validation; ship a signed `audesign.earlybuffer.ios.dylib` and let Geode’s iOS flow re-sign when required.
+
 ### Mobile policy (shared with Android)
 
 iOS uses the same **mobile I/O** path as Android (`SaveDropPaths` under the Geode mod save dir — no Win32 file dialogs) and the same **`PlatformLimits::isConstrainedDevice()`** ceilings (sim ≤2000µs, tick ≤2000, taller overlay inset, no disk PlanGold on load). Alerts show the full path and copy it to the clipboard; use Files / Share / Finder-via-device (see pause Export/Import).
@@ -229,8 +243,8 @@ iOS uses the same **mobile I/O** path as Android (`SaveDropPaths` under the Geod
 
 Use a package that passes `--require ios` (and any other platforms you ship). Tick on device (GD **2.2081** + Geode):
 
-1. **Package gate (Mac/PC)** — `python tools/geode_package_check.py <ship.geode> --require ios` exits 0.
-2. **Load** — install into Geode mods; enable EarlyBuffer; **no** missing `audesign.earlybuffer.ios.dylib`.
+1. **Package gate (Mac/PC)** — `python tools/geode_package_check.py <ship.geode> --require ios` exits 0 (binary present **and** code-signed).
+2. **Load** — install into Geode mods; enable EarlyBuffer; **no** `Unable to load the DYLIB` / `missing code signature` / missing `audesign.earlybuffer.ios.dylib`.
 3. **Live assist (touch)** — short classic level (not platformer); Enabled on; Safe Mode on; Assist Mode Live; early jump → Delay or Pass; overlay updates.
 4. **Settings without keyboard** — Pause → EB → toggle Enabled / Preset.
 5. **Config paths** — Export Config → alert shows full save-dir path + clipboard copy; Import after placing `earlybuffer-config.json` via Files / Share / Finder.
@@ -238,8 +252,8 @@ Use a package that passes `--require ios` (and any other platforms you ship). Ti
 7. **Constrained budgets** — with default sim/tick settings, Hybrid near a bake should not soft-lock; Lag Probe `HYBRID eb.hybrid.*` lines stay under a few ms when on.
 8. **Cold start** — force-quit; reopen; mod still loads; no crash on PlanGold/load.
 
-If step 2 fails, the `.geode` lacks the iOS binary — rebuild/merge. If step 5 fails with no path in the alert, capture a screenshot before changing I/O code.
+If step 2 fails with **missing file**, the `.geode` lacks the iOS binary — rebuild/merge. If it fails with **missing code signature**, rebuild on macOS/CI or re-sign the dylib. If step 5 fails with no path in the alert, capture a screenshot before changing I/O code.
 
 ## CI note
 
-Multi-platform CI builds Windows, macOS, iOS, and Android. Local Android NDK builds above do not require running CI; local iOS builds need a macOS host + Geode iOS binaries.
+Multi-platform CI builds Windows, macOS, iOS, and Android. The iOS job runs `geode_package_check.py --require ios` (signature gate) after build. Local Android NDK builds above do not require running CI; local iOS builds need a macOS host + Geode iOS binaries.
