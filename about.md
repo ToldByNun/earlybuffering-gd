@@ -19,7 +19,7 @@ You jump a little soon — the mod holds that press and lands it on the first ph
 
 You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you. It only decides *when* a press you already made is allowed to land — inside the windows and modes you set.
 
-> **v1.3.0** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS in the merged package). Newer game builds need a separate port.
+> **v1.3.1** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
 
 ---
 

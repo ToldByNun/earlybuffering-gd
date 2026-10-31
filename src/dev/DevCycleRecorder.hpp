@@ -52,10 +52,16 @@ public:
     void notePassThrough(AssistReason reason, char const* where);
 
     // Optional arm diagnostics (verify / budget / hold-extend).
+    // Explicit ctor — nested default member + `= {}` breaks clang (Android NDK).
     struct DelayArmMeta {
-        bool armVerifyOk = true;
-        bool budgetHitAtArm = false;
-        int holdExtendMax = -1;
+        bool armVerifyOk;
+        bool budgetHitAtArm;
+        int holdExtendMax;
+
+        DelayArmMeta()
+            : armVerifyOk(true)
+            , budgetHitAtArm(false)
+            , holdExtendMax(-1) {}
     };
 
     // Returns pressId of the armed cycle (0 if not recording).
@@ -66,7 +72,7 @@ public:
         int plannedFireTick,
         int planId,
         DevEventSource source = DevEventSource::Live,
-        DelayArmMeta meta = {}
+        DelayArmMeta meta = DelayArmMeta()
     );
 
     void noteRecheck(

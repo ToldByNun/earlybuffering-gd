@@ -7,13 +7,13 @@ Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBu
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.3.0** |
+| Version | **1.3.1** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`; iOS needs `.ios.dylib`) |
 | License | [MIT](LICENSE) |
 | Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
 
-> **Last 2.2081 line.** **v1.3.0** still targets Geometry Dash **2.2081** only (Config export, Hybrid lag, beginner defaults, Android + iOS mobile). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
+> **Last 2.2081 line.** **v1.3.1** still targets Geometry Dash **2.2081** only (settings tab overhaul, import UI sync, assist clock fix, Config / Hybrid / mobile). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
 
 ## What it does
 
@@ -30,7 +30,7 @@ Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_refe
 ## Install
 
 1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
-2. Install from the **Geode Index**, or download the **v1.3.0** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
+2. Install from the **Geode Index**, or download the **v1.3.1** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
 3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (Geode will prompt).
 
 **Mobile (Android + iOS):** same save-dir I/O (`replay-drop/`, `earlybuffer-config.json`) and constrained planner budgets — details and device smoke checklists in [`INSTALL.md`](INSTALL.md).
@@ -81,7 +81,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.3.0** Config / Hybrid / iOS mobile; **v1.2.2** Android64 package; **v1.2.1** miss-assist Pick Mode (still GD **2.2081** only).
+- **Changelog:** see [`changelog.md`](changelog.md) — **v1.3.1** settings UI / import sync / assist clock; **v1.3.0** Config / Hybrid / iOS mobile; **v1.2.2** Android64 package (still GD **2.2081** only).
 
 ## Credits
 

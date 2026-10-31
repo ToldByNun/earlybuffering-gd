@@ -2,14 +2,24 @@
 
 ## Unreleased
 
-### Settings UI overhaul
+## v1.3.1
+
+
+**Settings UI overhaul, config import sync, assist clock fix** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+### Settings UI
 - **8-tab chip strip** on Geode `ModSettingsPopup` (Main / Scope / Assist / Bake / Modes / Visual / Keys / Dev): text-only white/grey labels under search; filters rows by exhaustive key→tab map (no Assist catch-all).
 - **Copy / titles:** Main page title, accurate setting names (`assist-only-practice`, Window Unit on per-mode ticks, Dev actions blurb, pause status naming, etc.).
 - **Removed dead keys** (old JSON skips them; other keys still apply): `show-pause-assist`, `swallow-hopeless`, `dev-record-include-pass`, `dev-eval-budget-us`. Portable `ConfigBundle` count **126** (was 130).
-- **Config import UI sync:** after import, refresh Stage/Dev caches; push store → open SettingNodes; rebuild popup next frame so green Apply cannot overwrite the import; restore active tab; success alert after sync. Docs: `docs/assist_reference.md` Pause/settings + Config sections.
+- **Config import UI sync:** after import, refresh Stage/Dev caches; push store → open SettingNodes; rebuild popup next frame so green Apply cannot overwrite the import; restore active tab; success alert after sync.
 
-### Assist correctness (1.3.1 track)
-- **Dev instrumentation:** session `settingsFingerprint` filled; witness Trigger-World bake/ready/skip counters; DelayArm/Fire/Outcome fields for verify/budgetHit/recheck/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay compact `tw empty|N/M`; Dev Eval `liveVsEvalMismatch` when Live delayed but `bestSurv=none`.
+### Assist / clock
+- **Ghost physics timestep:** GD step `0.25` is normal (not a hitch); internal assist clock uses seconds, ghost I/O converts via `gdStepToSeconds` / `secondsToGdStep` — restores sane Live/Hybrid delays after the 1.3.0 hitch-poison path.
+- **Dev instrumentation:** session `settingsFingerprint`; witness Trigger-World bake counters; DelayArm/Fire/Outcome verify/budget/holdExtend/`deathAfterFire`; LagProbe `eb.assist.halluc`; overlay `tw empty|N/M`; Dev Eval `liveVsEvalMismatch`.
+
+### Packaging
+- Android NDK: fix clang nested `DelayArmMeta` default-init so Android32/64 CI links again.
+- Docs: `docs/assist_reference.md` Pause/settings + Config sections; ship notes under `releases/`.
 
 ## v1.3.0
 
