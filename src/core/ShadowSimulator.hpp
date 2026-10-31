@@ -119,9 +119,13 @@ struct InputEvent {
 class ShadowSimulator {
 public:
     static constexpr int SNAPSHOT_SLOTS = 16;
-    // Slot 0 is immortal attempt-start (bake). Ring capture uses 1..SNAPSHOT_SLOTS-1.
+    // Slot 0 is immortal attempt-start (bake). Plan/traj ring uses 1..13.
+    // Slots 14–15 are reserved for GhostParityProbe anchors (not rotated by plan).
     static constexpr int START_SNAPSHOT_SLOT = 0;
     static constexpr int SNAPSHOT_RING_BEGIN = 1;
+    static constexpr int SNAPSHOT_RING_END = 14; // exclusive upper bound for plan ring
+    static constexpr int PARITY_SLOT_A = 14;
+    static constexpr int PARITY_SLOT_B = 15;
     // Permanent eval ghosts (Commit 9) — not the 16 live snapshot slots.
     static constexpr int DEV_EVAL_SLOTS = 2;
     static constexpr float kClusterGapX = 50.f;
@@ -201,10 +205,12 @@ public:
     // Diag: beginCapture → count → restoreCapture (no lingering world edits).
     size_t diagCaptureTransformCount(PlayLayer* layer);
 
-    // Rotating ring — never overwrites START_SNAPSHOT_SLOT.
+    // Rotating ring — never overwrites START_SNAPSHOT_SLOT or parity slots.
     int captureSnapshot(PlayerObject* real);
     // Attempt-start pose for Replay/Brute bake (always slot 0).
     int captureStartSnapshot(PlayerObject* real);
+    // GhostParityProbe anchors: which=0 → slot 14, which=1 → slot 15.
+    int captureParitySnapshot(PlayerObject* real, int which);
     PlayerObject* snapshotSlot(int slot) const;
 
     SimPlan plan(

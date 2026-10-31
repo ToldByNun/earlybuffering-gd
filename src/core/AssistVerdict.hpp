@@ -47,6 +47,11 @@ enum class AssistReason {
     // Toggle orb / touch-toggle target overlapped in sim — never Delay
     PassToggleUnknown,
 
+    // GhostParityProbe: live path diverged from shadow replay (attempt-wide)
+    PassParityDrift,
+    // SpotTrustMap: this X was marked after prior drift (Pass until cleared)
+    PassSpotUntrusted,
+
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown
 };

@@ -30,6 +30,8 @@ char const* AssistVerdict::name(AssistReason reason) {
         case AssistReason::DelayGeneric: return "delay-generic";
         case AssistReason::HoldPending: return "hold-pending";
         case AssistReason::PassToggleUnknown: return "pass-toggle-unknown";
+        case AssistReason::PassParityDrift: return "pass-parity-drift";
+        case AssistReason::PassSpotUntrusted: return "pass-spot-untrusted";
         case AssistReason::PassUnknown: return "pass-unknown";
     }
     return "pass-unknown";
@@ -65,6 +67,8 @@ char const* AssistVerdict::overlayBit(AssistReason reason) {
         case AssistReason::DelayGeneric: return "DELAY";
         case AssistReason::HoldPending: return "HOLD~";
         case AssistReason::PassToggleUnknown: return "PASS toggle-unk";
+        case AssistReason::PassParityDrift: return "PASS parity";
+        case AssistReason::PassSpotUntrusted: return "PASS spot";
         case AssistReason::PassUnknown: return "PASS unknown";
     }
     return "PASS unknown";

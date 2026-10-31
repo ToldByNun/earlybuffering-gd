@@ -272,9 +272,13 @@ Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean �
 
 Continuous modes also Pass release assist during spam. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
+## GhostParity / SpotTrust (hard Pass)
+
+`GhostParityProbe` records live pose each physics tick, anchors every 16t into reserved shadow slots 14/15 (`PARITY_SLOT_A/B`, outside the plan capture ring 1..13), and every 16t replays the past ≤48t path via `samplePath`. Drift (ε placeholder 12px or death mismatch) → `SimTrust::noteParityDrift` + `SpotTrustMap::markUntrusted(x)` + LagProbe `eb.parity.drift`. AssistController: mid-buffer drift clears the buffer (`pass-parity-drift`); `planPress`/`planRelease` hard-Pass on parity drift or spot-untrusted — **never** softened by orb foresight. Overlay: `trust=1` / `trust=0 parity` / `trust=spot`. PlanGold: `spot-trust-map`, `sim-trust`, `ghost-parity-probe`.
+
 ## Divergence / UNTRUST
 
-`DivergenceTracker` ring (48): bad if delayed assist died, or orb expected but missed (death or delayed-for-orb). Warn ≥35%/n≥8; UNTRUST ≥45%/n≥12. `pollOutcome` uses real `planDelay`; `onRealDeath` notes pending outcomes. Live/Hybrid-live: `simUntrusted` → hard Pass + overlay `UNTRUST pass` / `PASS untrust` **unless** TravelForesight orb/pad ahead — then soft (allow Delay / Soft Hold). Low-trust spot Pass uses the same orb override. `shouldWarn` soft: `capMul *= 0.85`. `clear()` on attempt reset (and PlanGold `DivergenceTracker::selfCheck`).
+`DivergenceTracker` ring (48): bad if delayed assist died, or orb expected but missed (death or delayed-for-orb). Warn ≥35%/n≥8; UNTRUST ≥45%/n≥12. `pollOutcome` uses real `planDelay`; `onRealDeath` notes pending outcomes. Live/Hybrid-live: `simUntrusted` → hard Pass + overlay `UNTRUST pass` / `PASS untrust` **unless** TravelForesight orb/pad ahead — then soft (allow Delay / Soft Hold). Low-trust spot Pass uses the same orb override. `shouldWarn` soft: `capMul *= 0.85`. `clear()` on attempt reset (and PlanGold `DivergenceTracker::selfCheck`). Parity/SpotTrust gates above are separate and always hard.
 
 ## effectTick attribution
 
@@ -447,7 +451,9 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 | `pass-d0-safe` | Delay 0 already clears (Legacy preference / New best=0) |
 | `pass-hopeless` / `pass-budget` | Nothing viable / tick wall; may arm HUS if foresight/ascent |
 | `pass-toggle-unknown` | Toggle-orb / touch-toggle target overlapped in sim — refuse Delay (honesty; ToggleOrbSim accuracy is separate) |
-| `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / trust gates (orb foresight softens) |
+| `pass-parity-drift` | GhostParityProbe: shadow replay of recent path drifted vs live (attempt-wide hard Pass; clears buffer) |
+| `pass-spot-untrusted` | SpotTrustMap: X marked after prior parity drift (hard Pass until good-parity streak clears) |
+| `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / LevelProfile trust gates (`pass-untrust` softens near orb; parity/spot never soften) |
 | `pass-limit-zero` / `pass-debounce` / `pass-cps` / `pass-scope` / `pass-assist-off` / `pass-early-attempt` | Hard off / debounce / CPS / scope |
 | `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake paths (Hybrid falls through to Live) |
 | `delay-orb` / `delay-threat` / `delay-prefer` / `delay-generic` | Buffered Delay |

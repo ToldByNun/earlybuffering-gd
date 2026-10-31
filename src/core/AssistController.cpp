@@ -10,6 +10,9 @@
 #include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
+#include "GhostParityProbe.hpp"
+#include "SimTrust.hpp"
+#include "SpotTrustMap.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
 #include "TravelForesight.hpp"
@@ -267,6 +270,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_savesAttempt = 0;
     DivergenceTracker::get().clear();
     HybridVerifyCache::get().clearAttempt();
+    SimTrust::get().resetAttempt();
+    GhostParityProbe::get().resetAttempt();
     m_attemptTick = 0;
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
@@ -361,6 +366,8 @@ void AssistController::onLevelQuit() {
     }
     LevelProfile::get().clear();
     TriggerWorldStore::get().clear();
+    SimTrust::get().onLevelQuit();
+    GhostParityProbe::get().onLevelQuit();
 
     // Quiet reset — overlay already detached
     this->clearBuffer();
@@ -1400,6 +1407,13 @@ void AssistController::updateOverlay() {
             if (!bit.empty()) m_overlayText += " | " + bit;
             if (m_untrustPassHint) m_overlayText += " | UNTRUST pass";
         }
+        {
+            char const* const trustBit = SimTrust::get().overlayBit();
+            if (trustBit && trustBit[0] != '\0') {
+                this->m_overlayText += " | ";
+                this->m_overlayText += trustBit;
+            }
+        }
         if (m_savesAttempt > 0) {
             m_overlayText += fmt::format(" | saves {}/{}", m_savesAttempt, m_savesLevel);
         }
@@ -2060,6 +2074,20 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
 
     auto* p1 = playLayer->m_player1;
     if (p1) {
+        {
+            PerfTrace::Scope const scope("ghostParity");
+            GhostParityProbe::get().onPhysicsTick(
+                playLayer, p1, this->m_simDt, this->m_attemptTick
+            );
+        }
+        // Drift mid-buffer → drop Delay; never fire a plan made under bad trust.
+        if (SimTrust::get().parityDrift()
+            && this->m_buffer.state == BufferState::Buffered) {
+            AssistLog::debug("parity drift → clear buffer (force Pass)");
+            this->clearBuffer();
+            this->syncButtonState(playLayer);
+            this->noteVerdict(AssistReason::PassParityDrift, "parity-clear-buffer");
+        }
         this->m_lastPlayerX = p1->getPositionX();
         this->m_lastMode = StageConfig::kindOf(p1);
         if (!this->m_startSnapshotTaken && this->m_attemptTick <= 2) {
@@ -2415,6 +2443,32 @@ bool AssistController::planPress(
         DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
         this->noteVerdict(AssistReason::PassLimitZero, "press-limit0");
         return true;
+    }
+
+    // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
+    // Bad model must not arm Delay (Commit 1 PerfectAssist honesty).
+    {
+        float const xGate = player->getPositionX();
+        AssistReason parityReason = AssistReason::None;
+        if (SimTrust::get().forcePassReason(xGate, parityReason)) {
+            AssistLog::debug(fmt::format(
+                "SIMTRUST pass press ({})", AssistVerdict::name(parityReason)
+            ));
+            this->m_untrustPassHint = true;
+            SimPlan dummy;
+            dummy.action = PlanAction::Pass;
+            dummy.reason = parityReason;
+            dummy.firstDeathTick = -1;
+            dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            char const* where = parityReason == AssistReason::PassParityDrift
+                ? "press-parity-drift"
+                : "press-spot-untrusted";
+            DevCycleRecorder::get().noteGatePass(parityReason, where);
+            this->noteVerdict(parityReason, where);
+            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+            this->updateOverlay();
+            return true;
+        }
     }
 
     // Hybrid: one press wall/tick envelope for bake verify + Live fallthrough.
@@ -2838,6 +2892,25 @@ bool AssistController::planRelease(
         DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");
         this->noteVerdict(AssistReason::PassLimitZero, "release-limit0");
         return true;
+    }
+
+    // GhostParity / SpotTrust: hard Pass before bake (same honesty as press).
+    {
+        float const xGate = player->getPositionX();
+        AssistReason parityReason = AssistReason::None;
+        if (SimTrust::get().forcePassReason(xGate, parityReason)) {
+            AssistLog::debug(fmt::format(
+                "SIMTRUST pass release ({})", AssistVerdict::name(parityReason)
+            ));
+            this->m_untrustPassHint = true;
+            char const* where = parityReason == AssistReason::PassParityDrift
+                ? "release-parity-drift"
+                : "release-spot-untrusted";
+            DevCycleRecorder::get().noteGatePass(parityReason, where);
+            this->noteVerdict(parityReason, where);
+            this->updateOverlay();
+            return true;
+        }
     }
 
     PressSimBudget pressBudget;

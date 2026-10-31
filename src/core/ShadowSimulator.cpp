@@ -1359,15 +1359,23 @@ int ShadowSimulator::captureStartSnapshot(PlayerObject* real) {
 
 int ShadowSimulator::captureSnapshot(PlayerObject* real) {
     if (!real || !m_snapshots[0]) return -1;
-    // Never clobber attempt-start (bake) — DecisionLog / traj / planSequence ring.
-    if (m_nextSnapshot <= START_SNAPSHOT_SLOT || m_nextSnapshot >= SNAPSHOT_SLOTS) {
+    // Never clobber attempt-start (bake) or parity anchors (14–15).
+    if (m_nextSnapshot <= START_SNAPSHOT_SLOT || m_nextSnapshot >= SNAPSHOT_RING_END) {
         m_nextSnapshot = SNAPSHOT_RING_BEGIN;
     }
     int const slot = m_nextSnapshot;
     ++m_nextSnapshot;
-    if (m_nextSnapshot >= SNAPSHOT_SLOTS) {
+    if (m_nextSnapshot >= SNAPSHOT_RING_END) {
         m_nextSnapshot = SNAPSHOT_RING_BEGIN;
     }
+    copyPlayerState(m_snapshots[slot], real);
+    return slot;
+}
+
+int ShadowSimulator::captureParitySnapshot(PlayerObject* real, int which) {
+    if (!real || !m_snapshots[0]) return -1;
+    int const slot = (which & 1) ? PARITY_SLOT_B : PARITY_SLOT_A;
+    if (!m_snapshots[slot]) return -1;
     copyPlayerState(m_snapshots[slot], real);
     return slot;
 }
@@ -3801,7 +3809,10 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     // Attempt-start bake slot must stay out of the rotating ring.
     expect(START_SNAPSHOT_SLOT == 0, "start-slot-0");
     expect(SNAPSHOT_RING_BEGIN == 1, "ring-begins-1");
-    expect(SNAPSHOT_RING_BEGIN < SNAPSHOT_SLOTS, "ring-lt-slots");
+    expect(SNAPSHOT_RING_BEGIN < SNAPSHOT_RING_END, "ring-lt-end");
+    expect(SNAPSHOT_RING_END == PARITY_SLOT_A, "parity-after-ring");
+    expect(PARITY_SLOT_B == SNAPSHOT_SLOTS - 1, "parity-b-last");
+    expect(SNAPSHOT_RING_END < SNAPSHOT_SLOTS, "ring-end-lt-slots");
 
     // Fixed survive bins [0,24), [24,48), [48,96), [96,∞)
     expect(binOf(0) == 0, "bin0");
