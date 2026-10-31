@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class PlayLayer;
@@ -48,6 +49,7 @@ private:
     enum class Phase {
         Idle = 0,
         Collect,
+        CollectSections, // secondary: section lists may hold objects children miss
         Bake,
         Commit
     };
@@ -73,6 +75,7 @@ private:
 
     TriggerTrack* ensureTrack(GameObject* obj, TriggerKind kind);
     std::vector<GameObject*> objectsInGroup(int groupId) const;
+    void considerCollectedObject(GameObject* obj);
 
     static LivePose poseFromObject(GameObject* obj);
     static TriggerPose toKey(int tick, LivePose const& live);
@@ -97,9 +100,14 @@ private:
     size_t m_childIndex = 0;
     size_t m_childCount = 0;
     size_t m_effectIndex = 0;
+    size_t m_secOuter = 0;
+    size_t m_secInner = 0;
+    size_t m_secSlot = 0;
+    size_t m_sectionExtras = 0;
 
     std::vector<GameObject*> m_objects;
     std::vector<EffectGameObject*> m_effects;
+    std::unordered_set<int> m_seenIds;
     std::unordered_map<int, LivePose> m_live;
     std::unordered_map<int, TriggerTrack> m_tracks;
 

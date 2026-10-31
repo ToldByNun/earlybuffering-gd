@@ -45,8 +45,15 @@ struct TriggerWorldData {
 class TriggerWorldStore {
 public:
     static constexpr int kFileVersion = 1;
-    static constexpr size_t kMaxTracks = 2048;
-    static constexpr size_t kMaxKeysPerTrack = 8192;
+    // Soft ceiling: refuse NEW tracks/keys with AssistLog — never silent drop under soft.
+    static constexpr size_t kSoftMaxTracks = 100000;
+    static constexpr size_t kSoftMaxKeysPerTrack = 32768;
+    // Absolute OOM valve only — loud truncate + log (not the day-to-day cap).
+    static constexpr size_t kHardMaxTracks = 250000;
+    static constexpr size_t kHardMaxKeysPerTrack = 65536;
+    // Aliases used by baker / older call sites (= soft).
+    static constexpr size_t kMaxTracks = kSoftMaxTracks;
+    static constexpr size_t kMaxKeysPerTrack = kSoftMaxKeysPerTrack;
 
     static TriggerWorldStore& get();
 
@@ -58,11 +65,23 @@ public:
     bool hasTracks() const { return !this->m_data.tracks.empty(); }
     bool dirty() const { return this->m_dirty; }
     void markDirty() { this->m_dirty = true; }
+    bool softcapHit() const { return this->m_softcapHit; }
+    void noteSoftcap(char const* where);
+
+    static bool wouldHitSoftTracks(size_t trackCount) {
+        return trackCount >= kSoftMaxTracks;
+    }
+    static bool wouldHitSoftKeys(size_t keyCount) {
+        return keyCount >= kSoftMaxKeysPerTrack;
+    }
 
     TriggerWorldData const& data() const { return this->m_data; }
 
-    // Replace in-memory data (baker). Marks dirty. Caps track/key counts.
+    // Replace in-memory data (baker). Softcap logs; hard-only truncate.
     void setData(TriggerWorldData data);
+
+    // Keep endpoints + evenly spaced samples (long movers under key soft/hard).
+    static void decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep);
 
     TriggerTrack const* findTrack(int uniqueId) const;
     size_t trackCount() const { return this->m_data.tracks.size(); }
@@ -104,11 +123,19 @@ private:
     static char const* kindToString(TriggerKind kind);
     static TriggerKind kindFromString(std::string const& name);
 
-    static void clampData(TriggerWorldData& data);
+    struct ClampResult {
+        bool softTracks = false;
+        bool softKeys = false;
+        bool hardTracks = false;
+        bool hardKeys = false;
+    };
+    static ClampResult clampData(TriggerWorldData& data);
 
     TriggerWorldData m_data;
     bool m_loaded = false;
     mutable bool m_dirty = false;
+    bool m_softcapHit = false;
+    mutable bool m_softcapLogged = false;
 };
 
 #endif // EARLYBUFFER_CORE_TRIGGERWORLDSTORE_HPP

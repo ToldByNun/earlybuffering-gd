@@ -40,27 +40,75 @@ TriggerKind TriggerWorldStore::kindFromString(std::string const& name) {
     return TriggerKind::Ignore;
 }
 
-void TriggerWorldStore::clampData(TriggerWorldData& data) {
-    if (data.tracks.size() > kMaxTracks) {
-        data.tracks.resize(kMaxTracks);
+void TriggerWorldStore::decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep) {
+    if (keys.size() <= maxKeep || maxKeep < 2) return;
+    std::vector<TriggerPose> out;
+    out.reserve(maxKeep);
+    out.push_back(keys.front());
+    size_t const midSlots = maxKeep - 2;
+    size_t const inner = keys.size() - 2;
+    for (size_t i = 0; i < midSlots && inner > 0; ++i) {
+        size_t idx = 1 + (i * inner) / midSlots;
+        if (idx >= keys.size() - 1) idx = keys.size() - 2;
+        if (out.back().tick == keys[idx].tick) continue;
+        out.push_back(keys[idx]);
+    }
+    if (out.back().tick != keys.back().tick) {
+        out.push_back(keys.back());
+    }
+    else {
+        out.back() = keys.back();
+    }
+    keys = std::move(out);
+}
+
+TriggerWorldStore::ClampResult TriggerWorldStore::clampData(TriggerWorldData& data) {
+    ClampResult r;
+    if (data.tracks.size() >= kSoftMaxTracks) {
+        r.softTracks = true;
+    }
+    if (data.tracks.size() > kHardMaxTracks) {
+        r.hardTracks = true;
+        data.tracks.resize(kHardMaxTracks);
     }
     for (auto& track : data.tracks) {
-        if (track.keys.size() > kMaxKeysPerTrack) {
-            track.keys.resize(kMaxKeysPerTrack);
+        if (track.keys.size() >= kSoftMaxKeysPerTrack) {
+            r.softKeys = true;
+        }
+        if (track.keys.size() > kHardMaxKeysPerTrack) {
+            r.hardKeys = true;
+            TriggerWorldStore::decimateKeys(track.keys, kHardMaxKeysPerTrack);
         }
     }
+    return r;
+}
+
+void TriggerWorldStore::noteSoftcap(char const* where) {
+    this->m_softcapHit = true;
+    if (this->m_softcapLogged) return;
+    this->m_softcapLogged = true;
+    AssistLog::info(fmt::format(
+        "TRIGGER-WORLD: softcap ({}) tracks≤{} keys/track≤{} — refusing further growth; no silent drop under soft",
+        where ? where : "?",
+        kSoftMaxTracks,
+        kSoftMaxKeysPerTrack
+    ));
 }
 
 void TriggerWorldStore::clear() {
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
+    this->m_softcapHit = false;
+    this->m_softcapLogged = false;
 }
 
 void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
+    this->m_softcapHit = false;
+    this->m_softcapLogged = false;
     if (!level) return;
 
     this->m_data.levelKey = LevelProfile::makeKey(level);
@@ -105,7 +153,19 @@ void TriggerWorldStore::save() const {
 }
 
 void TriggerWorldStore::setData(TriggerWorldData data) {
-    TriggerWorldStore::clampData(data);
+    auto const clamp = TriggerWorldStore::clampData(data);
+    if (clamp.softTracks || clamp.softKeys) {
+        this->noteSoftcap(clamp.hardTracks || clamp.hardKeys ? "hard-clamp" : "setData");
+    }
+    if (clamp.hardTracks || clamp.hardKeys) {
+        AssistLog::info(fmt::format(
+            "TRIGGER-WORLD: HARD truncate tracks={} keysHit={} (hard tracks≤{} keys≤{})",
+            clamp.hardTracks ? 1 : 0,
+            clamp.hardKeys ? 1 : 0,
+            kHardMaxTracks,
+            kHardMaxKeysPerTrack
+        ));
+    }
     if (data.version <= 0) data.version = kFileVersion;
     if (data.tps <= 0.0) data.tps = 240.0;
     this->m_data = std::move(data);
@@ -227,6 +287,14 @@ std::string TriggerWorldStore::statusLine() const {
     if (this->m_data.tracks.empty()) {
         return "trigger-world: empty";
     }
+    if (this->m_softcapHit) {
+        return fmt::format(
+            "trigger-world: {}/{} ready @ {:.0f} tps softcap",
+            this->readyTrackCount(),
+            this->m_data.tracks.size(),
+            this->m_data.tps
+        );
+    }
     return fmt::format(
         "trigger-world: {}/{} ready @ {:.0f} tps",
         this->readyTrackCount(),
@@ -325,8 +393,76 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
         "kind-name-toggle"
     );
 
+    // Soft ≥100k; legacy 2048 must not silently drop.
+    expect(kSoftMaxTracks >= 100000, "soft-ge-100k");
+    expect(kSoftMaxTracks > 2048, "soft-gt-legacy-2048");
+    expect(!wouldHitSoftTracks(2048), "2048-under-soft");
+    expect(!wouldHitSoftTracks(kSoftMaxTracks - 1), "soft-minus-1");
+    expect(wouldHitSoftTracks(kSoftMaxTracks), "soft-eq-hit");
+    expect(wouldHitSoftKeys(kSoftMaxKeysPerTrack), "soft-keys-hit");
+
+    // ≫2048 tracks retained (no silent legacy truncate).
+    {
+        store.clear();
+        TriggerWorldData big;
+        big.levelKey = "__softcap_tracks__";
+        big.tps = 240.0;
+        big.version = kFileVersion;
+        big.tracks.reserve(3000);
+        for (int i = 0; i < 3000; ++i) {
+            TriggerTrack t;
+            t.uniqueId = 10000 + i;
+            t.objectId = 1;
+            t.kind = TriggerKind::StaticMove;
+            t.ready = true;
+            t.keys.push_back(TriggerPose{ 0, 0.f, 0.f, 0.f, 1.f, 1.f, true });
+            big.tracks.push_back(std::move(t));
+        }
+        store.setData(std::move(big));
+        expect(store.trackCount() == 3000, "retain-3000-no-silent-2048");
+        expect(!store.softcapHit(), "3000-not-softcap");
+    }
+
+    // Keys over soft but under hard: keep all, flag softcap (no silent 8192 drop).
+    {
+        store.clear();
+        TriggerWorldData keyed;
+        keyed.levelKey = "__softcap_keys__";
+        keyed.tps = 240.0;
+        keyed.version = kFileVersion;
+        TriggerTrack t;
+        t.uniqueId = 7;
+        t.objectId = 1;
+        t.kind = TriggerKind::StaticMove;
+        t.ready = true;
+        size_t const nKeys = kSoftMaxKeysPerTrack + 16;
+        t.keys.reserve(nKeys);
+        for (size_t i = 0; i < nKeys; ++i) {
+            t.keys.push_back(TriggerPose{
+                static_cast<int>(i), 0.f, 0.f, 0.f, 1.f, 1.f, true
+            });
+        }
+        keyed.tracks.push_back(std::move(t));
+        store.setData(std::move(keyed));
+        auto const* kept = store.findTrack(7);
+        expect(kept && kept->keys.size() == nKeys, "retain-keys-over-soft");
+        expect(store.softcapHit(), "keys-softcap-flag");
+    }
+
+    // Decimate keeps endpoints.
+    {
+        std::vector<TriggerPose> keys;
+        for (int i = 0; i < 100; ++i) {
+            keys.push_back(TriggerPose{ i, static_cast<float>(i), 0.f, 0.f, 1.f, 1.f, true });
+        }
+        TriggerWorldStore::decimateKeys(keys, 10);
+        expect(keys.size() <= 10 && keys.size() >= 2, "decimate-size");
+        expect(keys.front().tick == 0 && keys.back().tick == 99, "decimate-ends");
+    }
+
     store.clear();
     expect(!store.loaded() && !store.hasTracks(), "cleared");
+    expect(!store.softcapHit(), "cleared-softcap");
 
     if (fails == 0) {
         report = "TriggerWorldStore selfCheck OK";
@@ -399,7 +535,14 @@ Result<> TriggerWorldStore::readFile() {
     }
 
     for (auto const& tj : root["tracks"]) {
-        if (this->m_data.tracks.size() >= kMaxTracks) break;
+        if (this->m_data.tracks.size() >= kHardMaxTracks) {
+            this->noteSoftcap("load-hard-tracks");
+            break;
+        }
+        if (this->m_data.tracks.size() >= kSoftMaxTracks) {
+            this->noteSoftcap("load-soft-tracks");
+            // Keep loading until hard — soft is warn, not silent stop under soft.
+        }
 
         TriggerTrack track;
         track.uniqueId = static_cast<int>(tj["uniqueId"].asInt().unwrapOr(0));
@@ -418,7 +561,13 @@ Result<> TriggerWorldStore::readFile() {
         }
 
         for (auto const& kj : tj["keys"]) {
-            if (track.keys.size() >= kMaxKeysPerTrack) break;
+            if (track.keys.size() >= kHardMaxKeysPerTrack) {
+                this->noteSoftcap("load-hard-keys");
+                break;
+            }
+            if (track.keys.size() >= kSoftMaxKeysPerTrack) {
+                this->noteSoftcap("load-soft-keys");
+            }
             TriggerPose pose;
             pose.tick = static_cast<int>(kj["t"].asInt().unwrapOr(0));
             pose.x = static_cast<float>(kj["x"].asDouble().unwrapOr(0.0));

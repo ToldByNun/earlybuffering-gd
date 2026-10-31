@@ -1327,6 +1327,13 @@ void AssistController::updateOverlay() {
                 else if (!tw.hasTracks()) {
                     this->m_overlayText += " | tw empty";
                 }
+                else if (tw.softcapHit()) {
+                    this->m_overlayText += fmt::format(
+                        " | tw {}/{} softcap",
+                        tw.readyTrackCount(),
+                        tw.trackCount()
+                    );
+                }
                 else {
                     this->m_overlayText += fmt::format(
                         " | tw {}/{}",

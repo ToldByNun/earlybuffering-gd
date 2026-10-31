@@ -47,7 +47,17 @@ TriggerPose TriggerWorldBaker::toKey(int tick, LivePose const& live) {
 }
 
 void TriggerWorldBaker::pushKey(TriggerTrack& track, int tick, LivePose const& live) {
-    if (track.keys.size() >= TriggerWorldStore::kMaxKeysPerTrack) return;
+    // Soft key ceiling: decimate long movers, keep track — never silent drop whole track.
+    if (track.keys.size() >= TriggerWorldStore::kSoftMaxKeysPerTrack) {
+        TriggerWorldStore::decimateKeys(
+            track.keys, TriggerWorldStore::kSoftMaxKeysPerTrack * 3 / 4
+        );
+        TriggerWorldStore::get().noteSoftcap("bake-keys");
+    }
+    if (track.keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack) {
+        TriggerWorldStore::get().noteSoftcap("bake-keys-hard");
+        return;
+    }
     if (!track.keys.empty() && track.keys.back().tick == tick) {
         track.keys.back() = TriggerWorldBaker::toKey(tick, live);
         return;
@@ -101,8 +111,13 @@ void TriggerWorldBaker::clearJob() {
     this->m_childIndex = 0;
     this->m_childCount = 0;
     this->m_effectIndex = 0;
+    this->m_secOuter = 0;
+    this->m_secInner = 0;
+    this->m_secSlot = 0;
+    this->m_sectionExtras = 0;
     this->m_objects.clear();
     this->m_effects.clear();
+    this->m_seenIds.clear();
     this->m_live.clear();
     this->m_tracks.clear();
     this->m_bakedEffects = 0;
@@ -144,7 +159,8 @@ void TriggerWorldBaker::finishOk() {
     this->m_lastEffectCount = this->m_effects.size();
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: baked {} effects → {} tracks ({} ready) @ {:.0f} tps "
-        "(skip follow={} dynamic={} non-spawn={} children={} collectedEffects={})",
+        "(skip follow={} dynamic={} non-spawn={} children={} collectedEffects={} "
+        "sectionExtras={} softcap={})",
         this->m_bakedEffects,
         TriggerWorldStore::get().trackCount(),
         TriggerWorldStore::get().readyTrackCount(),
@@ -153,7 +169,9 @@ void TriggerWorldBaker::finishOk() {
         this->m_skippedDynamic,
         this->m_skippedNonSpawn,
         this->m_lastChildCount,
-        this->m_lastEffectCount
+        this->m_lastEffectCount,
+        this->m_sectionExtras,
+        TriggerWorldStore::get().softcapHit() ? 1 : 0
     ));
     this->clearJob();
 }
@@ -272,12 +290,27 @@ void TriggerWorldBaker::publishPartial() {
     TriggerWorldStore::get().setData(std::move(data));
 }
 
+void TriggerWorldBaker::considerCollectedObject(GameObject* obj) {
+    if (!obj) return;
+    if (typeinfo_cast<PlayerObject*>(obj)) return;
+    int const id = obj->m_uniqueID;
+    if (id == 0) return;
+    if (!this->m_seenIds.insert(id).second) return;
+    this->m_objects.push_back(obj);
+    if (auto* effect = typeinfo_cast<EffectGameObject*>(obj)) {
+        this->m_effects.push_back(effect);
+    }
+}
+
 TriggerTrack* TriggerWorldBaker::ensureTrack(GameObject* obj, TriggerKind kind) {
     if (!obj) return nullptr;
     int const id = obj->m_uniqueID;
     auto it = this->m_tracks.find(id);
     if (it != this->m_tracks.end()) return &it->second;
-    if (this->m_tracks.size() >= TriggerWorldStore::kMaxTracks) return nullptr;
+    if (this->m_tracks.size() >= TriggerWorldStore::kSoftMaxTracks) {
+        TriggerWorldStore::get().noteSoftcap("bake-tracks");
+        return nullptr;
+    }
 
     LivePose const pose = TriggerWorldBaker::poseFromObject(obj);
     this->m_live.emplace(id, pose);
@@ -460,7 +493,7 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
         }
 
         for (int t = startTick + step; t < endTick; t += step) {
-            if (track->keys.size() >= TriggerWorldStore::kMaxKeysPerTrack) break;
+            if (track->keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack) break;
             float const u = static_cast<float>(t - startTick)
                 / static_cast<float>(dur);
             LivePose mid = tb.start;
@@ -510,15 +543,22 @@ void TriggerWorldBaker::tickSlice() {
         if (this->m_phase == Phase::Collect) {
             auto* layer = this->m_layer;
             if (!layer || !layer->m_objectLayer) {
-                this->m_phase = Phase::Bake;
+                this->m_phase = Phase::CollectSections;
+                this->m_secOuter = 0;
+                this->m_secInner = 0;
+                this->m_secSlot = 0;
                 continue;
             }
             auto* children = layer->m_objectLayer->getChildren();
             if (!children) {
-                this->m_phase = Phase::Bake;
+                this->m_phase = Phase::CollectSections;
+                this->m_secOuter = 0;
+                this->m_secInner = 0;
+                this->m_secSlot = 0;
                 continue;
             }
 
+            // Collect must finish every child across slices (no skip on budget).
             size_t n = 0;
             while (this->m_childIndex < this->m_childCount
                 && n < kCollectPerSlice
@@ -528,24 +568,80 @@ void TriggerWorldBaker::tickSlice() {
                 );
                 ++this->m_childIndex;
                 ++n;
-                if (!obj) continue;
-                if (typeinfo_cast<PlayerObject*>(obj)) continue;
-                this->m_objects.push_back(obj);
-                if (auto* effect = typeinfo_cast<EffectGameObject*>(obj)) {
-                    this->m_effects.push_back(effect);
-                }
+                this->considerCollectedObject(obj);
             }
 
             float const collectFrac = this->m_childCount > 0
                 ? static_cast<float>(this->m_childIndex)
                     / static_cast<float>(this->m_childCount)
                 : 1.f;
-            this->m_progress = 0.15f * collectFrac;
+            this->m_progress = 0.12f * collectFrac;
 
             if (this->m_childIndex >= this->m_childCount) {
+                this->m_phase = Phase::CollectSections;
+                this->m_secOuter = 0;
+                this->m_secInner = 0;
+                this->m_secSlot = 0;
+            }
+            continue;
+        }
+
+        if (this->m_phase == Phase::CollectSections) {
+            auto* layer = this->m_layer;
+            if (!layer) {
                 this->m_phase = Phase::Bake;
                 this->m_effectIndex = 0;
+                continue;
             }
+
+            auto& sections = layer->m_sections;
+            size_t n = 0;
+            while (n < kCollectPerSlice && !budgetHit()) {
+                if (this->m_secOuter >= sections.size()) {
+                    this->m_phase = Phase::Bake;
+                    this->m_effectIndex = 0;
+                    if (this->m_sectionExtras > 0) {
+                        AssistLog::debug(fmt::format(
+                            "TRIGGER-WORLD: section collect +{} objects (total objs={} effects={})",
+                            this->m_sectionExtras,
+                            this->m_objects.size(),
+                            this->m_effects.size()
+                        ));
+                    }
+                    break;
+                }
+                auto* mid = sections[this->m_secOuter];
+                if (!mid || this->m_secInner >= mid->size()) {
+                    ++this->m_secOuter;
+                    this->m_secInner = 0;
+                    this->m_secSlot = 0;
+                    continue;
+                }
+                auto* inner = (*mid)[this->m_secInner];
+                if (!inner || this->m_secSlot >= inner->size()) {
+                    ++this->m_secInner;
+                    this->m_secSlot = 0;
+                    continue;
+                }
+                auto* raw = (*inner)[this->m_secSlot];
+                ++this->m_secSlot;
+                ++n;
+                size_t const before = this->m_seenIds.size();
+                this->considerCollectedObject(typeinfo_cast<GameObject*>(raw));
+                if (this->m_seenIds.size() > before) {
+                    ++this->m_sectionExtras;
+                }
+            }
+
+            this->m_progress = 0.12f + 0.03f * (
+                sections.empty()
+                    ? 1.f
+                    : std::min(
+                        1.f,
+                        static_cast<float>(this->m_secOuter)
+                            / static_cast<float>(sections.size())
+                    )
+            );
             continue;
         }
 
