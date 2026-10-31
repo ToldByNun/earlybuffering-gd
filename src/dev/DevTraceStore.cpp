@@ -995,7 +995,7 @@ void DevTraceStore::setModVersion(std::string modVersion) {
 
 std::string DevTraceStore::makeSettingsFingerprint() {
     return fmt::format(
-        "preset={} mode={} pick={} ticks={}/{} unit={} safe={} orbs={} "
+        "stage={} mode={} pick={} ticks={}/{} unit={} safe={} orbs={} "
         "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={}",
         StageConfig::stageLabel(StageConfig::fromSettings()),
         StageConfig::assistModeName(StageConfig::assistMode()),

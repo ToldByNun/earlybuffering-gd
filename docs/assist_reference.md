@@ -108,13 +108,13 @@ Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-righ
 
 | Tab | Contents |
 |-----|----------|
-| Main | Enabled, Preset, Safe Mode, Assist Mode, overlay / pause chrome, light diagnostics (`debug-logging`, `perf-trace`, `lag-probe`) |
+| Main | Enabled, Safe Mode, Assist Mode, **Window** (`window-unit` / `ticks-all` / `ticks-wave`), overlay / pause chrome, light diagnostics (`debug-logging`, `perf-trace`, `lag-probe`) |
 | Scope | Practice / start-pos / percent window / off-ranges |
-| Assist | Action rows (Cycle Preset / Reset Learn / Export·Import Config) + Window / Algorithm / Smart / Learning / Trigger World |
+| Assist | Action rows (Reset Learn / Export·Import Config) + Algorithm / Smart / Learning / Trigger World |
 | Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius |
 | Modes | Cube…Swing per-mode blocks |
-| Visual | Trajectory, Save Feedback / Color |
-| Keys | Hotkeys + Internal |
+| Visual | Trajectory, Bake Visualizer, Save Feedback / Color |
+| Keys | Hotkeys (no Preset / F6 cycle) |
 | Dev | Dev Lab session / eval / overlay / actions |
 
 Every `mod.json` key (including `title-*` and `custom:eb-action`) maps to exactly one tab via `InLevelSettingsFilter` — there is no Assist catch-all dump. Action rows use `custom:eb-action`: same chrome as bool settings (label + info `i`), Geode button on the right instead of a checkbox.
@@ -125,7 +125,7 @@ With **Dev Record** on, each session writes `devtraces/session-*.json` under the
 
 | Field | Where | Meaning |
 |-------|--------|---------|
-| `settingsFingerprint` | session root | Compact preset/mode/pick/ticks/safe/orbs/budgets/trigger-bake/learning summary (always filled on session start / level meta refresh) |
+| `settingsFingerprint` | session root | Compact stage/mode/pick/ticks/safe/orbs/budgets/trigger-bake/learning summary (always filled on session start / level meta refresh) |
 | `witness.triggerReadyTracks` / `triggerTrackCount` | `planFinished` | Store ready vs total tracks |
 | `witness.triggerBakeEffects` / `triggerBakeChildren` / `triggerCollectedEffects` | `planFinished` | Last bake: effects that produced keys, object-layer children, collected EffectGameObjects |
 | `witness.triggerSkipFollow` / `SkipDynamic` / `SkipNonSpawn` | `planFinished` | Last bake skip counters |
@@ -149,17 +149,17 @@ Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Wi
   "version": 2,
   "settings": {
     "enabled": true,
-    "preset": "Normal",
+    "ticks-all": 4,
+    "ticks-wave": 4,
     "look-ahead-cap": 0,
     "save-icon-color": "#7CFF4A",
-    "hotkey-cycle": "F6",
     "hotkey-debug": "Ctrl+Shift+D"
   }
 }
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **127** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **`settings`**: all **124** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
@@ -171,6 +171,7 @@ These keys were deleted from `mod.json` (unused / deprecated). If an older expor
 
 | Key | Why gone |
 |-----|----------|
+| `preset` / `stage-index` / `hotkey-cycle` | Preset packs removed — use Main → Window |
 | `show-pause-assist` | Unused legacy pause toggle |
 | `swallow-hopeless` | Deprecated; unused |
 | `dev-record-include-pass` | Cached in DevConfig, never read by recorder |
@@ -186,21 +187,23 @@ Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` witho
 
 - Missing key → leave the live setting unchanged.
 - Wrong JSON type / bad hex / bad keybind → **skip that key** (no `0`/`false` coercion into live settings).
-- Import runs under `StageConfig::beginApplying` / `endApplying` so the preset listener does **not** call `applyPresetByName` and wipe custom ticks / look-ahead.
-- If `preset` is present, it wins over a mismatched `stage-index`; then `notePresetSynced`.
+- Import runs under `StageConfig::beginApplying` / `endApplying` so overlay listeners stay quiet during bulk writes.
+- Legacy `preset` / `stage-index` keys in old exports are ignored.
 - After a successful import: `StageConfig::refreshCache()` + `DevConfig::refreshCache()`, overlay / trajectory sync, then **`InLevelSettingsFilterKeeper::reloadAfterImport`** — if ModSettings is open, store values are pushed into SettingNode drafts and the popup rebuilds next frame (keybinds + Apply cleared; active tab restored). Success alert shows after that sync. Closed popup → next open already reads the store.
-- PlanGold: `ConfigBundleKeys`, `ConfigBundleCodec`, and `ConfigBundle::selfCheck` (temp-file round-trip + preset/look-ahead-cap guard).
+- PlanGold: `ConfigBundleKeys`, `ConfigBundleCodec`, and `ConfigBundle::selfCheck` (temp-file round-trip + applying-guard).
 
 ## Settings table
 
-Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **Assist** (Window / Algorithm / Smart / Learning / Trigger World) → **Bake** → **Modes** → **Visual** → **Keys** → **Dev**.
+Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off Ranges) → **Assist** (Algorithm / Smart / Learning / Trigger World) → **Bake** → **Modes** → **Visual** → **Keys** → **Dev**. Preset packs are removed — windows live only on Main.
 
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
 | enabled | bool | true | | | Main — master |
-| preset | string | Normal | Tight/Normal/Wide/Max/Off | | Main — fills defaults (same as Assist Cycle Preset / F6) |
 | safe-mode | bool | true | | | Main — ON: block saves when enabled or assist-touched; OFF: vanilla progress |
 | assist-mode | string | Live | Live/Replay/Hybrid/BruteForce | | Main — same as Bake Cycle Assist Mode / Ctrl+Shift+M |
+| window-unit | string | Ticks | Ticks/Frames | | Main / Window — Frames→×4 ticks @240; per-mode `*-ticks` use same unit |
+| ticks-all | int | 4 | 0 | 48 | Main / Window |
+| ticks-wave | int | 4 | 0 | 48 | Main / Window |
 | debug-logging | bool | false | | | Main |
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
@@ -218,9 +221,6 @@ Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **As
 | assist-percent-min | int | 0 | 0 | 100 | Scope |
 | assist-percent-max | int | 100 | 0 | 100 | Scope |
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
-| ticks-all | int | 4 | 0 | 48 | Assist / Window |
-| ticks-wave | int | 4 | 0 | 48 | Assist / Window |
-| window-unit | string | Ticks | Ticks/Frames | | Assist / Window — Frames→×4 ticks @240; per-mode `*-ticks` use same unit |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
 | assist-pick | string | Legacy | New/Legacy | | Assist / Algorithm — G1 pick (Legacy default) |
@@ -245,8 +245,6 @@ Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **As
 | trigger-bake-skip-dynamic | bool | true | | | Trigger World — do not bake/probe follow-player etc. |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |
 | MODE-enable/overwrite/ticks/cap/slack/latency | mixed | see mod.json | | | Per-mode cube..swing; latencyWeight defaults Cube 0.25 … Wave 1.0 |
-| stage-index | int | 1 | 0 | 4 | Keys / Internal — preset mirror (1=Normal); do not edit |
-
 ## Pseudocode plan()
 
 1. tickBudget from opts (default 4000); if verifyAb then *2
@@ -364,7 +362,7 @@ When `smartDepth > 1` and BakeMap has later clicks: `planSequence` scores each a
 
 `ModeParams.latencyWeight` still softens Wave spam-dense assists (λ ×0.65). New miss-assist pick uses **outcome / exit prediction** (surviveTicks / endX−λ·delay / horizon replay) instead of fixed mid or latest.
 
-**Starter defaults use Normal (ticks-all/wave = 4)** so ±k-robust has room in spam. Tight (2/2) is still available via Preset. With auto k=2..3, a 2-tick window often cannot fit full ±k neighbors — `pickRobust` falls back to earliest viable. Wide/Max use wave 8/8; Max keeps ticks-all=16 but ticks-wave=8 on purpose.
+**Starter defaults use ticks-all/wave = 4** so ±k-robust has room in spam. Set tighter/wider windows on Main → Window (no Preset packs). With auto k=2..3, a 2-tick window often cannot fit full ±k neighbors — `pickRobust` falls back to earliest viable.
 
 ## LevelProfile JSON
 
@@ -420,7 +418,7 @@ clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. HUS replan
 
 ## Miss-assist contracts
 
-Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` / presets are tick windows. Beginner defaults: Pick **Legacy**, preset **Normal**, windows **4/4**, Assist **Live**, Safe Mode **on**, Auto-Tune / Self-Bake **off**.
+Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` are tick windows (Main → Window). Beginner defaults: Pick **Legacy**, windows **4/4**, Assist **Live**, Safe Mode **on**, Auto-Tune / Self-Bake **off**.
 
 ### Guarantees
 

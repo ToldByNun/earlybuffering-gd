@@ -176,7 +176,7 @@ Use a **merged** or android64-checked `.geode` only. Tick each item on a 64-bit 
 1. **Package gate (PC)** — `python tools/geode_package_check.py <ship.geode> --require android64` exits 0. For dual ships also `--require win`.
 2. **Load** — copy into Geode mods folder; enable EarlyBuffer; **no** `Unable to find platform binary under the name 'audesign.earlybuffer.android64.so'`.
 3. **Live assist (touch)** — short classic level (not platformer); Enabled on; Safe Mode on; Assist Mode Live; early jump → Delay or Pass; overlay updates (proves touch → `handleButton`).
-4. **Settings without keyboard** — Pause → EB → toggle Enabled / Preset (hotkeys optional).
+4. **Settings without keyboard** — Pause → EB → toggle Enabled / Window (hotkeys optional).
 5. **Config paths** — Export Config → alert shows save-dir path; Import after placing/editing `earlybuffer-config.json` there.
 6. **Replay drop** — place one `.gdr` (or `.gdr2` / `.mhr` / `.json` / `.slc`) in `replay-drop/` under the mod save dir → Import Replay succeeds or clear error (not “Windows-only”).
 7. **Cold start** — force-stop the app; reopen; mod still loads; PlanGold/load stays WARN-only (no crash). Dev Lab unused stays quiet.
@@ -246,7 +246,7 @@ Use a package that passes `--require ios` (and any other platforms you ship). Ti
 1. **Package gate (Mac/PC)** — `python tools/geode_package_check.py <ship.geode> --require ios` exits 0 (binary present **and** code-signed).
 2. **Load** — install into Geode mods; enable EarlyBuffer; **no** `Unable to load the DYLIB` / `missing code signature` / missing `audesign.earlybuffer.ios.dylib`.
 3. **Live assist (touch)** — short classic level (not platformer); Enabled on; Safe Mode on; Assist Mode Live; early jump → Delay or Pass; overlay updates.
-4. **Settings without keyboard** — Pause → EB → toggle Enabled / Preset.
+4. **Settings without keyboard** — Pause → EB → toggle Enabled / Window.
 5. **Config paths** — Export Config → alert shows full save-dir path + clipboard copy; Import after placing `earlybuffer-config.json` via Files / Share / Finder.
 6. **Replay drop** — place one `.gdr` (or `.gdr2` / `.mhr` / `.json` / `.slc`) in `replay-drop/` under the mod save dir → Import Replay succeeds or clear error.
 7. **Constrained budgets** — with default sim/tick settings, Hybrid near a bake should not soft-lock; Lag Probe `HYBRID eb.hybrid.*` lines stay under a few ms when on.

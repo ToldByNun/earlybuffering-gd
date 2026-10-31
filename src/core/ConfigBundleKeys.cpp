@@ -7,16 +7,15 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[127];
-    static constexpr int kEntryCount = 127;
+    static ConfigBundleKeys::Entry const kEntries[124];
+    static constexpr int kEntryCount = 124;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[127] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[124] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
-    { "preset", ConfigBundleKeys::Kind::String },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
     { "show-overlay", ConfigBundleKeys::Kind::Bool },
     { "debug-logging", ConfigBundleKeys::Kind::Bool },
@@ -121,7 +120,6 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[127] = {
     { "swing-cap", ConfigBundleKeys::Kind::Int },
     { "swing-slack", ConfigBundleKeys::Kind::Int },
     { "swing-latency", ConfigBundleKeys::Kind::Float },
-    { "hotkey-cycle", ConfigBundleKeys::Kind::Keybind },
     { "hotkey-debug", ConfigBundleKeys::Kind::Keybind },
     { "hotkey-reset-level", ConfigBundleKeys::Kind::Keybind },
     { "hotkey-auto-tune", ConfigBundleKeys::Kind::Keybind },
@@ -140,8 +138,7 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[127] = {
     { "dev-eval-require-deps", ConfigBundleKeys::Kind::Bool },
     { "dev-record-cands", ConfigBundleKeys::Kind::Bool },
     { "dev-eval-tick-budget", ConfigBundleKeys::Kind::Int },
-    { "dev-overlay", ConfigBundleKeys::Kind::Bool },
-    { "stage-index", ConfigBundleKeys::Kind::Int }
+    { "dev-overlay", ConfigBundleKeys::Kind::Bool }
 };
 
 ConfigBundleKeys::Entry const* ConfigBundleKeys::begin() {
@@ -229,13 +226,12 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         static_cast<int>(seen.size()) == ConfigBundleKeysTable::kEntryCount,
         "unique-count"
     );
-    // show-bake-path added → 49 bools (was 48).
     expect(kindBool == 49, "kind-bool-49");
-    expect(kindInt == 44, "kind-int-44");
+    expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 7, "kind-string-7");
+    expect(kindString == 6, "kind-string-6");
     expect(kindColor == 1, "kind-color-1");
-    expect(kindKeybind == 6, "kind-keybind-6");
+    expect(kindKeybind == 5, "kind-keybind-5");
 
     auto const* enabled = ConfigBundleKeys::find("enabled");
     expect(enabled != nullptr, "find-enabled");
@@ -244,10 +240,12 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     expect(bakePath && bakePath->kind == Kind::Bool, "find-show-bake-path");
     auto const* color = ConfigBundleKeys::find("save-icon-color");
     expect(color && color->kind == Kind::Color, "find-color");
-    auto const* hotkey = ConfigBundleKeys::find("hotkey-cycle");
+    auto const* hotkey = ConfigBundleKeys::find("hotkey-assist-mode");
     expect(hotkey && hotkey->kind == Kind::Keybind, "find-keybind");
     auto const* offFrom = ConfigBundleKeys::find("assist-off-1-from");
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
+    expect(ConfigBundleKeys::find("preset") == nullptr, "preset-removed");
+    expect(ConfigBundleKeys::find("stage-index") == nullptr, "stage-index-removed");
     expect(ConfigBundleKeys::find("no-such-setting") == nullptr, "find-miss");
     expect(ConfigBundleKeys::find(nullptr) == nullptr, "find-null");
 

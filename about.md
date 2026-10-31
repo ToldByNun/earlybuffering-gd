@@ -67,10 +67,10 @@ Contracts G1–G3, Pass-reason list, Hold-Until-Safe, Hybrid / mobile: [`docs/as
 
 ## Defaults that matter
 
-- Preset **Normal**, windows **4/4**, Pick **Legacy**, Assist Mode **Live**, **Safe Mode** on
+- Windows **4/4** on Main, Pick **Legacy**, Assist Mode **Live**, **Safe Mode** on
 - **Platformer** hard off
 - **Auto-Tune** / **Self-Bake** off — no per-level learning or practice recording until you turn them on
-- Presets (**Tight → Max**) fill tick windows · F6 cycles · Off kills assist
+- No Preset packs — set Window sliders on Main; **Enabled** off kills assist
 - Optional Trigger World Bake so movers aren’t invisible to the shadow
 - Save Feedback: sound / flash / world `+N` and `8+` when a delay actually fired
 - Lag Probe & Perf Trace if you’re hunting hitches

@@ -46,7 +46,6 @@ $on_mod(Loaded) {
     // Tabs for every EarlyBuffer settings open (Geode menu + pause EB).
     InLevelSettingsFilterKeeper::startWatchdog();
 
-    // Read saved values only — never re-apply a preset on load (that wiped custom ticks).
     StageConfig::refreshCache();
     DevConfig::refreshCache();
     syncPerfTrace();
@@ -90,13 +89,6 @@ $on_mod(Loaded) {
         if (ok) AssistLog::info(report);
         else AssistLog::info(fmt::format("WARN {}", report));
     }
-
-    listenForKeybindSettingPresses("hotkey-cycle", [](Keybind const&, bool down, bool repeat, double) {
-        if (!down || repeat) return;
-        auto const stage = StageConfig::cycleNext();
-        AssistLog::printCycle(stage, AssistController::get().estimatedTps());
-        AssistController::get().updateOverlay();
-    });
 
     listenForKeybindSettingPresses("hotkey-debug", [](Keybind const&, bool down, bool repeat, double) {
         if (!down || repeat) return;
@@ -143,23 +135,6 @@ $on_mod(Loaded) {
         }
         AssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
         AssistController::get().updateOverlay();
-    });
-
-    // Preset dropdown: only fill defaults when the user actually picks a *different* preset.
-    listenForSettingChanges<std::string>("preset", [](std::string value) {
-        if (StageConfig::isApplying()) return;
-        if (value == StageConfig::lastSyncedPreset()) {
-            onAnySetting();
-            return;
-        }
-        StageConfig::applyPresetByName(value);
-        AssistController::get().updateOverlay();
-    });
-
-    // stage-index is written by applyPreset / F6 — never drive applyPreset from it
-    // (that was overwriting saved ticks when Geode re-notified the index).
-    listenForSettingChanges<int64_t>("stage-index", [](int64_t) {
-        onAnySetting();
     });
 
     listenForSettingChanges<bool>("show-overlay", [](bool value) {

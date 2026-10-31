@@ -8,10 +8,9 @@
 class PlayerObject;
 
 struct StageInfo {
-    int index = 0;       // 0..4 (4 = OFF)
     bool enabled = true;
-    int ticksAll = 2;
-    int ticksWave = 2;
+    int ticksAll = 4;
+    int ticksWave = 4;
 };
 
 struct ModeParams {
@@ -45,21 +44,11 @@ public:
         BruteForce
     };
 
-    static constexpr int STAGE_COUNT = 5;
     static constexpr int MODE_COUNT = static_cast<int>(GameModeKind::Count);
-
-    static char const* presetName(int index);
-    static int presetIndexByName(std::string const& name);
 
     static void refreshCache();
 
     static StageInfo fromSettings();
-    static StageInfo preset(int index);
-    // Fills default ticks / slack / look-ahead. Does NOT touch per-mode overwrites.
-    // Only call from F6 cycle or an explicit Preset dropdown change — never on load.
-    static void applyPreset(int index);
-    static void applyPresetByName(std::string const& name);
-    static StageInfo cycleNext();
     static void toggleDebugLogging();
     // Toggle smart / per-level learning (bias, trust, capMul). Window ticks unchanged.
     static void toggleAutoTune();
@@ -68,16 +57,12 @@ public:
     static void toggleShowTrajectory();
 
     static bool isApplying();
-    // Bulk setting writes (ConfigBundle import) — suppresses preset / overlay listeners.
+    // Bulk setting writes (ConfigBundle import) — suppresses overlay listeners.
     static void beginApplying();
     static void endApplying();
-    // Remember the last preset we applied so load-time listener spam can't wipe custom ticks.
-    static void notePresetSynced(std::string const& name);
-    static std::string lastSyncedPreset();
 
-    // Setting groups mirror mod.json / tabs: Main → Scope → Assist (Window /
-    // Algorithm / Smart / Learning / Trigger World) → Bake → Modes → Visual →
-    // Keys → Dev.
+    // Setting groups mirror mod.json / tabs: Main (Window) → Scope → Assist →
+    // Bake → Modes → Visual → Keys → Dev.
 
     // --- General / UI ---
     static bool isEnabled();
@@ -175,15 +160,13 @@ public:
     static char const* assistVerifyMode();
     static bool assistVerifyAb();
 
-    // --- Internal ---
-    static int stageIndex();
-
     // --- Per-mode ---
     static GameModeKind kindOf(PlayerObject* player);
     static char const* kindName(GameModeKind kind);
     static ModeParams paramsFor(GameModeKind kind);
     static ModeParams paramsFor(PlayerObject* player);
 
+    // Overlay / fingerprint: "OFF" or "NA/NW" from Main Window values.
     static std::string stageLabel(StageInfo const& info);
 };
 

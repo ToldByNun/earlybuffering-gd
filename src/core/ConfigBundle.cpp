@@ -292,23 +292,7 @@ geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
             }
             applyOneSetting(mod, *it, settings[it->key], applied, skipped);
         }
-
-        // Preset wins over a mismatched stage-index from the file.
-        if (settings.contains("preset")) {
-            auto const presetParsed = settings["preset"].asString();
-            if (presetParsed.isOk()) {
-                std::string const presetName(presetParsed.unwrap());
-                int const idx = StageConfig::presetIndexByName(presetName);
-                try {
-                    mod->setSettingValue<int64_t>("stage-index", idx);
-                    mod->setSettingValue<std::string>("preset", presetName);
-                }
-                catch (...) {
-                    ++skipped;
-                }
-                StageConfig::notePresetSynced(presetName);
-            }
-        }
+        // Legacy preset / stage-index keys in old exports are ignored (removed).
 
         guard.release();
     }
@@ -333,7 +317,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
     };
 
     expect(ConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(ConfigBundleKeys::count() == 127, "keys-127");
+    expect(ConfigBundleKeys::count() == 124, "keys-124");
 
     auto* mod = Mod::get();
     if (!mod) {
@@ -358,13 +342,9 @@ bool ConfigBundle::selfCheck(std::string& report) {
     // Snapshot values we will mutate, then always restore.
     int64_t snapCap = 0;
     int64_t snapTicks = 0;
-    int64_t snapStage = 0;
-    std::string snapPreset;
     try {
         snapCap = mod->getSettingValue<int64_t>("look-ahead-cap");
         snapTicks = mod->getSettingValue<int64_t>("ticks-all");
-        snapStage = mod->getSettingValue<int64_t>("stage-index");
-        snapPreset = mod->getSettingValue<std::string>("preset");
     }
     catch (...) {
         expect(false, "snapshot");
@@ -377,9 +357,6 @@ bool ConfigBundle::selfCheck(std::string& report) {
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", snapCap);
             mod->setSettingValue<int64_t>("ticks-all", snapTicks);
-            mod->setSettingValue<int64_t>("stage-index", snapStage);
-            mod->setSettingValue<std::string>("preset", snapPreset);
-            StageConfig::notePresetSynced(snapPreset);
         }
         catch (...) {
         }
@@ -411,7 +388,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
         if (exp.isOk()) {
             auto const es = ConfigBundle::lastExportStats();
             expect(es.version == 2, "export-stats-v2");
-            expect(es.written >= 120, "export-stats-written");
+            expect(es.written >= 110, "export-stats-written");
         }
 
         StageConfig::beginApplying();
@@ -440,18 +417,14 @@ bool ConfigBundle::selfCheck(std::string& report) {
         }
     }
 
-    // --- Preset + custom look-ahead must not be wiped by applyPreset listener ---
+    // --- Applying-guard: import must not leave sentinel values wrong ---
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        expect(static_cast<bool>(out), "preset-guard-write");
+        expect(static_cast<bool>(out), "guard-write");
         if (out) {
-            // preset Tight would normally rewrite look-ahead-cap via applyPreset;
-            // import must keep sentinel 77 under applying-guard.
             out << R"({
   "version": 2,
   "settings": {
-    "preset": "Tight",
-    "stage-index": 0,
     "look-ahead-cap": 77,
     "ticks-all": 11
   }
@@ -459,30 +432,26 @@ bool ConfigBundle::selfCheck(std::string& report) {
             out.close();
 
             auto const imp = ConfigBundle::importFrom(tmp);
-            expect(imp.isOk(), "preset-guard-import");
+            expect(imp.isOk(), "guard-import");
             if (imp.isOk()) {
                 try {
                     expect(
                         mod->getSettingValue<int64_t>("look-ahead-cap") == 77,
-                        "preset-guard-cap"
+                        "guard-cap"
                     );
                     expect(
                         mod->getSettingValue<int64_t>("ticks-all") == 11,
-                        "preset-guard-ticks"
-                    );
-                    expect(
-                        mod->getSettingValue<std::string>("preset") == "Tight",
-                        "preset-guard-preset"
+                        "guard-ticks"
                     );
                 }
                 catch (...) {
-                    expect(false, "preset-guard-read");
+                    expect(false, "guard-read");
                 }
             }
         }
     }
 
-    // --- v1 flat root still applies known keys ---
+    // --- v1 flat root still applies known keys; legacy preset key ignored ---
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
         if (out) {
@@ -495,7 +464,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
                 expect(is.version == 1, "v1-stats-version");
                 try {
                     expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 55, "v1-cap");
-                    expect(mod->getSettingValue<std::string>("preset") == "Normal", "v1-preset");
+                    expect(mod->getSettingValue<int64_t>("ticks-all") == 3, "v1-ticks");
                 }
                 catch (...) {
                     expect(false, "v1-read");

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Main tab IA (Problem G) — presets removed
+- **Presets gone:** no `preset` dropdown, no Cycle Preset action, no F6 / `hotkey-cycle`, no `stage-index` / Internal mirror. Tick windows only via **Main → Window** (`window-unit` / `ticks-all` / `ticks-wave`).
+- Assist Off = **Enabled** off (not a Preset pack). Config import ignores legacy `preset` / `stage-index` keys.
+- Filter map / ConfigBundleKeys / docs synced (Main owns windows; Assist actions = Reset Learn + Export/Import).
+
 ### iOS / shared collision hardening (Problem C)
 - **`SimSessionGuard` RAII** around plan / verify / bake / traj / replay sessions — always restoreCapture, clear `m_simulating` / `m_applyingRing`, park ghosts (even on early return).
 - Ring restore via **`typeinfo_cast<RingObject*>`**; always restore **`m_activatedObjectIDs`**; `applyRingJump` clears applying-flag with RAII.

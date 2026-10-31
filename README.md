@@ -50,15 +50,15 @@ CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/wor
 
 Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
 
-- **Enabled / Preset / Assist Mode** — master control and Live / Hybrid / Replay / BruteForce
+- **Enabled / Assist Mode / Window** — master control, Live / Hybrid / Replay / BruteForce, and tick windows (unit + default + wave) on **Main** (no Preset packs)
 - **Pick Mode** (`assist-pick`) — **Legacy** (default, 1.2.0 feel) vs **New** (exit prediction)
 - **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
 - **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
 - **Assist Off Ranges** — six From/To percent slots (`-1` = unused); assist forced off inside those ranges
-- **Tick window / orbs / CPS / budgets** — timing and CPU limits (ticks ≠ 60fps frames)
+- **Orbs / CPS / budgets** — Assist algorithm limits (ticks ≠ 60fps frames)
 - **Save Feedback** — separate Sound / Color / Counter toggles when a delayed click is injected
 
-Hotkeys are configurable (defaults include F6 preset cycle, Ctrl+Shift+M assist mode, and more).
+Hotkeys are configurable (defaults include Ctrl+Shift+M assist mode, Ctrl+Shift+T trajectory, and more).
 
 ## Development status
 

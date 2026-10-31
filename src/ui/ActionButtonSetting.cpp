@@ -32,9 +32,6 @@ std::string dynamicButtonLabel(std::string const& key, std::string const& fallba
     if (key == "cycle-assist-mode") {
         return truncateLabel(StageConfig::assistModeName(StageConfig::assistMode()), 12);
     }
-    if (key == "cycle-preset-action") {
-        return truncateLabel(StageConfig::presetName(StageConfig::stageIndex()), 10);
-    }
     return fallback;
 }
 
@@ -68,10 +65,6 @@ void fireSettingAction(std::string const& key) {
     }
     if (key == "cycle-assist-mode") {
         PauseActionBridge::cycleAssistMode();
-        return;
-    }
-    if (key == "cycle-preset-action") {
-        PauseActionBridge::cyclePreset();
         return;
     }
     if (key == "reset-learn-action") {

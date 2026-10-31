@@ -12,24 +12,6 @@
 
 using namespace geode::prelude;
 
-static constexpr char const* PRESET_NAMES[] = { "Tight", "Normal", "Wide", "Max", "Off" };
-
-struct PresetDef {
-    bool enabled;
-    int ticksAll;
-    int ticksWave;
-    int slack;
-    int cap;
-};
-
-constexpr PresetDef PRESETS[] = {
-    { true,  2,  2, 2, 0 }, // Tight
-    { true,  4,  4, 2, 0 }, // Normal
-    { true,  8,  8, 2, 0 }, // Wide
-    { true, 16,  8, 2, 0 }, // Max
-    { false, 0,  0, 2, 0 }, // Off
-};
-
 struct ModeIds {
     char const* enable;
     char const* overwrite;
@@ -114,7 +96,6 @@ int g_cachedLookAhead = 0;
 bool g_cachedWindowUnitFrames = false;
 bool g_cacheInitialized = false;
 bool g_applying = false;
-std::string g_lastSyncedPreset;
 
 static int clampInt(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
@@ -179,21 +160,8 @@ static void loadAssistOffSlots(Mod* mod, std::vector<StageConfig::PercentRange>&
     }
 }
 
-char const* StageConfig::presetName(int index) {
-    if (index < 0 || index >= STAGE_COUNT) return "Off";
-    return PRESET_NAMES[index];
-}
-
-int StageConfig::presetIndexByName(std::string const& name) {
-    for (int i = 0; i < STAGE_COUNT; ++i) {
-        if (name == PRESET_NAMES[i]) return i;
-    }
-    return 0;
-}
-
 void StageConfig::refreshCache() {
     auto* mod = Mod::get();
-    g_cachedStage.index = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("stage-index")), 0, STAGE_COUNT - 1);
     g_cachedStage.enabled = mod->getSettingValue<bool>("enabled");
     // Wider max when storing display frames (8 frames ≈ 32 ticks @240 TPS).
     g_cachedStage.ticksAll = clampInt(static_cast<int>(mod->getSettingValue<int64_t>("ticks-all")), 0, 48);
@@ -311,83 +279,11 @@ void StageConfig::refreshCache() {
         g_cachedModes[static_cast<size_t>(i)] = p;
     }
 
-    if (g_lastSyncedPreset.empty()) {
-        try {
-            g_lastSyncedPreset = mod->getSettingValue<std::string>("preset");
-        }
-        catch (...) {
-            g_lastSyncedPreset = PRESET_NAMES[g_cachedStage.index];
-        }
-    }
-
     g_cacheInitialized = true;
 }
 
 void ensureCache() {
     if (!g_cacheInitialized) StageConfig::refreshCache();
-}
-
-void StageConfig::notePresetSynced(std::string const& name) {
-    g_lastSyncedPreset = name;
-}
-
-std::string StageConfig::lastSyncedPreset() {
-    ensureCache();
-    return g_lastSyncedPreset;
-}
-
-StageInfo StageConfig::preset(int index) {
-    index = clampInt(index, 0, STAGE_COUNT - 1);
-    auto const& def = PRESETS[index];
-    StageInfo info;
-    info.index = index;
-    info.enabled = def.enabled;
-    info.ticksAll = def.ticksAll;
-    info.ticksWave = def.ticksWave;
-    return info;
-}
-
-void StageConfig::applyPreset(int index) {
-    index = clampInt(index, 0, STAGE_COUNT - 1);
-    auto const info = preset(index);
-    auto const& def = PRESETS[index];
-
-    g_applying = true;
-    g_cachedStage = info;
-    g_cachedSlack = def.slack;
-    g_cachedLookAhead = def.cap;
-    g_cacheInitialized = true;
-
-    auto* mod = Mod::get();
-    mod->setSettingValue<int64_t>("stage-index", info.index);
-    mod->setSettingValue<std::string>("preset", std::string(PRESET_NAMES[index]));
-    mod->setSettingValue<bool>("enabled", info.enabled);
-    // Presets are authored in physics ticks; store in the user's window unit.
-    int const storeAll = ticksToWindowValue(info.ticksAll);
-    int const storeWave = ticksToWindowValue(info.ticksWave);
-    g_cachedStage.ticksAll = storeAll;
-    g_cachedStage.ticksWave = storeWave;
-    mod->setSettingValue<int64_t>("ticks-all", storeAll);
-    mod->setSettingValue<int64_t>("ticks-wave", storeWave);
-    mod->setSettingValue<int64_t>("death-slack", def.slack);
-    mod->setSettingValue<int64_t>("look-ahead-cap", def.cap);
-    g_lastSyncedPreset = PRESET_NAMES[index];
-    g_applying = false;
-    // Rebuild per-mode ticks with window-unit conversion.
-    refreshCache();
-    g_lastSyncedPreset = PRESET_NAMES[index];
-}
-
-void StageConfig::applyPresetByName(std::string const& name) {
-    applyPreset(presetIndexByName(name));
-}
-
-StageInfo StageConfig::cycleNext() {
-    ensureCache();
-    int next = g_cachedStage.index + 1;
-    if (next >= STAGE_COUNT) next = 0;
-    applyPreset(next);
-    return g_cachedStage;
 }
 
 void StageConfig::toggleDebugLogging() {
@@ -616,8 +512,6 @@ int StageConfig::ticksWave() {
 }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
 int StageConfig::lookAheadCap() { ensureCache(); return g_cachedLookAhead; }
-int StageConfig::stageIndex() { ensureCache(); return g_cachedStage.index; }
-
 GameModeKind StageConfig::kindOf(PlayerObject* player) {
     if (!player) return GameModeKind::Cube;
     if (player->m_isDart) return GameModeKind::Wave;
@@ -648,7 +542,7 @@ ModeParams StageConfig::paramsFor(PlayerObject* player) {
 }
 
 std::string StageConfig::stageLabel(StageInfo const& info) {
-    if (!info.enabled || info.index >= STAGE_COUNT - 1) return "OFF";
-    return fmt::format("{} ({}A/{}W)", presetName(info.index), info.ticksAll, info.ticksWave);
+    if (!info.enabled) return "OFF";
+    return fmt::format("{}A/{}W", info.ticksAll, info.ticksWave);
 }
 

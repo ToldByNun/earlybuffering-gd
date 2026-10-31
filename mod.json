@@ -34,26 +34,13 @@
 		"title-general": {
 			"type": "title",
 			"name": "Main",
-			"description": "On/off, preset, Safe Mode, Assist Mode, pause/overlay chrome, and light diagnostics."
+			"description": "On/off, Safe Mode, Assist Mode, delay windows (unit + default + wave), pause/overlay chrome, and light diagnostics."
 		},
 		"enabled": {
 			"type": "bool",
 			"name": "Enabled",
-			"description": "Turns EarlyBuffer on or off. When off, the game plays completely vanilla. The preset hotkey can also cycle to Off.",
+			"description": "Turns EarlyBuffer on or off. When off, the game plays completely vanilla.",
 			"default": true
-		},
-		"preset": {
-			"type": "string",
-			"name": "Preset",
-			"description": "Quick starting point for how early a click may be delayed (Tight = small window, Max = large). Changing preset fills the default tick windows; your per-mode overwrites stay. Same setting as Assist → Cycle Preset and Keys → Cycle Preset (F6).",
-			"one-of": [
-				"Tight",
-				"Normal",
-				"Wide",
-				"Max",
-				"Off"
-			],
-			"default": "Normal"
 		},
 		"safe-mode": {
 			"type": "bool",
@@ -72,6 +59,37 @@
 				"BruteForce"
 			],
 			"default": "Live"
+		},
+		"title-window": {
+			"type": "title",
+			"name": "Window",
+			"description": "Default delay windows for modes without per-mode overwrite. Numbers use Window Unit below."
+		},
+		"window-unit": {
+			"type": "string",
+			"name": "Window Unit",
+			"description": "Whether Default / per-mode window numbers mean physics Ticks (~240/s) or display Frames (60fps). Planning always runs in ticks; Frames are converted as 1 frame ≈ 4 ticks at 240 TPS. Switch unit, then set the numbers to match how you think about timing.",
+			"one-of": [
+				"Ticks",
+				"Frames"
+			],
+			"default": "Ticks"
+		},
+		"ticks-all": {
+			"type": "int",
+			"name": "Window (Default)",
+			"description": "How early a click may be delayed for modes without their own overwrite. Unit = Window Unit above (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness, floatier feel. Lower = snappier. Wave uses Window (Wave) unless Wave Overwrite is on.",
+			"default": 4,
+			"min": 0,
+			"max": 48
+		},
+		"ticks-wave": {
+			"type": "int",
+			"name": "Window (Wave default)",
+			"description": "Default delay window for wave when Wave → Overwrite is off. Same unit as Window Unit (Ticks or Frames). Wave is sensitive: keep low for a tight feel, raise for a wider window.",
+			"default": 4,
+			"min": 0,
+			"max": 48
 		},
 		"show-overlay": {
 			"type": "bool",
@@ -306,13 +324,7 @@
 		"title-assist-actions": {
 			"type": "title",
 			"name": "Assist Actions",
-			"description": "Quick actions for preset, learning reset, and config files. Cycle Preset edits the same Preset as Main (and F6)."
-		},
-		"cycle-preset-action": {
-			"type": "custom:eb-action",
-			"name": "Cycle Preset",
-			"description": "Cycles Tight → Normal → Wide → Max → Off. Same setting as Main → Preset and Keys → Cycle Preset (F6).",
-			"button-text": "cycle"
+			"description": "Quick actions for learning reset and config files."
 		},
 		"reset-learn-action": {
 			"type": "custom:eb-action",
@@ -331,37 +343,6 @@
 			"name": "Import Config",
 			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
 			"button-text": "import"
-		},
-		"title-window": {
-			"type": "title",
-			"name": "Window",
-			"description": "Default delay windows for modes without per-mode overwrite. Numbers use Window Unit below."
-		},
-		"window-unit": {
-			"type": "string",
-			"name": "Window Unit",
-			"description": "Whether Default / per-mode window numbers mean physics Ticks (~240/s) or display Frames (60fps). Planning always runs in ticks; Frames are converted as 1 frame ≈ 4 ticks at 240 TPS. Switch unit, then set the numbers to match how you think about timing.",
-			"one-of": [
-				"Ticks",
-				"Frames"
-			],
-			"default": "Ticks"
-		},
-		"ticks-all": {
-			"type": "int",
-			"name": "Window (Default)",
-			"description": "How early a click may be delayed for modes without their own overwrite. Unit = Window Unit above (Ticks ≈240/s, or Frames at 60fps → ×4 ticks). Higher = more forgiveness, floatier feel. Lower = snappier. Wave uses Window (Wave) unless Wave Overwrite is on.",
-			"default": 4,
-			"min": 0,
-			"max": 48
-		},
-		"ticks-wave": {
-			"type": "int",
-			"name": "Window (Wave default)",
-			"description": "Default delay window for wave when Wave → Overwrite is off. Same unit as Window Unit (Ticks or Frames). Wave is sensitive: keep low for a tight feel, raise for a wider window.",
-			"default": 4,
-			"min": 0,
-			"max": 48
 		},
 		"title-algorithm": {
 			"type": "title",
@@ -602,7 +583,7 @@
 		"cube-overwrite": {
 			"type": "bool",
 			"name": "Overwrite Cube",
-			"description": "On = use the Cube ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset.",
+			"description": "On = use the Cube ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults.",
 			"default": false
 		},
 		"cube-ticks": {
@@ -655,7 +636,7 @@
 			"type": "bool",
 			"name": "Overwrite Ship",
 			"default": false,
-			"description": "On = use the Ship ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the Ship ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"ship-ticks": {
 			"type": "int",
@@ -707,7 +688,7 @@
 			"type": "bool",
 			"name": "Overwrite Ball",
 			"default": false,
-			"description": "On = use the Ball ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the Ball ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"ball-ticks": {
 			"type": "int",
@@ -759,7 +740,7 @@
 			"type": "bool",
 			"name": "Overwrite UFO",
 			"default": false,
-			"description": "On = use the UFO ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the UFO ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"ufo-ticks": {
 			"type": "int",
@@ -811,7 +792,7 @@
 			"type": "bool",
 			"name": "Overwrite Wave",
 			"default": false,
-			"description": "On = use the Wave ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the Wave ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"wave-ticks": {
 			"type": "int",
@@ -863,7 +844,7 @@
 			"type": "bool",
 			"name": "Overwrite Robot",
 			"default": false,
-			"description": "On = use the Robot ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the Robot ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"robot-ticks": {
 			"type": "int",
@@ -915,7 +896,7 @@
 			"type": "bool",
 			"name": "Overwrite Spider",
 			"default": false,
-			"description": "On = use the Spider ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the Spider ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"spider-ticks": {
 			"type": "int",
@@ -967,7 +948,7 @@
 			"type": "bool",
 			"name": "Overwrite Swing",
 			"default": false,
-			"description": "On = use the Swing ticks / look-ahead / slack / latency below instead of the global preset. Off = use Defaults + Preset."
+			"description": "On = use the Swing ticks / look-ahead / slack / latency below instead of Main Window defaults. Off = use Main Window defaults."
 		},
 		"swing-ticks": {
 			"type": "int",
@@ -1046,13 +1027,6 @@
 			"name": "Keys",
 			"description": "In-game hotkeys. Each hotkey edits the same setting as the matching Main / Assist / Visual control."
 		},
-		"hotkey-cycle": {
-			"type": "keybind",
-			"name": "Cycle Preset",
-			"description": "Cycles preset Tight → Normal → Wide → Max → Off. Same setting as Main → Preset and Assist → Cycle Preset.",
-			"default": "F6",
-			"category": "gameplay"
-		},
 		"hotkey-debug": {
 			"type": "keybind",
 			"name": "Toggle Debug Logging",
@@ -1087,19 +1061,6 @@
 			"description": "Shows or hides trajectory / click-window paths (same as Visual → Trajectory Visualizer).",
 			"default": "Ctrl+Shift+T",
 			"category": "gameplay"
-		},
-		"title-internal": {
-			"type": "title",
-			"name": "Internal",
-			"description": "Preset Index mirrors Main → Preset for sync. Do not edit — use the Preset dropdown or F6."
-		},
-		"stage-index": {
-			"type": "int",
-			"name": "Preset Index (internal)",
-			"description": "Internal copy of Preset (0=Tight … 4=Off). Do not edit — use the Preset dropdown or F6.",
-			"default": 1,
-			"min": 0,
-			"max": 4
 		},
 		"title-dev": {
 			"type": "title",

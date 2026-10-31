@@ -30,7 +30,7 @@ public:
     static ImportStats lastImportStats();
     static ExportStats lastExportStats();
 
-    // Temp-file export→import + preset/look-ahead-cap guard. Restores prior values.
+    // Temp-file export→import + applying-guard. Restores prior values.
     static bool selfCheck(std::string& report);
 
 private:

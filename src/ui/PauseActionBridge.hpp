@@ -15,7 +15,6 @@ public:
     static void cancelBake();
     static void cycleAssistMode();
 
-    static void cyclePreset();
     static void toggleDebug();
     static void resetLearning();
     static void toggleAutoTune();

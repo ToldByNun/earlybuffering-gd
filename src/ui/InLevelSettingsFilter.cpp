@@ -23,7 +23,7 @@ public:
         SettingsCategory cat;
     };
 
-    static constexpr int kCount = 170;
+    static constexpr int kCount = 165;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -44,9 +44,12 @@ private:
 SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryMap::kCount] = {
     { "title-general", SettingsCategory::Main },
     { "enabled", SettingsCategory::Main },
-    { "preset", SettingsCategory::Main },
     { "safe-mode", SettingsCategory::Main },
     { "assist-mode", SettingsCategory::Main },
+    { "title-window", SettingsCategory::Main },
+    { "window-unit", SettingsCategory::Main },
+    { "ticks-all", SettingsCategory::Main },
+    { "ticks-wave", SettingsCategory::Main },
     { "show-overlay", SettingsCategory::Main },
     { "show-pause-hub", SettingsCategory::Main },
     { "show-pause-bake", SettingsCategory::Main },
@@ -72,14 +75,9 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "assist-off-6-from", SettingsCategory::Scope },
     { "assist-off-6-to", SettingsCategory::Scope },
     { "title-assist-actions", SettingsCategory::Assist },
-    { "cycle-preset-action", SettingsCategory::Assist },
     { "reset-learn-action", SettingsCategory::Assist },
     { "export-config-action", SettingsCategory::Assist },
     { "import-config-action", SettingsCategory::Assist },
-    { "title-window", SettingsCategory::Assist },
-    { "window-unit", SettingsCategory::Assist },
-    { "ticks-all", SettingsCategory::Assist },
-    { "ticks-wave", SettingsCategory::Assist },
     { "title-algorithm", SettingsCategory::Assist },
     { "death-slack", SettingsCategory::Assist },
     { "look-ahead-cap", SettingsCategory::Assist },
@@ -176,14 +174,11 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "save-feedback-counter", SettingsCategory::Visual },
     { "save-icon-color", SettingsCategory::Visual },
     { "title-keys", SettingsCategory::Keys },
-    { "hotkey-cycle", SettingsCategory::Keys },
     { "hotkey-debug", SettingsCategory::Keys },
     { "hotkey-reset-level", SettingsCategory::Keys },
     { "hotkey-auto-tune", SettingsCategory::Keys },
     { "hotkey-assist-mode", SettingsCategory::Keys },
     { "hotkey-trajectory", SettingsCategory::Keys },
-    { "title-internal", SettingsCategory::Keys },
-    { "stage-index", SettingsCategory::Keys },
     { "title-dev", SettingsCategory::Dev },
     { "title-dev-session", SettingsCategory::Dev },
     { "dev-record-enable", SettingsCategory::Dev },
@@ -622,7 +617,6 @@ public:
             || match("bake-map-action")
             || match("brute-bake-action")
             || match("cancel-bake-action")
-            || match("cycle-preset-action")
             || match("reset-learn-action")
             || match("export-config-action")
             || match("import-config-action");
@@ -788,6 +782,10 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     // Spot checks for the new IA (no Ingame; no Assist catch-all).
     expect(categoryForKey("enabled") == SettingsCategory::Main, "cat-enabled-main");
     expect(categoryForKey("assist-mode") == SettingsCategory::Main, "cat-assist-mode-main");
+    expect(categoryForKey("title-window") == SettingsCategory::Main, "cat-title-window-main");
+    expect(categoryForKey("window-unit") == SettingsCategory::Main, "cat-window-main");
+    expect(categoryForKey("ticks-all") == SettingsCategory::Main, "cat-ticks-all-main");
+    expect(categoryForKey("ticks-wave") == SettingsCategory::Main, "cat-ticks-wave-main");
     expect(categoryForKey("lag-probe") == SettingsCategory::Main, "cat-lag-main");
     expect(categoryForKey("show-pause-hub") == SettingsCategory::Main, "cat-hub-main");
     expect(categoryForKey("show-overlay") == SettingsCategory::Main, "cat-overlay-main");
@@ -796,14 +794,16 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("assist-off-1-from") == SettingsCategory::Scope, "cat-off-scope");
     expect(categoryForKey("import-bake-replay") == SettingsCategory::Bake, "cat-import-bake");
     expect(categoryForKey("bake-radius") == SettingsCategory::Bake, "cat-bake-radius");
-    expect(categoryForKey("cycle-preset-action") == SettingsCategory::Assist, "cat-cycle-preset");
+    expect(categoryForKey("reset-learn-action") == SettingsCategory::Assist, "cat-reset-learn");
     expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
-    expect(categoryForKey("window-unit") == SettingsCategory::Assist, "cat-window-assist");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
     expect(categoryForKey("show-bake-path") == SettingsCategory::Visual, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
-    expect(categoryForKey("hotkey-cycle") == SettingsCategory::Keys, "cat-hotkey-keys");
-    expect(categoryForKey("stage-index") == SettingsCategory::Keys, "cat-stage-keys");
+    expect(categoryForKey("hotkey-debug") == SettingsCategory::Keys, "cat-hotkey-keys");
+    expect(categoryForKey("preset") == SettingsCategory::Count, "cat-preset-gone");
+    expect(categoryForKey("stage-index") == SettingsCategory::Count, "cat-stage-gone");
+    expect(categoryForKey("hotkey-cycle") == SettingsCategory::Count, "cat-cycle-hotkey-gone");
+    expect(categoryForKey("cycle-preset-action") == SettingsCategory::Count, "cat-cycle-action-gone");
     expect(categoryForKey("title-dev") == SettingsCategory::Dev, "cat-title-dev");
     expect(categoryForKey("dev-start-record-action") == SettingsCategory::Dev, "cat-dev-start");
 
@@ -826,7 +826,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
         expect(c != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-count-170");
+    expect(mapped == SettingsCategoryMap::kCount, "map-count-165");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {

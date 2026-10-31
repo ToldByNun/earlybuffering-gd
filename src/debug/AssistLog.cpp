@@ -29,21 +29,20 @@ void AssistLog::printBanner() {
     auto const version = Mod::get()->getVersion().toVString();
     log::info("======================");
     log::info("[{}] {} LOADED", modTag(), version);
-    if (!stage.enabled || stage.index >= StageConfig::STAGE_COUNT - 1) {
+    if (!stage.enabled) {
         log::info("[{}] Starting Mode: OFF", modTag());
     }
     else {
         log::info(
-            "[{}] Starting Preset: {} ({} ALL / {} Wave, slack {})",
+            "[{}] Starting windows: {} ALL / {} Wave (slack {})",
             modTag(),
-            StageConfig::presetName(stage.index),
             stage.ticksAll,
             stage.ticksWave,
             StageConfig::deathSlack()
         );
     }
     log::info(
-        "[{}] F6: presets  |  Ctrl+Shift+M: modes  |  Ctrl+Shift+T: trajectory  |  Ctrl+Shift+L: learning",
+        "[{}] Ctrl+Shift+M: modes  |  Ctrl+Shift+T: trajectory  |  Ctrl+Shift+L: learning",
         modTag()
     );
     log::info(
@@ -65,37 +64,6 @@ void AssistLog::printBanner() {
     log::info("======================");
 }
 
-void AssistLog::printCycle(StageInfo const& stage, double physicsTps) {
-    if (!stage.enabled || stage.index >= StageConfig::STAGE_COUNT - 1) {
-        log::info("[{}] F6 Cycle -> OFF", modTag());
-        return;
-    }
-
-    auto const frames60 = ticksToFrames60(stage.ticksAll, physicsTps);
-    if (stage.ticksWave != stage.ticksAll) {
-        auto const waveFrames = ticksToFrames60(stage.ticksWave, physicsTps);
-        log::info(
-            "[{}] F6 Cycle -> {}: {} Ticks All | {} Ticks Wave ({:.1f}f @ 60fps, wave {:.1f}f)",
-            modTag(),
-            StageConfig::presetName(stage.index),
-            stage.ticksAll,
-            stage.ticksWave,
-            frames60,
-            waveFrames
-        );
-    }
-    else {
-        log::info(
-            "[{}] F6 Cycle -> {}: {} Ticks All | {} Ticks Wave ({:.1f}f @ 60fps)",
-            modTag(),
-            StageConfig::presetName(stage.index),
-            stage.ticksAll,
-            stage.ticksWave,
-            frames60
-        );
-    }
-}
-
 void AssistLog::printSavedPress(
     int delayedTicks,
     int frame0,
@@ -115,4 +83,3 @@ void AssistLog::printSavedPress(
         limit
     );
 }
-

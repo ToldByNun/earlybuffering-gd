@@ -371,12 +371,6 @@ void PauseActionBridge::cancelBake() {
     AssistLog::info("BAKE: cancel requested");
 }
 
-void PauseActionBridge::cyclePreset() {
-    auto const stage = StageConfig::cycleNext();
-    AssistLog::printCycle(stage, AssistController::get().estimatedTps());
-    AssistController::get().updateOverlay();
-}
-
 void PauseActionBridge::toggleDebug() {
     StageConfig::toggleDebugLogging();
     AssistLog::info(fmt::format("debug-logging: {}", StageConfig::debugLogging() ? "ON" : "OFF"));
