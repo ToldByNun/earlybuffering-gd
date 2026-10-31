@@ -31,6 +31,8 @@ private:
     static std::string buildIndex(std::filesystem::path const& dir, bool bakeFailOnly);
     static std::string buildSettings();
     static std::string buildClockAssist();
+    // P1 vs shadow rects + hazard overlaps after copy from start snap (pre-step).
+    static std::string buildGhostHitbox();
     static std::string buildReplay();
     static std::string buildBakeMap();
     static std::string buildTriggerWorld();

@@ -1228,9 +1228,66 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
         // local helper via instance method — static caller uses get()
         get().copyWaveTrail(dst, src);
     }
+
+    // Ghost is created as icon cube (create 1,1). Mode flags alone leave a
+    // cube-sized collide rect → false deaths on tight wave. Rebuild body, then
+    // re-apply pose/holds switchedToMode may clobber.
+    {
+        GameObjectType portal = GameObjectType::CubePortal;
+        if (src->m_isDart) portal = GameObjectType::WavePortal;
+        else if (src->m_isShip) portal = GameObjectType::ShipPortal;
+        else if (src->m_isBall) portal = GameObjectType::BallPortal;
+        else if (src->m_isBird) portal = GameObjectType::UfoPortal;
+        else if (src->m_isRobot) portal = GameObjectType::RobotPortal;
+        else if (src->m_isSpider) portal = GameObjectType::SpiderPortal;
+        else if (src->m_isSwing) portal = GameObjectType::SwingPortal;
+
+        auto const pos = src->getPosition();
+        auto const rot = src->getRotation();
+        float const sx = src->getScaleX();
+        float const sy = src->getScaleY();
+        double const yVel = src->m_yVelocity;
+        float const vehicle = src->m_vehicleSize;
+        bool const jumpHeld =
+            src->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
+
+        dst->setContentSize(src->getContentSize());
+        dst->switchedToMode(portal);
+        dst->updatePlayerScale();
+        dst->updatePlayerArt();
+
+        dst->setPosition(pos);
+        dst->m_position = src->m_position;
+        dst->setRotation(rot);
+        dst->setScaleX(sx);
+        dst->setScaleY(sy);
+        dst->m_vehicleSize = vehicle;
+        dst->m_yVelocity = yVel;
+        dst->m_isDead = false;
+
+        int const jumpIdx = static_cast<int>(PlayerButton::Jump);
+        if (jumpHeld) {
+            dst->m_holdingButtons[jumpIdx] = true;
+        }
+        else {
+            dst->releaseButton(PlayerButton::Jump);
+            dst->m_holdingButtons[jumpIdx] = false;
+        }
+    }
+
+    hideGhost(dst);
+    clearCollisionLogs(dst);
 }
 
 #undef EB_COPY
+
+size_t ShadowSimulator::diagCaptureTransformCount(PlayLayer* layer) {
+    if (!layer) return 0;
+    this->beginCapture(layer);
+    size_t const n = this->m_savedTransforms.size();
+    this->restoreCapture(layer);
+    return n;
+}
 
 int ShadowSimulator::captureStartSnapshot(PlayerObject* real) {
     if (!real || !m_snapshots[START_SNAPSHOT_SLOT]) return -1;

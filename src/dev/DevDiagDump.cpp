@@ -138,6 +138,7 @@ std::string DevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeF
         o << "  01_settings.txt\n";
     }
     o << "  02_clock_assist.txt     — simDt/TPS/startSnap vehicle flags\n";
+    o << "  02b_ghost_hitbox.txt    — P1 vs shadow rect + hazard overlaps\n";
     o << "  03_replay.txt           — raw import events\n";
     o << "  03b_replay_remap.txt    — src→bake frame map + event order\n";
     o << "  04_bakemap.txt\n";
@@ -220,6 +221,146 @@ std::string DevDiagDump::buildClockAssist() {
     dumpVehicleFlags(o, "liveP1", pl ? pl->m_player1 : nullptr);
     dumpVehicleFlags(o, "liveP2", pl ? pl->m_player2 : nullptr);
     dumpVehicleFlags(o, "shadow", ShadowSimulator::get().shadow());
+    return o.str();
+}
+
+namespace {
+
+bool isHazardType(GameObject* obj) {
+    if (!obj) return false;
+    auto const t = obj->m_objectType;
+    return t == GameObjectType::Hazard || t == GameObjectType::AnimatedHazard;
+}
+
+void dumpRectLine(std::ostringstream& o, char const* name, PlayerObject* p) {
+    if (!p) {
+        o << name << "=<null>\n";
+        return;
+    }
+    auto const r = p->getObjectRect();
+    o << fmt::format(
+        "{}: pos=({:.2f},{:.2f}) rot={:.2f} scale=({:.3f},{:.3f}) vehicleSize={:.3f} "
+        "content=({:.2f},{:.2f}) rect=({:.2f},{:.2f},{:.2f},{:.2f}) area={:.1f} "
+        "jumpHeld={} isDart={}\n",
+        name,
+        p->getPositionX(), p->getPositionY(), p->getRotation(),
+        p->getScaleX(), p->getScaleY(), p->m_vehicleSize,
+        p->getContentSize().width, p->getContentSize().height,
+        r.origin.x, r.origin.y, r.size.width, r.size.height,
+        r.size.width * r.size.height,
+        boolStr(p->m_holdingButtons[static_cast<int>(PlayerButton::Jump)]),
+        boolStr(p->m_isDart)
+    );
+}
+
+int countHazardOverlaps(
+    PlayLayer* layer, PlayerObject* p, std::ostringstream& detail, int maxDetail
+) {
+    if (!layer || !p) return 0;
+    auto const pref = p->getObjectRect();
+    int n = 0;
+    auto consider = [&](GameObject* obj) {
+        if (!isHazardType(obj)) return;
+        auto const hr = obj->getObjectRect();
+        if (!pref.intersectsRect(hr)) return;
+        ++n;
+        if (n <= maxDetail) {
+            detail << fmt::format(
+                "  hazard id={} type={} @({:.1f},{:.1f}) rect=({:.1f},{:.1f},{:.1f},{:.1f})\n",
+                obj->m_uniqueID, static_cast<int>(obj->m_objectType),
+                obj->getPositionX(), obj->getPositionY(),
+                hr.origin.x, hr.origin.y, hr.size.width, hr.size.height
+            );
+        }
+    };
+    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
+        for (unsigned i = 0; i < children->count(); ++i) {
+            consider(typeinfo_cast<GameObject*>(children->objectAtIndex(i)));
+        }
+    }
+    for (auto* mid : layer->m_sections) {
+        if (!mid) continue;
+        for (auto* inner : *mid) {
+            if (!inner) continue;
+            for (auto* raw : *inner) {
+                consider(typeinfo_cast<GameObject*>(raw));
+            }
+        }
+    }
+    return n;
+}
+
+} // namespace
+
+std::string DevDiagDump::buildGhostHitbox() {
+    std::ostringstream o;
+    o << "# Ghost vs live hitbox after copyPlayerState(startSnap) — BEFORE physics\n";
+    o << "# If shadow rect >> P1 or exclusive hazard overlaps → false frame-0 deaths\n\n";
+
+    auto* layer = PlayLayer::get();
+    if (!layer || !layer->m_player1) {
+        o << "ERROR: no PlayLayer / P1\n";
+        return o.str();
+    }
+    auto& sim = ShadowSimulator::get();
+    auto* snap = sim.snapshotSlot(ShadowSimulator::START_SNAPSHOT_SLOT);
+    auto* shadow = sim.shadow();
+    if (!snap || !shadow) {
+        o << "ERROR: missing start snap or shadow — reset once in level\n";
+        return o.str();
+    }
+
+    // Ensure start snap exists for this attempt.
+    (void)AssistController::get().ensureStartSnapshot(layer);
+    snap = sim.snapshotSlot(ShadowSimulator::START_SNAPSHOT_SLOT);
+
+    dumpRectLine(o, "liveP1(before)", layer->m_player1);
+    dumpRectLine(o, "startSnap", snap);
+    dumpRectLine(o, "shadow(beforeCopy)", shadow);
+
+    ShadowSimulator::copyPlayerState(shadow, snap);
+    dumpRectLine(o, "shadow(afterCopy)", shadow);
+
+    auto const p1r = layer->m_player1->getObjectRect();
+    auto const shr = shadow->getObjectRect();
+    o << fmt::format(
+        "rectDelta: dw={:.2f} dh={:.2f} dArea={:.1f}\n",
+        shr.size.width - p1r.size.width,
+        shr.size.height - p1r.size.height,
+        (shr.size.width * shr.size.height) - (p1r.size.width * p1r.size.height)
+    );
+
+    std::ostringstream p1Haz;
+    std::ostringstream shHaz;
+    int const p1Hits = countHazardOverlaps(layer, layer->m_player1, p1Haz, 12);
+    int const shHits = countHazardOverlaps(layer, shadow, shHaz, 12);
+    o << fmt::format("hazardOverlaps liveP1={} shadow={}\n", p1Hits, shHits);
+    if (p1Hits > 0) {
+        o << "liveP1 overlaps:\n" << p1Haz.str();
+    }
+    if (shHits > 0) {
+        o << "shadow overlaps:\n" << shHaz.str();
+    }
+    o << fmt::format(
+        "exclusiveShadowHazards={}\n",
+        shHits > p1Hits ? "LIKELY (ghost hitbox/world mismatch)" : "none-or-equal"
+    );
+
+    // TW capture size + bake gdStep for current pending replay dt.
+    o << fmt::format(
+        "twCapturedTransforms={}\n", sim.diagCaptureTransformCount(layer)
+    );
+
+    float dt = AssistController::get().simDt();
+    if (!(dt > 0.f)) dt = AssistClock::kNominalSimDt;
+    auto const* rep = BakeMap::get().pendingReplay();
+    if (rep && rep->tps > AssistClock::kPlanSnapTpsHi) {
+        dt = static_cast<float>(1.0 / std::min(rep->tps, 4000.0));
+    }
+    o << fmt::format(
+        "probeDt={} gdStep={}\n",
+        dt, AssistClock::secondsToGdStep(dt)
+    );
     return o.str();
 }
 
@@ -707,6 +848,7 @@ bool DevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
     if (!put("00_INDEX.txt", buildIndex(outDir, false))) return false;
     if (!put("01_settings.txt", buildSettings())) return false;
     if (!put("02_clock_assist.txt", buildClockAssist())) return false;
+    if (!put("02b_ghost_hitbox.txt", buildGhostHitbox())) return false;
     if (!put("03_replay.txt", buildReplay())) return false;
     if (!put("03b_replay_remap.txt", buildReplayRemap())) return false;
     if (!put("04_bakemap.txt", buildBakeMap())) return false;
@@ -730,6 +872,7 @@ bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMs
 
     if (!put("00_INDEX.txt", buildIndex(outDir, true))) return false;
     if (!put("02_clock_assist.txt", buildClockAssist())) return false;
+    if (!put("02b_ghost_hitbox.txt", buildGhostHitbox())) return false;
     if (!put("03_replay.txt", buildReplay())) return false;
     if (!put("03b_replay_remap.txt", buildReplayRemap())) return false;
     if (!put("04_bakemap.txt", buildBakeMap())) return false;

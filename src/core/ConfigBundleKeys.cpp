@@ -229,7 +229,8 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         static_cast<int>(seen.size()) == ConfigBundleKeysTable::kEntryCount,
         "unique-count"
     );
-    expect(kindBool == 48, "kind-bool-48");
+    // show-bake-path added → 49 bools (was 48).
+    expect(kindBool == 49, "kind-bool-49");
     expect(kindInt == 44, "kind-int-44");
     expect(kindFloat == 20, "kind-float-20");
     expect(kindString == 7, "kind-string-7");
@@ -239,6 +240,8 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     auto const* enabled = ConfigBundleKeys::find("enabled");
     expect(enabled != nullptr, "find-enabled");
     expect(enabled && enabled->kind == Kind::Bool, "find-enabled-bool");
+    auto const* bakePath = ConfigBundleKeys::find("show-bake-path");
+    expect(bakePath && bakePath->kind == Kind::Bool, "find-show-bake-path");
     auto const* color = ConfigBundleKeys::find("save-icon-color");
     expect(color && color->kind == Kind::Color, "find-color");
     auto const* hotkey = ConfigBundleKeys::find("hotkey-cycle");

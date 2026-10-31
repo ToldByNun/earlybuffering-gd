@@ -188,6 +188,11 @@ public:
 
     static void copyPlayerState(PlayerObject* dst, PlayerObject* src);
 
+    // Count of TW transforms captured for the current/last beginCapture (diag).
+    size_t capturedTransformCount() const { return this->m_savedTransforms.size(); }
+    // Diag: beginCapture → count → restoreCapture (no lingering world edits).
+    size_t diagCaptureTransformCount(PlayLayer* layer);
+
     // Rotating ring — never overwrites START_SNAPSHOT_SLOT.
     int captureSnapshot(PlayerObject* real);
     // Attempt-start pose for Replay/Brute bake (always slot 0).

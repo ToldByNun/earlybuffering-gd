@@ -184,14 +184,21 @@ void BakeMap::loadForLevel(GJGameLevel* level) {
     this->m_dirty = false;
     if (!level) return;
     m_data.levelKey = LevelProfile::makeKey(level);
-    m_loaded = true;
     auto res = readFile();
-    if (res.isOk()) {
+    if (res.isOk() && !m_data.clicks.empty()) {
+        m_loaded = true;
         AssistLog::debug(fmt::format(
             "BAKE: loaded map {} ({} clicks, {}, {})",
             m_data.levelKey, m_data.clicks.size(), m_data.sourceReplay, m_data.method
         ));
+        return;
     }
+    // Empty / missing bake file — keep levelKey for next save, not a loaded map.
+    m_data.sourceReplay.clear();
+    m_data.method.clear();
+    m_data.tps = AssistClock::kNominalTps;
+    m_data.clicks.clear();
+    m_loaded = false;
 }
 
 void BakeMap::save() const {
