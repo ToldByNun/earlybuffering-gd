@@ -1240,7 +1240,7 @@ bool DevTraceStore::selfCheck(std::string& report) {
     // JSON roundtrip preserves IDs
     DevSessionFile sess;
     sess.traceSchema = kTraceSchema;
-    sess.modVersion = "v1.3.0-test";
+    sess.modVersion = "v1.3.2-test";
     sess.sessionId = "selfcheck";
     sess.recordingsTarget = 10;
     sess.recordingsDone = 1;
@@ -1273,7 +1273,7 @@ bool DevTraceStore::selfCheck(std::string& report) {
         bool const wasOpen = store.isOpen();
         DevSessionFile saved = store.session();
         expect(store.beginSession("selfcheck-api", 3), "store-begin");
-        store.setModVersion("v1.3.0-test");
+        store.setModVersion("v1.3.2-test");
         store.setLevelMeta("lvl", "Level", false, true, "fp");
         expect(store.beginAttempt(100), "store-attempt");
         int64_t const pid = store.allocPressId();

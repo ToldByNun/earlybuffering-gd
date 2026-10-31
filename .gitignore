@@ -75,5 +75,7 @@ state/
 # Packaged mods (local)
 *.geode
 
-# Local release staging (notes, checklists, packaged builds)
-releases/
+# Local release staging — keep markdown notes tracked; ignore binaries/checklists junk
+releases/*
+!releases/*.md
+/releases

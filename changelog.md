@@ -1,19 +1,47 @@
 # Changelog
 
-## Unreleased
+## v1.3.2
 
-### Main tab IA (Problem G) — presets removed
-- **Presets gone:** no `preset` dropdown, no Cycle Preset action, no F6 / `hotkey-cycle`, no `stage-index` / Internal mirror. Tick windows only via **Main → Window** (`window-unit` / `ticks-all` / `ticks-wave`).
-- Assist Off = **Enabled** off (not a Preset pack). Config import ignores legacy `preset` / `stage-index` keys.
-- Filter map / ConfigBundleKeys / docs synced (Main owns windows; Assist actions = Reset Learn + Export/Import).
+**Assist honesty + bake fidelity + Main Window IA + iOS harden** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+### Queued tap / hold (Problem A)
+- Early UP while a Delay is buffered no longer cancels the buffer; plain Delay still fires then ASAP-releases.
+- Plans with `requireHold` / `releaseAfter` keep the planned hold after inject when the user already released (queued hold), without force-releasing while Jump is still held.
+- Docs: press-queue vs post-fire hold-extend clarified; PlanGold `queuedHoldSelfCheck`.
+
+### Toggle orbs / “dying to nothing” (Problem B)
+- Toggle-orb / touch-toggle targets marked **UnknownOnOverlap**; Delay refused when the path hits unknown toggle geometry (`PassToggleUnknown`).
+- **`ToggleOrbSim`**: reversible group flip on shadow hit (1594 / touch-1049) without real `triggerObject`; restore with capture teardown.
+- Inactive StaticToggle bake hardens collision (not visibility-only).
+
+### Trigger World bake (Problem D)
+- Soft ceiling ≥ **100 000** tracks (loud `tw softcap`); no silent 2048 truncate of bakeable static movers.
+- Collect finishes every object-layer child across slices; section scan for extras; long movers decimate keys under softcap.
+
+### Replay / Brute bake (Problem E)
+- Replay + BruteForce bake produce usable windows again (start snapshot, author TPS 1:1 for Physics Bypass, press+release same-frame, P2 handling).
+- Empty bake (`clicks=0`) no longer looks “loaded”; clear status / alerts.
+- Ghost hitbox fidelity: `copyPlayerState` refresh + clear stale jump hold; mode art / `switchedToMode` for non-cube ghosts.
+
+### Bake Visualizer (Problem F)
+- Visual tab **Bake Visualizer** (`show-bake-path`): green BakeMap windows near the player (off by default).
+
+### Main tab IA — presets removed (Problem G)
+- **Presets gone:** no `preset` dropdown, Cycle Preset action, F6 / `hotkey-cycle`, or `stage-index` Internal mirror.
+- Tick windows only on **Main → Window** (`window-unit` / `ticks-all` / `ticks-wave`).
+- Assist Off = **Enabled** off. Config import ignores legacy `preset` / `stage-index`.
+- Portable `ConfigBundle` keys **124** (was 127 with preset/stage/hotkey-cycle).
 
 ### iOS / shared collision hardening (Problem C)
-- **`SimSessionGuard` RAII** around plan / verify / bake / traj / replay sessions — always restoreCapture, clear `m_simulating` / `m_applyingRing`, park ghosts (even on early return).
-- Ring restore via **`typeinfo_cast<RingObject*>`**; always restore **`m_activatedObjectIDs`**; `applyRingJump` clears applying-flag with RAII.
-- **`collisionCheckObjects`** uses a persistent filter buffer (no stack `gd::vector`); null-reject live `playerTouchedRing` args.
-- Park/scrub **all** owned ghosts after sim (snapshots scrub+hide only — pose kept for bake/traj).
-- HUS: defer mid-`PlayerObject::update` replan (`hus-defer-mid-update`); Eclipse coexistence A/B matrix in `docs/assist_reference.md`.
-- **iOS load:** CMake POST_BUILD `ldid`/`codesign` ad-hoc sign; `geode_package_check.py --require ios` verifies `LC_CODE_SIGNATURE`; CI iOS job gates on it; `INSTALL.md` covers `missing code signature` / `Unable to load the DYLIB`.
+- **`SimSessionGuard` RAII** around plan / verify / bake / traj / replay — always restoreCapture, clear flags, park ghosts.
+- Ring restore via `typeinfo_cast`; always restore `m_activatedObjectIDs`; `applyRingJump` RAII for `m_applyingRing`.
+- **`collisionCheckObjects`** uses a persistent filter buffer (no stack `gd::vector`); null-reject live `playerTouchedRing`.
+- Park/scrub all owned ghosts after sim; HUS defers mid-`PlayerObject::update` replan; Eclipse coexistence notes in `docs/assist_reference.md`.
+- **iOS load:** CMake POST_BUILD `ldid`/`codesign`; `geode_package_check.py --require ios` checks `LC_CODE_SIGNATURE`; CI iOS job gates; `INSTALL.md` covers `missing code signature` / `Unable to load the DYLIB`.
+
+### Packaging / docs
+- `INSTALL.md` iOS signature troubleshooting; CI verifies signed `.ios.dylib`.
+- README / about / support / `assist_reference` → **v1.3.2**; ship notes: [`releases/v1.3.2.md`](releases/v1.3.2.md).
 
 ## v1.3.1
 
