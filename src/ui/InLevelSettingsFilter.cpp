@@ -5,6 +5,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/loader/SettingV3.hpp>
+#include <Geode/ui/GeodeUI.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
 #include <cocos-ext.h>
 #include <cmath>
@@ -858,6 +859,102 @@ bool InLevelSettingsFilterKeeper::isOpen() {
 
 void InLevelSettingsFilterKeeper::refreshOpen() {
     // Action button rows refresh themselves via onTick.
+}
+
+// Pull committed store values into open SettingNodeV3 drafts so Apply cannot
+// overwrite a just-imported config with stale green uncommitted UI.
+class SettingsImportUiSync {
+public:
+    template <class SettingT>
+    static bool syncValueNode(SettingNodeV3* sett) {
+        auto* node = typeinfo_cast<SettingValueNodeV3<SettingT>*>(sett);
+        if (!node) return false;
+        node->setValue(node->getSetting()->getValue(), nullptr);
+        return true;
+    }
+
+    static void syncNodesFromStore(CCNode* root, std::string const& ourId) {
+        if (!root) return;
+        std::vector<SettingNodeV3*> settings;
+        ScrollLayer* list = nullptr;
+        SettingsFilterWalk::collect(root, settings, list);
+        for (auto* sett : settings) {
+            if (!sett) continue;
+            auto setting = sett->getSetting();
+            if (!setting || setting->getModID() != ourId) continue;
+            if (syncValueNode<BoolSettingV3>(sett)) continue;
+            if (syncValueNode<IntSettingV3>(sett)) continue;
+            if (syncValueNode<FloatSettingV3>(sett)) continue;
+            if (syncValueNode<StringSettingV3>(sett)) continue;
+            if (syncValueNode<Color3BSettingV3>(sett)) continue;
+            if (syncValueNode<Color4BSettingV3>(sett)) continue;
+            // KeybindSettingNodeV3 has no public setValue — popup rebuild covers it.
+        }
+    }
+
+    static CCNode* findOurSettingsPopup(CCNode* scene, std::string const& ourId) {
+        if (!scene) return nullptr;
+        if (auto* keeper = SettingsFilterKeeperNode::findOpen()) {
+            if (auto* parent = keeper->getParent()) return parent;
+        }
+        for (auto* child : CCArrayExt<CCNode*>(scene->getChildren())) {
+            auto* alert = typeinfo_cast<FLAlertLayer*>(child);
+            if (!alert) continue;
+            std::vector<SettingNodeV3*> settings;
+            ScrollLayer* list = nullptr;
+            SettingsFilterWalk::collect(alert, settings, list);
+            for (auto* sett : settings) {
+                if (!sett) continue;
+                auto s = sett->getSetting();
+                if (s && s->getModID() == ourId) return alert;
+            }
+        }
+        return nullptr;
+    }
+
+private:
+    SettingsImportUiSync() = delete;
+};
+
+void InLevelSettingsFilterKeeper::reloadAfterImport() {
+    auto* scene = CCScene::get();
+    if (!scene) return;
+    auto* mod = Mod::get();
+    if (!mod) return;
+    std::string const ourId = mod->getID();
+
+    SettingsCategory restoreCat = SettingsCategory::Main;
+    if (auto* open = SettingsFilterKeeperNode::findOpen()) {
+        restoreCat = open->m_category;
+    }
+
+    CCNode* popup = SettingsImportUiSync::findOurSettingsPopup(scene, ourId);
+    if (!popup) return;
+
+    SettingsImportUiSync::syncNodesFromStore(popup, ourId);
+
+    int const restoreI = static_cast<int>(restoreCat);
+    // Rebuild next frame: import runs from a SettingNode button callback — do not
+    // destroy the popup until that stack unwinds. Rebuild also refreshes keybinds.
+    Loader::get()->queueInMainThread([restoreI] {
+        auto* scene = CCScene::get();
+        if (!scene) return;
+        auto* mod = Mod::get();
+        if (!mod) return;
+
+        if (auto* popup = SettingsImportUiSync::findOurSettingsPopup(scene, mod->getID())) {
+            popup->removeFromParentAndCleanup(true);
+        }
+        auto* fresh = geode::openSettingsPopup(mod, false);
+        if (!fresh) return;
+        InLevelSettingsFilterKeeper::attach(fresh);
+        if (auto* keeper = SettingsFilterKeeperNode::findOpen()) {
+            auto const cat = static_cast<SettingsCategory>(restoreI);
+            if (cat >= SettingsCategory::Main && cat < SettingsCategory::Count) {
+                keeper->setCategory(cat);
+            }
+        }
+    });
 }
 
 class SettingsTabWatchdog : public CCNode {

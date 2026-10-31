@@ -529,11 +529,14 @@ void PauseActionBridge::importConfig() {
         }
     }
     AssistController::get().updateOverlay();
-    FLAlertLayer::create(
-        "EarlyBuffer",
-        PauseActionBridgeDetail::formatImportSuccess(path).c_str(),
-        "OK"
-    )->show();
+    // Open ModSettingsPopup rows keep stale uncommitted values after setSettingValue
+    // → green labels / Apply would overwrite the import. Sync + rebuild UI.
+    InLevelSettingsFilterKeeper::reloadAfterImport();
+    auto const successMsg = PauseActionBridgeDetail::formatImportSuccess(path);
+    // Show success after the settings rebuild so it stays on top.
+    Loader::get()->queueInMainThread([successMsg] {
+        FLAlertLayer::create("EarlyBuffer", successMsg.c_str(), "OK")->show();
+    });
 }
 
 void PauseActionBridge::stubDevAction(char const* name) {

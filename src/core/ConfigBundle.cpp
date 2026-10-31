@@ -2,6 +2,7 @@
 #include "ConfigBundleCodec.hpp"
 #include "ConfigBundleKeys.hpp"
 #include "../config/StageConfig.hpp"
+#include "../dev/DevConfig.hpp"
 
 #include <fstream>
 #include <string>
@@ -313,6 +314,8 @@ geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
     }
 
     StageConfig::refreshCache();
+    // Applying-guard skips setting watchers — refresh Dev Lab cache explicitly.
+    DevConfig::refreshCache();
 
     stats.applied = applied;
     stats.skipped = skipped;
