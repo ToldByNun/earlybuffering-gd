@@ -63,7 +63,7 @@ void ShadowSimulator::attach(PlayLayer* layer) {
     }
     m_evalActive = nullptr;
     m_evalAbort = false;
-    m_nextSnapshot = 0;
+    m_nextSnapshot = SNAPSHOT_RING_BEGIN;
     m_hostLayer = layer;
 }
 
@@ -82,6 +82,7 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_deathObject = nullptr;
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
+    this->m_poseRemapDt = -1.f;
     this->m_triggerWorldAppliedThisTick = false;
     this->m_dynamicTargetIds.clear();
     this->m_toggleTargetIds.clear();
@@ -306,6 +307,7 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_deathObject = nullptr;
     this->m_simAbsTick = -1;
     this->m_simTickBase = 0;
+    this->m_poseRemapDt = -1.f;
     this->m_triggerWorldAppliedThisTick = false;
     this->m_dynamicTargetIds.clear();
     this->m_toggleTargetIds.clear();
@@ -952,7 +954,16 @@ void ShadowSimulator::applyTriggerWorldAtTick(
 
         auto* obj = c.st->obj;
         TriggerPose pose{};
-        if (!store.samplePose(c.st->uniqueId, absTick, pose)) continue;
+        bool ok = false;
+        if (this->m_poseRemapDt > 0.f) {
+            ok = store.samplePose(
+                c.st->uniqueId, absTick, this->m_poseRemapDt, pose
+            );
+        }
+        else {
+            ok = store.samplePose(c.st->uniqueId, absTick, pose);
+        }
+        if (!ok) continue;
         TriggerWorldStore::writePose(obj, pose);
         c.st->dirty = true;
         ++applied;
@@ -1199,10 +1210,23 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
 
 #undef EB_COPY
 
+int ShadowSimulator::captureStartSnapshot(PlayerObject* real) {
+    if (!real || !m_snapshots[START_SNAPSHOT_SLOT]) return -1;
+    copyPlayerState(m_snapshots[START_SNAPSHOT_SLOT], real);
+    return START_SNAPSHOT_SLOT;
+}
+
 int ShadowSimulator::captureSnapshot(PlayerObject* real) {
     if (!real || !m_snapshots[0]) return -1;
+    // Never clobber attempt-start (bake) — DecisionLog / traj / planSequence ring.
+    if (m_nextSnapshot <= START_SNAPSHOT_SLOT || m_nextSnapshot >= SNAPSHOT_SLOTS) {
+        m_nextSnapshot = SNAPSHOT_RING_BEGIN;
+    }
     int const slot = m_nextSnapshot;
-    m_nextSnapshot = (m_nextSnapshot + 1) % SNAPSHOT_SLOTS;
+    ++m_nextSnapshot;
+    if (m_nextSnapshot >= SNAPSHOT_SLOTS) {
+        m_nextSnapshot = SNAPSHOT_RING_BEGIN;
+    }
     copyPlayerState(m_snapshots[slot], real);
     return slot;
 }
@@ -3460,6 +3484,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
 
     this->m_simTickBase = 0;
     this->m_simAbsTick = -1;
+    this->m_poseRemapDt = dt; // TW remap must match bake physics, not live hitch dt
     m_simulating = true;
     beginCapture(layer);
 
@@ -3485,6 +3510,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     }
 
     this->m_simAbsTick = -1;
+    this->m_poseRemapDt = -1.f;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();
@@ -3522,6 +3548,7 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
 
     this->m_simTickBase = 0;
     this->m_simAbsTick = -1;
+    this->m_poseRemapDt = dt;
     m_simulating = true;
     beginCapture(layer);
 
@@ -3542,6 +3569,7 @@ ShadowSimulator::PathSample ShadowSimulator::samplePath(
     }
 
     this->m_simAbsTick = -1;
+    this->m_poseRemapDt = -1.f;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();
@@ -3569,6 +3597,11 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         if (!r.died) return r.endX > zone.endX || r.zoneCleared;
         return r.deathX > zone.endX;
     };
+
+    // Attempt-start bake slot must stay out of the rotating ring.
+    expect(START_SNAPSHOT_SLOT == 0, "start-slot-0");
+    expect(SNAPSHOT_RING_BEGIN == 1, "ring-begins-1");
+    expect(SNAPSHOT_RING_BEGIN < SNAPSHOT_SLOTS, "ring-lt-slots");
 
     // Fixed survive bins [0,24), [24,48), [48,96), [96,∞)
     expect(binOf(0) == 0, "bin0");

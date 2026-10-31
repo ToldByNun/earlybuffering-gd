@@ -511,15 +511,33 @@ Result<int> BakeMap::bakeReplay(
         ));
     }
 
+    int const nClicks = static_cast<int>(out.clicks.size());
+    int const nJobs = static_cast<int>(jobs.size());
+    AssistLog::info(fmt::format(
+        "BAKE done clicks={} jobs={} frames≈{} tps={:.0f} source={} (replay)",
+        nClicks,
+        nJobs,
+        nJobs > 0 ? jobs.back().until : 0,
+        tps,
+        out.sourceReplay
+    ));
+
+    if (nJobs <= 0) {
+        return Err("Replay has no Jump events to bake (import a macro with clicks)");
+    }
+    if (nClicks <= 0) {
+        // Do not persist empty over a previous good map.
+        return Err(
+            "Replay bake produced 0 windows — start snapshot may be stale or every "
+            "click dies in sim. Reset the level once, then Bake Map again."
+        );
+    }
+
     m_data = std::move(out);
     m_loaded = true;
     this->m_dirty = true;
     save();
-    AssistLog::info(fmt::format(
-        "BAKE: {} clicks from {} @ {:.0f} tps (replay)",
-        m_data.clicks.size(), m_data.sourceReplay, m_data.tps
-    ));
-    return Ok(static_cast<int>(m_data.clicks.size()));
+    return Ok(nClicks);
 }
 
 Result<int> BakeMap::bakeBrute(
@@ -820,19 +838,24 @@ Result<int> BakeMap::bakeBrute(
         ));
     }
 
-    if (out.clicks.empty()) {
-        return Err("Brute found no safe clicks (died immediately / unsolvable from start)");
+    int const nClicks = static_cast<int>(out.clicks.size());
+    AssistLog::info(fmt::format(
+        "BAKE done clicks={} frames_cap={} tps={:.0f} (brute)",
+        nClicks, maxFrames, tps
+    ));
+
+    if (nClicks <= 0) {
+        return Err(
+            "Brute found no safe clicks (died immediately / unsolvable from start). "
+            "Reset the level once so the start snapshot is fresh, then Brute Bake."
+        );
     }
 
     m_data = std::move(out);
     m_loaded = true;
     this->m_dirty = true;
     save();
-    AssistLog::info(fmt::format(
-        "BAKE: {} clicks (brute, no replay) @ {:.0f} tps (serial)",
-        m_data.clicks.size(), m_data.tps
-    ));
-    return Ok(static_cast<int>(m_data.clicks.size()));
+    return Ok(nClicks);
 }
 
 Result<> BakeMap::writeFile() const {

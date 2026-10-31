@@ -16,6 +16,15 @@ void BakeScheduler::cancel() {
 
 bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMethod method) {
     if (!layer || running()) return false;
+    if (startSlot < 0) {
+        AssistLog::info("BAKE failed: no start snapshot slot");
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            "No start snapshot — reset the level once, then bake.",
+            "OK"
+        )->show();
+        return false;
+    }
     m_running = true;
     // Main-thread only: queue work via queueInMainThread chain (cooperative).
     auto* pl = layer;
@@ -25,14 +34,23 @@ bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMetho
         if (res.isErr()) {
             AssistLog::info(fmt::format("BAKE failed: {}", res.unwrapErr()));
             FLAlertLayer::create("EarlyBuffer", res.unwrapErr().c_str(), "OK")->show();
-        } else {
-            AssistLog::info(fmt::format("BAKE done: {} windows", res.unwrap()));
-            FLAlertLayer::create(
-                "EarlyBuffer",
-                fmt::format("Bake done — {} windows (main-thread).", res.unwrap()).c_str(),
-                "OK"
-            )->show();
+            return;
         }
+        int const n = res.unwrap();
+        if (n <= 0) {
+            // Belt: bake*() should Err on empty; never celebrate 0 windows.
+            char const* msg =
+                "Bake produced 0 windows — reset the level, then try again.";
+            AssistLog::info(fmt::format("BAKE done clicks=0 (treated as fail)"));
+            FLAlertLayer::create("EarlyBuffer", msg, "OK")->show();
+            return;
+        }
+        AssistLog::info(fmt::format("BAKE done clicks={} (scheduler ok)", n));
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            fmt::format("Bake done — {} windows.", n).c_str(),
+            "OK"
+        )->show();
     });
     return true;
 }

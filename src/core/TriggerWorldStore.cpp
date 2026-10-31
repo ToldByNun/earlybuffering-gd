@@ -223,9 +223,17 @@ bool TriggerWorldStore::samplePoseAtStoreTick(
     return true;
 }
 
-bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const {
-    int const storeTick = this->remapLiveTick(liveAbsTick);
+bool TriggerWorldStore::samplePose(
+    int uniqueId, int liveAbsTick, float liveSimDt, TriggerPose& out
+) const {
+    int const storeTick = this->remapLiveTick(liveAbsTick, liveSimDt);
     return this->samplePoseAtStoreTick(uniqueId, storeTick, out);
+}
+
+bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const {
+    return this->samplePose(
+        uniqueId, liveAbsTick, AssistController::get().simDt(), out
+    );
 }
 
 void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {

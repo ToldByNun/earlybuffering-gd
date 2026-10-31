@@ -94,7 +94,9 @@ public:
 
     // Sample at live absTick (remaps to store tick first).
     // Hold last; before first key → false = keep baseline.
+    // Overload with liveSimDt for offline bake (do not use live hitch dt).
     bool samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const;
+    bool samplePose(int uniqueId, int liveAbsTick, float liveSimDt, TriggerPose& out) const;
     // Sample with an already-remapped store tick (tests / bakers).
     bool samplePoseAtStoreTick(int uniqueId, int storeTick, TriggerPose& out) const;
 

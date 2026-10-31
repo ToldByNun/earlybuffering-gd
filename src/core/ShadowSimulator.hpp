@@ -118,6 +118,9 @@ struct InputEvent {
 class ShadowSimulator {
 public:
     static constexpr int SNAPSHOT_SLOTS = 16;
+    // Slot 0 is immortal attempt-start (bake). Ring capture uses 1..SNAPSHOT_SLOTS-1.
+    static constexpr int START_SNAPSHOT_SLOT = 0;
+    static constexpr int SNAPSHOT_RING_BEGIN = 1;
     // Permanent eval ghosts (Commit 9) — not the 16 live snapshot slots.
     static constexpr int DEV_EVAL_SLOTS = 2;
     static constexpr float kClusterGapX = 50.f;
@@ -181,7 +184,10 @@ public:
 
     static void copyPlayerState(PlayerObject* dst, PlayerObject* src);
 
+    // Rotating ring — never overwrites START_SNAPSHOT_SLOT.
     int captureSnapshot(PlayerObject* real);
+    // Attempt-start pose for Replay/Brute bake (always slot 0).
+    int captureStartSnapshot(PlayerObject* real);
     PlayerObject* snapshotSlot(int slot) const;
 
     SimPlan plan(
@@ -534,6 +540,8 @@ private:
     int m_simAbsTick = -1;
     // Absolute tick corresponding to t=0 inside runOne / baseline / orb scan.
     int m_simTickBase = 0;
+    // >0 during offline bake: TriggerWorld remap uses this dt, not live simDt.
+    float m_poseRemapDt = -1.f;
     // Set when applyTriggerWorldAtTick runs for this step (SimCollisionPolicy).
     bool m_triggerWorldAppliedThisTick = false;
     // uniqueIds targeted by DynamicFollow (Unknown unless live probe applied).

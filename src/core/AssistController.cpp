@@ -381,14 +381,20 @@ void AssistController::onLevelQuit() {
 
 geode::Result<> AssistController::ensureStartSnapshot(PlayLayer* layer) {
     if (!layer) return geode::Err("No layer");
+    // Prefer reserved start slot captured at attempt begin. Only (re)capture
+    // while still near frame 0 — never overwrite with mid-run pose at bake time.
     if (!m_startSnapshotTaken || m_startSnapshotSlot < 0) {
         if (layer->m_player1 && m_attemptTick <= 5) {
-            m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(layer->m_player1);
+            m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(layer->m_player1);
             m_startSnapshotTaken = m_startSnapshotSlot >= 0;
         }
     }
-    if (!m_startSnapshotTaken) {
+    if (!m_startSnapshotTaken
+        || m_startSnapshotSlot != ShadowSimulator::START_SNAPSHOT_SLOT) {
         return geode::Err("Reset the level once (start snapshot), then bake");
+    }
+    if (!ShadowSimulator::get().snapshotSlot(m_startSnapshotSlot)) {
+        return geode::Err("Start snapshot missing — reset the level, then bake");
     }
     return geode::Ok();
 }
@@ -2032,8 +2038,8 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         this->m_lastPlayerX = p1->getPositionX();
         this->m_lastMode = StageConfig::kindOf(p1);
         if (!this->m_startSnapshotTaken && this->m_attemptTick <= 2) {
-            PerfTrace::Scope const scope("captureSnapshot");
-            this->m_startSnapshotSlot = ShadowSimulator::get().captureSnapshot(p1);
+            PerfTrace::Scope const scope("captureStartSnapshot");
+            this->m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(p1);
             this->m_startSnapshotTaken = this->m_startSnapshotSlot >= 0;
         }
 

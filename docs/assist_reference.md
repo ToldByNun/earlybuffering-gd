@@ -63,6 +63,8 @@ Settings (Learning): `auto-tune` (default off), `self-bake` (default off, practi
 
 `SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). **Death and reset never refine** (merge-only — refine on the main thread caused 1–2s freezes). Checkpoint / complete / quit may refine when enabled, start snapshot exists, and assist did not touch the run (`refineSelfWindows`, budget 64 sims). Quit cancels in-flight refine.
 
+**Replay / Brute bake:** attempt-start pose lives in reserved snapshot slot 0 (`captureStartSnapshot`) so DecisionLog / trajectory cannot clobber it. Offline bake remaps Trigger World with bake `dt`, not live hitch `simDt`. Empty results return an error (no “Bake done — 0 windows”); previous good maps are not overwritten. Always **reset once from start**, then pause → Bake Map / Brute Bake.
+
 ## Trigger World Bake
 
 Settings (Trigger World): `trigger-bake` (default on), `trigger-bake-skip-dynamic` (default on).
