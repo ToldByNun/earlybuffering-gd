@@ -754,6 +754,16 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     unknownOrb.usedOrbWindow = true;
     expect(shouldArmHoldUntilSafe(unknownOrb), "arm-unknown-orb");
 
+    // Toggle-unknown + foresight → Soft Hold OK; plain toggle Pass → no HUS.
+    SimPlan toggleUnk;
+    toggleUnk.action = PlanAction::Pass;
+    toggleUnk.reason = AssistReason::PassToggleUnknown;
+    toggleUnk.unknown = true;
+    toggleUnk.toggleUnknown = true;
+    expect(!shouldArmHoldUntilSafe(toggleUnk), "no-arm-toggle-plain");
+    toggleUnk.foresightOrbPad = true;
+    expect(shouldArmHoldUntilSafe(toggleUnk), "arm-toggle-foresight");
+
     SimPlan idleAscent;
     idleAscent.action = PlanAction::Pass;
     idleAscent.reason = AssistReason::PassHopeless;
@@ -2562,6 +2572,19 @@ bool AssistController::planPress(
     DevCycleRecorder::get().notePlanFinished(
         plan, effectTick, limit, clock, playLayer, player
     );
+
+    // Belt: never arm Delay when sim marked unknown / toggle-target uncertainty.
+    if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
+        AssistLog::debug(fmt::format(
+            "press: refuse Delay (toggle/unknown) → Pass id={}",
+            plan.planId
+        ));
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        plan.reason = AssistReason::PassToggleUnknown;
+        plan.unknown = true;
+        plan.toggleUnknown = true;
+    }
 
     if (plan.action != PlanAction::Delay) {
         if (shouldArmHoldUntilSafe(plan)) {

@@ -75,6 +75,7 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_dead = false;
     this->m_jumped = false;
     this->m_unknown = false;
+    this->m_toggleUnknownHit = false;
     this->m_activatedRing = false;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
@@ -82,6 +83,7 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_simTickBase = 0;
     this->m_triggerWorldAppliedThisTick = false;
     this->m_dynamicTargetIds.clear();
+    this->m_toggleTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
     this->m_saved.clear();
@@ -296,6 +298,7 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_dead = false;
     this->m_jumped = false;
     this->m_unknown = false;
+    this->m_toggleUnknownHit = false;
     this->m_activatedRing = false;
     this->m_ringCount = 0;
     this->m_deathObject = nullptr;
@@ -303,6 +306,7 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_simTickBase = 0;
     this->m_triggerWorldAppliedThisTick = false;
     this->m_dynamicTargetIds.clear();
+    this->m_toggleTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
     // If a sim aborted after applyAtTick moved solids, put them back before
@@ -551,8 +555,60 @@ bool ShadowSimulator::isDynamicTriggerTarget(int uniqueId) const {
     return this->m_dynamicTargetIds.find(uniqueId) != this->m_dynamicTargetIds.end();
 }
 
+bool ShadowSimulator::isToggleTriggerTarget(int uniqueId) const {
+    return this->m_toggleTargetIds.find(uniqueId) != this->m_toggleTargetIds.end();
+}
+
 bool ShadowSimulator::liveDynamicApplied(int uniqueId) const {
     return this->m_liveDynamicAppliedIds.find(uniqueId) != this->m_liveDynamicAppliedIds.end();
+}
+
+void ShadowSimulator::noteUnknown(GameObject* obj) {
+    this->m_unknown = true;
+    if (obj && this->isToggleTriggerTarget(obj->m_uniqueID)) {
+        this->m_toggleUnknownHit = true;
+    }
+}
+
+void ShadowSimulator::captureToggleUnknownTargets(PlayLayer* layer) {
+    this->m_toggleTargetIds.clear();
+    if (!layer) return;
+
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    if (!children) return;
+
+    // Collect toggle-orb / touch-toggle effects with a target group.
+    std::vector<EffectGameObject*> toggleEffects;
+    toggleEffects.reserve(32);
+    for (unsigned i = 0; i < children->count(); ++i) {
+        auto* effect = typeinfo_cast<EffectGameObject*>(children->objectAtIndex(i));
+        if (!effect) continue;
+        if (effect->m_targetGroupID <= 0) continue;
+        if (TriggerClassify::classify(effect) != TriggerKind::DynamicOther) continue;
+        int const oid = effect->m_objectID;
+        bool const toggleOrb = TriggerClassify::isToggleOrbId(oid);
+        bool const touchToggle =
+            TriggerClassify::isToggleTriggerId(oid) && effect->m_touchTriggered;
+        if (!toggleOrb && !touchToggle) continue;
+        toggleEffects.push_back(effect);
+        if (toggleEffects.size() >= 256) break;
+    }
+    if (toggleEffects.empty()) return;
+
+    static constexpr size_t kMaxToggleTargets = 8192;
+    for (auto* effect : toggleEffects) {
+        int const groupId = effect->m_targetGroupID;
+        if (groupId <= 0) continue;
+        for (unsigned i = 0; i < children->count(); ++i) {
+            if (this->m_toggleTargetIds.size() >= kMaxToggleTargets) return;
+            auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
+            if (!obj) continue;
+            if (typeinfo_cast<PlayerObject*>(obj)) continue;
+            if (obj == effect) continue;
+            if (!obj->belongsToGroup(groupId)) continue;
+            this->m_toggleTargetIds.insert(obj->m_uniqueID);
+        }
+    }
 }
 
 void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
@@ -742,11 +798,14 @@ void ShadowSimulator::beginCapture(PlayLayer* layer) {
     this->m_saved.clear();
     this->m_savedTransforms.clear();
     this->m_dynamicTargetIds.clear();
+    this->m_toggleTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
+    this->m_toggleUnknownHit = false;
     this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
     this->captureTriggerTransforms(layer);
     this->captureDynamicFollows(layer);
+    this->captureToggleUnknownTargets(layer);
 }
 
 void ShadowSimulator::resetCaptureForNextRun(PlayLayer* layer) {
@@ -782,7 +841,9 @@ void ShadowSimulator::restoreCapture(PlayLayer* layer) {
     }
     this->m_dynamicFollowJobs.clear();
     this->m_dynamicTargetIds.clear();
+    this->m_toggleTargetIds.clear();
     this->m_liveDynamicAppliedIds.clear();
+    this->m_toggleUnknownHit = false;
     this->m_triggerWorldAppliedThisTick = false;
 
     for (auto const& s : this->m_saved) {
@@ -1424,6 +1485,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     m_dead = false;
     m_jumped = false;
     m_unknown = false;
+    m_toggleUnknownHit = false;
     m_activatedRing = false;
     m_ringCount = 0;
     m_deathObject = nullptr;
@@ -1443,6 +1505,8 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
         out.ringCount = m_ringCount;
         out.endX = s->getPositionX();
         out.wasDashing = s->m_isDashing;
+        out.toggleUnknown = m_toggleUnknownHit;
+        if (out.toggleUnknown) out.unknownTrunc = true;
         out.ticksRan = std::max(out.ticksRan, out.deathTick >= 0 ? out.deathTick + 1 : 0);
         if (out.ticksBeforeNeutral <= 0) out.ticksBeforeNeutral = out.ticksRan;
         return out;
@@ -1680,6 +1744,7 @@ struct Cand {
     bool dualFailed = false;
     bool clearsThreat = false;
     bool unknownTrunc = false;
+    bool toggleUnknown = false;
     bool activatedRing = false;
     bool orbUseful = false;
     bool requireHold = false;
@@ -1816,14 +1881,11 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
 
     out.diedBeforeAction = r.diedBeforeAction;
     out.clearsThreat = clearsThreatOf(r, zone);
-    out.unknown = r.unknown || r.unknownTrunc;
-    // Survive-only: never ok a bake delay that dies in sim.
+    out.unknown = r.unknown || r.unknownTrunc || r.toggleUnknown;
+    // Survive-only: never ok a bake delay that dies or hits unknown (toggle honesty).
     bool viable = false;
-    if (r.diedBeforeAction || r.died) {
+    if (r.diedBeforeAction || r.died || r.unknownTrunc || r.toggleUnknown) {
         viable = false;
-    }
-    else if (r.unknownTrunc) {
-        viable = !zone.valid || out.clearsThreat || r.endX > zone.endX;
     }
     else {
         viable = !zone.valid || out.clearsThreat || r.zoneCleared;
@@ -1915,6 +1977,8 @@ SimPlan ShadowSimulator::plan(
     this->m_simAbsTick = -1;
     m_simulating = true;
     beginCapture(layer);
+    bool sawToggleUnknown = false;
+    bool const hadToggleTargets = !this->m_toggleTargetIds.empty();
 
     {
         auto base = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
@@ -2017,6 +2081,10 @@ SimPlan ShadowSimulator::plan(
         c.diedBeforeAction = r.diedBeforeAction;
         c.activatedRing = r.activatedRing;
         c.unknownTrunc = r.unknownTrunc;
+        c.toggleUnknown = r.toggleUnknown;
+        if (c.toggleUnknown || (c.unknownTrunc && hadToggleTargets)) {
+            sawToggleUnknown = true;
+        }
         c.endX = r.endX;
         c.deathX = r.deathX;
         c.jumpTick = r.jumped ? r.jumpTick : d;
@@ -2030,12 +2098,9 @@ SimPlan ShadowSimulator::plan(
         c.clearsThreat = clearsThreatOf(c.raw, zone);
         // Delay-viable ONLY if the sim survives. Death-past-zone used to count
         // as "clear" and caused +N Delay that still died (early or late).
-        // Uncertain → not Delay-viable (Pass / keep searching), never assist into death.
-        if (c.diedBeforeAction || c.raw.died) {
+        // Unknown / toggle-target overlap → never Delay-viable (honesty).
+        if (c.diedBeforeAction || c.raw.died || c.unknownTrunc || c.toggleUnknown) {
             c.viable = false;
-        }
-        else if (c.unknownTrunc) {
-            c.viable = !zone.valid || c.clearsThreat || c.raw.endX > zone.endX;
         }
         else {
             c.viable = !zone.valid || c.clearsThreat || c.raw.zoneCleared
@@ -2323,6 +2388,10 @@ SimPlan ShadowSimulator::plan(
                     c.raw = br;
                     c.activatedRing = br.activatedRing;
                     c.unknownTrunc = br.unknownTrunc;
+                    c.toggleUnknown = br.toggleUnknown;
+                    if (c.toggleUnknown || (c.unknownTrunc && hadToggleTargets)) {
+                        sawToggleUnknown = true;
+                    }
                     c.endX = br.endX;
                     c.deathX = br.deathX;
                     c.surviveTicks = br.ticksBeforeNeutral > 0 ? br.ticksBeforeNeutral : br.ticksRan;
@@ -2376,6 +2445,10 @@ SimPlan ShadowSimulator::plan(
         h.raw = hold;
         h.activatedRing = hold.activatedRing;
         h.unknownTrunc = hold.unknownTrunc;
+        h.toggleUnknown = hold.toggleUnknown;
+        if (h.toggleUnknown || (h.unknownTrunc && hadToggleTargets)) {
+            sawToggleUnknown = true;
+        }
         h.endX = hold.endX;
         h.deathX = hold.deathX;
         h.surviveTicks = hold.ticksBeforeNeutral > 0 ? hold.ticksBeforeNeutral : hold.ticksRan;
@@ -2753,13 +2826,17 @@ SimPlan ShadowSimulator::plan(
 
     // G1 window-cap assert.
     if (chosen > limit) chosen = limit;
-    // Hard gate: never arm a Delay the sim marked as death.
+    // Hard gate: never arm a Delay the sim marked as death or unknown.
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.raw.died || ch.diedBeforeAction) {
+        if (!ch.viable || ch.raw.died || ch.diedBeforeAction
+            || ch.unknownTrunc || ch.toggleUnknown) {
+            if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
+                sawToggleUnknown = true;
+            }
             AssistLog::debug(fmt::format(
-                "PLAN id={} reject lethal Delay +{} → Pass",
-                plan.planId, chosen
+                "PLAN id={} reject lethal/unknown Delay +{} → Pass toggleUnk={}",
+                plan.planId, chosen, sawToggleUnknown ? 1 : 0
             ));
             chosen = -1;
             doPass = false;
@@ -2803,10 +2880,14 @@ SimPlan ShadowSimulator::plan(
             ));
         }
     }
-    // Re-assert lethal gate after idleSafer / budget-partial.
+    // Re-assert lethal / unknown gate after idleSafer / budget-partial.
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.raw.died || ch.diedBeforeAction) {
+        if (!ch.viable || ch.raw.died || ch.diedBeforeAction
+            || ch.unknownTrunc || ch.toggleUnknown) {
+            if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
+                sawToggleUnknown = true;
+            }
             chosen = -1;
             doPass = false;
             plan.requireOrb = false;
@@ -2936,13 +3017,18 @@ SimPlan ShadowSimulator::plan(
 
     if (chosen < 0) {
         plan.action = PlanAction::Pass;
-        plan.reason = plan.budgetHit
-            ? AssistReason::PassBudget
-            : AssistReason::PassHopeless;
+        plan.toggleUnknown = sawToggleUnknown;
+        plan.unknown = sawToggleUnknown;
+        plan.reason = sawToggleUnknown
+            ? AssistReason::PassToggleUnknown
+            : (plan.budgetHit
+                ? AssistReason::PassBudget
+                : AssistReason::PassHopeless);
         plan.delay = 0;
         AssistLog::debug(fmt::format(
-            "PLAN id={} Pass verdict={} limit={} budgetHit={} orbIntent={}",
-            plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit, orbIntent
+            "PLAN id={} Pass verdict={} limit={} budgetHit={} toggleUnk={} orbIntent={}",
+            plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit,
+            sawToggleUnknown ? 1 : 0, orbIntent
         ));
         DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
         if (plan.budgetHit) early = DevRejectLedger::EarlyExit::Budget;
@@ -2958,48 +3044,70 @@ SimPlan ShadowSimulator::plan(
         plan.nowIsSafe = cands[0].viable;
         plan.jumpTick = cands[0].jumpTick;
         plan.activatedRing = cands[0].activatedRing;
+        plan.toggleUnknown = sawToggleUnknown || cands[0].toggleUnknown;
+        plan.unknown = plan.toggleUnknown || cands[0].unknownTrunc;
+        // d0 "safe" that only looked clear through unknown → honesty Pass.
+        if (cands[0].unknownTrunc || cands[0].toggleUnknown || !cands[0].viable) {
+            if (sawToggleUnknown || cands[0].toggleUnknown || hadToggleTargets) {
+                plan.reason = AssistReason::PassToggleUnknown;
+                plan.toggleUnknown = true;
+                plan.unknown = true;
+            }
+        }
     }
     else {
-        plan.action = PlanAction::Delay;
-        plan.reason = AssistVerdict::inferDelayReason(
-            plan.activatedRing
-                || cands[static_cast<size_t>(chosen)].activatedRing,
-            plan.requireOrb,
-            hasPrefer
-        );
-        plan.delay = chosen;
-        plan.jumpTick = cands[static_cast<size_t>(chosen)].jumpTick;
-        plan.nowIsSafe = false;
-        plan.activatedRing = plan.activatedRing
-            || cands[static_cast<size_t>(chosen)].activatedRing;
-        if (plan.releaseAfter < 0 && cands[static_cast<size_t>(chosen)].releaseAfter >= 0) {
-            plan.releaseAfter = cands[static_cast<size_t>(chosen)].releaseAfter;
-            plan.releaseEarliest = plan.releaseAfter;
-            plan.releaseLatest = plan.releaseAfter;
+        auto const& winCand = cands[static_cast<size_t>(chosen)];
+        // Belt: never ship Delay on unknown/toggle-unknown path.
+        if (winCand.unknownTrunc || winCand.toggleUnknown) {
+            plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassToggleUnknown;
+            plan.delay = 0;
+            plan.unknown = true;
+            plan.toggleUnknown = true;
+            plan.nowIsSafe = false;
         }
-        plan.requireHold = plan.requireHold
-            || cands[static_cast<size_t>(chosen)].requireHold;
-        // Non-orb: publish survivor band for planSequence exit prediction.
-        if (!plan.requireOrb) {
-            int sLo = -1;
-            int sHi = -1;
-            for (int d = 0; d <= limit; ++d) {
-                auto const& c = cands[static_cast<size_t>(d)];
-                if (!c.viable || c.raw.died) continue;
-                if (sLo < 0) sLo = d;
-                sHi = d;
+        else {
+            plan.action = PlanAction::Delay;
+            plan.reason = AssistVerdict::inferDelayReason(
+                plan.activatedRing || winCand.activatedRing,
+                plan.requireOrb,
+                hasPrefer
+            );
+            plan.delay = chosen;
+            plan.jumpTick = winCand.jumpTick;
+            plan.nowIsSafe = false;
+            plan.activatedRing = plan.activatedRing || winCand.activatedRing;
+            // Chosen path is clean — other cands may have hit toggle-unknown.
+            plan.unknown = false;
+            plan.toggleUnknown = false;
+            if (plan.releaseAfter < 0 && winCand.releaseAfter >= 0) {
+                plan.releaseAfter = winCand.releaseAfter;
+                plan.releaseEarliest = plan.releaseAfter;
+                plan.releaseLatest = plan.releaseAfter;
             }
-            if (sLo >= 0) {
-                plan.dMin = sLo;
-                plan.dMax = sHi;
+            plan.requireHold = plan.requireHold || winCand.requireHold;
+            // Non-orb: publish survivor band for planSequence exit prediction.
+            if (!plan.requireOrb) {
+                int sLo = -1;
+                int sHi = -1;
+                for (int d = 0; d <= limit; ++d) {
+                    auto const& c = cands[static_cast<size_t>(d)];
+                    if (!c.viable || c.raw.died) continue;
+                    if (sLo < 0) sLo = d;
+                    sHi = d;
+                }
+                if (sLo >= 0) {
+                    plan.dMin = sLo;
+                    plan.dMax = sHi;
+                }
             }
         }
     }
 
     // Dash orbs: sim keeps Jump down via tapRelease exceptions, but live inject
     // used to default releaseAfter=1 and cancel the dash. Force hold when the
-    // winning cand dashed.
-    if (chosen >= 0 && chosen <= limit) {
+    // winning Delay cand dashed.
+    if (plan.action == PlanAction::Delay && chosen >= 0 && chosen <= limit) {
         auto const& win = cands[static_cast<size_t>(chosen)];
         if (win.raw.wasDashing) {
             plan.requireHold = true;
@@ -3010,6 +3118,20 @@ SimPlan ShadowSimulator::plan(
             }
             if (plan.releaseLatest < 120) plan.releaseLatest = 120;
         }
+    }
+
+    // Final honesty: never ship Delay when the *chosen* path is unknown.
+    if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        plan.reason = AssistReason::PassToggleUnknown;
+        plan.unknown = true;
+        plan.toggleUnknown = true;
+        plan.requireHold = false;
+        AssistLog::debug(fmt::format(
+            "PLAN id={} refuse Delay → pass-toggle-unknown",
+            plan.planId
+        ));
     }
 
     if (plan.action == PlanAction::Delay && plan.reason == AssistReason::None) {

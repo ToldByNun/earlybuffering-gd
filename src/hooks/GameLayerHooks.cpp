@@ -153,7 +153,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                         break;
                     case SimObjectAction::UnknownOnOverlap:
                         if (player && obj->getObjectRect().intersectsRect(player->getObjectRect())) {
-                            sim.noteUnknown();
+                            sim.noteUnknown(obj);
                             SimCollisionPolicy::noteLimitedSimOnce();
                         }
                         break;

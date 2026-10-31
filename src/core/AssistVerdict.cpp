@@ -29,6 +29,7 @@ char const* AssistVerdict::name(AssistReason reason) {
         case AssistReason::DelayPrefer: return "delay-prefer";
         case AssistReason::DelayGeneric: return "delay-generic";
         case AssistReason::HoldPending: return "hold-pending";
+        case AssistReason::PassToggleUnknown: return "pass-toggle-unknown";
         case AssistReason::PassUnknown: return "pass-unknown";
     }
     return "pass-unknown";
@@ -63,6 +64,7 @@ char const* AssistVerdict::overlayBit(AssistReason reason) {
         case AssistReason::DelayPrefer: return "DELAY prefer";
         case AssistReason::DelayGeneric: return "DELAY";
         case AssistReason::HoldPending: return "HOLD~";
+        case AssistReason::PassToggleUnknown: return "PASS toggle-unk";
         case AssistReason::PassUnknown: return "PASS unknown";
     }
     return "PASS unknown";

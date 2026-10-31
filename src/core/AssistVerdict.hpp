@@ -44,6 +44,9 @@ enum class AssistReason {
     // Soft hold (later commits may set; reserved)
     HoldPending,
 
+    // Toggle orb / touch-toggle target overlapped in sim — never Delay
+    PassToggleUnknown,
+
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown
 };

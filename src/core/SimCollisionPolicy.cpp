@@ -17,26 +17,34 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
     if (!obj) return SimObjectAction::Skip;
 
     auto& sim = ShadowSimulator::get();
-    if (StageConfig::triggerBake() && sim.isSimulating()) {
-        // Ready static bake track + apply this sim tick → Include.
-        if (sim.triggerWorldAppliedThisTick()) {
-            auto const* track = TriggerWorldStore::get().findTrack(obj->m_uniqueID);
-            if (track
-                && track->ready
-                && TriggerClassify::isStatic(track->kind)) {
-                return SimObjectAction::Include;
-            }
+    if (sim.isSimulating()) {
+        // Toggle orb / touch-toggle targets: frozen pre-flip pose is a lie —
+        // always UnknownOnOverlap (never Include via live follow probe).
+        if (sim.isToggleTriggerTarget(obj->m_uniqueID)) {
+            return SimObjectAction::UnknownOnOverlap;
         }
 
-        // Player-coupled follow targets: never trust editor pose.
-        // skip-dynamic (default) / dual / probe miss → Unknown.
-        // skip-dynamic off + cheap live probe applied → Include.
-        if (sim.isDynamicTriggerTarget(obj->m_uniqueID)) {
-            if (!StageConfig::triggerBakeSkipDynamic()
-                && sim.liveDynamicApplied(obj->m_uniqueID)) {
-                return SimObjectAction::Include;
+        if (StageConfig::triggerBake()) {
+            // Ready static bake track + apply this sim tick → Include.
+            if (sim.triggerWorldAppliedThisTick()) {
+                auto const* track = TriggerWorldStore::get().findTrack(obj->m_uniqueID);
+                if (track
+                    && track->ready
+                    && TriggerClassify::isStatic(track->kind)) {
+                    return SimObjectAction::Include;
+                }
             }
-            return SimObjectAction::UnknownOnOverlap;
+
+            // Player-coupled follow targets: never trust editor pose.
+            // skip-dynamic (default) / dual / probe miss → Unknown.
+            // skip-dynamic off + cheap live probe applied → Include.
+            if (sim.isDynamicTriggerTarget(obj->m_uniqueID)) {
+                if (!StageConfig::triggerBakeSkipDynamic()
+                    && sim.liveDynamicApplied(obj->m_uniqueID)) {
+                    return SimObjectAction::Include;
+                }
+                return SimObjectAction::UnknownOnOverlap;
+            }
         }
     }
 
@@ -100,7 +108,8 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
     if (warned) return false;
     warned = true;
     AssistLog::info(
-        "sim: limited (follow-player/dynamic → unknown unless live probe; "
+        "sim: limited (toggle-orb/touch-toggle targets → unknown; "
+        "follow-player/dynamic → unknown unless live probe; "
         "ready static bake → include)"
     );
     return true;

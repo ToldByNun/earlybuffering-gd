@@ -76,6 +76,8 @@ struct SimPlan {
     GameObject* baselineDeathObject = nullptr;
     float baselineDeathX = 0.f;
     bool unknown = false;
+    // True when sim overlapped a toggle-orb / touch-toggle target (Commit 3).
+    bool toggleUnknown = false;
     bool budgetHit = false;
     bool activatedRing = false;
     bool usedOrbWindow = false;
@@ -168,7 +170,9 @@ public:
     void evacuateGhosts(GJBaseGameLayer* layer);
     void noteJump();
     void noteActivated(GameObject* obj);
-    void noteUnknown() { m_unknown = true; }
+    // Overlap with UnknownOnOverlap object. Pass obj to flag toggle-target hits.
+    void noteUnknown(GameObject* obj = nullptr);
+    bool isToggleTriggerTarget(int uniqueId) const;
 
     void applyRingJump(PlayerObject* shadow, RingObject* ring);
     bool isApplyingRing() const { return m_applyingRing; }
@@ -405,6 +409,7 @@ public:
         bool unknown = false;
         bool activatedRing = false;
         bool unknownTrunc = false;
+        bool toggleUnknown = false;
         bool zoneCleared = false;
         bool wasDashing = false;
         int ringCount = 0;
@@ -518,6 +523,7 @@ private:
     bool m_dead = false;
     bool m_jumped = false;
     bool m_unknown = false;
+    bool m_toggleUnknownHit = false;
     bool m_activatedRing = false;
     int m_ringCount = 0;
     GameObject* m_deathObject = nullptr;
@@ -532,8 +538,12 @@ private:
     bool m_triggerWorldAppliedThisTick = false;
     // uniqueIds targeted by DynamicFollow (Unknown unless live probe applied).
     std::unordered_set<int> m_dynamicTargetIds;
+    // Toggle orb 1594 / touch-1049 group members → always UnknownOnOverlap.
+    std::unordered_set<int> m_toggleTargetIds;
     std::vector<DynamicFollowJob> m_dynamicFollowJobs;
     std::unordered_set<int> m_liveDynamicAppliedIds;
+
+    void captureToggleUnknownTargets(PlayLayer* layer);
 
     static constexpr size_t kMaxDynamicFollowJobs = 32;
     static constexpr size_t kMaxDynamicTargetsPerJob = 64;

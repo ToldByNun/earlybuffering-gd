@@ -81,7 +81,7 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 | Quit | Cancel → `save` if dirty → `clear` |
 | `trigger-bake` off | Clear store; no build |
 
-**Sim collision:** ready Static* track + apply this step → `Include`. DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay Unknown. **Follow-player never enters static JSON.**
+**Sim collision:** ready Static* track + apply this step → `Include`. **Toggle orb 1594 / touch-1049 target group members → always `UnknownOnOverlap`** (never Delay-viable; `pass-toggle-unknown`). DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay Unknown. **Follow-player never enters static JSON.**
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Caps: 2048 tracks, 8192 keys/track. Baker: spawn-timed StaticMove/Rotate/Scale/Toggle (linear); group-follow / touch / toggle-orb / enter-X skipped.
 
@@ -423,6 +423,7 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 | `pass-wave-proximity` / `pass-wave-futile` | Wave spam / no useful delay (blocked by foresight orb) |
 | `pass-d0-safe` | Delay 0 already clears (Legacy preference / New best=0) |
 | `pass-hopeless` / `pass-budget` | Nothing viable / tick wall; may arm HUS if foresight/ascent |
+| `pass-toggle-unknown` | Toggle-orb / touch-toggle target overlapped in sim — refuse Delay (honesty; ToggleOrbSim accuracy is separate) |
 | `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / trust gates (orb foresight softens) |
 | `pass-limit-zero` / `pass-debounce` / `pass-cps` / `pass-scope` / `pass-assist-off` / `pass-early-attempt` | Hard off / debounce / CPS / scope |
 | `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake paths (Hybrid falls through to Live) |
@@ -444,6 +445,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
 | Budget starve mid-search + foresight orb | `HUS` → cadenced replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass / never hang; LagProbe `eb.hus.replan` |
 | Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
+| Toggle-orb corridor (solids flip on 1594) | `PASS toggle-unk` / HUS — never hallucinated Delay | Same | Overlay `PASS toggle-unk`; Commit 4 models flip |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
