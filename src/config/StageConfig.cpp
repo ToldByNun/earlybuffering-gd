@@ -80,7 +80,6 @@ bool g_cachedShowPauseHub = true;
 bool g_cachedAssistPress = true;
 bool g_cachedAssistRelease = true;
 bool g_cachedAssistOrbs = true;
-bool g_cachedSwallow = false;
 bool g_cachedAutoTune = false;
 bool g_cachedSelfBake = false;
 bool g_cachedSelfBakeNormal = false;
@@ -105,7 +104,6 @@ bool g_cachedAssistStartposOnly = false;
 int g_cachedAssistPercentMin = 0;
 int g_cachedAssistPercentMax = 100;
 std::vector<StageConfig::PercentRange> g_cachedAssistDisableRanges;
-bool g_cachedShowPauseAssist = false;
 bool g_cachedSaveFeedbackSound = true;
 bool g_cachedSaveFeedbackColor = true;
 bool g_cachedSaveFeedbackCounter = false;
@@ -218,7 +216,6 @@ void StageConfig::refreshCache() {
     g_cachedAssistPress = readBool(mod, "assist-press", true);
     g_cachedAssistRelease = readBool(mod, "assist-release", true);
     g_cachedAssistOrbs = readBool(mod, "assist-orbs", true);
-    g_cachedSwallow = readBool(mod, "swallow-hopeless", false);
     g_cachedAutoTune = readBool(mod, "auto-tune", false);
     g_cachedSelfBake = readBool(mod, "self-bake", false);
     g_cachedSelfBakeNormal = readBool(mod, "self-bake-normal", false);
@@ -243,7 +240,6 @@ void StageConfig::refreshCache() {
         std::swap(g_cachedAssistPercentMin, g_cachedAssistPercentMax);
     }
     loadAssistOffSlots(mod, g_cachedAssistDisableRanges);
-    g_cachedShowPauseAssist = readBool(mod, "show-pause-assist", false);
     g_cachedSaveFeedbackSound = readBool(mod, "save-feedback-sound", false);
     g_cachedSaveFeedbackColor = readBool(mod, "save-feedback-color", false);
     g_cachedSaveFeedbackCounter = readBool(mod, "save-feedback-counter", false);
@@ -509,7 +505,6 @@ bool StageConfig::showPauseHub() { ensureCache(); return g_cachedShowPauseHub; }
 bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
 bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
 bool StageConfig::assistOrbs() { ensureCache(); return g_cachedAssistOrbs; }
-bool StageConfig::swallowHopeless() { ensureCache(); return g_cachedSwallow; }
 bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
 bool StageConfig::selfBake() { ensureCache(); return g_cachedSelfBake; }
 bool StageConfig::selfBakeNormal() { ensureCache(); return g_cachedSelfBakeNormal; }
@@ -575,7 +570,6 @@ bool StageConfig::isInAssistDisableRange(float percent) {
     }
     return false;
 }
-bool StageConfig::showPauseAssist() { ensureCache(); return g_cachedShowPauseAssist; }
 bool StageConfig::saveFeedbackSound() {
     ensureCache();
     return g_cachedSaveFeedbackSound;

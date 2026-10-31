@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[130];
-    static constexpr int kEntryCount = 130;
+    static ConfigBundleKeys::Entry const kEntries[126];
+    static constexpr int kEntryCount = 126;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[130] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[126] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "preset", ConfigBundleKeys::Kind::String },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
@@ -24,7 +24,6 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[130] = {
     { "lag-probe", ConfigBundleKeys::Kind::Bool },
     { "show-trajectory", ConfigBundleKeys::Kind::Bool },
     { "show-pause-bake", ConfigBundleKeys::Kind::Bool },
-    { "show-pause-assist", ConfigBundleKeys::Kind::Bool },
     { "show-pause-hub", ConfigBundleKeys::Kind::Bool },
     { "save-feedback-sound", ConfigBundleKeys::Kind::Bool },
     { "save-feedback-color", ConfigBundleKeys::Kind::Bool },
@@ -129,7 +128,6 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[130] = {
     { "hotkey-trajectory", ConfigBundleKeys::Kind::Keybind },
     { "dev-record-enable", ConfigBundleKeys::Kind::Bool },
     { "dev-record-count", ConfigBundleKeys::Kind::Int },
-    { "dev-record-include-pass", ConfigBundleKeys::Kind::Bool },
     { "dev-count-empty-attempts", ConfigBundleKeys::Kind::Bool },
     { "dev-freeze-world", ConfigBundleKeys::Kind::Bool },
     { "dev-disable-random", ConfigBundleKeys::Kind::Bool },
@@ -140,11 +138,9 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[130] = {
     { "dev-objective", ConfigBundleKeys::Kind::String },
     { "dev-eval-require-deps", ConfigBundleKeys::Kind::Bool },
     { "dev-record-cands", ConfigBundleKeys::Kind::Bool },
-    { "dev-eval-budget-us", ConfigBundleKeys::Kind::Int },
     { "dev-eval-tick-budget", ConfigBundleKeys::Kind::Int },
     { "dev-overlay", ConfigBundleKeys::Kind::Bool },
-    { "stage-index", ConfigBundleKeys::Kind::Int },
-    { "swallow-hopeless", ConfigBundleKeys::Kind::Bool }
+    { "stage-index", ConfigBundleKeys::Kind::Int }
 };
 
 ConfigBundleKeys::Entry const* ConfigBundleKeys::begin() {
@@ -181,7 +177,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 130, "count-130");
+    expect(ConfigBundleKeysTable::kEntryCount == 126, "count-126");
     expect(
         ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount,
         "count-api"
@@ -232,8 +228,8 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         static_cast<int>(seen.size()) == ConfigBundleKeysTable::kEntryCount,
         "unique-count"
     );
-    expect(kindBool == 51, "kind-bool-51");
-    expect(kindInt == 45, "kind-int-45");
+    expect(kindBool == 48, "kind-bool-48");
+    expect(kindInt == 44, "kind-int-44");
     expect(kindFloat == 20, "kind-float-20");
     expect(kindString == 7, "kind-string-7");
     expect(kindColor == 1, "kind-color-1");

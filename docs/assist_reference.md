@@ -157,7 +157,7 @@ Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Wi
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **130** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **`settings`**: all **126** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows. Unknown / removed keys in old JSON are skipped on import.
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
@@ -190,7 +190,6 @@ Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **As
 | show-overlay | bool | false | | | Main |
 | show-trajectory | bool | false | | | Visual |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
-| show-pause-assist | bool | false | | | Main — legacy unused (actions under Assist page) |
 | show-pause-hub | bool | true | | | Main — EB button |
 | save-feedback-sound | bool | false | | | Visual — per-tick MP3 cue on delayed inject |
 | save-feedback-color | bool | false | | | Visual — flash player icon on delayed inject |
@@ -228,8 +227,7 @@ Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **As
 | trigger-bake-skip-dynamic | bool | true | | | Trigger World — do not bake/probe follow-player etc. |
 | assist-verify | string | off | off/ab | | Learning — debug A/B only |
 | MODE-enable/overwrite/ticks/cap/slack/latency | mixed | see mod.json | | | Per-mode cube..swing; latencyWeight defaults Cube 0.25 … Wave 1.0 |
-| stage-index | int | 1 | 0 | 4 | Internal — preset mirror (1=Normal) |
-| swallow-hopeless | bool | false | | | Internal — deprecated unused |
+| stage-index | int | 1 | 0 | 4 | Keys / Internal — preset mirror (1=Normal); do not edit |
 
 ## Pseudocode plan()
 

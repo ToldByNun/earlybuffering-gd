@@ -201,9 +201,7 @@ $on_mod(Loaded) {
         AssistController::get().updateOverlay();
     });
     watchBool("show-pause-bake");
-    watchBool("show-pause-assist");
     watchBool("show-pause-hub");
-    watchBool("swallow-hopeless");
     watchBool("auto-tune");
     watchBool("self-bake");
     watchBool("self-bake-normal");
@@ -241,7 +239,6 @@ $on_mod(Loaded) {
     // Dev Lab (Commit 2 cache; session/eval still stubbed).
     watchBool("dev-record-enable");
     watchInt("dev-record-count");
-    watchBool("dev-record-include-pass");
     watchBool("dev-count-empty-attempts");
     watchBool("dev-freeze-world");
     watchBool("dev-disable-random");
@@ -250,7 +247,6 @@ $on_mod(Loaded) {
     watchInt("dev-eval-tail");
     watchBool("dev-eval-require-deps");
     watchBool("dev-record-cands");
-    watchInt("dev-eval-budget-us");
     watchInt("dev-eval-tick-budget");
     watchBool("dev-overlay");
     listenForSettingChanges<std::string>("dev-eval-grid", [](std::string) {

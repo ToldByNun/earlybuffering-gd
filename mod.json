@@ -91,12 +91,6 @@
 			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
 			"default": false
 		},
-		"show-pause-assist": {
-			"type": "bool",
-			"name": "Pause Assist Buttons (legacy)",
-			"description": "Unused legacy toggle. Assist actions are under EB → Assist. Kept so old configs still load.",
-			"default": false
-		},
 		"debug-logging": {
 			"type": "bool",
 			"name": "Debug Logging",
@@ -1091,7 +1085,7 @@
 		"title-internal": {
 			"type": "title",
 			"name": "Internal",
-			"description": "Internal keys for old configs / preset sync. Prefer Main → Preset; you usually can ignore this section."
+			"description": "Preset Index mirrors Main → Preset for sync. Do not edit — use the Preset dropdown or F6."
 		},
 		"stage-index": {
 			"type": "int",
@@ -1100,12 +1094,6 @@
 			"default": 1,
 			"min": 0,
 			"max": 4
-		},
-		"swallow-hopeless": {
-			"type": "bool",
-			"name": "Swallow If Hopeless (deprecated)",
-			"description": "Deprecated and unused — EarlyBuffer never blocks your clicks. Kept so old configs still load.",
-			"default": false
 		},
 		"title-dev": {
 			"type": "title",
@@ -1130,12 +1118,6 @@
 			"default": 10,
 			"min": 1,
 			"max": 50
-		},
-		"dev-record-include-pass": {
-			"type": "bool",
-			"name": "Dev Record Include Pass",
-			"description": "When recording, also trace gate Passes (CPS/scope/spam) so cause analysis is complete. Off = only Delay arms and related fire/outcome events.",
-			"default": true
 		},
 		"dev-count-empty-attempts": {
 			"type": "bool",
@@ -1215,14 +1197,6 @@
 			"name": "Dev Record Candidates",
 			"description": "When recording after plan(), store per-delay reject ledger notes (and scores). Default on. Off keeps codes thinner but hurts why-not analysis.",
 			"default": true
-		},
-		"dev-eval-budget-us": {
-			"type": "int",
-			"name": "Dev Eval Budget (µs)",
-			"description": "Soft wall-clock cap for one eval pass (microseconds). 0 = no wall clock limit (tick budget still applies). Partial grids set objectivePartial.",
-			"default": 2000,
-			"min": 0,
-			"max": 20000
 		},
 		"dev-eval-tick-budget": {
 			"type": "int",

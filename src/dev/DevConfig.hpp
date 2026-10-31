@@ -24,7 +24,6 @@ public:
     // --- Session ---
     static bool recordEnable();
     static int recordCount(); // clamped 1..50
-    static bool recordIncludePass();
     static bool countEmptyAttempts();
     static bool freezeWorld();
     // When recording: kill explore / verify-AB randomness (default on).
@@ -40,7 +39,6 @@ public:
     static char const* objectiveId(Objective obj);
     static bool evalRequireDeps();
     static bool recordCands();
-    static int evalBudgetUs();
     static int evalTickBudget();
 
     // --- Overlay ---

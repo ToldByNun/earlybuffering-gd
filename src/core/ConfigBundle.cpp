@@ -330,7 +330,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
     };
 
     expect(ConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(ConfigBundleKeys::count() == 130, "keys-130");
+    expect(ConfigBundleKeys::count() == 126, "keys-126");
 
     auto* mod = Mod::get();
     if (!mod) {

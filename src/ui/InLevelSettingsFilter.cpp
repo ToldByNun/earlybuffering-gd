@@ -3,10 +3,11 @@
 #include "../core/ConfigBundleKeys.hpp"
 
 #include <Geode/Geode.hpp>
-#include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
+#include <cocos-ext.h>
+#include <cmath>
 #include <fmt/format.h>
 #include <cstring>
 #include <vector>
@@ -21,7 +22,7 @@ public:
         SettingsCategory cat;
     };
 
-    static constexpr int kCount = 171;
+    static constexpr int kCount = 167;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -48,7 +49,6 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "show-overlay", SettingsCategory::Main },
     { "show-pause-hub", SettingsCategory::Main },
     { "show-pause-bake", SettingsCategory::Main },
-    { "show-pause-assist", SettingsCategory::Main },
     { "debug-logging", SettingsCategory::Main },
     { "perf-trace", SettingsCategory::Main },
     { "lag-probe", SettingsCategory::Main },
@@ -182,12 +182,10 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "hotkey-trajectory", SettingsCategory::Keys },
     { "title-internal", SettingsCategory::Keys },
     { "stage-index", SettingsCategory::Keys },
-    { "swallow-hopeless", SettingsCategory::Keys },
     { "title-dev", SettingsCategory::Dev },
     { "title-dev-session", SettingsCategory::Dev },
     { "dev-record-enable", SettingsCategory::Dev },
     { "dev-record-count", SettingsCategory::Dev },
-    { "dev-record-include-pass", SettingsCategory::Dev },
     { "dev-count-empty-attempts", SettingsCategory::Dev },
     { "dev-freeze-world", SettingsCategory::Dev },
     { "dev-disable-random", SettingsCategory::Dev },
@@ -199,7 +197,6 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "dev-objective", SettingsCategory::Dev },
     { "dev-eval-require-deps", SettingsCategory::Dev },
     { "dev-record-cands", SettingsCategory::Dev },
-    { "dev-eval-budget-us", SettingsCategory::Dev },
     { "dev-eval-tick-budget", SettingsCategory::Dev },
     { "title-dev-overlay", SettingsCategory::Dev },
     { "dev-overlay", SettingsCategory::Dev },
@@ -254,9 +251,44 @@ float InLevelSettingsFilter::preservedContentY(
 // File-local UI helpers (classes, not anonymous namespaces).
 class SettingsFilterWalk {
 public:
+    static bool isOurCategoryChrome(CCNode* node) {
+        if (!node) return false;
+        auto const id = node->getID();
+        return id == "earlybuffer-settings-category-bar"_spr
+            || id == "earlybuffer-settings-category-menu"_spr;
+    }
+
+    // Legacy: older builds nested a ScrollLayer in the chip bar; still ignore those.
+    static bool isCategoryBarScroll(ScrollLayer* scroll) {
+        if (!scroll) return false;
+        if (scroll->getID() == "earlybuffer-settings-category-scroll"_spr) return true;
+        for (auto* n = scroll->getParent(); n; n = n->getParent()) {
+            if (n->getID() == "earlybuffer-settings-category-bar"_spr) return true;
+        }
+        return false;
+    }
+
+    static bool scrollLooksLikeSettingsList(ScrollLayer* scroll) {
+        if (!scroll || !scroll->m_contentLayer) return false;
+        if (isCategoryBarScroll(scroll)) return false;
+        // Real ModSettingsPopup list is tall; chip strip is ~34px.
+        if (scroll->getContentSize().height < 80.f) return false;
+        return true;
+    }
+
     static void collect(CCNode* node, std::vector<SettingNodeV3*>& settings, ScrollLayer*& list) {
         if (!node) return;
-        if (auto* scroll = typeinfo_cast<ScrollLayer*>(node)) list = scroll;
+        // Do not descend into our chip bar — its nested ScrollLayer would steal `list`.
+        if (isOurCategoryChrome(node)) return;
+
+        if (auto* scroll = typeinfo_cast<ScrollLayer*>(node)) {
+            if (scrollLooksLikeSettingsList(scroll)) {
+                if (!list
+                    || scroll->getContentSize().height > list->getContentSize().height) {
+                    list = scroll;
+                }
+            }
+        }
         if (auto* sett = typeinfo_cast<SettingNodeV3*>(node)) {
             settings.push_back(sett);
             return;
@@ -275,53 +307,55 @@ private:
 
 class SettingsFilterKeeperNode;
 
-// Visible chip / segment strip — every tab label is tappable at once.
+// Text-only tab strip: selected = white, idle = grey. No chrome / fills.
+// Invisible CCMenu hit targets (opacity 1) — Geode ScrollLayer was eating bar touches.
 class SettingsCategoryBar : public CCNode {
 public:
-    static constexpr float kBarH = 34.f;
-    static constexpr float kChipGap = 3.f;
-    static constexpr float kSidePad = 4.f;
-    static constexpr float kChipFontScale = 0.38f;
-    static constexpr float kMinFitScale = 0.26f;
-    static constexpr float kMaxFitScale = 1.f;
+    static constexpr float kBarH = 32.f;
+    static constexpr float kSidePad = 2.f;
+    static constexpr float kSegGap = 0.f;
+    static constexpr float kMinFitScale = 0.20f;
+    static constexpr float kMaxFitScale = 0.40f;
 
     bool initBar(SettingsFilterKeeperNode* owner, float width) {
         if (!CCNode::init()) return false;
         if (!owner || width < 40.f) return false;
 
         this->m_owner = owner;
+        this->m_active = SettingsCategory::Main;
         this->setID("earlybuffer-settings-category-bar"_spr);
         this->setContentSize({ width, kBarH });
         this->ignoreAnchorPointForPosition(false);
         this->setAnchorPoint({ 0.5f, 0.f });
 
-        this->m_scroll = ScrollLayer::create({ width, kBarH }, true, false);
-        if (!this->m_scroll) return false;
-        this->m_scroll->setID("earlybuffer-settings-category-scroll"_spr);
-        this->m_scroll->setPosition({ 0.f, 0.f });
-        this->m_scroll->setCancelTouchLimit(8.f);
-        this->addChild(this->m_scroll);
+        this->m_labels = CCNode::create();
+        if (!this->m_labels) return false;
+        this->m_labels->setContentSize({ width, kBarH });
+        this->m_labels->setPosition({ 0.f, 0.f });
+        this->addChild(this->m_labels, 1);
 
         this->m_menu = CCMenu::create();
         if (!this->m_menu) return false;
         this->m_menu->setID("earlybuffer-settings-category-menu"_spr);
+        this->m_menu->setContentSize({ width, kBarH });
         this->m_menu->setPosition({ 0.f, 0.f });
         this->m_menu->ignoreAnchorPointForPosition(false);
         this->m_menu->setAnchorPoint({ 0.f, 0.f });
-        this->m_scroll->m_contentLayer->addChild(this->m_menu);
+        this->addChild(this->m_menu, 2);
 
-        this->rebuildChips(SettingsCategory::Main);
+        this->rebuild(this->m_active);
         return true;
     }
 
     void setCategory(SettingsCategory cat) {
-        this->rebuildChips(cat);
-        this->ensureActiveVisible(cat);
+        if (cat == this->m_active) return;
+        this->m_active = cat;
+        // Never destroy menu items mid-click — only recolor labels.
+        this->paintLabels(cat);
     }
 
     void setMenuTouchPriority(int priority) {
         if (this->m_menu) this->m_menu->setTouchPriority(priority);
-        if (this->m_scroll) this->m_scroll->setTouchPriority(priority + 1);
     }
 
     void onChip(CCObject* sender);
@@ -337,129 +371,101 @@ public:
     }
 
 private:
-    ButtonSprite* makeChipSprite(SettingsCategory cat, bool active) const {
-        char const* const frame = active ? "GJ_button_01.png" : "GJ_button_05.png";
-        auto* spr = ButtonSprite::create(
-            InLevelSettingsFilter::categoryName(cat),
-            "bigFont.fnt",
-            frame,
-            kChipFontScale
-        );
-        if (!spr) return nullptr;
-        if (!active) spr->setOpacity(210);
-        return spr;
+    void paintLabels(SettingsCategory active) {
+        if (!this->m_labels) return;
+        auto* kids = this->m_labels->getChildren();
+        if (!kids) return;
+        for (unsigned i = 0; i < kids->count(); ++i) {
+            auto* label = typeinfo_cast<CCLabelBMFont*>(kids->objectAtIndex(i));
+            if (!label) continue;
+            bool const isActive = static_cast<int>(active) == static_cast<int>(i);
+            if (isActive) {
+                label->setColor({ 255, 255, 255 });
+                label->setOpacity(255);
+            }
+            else {
+                label->setColor({ 150, 150, 150 });
+                label->setOpacity(200);
+            }
+        }
     }
 
-    void rebuildChips(SettingsCategory active) {
-        if (!this->m_menu || !this->m_scroll || !this->m_scroll->m_contentLayer) return;
-
+    void rebuild(SettingsCategory active) {
+        if (!this->m_menu || !this->m_labels) return;
         this->m_menu->removeAllChildren();
-        this->m_chips.clear();
+        this->m_labels->removeAllChildren();
 
         float const barW = this->getContentSize().width;
-        float const midY = kBarH * 0.5f;
+        int const n = static_cast<int>(SettingsCategory::Count);
+        if (n <= 0) return;
 
-        struct ChipMeas {
-            SettingsCategory cat;
-            float width;
-        };
-        std::vector<ChipMeas> measured;
-        measured.reserve(static_cast<size_t>(SettingsCategory::Count));
+        float const segW = (barW - kSidePad * 2.f) / static_cast<float>(n);
+        if (segW < 8.f) return;
 
-        float natural = kSidePad * 2.f;
-        for (int i = 0; i < static_cast<int>(SettingsCategory::Count); ++i) {
-            auto const cat = static_cast<SettingsCategory>(i);
-            auto* probe = this->makeChipSprite(cat, cat == active);
-            float w = 40.f;
-            if (probe) {
-                w = probe->getContentSize().width * probe->getScale();
-                // Not added — release via autorelease pool after frame; keep local Ref.
-            }
-            if (i > 0) natural += kChipGap;
-            natural += w;
-            measured.push_back({ cat, w });
-        }
-
-        float fit = 1.f;
-        if (natural > barW && natural > 0.f) {
-            fit = barW / natural;
-        }
-        if (fit < kMinFitScale) fit = kMinFitScale;
-        if (fit > kMaxFitScale) fit = kMaxFitScale;
-
-        float contentW = kSidePad * 2.f;
-        for (size_t i = 0; i < measured.size(); ++i) {
-            if (i > 0) contentW += kChipGap;
-            contentW += measured[i].width * fit;
-        }
-        if (contentW < barW) contentW = barW;
-
-        this->m_scroll->m_contentLayer->setContentSize({ contentW, kBarH });
-        this->m_menu->setContentSize({ contentW, kBarH });
-
+        this->m_menu->setContentSize({ barW, kBarH });
         float x = kSidePad;
-        for (size_t i = 0; i < measured.size(); ++i) {
-            auto const cat = measured[i].cat;
+        for (int i = 0; i < n; ++i) {
+            auto const cat = static_cast<SettingsCategory>(i);
             bool const isActive = cat == active;
-            auto* spr = this->makeChipSprite(cat, isActive);
-            if (!spr) continue;
-            spr->setScale(spr->getScale() * fit);
-            if (isActive) spr->setScale(spr->getScale() * 1.04f);
+
+            auto* label = CCLabelBMFont::create(
+                InLevelSettingsFilter::categoryName(cat),
+                "bigFont.fnt"
+            );
+            if (label) {
+                float scale = kMaxFitScale;
+                float const maxW = segW - 4.f;
+                if (label->getContentSize().width > 0.f) {
+                    float const fit = maxW / label->getContentSize().width;
+                    if (fit < scale) scale = fit;
+                }
+                if (scale < kMinFitScale) scale = kMinFitScale;
+                label->setScale(scale);
+                label->setAnchorPoint({ 0.5f, 0.5f });
+                label->setPosition({ x + segW * 0.5f, kBarH * 0.5f });
+                if (isActive) {
+                    label->setColor({ 255, 255, 255 });
+                    label->setOpacity(255);
+                }
+                else {
+                    label->setColor({ 150, 150, 150 });
+                    label->setOpacity(200);
+                }
+                this->m_labels->addChild(label);
+            }
+
+            // Near-invisible hit plate (opacity 0 often skips hit-tests in cocos).
+            auto* hit = CCScale9Sprite::create("square02b_001.png");
+            if (!hit) {
+                x += segW;
+                continue;
+            }
+            hit->setOpacity(1);
+            hit->setContentSize({ segW, kBarH });
 
             auto* item = CCMenuItemSpriteExtra::create(
-                spr, this, menu_selector(SettingsCategoryBar::onChip)
+                hit, this, menu_selector(SettingsCategoryBar::onChip)
             );
-            if (!item) continue;
+            if (!item) {
+                x += segW;
+                continue;
+            }
             item->setTag(static_cast<int>(cat));
-            float const iw = item->getContentSize().width * item->getScale();
-            item->setPosition({ x + iw * 0.5f, midY });
+            item->setContentSize({ segW, kBarH });
+            if (auto* img = item->getNormalImage()) {
+                img->setAnchorPoint({ 0.5f, 0.5f });
+                img->setPosition({ segW * 0.5f, kBarH * 0.5f });
+            }
+            item->setPosition({ x + segW * 0.5f, kBarH * 0.5f });
             this->m_menu->addChild(item);
-            this->m_chips.push_back(item);
-            x += iw + kChipGap;
+            x += segW;
         }
-
-        // Horizontal lists start scrolled to the left (x = 0).
-        this->m_scroll->m_contentLayer->setPosition({ 0.f, 0.f });
-    }
-
-    void ensureActiveVisible(SettingsCategory cat) {
-        if (!this->m_scroll || !this->m_scroll->m_contentLayer) return;
-        auto const idx = static_cast<int>(cat);
-        if (idx < 0 || idx >= static_cast<int>(this->m_chips.size())) return;
-        auto* item = this->m_chips[static_cast<size_t>(idx)];
-        if (!item) return;
-
-        float const viewW = this->getContentSize().width;
-        float const contentW = this->m_scroll->m_contentLayer->getContentSize().width;
-        if (contentW <= viewW + 0.5f) {
-            this->m_scroll->m_contentLayer->setPositionX(0.f);
-            return;
-        }
-
-        float const itemX = item->getPositionX();
-        float const itemHalf = item->getContentSize().width * item->getScale() * 0.5f;
-        float const left = itemX - itemHalf;
-        float const right = itemX + itemHalf;
-        float posX = this->m_scroll->m_contentLayer->getPositionX();
-        // Content moves left (negative) to reveal right-side chips.
-        float const viewLeft = -posX;
-        float const viewRight = viewLeft + viewW;
-        if (left < viewLeft) {
-            posX = -left + kSidePad;
-        }
-        else if (right > viewRight) {
-            posX = -(right - viewW) - kSidePad;
-        }
-        float const minX = viewW - contentW;
-        if (posX > 0.f) posX = 0.f;
-        if (posX < minX) posX = minX;
-        this->m_scroll->m_contentLayer->setPositionX(posX);
     }
 
     SettingsFilterKeeperNode* m_owner = nullptr;
-    ScrollLayer* m_scroll = nullptr;
+    SettingsCategory m_active = SettingsCategory::Main;
+    CCNode* m_labels = nullptr;
     CCMenu* m_menu = nullptr;
-    std::vector<CCMenuItemSpriteExtra*> m_chips;
 };
 
 class SettingsFilterKeeperNode : public CCNode {
@@ -471,6 +477,7 @@ public:
     size_t m_lastChildCount = 0;
     SettingsCategory m_appliedCat = SettingsCategory::Count;
     bool m_loggedShortList = false;
+    float m_listFullH = 0.f;
 
     void setCategory(SettingsCategory cat) {
         auto const n = static_cast<int>(SettingsCategory::Count);
@@ -489,47 +496,76 @@ public:
         ));
     }
 
+    void layoutBar(ScrollLayer* list, SettingsCategoryBar* bar) {
+        if (!list || !bar) return;
+        constexpr float kBarH = SettingsCategoryBar::kBarH;
+        auto const sz = list->getContentSize();
+        // Geode can restore list height every frame — keep carving the tab strip out.
+        if (sz.height > this->m_listFullH) this->m_listFullH = sz.height;
+        if (this->m_listFullH < kBarH + 16.f) {
+            if (!this->m_loggedShortList) {
+                this->m_loggedShortList = true;
+                log::warn(
+                    "EarlyBuffer settings category bar skipped: list height {:.1f} <= {:.1f}",
+                    this->m_listFullH,
+                    kBarH + 16.f
+                );
+            }
+            return;
+        }
+        float const wantH = this->m_listFullH - kBarH;
+        if (std::fabs(sz.height - wantH) > 0.5f) {
+            list->setContentSize({ sz.width, wantH });
+        }
+        bar->setPosition({
+            list->getPositionX() + sz.width * 0.5f,
+            list->getPositionY() + wantH
+        });
+        // Beat ScrollLayer + Geode menus so tab hits actually fire.
+        bar->setMenuTouchPriority(list->getTouchPriority() - 64);
+        bar->setZOrder(list->getZOrder() + 20);
+    }
+
     void ensureBar(ScrollLayer* list) {
-        if (!list) return;
+        if (!list || SettingsFilterWalk::isCategoryBarScroll(list)) return;
 
         this->m_list = list;
         auto* parent = list->getParent();
         if (!parent) return;
 
-        constexpr float kBarH = SettingsCategoryBar::kBarH;
+        if (this->m_listFullH <= 0.f) {
+            this->m_listFullH = list->getContentSize().height;
+        }
+
         if (auto* existing = typeinfo_cast<SettingsCategoryBar*>(
                 parent->getChildByID("earlybuffer-settings-category-bar"_spr)
             )) {
             this->m_bar = existing;
+            this->layoutBar(list, existing);
             this->m_bar->setCategory(this->m_category);
             return;
         }
 
-        auto const listSize = list->getContentSize();
-        // Prefer attaching even on shorter lists; only skip when physically impossible.
-        if (listSize.height <= kBarH + 16.f) {
+        constexpr float kBarH = SettingsCategoryBar::kBarH;
+        if (this->m_listFullH <= kBarH + 16.f) {
             if (!this->m_loggedShortList) {
                 this->m_loggedShortList = true;
                 log::warn(
                     "EarlyBuffer settings category bar skipped: list height {:.1f} <= {:.1f}",
-                    listSize.height,
+                    this->m_listFullH,
                     kBarH + 16.f
                 );
             }
             return;
         }
 
-        list->setContentSize({ listSize.width, listSize.height - kBarH });
-        auto* bar = SettingsCategoryBar::create(this, listSize.width);
+        float const width = list->getContentSize().width;
+        auto* bar = SettingsCategoryBar::create(this, width);
         if (!bar) return;
 
-        bar->setPosition({
-            list->getPositionX() + listSize.width * 0.5f,
-            list->getPositionY() + list->getContentSize().height
-        });
-        bar->setMenuTouchPriority(list->getTouchPriority() - 1);
         parent->addChild(bar);
         this->m_bar = bar;
+        this->layoutBar(list, bar);
         this->m_bar->setCategory(this->m_category);
     }
 
@@ -539,7 +575,14 @@ public:
         std::vector<SettingNodeV3*> found;
         ScrollLayer* list = nullptr;
         SettingsFilterWalk::collect(popup, found, list);
-        if (list) this->m_list = list;
+        if (list && SettingsFilterWalk::scrollLooksLikeSettingsList(list)) {
+            // Never replace a good settings list with a shorter / chip-bar scroll.
+            if (!this->m_list
+                || SettingsFilterWalk::isCategoryBarScroll(this->m_list)
+                || list->getContentSize().height >= this->m_list->getContentSize().height) {
+                this->m_list = list;
+            }
+        }
 
         for (auto* sett : found) {
             if (!sett) continue;
@@ -587,7 +630,11 @@ public:
 
         this->absorbFromTree(popup);
         this->ensureBar(this->m_list);
-        if (!this->m_list || !this->m_list->m_contentLayer) return;
+        if (!this->m_list
+            || !this->m_list->m_contentLayer
+            || SettingsFilterWalk::isCategoryBarScroll(this->m_list)) {
+            return;
+        }
         if (this->m_all.empty()) return;
 
         auto* content = this->m_list->m_contentLayer;
@@ -678,9 +725,15 @@ private:
 void SettingsCategoryBar::onChip(CCObject* sender) {
     auto* item = typeinfo_cast<CCMenuItem*>(sender);
     if (!item || !this->m_owner) return;
-    auto const idx = item->getTag();
-    if (idx < 0 || idx >= static_cast<int>(SettingsCategory::Count)) return;
-    this->m_owner->setCategory(static_cast<SettingsCategory>(idx));
+    int const tag = item->getTag();
+    if (tag < 0 || tag >= static_cast<int>(SettingsCategory::Count)) return;
+    auto* owner = this->m_owner;
+    auto const cat = static_cast<SettingsCategory>(tag);
+    // Defer past the menu callback so Geode touch dispatch stays stable.
+    Loader::get()->queueInMainThread([owner = Ref(owner), cat] {
+        if (!owner) return;
+        owner->setCategory(cat);
+    });
 }
 
 void InLevelSettingsFilter::apply(CCNode* popup, SettingsCategory cat) {
@@ -768,7 +821,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
         expect(c != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-count-171");
+    expect(mapped == SettingsCategoryMap::kCount, "map-count-167");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
@@ -779,8 +832,11 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
 
     expect(preservedContentY(100.f, 800.f, 400.f) == 500.f, "scroll-shrink");
     expect(preservedContentY(0.f, 100.f, 100.f) == 0.f, "scroll-same");
-    expect(SettingsCategoryBar::kBarH == 34.f, "chip-bar-height");
+    expect(SettingsCategoryBar::kBarH == 32.f, "chip-bar-height");
     expect(SettingsCategoryBar::kMinFitScale > 0.f, "chip-min-fit");
+    expect(SettingsFilterWalk::isOurCategoryChrome(nullptr) == false, "chrome-null");
+    expect(SettingsFilterWalk::isCategoryBarScroll(nullptr) == false, "cat-scroll-null");
+    expect(SettingsFilterWalk::scrollLooksLikeSettingsList(nullptr) == false, "list-null");
 
     if (fails == 0) report = "InLevelSettingsFilter selfCheck OK";
     else report = fmt::format("InLevelSettingsFilter {} fails: {}", fails, report);

@@ -12,7 +12,6 @@ using namespace geode::prelude;
 bool g_devCacheInit = false;
 bool g_devRecordEnable = false;
 int g_devRecordCount = 10;
-bool g_devRecordIncludePass = true;
 bool g_devCountEmptyAttempts = false;
 bool g_devFreezeWorld = false;
 bool g_devDisableRandom = true;
@@ -23,7 +22,6 @@ int g_devEvalTail = 48;
 DevConfig::Objective g_devObjective = DevConfig::Objective::SurviveThenEndX;
 bool g_devEvalRequireDeps = true;
 bool g_devRecordCands = true;
-int g_devEvalBudgetUs = 2000;
 int g_devEvalTickBudget = 8000;
 bool g_devOverlay = false;
 
@@ -79,7 +77,6 @@ void DevConfig::refreshCache() {
 
     g_devRecordEnable = readBool(mod, "dev-record-enable", false);
     g_devRecordCount = clampInt(readInt(mod, "dev-record-count", 10), 1, 50);
-    g_devRecordIncludePass = readBool(mod, "dev-record-include-pass", true);
     g_devCountEmptyAttempts = readBool(mod, "dev-count-empty-attempts", false);
     g_devFreezeWorld = readBool(mod, "dev-freeze-world", false);
     g_devDisableRandom = readBool(mod, "dev-disable-random", true);
@@ -90,7 +87,6 @@ void DevConfig::refreshCache() {
     g_devObjective = parseObjective(readString(mod, "dev-objective", "survive_then_endx_v1"));
     g_devEvalRequireDeps = readBool(mod, "dev-eval-require-deps", true);
     g_devRecordCands = readBool(mod, "dev-record-cands", true);
-    g_devEvalBudgetUs = clampInt(readInt(mod, "dev-eval-budget-us", 2000), 0, 20000);
     g_devEvalTickBudget = clampInt(readInt(mod, "dev-eval-tick-budget", 8000), 500, 50000);
     g_devOverlay = readBool(mod, "dev-overlay", false);
 
@@ -111,11 +107,6 @@ bool DevConfig::recordEnable() {
 int DevConfig::recordCount() {
     ensureCache();
     return g_devRecordCount;
-}
-
-bool DevConfig::recordIncludePass() {
-    ensureCache();
-    return g_devRecordIncludePass;
 }
 
 bool DevConfig::countEmptyAttempts() {
@@ -184,11 +175,6 @@ bool DevConfig::evalRequireDeps() {
 bool DevConfig::recordCands() {
     ensureCache();
     return g_devRecordCands;
-}
-
-int DevConfig::evalBudgetUs() {
-    ensureCache();
-    return g_devEvalBudgetUs;
 }
 
 int DevConfig::evalTickBudget() {

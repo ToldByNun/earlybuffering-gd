@@ -92,8 +92,7 @@ public:
     static bool blocksProgressSaves(bool assistTouchedRun);
     static bool showOverlay();
     static bool showTrajectory();
-    static bool showPauseBake(); // pause-screen bake / mode buttons
-    static bool showPauseAssist();
+    static bool showPauseBake(); // pause-screen status lines
     // Pause top-right button → Geode openSettingsPopup (later: hub).
     static bool showPauseHub();
     // Independent save-feedback toggles (sound / icon flash / frame counter).
@@ -134,7 +133,6 @@ public:
     static bool assistPress();
     static bool assistRelease();
     static bool assistOrbs(); // orb contact-window ranking (Live/Hybrid)
-    static bool swallowHopeless(); // deprecated unused (Internal)
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
     static char const* assistModeHint(AssistMode mode);
