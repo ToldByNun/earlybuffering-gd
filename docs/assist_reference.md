@@ -85,7 +85,9 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 | Quit | Cancel → `save` if dirty → `clear` |
 | `trigger-bake` off | Clear store; no build |
 
-**Sim collision:** ready Static* track + apply this step → `Include` only while pose active (`writePose` clears visibility/`poweredOn` when inactive → `Skip`). **Toggle orb 1594 / touch-1049 targets:** pre-flip → `UnknownOnOverlap` (`pass-toggle-unknown`); after `ToggleOrbSim` models the hit → `Include`/`Skip` by post-flip active (no vanilla `triggerObject`). DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay Unknown. **Follow-player never enters static JSON.**
+**Sim collision:** ready Static* track + apply this step → `Include` only while pose active (`writePose` clears visibility/`poweredOn` when inactive → `Skip`). **Toggle orb 1594 / touch-1049 targets:** pre-flip → `UnknownOnOverlap` (`pass-toggle-unknown`); after `ToggleOrbSim` models the hit → `Include`/`Skip` by post-flip active (no vanilla `triggerObject`). DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay **Hard** Unknown. **Follow-player never enters static JSON.**
+
+**Commit 5 (Soft Unknown → Include):** Soft histogram types (vehicle / mirror / teleport / modifier / collision / enter-effect) → `Include` via `classifyObjectType` — vanilla physics, **no Soft-Continue**. Hard (toggle pre-model, dynamic follow, Dual/Solo) still `UnknownOnOverlap` + truncate. PlanGold: `sim-collision-policy` fixtures + `ghost-parity-probe` (ε LOCK unchanged).
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Softcap **100 000** tracks / 32 768 keys/track (AssistLog + overlay `tw softcap`); hard OOM valve 250 000 / 65 536 with loud truncate — **no silent 2048 drop**.
 
