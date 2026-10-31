@@ -585,6 +585,107 @@ bool AssistController::fireTickSelfCheck(std::string& report) {
     return false;
 }
 
+int AssistController::resolveQueuedHoldTicks(
+    bool requireHold,
+    bool continuous,
+    int releaseAfter,
+    int releaseEarliest,
+    int releaseLatest,
+    int extendCap
+) {
+    if (extendCap < 0) extendCap = 0;
+
+    int hold = -1;
+    if (continuous) {
+        // Earliest-safe only — never drag ceiling with blind +limit.
+        if (releaseEarliest >= 0) hold = releaseEarliest;
+        else if (releaseAfter >= 0) hold = releaseAfter;
+        else return 0;
+    }
+    else if (releaseAfter >= 0) {
+        hold = releaseAfter;
+    }
+    else if (requireHold) {
+        hold = extendCap;
+    }
+    else {
+        return 0;
+    }
+
+    if (hold <= 0) return 0;
+    if (releaseLatest >= 0) hold = std::min(hold, releaseLatest);
+    hold = std::min(hold, extendCap);
+    return std::max(0, hold);
+}
+
+bool AssistController::queuedHoldSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    // Plain Delay tap + early release → ASAP (0 hold).
+    expect(
+        resolveQueuedHoldTicks(false, false, -1, -1, -1, 8) == 0,
+        "plain-asap"
+    );
+    expect(
+        resolveQueuedHoldTicks(false, false, 0, -1, -1, 8) == 0,
+        "rel0-asap"
+    );
+
+    // Planner releaseAfter honored (discrete).
+    expect(
+        resolveQueuedHoldTicks(false, false, 5, 2, 10, 8) == 5,
+        "rel-after"
+    );
+    expect(
+        resolveQueuedHoldTicks(true, false, 5, 2, 10, 8) == 5,
+        "hold-rel-after"
+    );
+
+    // requireHold without release fields → clamp to extendCap (dash/robot).
+    expect(
+        resolveQueuedHoldTicks(true, false, -1, -1, -1, 8) == 8,
+        "hold-fallback-cap"
+    );
+
+    // Continuous: earliest-safe only; no blind +limit.
+    expect(
+        resolveQueuedHoldTicks(true, true, 10, 2, 14, 16) == 2,
+        "cont-earliest"
+    );
+    expect(
+        resolveQueuedHoldTicks(true, true, 6, -1, 14, 16) == 6,
+        "cont-rel-after"
+    );
+    expect(
+        resolveQueuedHoldTicks(true, true, -1, -1, -1, 16) == 0,
+        "cont-no-blind-cap"
+    );
+
+    // Clamp to latest and extendCap.
+    expect(
+        resolveQueuedHoldTicks(false, false, 12, 2, 4, 16) == 4,
+        "clamp-latest"
+    );
+    expect(
+        resolveQueuedHoldTicks(false, false, 12, 2, 20, 8) == 8,
+        "clamp-cap"
+    );
+
+    if (fails == 0) {
+        report = "queuedHoldSelfCheck OK";
+        return true;
+    }
+    report = fmt::format("queuedHoldSelfCheck {} fails: {}", fails, report);
+    return false;
+}
+
 bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
     if (plan.action == PlanAction::Delay) return false;
     if (plan.reason == AssistReason::PassBudget) return true;
@@ -754,6 +855,9 @@ bool AssistController::armHoldUntilSafe(
     this->m_buffer.mode = StageConfig::kindOf(player);
     this->m_buffer.requireOrb = plan.requireOrb || plan.foresightOrbPad || plan.usedOrbWindow;
     this->m_buffer.requireHold = plan.requireHold;
+    this->m_buffer.releaseAfter = plan.releaseAfter;
+    this->m_buffer.releaseEarliest = plan.releaseEarliest;
+    this->m_buffer.releaseLatest = plan.releaseLatest;
     this->m_buffer.dMin = plan.dMin;
     this->m_buffer.dMax = plan.dMax;
     this->m_buffer.planId = plan.planId;
@@ -905,6 +1009,9 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
         this->m_buffer.requireOrb = this->m_buffer.requireOrb || re.requireOrb;
         this->m_buffer.requireHold = re.requireHold;
+        this->m_buffer.releaseAfter = re.releaseAfter;
+        this->m_buffer.releaseEarliest = re.releaseEarliest;
+        this->m_buffer.releaseLatest = re.releaseLatest;
         if (re.dMin >= 0) this->m_buffer.dMin = re.dMin;
         if (re.dMax >= 0) this->m_buffer.dMax = re.dMax;
         this->m_buffer.holdUntilSafe = false; // hard Delay confirmed
@@ -1712,13 +1819,19 @@ void AssistController::fireBuffered(
     bool const player1 = this->m_buffer.player1;
     bool const requireHold = this->m_buffer.requireHold;
     bool const continuous = this->m_buffer.continuous;
+    int const releaseAfter = this->m_buffer.releaseAfter;
+    int const releaseEarliest = this->m_buffer.releaseEarliest;
+    int const releaseLatest = this->m_buffer.releaseLatest;
     bool const letGo = this->m_buffer.releaseSeen || !this->userHolding(player1);
     int const delayed = std::max(0, this->m_attemptTick - this->m_buffer.pressTick);
     int const planId = this->m_buffer.planId;
     bool const expectOrb = this->m_buffer.requireOrb;
     int64_t const devPressId = this->m_buffer.devPressId;
-    // Max post-release extend = this press's tick window (e.g. Ticks=4 → ≤4).
+    // Max post-release / queued hold = this press's tick window (e.g. Ticks=4 → ≤4).
     int const extendCap = std::max(0, this->m_buffer.limit);
+    int const queuedHold = resolveQueuedHoldTicks(
+        requireHold, continuous, releaseAfter, releaseEarliest, releaseLatest, extendCap
+    );
 
     DevCycleRecorder::get().noteFire(devPressId, this->m_attemptTick);
 
@@ -1749,43 +1862,65 @@ void AssistController::fireBuffered(
 
     // After assisted press:
     // - While user holds: never force-release.
-    // - After they let go: optional short extend ≤ tick window (not every time).
-    // - If user already up at fire: release next tick (swallowed release).
+    // - User already up (releaseSeen) + plan hold → queued hold in GD for N ticks, then UP.
+    // - User already up + plain Delay → ASAP release (swallowed early UP).
+    // - User still holding + requireHold → extend-after-release on their UP.
     if (wasPress) {
         if (letGo) {
             this->m_pendingRelease = true;
             this->m_pendingReleaseP1 = player1;
-            this->m_pendingReleaseHold = false;
-            this->m_pendingReleaseContinuous = false;
             this->m_pendingReleaseArmTick = this->m_attemptTick;
             this->m_pendingReleaseUserUpTick = this->m_attemptTick;
-            this->m_pendingReleaseMaxExtend = 0;
-            this->m_pendingReleaseTick = this->m_attemptTick; // flush ASAP
-            AssistLog::debug(fmt::format(
-                "hold-assist: arm release ASAP (user already up) @fire={}",
-                this->m_attemptTick
-            ));
+            if (queuedHold > 0) {
+                // Queued click hold: inject stays down for planned ticks despite early UP.
+                this->m_pendingReleaseHold = requireHold || releaseAfter > 0;
+                this->m_pendingReleaseContinuous = continuous;
+                this->m_pendingReleaseMaxExtend = queuedHold;
+                this->m_pendingReleaseTick = this->m_attemptTick + queuedHold;
+                AssistLog::debug(fmt::format(
+                    "hold-assist: arm queued hold={} @fire={} hold={} cont={} rel=[{},{}]@{}",
+                    queuedHold,
+                    this->m_attemptTick,
+                    requireHold ? 1 : 0,
+                    continuous ? 1 : 0,
+                    releaseEarliest,
+                    releaseLatest,
+                    releaseAfter
+                ));
+                DevCycleRecorder::get().noteHoldExtend(devPressId, queuedHold);
+            }
+            else {
+                this->m_pendingReleaseHold = false;
+                this->m_pendingReleaseContinuous = false;
+                this->m_pendingReleaseMaxExtend = 0;
+                this->m_pendingReleaseTick = this->m_attemptTick; // flush ASAP
+                AssistLog::debug(fmt::format(
+                    "hold-assist: arm release ASAP (user already up) @fire={}",
+                    this->m_attemptTick
+                ));
+            }
         }
         else if (requireHold) {
             // Only explicit requireHold (dash orb / robot hold) gets post-release extend.
             // Continuous modes (Wave/Ship/Swing) plan releases live in planRelease so
             // letting go never drags the player into ceiling hazards for +limit ticks.
+            int const extend = queuedHold > 0 ? queuedHold : extendCap;
             this->m_pendingRelease = true;
             this->m_pendingReleaseP1 = player1;
             this->m_pendingReleaseHold = requireHold;
             this->m_pendingReleaseContinuous = continuous;
             this->m_pendingReleaseArmTick = this->m_attemptTick;
             this->m_pendingReleaseUserUpTick = -1;
-            this->m_pendingReleaseMaxExtend = extendCap;
+            this->m_pendingReleaseMaxExtend = extend;
             this->m_pendingReleaseTick = 0; // set on user-up
             AssistLog::debug(fmt::format(
                 "hold-assist: arm extend-after-release max={} @fire={} hold={} cont={}",
-                extendCap,
+                extend,
                 this->m_attemptTick,
                 requireHold ? 1 : 0,
                 continuous ? 1 : 0
             ));
-            DevCycleRecorder::get().noteHoldExtend(devPressId, extendCap);
+            DevCycleRecorder::get().noteHoldExtend(devPressId, extend);
         }
         // else: plain Delay tap — user owns hold+release fully (no pending).
     }
@@ -2555,6 +2690,9 @@ bool AssistController::planPress(
     this->m_buffer.mode = kind;
     this->m_buffer.requireOrb = plan.requireOrb;
     this->m_buffer.requireHold = plan.requireHold;
+    this->m_buffer.releaseAfter = plan.releaseAfter;
+    this->m_buffer.releaseEarliest = plan.releaseEarliest;
+    this->m_buffer.releaseLatest = plan.releaseLatest;
     // Orb activation band only constrains fire when we are waiting FOR the orb.
     // Incidental actMin/actMax from other cands must not collapse a threat Delay
     // (that made +N feedback lie while the jump fired almost immediately).

@@ -33,7 +33,7 @@ struct BufferedInput {
     int planDelay = 0;
     bool continuous = false;
     // Early UP while Buffered: true, buffer stays Buffered — inject still due at fireTick.
-    // (Not a cancel. Post-fire ASAP release when set; requireHold honor is separate.)
+    // (Not a cancel. At fire: queued hold via releaseAfter/requireHold, else ASAP release.)
     bool releaseSeen = false;
     int releaseTick = 0;
     bool jumpSeen = false;
@@ -128,6 +128,18 @@ public:
         int attemptTick, int fireTick, int pressTick, int planDelay, int limit
     );
     static bool fireTickSelfCheck(std::string& report);
+
+    // Queued hold after inject when user already released (releaseSeen).
+    // Continuous: earliest-safe only (never blind +limit). Plain tap / unset → 0 (ASAP).
+    static int resolveQueuedHoldTicks(
+        bool requireHold,
+        bool continuous,
+        int releaseAfter,
+        int releaseEarliest,
+        int releaseLatest,
+        int extendCap
+    );
+    static bool queuedHoldSelfCheck(std::string& report);
 
     // Soft Hold-Until-Safe (press): arm when PassBudget / budget+foresight /
     // unknown+foresight — never past limit. Pure helpers for PlanGold.

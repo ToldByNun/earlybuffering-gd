@@ -33,16 +33,26 @@ bool BufferEventMachine::selfCheck() {
     if (!fireStillDue) return false;
     if (!releaseSeen) return false;
 
-    // 3) fireTick → inject, clear buffer; releaseSeen → PendingRelease ASAP
+    // 3a) fireTick + releaseSeen + plain Delay → PendingRelease ASAP → Idle
     fireStillDue = false;
     s = BufferSmState::Idle;
     if (releaseSeen) {
         s = BufferSmState::PendingRelease;
-        // ASAP flush then Idle
-        s = BufferSmState::Idle;
+        s = BufferSmState::Idle; // ASAP (queuedHold == 0)
         releaseSeen = false;
     }
     if (s != BufferSmState::Idle || fireStillDue) return false;
+
+    // 3b) fireTick + releaseSeen + plan hold → PendingRelease for N ticks → Idle
+    s = BufferSmState::ArmedPress;
+    releaseSeen = true;
+    fireStillDue = true;
+    int const queuedHold = 5; // resolveQueuedHoldTicks > 0
+    fireStillDue = false;
+    s = BufferSmState::PendingRelease;
+    if (queuedHold <= 0 || s != BufferSmState::PendingRelease) return false;
+    s = BufferSmState::Idle;
+    releaseSeen = false;
 
     // 4) Press B while ArmedPress + releaseSeen: fire A then re-arm B
     s = BufferSmState::ArmedPress;

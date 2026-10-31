@@ -47,6 +47,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistController::effectTickSelfCheck(attribReport), "effect-tick-attrib");
     std::string fireReport;
     expect(AssistController::fireTickSelfCheck(fireReport), "fire-tick-jump");
+    std::string queuedHoldReport;
+    expect(AssistController::queuedHoldSelfCheck(queuedHoldReport), "queued-hold");
     std::string recheckReport;
     expect(AssistController::recheckSlideSelfCheck(recheckReport), "recheck-slide");
     std::string exploreReport;

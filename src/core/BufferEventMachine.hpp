@@ -13,8 +13,9 @@ enum class BufferSmState {
 // Hold / Delay press contract (must stay true in AssistController):
 //   Idle → ArmedPress on Delay planPress (swallow DOWN).
 //   Early UP while ArmedPress: set releaseSeen, stay ArmedPress — fire still due.
-//   At fireTick: inject; releaseSeen → PendingRelease (ASAP today; requireHold
-//   honor is a separate gameplay change).
+//   At fireTick: inject; releaseSeen + plan hold → PendingRelease for N queued
+//   hold ticks; releaseSeen + plain Delay → PendingRelease ASAP.
+//   While userHolding: never force-release.
 //   Press B while ArmedPress + releaseSeen: fire A, then Idle, then maybe re-arm B.
 //   Cancel (death/reset/quit/checkpoint) → Idle. Force-fire (CPS/mode) still injects.
 class BufferEventMachine {

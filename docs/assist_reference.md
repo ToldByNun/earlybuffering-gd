@@ -296,9 +296,15 @@ After a **Delay** press is chosen, the planner probes release-after values `{0,1
 | `releaseEarliest`…`releaseLatest` | Safe hold durations (ticks after press) that still clear the threat |
 | `releaseAfter` | Preferred release (continuous → earliest; tap → mid-window) |
 
-**ArmedPress / Delay press buffer (pre-inject):** Early user UP while waiting for `fireTick` sets `releaseSeen` and **swallows** the UP — the buffer stays `Buffered` and inject is **still due**. Early release does **not** cancel Delay.
+**ArmedPress / Delay press buffer (pre-inject):** Early user UP while waiting for `fireTick` sets `releaseSeen` and **swallows** the UP — the buffer stays `Buffered` and inject is **still due**. Early release does **not** cancel Delay. Arm copies `requireHold` / `releaseAfter|Earliest|Latest` onto the buffer.
 
-On inject: if the user still holds, arm `pendingRelease` for post-fire extend when `requireHold` (dash/robot); continuous modes plan releases via `planRelease` (no blind +limit hold). If `releaseSeen` (user already up): arm `pendingRelease` and flush ASAP today. **Re-click** while ArmedPress + `releaseSeen` → fire A first, then plan B. **Re-click** while pending → cancel scheduled release and re-plan. Dash `requireHold` keeps release deferred while `m_isDashing` after a held inject.
+On inject (`resolveQueuedHoldTicks`):
+- User still holding + `requireHold` → arm extend-after-release (never force-release while held).
+- User already up (`releaseSeen`) + plan hold (`requireHold` or `releaseAfter > 0`) → **queued hold**: keep Jump down in GD for N ticks (continuous = earliest-safe only; clamp to window / `releaseLatest`), then inject UP.
+- User already up + plain Delay (no hold plan) → ASAP release.
+- Hard rule: while `userHolding`, never inject UP.
+
+**Re-click** while ArmedPress + `releaseSeen` → fire A first, then plan B. **Re-click** while pending → cancel scheduled release and re-plan. Dash `requireHold` keeps release deferred while `m_isDashing` after a held inject. Helpers: `AssistController::resolveQueuedHoldTicks` / `queuedHoldSelfCheck`.
 
 Branch releases `{2,5,10,18}` and dash-hold `40` seed the window when they already won viability.
 
@@ -330,7 +336,7 @@ Before inject, live recheck may slide `fireTick`. Rules (`acceptRecheckSlide`):
 
 ## Pseudocode fireBuffered()
 
-Wait for dMin if requireOrb; up to 2 safe reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; if `releaseSeen` → PendingRelease ASAP; else if `requireHold` and still holding → arm extend-after-release; else plain tap (user owns hold).
+Wait for dMin if requireOrb; up to 2 safe reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; if `releaseSeen` + queued hold → PendingRelease for N ticks; else if `releaseSeen` → ASAP; else if `requireHold` and still holding → arm extend-after-release; else plain tap (user owns hold).
 Press B while ArmedPress + releaseSeen: fire A first, then plan B.
 
 ## Buffer states
