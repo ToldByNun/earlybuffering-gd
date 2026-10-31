@@ -296,7 +296,9 @@ After a **Delay** press is chosen, the planner probes release-after values `{0,1
 | `releaseEarliest`…`releaseLatest` | Safe hold durations (ticks after press) that still clear the threat |
 | `releaseAfter` | Preferred release (continuous → earliest; tap → mid-window) |
 
-On inject: if the user still holds, arm `pendingRelease` at preferred; continuous modes may hold until `releaseLatest`, then force release. Early user release inside the window → no inject. **Re-click** while pending → cancel scheduled release and re-plan (second click in the window). Dash `requireHold` keeps release deferred while `m_isDashing`.
+**ArmedPress / Delay press buffer (pre-inject):** Early user UP while waiting for `fireTick` sets `releaseSeen` and **swallows** the UP — the buffer stays `Buffered` and inject is **still due**. Early release does **not** cancel Delay.
+
+On inject: if the user still holds, arm `pendingRelease` for post-fire extend when `requireHold` (dash/robot); continuous modes plan releases via `planRelease` (no blind +limit hold). If `releaseSeen` (user already up): arm `pendingRelease` and flush ASAP today. **Re-click** while ArmedPress + `releaseSeen` → fire A first, then plan B. **Re-click** while pending → cancel scheduled release and re-plan. Dash `requireHold` keeps release deferred while `m_isDashing` after a held inject.
 
 Branch releases `{2,5,10,18}` and dash-hold `40` seed the window when they already won viability.
 
@@ -328,12 +330,15 @@ Before inject, live recheck may slide `fireTick`. Rules (`acceptRecheckSlide`):
 
 ## Pseudocode fireBuffered()
 
-Wait for dMin if requireOrb; up to 2 safe reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; PendingRelease if needed.
-Press B while ArmedPress: fire A first, then plan B.
+Wait for dMin if requireOrb; up to 2 safe reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; if `releaseSeen` → PendingRelease ASAP; else if `requireHold` and still holding → arm extend-after-release; else plain tap (user owns hold).
+Press B while ArmedPress + releaseSeen: fire A first, then plan B.
 
 ## Buffer states
 
 Idle | ArmedPress | ArmedRelease | PendingRelease
+
+`BufferEventMachine::selfCheck` documents: early UP → `releaseSeen`, stay ArmedPress, fire still due; cancel drops buffer; force-fire still injects.
+
 Cancel: death, resetLevel, quit, checkpoint load. Force-fire: mode-change, CPS unlock.
 
 ## Smart bake-chain

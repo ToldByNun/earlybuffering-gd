@@ -3000,6 +3000,13 @@ bool AssistController::onHandleButton(
             this->m_buffer.releaseSeen = true;
             this->m_buffer.releaseTick = effectTick;
             this->m_log.noteInput(effectTick, false);
+            // Early UP does not cancel Delay: stay Buffered, fire still due.
+            AssistLog::debug(fmt::format(
+                "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} p{}",
+                this->m_buffer.fireTick,
+                this->m_attemptTick,
+                player1 ? 1 : 2
+            ));
             return false;
         }
 

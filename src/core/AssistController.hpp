@@ -32,6 +32,8 @@ struct BufferedInput {
     // actual attemptTick - pressTick at inject, not this field.
     int planDelay = 0;
     bool continuous = false;
+    // Early UP while Buffered: true, buffer stays Buffered — inject still due at fireTick.
+    // (Not a cancel. Post-fire ASAP release when set; requireHold honor is separate.)
     bool releaseSeen = false;
     int releaseTick = 0;
     bool jumpSeen = false;

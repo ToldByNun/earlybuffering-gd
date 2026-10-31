@@ -11,14 +11,58 @@ char const* BufferEventMachine::stateName(BufferSmState s) {
 }
 
 bool BufferEventMachine::selfCheck() {
-    // Transition contract smoke test (logical).
+    // Logical transition smoke (no AssistController instance required).
+    // Mirrors BufferedInput: Idle/Buffered ≈ Idle/ArmedPress; releaseSeen is a flag.
+
+    if (stateName(BufferSmState::Idle)[0] == '?') return false;
+    if (stateName(BufferSmState::ArmedPress)[0] == '?') return false;
+    if (stateName(BufferSmState::PendingRelease)[0] == '?') return false;
+
     BufferSmState s = BufferSmState::Idle;
-    s = BufferSmState::ArmedPress; // planPress Delay
-    // releaseSeen keeps ArmedPress
-    // Press B => fire then Idle then maybe re-arm
+    bool releaseSeen = false;
+    bool fireStillDue = false;
+
+    // 1) Delay planPress → ArmedPress, fire scheduled
+    s = BufferSmState::ArmedPress;
+    fireStillDue = true;
+    if (s != BufferSmState::ArmedPress || !fireStillDue) return false;
+
+    // 2) Early UP → releaseSeen, stay ArmedPress (does NOT cancel inject)
+    releaseSeen = true;
+    if (s != BufferSmState::ArmedPress) return false;
+    if (!fireStillDue) return false;
+    if (!releaseSeen) return false;
+
+    // 3) fireTick → inject, clear buffer; releaseSeen → PendingRelease ASAP
+    fireStillDue = false;
     s = BufferSmState::Idle;
-    s = BufferSmState::PendingRelease;
+    if (releaseSeen) {
+        s = BufferSmState::PendingRelease;
+        // ASAP flush then Idle
+        s = BufferSmState::Idle;
+        releaseSeen = false;
+    }
+    if (s != BufferSmState::Idle || fireStillDue) return false;
+
+    // 4) Press B while ArmedPress + releaseSeen: fire A then re-arm B
+    s = BufferSmState::ArmedPress;
+    releaseSeen = true;
+    fireStillDue = true;
+    // fire A
     s = BufferSmState::Idle;
+    fireStillDue = false;
+    // plan B
+    s = BufferSmState::ArmedPress;
+    releaseSeen = false;
+    fireStillDue = true;
+    if (s != BufferSmState::ArmedPress || !fireStillDue || releaseSeen) return false;
+
+    // 5) Cancel while armed → Idle (buffer dropped; no inject)
+    s = BufferSmState::Idle;
+    fireStillDue = false;
+    releaseSeen = false;
+    if (s != BufferSmState::Idle || fireStillDue) return false;
+
     (void)s;
     return true;
 }
