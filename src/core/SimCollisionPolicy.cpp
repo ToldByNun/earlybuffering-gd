@@ -1,5 +1,6 @@
 #include "SimCollisionPolicy.hpp"
 #include "ShadowSimulator.hpp"
+#include "ToggleOrbSim.hpp"
 #include "TriggerClassify.hpp"
 #include "TriggerWorldStore.hpp"
 #include "../config/StageConfig.hpp"
@@ -18,19 +19,28 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
 
     auto& sim = ShadowSimulator::get();
     if (sim.isSimulating()) {
-        // Toggle orb / touch-toggle targets: frozen pre-flip pose is a lie —
-        // always UnknownOnOverlap (never Include via live follow probe).
+        // Toggle orb / touch-toggle: modeled flip → Include/Skip; else Unknown.
         if (sim.isToggleTriggerTarget(obj->m_uniqueID)) {
+            auto& toggle = ToggleOrbSim::get();
+            if (toggle.isModeled(obj->m_uniqueID)) {
+                return toggle.isModeledActive(obj->m_uniqueID)
+                    ? SimObjectAction::Include
+                    : SimObjectAction::Skip;
+            }
             return SimObjectAction::UnknownOnOverlap;
         }
 
         if (StageConfig::triggerBake()) {
-            // Ready static bake track + apply this sim tick → Include.
+            // Ready static bake track + apply this sim tick → Include (active only).
             if (sim.triggerWorldAppliedThisTick()) {
                 auto const* track = TriggerWorldStore::get().findTrack(obj->m_uniqueID);
                 if (track
                     && track->ready
                     && TriggerClassify::isStatic(track->kind)) {
+                    // writePose(inactive) clears visibility/poweredOn — do not Include.
+                    if (!obj->isVisible() || !obj->m_poweredOn) {
+                        return SimObjectAction::Skip;
+                    }
                     return SimObjectAction::Include;
                 }
             }
@@ -108,9 +118,9 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
     if (warned) return false;
     warned = true;
     AssistLog::info(
-        "sim: limited (toggle-orb/touch-toggle targets → unknown; "
+        "sim: limited (toggle-orb/touch-toggle → unknown until ToggleOrbSim flip; "
         "follow-player/dynamic → unknown unless live probe; "
-        "ready static bake → include)"
+        "ready static bake → include when active)"
     );
     return true;
 }

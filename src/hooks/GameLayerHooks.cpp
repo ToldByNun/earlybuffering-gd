@@ -2,6 +2,8 @@
 #include "../core/BakeScheduler.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimCollisionPolicy.hpp"
+#include "../core/ToggleOrbSim.hpp"
+#include "../core/TriggerClassify.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -65,11 +67,18 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     // Orbs: one physics jump on the shadow, claim for this run only, no VFX.
     // Requires Jump held (applyRingJump) — wait-ticks must not claim early.
     // Orb-window scan records overlap only (no boost / claim).
+    // Toggle orb 1594: reversible group flip via ToggleOrbSim (no triggerObject).
     void playerTouchedRing(PlayerObject* player, RingObject* ring) {
         if (simulating()) {
             auto& sim = ShadowSimulator::get();
             if (sim.isOrbScanning()) {
                 sim.noteOrbOverlap();
+                return;
+            }
+            if (ring && TriggerClassify::isToggleOrbId(ring->m_objectID)) {
+                if (!sim.isShadow(player)) return;
+                auto* playLayer = typeinfo_cast<PlayLayer*>(this);
+                ToggleOrbSim::get().onToggleHit(playLayer, player, ring);
                 return;
             }
             sim.applyRingJump(player, ring);
@@ -79,7 +88,17 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     }
 
     void playerTouchedTrigger(PlayerObject* player, EffectGameObject* object) {
-        if (simulating()) return;
+        if (simulating()) {
+            auto& sim = ShadowSimulator::get();
+            if (!sim.isShadow(player) || !object) return;
+            // Touch-toggle 1049: model group flip; other triggers stay blocked.
+            if (TriggerClassify::isToggleTriggerId(object->m_objectID)
+                && object->m_isTouchTriggered) {
+                auto* playLayer = typeinfo_cast<PlayLayer*>(this);
+                ToggleOrbSim::get().onToggleHit(playLayer, player, object);
+            }
+            return;
+        }
         GJBaseGameLayer::playerTouchedTrigger(player, object);
     }
 

@@ -4,6 +4,7 @@
 #include "MissAssistContracts.hpp"
 #include "TravelForesight.hpp"
 #include "OpportunityProbe.hpp"
+#include "ToggleOrbSim.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -86,6 +87,7 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_toggleTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
+    ToggleOrbSim::get().restore();
     this->m_saved.clear();
     this->m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
@@ -309,6 +311,7 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_toggleTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
+    ToggleOrbSim::get().restore();
     // If a sim aborted after applyAtTick moved solids, put them back before
     // we drop the snapshot — reset/checkpoint must not inherit drifted poses.
     if (!this->m_savedTransforms.empty() && layer) {
@@ -588,7 +591,7 @@ void ShadowSimulator::captureToggleUnknownTargets(PlayLayer* layer) {
         int const oid = effect->m_objectID;
         bool const toggleOrb = TriggerClassify::isToggleOrbId(oid);
         bool const touchToggle =
-            TriggerClassify::isToggleTriggerId(oid) && effect->m_touchTriggered;
+            TriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered;
         if (!toggleOrb && !touchToggle) continue;
         toggleEffects.push_back(effect);
         if (toggleEffects.size() >= 256) break;
@@ -803,12 +806,14 @@ void ShadowSimulator::beginCapture(PlayLayer* layer) {
     this->m_liveDynamicAppliedIds.clear();
     this->m_toggleUnknownHit = false;
     this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
+    ToggleOrbSim::get().restore();
     this->captureTriggerTransforms(layer);
     this->captureDynamicFollows(layer);
     this->captureToggleUnknownTargets(layer);
 }
 
 void ShadowSimulator::resetCaptureForNextRun(PlayLayer* layer) {
+    ToggleOrbSim::get().restore();
     this->resetTriggerTransforms();
     this->m_triggerWorldAppliedThisTick = false;
     this->m_liveDynamicAppliedIds.clear();
@@ -835,6 +840,7 @@ void ShadowSimulator::resetCaptureForNextRun(PlayLayer* layer) {
 }
 
 void ShadowSimulator::restoreCapture(PlayLayer* layer) {
+    ToggleOrbSim::get().restore();
     {
         LagProbe::Scope const scope("eb.trigger.restore");
         this->restoreTriggerTransforms(layer);

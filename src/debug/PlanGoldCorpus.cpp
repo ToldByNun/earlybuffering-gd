@@ -15,6 +15,7 @@
 #include "../core/SaveDropPaths.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
+#include "../core/ToggleOrbSim.hpp"
 #include "../core/TriggerClassify.hpp"
 #include "../core/TriggerWorldStore.hpp"
 #include "../ui/InLevelSettingsFilter.hpp"
@@ -67,6 +68,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(PlatformLimits::selfCheck(platformLimitsReport), "platform-limits");
     std::string classifyReport;
     expect(TriggerClassify::selfCheck(classifyReport), "trigger-classify");
+    std::string toggleOrbReport;
+    expect(ToggleOrbSim::selfCheck(toggleOrbReport), "toggle-orb-sim");
     std::string twReport;
     expect(TriggerWorldStore::selfCheck(twReport), "trigger-world-store");
     std::string clockReport;
