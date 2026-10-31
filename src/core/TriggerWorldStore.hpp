@@ -79,6 +79,10 @@ public:
 
     // Replace in-memory data (baker). Softcap logs; hard-only truncate.
     void setData(TriggerWorldData data);
+    // Commit 4: empty incomplete collect must not poison the on-disk cache.
+    void clearDirty() { this->m_dirty = false; }
+    // Delete triggers/<key>.json if present (empty / stale cache).
+    void discardCacheFile() const;
 
     // Keep endpoints + evenly spaced samples (long movers under key soft/hard).
     static void decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep);

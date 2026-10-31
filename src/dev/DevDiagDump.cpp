@@ -6,6 +6,7 @@
 #include "../core/BakeMap.hpp"
 #include "../core/ConfigBundleKeys.hpp"
 #include "../core/ShadowSimulator.hpp"
+#include "../core/TriggerWorldBaker.hpp"
 #include "../core/TriggerWorldStore.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/PlanGoldCorpus.hpp"
@@ -506,6 +507,7 @@ std::string DevDiagDump::buildBakeMap() {
 std::string DevDiagDump::buildTriggerWorld() {
     std::ostringstream o;
     auto& tw = TriggerWorldStore::get();
+    auto& baker = TriggerWorldBaker::get();
     o << "loaded=" << boolStr(tw.loaded()) << "\n";
     o << "hasTracks=" << boolStr(tw.hasTracks()) << "\n";
     o << "trackCount=" << tw.trackCount() << "\n";
@@ -513,6 +515,22 @@ std::string DevDiagDump::buildTriggerWorld() {
     o << "softcapHit=" << boolStr(tw.softcapHit()) << "\n";
     o << "tps=" << tw.data().tps << "\n";
     o << "levelKey=" << tw.data().levelKey << "\n";
+    o << "statusLine=" << baker.statusLine() << "\n";
+    o << "bakerRunning=" << boolStr(baker.running()) << "\n";
+    o << fmt::format(
+        "lastBake bakedEffects={} startTimed={} skipFollow={} skipDyn={} "
+        "skipTouch={} children={} effects={} sectionExtras={} collectIncomplete={}\n",
+        baker.lastBakedEffects(),
+        baker.lastBakedStartTimed(),
+        baker.lastSkippedFollow(),
+        baker.lastSkippedDynamic(),
+        baker.lastSkippedTouch(),
+        baker.lastChildCount(),
+        baker.lastEffectCount(),
+        baker.lastSectionExtras(),
+        boolStr(baker.lastCollectIncomplete())
+    );
+    o << "softMaxTracks=" << TriggerWorldStore::kSoftMaxTracks << "\n";
     // Kind histogram
     int kinds[16]{};
     for (auto const& t : tw.data().tracks) {

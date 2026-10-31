@@ -2,8 +2,10 @@
 #include "AssistClock.hpp"
 #include "AssistController.hpp"
 #include "ShadowSimulator.hpp"
+#include "TriggerWorldBaker.hpp"
 #include "TriggerWorldStore.hpp"
 #include "LevelProfile.hpp"
+#include "../config/StageConfig.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../debug/AssistLog.hpp"
 
@@ -535,9 +537,22 @@ Result<int> BakeMap::bakeReplay(
             attemptTick
         ));
     }
-    {
+    // Commit 4: never validate while TW is still building / stale-empty.
+    if (StageConfig::triggerBake()) {
+        m_progress.setStatus("waiting Trigger World…");
+        std::string twErr;
+        if (!TriggerWorldBaker::get().waitUntilReady(layer, 45000, twErr)) {
+            return Err(twErr.empty() ? "Trigger World not ready for bake" : twErr);
+        }
         auto& tw = TriggerWorldStore::get();
-        if (tw.loaded() && tw.softcapHit()) {
+        AssistLog::info(fmt::format(
+            "BAKE: TW ready tracks={} ready={} softcap={} ({})",
+            tw.trackCount(),
+            tw.readyTrackCount(),
+            tw.softcapHit() ? 1 : 0,
+            TriggerWorldBaker::get().statusLine()
+        ));
+        if (tw.softcapHit()) {
             AssistLog::info(fmt::format(
                 "BAKE warn: Trigger World softcap ({} tracks) — movers may be incomplete",
                 tw.trackCount()

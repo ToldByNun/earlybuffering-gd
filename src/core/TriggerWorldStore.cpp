@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 
 using namespace geode::prelude;
 
@@ -117,6 +118,16 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
 
     auto res = this->readFile();
     if (res.isOk()) {
+        // Commit 4: empty on-disk cache is a miss (init raced → poisoned file).
+        if (this->m_data.tracks.empty()) {
+            AssistLog::info(fmt::format(
+                "TRIGGER-WORLD: empty cache for {} — treat as miss (rebuild)",
+                this->m_data.levelKey
+            ));
+            this->discardCacheFile();
+            this->m_dirty = false;
+            return;
+        }
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
             this->m_data.levelKey,
@@ -171,6 +182,23 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
     this->m_data = std::move(data);
     this->m_loaded = !this->m_data.levelKey.empty();
     this->m_dirty = true;
+}
+
+void TriggerWorldStore::discardCacheFile() const {
+    if (this->m_data.levelKey.empty()) return;
+    auto const path = TriggerWorldStore::triggerPath(this->m_data.levelKey);
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) return;
+    std::filesystem::remove(path, ec);
+    if (ec) {
+        AssistLog::debug(fmt::format(
+            "TRIGGER-WORLD: discard cache failed: {}", ec.message()
+        ));
+        return;
+    }
+    AssistLog::info(fmt::format(
+        "TRIGGER-WORLD: discarded empty/stale cache {}", path.filename().string()
+    ));
 }
 
 TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {
@@ -409,7 +437,9 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
     // Soft ≥100k; legacy 2048 must not silently drop.
     expect(kSoftMaxTracks >= 100000, "soft-ge-100k");
     expect(kSoftMaxTracks > 2048, "soft-gt-legacy-2048");
+    expect(kSoftMaxTracks == 100000, "soft-eq-100k-lock");
     expect(!wouldHitSoftTracks(2048), "2048-under-soft");
+    expect(kHardMaxTracks > kSoftMaxTracks, "hard-gt-soft");
     expect(!wouldHitSoftTracks(kSoftMaxTracks - 1), "soft-minus-1");
     expect(wouldHitSoftTracks(kSoftMaxTracks), "soft-eq-hit");
     expect(wouldHitSoftKeys(kSoftMaxKeysPerTrack), "soft-keys-hit");

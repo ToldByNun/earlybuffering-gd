@@ -121,9 +121,13 @@ void TriggerWorldBaker::clearJob() {
     this->m_live.clear();
     this->m_tracks.clear();
     this->m_bakedEffects = 0;
+    this->m_bakedStartTimed = 0;
     this->m_skippedFollow = 0;
     this->m_skippedDynamic = 0;
     this->m_skippedNonSpawn = 0;
+    this->m_skippedTouch = 0;
+    this->m_waitSlices = 0;
+    this->m_collectIncomplete = false;
     this->m_levelKey.clear();
     this->m_tps = 240.0;
 }
@@ -150,28 +154,76 @@ void TriggerWorldBaker::finishCancel() {
 void TriggerWorldBaker::finishOk() {
     this->m_running = false;
     this->m_progress = 1.f;
-    this->m_status = TriggerWorldStore::get().statusLine();
     this->m_lastBakedEffects = this->m_bakedEffects;
+    this->m_lastBakedStartTimed = this->m_bakedStartTimed;
     this->m_lastSkippedFollow = this->m_skippedFollow;
     this->m_lastSkippedDynamic = this->m_skippedDynamic;
     this->m_lastSkippedNonSpawn = this->m_skippedNonSpawn;
+    this->m_lastSkippedTouch = this->m_skippedTouch;
     this->m_lastChildCount = this->m_childCount;
     this->m_lastEffectCount = this->m_effects.size();
+    this->m_lastSectionExtras = this->m_sectionExtras;
+    this->m_lastCollectIncomplete = this->m_collectIncomplete;
+
+    auto& store = TriggerWorldStore::get();
+    size_t const tracks = store.trackCount();
+    // Incomplete collect (0 children at init) must not poison disk cache.
+    if (tracks == 0 && this->m_collectIncomplete) {
+        store.clearDirty();
+        store.discardCacheFile();
+        this->m_status = "trigger-world: empty (collect incomplete — will retry)";
+        AssistLog::info(
+            "TRIGGER-WORLD: 0 tracks after incomplete collect — not caching; kickIfStaleEmpty will retry"
+        );
+        this->clearJob();
+        return;
+    }
+    if (tracks == 0) {
+        store.clearDirty();
+        store.discardCacheFile();
+        this->m_status = fmt::format(
+            "trigger-world: empty (baked={} startTimed={} skip follow={} dyn={} touch={} effects={} children={})",
+            this->m_lastBakedEffects,
+            this->m_lastBakedStartTimed,
+            this->m_lastSkippedFollow,
+            this->m_lastSkippedDynamic,
+            this->m_lastSkippedTouch,
+            this->m_lastEffectCount,
+            this->m_lastChildCount
+        );
+        AssistLog::info(fmt::format(
+            "TRIGGER-WORLD: EMPTY after full collect — baked={} startTimed={} "
+            "skip follow={} dynamic={} touch={} children={} effects={} sectionExtras={}",
+            this->m_lastBakedEffects,
+            this->m_lastBakedStartTimed,
+            this->m_lastSkippedFollow,
+            this->m_lastSkippedDynamic,
+            this->m_lastSkippedTouch,
+            this->m_lastChildCount,
+            this->m_lastEffectCount,
+            this->m_lastSectionExtras
+        ));
+        this->clearJob();
+        return;
+    }
+
+    this->m_status = store.statusLine();
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: baked {} effects → {} tracks ({} ready) @ {:.0f} tps "
-        "(skip follow={} dynamic={} non-spawn={} children={} collectedEffects={} "
-        "sectionExtras={} softcap={})",
+        "(startTimed={} skip follow={} dynamic={} touch={} children={} "
+        "collectedEffects={} sectionExtras={} softcap={})",
         this->m_bakedEffects,
-        TriggerWorldStore::get().trackCount(),
-        TriggerWorldStore::get().readyTrackCount(),
+        tracks,
+        store.readyTrackCount(),
         this->m_tps,
+        this->m_bakedStartTimed,
         this->m_skippedFollow,
         this->m_skippedDynamic,
-        this->m_skippedNonSpawn,
+        this->m_skippedTouch,
         this->m_lastChildCount,
         this->m_lastEffectCount,
         this->m_sectionExtras,
-        TriggerWorldStore::get().softcapHit() ? 1 : 0
+        store.softcapHit() ? 1 : 0
     ));
     this->clearJob();
 }
@@ -225,6 +277,81 @@ void TriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
     this->start(layer);
 }
 
+void TriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
+    if (!layer || !StageConfig::triggerBake()) return;
+    if (this->m_running) return;
+    auto& store = TriggerWorldStore::get();
+    if (!store.loaded() || store.hasTracks()) return;
+    size_t children = 0;
+    if (layer->m_objectLayer) {
+        if (auto* ch = layer->m_objectLayer->getChildren()) {
+            children = static_cast<size_t>(ch->count());
+        }
+    }
+    if (children == 0 && layer->m_sections.empty()) return;
+    AssistLog::info(fmt::format(
+        "TRIGGER-WORLD: stale empty with {} objectLayer children — rebuild",
+        children
+    ));
+    this->start(layer);
+}
+
+bool TriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string& err) {
+    err.clear();
+    if (!layer) {
+        err = "no PlayLayer for TW wait";
+        return false;
+    }
+    if (!StageConfig::triggerBake()) return true;
+
+    this->kickIfStaleEmpty(layer);
+    if (!this->m_running && !TriggerWorldStore::get().hasTracks()) {
+        this->resumeIfEmpty(layer);
+    }
+
+    if (wallMs < 100) wallMs = 100;
+    auto const t0 = std::chrono::steady_clock::now();
+    while (this->m_running) {
+        this->tickSlice();
+        auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - t0
+        ).count();
+        if (ms >= wallMs) {
+            err = fmt::format(
+                "Trigger World still building after {}ms ({:.0f}%) — cancel bake or wait",
+                wallMs, this->m_progress * 100.f
+            );
+            return false;
+        }
+        if (this->m_cancel) {
+            err = "Trigger World build cancelled during bake wait";
+            return false;
+        }
+    }
+
+    auto& store = TriggerWorldStore::get();
+    if (store.hasTracks()) return true;
+
+    // Loud empty: effects existed but nothing baked, or collect incomplete.
+    if (this->m_lastCollectIncomplete) {
+        err = "Trigger World empty — collect incomplete (objectLayer not ready). Reset and retry bake.";
+        return false;
+    }
+    if (this->m_lastEffectCount > 0 && this->m_lastBakedEffects == 0) {
+        err = fmt::format(
+            "Trigger World empty after build (effects={} skip follow={} dyn={} touch={}). "
+            "Movers not modeled — bake would lie.",
+            this->m_lastEffectCount,
+            this->m_lastSkippedFollow,
+            this->m_lastSkippedDynamic,
+            this->m_lastSkippedTouch
+        );
+        return false;
+    }
+    // Truly no static movers in level — allow bake with TW empty.
+    return true;
+}
+
 bool TriggerWorldBaker::start(PlayLayer* layer) {
     if (!layer) return false;
     if (!StageConfig::triggerBake()) return false;
@@ -236,7 +363,6 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
     this->m_progress = 0.f;
     this->m_status = "trigger-world: building";
     this->m_layer = layer;
-    this->m_phase = Phase::Collect;
 
     // Author tracks in sim TPS (1/m_simDt), never warped wall TPS.
     this->m_tps = AssistController::get().estimatedTps();
@@ -261,10 +387,19 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
         }
     }
 
-    AssistLog::debug(fmt::format(
-        "TRIGGER-WORLD: bake queued ({} children)",
-        this->m_childCount
-    ));
+    // Commit 4: wait for objects if init raced ahead of objectLayer populate.
+    if (this->m_childCount == 0) {
+        this->m_phase = Phase::WaitObjects;
+        this->m_waitSlices = 0;
+        AssistLog::debug("TRIGGER-WORLD: bake queued — waiting for objectLayer");
+    }
+    else {
+        this->m_phase = Phase::Collect;
+        AssistLog::debug(fmt::format(
+            "TRIGGER-WORLD: bake queued ({} children)",
+            this->m_childCount
+        ));
+    }
     return true;
 }
 
@@ -353,9 +488,8 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
         return;
     }
 
-    if (effect->m_isTouchTriggered) return;
-    if (!effect->m_isSpawnTriggered) {
-        ++this->m_skippedNonSpawn;
+    if (effect->m_isTouchTriggered) {
+        ++this->m_skippedTouch;
         return;
     }
 
@@ -365,9 +499,13 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     auto targets = this->objectsInGroup(groupId);
     if (targets.empty()) return;
 
-    int const startTick = TriggerWorldBaker::durationTicks(
-        effect->m_spawnTriggerDelay, this->m_tps
-    );
+    // Spawn-triggered: use spawn delay. Non-spawn (Commit 4): start-of-level t=0
+    // — previously skipped all non-spawn → empty TW on many levels (e.g. id_80045794).
+    bool const spawn = effect->m_isSpawnTriggered;
+    int const startTick = spawn
+        ? TriggerWorldBaker::durationTicks(effect->m_spawnTriggerDelay, this->m_tps)
+        : 0;
+    if (!spawn) ++this->m_bakedStartTimed;
     int const dur = TriggerWorldBaker::durationTicks(effect->m_duration, this->m_tps);
 
     if (kind == TriggerKind::StaticToggle) {
@@ -538,6 +676,49 @@ void TriggerWorldBaker::tickSlice() {
         if (this->m_cancel) {
             this->finishCancel();
             return;
+        }
+
+        if (this->m_phase == Phase::WaitObjects) {
+            auto* layer = this->m_layer;
+            size_t children = 0;
+            if (layer && layer->m_objectLayer) {
+                if (auto* ch = layer->m_objectLayer->getChildren()) {
+                    children = static_cast<size_t>(ch->count());
+                }
+            }
+            bool const hasSections = layer && !layer->m_sections.empty();
+            ++this->m_waitSlices;
+            this->m_progress = 0.02f * std::min(
+                1.f,
+                static_cast<float>(this->m_waitSlices)
+                    / static_cast<float>(kMaxWaitObjectSlices)
+            );
+            if (children > 0 || hasSections) {
+                this->m_childCount = children;
+                this->m_childIndex = 0;
+                this->m_objects.clear();
+                this->m_effects.clear();
+                this->m_seenIds.clear();
+                if (children > 0) {
+                    this->m_objects.reserve(children);
+                    this->m_effects.reserve(256);
+                }
+                this->m_phase = Phase::Collect;
+                AssistLog::debug(fmt::format(
+                    "TRIGGER-WORLD: objects ready ({} children) after {} wait slices",
+                    children, this->m_waitSlices
+                ));
+                continue;
+            }
+            if (this->m_waitSlices >= kMaxWaitObjectSlices) {
+                this->m_collectIncomplete = true;
+                this->m_phase = Phase::Commit;
+                AssistLog::info(
+                    "TRIGGER-WORLD: WaitObjects timed out — committing incomplete empty"
+                );
+                continue;
+            }
+            break; // yield slice; try next physics tick
         }
 
         if (this->m_phase == Phase::Collect) {

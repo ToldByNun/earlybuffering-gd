@@ -2091,10 +2091,11 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         PerfTrace::Scope const scope("selfBakeIdle");
         SelfBakeRecorder::get().onPhysicsTick(playLayer);
     }
-    {
-        PerfTrace::Scope const scope("triggerBakeSlice");
-        TriggerWorldBaker::get().tickSlice();
-    }
+        {
+            PerfTrace::Scope const scope("triggerBakeSlice");
+            TriggerWorldBaker::get().kickIfStaleEmpty(playLayer);
+            TriggerWorldBaker::get().tickSlice();
+        }
 
     auto* p1 = playLayer->m_player1;
     if (p1) {

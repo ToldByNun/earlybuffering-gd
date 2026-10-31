@@ -37,22 +37,33 @@ public:
     size_t lastSkippedFollow() const { return this->m_lastSkippedFollow; }
     size_t lastSkippedDynamic() const { return this->m_lastSkippedDynamic; }
     size_t lastSkippedNonSpawn() const { return this->m_lastSkippedNonSpawn; }
+    size_t lastSkippedTouch() const { return this->m_lastSkippedTouch; }
+    size_t lastBakedStartTimed() const { return this->m_lastBakedStartTimed; }
     size_t lastChildCount() const { return this->m_lastChildCount; }
     size_t lastEffectCount() const { return this->m_lastEffectCount; }
+    size_t lastSectionExtras() const { return this->m_lastSectionExtras; }
+    bool lastCollectIncomplete() const { return this->m_lastCollectIncomplete; }
 
     // Amortized collect/bake/commit. Safe no-op when idle.
     void tickSlice();
     // After death-cancel: resume build if store still empty (reset path).
     void resumeIfEmpty(PlayLayer* layer);
+    // Physics tick: objects appeared after init race → rebuild empty TW.
+    void kickIfStaleEmpty(PlayLayer* layer);
+    // Bake validate: drain slices until idle or wallMs. err on cancel / incomplete.
+    bool waitUntilReady(PlayLayer* layer, int wallMs, std::string& err);
 
 private:
     enum class Phase {
         Idle = 0,
+        WaitObjects, // Commit 4: objectLayer may be empty at onLevelInit
         Collect,
         CollectSections, // secondary: section lists may hold objects children miss
         Bake,
         Commit
     };
+
+    static constexpr int kMaxWaitObjectSlices = 180;
 
     struct LivePose {
         float x = 0.f;
@@ -112,16 +123,24 @@ private:
     std::unordered_map<int, TriggerTrack> m_tracks;
 
     size_t m_bakedEffects = 0;
+    size_t m_bakedStartTimed = 0; // non-spawn static baked at t=0
     size_t m_skippedFollow = 0;
     size_t m_skippedDynamic = 0;
-    size_t m_skippedNonSpawn = 0;
+    size_t m_skippedNonSpawn = 0; // touch-triggered only (legacy name)
+    size_t m_skippedTouch = 0;
+    int m_waitSlices = 0;
+    bool m_collectIncomplete = false;
 
     size_t m_lastBakedEffects = 0;
+    size_t m_lastBakedStartTimed = 0;
     size_t m_lastSkippedFollow = 0;
     size_t m_lastSkippedDynamic = 0;
     size_t m_lastSkippedNonSpawn = 0;
+    size_t m_lastSkippedTouch = 0;
     size_t m_lastChildCount = 0;
     size_t m_lastEffectCount = 0;
+    size_t m_lastSectionExtras = 0;
+    bool m_lastCollectIncomplete = false;
 };
 
 #endif // EARLYBUFFER_CORE_TRIGGERWORLDBAKER_HPP
