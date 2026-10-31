@@ -13,15 +13,20 @@ ToggleOrbSim& ToggleOrbSim::get() {
 
 void ToggleOrbSim::applyCollisionActive(GameObject* obj, bool active) {
     if (!obj) return;
+    auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
     if (active) {
-        obj->m_poweredOn = true;
-        obj->m_visible = true;
+        if (ego) {
+            ego->m_poweredOn = true;
+            ego->m_visible = true;
+        }
         obj->setVisible(true);
     }
     else {
         // Inactive must not collide: visibility alone left solids deadly (Commit 4).
-        obj->m_poweredOn = false;
-        obj->m_visible = false;
+        if (ego) {
+            ego->m_poweredOn = false;
+            ego->m_visible = false;
+        }
         obj->setVisible(false);
     }
 }
@@ -31,12 +36,14 @@ void ToggleOrbSim::captureCollision(GameObject* obj, CollisionSnap& out) {
     if (!obj) return;
     out.obj = obj;
     out.uniqueId = obj->m_uniqueID;
-    out.poweredOn = obj->m_poweredOn;
-    out.activated = obj->m_activated;
     out.isActivated = obj->m_isActivated;
-    out.egoVisible = obj->m_visible;
     out.nodeVisible = obj->isVisible();
     out.opacity = obj->getOpacity();
+    if (auto* ego = typeinfo_cast<EnhancedGameObject*>(obj)) {
+        out.poweredOn = ego->m_poweredOn;
+        out.activated = ego->m_activated;
+        out.egoVisible = ego->m_visible;
+    }
     if (auto* ring = typeinfo_cast<RingObject*>(obj)) {
         out.isRing = true;
         out.claimTouch = ring->m_claimTouch;
@@ -45,10 +52,12 @@ void ToggleOrbSim::captureCollision(GameObject* obj, CollisionSnap& out) {
 
 void ToggleOrbSim::restoreCollision(CollisionSnap const& snap) {
     if (!snap.obj) return;
-    snap.obj->m_poweredOn = snap.poweredOn;
-    snap.obj->m_activated = snap.activated;
     snap.obj->m_isActivated = snap.isActivated;
-    snap.obj->m_visible = snap.egoVisible;
+    if (auto* ego = typeinfo_cast<EnhancedGameObject*>(snap.obj)) {
+        ego->m_poweredOn = snap.poweredOn;
+        ego->m_activated = snap.activated;
+        ego->m_visible = snap.egoVisible;
+    }
     snap.obj->setOpacity(snap.opacity);
     snap.obj->setVisible(snap.nodeVisible);
     if (snap.isRing) {
@@ -144,7 +153,9 @@ bool ToggleOrbSim::onToggleHit(
         bool wantActive = false;
         if (toggleOrb) {
             // Toggle orb: invert current collision participation.
-            bool const currentlyOn = obj->isVisible() && obj->m_poweredOn;
+            auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
+            bool const currentlyOn = obj->isVisible()
+                && (!ego || ego->m_poweredOn);
             wantActive = !currentlyOn;
         }
         else {

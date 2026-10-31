@@ -162,9 +162,10 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
             extra.reserve(objectsCount);
             for (int i = 0; i < objectsCount; i++) {
                 GameObject* obj = vec->at(i);
-                // Never feed our own ghosts back into shadow collision either.
-                if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
-                    if (sim.isOwnedGhost(asPl)) continue;
+                // Never collide the shadow with real P1/P2 or other ghosts —
+                // same spawn pose → instant frame-0 "death" during bake/plan.
+                if (typeinfo_cast<PlayerObject*>(obj)) {
+                    continue;
                 }
                 switch (SimCollisionPolicy::classify(obj)) {
                     case SimObjectAction::Include:

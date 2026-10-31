@@ -70,6 +70,7 @@ void ShadowSimulator::attach(PlayLayer* layer) {
 void ShadowSimulator::detach(bool layerDying) {
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
     this->m_simulating = false;
+    this->m_bakeOffline = false;
     this->m_applyingRing = false;
     this->m_orbScanning = false;
     this->m_orbOverlapTick = false;
@@ -532,15 +533,15 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     }
     if (wanted.empty()) return;
 
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children) return;
+    std::unordered_set<int> seen;
+    seen.reserve(wanted.size());
+    this->m_savedTransforms.reserve(std::min(wanted.size(), static_cast<size_t>(4096)));
 
-    this->m_savedTransforms.reserve(wanted.size());
-    for (unsigned i = 0; i < children->count(); ++i) {
-        auto* obj = typeinfo_cast<GameObject*>(children->objectAtIndex(i));
-        if (!obj) continue;
+    auto consider = [&](GameObject* obj) {
+        if (!obj) return;
         int const uid = obj->m_uniqueID;
-        if (wanted.find(uid) == wanted.end()) continue;
+        if (wanted.find(uid) == wanted.end()) return;
+        if (!seen.insert(uid).second) return;
 
         SavedTransform st;
         st.uniqueId = uid;
@@ -553,6 +554,27 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
         st.nodeVisible = obj->isVisible();
         st.dirty = false;
         this->m_savedTransforms.push_back(st);
+    };
+
+    // Primary: objectLayer children.
+    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
+        for (unsigned i = 0; i < children->count(); ++i) {
+            consider(typeinfo_cast<GameObject*>(children->objectAtIndex(i)));
+        }
+    }
+    // Secondary: section lists often hold objects children miss (same as TW baker).
+    // Without this, bake at spawn can get tw=false → toggled spikes stay lethal.
+    {
+        auto& sections = layer->m_sections;
+        for (auto* mid : sections) {
+            if (!mid) continue;
+            for (auto* inner : *mid) {
+                if (!inner) continue;
+                for (auto* raw : *inner) {
+                    consider(typeinfo_cast<GameObject*>(raw));
+                }
+            }
+        }
     }
 }
 
@@ -3459,22 +3481,54 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     std::vector<ReplayEvent> const& events,
     float dt,
     int untilFrame,
-    int sampleFrame
+    int sampleFrame,
+    bool applyP2ToShadow,
+    bool traceFrames,
+    bool parkReals,
+    int substeps,
+    std::function<bool(int frame)> onFrame
 ) {
     BakeRunResult out;
     auto* snap = this->snapshotSlot(slot);
     if (!layer || !snap || !m_shadow || dt <= 0.f || untilFrame < 0) return out;
+    if (substeps < 1) substeps = 1;
+    if (substeps > 32) substeps = 32;
+    float const subDt = dt / static_cast<float>(substeps);
+
+    // Live players share spawn with the ghost — any residual collision path
+    // (not only collisionCheckObjects) can mark frame-0 death. Park them.
+    cocos2d::CCPoint savedP1{};
+    cocos2d::CCPoint savedP2{};
+    bool parkedP1 = false;
+    bool parkedP2 = false;
+    if (parkReals) {
+        if (layer->m_player1 && layer->m_player1 != m_shadow) {
+            savedP1 = layer->m_player1->getPosition();
+            layer->m_player1->setPosition({ -100000.f, -100000.f });
+            parkedP1 = true;
+        }
+        if (layer->m_player2 && layer->m_player2 != m_shadow) {
+            savedP2 = layer->m_player2->getPosition();
+            layer->m_player2->setPosition({ -100000.f, -100000.f });
+            parkedP2 = true;
+        }
+    }
 
     copyPlayerState(m_shadow, snap);
     m_dead = false;
     m_jumped = false;
     m_unknown = false;
+    m_toggleUnknownHit = false;
     m_deathObject = nullptr;
 
     auto* s = m_shadow;
     size_t nextEv = 0;
+    if (traceFrames) {
+        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 512)) + 2);
+    }
 
     auto applyEv = [&](ReplayEvent const& ev) {
+        if (ev.player2 && !applyP2ToShadow) return;
         auto btn = PlayerButton::Jump;
         if (ev.button == 2) btn = PlayerButton::Left;
         else if (ev.button == 3) btn = PlayerButton::Right;
@@ -3485,15 +3539,28 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     this->m_simTickBase = 0;
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = dt; // TW remap must match bake physics, not live hitch dt
+    this->m_bakeOffline = true;
     m_simulating = true;
     beginCapture(layer);
 
     for (int frame = 0; frame <= untilFrame; ++frame) {
         this->m_simAbsTick = frame;
+
+        // Clickbots often put press+release on the SAME frame. Apply downs
+        // BEFORE physics so the tick is held; releases AFTER the step.
+        std::vector<ReplayEvent const*> downs;
+        std::vector<ReplayEvent const*> ups;
         while (nextEv < events.size() && events[nextEv].frame == frame) {
-            applyEv(events[nextEv]);
+            auto const& ev = events[nextEv];
+            if (!ev.player2 || applyP2ToShadow) {
+                if (ev.down) downs.push_back(&ev);
+                else ups.push_back(&ev);
+            }
             ++nextEv;
         }
+        for (auto const* ev : downs) applyEv(*ev);
+        bool const jumpHeldThisStep =
+            s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
 
         if (sampleFrame >= 0 && frame == sampleFrame) {
             out.xAtSample = s->getPositionX();
@@ -3501,19 +3568,75 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
             out.sampled = true;
         }
 
-        stepPhysics(layer, s, dt, dt);
-        if (m_dead || m_unknown) {
+        // Physics-bypass: N micro-steps at author dt inside one bake tick.
+        for (int sub = 0; sub < substeps; ++sub) {
+            stepPhysics(layer, s, subDt, subDt);
+            if (m_dead) break;
+        }
+        for (auto const* ev : ups) applyEv(*ev);
+
+        // Hard death only — Unknown must not wipe a working replay bake
+        // (toggle-group solids used to abort every click via m_unknown).
+        if (m_unknown) {
+            out.unknown = true;
+        }
+
+        if (onFrame && !onFrame(frame)) {
+            out.died = m_dead;
+            out.deathFrame = frame;
+            out.deathX = s->getPositionX();
+            out.deathY = s->getPositionY();
+            break;
+        }
+
+        int const evThis = static_cast<int>(downs.size() + ups.size());
+        if (traceFrames) {
+            BakeFrameTrace tr;
+            tr.frame = frame;
+            tr.x = s->getPositionX();
+            tr.y = s->getPositionY();
+            tr.yVel = static_cast<float>(s->m_yVelocity);
+            tr.jumpHeld = jumpHeldThisStep;
+            tr.dead = m_dead;
+            tr.unknown = m_unknown;
+            tr.twApplied = this->m_triggerWorldAppliedThisTick;
+            tr.eventsApplied = evThis;
+            tr.mode = static_cast<int>(StageConfig::kindOf(s));
+            if (m_dead && m_deathObject) {
+                tr.deathObjId = m_deathObject->m_uniqueID;
+                tr.deathObjType = static_cast<int>(m_deathObject->m_objectType);
+                tr.deathObjX = m_deathObject->getPositionX();
+                tr.deathObjY = m_deathObject->getPositionY();
+            }
+            out.frames.push_back(tr);
+        }
+
+        if (m_dead) {
             out.died = true;
             out.deathFrame = frame;
+            out.deathX = s->getPositionX();
+            out.deathY = s->getPositionY();
+            if (m_deathObject) {
+                out.deathObjId = m_deathObject->m_uniqueID;
+                out.deathObjType = static_cast<int>(m_deathObject->m_objectType);
+            }
             break;
         }
     }
 
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = -1.f;
+    this->m_bakeOffline = false;
     restoreCapture(layer);
     m_simulating = false;
     parkGhosts();
+
+    if (parkedP1 && layer->m_player1) {
+        layer->m_player1->setPosition(savedP1);
+    }
+    if (parkedP2 && layer->m_player2) {
+        layer->m_player2->setPosition(savedP2);
+    }
     return out;
 }
 

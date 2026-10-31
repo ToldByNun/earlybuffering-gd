@@ -1011,6 +1011,12 @@
 			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
+		"show-bake-path": {
+			"type": "bool",
+			"name": "Bake Visualizer",
+			"description": "Draws green BakeMap click windows near the player (coverage check). Needs a loaded bake. Off by default — no draw when empty or disabled.",
+			"default": false
+		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",
@@ -1263,6 +1269,17 @@
 			"name": "Copy Last Dev Report",
 			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
 			"button-text": "copy"
+		},
+		"title-dev-diag": {
+			"type": "title",
+			"name": "Diagnostics",
+			"description": "Dump current settings + bake/TW/clock/replay probe logs to the mod save folder for bug reports."
+		},
+		"dev-dump-diag-action": {
+			"type": "custom:eb-action",
+			"name": "Dump All Diag",
+			"description": "Writes a timestamped folder under mod save dir /diag/ with: all settings, clock/assist, replay, BakeMap, Trigger World, bake sim probe (first clicks: deathFrame/unknown/x), self-checks. Also auto-runs on bake 0-windows. Enter level, reset, import replay, then dump (or bake).",
+			"button-text": "dump"
 		}
 	},
 	"resources": {

@@ -1,7 +1,10 @@
 #include "BakeMap.hpp"
+#include "AssistClock.hpp"
 #include "AssistController.hpp"
 #include "ShadowSimulator.hpp"
+#include "TriggerWorldStore.hpp"
 #include "LevelProfile.hpp"
+#include "../dev/DevDiagDump.hpp"
 #include "../debug/AssistLog.hpp"
 
 #include <Geode/utils/file.hpp>
@@ -45,6 +48,103 @@ int resolveRadius(int bakeRadius, BakeMethod method) {
         return std::max(32, base * 4);
     }
     return std::max(8, base);
+}
+
+// After TPS remap, same-source-frame press+release can collapse to one bake
+// frame. Push releases forward so every press is held ≥1 bake tick.
+void ensureMinHoldTicks(std::vector<ReplayEvent>& ev, int minHold = 1) {
+    if (minHold <= 0 || ev.empty()) return;
+    for (size_t i = 0; i < ev.size(); ++i) {
+        if (!ev[i].down || ev[i].button != 1) continue;
+        for (size_t j = i + 1; j < ev.size(); ++j) {
+            if (ev[j].button != ev[i].button) continue;
+            if (ev[j].player2 != ev[i].player2) continue;
+            if (ev[j].down) break; // next press
+            if (ev[j].frame <= ev[i].frame) {
+                ev[j].frame = ev[i].frame + minHold;
+            }
+            break;
+        }
+    }
+    std::stable_sort(ev.begin(), ev.end(), [](auto const& a, auto const& b) {
+        if (a.frame != b.frame) return a.frame < b.frame;
+        // Downs before ups on the same frame (matches bake apply order).
+        return a.down && !b.down;
+    });
+}
+
+// Physics-bypass macros (MegaHack 1000–3000): keep author quantum 1:1.
+// Mild FPS (60/360) still snap to live ~240 — discrete collisions match the game.
+double resolveBakeTps(double srcTps, double liveTps) {
+    if (srcTps > AssistClock::kPlanSnapTpsHi) {
+        return std::min(srcTps, 4000.0);
+    }
+    if (liveTps < AssistClock::kPlanSnapTpsLo || liveTps > AssistClock::kPlanSnapTpsHi) {
+        return AssistClock::kNominalTps;
+    }
+    return liveTps;
+}
+
+// Scale a ~240-tick radius/horizon to author TPS wall-time.
+int scaleBakeTicks(int ticks, double bakeTps) {
+    if (ticks <= 0) return ticks;
+    if (bakeTps <= AssistClock::kPlanSnapTpsHi) return ticks;
+    long long scaled = std::llround(
+        static_cast<double>(ticks) * (bakeTps / AssistClock::kNominalTps)
+    );
+    if (scaled < ticks) scaled = ticks;
+    if (scaled > 2000) scaled = 2000;
+    return static_cast<int>(scaled);
+}
+
+// Remap author FPS → bake TPS (no-op when bakeTps == srcTps), min-hold, P1-only.
+std::vector<ReplayEvent> prepareBakeTimeline(
+    std::vector<ReplayEvent> const& src,
+    double srcTps,
+    double bakeTps,
+    bool forceSoloP1
+) {
+    std::vector<ReplayEvent> ev = src;
+    if (forceSoloP1) {
+        // Keep real dual P2 only when P1 is majority; else MegaHack all-P2 → P1.
+        int p1 = 0;
+        int p2 = 0;
+        for (auto const& e : ev) {
+            if (e.player2) ++p2;
+            else ++p1;
+        }
+        if (p2 >= p1) {
+            for (auto& e : ev) e.player2 = false;
+        }
+        else {
+            // Drop P2 dual clicks from P1 bake timeline (don't feed into ghost).
+            ev.erase(
+                std::remove_if(ev.begin(), ev.end(), [](ReplayEvent const& e) {
+                    return e.player2;
+                }),
+                ev.end()
+            );
+        }
+    }
+    if (srcTps > 0.0 && bakeTps > 0.0 && std::fabs(srcTps - bakeTps) >= 0.5) {
+        float const srcDt = static_cast<float>(1.0 / srcTps);
+        for (auto& e : ev) {
+            e.frame = AssistClock::get().remapTick(bakeTps, e.frame, srcDt);
+        }
+    }
+    // MegaHack GDR is often 1-based (first physics tick = frame 1). Shift so the
+    // opening tap lands on sim frame 0 — otherwise frame 0 falls into spawn spikes.
+    {
+        int minF = std::numeric_limits<int>::max();
+        for (auto const& e : ev) {
+            if (e.frame < minF) minF = e.frame;
+        }
+        if (minF == 1) {
+            for (auto& e : ev) e.frame -= 1;
+        }
+    }
+    ensureMinHoldTicks(ev, 1);
+    return ev;
 }
 
 unsigned workerCount() {
@@ -370,7 +470,8 @@ bool BakeMap::testShiftedClick(
     int eventIndex,
     int testFrame,
     int untilFrame,
-    float dt
+    float dt,
+    int substeps
 ) const {
     if (eventIndex < 0 || eventIndex >= static_cast<int>(timeline.size())) return false;
     timeline[static_cast<size_t>(eventIndex)].frame = testFrame;
@@ -378,7 +479,8 @@ bool BakeMap::testShiftedClick(
         return a.frame < b.frame;
     });
     auto r = ShadowSimulator::get().runBakeTimeline(
-        layer, startSnapshotSlot, timeline, dt, untilFrame, -1
+        layer, startSnapshotSlot, timeline, dt, untilFrame, -1,
+        true, false, true, substeps
     );
     return !r.died;
 }
@@ -416,8 +518,40 @@ Result<int> BakeMap::bakeReplay(
     if (startSnapshotSlot < 0) return Err("No start snapshot (reset once, then bake)");
 
     bakeRadius = resolveRadius(bakeRadius, BakeMethod::Replay);
-    double tps = m_replay.tps > 0.0 ? m_replay.tps : 240.0;
-    float dt = static_cast<float>(1.0 / tps);
+
+    // World must match start snapshot: bake right after reset, not mid-run.
+    // Mid-level orb claims / toggles make the ghost die immediately at start.
+    int const attemptTick = AssistController::get().attemptTick();
+    if (attemptTick > 60) {
+        AssistLog::info(fmt::format(
+            "BAKE warn: attemptTick={} — prefer reset→pause→bake (mid-run world pollutes orbs/toggles)",
+            attemptTick
+        ));
+    }
+    {
+        auto& tw = TriggerWorldStore::get();
+        if (tw.loaded() && tw.softcapHit()) {
+            AssistLog::info(fmt::format(
+                "BAKE warn: Trigger World softcap ({} tracks) — movers may be incomplete",
+                tw.trackCount()
+            ));
+        }
+    }
+
+    // Mild FPS (60/360) → resample onto live ~240. Physics-bypass (1000–3000)
+    // stays 1:1 at author TPS so the ghost matches the bot quantum exactly.
+    double const srcTps = m_replay.tps > 0.0 ? m_replay.tps : AssistClock::kNominalTps;
+    double const liveTps = AssistController::get().estimatedTps();
+    double const tps = resolveBakeTps(srcTps, liveTps);
+    float const dt = static_cast<float>(1.0 / tps);
+    bakeRadius = scaleBakeTicks(bakeRadius, tps);
+
+    std::vector<ReplayEvent> ev = prepareBakeTimeline(m_replay.events, srcTps, tps, true);
+    AssistLog::info(fmt::format(
+        "BAKE replay: timeline {} events @ {:.0f}←{:.0f} tps radius={} "
+        "(validate 1:1 then expand windows)",
+        ev.size(), tps, srcTps, bakeRadius
+    ));
 
     BakeMapData out;
     out.levelKey = m_data.levelKey.empty() && layer->m_level
@@ -428,7 +562,6 @@ Result<int> BakeMap::bakeReplay(
     out.tps = tps;
     out.method = "replay";
 
-    auto const& ev = m_replay.events;
     bool const doRelease = StageConfig::assistRelease();
 
     std::vector<JumpJob> jobs;
@@ -439,18 +572,88 @@ Result<int> BakeMap::bakeReplay(
         int F = e.frame;
         int next = nextJumpFrame(ev, i, e.player2);
         int horizon = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll()).cap;
+        if (horizon <= 0) horizon = std::max(16, StageConfig::ticksAll() * 4);
+        horizon = scaleBakeTicks(horizon, tps);
         int until = next > 0 ? std::min(next, F + horizon) : F + horizon;
         until = std::max(until, F + 1);
         jobs.push_back(JumpJob{ i, F, e.down, e.player2, until });
     }
+    if (jobs.empty()) {
+        return Err("Replay has no Jump events to bake (import a macro with clicks)");
+    }
 
-    m_progress.total = static_cast<int>(jobs.size());
-    m_progress.setStatus(fmt::format("replay bake · {} clicks · radius {}", jobs.size(), bakeRadius));
+    int lastFrame = 0;
+    for (auto const& e : ev) {
+        if (e.frame > lastFrame) lastFrame = e.frame;
+    }
+    // Progress: validate frames + per-click expand.
+    int const validateWeight = std::max(1, lastFrame);
+    m_progress.total = validateWeight + static_cast<int>(jobs.size());
+    m_progress.done = 0;
+    m_progress.setStatus(fmt::format(
+        "validate macro 1:1 · {}f @ {:.0f} tps", lastFrame, tps
+    ));
     AssistLog::info(fmt::format(
-        "BAKE replay: {} jobs, radius {}, 1 thread (binary search)",
-        jobs.size(), bakeRadius
+        "BAKE replay: validate 0..{} then expand {} clicks, radius {} @ {:.0f} tps",
+        lastFrame, jobs.size(), bakeRadius, tps
     ));
 
+    // ── Phase 1: full 1:1 macro run (must survive) ─────────────────────
+    ShadowSimulator::BakeRunResult validate;
+    {
+        std::lock_guard lock(m_simMutex);
+        int lastLogged = -1;
+        validate = ShadowSimulator::get().runBakeTimeline(
+            layer, startSnapshotSlot, ev, dt, lastFrame, -1,
+            true, false, true, 1,
+            [&](int frame) -> bool {
+                if (m_progress.cancel.load()) return false;
+                if (frame - lastLogged >= 64 || frame == lastFrame) {
+                    lastLogged = frame;
+                    m_progress.done = frame;
+                    m_progress.setStatus(fmt::format(
+                        "validate {}/{}", frame, lastFrame
+                    ));
+                }
+                return true;
+            }
+        );
+    }
+    if (m_progress.cancel.load()) return Err("Bake cancelled");
+
+    if (validate.died) {
+        AssistLog::info(fmt::format(
+            "BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
+            "objId={} objType={} (fix 1:1 before windows)",
+            validate.deathFrame, validate.deathX, validate.deathY,
+            validate.deathObjId, validate.deathObjType
+        ));
+        {
+            std::filesystem::path diagDir;
+            std::string diagErr;
+            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                AssistLog::info(fmt::format(
+                    "BAKE: validate fail — wrote diag {}", diagDir.string()
+                ));
+            }
+        }
+        return Err(fmt::format(
+            "Macro dies in sim at frame {} (x={:.0f}) — ghost path ≠ bot. "
+            "Reset→pause→Bake. Diag: /diag/bakefail_*",
+            validate.deathFrame, validate.deathX
+        ));
+    }
+
+    m_progress.done = validateWeight;
+    m_progress.setStatus(fmt::format(
+        "expand windows · {} clicks · radius {}", jobs.size(), bakeRadius
+    ));
+    AssistLog::info(fmt::format(
+        "BAKE: validate OK through frame {} — expanding {} click windows",
+        lastFrame, jobs.size()
+    ));
+
+    // ── Phase 2: binary-search earliest/latest around each click ───────
     for (auto const& job : jobs) {
         if (m_progress.cancel.load()) return Err("Bake cancelled");
 
@@ -461,8 +664,13 @@ Result<int> BakeMap::bakeReplay(
         float x = sample.sampled ? sample.xAtSample : 0.f;
         auto mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
 
-        if (!testShiftedClick(layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt)) {
-            AssistLog::debug(fmt::format("BAKE: skip click @{} (nominal dies)", job.frame));
+        // Nominal already survived full validate — still re-check shift window.
+        if (!testShiftedClick(
+                layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt
+            )) {
+            AssistLog::debug(fmt::format(
+                "BAKE: skip click @{} (shift re-check died)", job.frame
+            ));
             m_progress.done.fetch_add(1);
             continue;
         }
@@ -471,7 +679,9 @@ Result<int> BakeMap::bakeReplay(
         int hi = job.frame;
         while (lo < hi) {
             int mid = lo + (hi - lo) / 2;
-            if (testShiftedClick(layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt)) {
+            if (testShiftedClick(
+                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt
+                )) {
                 hi = mid;
             }
             else {
@@ -484,7 +694,9 @@ Result<int> BakeMap::bakeReplay(
         hi = job.frame + bakeRadius;
         while (lo < hi) {
             int mid = lo + (hi - lo + 1) / 2;
-            if (testShiftedClick(layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt)) {
+            if (testShiftedClick(
+                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt
+                )) {
                 lo = mid;
             }
             else {
@@ -505,31 +717,31 @@ Result<int> BakeMap::bakeReplay(
 
         m_progress.done.fetch_add(1);
         m_progress.setStatus(fmt::format(
-            "replay {}/{} · @{} → [{},{}]",
-            m_progress.done.load(), m_progress.total.load(),
+            "expand {}/{} · @{} → [{},{}]",
+            static_cast<int>(out.clicks.size()), jobs.size(),
             job.frame, earliest, latest
         ));
     }
 
     int const nClicks = static_cast<int>(out.clicks.size());
-    int const nJobs = static_cast<int>(jobs.size());
     AssistLog::info(fmt::format(
-        "BAKE done clicks={} jobs={} frames≈{} tps={:.0f} source={} (replay)",
-        nClicks,
-        nJobs,
-        nJobs > 0 ? jobs.back().until : 0,
-        tps,
-        out.sourceReplay
+        "BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} (replay)",
+        nClicks, jobs.size(), lastFrame, tps, out.sourceReplay
     ));
 
-    if (nJobs <= 0) {
-        return Err("Replay has no Jump events to bake (import a macro with clicks)");
-    }
     if (nClicks <= 0) {
-        // Do not persist empty over a previous good map.
+        {
+            std::filesystem::path diagDir;
+            std::string diagErr;
+            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                AssistLog::info(fmt::format(
+                    "BAKE: 0 windows after validate — diag {}", diagDir.string()
+                ));
+            }
+        }
         return Err(
-            "Replay bake produced 0 windows — start snapshot may be stale or every "
-            "click dies in sim. Reset the level once, then Bake Map again."
+            "Replay bake produced 0 windows after macro validated — expand failed. "
+            "Diag: /diag/bakefail_*"
         );
     }
 
@@ -845,9 +1057,18 @@ Result<int> BakeMap::bakeBrute(
     ));
 
     if (nClicks <= 0) {
+        {
+            std::filesystem::path diagDir;
+            std::string diagErr;
+            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                AssistLog::info(fmt::format(
+                    "BAKE brute: 0 windows — wrote diag bundle {}", diagDir.string()
+                ));
+            }
+        }
         return Err(
             "Brute found no safe clicks (died immediately / unsolvable from start). "
-            "Reset the level once so the start snapshot is fresh, then Brute Bake."
+            "Reset once, then Brute Bake. Diag under save dir /diag/bakefail_*."
         );
     }
 

@@ -13,6 +13,7 @@
 #include "ui/ActionButtonSetting.hpp"
 #include "ui/InLevelSettingsFilter.hpp"
 #include "ui/StatusOverlay.hpp"
+#include "ui/BakePathVisualizer.hpp"
 #include "ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -197,6 +198,18 @@ $on_mod(Loaded) {
         }
         else {
             TrajectoryVisualizer::get().clear();
+        }
+        AssistController::get().updateOverlay();
+    });
+    listenForSettingChanges<bool>("show-bake-path", [](bool value) {
+        if (StageConfig::isApplying()) return;
+        StageConfig::refreshCache();
+        BakePathVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get()) BakePathVisualizer::get().attach(pl);
+        }
+        else {
+            BakePathVisualizer::get().clear();
         }
         AssistController::get().updateOverlay();
     });

@@ -238,16 +238,21 @@ bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& o
 
 void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
     if (!obj) return;
+    auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
     // Inactive: disable collision participation, not visibility alone
     // (invisible solids still killed through Include — Commit 4).
     if (!pose.active) {
-        obj->m_poweredOn = false;
-        obj->m_visible = false;
+        if (ego) {
+            ego->m_poweredOn = false;
+            ego->m_visible = false;
+        }
         obj->setVisible(false);
         return;
     }
-    obj->m_poweredOn = true;
-    obj->m_visible = true;
+    if (ego) {
+        ego->m_poweredOn = true;
+        ego->m_visible = true;
+    }
     obj->setVisible(true);
     obj->setPosition({ pose.x, pose.y });
     obj->m_positionX = pose.x;

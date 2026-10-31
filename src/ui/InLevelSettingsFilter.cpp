@@ -23,7 +23,7 @@ public:
         SettingsCategory cat;
     };
 
-    static constexpr int kCount = 167;
+    static constexpr int kCount = 170;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -170,6 +170,7 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "swing-slack", SettingsCategory::Modes },
     { "swing-latency", SettingsCategory::Modes },
     { "show-trajectory", SettingsCategory::Visual },
+    { "show-bake-path", SettingsCategory::Visual },
     { "save-feedback-sound", SettingsCategory::Visual },
     { "save-feedback-color", SettingsCategory::Visual },
     { "save-feedback-counter", SettingsCategory::Visual },
@@ -209,6 +210,8 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "dev-export-session-action", SettingsCategory::Dev },
     { "dev-clear-traces-action", SettingsCategory::Dev },
     { "dev-copy-report-action", SettingsCategory::Dev },
+    { "title-dev-diag", SettingsCategory::Dev },
+    { "dev-dump-diag-action", SettingsCategory::Dev },
 };
 
 char const* InLevelSettingsFilter::categoryName(SettingsCategory cat) {
@@ -797,6 +800,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
     expect(categoryForKey("window-unit") == SettingsCategory::Assist, "cat-window-assist");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
+    expect(categoryForKey("show-bake-path") == SettingsCategory::Visual, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Keys, "cat-hotkey-keys");
     expect(categoryForKey("stage-index") == SettingsCategory::Keys, "cat-stage-keys");
@@ -822,7 +826,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
         expect(c != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-count-167");
+    expect(mapped == SettingsCategoryMap::kCount, "map-count-170");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {

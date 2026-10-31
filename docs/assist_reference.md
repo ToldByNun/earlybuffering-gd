@@ -63,7 +63,7 @@ Settings (Learning): `auto-tune` (default off), `self-bake` (default off, practi
 
 `SelfBakeRecorder` records vanilla jump inputs (never assist injects). On death / checkpoint / complete / reset, merges into `BakeMap` via `mergeSelfClicks` (`method=self` when empty/self; dedup union; cap 512). **Death and reset never refine** (merge-only — refine on the main thread caused 1–2s freezes). Checkpoint / complete / quit may refine when enabled, start snapshot exists, and assist did not touch the run (`refineSelfWindows`, budget 64 sims). Quit cancels in-flight refine.
 
-**Replay / Brute bake:** attempt-start pose lives in reserved snapshot slot 0 (`captureStartSnapshot`) so DecisionLog / trajectory cannot clobber it. Offline bake remaps Trigger World with bake `dt`, not live hitch `simDt`. Empty results return an error (no “Bake done — 0 windows”); previous good maps are not overwritten. Always **reset once from start**, then pause → Bake Map / Brute Bake.
+**Replay / Brute bake:** attempt-start pose lives in reserved snapshot slot 0 (`captureStartSnapshot`) so DecisionLog / trajectory cannot clobber it. Offline bake remaps Trigger World with bake `dt`, not live hitch `simDt`. Replay macros at non-game FPS (360 / physics-bypass 3000, …) are **resampled** to live TPS (~240); zero-length clicks after remap get a **minimum 1-tick hold**. Bake applies **downs → physics → ups** each frame so same-frame press+release still holds for that tick (clickbots). Majority-P2 MegaHack exports → P1; dual P2 clicks are dropped from the P1 timeline. Real P1/P2 are parked off-map during bake; sim collision ignores PlayerObjects. Offline bake trusts current toggle pose (no Unknown abort). Empty → error + `diag/bakefail_*`. Always **reset → pause → Bake Map**. Diag: Dev → Dump All Diag.
 
 ## Trigger World Bake
 
@@ -159,7 +159,7 @@ Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Wi
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **126** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **`settings`**: all **127** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
@@ -206,6 +206,7 @@ Geode setting titles follow tabs: **Main** → **Scope** (+ Off Ranges) → **As
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
 | show-overlay | bool | false | | | Main |
 | show-trajectory | bool | false | | | Visual |
+| show-bake-path | bool | false | | | Visual — green BakeMap windows near player |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
 | show-pause-hub | bool | true | | | Main — EB button |
 | save-feedback-sound | bool | false | | | Visual — per-tick MP3 cue on delayed inject |

@@ -198,6 +198,8 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(clock.remapTick(120.0, 100, 1.f / 120.f) == 100, "remap-matched-author");
     expect(clock.remapTick(240.0, -5, 1.f / 240.f) == 0, "remap-neg-live");
     expect(clock.remapTick(0.0, 50, 1.f / 240.f) == 50, "remap-bad-author");
+    // Replay @360 → game @240: frame 86 → round(86 * 240/360) = 57.
+    expect(clock.remapTick(240.0, 86, 1.f / 360.f) == 57, "remap-360-to-240");
 
     expect(!clock.speedScaleSuspect(1.f, 240.0), "suspect-nominal");
     expect(!clock.speedScaleSuspect(1.f, 220.0), "suspect-within-band");

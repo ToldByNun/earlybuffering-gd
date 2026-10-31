@@ -11,6 +11,7 @@
 
 #include <Geode/Geode.hpp>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -144,6 +145,9 @@ public:
         return layer && this->m_hostLayer == layer;
     }
     bool isSimulating() const { return m_simulating; }
+    // Offline bake timeline: trust current toggle pose (Include/Skip) instead of
+    // UnknownOnOverlap — otherwise every toggle-group solid aborts the macro.
+    bool bakeOffline() const { return this->m_bakeOffline; }
     // True after applyTriggerWorldAtTick ran for the current sim step.
     bool triggerWorldAppliedThisTick() const {
         return this->m_triggerWorldAppliedThisTick;
@@ -365,20 +369,53 @@ public:
         int actionShift = 0
     );
 
+    // Optional per-frame bake/diag trace (filled when traceFrames=true).
+    struct BakeFrameTrace {
+        int frame = 0;
+        float x = 0.f;
+        float y = 0.f;
+        float yVel = 0.f;
+        bool jumpHeld = false;
+        bool dead = false;
+        bool unknown = false;
+        bool twApplied = false;
+        int eventsApplied = 0; // count this frame
+        int mode = 0;
+        int deathObjId = -1;
+        int deathObjType = -1;
+        float deathObjX = 0.f;
+        float deathObjY = 0.f;
+    };
     struct BakeRunResult {
         bool died = false;
+        bool unknown = false;
         int deathFrame = -1;
         float xAtSample = 0.f;
+        float deathX = 0.f;
+        float deathY = 0.f;
         GameModeKind modeAtSample = GameModeKind::Cube;
         bool sampled = false;
+        int deathObjId = -1;
+        int deathObjType = -1;
+        std::vector<BakeFrameTrace> frames;
     };
+    // applyP2ToShadow: MegaHack often marks solo inputs as player2 — still feed P1 ghost.
+    // traceFrames: record BakeFrameTrace each step (diag dumps).
+    // parkReals: move live P1/P2 off-map during bake so spawn overlap cannot kill ghost.
+    // substeps: optional micro-steps per bake tick (usually 1; bypass macros bake 1:1).
+    // onFrame: optional progress hook; return false to cancel (bake validate).
     BakeRunResult runBakeTimeline(
         PlayLayer* layer,
         int snapshotSlot,
         std::vector<ReplayEvent> const& events,
         float dt,
         int untilFrame,
-        int sampleFrame = -1
+        int sampleFrame = -1,
+        bool applyP2ToShadow = true,
+        bool traceFrames = false,
+        bool parkReals = true,
+        int substeps = 1,
+        std::function<bool(int frame)> onFrame = {}
     );
 
     struct PathSample {
@@ -523,6 +560,7 @@ private:
     GJBaseGameLayer* m_hostLayer = nullptr;
     int m_nextSnapshot = 0;
     bool m_simulating = false;
+    bool m_bakeOffline = false;
     bool m_applyingRing = false;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;

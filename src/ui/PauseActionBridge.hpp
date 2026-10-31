@@ -31,6 +31,8 @@ public:
     static void devExportSession();
     static void devClearTraces();
     static void devCopyReport();
+    // Writes settings/clock/replay/TW/bake-probe logs under saveDir/diag/.
+    static void devDumpDiag();
 
     // Geode ModSettingsPopup with Main/Scope/Assist/Bake/Modes/Visual/Keys/Dev switcher.
     static void openModSettings();

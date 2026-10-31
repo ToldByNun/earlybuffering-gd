@@ -29,6 +29,7 @@
 #include "../ui/SaveFeedback.hpp"
 #include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
+#include "../ui/BakePathVisualizer.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <algorithm>
@@ -314,6 +315,8 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     StatusOverlay::attach(playLayer);
     TrajectoryVisualizer::get().setEnabled(StageConfig::showTrajectory());
     TrajectoryVisualizer::get().attach(playLayer);
+    BakePathVisualizer::get().setEnabled(StageConfig::showBakePath());
+    BakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
         BakeMap::get().loadForLevel(playLayer->m_level);
@@ -339,6 +342,7 @@ void AssistController::onLevelQuit() {
     bool const layerAlive = playLayer != nullptr;
     SaveFrameCounter::get().detach(!layerAlive);
     TrajectoryVisualizer::get().detach(!layerAlive);
+    BakePathVisualizer::get().detach(!layerAlive);
     StatusOverlay::detach(!layerAlive);
 
     if (playLayer) {
@@ -1292,6 +1296,7 @@ void AssistController::updateOverlay() {
             }
         }
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
+        std::string bakeVizBit = BakePathVisualizer::get().statusHint();
         int const smartDepth = StageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1
@@ -1318,6 +1323,7 @@ void AssistController::updateOverlay() {
         if (!smartBit.empty()) m_overlayText += " | " + smartBit;
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
+        if (!bakeVizBit.empty()) m_overlayText += " | " + bakeVizBit;
         if (StageConfig::triggerBake()) {
             if (TriggerWorldBaker::get().running()) {
                 this->m_overlayText += fmt::format(
@@ -2077,6 +2083,10 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     {
         PerfTrace::Scope const scope("trajectory");
         TrajectoryVisualizer::get().onPhysicsTick(playLayer, dt);
+    }
+    {
+        PerfTrace::Scope const scope("bakePath");
+        BakePathVisualizer::get().onPhysicsTick(playLayer, dt);
     }
 
     this->pruneClickTimes();

@@ -75,6 +75,7 @@ bool g_cachedLagProbe = true;
 bool g_cachedSafeMode = false;
 bool g_cachedShowOverlay = true;
 bool g_cachedShowTrajectory = false;
+bool g_cachedShowBakePath = false;
 bool g_cachedShowPauseBake = true;
 bool g_cachedShowPauseHub = true;
 bool g_cachedAssistPress = true;
@@ -211,6 +212,7 @@ void StageConfig::refreshCache() {
     g_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     g_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
     g_cachedShowTrajectory = readBool(mod, "show-trajectory", false);
+    g_cachedShowBakePath = readBool(mod, "show-bake-path", false);
     g_cachedShowPauseBake = readBool(mod, "show-pause-bake", false);
     g_cachedShowPauseHub = readBool(mod, "show-pause-hub", true);
     g_cachedAssistPress = readBool(mod, "assist-press", true);
@@ -500,6 +502,7 @@ bool StageConfig::blocksProgressSaves(bool assistTouchedRun) {
 
 bool StageConfig::showOverlay() { ensureCache(); return g_cachedShowOverlay; }
 bool StageConfig::showTrajectory() { ensureCache(); return g_cachedShowTrajectory; }
+bool StageConfig::showBakePath() { ensureCache(); return g_cachedShowBakePath; }
 bool StageConfig::showPauseBake() { ensureCache(); return g_cachedShowPauseBake; }
 bool StageConfig::showPauseHub() { ensureCache(); return g_cachedShowPauseHub; }
 bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }

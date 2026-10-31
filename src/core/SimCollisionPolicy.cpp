@@ -19,13 +19,22 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
 
     auto& sim = ShadowSimulator::get();
     if (sim.isSimulating()) {
-        // Toggle orb / touch-toggle: modeled flip → Include/Skip; else Unknown.
+        // Toggle orb / touch-toggle: modeled flip → Include/Skip; else Unknown
+        // for live plan honesty. Offline bake trusts the current powered/visible
+        // pose so a working macro is not aborted on every toggle-group solid.
         if (sim.isToggleTriggerTarget(obj->m_uniqueID)) {
             auto& toggle = ToggleOrbSim::get();
             if (toggle.isModeled(obj->m_uniqueID)) {
                 return toggle.isModeledActive(obj->m_uniqueID)
                     ? SimObjectAction::Include
                     : SimObjectAction::Skip;
+            }
+            if (sim.bakeOffline()) {
+                auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
+                if (!obj->isVisible() || (ego && !ego->m_poweredOn)) {
+                    return SimObjectAction::Skip;
+                }
+                return SimObjectAction::Include;
             }
             return SimObjectAction::UnknownOnOverlap;
         }
@@ -38,7 +47,8 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
                     && track->ready
                     && TriggerClassify::isStatic(track->kind)) {
                     // writePose(inactive) clears visibility/poweredOn — do not Include.
-                    if (!obj->isVisible() || !obj->m_poweredOn) {
+                    auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
+                    if (!obj->isVisible() || (ego && !ego->m_poweredOn)) {
                         return SimObjectAction::Skip;
                     }
                     return SimObjectAction::Include;
@@ -48,10 +58,14 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
             // Player-coupled follow targets: never trust editor pose.
             // skip-dynamic (default) / dual / probe miss → Unknown.
             // skip-dynamic off + cheap live probe applied → Include.
+            // Offline bake: Skip (don't abort the whole macro on follow geometry).
             if (sim.isDynamicTriggerTarget(obj->m_uniqueID)) {
                 if (!StageConfig::triggerBakeSkipDynamic()
                     && sim.liveDynamicApplied(obj->m_uniqueID)) {
                     return SimObjectAction::Include;
+                }
+                if (sim.bakeOffline()) {
+                    return SimObjectAction::Skip;
                 }
                 return SimObjectAction::UnknownOnOverlap;
             }

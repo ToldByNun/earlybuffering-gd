@@ -92,6 +92,7 @@ public:
     static bool blocksProgressSaves(bool assistTouchedRun);
     static bool showOverlay();
     static bool showTrajectory();
+    static bool showBakePath(); // green BakeMap windows near player
     static bool showPauseBake(); // pause-screen status lines
     // Pause top-right button → Geode openSettingsPopup (later: hub).
     static bool showPauseHub();

@@ -144,7 +144,8 @@ private:
         int eventIndex,
         int testFrame,
         int untilFrame,
-        float dt
+        float dt,
+        int substeps = 1
     ) const;
 
     geode::Result<int> bakeReplay(

@@ -114,6 +114,10 @@ void fireSettingAction(std::string const& key) {
         PauseActionBridge::devCopyReport();
         return;
     }
+    if (key == "dev-dump-diag-action") {
+        PauseActionBridge::devDumpDiag();
+        return;
+    }
 }
 
 } // namespace

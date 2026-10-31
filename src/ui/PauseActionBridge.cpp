@@ -10,11 +10,13 @@
 #include "../debug/AssistLog.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevConfig.hpp"
+#include "../dev/DevDiagDump.hpp"
 #include "../dev/DevReport.hpp"
 #include "../dev/DevSession.hpp"
 #include "../dev/DevTraceStore.hpp"
 #include "../ui/DevOverlay.hpp"
 #include "../ui/StatusOverlay.hpp"
+#include "../ui/BakePathVisualizer.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -527,6 +529,16 @@ void PauseActionBridge::importConfig() {
         else {
             TrajectoryVisualizer::get().clear();
         }
+        bool const bakePath = StageConfig::showBakePath();
+        BakePathVisualizer::get().setEnabled(bakePath);
+        if (bakePath) {
+            if (auto* pl = PlayLayer::get()) {
+                BakePathVisualizer::get().attach(pl);
+            }
+        }
+        else {
+            BakePathVisualizer::get().clear();
+        }
     }
     AssistController::get().updateOverlay();
     // Open ModSettingsPopup rows keep stale uncommitted values after setSettingValue
@@ -664,6 +676,30 @@ void PauseActionBridge::devClearTraces() {
     auto const msg = fmt::format(
         "Cleared {} session file(s) under devtraces/.",
         n
+    );
+    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
+}
+
+void PauseActionBridge::devDumpDiag() {
+    std::filesystem::path dir;
+    std::string err;
+    if (!DevDiagDump::dumpAll(dir, err)) {
+        AssistLog::info(fmt::format("DIAG dump failed: {}", err));
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            err.empty() ? "Diag dump failed." : err.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    bool const clipOk = clipboard::write(dir.string());
+    auto const msg = fmt::format(
+        "Wrote diagnostic bundle:\n{}\n\n"
+        "Includes settings, clock, replay, BakeMap, Trigger World,\n"
+        "bake probe (first clicks vs sim death), self-checks.\n\n"
+        "{}",
+        dir.string(),
+        clipOk ? "Path copied to clipboard." : "Clipboard copy failed."
     );
     FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
 }

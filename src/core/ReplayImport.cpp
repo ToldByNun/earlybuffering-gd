@@ -52,6 +52,20 @@ T readBE(std::ifstream& f) {
 }
 
 
+static void normalizeSoloPlayer2(ImportedReplay& out) {
+    // MegaHack GDR often stores almost all inputs as player2 (p1Inputs≈0 or
+    // tiny P1 stub). Solo bake/assist only drives P1 — flip majority-P2 to P1.
+    int p1 = 0;
+    int p2 = 0;
+    for (auto const& e : out.events) {
+        if (e.player2) ++p2;
+        else ++p1;
+    }
+    if (p2 > 0 && p2 >= p1) {
+        for (auto& e : out.events) e.player2 = false;
+    }
+}
+
 Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& path) {
     if (!std::filesystem::exists(path)) return Err("File not found");
 
@@ -61,22 +75,30 @@ Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& path) {
         return static_cast<char>(std::tolower(c));
     });
 
-    if (ext == ".gdr" || ext == ".gdr2") return loadGdr(path);
-    if (name.ends_with(".mhr.json") || isMhrJsonName(path)) return loadMhrJson(path);
+    auto finish = [](Result<ImportedReplay> r) -> Result<ImportedReplay> {
+        if (r.isOk()) normalizeSoloPlayer2(r.unwrap());
+        return r;
+    };
+
+    if (ext == ".gdr" || ext == ".gdr2") return finish(loadGdr(path));
+    if (name.ends_with(".mhr.json") || isMhrJsonName(path)) return finish(loadMhrJson(path));
     if (ext == ".mhr") {
         // JSON saved as .mhr, or binary HACK magic
         std::ifstream probe(path, std::ios::binary);
         if (!probe) return Err("Failed to open file");
         char head[8]{};
         probe.read(head, 8);
-        if (head[0] == '{' || head[0] == '[') return loadMhrJson(path);
-        return loadMhrBin(path);
+        if (head[0] == '{' || head[0] == '[') return finish(loadMhrJson(path));
+        return finish(loadMhrBin(path));
     }
-    if (ext == ".slc") return loadSlc(path);
+    if (ext == ".slc") return finish(loadSlc(path));
     if (ext == ".json") {
         // Try MHR-shaped JSON, else fail
         auto mhr = loadMhrJson(path);
-        if (mhr.isOk()) return mhr;
+        if (mhr.isOk()) {
+            normalizeSoloPlayer2(mhr.unwrap());
+            return mhr;
+        }
         return Err("Unsupported .json (expected MegaHack meta/events layout)");
     }
 
@@ -84,9 +106,9 @@ Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& path) {
     std::ifstream f(path, std::ios::binary);
     char magic[4]{};
     f.read(magic, 4);
-    if (std::string_view(magic, 3) == "GDR") return loadGdr(path);
-    if (std::string_view(magic, 4) == "SILL") return loadSlc(path);
-    if (magic[0] == '{') return loadMhrJson(path);
+    if (std::string_view(magic, 3) == "GDR") return finish(loadGdr(path));
+    if (std::string_view(magic, 4) == "SILL") return finish(loadSlc(path));
+    if (magic[0] == '{') return finish(loadMhrJson(path));
 
     return Err(fmt::format("Unsupported replay format: {}", path.filename().string()));
 }
