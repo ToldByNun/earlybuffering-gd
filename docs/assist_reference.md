@@ -274,7 +274,11 @@ Continuous modes also Pass release assist during spam. Reset on attempt / quit. 
 
 ## GhostParity / SpotTrust (hard Pass)
 
-`GhostParityProbe` records live pose each physics tick, anchors every 16t into reserved shadow slots 14/15 (`PARITY_SLOT_A/B`, outside the plan capture ring 1..13), and every 16t replays the past ≤48t path via `samplePath`. Drift (ε placeholder 12px or death mismatch) → `SimTrust::noteParityDrift` + `SpotTrustMap::markUntrusted(x)` + LagProbe `eb.parity.drift`. AssistController: mid-buffer drift clears the buffer (`pass-parity-drift`); `planPress`/`planRelease` hard-Pass on parity drift or spot-untrusted — **never** softened by orb foresight. Overlay: `trust=1` / `trust=0 parity` / `trust=spot`. PlanGold: `spot-trust-map`, `sim-trust`, `ghost-parity-probe`.
+`GhostParityProbe` records live pose each physics tick, anchors every 16t into reserved shadow slots 14/15 (`PARITY_SLOT_A/B`, outside the plan capture ring 1..13), and every 16t replays the past ≤48t path via `samplePath`. Drift (ε **LOCKED** 12px via `AssistContracts140::kLockedEps*` / `applyLockedEps` at boot, or death mismatch) → `SimTrust::noteParityDrift` + `SpotTrustMap::markUntrusted(x)` + LagProbe `eb.parity.drift` + `AssistRealMetrics::noteParityProbe`. AssistController: mid-buffer drift clears the buffer (`pass-parity-drift`); `planPress`/`planRelease` hard-Pass on parity drift or spot-untrusted — **never** softened by orb foresight. Overlay: `trust=1` / `trust=0 parity` / `trust=spot`. PlanGold: `spot-trust-map`, `sim-trust`, `ghost-parity-probe`.
+
+### Assist contracts v1.4.0 LOCK (Commit 2)
+
+Frozen numbers live in `docs/assist_contracts_140.md` and `AssistContracts140` — **DO NOT RETUNE** without a new mod version. Real counters: `AssistRealMetrics` (`N_opp` / `N_trust_opp` / `A` / `DAF` / ParityOK + Wilson G5 / G6 / G7a / G7b TrustRate). Overlay bit `daf=a/A par=ok/n`. `dev-freeze-world` default **on**. Prev/Caused stay `simEstimate` only (G10). PlanGold: `assist-contracts-140`, `assist-real-metrics`.
 
 ## Divergence / UNTRUST
 

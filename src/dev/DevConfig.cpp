@@ -78,7 +78,8 @@ void DevConfig::refreshCache() {
     g_devRecordEnable = readBool(mod, "dev-record-enable", false);
     g_devRecordCount = clampInt(readInt(mod, "dev-record-count", 10), 1, 50);
     g_devCountEmptyAttempts = readBool(mod, "dev-count-empty-attempts", false);
-    g_devFreezeWorld = readBool(mod, "dev-freeze-world", false);
+    // Commit 2 LOCK: freeze-world default ON for honest corpus / eval records.
+    g_devFreezeWorld = readBool(mod, "dev-freeze-world", true);
     g_devDisableRandom = readBool(mod, "dev-disable-random", true);
     g_devEvalOnDeath = readBool(mod, "dev-eval-on-death", true);
     g_devEvalGrid = parseEvalGrid(readString(mod, "dev-eval-grid", "band"));

@@ -1,4 +1,5 @@
 #include "config/StageConfig.hpp"
+#include "core/AssistContracts140.hpp"
 #include "core/AssistController.hpp"
 #include "core/BakeMap.hpp"
 #include "core/SaveDropPaths.hpp"
@@ -58,6 +59,15 @@ $on_mod(Loaded) {
         }
     }
     AssistLog::printBanner();
+    // Commit 2 LOCK: freeze GhostParityProbe ε before any runtime / PlanGold probe.
+    AssistContracts140::applyLockedEps();
+    AssistLog::info(fmt::format(
+        "AssistContracts140 LOCK schema={} corpus={} eps=({:.0f},{:.0f})",
+        AssistContracts140::kSchema,
+        AssistContracts140::kCorpusLabel,
+        AssistContracts140::kLockedEpsX,
+        AssistContracts140::kLockedEpsY
+    ));
     if (StageConfig::perfTrace()) {
         AssistLog::info(fmt::format("PerfTrace logging to {}", PerfTrace::logPath()));
     }

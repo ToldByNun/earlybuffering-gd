@@ -10,6 +10,7 @@
 #include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
+#include "AssistRealMetrics.hpp"
 #include "GhostParityProbe.hpp"
 #include "SimTrust.hpp"
 #include "SpotTrustMap.hpp"
@@ -287,6 +288,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_outcomePending = false;
     m_outcomePlanDelay = false;
     m_untrustPassHint = false;
+    m_dafWatch = false;
     {
         LagProbe::Scope const s("eb.saveFeedbackReset");
         SaveFeedback::get().reset();
@@ -326,6 +328,11 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
         BakeMap::get().loadForLevel(playLayer->m_level);
         TriggerWorldBaker::get().loadOrBuild(playLayer);
+        // Movers / TW tracks → dynamic-labelled TrustRate floor (G7b).
+        bool const dynamicLabelled = TriggerWorldStore::get().hasTracks();
+        AssistRealMetrics::get().setLevelKey(
+            LevelProfile::get().key(), dynamicLabelled
+        );
     }
     updateOverlay();
 }
@@ -368,6 +375,8 @@ void AssistController::onLevelQuit() {
     TriggerWorldStore::get().clear();
     SimTrust::get().onLevelQuit();
     GhostParityProbe::get().onLevelQuit();
+    this->m_dafWatch = false;
+    // Keep AssistRealMetrics session across levels (corpus report); do not resetSession.
 
     // Quiet reset — overlay already detached
     this->clearBuffer();
@@ -913,6 +922,7 @@ bool AssistController::armHoldUntilSafe(
         );
     }
     this->noteVerdict(AssistReason::HoldPending, "hus-arm");
+    if (eta > 0) AssistRealMetrics::get().noteArm();
     AssistLog::debug(fmt::format(
         "HOLD-UNTIL-SAFE arm eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
         eta, limit,
@@ -1414,6 +1424,12 @@ void AssistController::updateOverlay() {
                 this->m_overlayText += trustBit;
             }
         }
+        {
+            auto const metricsBit = AssistRealMetrics::get().overlayBit();
+            if (!metricsBit.empty()) {
+                this->m_overlayText += " | " + metricsBit;
+            }
+        }
         if (m_savesAttempt > 0) {
             m_overlayText += fmt::format(" | saves {}/{}", m_savesAttempt, m_savesLevel);
         }
@@ -1627,6 +1643,10 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     // Heavy learning/bake runs on resetAttempt (next attempt), not here.
     // Drop in-flight trigger-world slices (no flush); partial store may remain.
     TriggerWorldBaker::get().cancel();
+    if (this->m_dafWatch) {
+        AssistRealMetrics::get().noteDeathAfterFire();
+        this->m_dafWatch = false;
+    }
     if (this->m_outcomePending) {
         LagProbe::Scope const s("eb.outcomeNote");
         DivergenceTracker::get().note(
@@ -1898,6 +1918,10 @@ void AssistController::fireBuffered(
     DevCycleRecorder::get().noteFire(devPressId, this->m_attemptTick);
 
     this->inject(playLayer, this->m_buffer.down);
+    // Real-harm watch: death after a fired Delay inject (Commit 2 DAF).
+    if (delayed > 0 && wasPress) {
+        this->m_dafWatch = true;
+    }
     AssistLog::printSavedPress(
         delayed, this->m_buffer.pressTick, this->m_attemptTick,
         this->m_buffer.limit, this->estimatedTps()
@@ -2425,6 +2449,7 @@ bool AssistController::tryBakeAssist(
         );
     }
     this->noteVerdict(AssistReason::DelayPrefer, "bake-delay");
+    if (delay > 0) AssistRealMetrics::get().noteArm();
     this->updateOverlay();
     return false;
 }
@@ -2443,6 +2468,13 @@ bool AssistController::planPress(
         DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
         this->noteVerdict(AssistReason::PassLimitZero, "press-limit0");
         return true;
+    }
+
+    // Opportunity (Commit 2): every press that reaches assist decisioning.
+    {
+        float const xOpp = player->getPositionX();
+        bool const trusted = SimTrust::get().okAt(xOpp);
+        AssistRealMetrics::get().noteOpportunity(trusted);
     }
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
@@ -2873,6 +2905,7 @@ bool AssistController::planPress(
         );
     }
     this->noteVerdict(delayReason, "press-delay");
+    if (delay > 0) AssistRealMetrics::get().noteArm();
     this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     this->updateOverlay();
     return false;
@@ -3146,6 +3179,7 @@ bool AssistController::planRelease(
         );
     }
     this->noteVerdict(delayReason, "release-delay");
+    if (delay > 0) AssistRealMetrics::get().noteArm();
     this->recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     this->updateOverlay();
     return false;

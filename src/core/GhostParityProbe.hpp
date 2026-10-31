@@ -5,16 +5,17 @@
 #include <string>
 #include <vector>
 
-// Past-window ghost vs live pose check (Commit 1).
+// Past-window ghost vs live pose check (Commit 1 + Commit 2 ε LOCK).
 // Anchors live in reserved ShadowSimulator parity snapshot slots so plan()
-// captures cannot clobber them. ε placeholders until Commit 2 freezes noise.
+// captures cannot clobber them. ε is frozen in AssistContracts140 — remeasure
+// only in a new mod version (AssistRealMetrics tracks max|dxy| for that).
 class GhostParityProbe {
 public:
     static constexpr int kPoseCap = 240;
     static constexpr int kHorizonTicks = 48;
     static constexpr int kAnchorEvery = 16;
     static constexpr int kProbeEvery = 16;
-    // Placeholder ε — Commit 2 replaces from corpus p99 and freezes.
+    // Must match AssistContracts140::kLockedEps* (Commit 2 freeze).
     static constexpr float kDefaultEpsX = 12.f;
     static constexpr float kDefaultEpsY = 12.f;
     static constexpr int kMaxProbeUs = 900;

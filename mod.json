@@ -1095,8 +1095,8 @@
 		"dev-freeze-world": {
 			"type": "bool",
 			"name": "Dev Freeze World",
-			"description": "Capture nearby object poses / restoreable world state for high-fidelity eval. Off = player+clock digest only (playerOnlyApproximated). Heavier CPU/IO when on.",
-			"default": false
+			"description": "Capture nearby object poses / restoreable world state for high-fidelity eval (Commit 2 LOCK default on). Off = player+clock digest only (playerOnlyApproximated). Heavier CPU/IO when on.",
+			"default": true
 		},
 		"dev-disable-random": {
 			"type": "bool",

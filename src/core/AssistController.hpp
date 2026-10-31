@@ -288,6 +288,8 @@ private:
     bool m_assistTouchedRun = false;
     int m_savesAttempt = 0;
     int m_savesLevel = 0;
+    // Commit 2 real metrics: death after a fired Delay inject (cleared on reset).
+    bool m_dafWatch = false;
 };
 
 #endif // EARLYBUFFER_CORE_ASSISTCONTROLLER_HPP

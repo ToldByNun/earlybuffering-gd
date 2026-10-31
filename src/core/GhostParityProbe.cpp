@@ -1,4 +1,5 @@
 #include "GhostParityProbe.hpp"
+#include "AssistRealMetrics.hpp"
 #include "SimTrust.hpp"
 #include "SpotTrustMap.hpp"
 #include "ShadowSimulator.hpp"
@@ -162,6 +163,7 @@ void GhostParityProbe::maybeRunProbe(
         || dy > this->m_epsY;
 
     this->m_lastDrifted = drifted;
+    AssistRealMetrics::get().noteParityProbe(drifted, dx, dy);
     if (!drifted) {
         SimTrust::get().clearParityDrift();
         SpotTrustMap::get().noteGoodParity(livePose->x);

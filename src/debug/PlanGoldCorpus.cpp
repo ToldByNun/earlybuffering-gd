@@ -2,6 +2,8 @@
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/AssistLearning.hpp"
+#include "../core/AssistContracts140.hpp"
+#include "../core/AssistRealMetrics.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
 #include "../core/MissAssistContracts.hpp"
@@ -42,6 +44,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     auto expect = [&](bool ok, char const* name) {
         if (!ok) { ++fails; report += std::string("FAIL ") + name + "; "; }
     };
+    // Commit 2 LOCK: freeze ε before any probe / contract selfCheck.
+    AssistContracts140::applyLockedEps();
     std::string shadowReport;
     expect(ShadowSimulator::regressionSelfCheck(shadowReport), "shadow-self");
     expect(BufferEventMachine::selfCheck(), "buffer-sm");
@@ -103,6 +107,10 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(SimTrust::selfCheck(simTrustReport), "sim-trust");
     std::string ghostParityReport;
     expect(GhostParityProbe::selfCheck(ghostParityReport), "ghost-parity-probe");
+    std::string contracts140Report;
+    expect(AssistContracts140::selfCheck(contracts140Report), "assist-contracts-140");
+    std::string realMetricsReport;
+    expect(AssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
     std::string missReport;
     expect(MissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string foresightReport;
