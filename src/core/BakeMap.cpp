@@ -629,11 +629,27 @@ Result<int> BakeMap::bakeReplay(
     if (m_progress.cancel.load()) return Err("Bake cancelled");
 
     if (validate.died) {
+        // P2 drop stats for err string (same policy as prepareBakeTimeline).
+        int droppedP2 = 0;
+        {
+            int p1 = 0;
+            int p2 = 0;
+            for (auto const& e : m_replay.events) {
+                if (e.player2) ++p2;
+                else ++p1;
+            }
+            if (p2 < p1) droppedP2 = p2;
+        }
+        auto const top3 = DevDiagDump::formatUnknownTop3(validate.unknownHist);
+        int const twTracks = TriggerWorldStore::get().trackCount();
         AssistLog::info(fmt::format(
             "BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
-            "objId={} objType={} (fix 1:1 before windows)",
+            "objId={} objType={} gameId={} twTracks={} droppedP2={} "
+            "unknownTop3=[{}] soft={} hard={} (fix 1:1 before windows)",
             validate.deathFrame, validate.deathX, validate.deathY,
-            validate.deathObjId, validate.deathObjType
+            validate.deathObjId, validate.deathObjType, validate.deathObjGameId,
+            twTracks, droppedP2, top3,
+            validate.unknownSoftHits, validate.unknownHardHits
         ));
         {
             std::filesystem::path diagDir;
@@ -645,9 +661,11 @@ Result<int> BakeMap::bakeReplay(
             }
         }
         return Err(fmt::format(
-            "Macro dies in sim at frame {} (x={:.0f}) — ghost path ≠ bot. "
+            "Macro dies in sim at frame {} (x={:.0f}) deathObjId={} "
+            "twTracks={} unknownTop3=[{}] droppedP2={} — ghost path ≠ bot. "
             "Reset→pause→Bake. Diag: /diag/bakefail_*",
-            validate.deathFrame, validate.deathX
+            validate.deathFrame, validate.deathX, validate.deathObjId,
+            twTracks, top3, droppedP2
         ));
     }
 

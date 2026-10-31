@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -190,8 +191,18 @@ public:
     void noteJump();
     void noteActivated(GameObject* obj);
     // Overlap with UnknownOnOverlap object. Pass obj to flag toggle-target hits.
+    // When unknown-hist collection is on (bake diag), records Soft/Hard bins.
     void noteUnknown(GameObject* obj = nullptr);
     bool isToggleTriggerTarget(int uniqueId) const;
+
+    // Soft/Hard unknown overlap histogram (Commit 3 bakefail forensics).
+    struct UnknownHistBin {
+        int objectId = 0;   // m_objectID
+        int objectType = 0; // GameObjectType
+        int uniqueId = -1;  // last seen m_uniqueID
+        bool hard = false;
+        int count = 0;
+    };
 
     void applyRingJump(PlayerObject* shadow, RingObject* ring);
     bool isApplyingRing() const { return m_applyingRing; }
@@ -416,7 +427,12 @@ public:
         bool sampled = false;
         int deathObjId = -1;
         int deathObjType = -1;
+        int deathObjGameId = -1; // m_objectID of killer
         std::vector<BakeFrameTrace> frames;
+        // Sorted by count desc (Commit 3). Filled whenever hist collection runs.
+        std::vector<UnknownHistBin> unknownHist;
+        int unknownSoftHits = 0;
+        int unknownHardHits = 0;
     };
     // applyP2ToShadow: MegaHack often marks solo inputs as player2 — still feed P1 ghost.
     // traceFrames: record BakeFrameTrace each step (diag dumps).
@@ -587,9 +603,12 @@ private:
     bool m_jumped = false;
     bool m_unknown = false;
     bool m_toggleUnknownHit = false;
+    bool m_collectUnknownHist = false;
     bool m_activatedRing = false;
     int m_ringCount = 0;
     GameObject* m_deathObject = nullptr;
+    // objectId → bin while m_collectUnknownHist (cleared each bake timeline).
+    std::unordered_map<int, UnknownHistBin> m_unknownHistMap;
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;

@@ -140,17 +140,87 @@ std::string DevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeF
     o << "  02_clock_assist.txt     — simDt/TPS/startSnap vehicle flags\n";
     o << "  02b_ghost_hitbox.txt    — P1 vs shadow rect + hazard overlaps\n";
     o << "  03_replay.txt           — raw import events\n";
-    o << "  03b_replay_remap.txt    — src→bake frame map + event order\n";
+    o << "  03b_replay_remap.txt    — AFTER prepareBakeTimeline (incl −1)\n";
     o << "  04_bakemap.txt\n";
     o << "  05_trigger_world.txt\n";
     o << "  06_bake_probe.txt       — per-click survive/death summary\n";
-    o << "  06b_bake_frames.txt     — FRAME-BY-FRAME first death (+ no-TW retry)\n";
+    o << "  06b_bake_frames.txt     — FRAME-BY-FRAME through death+8\n";
+    o << "  06c_unknown_hist.txt    — Soft/Hard Unknown objectId histogram\n";
     if (!bakeFailOnly) {
         o << "  07_selfchecks.txt\n";
     }
     o << "  08_overlay.txt\n";
     o << "\nCopy this whole folder when reporting bake 0-windows bugs.\n";
     return o.str();
+}
+
+int DevDiagDump::deathTraceUntil(int deathFrame, int lastEventFrame) {
+    // Commit 3: always cover death+8; never hard-cap at 128.
+    int until = 0;
+    if (deathFrame >= 0) {
+        until = deathFrame + 8;
+    }
+    if (lastEventFrame >= 0) {
+        until = std::max(until, lastEventFrame + 8);
+    }
+    if (until < 8) until = 8;
+    // Safety: enormous macros still get a bound (death+8 path is short).
+    if (deathFrame < 0 && until > 4096) until = 4096;
+    return until;
+}
+
+std::string DevDiagDump::formatUnknownTop3(
+    std::vector<ShadowSimulator::UnknownHistBin> const& hist
+) {
+    if (hist.empty()) return "-";
+    std::string s;
+    int n = 0;
+    for (auto const& b : hist) {
+        if (n >= 3) break;
+        if (!s.empty()) s += ",";
+        s += fmt::format(
+            "{}:{}:{}x",
+            b.hard ? "H" : "S",
+            b.objectId,
+            b.count
+        );
+        ++n;
+    }
+    return s.empty() ? "-" : s;
+}
+
+bool DevDiagDump::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+    expect(deathTraceUntil(185, 100) == 193, "death185-plus8");
+    expect(deathTraceUntil(50, 200) == 208, "lastEv-wins");
+    expect(deathTraceUntil(-1, 10) == 18, "no-death-lastEv");
+    expect(deathTraceUntil(-1, -1) == 8, "floor8");
+    // Surviving huge macro without death is capped.
+    expect(deathTraceUntil(-1, 10000) == 4096, "survive-cap");
+
+    std::vector<ShadowSimulator::UnknownHistBin> empty;
+    expect(formatUnknownTop3(empty) == "-", "top3-empty");
+    std::vector<ShadowSimulator::UnknownHistBin> bins = {
+        { 10, 0, 1, true, 5 },
+        { 20, 0, 2, false, 3 },
+        { 30, 0, 3, false, 1 },
+        { 40, 0, 4, true, 1 },
+    };
+    expect(formatUnknownTop3(bins) == "H:10:5x,S:20:3x,S:30:1x", "top3-fmt");
+
+    if (fails == 0) {
+        report = "DevDiagDump selfCheck OK";
+        return true;
+    }
+    report = fmt::format("DevDiagDump selfCheck {} fails: {}", fails, report);
+    return false;
 }
 
 std::string DevDiagDump::buildSettings() {
@@ -466,7 +536,8 @@ bool DevDiagDump::prepareBakeEvents(
     double& outBakeTps,
     std::vector<ReplayEvent>& outEv,
     std::string& outErr,
-    int* outSubsteps
+    int* outSubsteps,
+    BakePrepStats* outStats
 ) {
     outLayer = PlayLayer::get();
     if (!outLayer) {
@@ -499,6 +570,7 @@ bool DevDiagDump::prepareBakeEvents(
     outDt = static_cast<float>(1.0 / outBakeTps);
     if (outSubsteps) *outSubsteps = 1;
     outEv = rep->events;
+    BakePrepStats stats{};
     // Match BakeMap::prepareBakeTimeline: majority-P2 → P1; else drop dual P2.
     {
         int p1 = 0;
@@ -508,9 +580,11 @@ bool DevDiagDump::prepareBakeEvents(
             else ++p1;
         }
         if (p2 >= p1) {
+            stats.forcedP2toP1 = p2 > 0;
             for (auto& e : outEv) e.player2 = false;
         }
         else {
+            stats.droppedP2 = p2;
             outEv.erase(
                 std::remove_if(outEv.begin(), outEv.end(), [](ReplayEvent const& e) {
                     return e.player2;
@@ -531,7 +605,9 @@ bool DevDiagDump::prepareBakeEvents(
         for (auto const& e : outEv) {
             if (e.frame < minF) minF = e.frame;
         }
+        stats.minFrameBeforeShift = (minF == std::numeric_limits<int>::max()) ? -1 : minF;
         if (minF == 1) {
+            stats.shiftedMinus1 = true;
             for (auto& e : outEv) e.frame -= 1;
         }
     }
@@ -552,43 +628,78 @@ bool DevDiagDump::prepareBakeEvents(
         if (a.frame != b.frame) return a.frame < b.frame;
         return a.down && !b.down;
     });
+    if (outStats) *outStats = stats;
     return true;
 }
 
 std::string DevDiagDump::buildReplayRemap() {
     std::ostringstream o;
-    auto const* rep = BakeMap::get().pendingReplay();
-    if (!rep) {
-        o << "ERROR: no pending replay\n";
+    PlayLayer* layer = nullptr;
+    int slot = -1;
+    float dt = 0.f;
+    double srcTps = 0.0;
+    double bakeTps = 0.0;
+    std::vector<ReplayEvent> ev;
+    std::string err;
+    BakePrepStats stats{};
+    if (!prepareBakeEvents(layer, slot, dt, srcTps, bakeTps, ev, err, nullptr, &stats)) {
+        o << "ERROR: " << err << "\n";
         return o.str();
     }
-    double const srcTps = rep->tps > 0.0 ? rep->tps : AssistClock::kNominalTps;
-    double liveTps = AssistController::get().estimatedTps();
-    double bakeTps = srcTps;
-    if (srcTps > AssistClock::kPlanSnapTpsHi) {
-        bakeTps = std::min(srcTps, 4000.0);
-    }
-    else if (liveTps < AssistClock::kPlanSnapTpsLo || liveTps > AssistClock::kPlanSnapTpsHi) {
-        bakeTps = AssistClock::kNominalTps;
-    }
-    else {
-        bakeTps = liveTps;
-    }
-    o << fmt::format("srcTps={:.0f} bakeTps={:.0f}\n", srcTps, bakeTps);
-    o << "columns: i srcFrame bakeFrame btn down p2(raw) → afterForceP1\n";
-    float const srcDt = static_cast<float>(1.0 / srcTps);
-    int const n = static_cast<int>(rep->events.size());
-    int const show = std::min(n, 80);
+    auto const* rep = BakeMap::get().pendingReplay();
+    o << "# Commit 3: frames AFTER prepareBakeTimeline (TPS remap + P2 policy + optional −1)\n";
+    o << fmt::format(
+        "srcTps={:.0f} bakeTps={:.0f} shiftedMinus1={} minFrameBeforeShift={} "
+        "droppedP2={} forcedP2toP1={} postEvents={}\n",
+        srcTps, bakeTps, boolStr(stats.shiftedMinus1), stats.minFrameBeforeShift,
+        stats.droppedP2, boolStr(stats.forcedP2toP1), ev.size()
+    );
+    o << "columns: i srcFrame(raw) postBakeFrame btn down p2raw kept\n";
+
+    // Pair raw src → post timeline by index when sizes match after P2 drop is hard;
+    // show post list primarily (this is what the sim runs).
+    int const nPost = static_cast<int>(ev.size());
+    int const show = std::min(nPost, 120);
     for (int i = 0; i < show; ++i) {
-        auto const& e = rep->events[static_cast<size_t>(i)];
-        int const bf = AssistClock::get().remapTick(bakeTps, e.frame, srcDt);
+        auto const& e = ev[static_cast<size_t>(i)];
+        int srcFrame = -1;
+        if (rep && i < static_cast<int>(rep->events.size())) {
+            // Best-effort: same index only when we forced P2→P1 (size preserved).
+            if (stats.forcedP2toP1 || stats.droppedP2 == 0) {
+                srcFrame = rep->events[static_cast<size_t>(i)].frame;
+            }
+        }
         o << fmt::format(
-            "  [{:4}] src={:6} bake={:6} btn={} down={} p2raw={}\n",
-            i, e.frame, bf, e.button, boolStr(e.down), boolStr(e.player2)
+            "  [{:4}] src={:6} post={:6} btn={} down={} p2={}\n",
+            i, srcFrame, e.frame, e.button, boolStr(e.down), boolStr(e.player2)
         );
     }
-    if (n > show) {
-        o << fmt::format("  ... ({} more events)\n", n - show);
+    if (nPost > show) {
+        o << fmt::format("  ... ({} more post-prep events)\n", nPost - show);
+    }
+    // Around first death if probe finds one (post frames near death).
+    int lastEv = 0;
+    for (auto const& e : ev) {
+        if (e.frame > lastEv) lastEv = e.frame;
+    }
+    auto probe = ShadowSimulator::get().runBakeTimeline(
+        layer, slot, ev, dt, deathTraceUntil(-1, lastEv), -1, true, false, true, 1
+    );
+    if (probe.died && probe.deathFrame >= 0) {
+        o << fmt::format(
+            "\n# events with postBakeFrame in [death-8, death+8] deathF={}\n",
+            probe.deathFrame
+        );
+        int const lo = std::max(0, probe.deathFrame - 8);
+        int const hi = probe.deathFrame + 8;
+        for (int i = 0; i < nPost; ++i) {
+            auto const& e = ev[static_cast<size_t>(i)];
+            if (e.frame < lo || e.frame > hi) continue;
+            o << fmt::format(
+                "  [{:4}] post={:6} btn={} down={}\n",
+                i, e.frame, e.button, boolStr(e.down)
+            );
+        }
     }
     return o.str();
 }
@@ -690,7 +801,7 @@ std::string DevDiagDump::buildBakeProbe(int maxJobs) {
 
 std::string DevDiagDump::buildBakeFrameTrace() {
     std::ostringstream o;
-    o << "# Frame-by-frame bake timeline (parkReals=on, P2→P1)\n";
+    o << "# Frame-by-frame bake timeline (parkReals=on) — Commit 3 death+8\n";
     o << "# columns: frame x y yVel jumpHeld mode evs tw dead unk | deathObj...\n\n";
 
     PlayLayer* layer = nullptr;
@@ -701,25 +812,45 @@ std::string DevDiagDump::buildBakeFrameTrace() {
     int substeps = 1;
     std::vector<ReplayEvent> ev;
     std::string err;
-    if (!prepareBakeEvents(layer, slot, dt, srcTps, bakeTps, ev, err, &substeps)) {
+    BakePrepStats stats{};
+    if (!prepareBakeEvents(layer, slot, dt, srcTps, bakeTps, ev, err, &substeps, &stats)) {
         o << "ERROR: " << err << "\n";
         return o.str();
     }
-
-    // Run until first death or 128 frames — see exact sequence.
-    int const until = 128;
+    int lastEv = 0;
+    for (auto const& e : ev) {
+        if (e.frame > lastEv) lastEv = e.frame;
+    }
     o << fmt::format(
-        "=== TRACE A: frames 0..{} (or first death) tw=ON parkReals=ON substeps={} ===\n",
-        until, substeps
+        "prep shiftedMinus1={} droppedP2={} forcedP2toP1={} lastEv={} twTracks={}\n",
+        boolStr(stats.shiftedMinus1), stats.droppedP2, boolStr(stats.forcedP2toP1),
+        lastEv, TriggerWorldStore::get().trackCount()
+    );
+
+    // Probe without frame log to find death, then re-run through death+8 with frames.
+    int const probeUntil = deathTraceUntil(-1, lastEv);
+    auto probe = ShadowSimulator::get().runBakeTimeline(
+        layer, slot, ev, dt, probeUntil, -1, true, false, true, substeps
+    );
+    int const until = deathTraceUntil(
+        probe.died ? probe.deathFrame : -1,
+        probe.died ? -1 : std::min(lastEv, 56)
+    );
+    o << fmt::format(
+        "=== TRACE A: frames 0..{} (deathF={} → death+8) parkReals=ON substeps={} ===\n",
+        until, probe.deathFrame, substeps
     );
     auto a = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, until, -1, true, true, true, substeps
     );
     o << fmt::format(
         "result died={} deathF={} deathX={:.2f} deathY={:.2f} deathObjId={} "
-        "deathObjType={} unknown={} framesLogged={}\n",
+        "deathObjType={} deathObjGameId={} unknown={} softHits={} hardHits={} "
+        "unknownTop3=[{}] framesLogged={}\n",
         boolStr(a.died), a.deathFrame, a.deathX, a.deathY,
-        a.deathObjId, a.deathObjType, boolStr(a.unknown), a.frames.size()
+        a.deathObjId, a.deathObjType, a.deathObjGameId, boolStr(a.unknown),
+        a.unknownSoftHits, a.unknownHardHits,
+        formatUnknownTop3(a.unknownHist), a.frames.size()
     );
     for (auto const& tr : a.frames) {
         o << fmt::format(
@@ -735,7 +866,6 @@ std::string DevDiagDump::buildBakeFrameTrace() {
             );
         }
         o << "\n";
-        // Also list events that fired this frame from remapped timeline.
         for (auto const& e : ev) {
             if (e.frame != tr.frame) continue;
             o << fmt::format(
@@ -744,7 +874,7 @@ std::string DevDiagDump::buildBakeFrameTrace() {
         }
     }
 
-    // Compare: same run but without parking (legacy path).
+    // Compare: same until without parking (legacy path) — short log.
     o << fmt::format(
         "\n=== TRACE B: frames 0..{} parkReals=OFF (legacy spawn-overlap check) ===\n",
         until
@@ -759,10 +889,8 @@ std::string DevDiagDump::buildBakeFrameTrace() {
         b.deathObjId, b.deathObjType, boolStr(b.unknown), b.frames.size()
     );
     for (auto const& tr : b.frames) {
-        if (!tr.dead && tr.frame > 16 && tr.frame + 1 < static_cast<int>(b.frames.size())) {
-            continue; // keep B shorter: first 16 + death frame
-        }
-        if (tr.frame > 16 && !tr.dead) continue;
+        bool const nearDeath = b.died && tr.frame + 8 >= b.deathFrame;
+        if (!tr.dead && tr.frame > 16 && !nearDeath) continue;
         o << fmt::format(
             "  f={:4} x={:8.2f} y={:8.2f} yv={:8.3f} jmp={} mode={} evs={} tw={} "
             "dead={} unk={}",
@@ -778,7 +906,6 @@ std::string DevDiagDump::buildBakeFrameTrace() {
         o << "\n";
     }
 
-    // If still dying at 0 with park, try first click window with full event log.
     if (!ev.empty()) {
         int firstClick = -1;
         for (auto const& e : ev) {
@@ -787,7 +914,7 @@ std::string DevDiagDump::buildBakeFrameTrace() {
                 break;
             }
         }
-        if (firstClick > 0) {
+        if (firstClick >= 0) {
             int const untilClick = firstClick + 8;
             o << fmt::format(
                 "\n=== TRACE C: through first click f={} (+8) parkReals=ON ===\n",
@@ -811,6 +938,71 @@ std::string DevDiagDump::buildBakeFrameTrace() {
                 );
             }
         }
+    }
+    return o.str();
+}
+
+std::string DevDiagDump::buildUnknownHistogram() {
+    std::ostringstream o;
+    o << "# Soft/Hard Unknown overlap histogram (Commit 3)\n";
+    o << "# Soft = Include-candidate later; Hard = toggle/dynamic/dual honesty truncate\n\n";
+
+    PlayLayer* layer = nullptr;
+    int slot = -1;
+    float dt = 0.f;
+    double srcTps = 0.0;
+    double bakeTps = 0.0;
+    int substeps = 1;
+    std::vector<ReplayEvent> ev;
+    std::string err;
+    BakePrepStats stats{};
+    if (!prepareBakeEvents(layer, slot, dt, srcTps, bakeTps, ev, err, &substeps, &stats)) {
+        o << "ERROR: " << err << "\n";
+        return o.str();
+    }
+    int lastEv = 0;
+    for (auto const& e : ev) {
+        if (e.frame > lastEv) lastEv = e.frame;
+    }
+    auto probe = ShadowSimulator::get().runBakeTimeline(
+        layer, slot, ev, dt, deathTraceUntil(-1, lastEv), -1, true, false, true, substeps
+    );
+    int const until = deathTraceUntil(probe.died ? probe.deathFrame : -1, lastEv);
+    auto run = ShadowSimulator::get().runBakeTimeline(
+        layer, slot, ev, dt, until, -1, true, false, true, substeps
+    );
+    o << fmt::format(
+        "until={} died={} deathF={} deathObjId={} deathObjGameId={} "
+        "twTracks={} droppedP2={} shiftedMinus1={}\n",
+        until, boolStr(run.died), run.deathFrame, run.deathObjId, run.deathObjGameId,
+        TriggerWorldStore::get().trackCount(), stats.droppedP2,
+        boolStr(stats.shiftedMinus1)
+    );
+    o << fmt::format(
+        "softHits={} hardHits={} bins={} unknownTop3=[{}]\n\n",
+        run.unknownSoftHits, run.unknownHardHits, run.unknownHist.size(),
+        formatUnknownTop3(run.unknownHist)
+    );
+    o << "columns: rank class objectId objectType uniqueId count\n";
+    int rank = 0;
+    for (auto const& b : run.unknownHist) {
+        o << fmt::format(
+            "  [{:2}] {} oid={} type={} uid={} count={}\n",
+            rank,
+            b.hard ? "hard" : "soft",
+            b.objectId,
+            b.objectType,
+            b.uniqueId,
+            b.count
+        );
+        ++rank;
+        if (rank >= 64) {
+            o << fmt::format("  ... ({} more bins)\n", run.unknownHist.size() - 64);
+            break;
+        }
+    }
+    if (run.unknownHist.empty()) {
+        o << "  (no UnknownOnOverlap hits in this timeline)\n";
     }
     return o.str();
 }
@@ -855,6 +1047,7 @@ bool DevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
     if (!put("05_trigger_world.txt", buildTriggerWorld())) return false;
     if (!put("06_bake_probe.txt", buildBakeProbe(48))) return false;
     if (!put("06b_bake_frames.txt", buildBakeFrameTrace())) return false;
+    if (!put("06c_unknown_hist.txt", buildUnknownHistogram())) return false;
     if (!put("07_selfchecks.txt", buildSelfChecks())) return false;
     if (!put("08_overlay.txt", buildOverlay())) return false;
 
@@ -879,6 +1072,7 @@ bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMs
     if (!put("05_trigger_world.txt", buildTriggerWorld())) return false;
     if (!put("06_bake_probe.txt", buildBakeProbe(64))) return false;
     if (!put("06b_bake_frames.txt", buildBakeFrameTrace())) return false;
+    if (!put("06c_unknown_hist.txt", buildUnknownHistogram())) return false;
     if (!put("08_overlay.txt", buildOverlay())) return false;
 
     AssistLog::info(fmt::format("DIAG: bake-fail dump → {}", outDir.string()));

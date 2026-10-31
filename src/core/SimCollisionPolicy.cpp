@@ -7,6 +7,8 @@
 #include "../debug/AssistLog.hpp"
 
 #include <Geode/Geode.hpp>
+#include <cstring>
+#include <fmt/format.h>
 
 using namespace geode::prelude;
 
@@ -127,6 +129,26 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
     }
 }
 
+SimUnknownClass SimCollisionPolicy::unknownClass(GameObject* obj) {
+    if (!obj) return SimUnknownClass::Soft;
+    auto& sim = ShadowSimulator::get();
+    // Hard: honesty truncate / Pass — never soft-continue these.
+    if (sim.isToggleTriggerTarget(obj->m_uniqueID)) return SimUnknownClass::Hard;
+    if (sim.isDynamicTriggerTarget(obj->m_uniqueID)) return SimUnknownClass::Hard;
+    switch (obj->m_objectType) {
+        case GameObjectType::DualPortal:
+        case GameObjectType::SoloPortal:
+            return SimUnknownClass::Hard;
+        default:
+            break;
+    }
+    return SimUnknownClass::Soft;
+}
+
+char const* SimCollisionPolicy::unknownClassId(SimUnknownClass c) {
+    return c == SimUnknownClass::Hard ? "hard" : "soft";
+}
+
 bool SimCollisionPolicy::noteLimitedSimOnce() {
     static bool warned = false;
     if (warned) return false;
@@ -137,4 +159,31 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
         "ready static bake → include when active)"
     );
     return true;
+}
+
+bool SimCollisionPolicy::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+    expect(
+        std::strcmp(unknownClassId(SimUnknownClass::Soft), "soft") == 0,
+        "id-soft"
+    );
+    expect(
+        std::strcmp(unknownClassId(SimUnknownClass::Hard), "hard") == 0,
+        "id-hard"
+    );
+    expect(isSpeedPortalId(200), "speed-200");
+    expect(!isSpeedPortalId(1), "not-speed-1");
+    if (fails == 0) {
+        report = "SimCollisionPolicy selfCheck OK";
+        return true;
+    }
+    report = fmt::format("SimCollisionPolicy selfCheck {} fails: {}", fails, report);
+    return false;
 }

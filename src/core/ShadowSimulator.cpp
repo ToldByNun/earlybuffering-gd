@@ -4,6 +4,7 @@
 #include "MissAssistContracts.hpp"
 #include "TravelForesight.hpp"
 #include "OpportunityProbe.hpp"
+#include "SimCollisionPolicy.hpp"
 #include "SimSessionGuard.hpp"
 #include "ToggleOrbSim.hpp"
 #include "../config/StageConfig.hpp"
@@ -647,6 +648,20 @@ void ShadowSimulator::noteUnknown(GameObject* obj) {
     if (obj && this->isToggleTriggerTarget(obj->m_uniqueID)) {
         this->m_toggleUnknownHit = true;
     }
+    if (!this->m_collectUnknownHist || !obj) return;
+    bool const hard =
+        SimCollisionPolicy::unknownClass(obj) == SimUnknownClass::Hard;
+    int const oid = obj->m_objectID;
+    auto& bin = this->m_unknownHistMap[oid];
+    if (bin.count == 0) {
+        bin.objectId = oid;
+        bin.objectType = static_cast<int>(obj->m_objectType);
+        bin.hard = hard;
+    }
+    // Prefer hard if any overlap of this objectId was hard.
+    if (hard) bin.hard = true;
+    bin.uniqueId = obj->m_uniqueID;
+    ++bin.count;
 }
 
 void ShadowSimulator::captureToggleUnknownTargets(PlayLayer* layer) {
@@ -3616,11 +3631,13 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     m_unknown = false;
     m_toggleUnknownHit = false;
     m_deathObject = nullptr;
+    this->m_unknownHistMap.clear();
+    this->m_collectUnknownHist = true;
 
     auto* s = m_shadow;
     size_t nextEv = 0;
     if (traceFrames) {
-        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 512)) + 2);
+        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 2048)) + 2);
     }
 
     auto applyEv = [&](ReplayEvent const& ev) {
@@ -3715,11 +3732,34 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 if (m_deathObject) {
                     out.deathObjId = m_deathObject->m_uniqueID;
                     out.deathObjType = static_cast<int>(m_deathObject->m_objectType);
+                    out.deathObjGameId = m_deathObject->m_objectID;
                 }
                 break;
             }
         }
     }
+
+    this->m_collectUnknownHist = false;
+    this->m_bakeOffline = false;
+    // Seal Soft/Hard unknown histogram (count desc).
+    out.unknownHist.clear();
+    out.unknownHist.reserve(this->m_unknownHistMap.size());
+    out.unknownSoftHits = 0;
+    out.unknownHardHits = 0;
+    for (auto const& kv : this->m_unknownHistMap) {
+        out.unknownHist.push_back(kv.second);
+        if (kv.second.hard) out.unknownHardHits += kv.second.count;
+        else out.unknownSoftHits += kv.second.count;
+    }
+    std::sort(
+        out.unknownHist.begin(),
+        out.unknownHist.end(),
+        [](UnknownHistBin const& a, UnknownHistBin const& b) {
+            if (a.count != b.count) return a.count > b.count;
+            return a.objectId < b.objectId;
+        }
+    );
+    this->m_unknownHistMap.clear();
 
     if (parkedP1 && layer->m_player1) {
         layer->m_player1->setPosition(savedP1);

@@ -65,6 +65,8 @@ Settings (Learning): `auto-tune` (default off), `self-bake` (default off, practi
 
 **Replay / Brute bake:** attempt-start pose lives in reserved snapshot slot 0 (`captureStartSnapshot`) so DecisionLog / trajectory cannot clobber it. Offline bake remaps Trigger World with bake `dt`, not live hitch `simDt`. Replay macros at non-game FPS (360 / physics-bypass 3000, …) are **resampled** to live TPS (~240); zero-length clicks after remap get a **minimum 1-tick hold**. Bake applies **downs → physics → ups** each frame so same-frame press+release still holds for that tick (clickbots). Majority-P2 MegaHack exports → P1; dual P2 clicks are dropped from the P1 timeline. Real P1/P2 are parked off-map during bake; sim collision ignores PlayerObjects. Offline bake trusts current toggle pose (no Unknown abort). Empty → error + `diag/bakefail_*`. Always **reset → pause → Bake Map**. Diag: Dev → Dump All Diag.
 
+**Bakefail forensics (Commit 3):** `06b_bake_frames.txt` traces through **`deathFrame+8`** (no hard 128 cap). `03b_replay_remap.txt` shows frames **after** `prepareBakeTimeline` (TPS remap + P2 policy + optional −1). `06c_unknown_hist.txt` Soft/Hard Unknown histogram by `objectId` (`SimCollisionPolicy::unknownClass`). Validate Err includes `deathObjId`, `twTracks`, `unknownTop3=[H|S:oid:Nx,…]`, `droppedP2`. PlanGold: `dev-diag-dump`, `sim-collision-policy`.
+
 ## Trigger World Bake
 
 Settings (Trigger World): `trigger-bake` (default on), `trigger-bake-skip-dynamic` (default on).

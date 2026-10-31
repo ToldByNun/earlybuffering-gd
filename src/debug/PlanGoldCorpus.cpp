@@ -7,8 +7,10 @@
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
 #include "../core/MissAssistContracts.hpp"
+#include "../core/SimCollisionPolicy.hpp"
 #include "../core/SimTrust.hpp"
 #include "../core/SpotTrustMap.hpp"
+#include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
 #include "../core/DivergenceTracker.hpp"
@@ -111,6 +113,10 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistContracts140::selfCheck(contracts140Report), "assist-contracts-140");
     std::string realMetricsReport;
     expect(AssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
+    std::string collisionPolicyReport;
+    expect(SimCollisionPolicy::selfCheck(collisionPolicyReport), "sim-collision-policy");
+    std::string diagDumpReport;
+    expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;
     expect(MissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string foresightReport;

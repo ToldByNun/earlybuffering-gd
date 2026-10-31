@@ -2,6 +2,7 @@
 #define EARLYBUFFER_DEV_DEVDIAGDUMP_HPP
 
 #include "../core/ReplayImport.hpp"
+#include "../core/ShadowSimulator.hpp"
 
 #include <filesystem>
 #include <string>
@@ -37,12 +38,28 @@ private:
     static std::string buildBakeMap();
     static std::string buildTriggerWorld();
     static std::string buildBakeProbe(int maxJobs);
-    // Frame-by-frame: first death path + first surviving click (if any).
+    // Frame-by-frame through deathFrame+8 (Commit 3 — no hard 128 cap).
     static std::string buildBakeFrameTrace();
-    // Remapped event list (src frame → bake frame) for first N + around death.
+    // Soft/Hard unknown overlap histogram from a death+8 bake timeline.
+    static std::string buildUnknownHistogram();
+    // Remapped event list AFTER prepareBakeTimeline (incl. optional −1 shift).
     static std::string buildReplayRemap();
     static std::string buildSelfChecks();
     static std::string buildOverlay();
+
+    // Pure helpers (PlanGold).
+    static int deathTraceUntil(int deathFrame, int lastEventFrame);
+    static std::string formatUnknownTop3(
+        std::vector<ShadowSimulator::UnknownHistBin> const& hist
+    );
+    static bool selfCheck(std::string& report);
+
+    struct BakePrepStats {
+        int droppedP2 = 0;
+        bool forcedP2toP1 = false;
+        bool shiftedMinus1 = false;
+        int minFrameBeforeShift = -1;
+    };
 
     // Shared: prepare remapped timeline for probe/trace (empty on error → msg in outErr).
     static bool prepareBakeEvents(
@@ -53,7 +70,8 @@ private:
         double& outBakeTps,
         std::vector<ReplayEvent>& outEv,
         std::string& outErr,
-        int* outSubsteps = nullptr
+        int* outSubsteps = nullptr,
+        BakePrepStats* outStats = nullptr
     );
 };
 
