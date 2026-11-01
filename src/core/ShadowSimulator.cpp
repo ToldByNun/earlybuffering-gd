@@ -9,6 +9,7 @@
 #include "ToggleOrbSim.hpp"
 #include "OrbStackResolver.hpp"
 #include "ModeSurvival.hpp"
+#include "PrefixSim.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -2602,6 +2603,17 @@ SimPlan ShadowSimulator::plan(
         return false;
     };
 
+    // Commit 10 PrefixSim: shared-prefix early-death + same-crash cut.
+    int prefixDeathTick = -1;
+    int sameCrashStreak = 0;
+    int sameCrashPrevTick = -1;
+    bool sameCrashStopped = false;
+
+    bool const isWaveMode = real && real->m_isDart;
+    bool const isShipLike = real && (real->m_isShip || real->m_isBird
+        || real->m_isSpider || real->m_isSwing);
+    bool const isRobot = real && real->m_isRobot;
+
     for (int d : order) {
         if (d == 0) continue;
         if (d >= 0 && d <= limit && candReady[static_cast<size_t>(d)]) {
@@ -2612,49 +2624,77 @@ SimPlan ShadowSimulator::plan(
             // Remaining delays stay unevaluated → budget-not-reached in ledger.
             break;
         }
+
+        // Shared prefix: idle death at T ⇒ skip every delay d > T (same fate).
+        if (PrefixSim::shouldSkipAfterPrefixDeath(d, prefixDeathTick)) {
+            Cand skip;
+            skip.delay = d;
+            skip.diedBeforeAction = true;
+            skip.raw.died = true;
+            skip.raw.diedBeforeAction = true;
+            skip.raw.deathTick = prefixDeathTick;
+            finalizeViable(skip, -1);
+            cands[static_cast<size_t>(d)] = skip;
+            candReady[static_cast<size_t>(d)] = 1;
+            continue;
+        }
+
         auto c = evalDelay(d, -1);
         if (c.diedBeforeAction) {
-            // RC6: mark non-viable and keep searching later delays.
+            prefixDeathTick = PrefixSim::mergePrefixDeathTick(
+                prefixDeathTick, c.raw.deathTick, true
+            );
             finalizeViable(c, -1);
             cands[static_cast<size_t>(d)] = c;
             if (d >= 0 && d <= limit) {
                 candReady[static_cast<size_t>(d)] = 1;
             }
+            // Fill remaining d > T without more sims.
+            if (prefixDeathTick >= 0) {
+                for (int sd : order) {
+                    if (sd <= prefixDeathTick) continue;
+                    if (sd < 0 || sd > limit) continue;
+                    if (candReady[static_cast<size_t>(sd)]) continue;
+                    Cand fill;
+                    fill.delay = sd;
+                    fill.diedBeforeAction = true;
+                    fill.raw.died = true;
+                    fill.raw.diedBeforeAction = true;
+                    fill.raw.deathTick = prefixDeathTick;
+                    finalizeViable(fill, -1);
+                    cands[static_cast<size_t>(sd)] = fill;
+                    candReady[static_cast<size_t>(sd)] = 1;
+                }
+            }
             continue;
         }
 
-        if (c.raw.died && !c.diedBeforeAction && down
-            && (model.continuous || real->m_isRobot) && options.maxBranches > 0) {
-            int tried = 0;
-            for (int k : BRANCH_RELEASES) {
-                if (tried >= options.maxBranches) break;
-                if (tickBudget <= 0) break;
-                ++tried;
-                auto br = runOne(
-                    layer, real, down, d, limit, dt, firstDt, model, k,
-                    zone.valid ? &zone : nullptr, &tickBudget
-                );
-                this->resetCaptureForNextRun(layer);
-                if (!br.died || br.unknownTrunc) {
-                    c.raw = br;
-                    c.activatedRing = br.activatedRing;
-                    c.unknownTrunc = br.unknownTrunc;
-                    c.toggleUnknown = br.toggleUnknown;
-                    if (c.toggleUnknown || (c.unknownTrunc && hadToggleTargets)) {
-                        sawToggleUnknown = true;
-                    }
-                    c.endX = br.endX;
-                    c.deathX = br.deathX;
-                    c.surviveTicks = br.ticksBeforeNeutral > 0 ? br.ticksBeforeNeutral : br.ticksRan;
-                    c.surviveBin = surviveBinOf(c.surviveTicks);
-                    c.releaseAfter = k;
-                    c.requireHold = false;
-                    break;
-                }
-            }
-        }
+        // Quick pass only here; hold-branch deferred to two-pass full-score set.
         finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
         cands[static_cast<size_t>(d)] = c;
+        if (d >= 0 && d <= limit) {
+            candReady[static_cast<size_t>(d)] = 1;
+        }
+
+        // Same deathTick after press across delays → next obstacle, stop.
+        sameCrashStreak = PrefixSim::updateSameCrashStreak(
+            sameCrashStreak,
+            sameCrashPrevTick,
+            c.raw.deathTick,
+            c.raw.died,
+            c.diedBeforeAction
+        );
+        if (c.raw.died && !c.diedBeforeAction && c.raw.deathTick >= 0) {
+            sameCrashPrevTick = c.raw.deathTick;
+        }
+        if (PrefixSim::sameCrashShouldStop(sameCrashStreak)) {
+            sameCrashStopped = true;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} same-crash stop deathTick={} after delay={}",
+                plan.planId, c.raw.deathTick, d
+            ));
+            break;
+        }
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
         // New: never early-exit — full survivor band needed for outcome / exit predict.
@@ -2683,32 +2723,108 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    for (auto& c : cands) {
-        if (!c.raw.activatedRing || !c.raw.wasDashing) continue;
-        if (c.viable) continue;
-        if (tickBudget <= 0) break;
-        auto hold = runOne(
-            layer, real, down, c.delay, limit, dt, firstDt, model, 40,
-            zone.valid ? &zone : nullptr, &tickBudget
-        );
-        this->resetCaptureForNextRun(layer);
-        Cand h = c;
-        h.raw = hold;
-        h.activatedRing = hold.activatedRing;
-        h.unknownTrunc = hold.unknownTrunc;
-        h.toggleUnknown = hold.toggleUnknown;
-        if (h.toggleUnknown || (h.unknownTrunc && hadToggleTargets)) {
-            sawToggleUnknown = true;
+    // Commit 10 two-pass: expensive hold-branch / release theories only on full-score set.
+    {
+        std::vector<PrefixSim::QuickSample> quick;
+        quick.reserve(static_cast<size_t>(limit) + 1);
+        for (int d = 0; d <= limit; ++d) {
+            if (!candReady[static_cast<size_t>(d)]) continue;
+            auto const& c = cands[static_cast<size_t>(d)];
+            PrefixSim::QuickSample s;
+            s.delay = d;
+            s.died = c.raw.died;
+            s.diedBeforeAction = c.diedBeforeAction;
+            s.viable = c.viable;
+            s.activatedRing = c.activatedRing;
+            s.deathTick = c.raw.deathTick;
+            s.surviveTicks = c.surviveTicks;
+            s.endX = c.endX;
+            quick.push_back(s);
         }
-        h.endX = hold.endX;
-        h.deathX = hold.deathX;
-        h.surviveTicks = hold.ticksBeforeNeutral > 0 ? hold.ticksBeforeNeutral : hold.ticksRan;
-        h.surviveBin = surviveBinOf(h.surviveTicks);
-        finalizeViable(h, 40);
-        if (h.viable && !c.viable) {
-            c = h;
-            c.requireHold = true;
-            c.releaseAfter = 40;
+        auto const fullDelays = PrefixSim::delaysForFullScore(
+            quick.data(), static_cast<int>(quick.size()), PrefixSim::kFullScoreTopK
+        );
+        bool const holdTheoryOk = PrefixSim::allowHoldBranchTheory(
+            model.continuous, isRobot, isWaveMode, isShipLike
+        );
+
+        for (int d : fullDelays) {
+            if (d < 0 || d > limit) continue;
+            if (tickBudget <= 0 || wallExceeded()) {
+                plan.budgetHit = true;
+                break;
+            }
+            auto& c = cands[static_cast<size_t>(d)];
+
+            // Mode-gated release branch (WaveTurn / ship recover / robot).
+            if (c.raw.died && !c.diedBeforeAction && down && holdTheoryOk
+                && options.maxBranches > 0) {
+                int tried = 0;
+                for (int k : BRANCH_RELEASES) {
+                    if (tried >= options.maxBranches) break;
+                    if (tickBudget <= 0) break;
+                    ++tried;
+                    auto br = runOne(
+                        layer, real, down, d, limit, dt, firstDt, model, k,
+                        zone.valid ? &zone : nullptr, &tickBudget
+                    );
+                    this->resetCaptureForNextRun(layer);
+                    if (!br.died || br.unknownTrunc) {
+                        c.raw = br;
+                        c.activatedRing = br.activatedRing;
+                        c.unknownTrunc = br.unknownTrunc;
+                        c.toggleUnknown = br.toggleUnknown;
+                        if (c.toggleUnknown || (c.unknownTrunc && hadToggleTargets)) {
+                            sawToggleUnknown = true;
+                        }
+                        c.endX = br.endX;
+                        c.deathX = br.deathX;
+                        c.surviveTicks = br.ticksBeforeNeutral > 0
+                            ? br.ticksBeforeNeutral : br.ticksRan;
+                        c.surviveBin = surviveBinOf(c.surviveTicks);
+                        c.releaseAfter = k;
+                        c.requireHold = false;
+                        finalizeViable(c, k);
+                        break;
+                    }
+                }
+            }
+
+            // Dash hold salvage (still two-pass gated to full-score set).
+            if (c.raw.activatedRing && c.raw.wasDashing && !c.viable
+                && tickBudget > 0) {
+                auto hold = runOne(
+                    layer, real, down, c.delay, limit, dt, firstDt, model, 40,
+                    zone.valid ? &zone : nullptr, &tickBudget
+                );
+                this->resetCaptureForNextRun(layer);
+                Cand h = c;
+                h.raw = hold;
+                h.activatedRing = hold.activatedRing;
+                h.unknownTrunc = hold.unknownTrunc;
+                h.toggleUnknown = hold.toggleUnknown;
+                if (h.toggleUnknown || (h.unknownTrunc && hadToggleTargets)) {
+                    sawToggleUnknown = true;
+                }
+                h.endX = hold.endX;
+                h.deathX = hold.deathX;
+                h.surviveTicks = hold.ticksBeforeNeutral > 0
+                    ? hold.ticksBeforeNeutral : hold.ticksRan;
+                h.surviveBin = surviveBinOf(h.surviveTicks);
+                finalizeViable(h, 40);
+                if (h.viable && !c.viable) {
+                    c = h;
+                    c.requireHold = true;
+                    c.releaseAfter = 40;
+                }
+            }
+        }
+
+        if (sameCrashStopped) {
+            AssistLog::debug(fmt::format(
+                "PLAN id={} prefixSim sameCrash={} prefixDeathTick={}",
+                plan.planId, 1, prefixDeathTick
+            ));
         }
     }
 
@@ -2840,7 +2956,8 @@ SimPlan ShadowSimulator::plan(
         return best;
     };
 
-    // Optional: top cand must also clear threat under firstDt ±3%.
+    // Optional: cand must also clear threat under firstDt ±3%.
+    // Commit 10: jitter only Top-2 ranked picks (never walk the whole pool).
     auto jitterOk = [&](int d, int releaseAfter) -> bool {
         if (!options.robustJitter || d < 0) return true;
         if (tickBudget <= 0 || wallExceeded()) return true; // soft accept
@@ -2856,6 +2973,25 @@ SimPlan ShadowSimulator::plan(
             if (!clearsThreatOf(r, zone) || r.diedBeforeAction) return false;
         }
         return true;
+    };
+    // pickFn returns next best delay; jitter capped at PrefixSim::kJitterTopK attempts.
+    auto pickWithJitterTop2 = [&](auto&& pickFn) -> int {
+        int attempts = 0;
+        for (;;) {
+            int const pick = pickFn();
+            if (pick < 0) return -1;
+            int const releaseAfter =
+                cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
+            if (!options.robustJitter) return pick;
+            if (!PrefixSim::jitterAttemptAllowed(attempts, PrefixSim::kJitterTopK)) {
+                // Top-2 already failed jitter — stop (do not burn the pool).
+                return -1;
+            }
+            ++attempts;
+            if (jitterOk(pick, releaseAfter)) return pick;
+            cands[static_cast<size_t>(pick)].viable = false;
+            cands[static_cast<size_t>(pick)].robustKFailed = true;
+        }
     };
 
     int actMin = -1, actMax = -1;
@@ -2970,17 +3106,11 @@ SimPlan ShadowSimulator::plan(
         for (int d = actMin; d <= actMax; ++d) pool.push_back(d);
         int const k = robustK;
         auto tryPick = [&](std::vector<int> const& p) -> int {
-            for (;;) {
-                // Orb window: Legacy earliest-first; New outcome/exit rank ±k.
-                int pick = legacyPick
+            return pickWithJitterTop2([&]() {
+                return legacyPick
                     ? pickEarliestRobust(p, true)
                     : pickRobust(p, true, true);
-                if (pick < 0) return -1;
-                int releaseAfter = cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
-                if (jitterOk(pick, releaseAfter)) return pick;
-                cands[static_cast<size_t>(pick)].viable = false;
-                cands[static_cast<size_t>(pick)].robustKFailed = true;
-            }
+            });
         };
         if (actMax - actMin >= 2 * k) {
             std::vector<int> interior;
@@ -2996,72 +3126,51 @@ SimPlan ShadowSimulator::plan(
     else if (legacyPick) {
         // Legacy: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
         if (cands[0].viable) {
-            int releaseAfter = cands[0].requireHold ? 40 : -1;
-            if (jitterOk(0, releaseAfter)) {
+            // d0 Pass: single jitter attempt (counts as Top-1 of Top-2).
+            chosen = pickWithJitterTop2([&]() {
+                return cands[0].viable ? 0 : -1;
+            });
+            if (chosen == 0) {
                 doPass = true;
-                chosen = 0;
                 plan.threatCleared = true;
                 plan.nowIsSafe = true;
             }
             else {
-                cands[0].viable = false;
-                cands[0].robustKFailed = true;
                 std::vector<int> pool;
                 for (int d = 0; d <= limit; ++d) pool.push_back(d);
-                for (;;) {
-                    chosen = pickLatestRobust(pool, false);
-                    if (chosen < 0) break;
-                    int releaseAfter2 = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
-                    if (jitterOk(chosen, releaseAfter2)) break;
-                    cands[static_cast<size_t>(chosen)].viable = false;
-                    cands[static_cast<size_t>(chosen)].robustKFailed = true;
-                    chosen = -1;
-                }
+                chosen = pickWithJitterTop2([&]() {
+                    return pickLatestRobust(pool, false);
+                });
                 applyChosenMeta(chosen);
             }
         }
         else {
             std::vector<int> pool;
             for (int d = 0; d <= limit; ++d) pool.push_back(d);
-            for (;;) {
-                chosen = pickLatestRobust(pool, false);
-                if (chosen < 0) break;
-                int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
-                if (jitterOk(chosen, releaseAfter)) break;
-                cands[static_cast<size_t>(chosen)].viable = false;
-                cands[static_cast<size_t>(chosen)].robustKFailed = true;
-                chosen = -1;
-            }
+            chosen = pickWithJitterTop2([&]() {
+                return pickLatestRobust(pool, false);
+            });
             applyChosenMeta(chosen);
         }
     }
     else {
         // New (G1): d0 survived → Pass. Else best predicted exit among survivors (±k).
         if (cands[0].viable) {
-            int releaseAfter = cands[0].requireHold ? 40 : -1;
-            if (jitterOk(0, releaseAfter)) {
+            chosen = pickWithJitterTop2([&]() {
+                return cands[0].viable ? 0 : -1;
+            });
+            if (chosen == 0) {
                 doPass = true;
-                chosen = 0;
                 plan.threatCleared = true;
                 plan.nowIsSafe = true;
-            }
-            else {
-                cands[0].viable = false;
-                cands[0].robustKFailed = true;
             }
         }
         if (!doPass) {
             std::vector<int> pool;
             for (int d = 0; d <= limit; ++d) pool.push_back(d);
-            for (;;) {
-                chosen = pickRobust(pool, false, true);
-                if (chosen < 0) break;
-                int releaseAfter = cands[static_cast<size_t>(chosen)].requireHold ? 40 : -1;
-                if (jitterOk(chosen, releaseAfter)) break;
-                cands[static_cast<size_t>(chosen)].viable = false;
-                cands[static_cast<size_t>(chosen)].robustKFailed = true;
-                chosen = -1;
-            }
+            chosen = pickWithJitterTop2([&]() {
+                return pickRobust(pool, false, true);
+            });
             if (chosen == 0) {
                 doPass = true;
                 plan.threatCleared = true;

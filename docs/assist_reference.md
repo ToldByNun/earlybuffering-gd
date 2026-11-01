@@ -274,6 +274,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 9 (ModeSurvival — lethal vs recoverable vs landing):** Ideas reimplemented (no upstream code). `ModeSurvival` classifies cand outcomes: Cube/Ball **Landing** after settle past threat; Wave **Recoverable** after clear (3 flip-probe helpers + smallest clear +1px); Ship/UFO/Spider **Recoverable** after clear; **LateCrashAfterClear** when death is past the threat; **Lethal** inside the zone. Narrow overlap-ignore only for follow/spent hazards already overlapping at click. ParityGate: ascent-shaped death alone ≠ Landing. `finalizeViable` / `verifyDelay` use this so land-then-late-spike is not false-lethal. PlanGold: `mode-survival`.
 
+**Commit 10 (PrefixSim + two-pass / same-crash):** Ideas reimplemented (no upstream). Shared-prefix: idle death at tick T marks all delays `d > T` without re-sim. Same `deathTick` after press across ≥2 delays → stop (next obstacle). Two-pass: quick cand fill, then hold/release theories only on `delaysForFullScore` (survivors + top died-acted). Mode-gated WaveTurn/ship recover. Jitter (±3% firstDt) only Top-2 picks. PlanGold: `prefix-sim`.
+
 Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2
