@@ -11,6 +11,7 @@
 #include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
 #include "AssistRealMetrics.hpp"
+#include "AssistSimEstimate.hpp"
 #include "GhostParityProbe.hpp"
 #include "SimTrust.hpp"
 #include "PerfectAssistPolicy.hpp"
@@ -721,6 +722,11 @@ bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
     if (plan.unknown && opp) return true;
     // Continuous: idle safer + ascent helped in eval but pick starved → soft hold.
     if (plan.continuous && plan.idleSafer && plan.ascentUseful) return true;
+    // Hopeless after a real search: Soft Hold + replan (same-crash / no-clear
+    // must not leave Live as silent vanilla — that felt "assist off" unless Dev
+    // Record was running and budget→PassBudget→Hold was more common).
+    if (plan.reason == AssistReason::PassHopeless) return true;
+    (void)opp;
     return false;
 }
 
@@ -773,6 +779,11 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     foresightBudget.budgetHit = true;
     foresightBudget.foresightOrbPad = true;
     expect(shouldArmHoldUntilSafe(foresightBudget), "arm-foresight-budget");
+
+    SimPlan hopelessBare;
+    hopelessBare.action = PlanAction::Pass;
+    hopelessBare.reason = AssistReason::PassHopeless;
+    expect(shouldArmHoldUntilSafe(hopelessBare), "arm-hopeless");
 
     SimPlan unknownOrb;
     unknownOrb.action = PlanAction::Pass;
@@ -1426,9 +1437,14 @@ void AssistController::updateOverlay() {
             }
         }
         {
+            // Commit 12: real metrics primary; simEstimate secondary (G10).
             auto const metricsBit = AssistRealMetrics::get().overlayBit();
             if (!metricsBit.empty()) {
                 this->m_overlayText += " | " + metricsBit;
+            }
+            auto const simBit = AssistSimEstimate::get().overlayBit();
+            if (!simBit.empty()) {
+                this->m_overlayText += " | " + simBit;
             }
         }
         if (m_savesAttempt > 0) {
@@ -2766,17 +2782,8 @@ bool AssistController::planPress(
         plan.toggleUnknown = true;
     }
 
-    // Commit 11: never soft-trust budgetHit; never invent Delay without viable cand.
-    if (plan.action == PlanAction::Delay
-        && !PerfectAssistPolicy::allowArmDelay(true, plan.budgetHit)) {
-        AssistLog::debug(fmt::format(
-            "press: refuse Delay (budgetHit) → PassBudget id={}",
-            plan.planId
-        ));
-        plan.action = PlanAction::Pass;
-        plan.delay = 0;
-        plan.reason = AssistReason::PassBudget;
-    }
+    // Commit 11: do not invent Delay without a viable cand (plan already gated).
+    // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
     if (plan.action != PlanAction::Delay) {
         if (shouldArmHoldUntilSafe(plan)) {

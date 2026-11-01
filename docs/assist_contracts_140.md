@@ -4,7 +4,7 @@
 
 Corpus label for this freeze: `corpus=solo` (solo play + PlanGold). Multi-player opt-in reports may use `corpus=multi` with higher `A_min`.
 
-Prev / Caused / Net / HarmRate_sim are **`simEstimate` only** — never a ship Pass/Fail by themselves (G10).
+Prev / Caused / Net / HarmRate_sim are **`simEstimate` only** (Commit 12: `AssistSimEstimate`) — never a ship Pass/Fail by themselves (G10). Primary ship gates stay on real counters (`AssistRealMetrics`).
 
 **Baseline status:** ε and G5–G7b numbers below are the **frozen Commit-2 LOCK** (Commit-1 probe placeholder + contract table). Live corpus p99 remeasure is deferred to a **new version**; until then runtime only **records** `max|dxy|` via `AssistRealMetrics` and must not change ε. `dev-freeze-world` default = **true**.
 
@@ -61,5 +61,6 @@ Tightening trust to shrink `N_trust_opp` and inflate AssistCov **fails G7b** whe
 ## Code
 
 - Constants + Wilson + gates: `AssistContracts140`
-- Runtime counters / report line: `AssistRealMetrics`
-- PlanGold: `assist-contracts-140`, `assist-real-metrics`
+- Runtime counters / report line (primary): `AssistRealMetrics`
+- Counterfactual Prev/Caused/Net (secondary, G10): `AssistSimEstimate`
+- PlanGold: `assist-contracts-140`, `assist-real-metrics`, `assist-sim-estimate`

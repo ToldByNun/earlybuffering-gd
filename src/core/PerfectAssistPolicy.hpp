@@ -51,8 +51,9 @@ public:
         bool budgetRemainsForProbe
     );
 
-    // Never arm Delay when budgetHit (soft-trust ban).
-    static bool allowArmDelay(bool candViable, bool budgetHit);
+    // Soft-trust ban: never invent Delay from incomplete budget-partial search.
+    // A fully evaluated viable cand may arm even if later delays hit the budget.
+    static bool allowArmDelay(bool candViable, bool budgetHit, bool softTrustPartial = false);
 
     // Never invent next-click / auto-release.
     static bool allowInventClick();

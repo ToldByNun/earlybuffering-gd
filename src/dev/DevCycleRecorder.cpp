@@ -170,6 +170,8 @@ void DevCycleRecorder::notePlanFinished(
     if (layer && layer->m_player2) {
         player2 = layer->m_player2;
     }
+    // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
+    bool const freezeOnRecord = true;
     w->witness = DevLiveWitness::capture(
         layer,
         player,
@@ -177,7 +179,7 @@ void DevCycleRecorder::notePlanFinished(
         plan,
         w->hasClockStamp ? w->clockStamp : clock,
         effectTick,
-        DevConfig::freezeWorld()
+        freezeOnRecord
     );
     w->hasWitness = w->witness.valid;
 
@@ -185,7 +187,7 @@ void DevCycleRecorder::notePlanFinished(
     if (w->hasWitness) {
         DevClassifyOptions opts;
         opts.requireDeps = DevConfig::evalRequireDeps();
-        opts.freezeWorld = DevConfig::freezeWorld();
+        opts.freezeWorld = freezeOnRecord;
         opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
         DevClassifyResult const gate = DevStateDiff::classifyWitnessGate(
             w->witness, opts

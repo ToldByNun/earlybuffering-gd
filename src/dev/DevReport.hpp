@@ -36,10 +36,20 @@ public:
     bool liveVsEvalMismatch = false;
     int livePlannedDelay = -1;
 
+    // Commit 12: counterfactual Prev/Caused class for this eval (simEstimate / G10).
+    int plannedDelay = -1;
+    char const* simNetClass = "neutral"; // prev|caused|neutral|inconclusive
+    int simPrev = 0;
+    int simCaused = 0;
+    int simNet = 0;
+    float simHarmRate = 0.f;
+
     // Build from an eval grid result. Never writes ideal= unless idealEligible.
+    // plannedDelay > 0 → accumulate AssistSimEstimate (secondary, not a ship gate).
     static DevReport fromGrid(
         DevEvalEngine::GridReport const& grid,
-        std::string recLine
+        std::string recLine,
+        int plannedDelay = -1
     );
 
     // Pure formatter used by fromGrid and selfCheck.

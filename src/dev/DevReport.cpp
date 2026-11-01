@@ -3,6 +3,7 @@
 #include "DevSession.hpp"
 #include "DevTraceStore.hpp"
 #include "../debug/LagProbe.hpp"
+#include "../core/AssistSimEstimate.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
 
@@ -39,13 +40,17 @@ DevObjective::Kind objectiveKindFromConfig() {
 }
 
 DevDecisionEvent const* findPlanFinished(DevAttempt const& attempt) {
-    DevDecisionEvent const* best = nullptr;
+    // Prefer last armed Delay with witness (counterfactual Net / bestSurv).
+    // Falling back to last Pass plan made bestEval=0 look like a false "win".
+    DevDecisionEvent const* bestDelay = nullptr;
+    DevDecisionEvent const* bestAny = nullptr;
     for (auto const& e : attempt.events) {
         if (e.kind != DevEventKind::PlanFinished) continue;
         if (!e.hasWitness || !e.witness.valid) continue;
-        best = &e;
+        bestAny = &e;
+        if (e.plannedDelay > 0) bestDelay = &e;
     }
-    return best;
+    return bestDelay ? bestDelay : bestAny;
 }
 
 int limitFromPlanEvent(DevDecisionEvent const& e) {
@@ -118,7 +123,7 @@ bool runEvalOnPlanEvent(
     if (DevSession::get().isRecording()) {
         rec = DevSession::get().statusLine();
     }
-    out = DevReport::fromGrid(grid, std::move(rec));
+    out = DevReport::fromGrid(grid, std::move(rec), planEv.plannedDelay);
     if (out.valid && planEv.plannedDelay > 0
         && (!out.hasBestSurviving || out.bestSurvivingDelay < 0)) {
         out.liveVsEvalMismatch = true;
@@ -131,7 +136,8 @@ bool runEvalOnPlanEvent(
 
 DevReport DevReport::fromGrid(
     DevEvalEngine::GridReport const& grid,
-    std::string recLine
+    std::string recLine,
+    int plannedDelay
 ) {
     DevReport r;
     r.recLine = std::move(recLine);
@@ -161,6 +167,30 @@ DevReport DevReport::fromGrid(
         r.idealBlockedReason = grid.objective.idealBlockedReason;
     }
 
+    // Commit 12: Prev/Caused from d0 vs planned Delay (simEstimate / G10).
+    r.plannedDelay = plannedDelay;
+    {
+        std::vector<AssistSimEstimate::SampleView> views;
+        views.reserve(grid.samples.size());
+        for (auto const& s : grid.samples) {
+            AssistSimEstimate::SampleView v;
+            v.delay = s.delay;
+            v.survivedPrimary = s.survivedPrimary;
+            v.inconclusive = s.inconclusive();
+            views.push_back(v);
+        }
+        auto const cls = AssistSimEstimate::classifyFromSamples(views, plannedDelay);
+        r.simNetClass = AssistSimEstimate::netClassId(cls);
+        if (plannedDelay > 0) {
+            AssistSimEstimate::get().noteEval(cls, r.claimsAllowed);
+        }
+        auto& est = AssistSimEstimate::get();
+        r.simPrev = est.prev();
+        r.simCaused = est.caused();
+        r.simNet = est.net();
+        r.simHarmRate = est.harmRateSim();
+    }
+
     r.overlayLine = formatOverlayLine(r);
 
     matjson::Value j = matjson::Value::object();
@@ -187,6 +217,13 @@ DevReport DevReport::fromGrid(
     if (!grid.fidelity.evalSuppressedReason.empty()) {
         j["evalSuppressedReason"] = grid.fidelity.evalSuppressedReason;
     }
+    // G10: simEstimate fields — diagnostic only, never ship Pass/Fail.
+    j["simEstimate"] = true;
+    j["simNetClass"] = r.simNetClass ? r.simNetClass : "neutral";
+    j["simPrev"] = r.simPrev;
+    j["simCaused"] = r.simCaused;
+    j["simNet"] = r.simNet;
+    j["simHarmRate"] = r.simHarmRate;
     j["overlay"] = r.overlayLine;
     if (r.liveVsEvalMismatch) {
         j["liveVsEvalMismatch"] = true;
@@ -232,9 +269,17 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
     }
 
     if (r.hasBestEvaluated) {
-        append(fmt::format(
-            "bestEval={} obj={}", r.bestEvaluatedDelay, r.objectiveId
-        ));
+        // When nothing survives primary, bestEval is least-bad death — label it.
+        if (!r.hasBestSurviving) {
+            append(fmt::format(
+                "bestEval={}(died) obj={}", r.bestEvaluatedDelay, r.objectiveId
+            ));
+        }
+        else {
+            append(fmt::format(
+                "bestEval={} obj={}", r.bestEvaluatedDelay, r.objectiveId
+            ));
+        }
     }
     else {
         append(fmt::format("bestEval=none obj={}", r.objectiveId));
@@ -242,6 +287,17 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
 
     if (r.idealEligible && r.hasIdealDelay) {
         append(fmt::format("ideal={}", r.idealDelay));
+    }
+
+    // Commit 12: simEstimate Net secondary (never ship gate).
+    if (r.plannedDelay > 0) {
+        append(fmt::format(
+            "simEst {} net=+{}/-{} harm={:.0f}%",
+            r.simNetClass ? r.simNetClass : "neutral",
+            r.simPrev,
+            r.simCaused,
+            r.simHarmRate * 100.f
+        ));
     }
     return line;
 }
@@ -372,6 +428,21 @@ bool DevReport::selfCheck(std::string& report) {
         expect(line.find("bestSurv=2") != std::string::npos, "bestsurv");
         expect(line.find("obj=survive_then_endx_v1") != std::string::npos, "obj");
         expect(line.find("fid=reproduced") != std::string::npos, "fid");
+        expect(line.find("(died)") == std::string::npos, "no-died-tag-when-surv");
+    }
+
+    // No survivor → bestEval labeled (died).
+    {
+        DevReport r;
+        r.claimsAllowed = true;
+        r.fidelity = DevFidelity::Reproduced;
+        r.objectiveId = "survive_then_endx_v1";
+        r.hasBestSurviving = false;
+        r.hasBestEvaluated = true;
+        r.bestEvaluatedDelay = 0;
+        auto line = formatOverlayLine(r);
+        expect(line.find("bestSurv=none") != std::string::npos, "nosurv");
+        expect(line.find("bestEval=0(died)") != std::string::npos, "died-tag");
     }
 
     // Eligible horizon_clear → ideal= present.
@@ -411,6 +482,30 @@ bool DevReport::selfCheck(std::string& report) {
         expect(r.overlayLine.find("ideal=") == std::string::npos, "from-no-ideal");
         expect(r.jsonLine.find("\"idealDelay\"") == std::string::npos, "from-json-no-ideal");
         expect(r.overlayLine.find("REC 1/10") != std::string::npos, "from-rec");
+        expect(r.jsonLine.find("simEstimate") != std::string::npos, "sim-tag");
+    }
+
+    // Commit 12: Prev class from d0 die / delay survive → simEst overlay.
+    {
+        AssistSimEstimate::get().resetSession();
+        DevEvalEngine::GridReport gr;
+        gr.fidelity.fidelity = DevFidelity::Reproduced;
+        gr.fidelity.claimsAllowed = true;
+        gr.objective.objectiveId = "survive_then_endx_v1";
+        gr.objective.hasBestSurviving = true;
+        gr.objective.bestSurvivingDelay = 4;
+        DevObjective::Sample d0;
+        d0.delay = 0;
+        d0.survivedPrimary = false;
+        DevObjective::Sample arm;
+        arm.delay = 4;
+        arm.survivedPrimary = true;
+        gr.samples = {d0, arm};
+        auto r = fromGrid(gr, "", 4);
+        expect(std::string(r.simNetClass) == "prev", "sim-prev");
+        expect(r.overlayLine.find("simEst") != std::string::npos, "sim-ov");
+        expect(AssistSimEstimate::get().prev() == 1, "sim-acc");
+        AssistSimEstimate::get().resetSession();
     }
 
     // Claims off → bestSurv=none, no ideal.

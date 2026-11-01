@@ -4,6 +4,7 @@
 #include "../core/AssistLearning.hpp"
 #include "../core/AssistContracts140.hpp"
 #include "../core/AssistRealMetrics.hpp"
+#include "../core/AssistSimEstimate.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
 #include "../core/MissAssistContracts.hpp"
@@ -118,6 +119,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistContracts140::selfCheck(contracts140Report), "assist-contracts-140");
     std::string realMetricsReport;
     expect(AssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
+    std::string simEstimateReport;
+    expect(AssistSimEstimate::selfCheck(simEstimateReport), "assist-sim-estimate");
     std::string collisionPolicyReport;
     expect(SimCollisionPolicy::selfCheck(collisionPolicyReport), "sim-collision-policy");
     std::string tg2FixtureReport;

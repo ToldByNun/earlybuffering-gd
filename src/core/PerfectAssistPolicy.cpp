@@ -64,9 +64,11 @@ bool PerfectAssistPolicy::allowPassBudget(
     return true;
 }
 
-bool PerfectAssistPolicy::allowArmDelay(bool candViable, bool budgetHit) {
-    // Never soft-trust budgetHit into a Delay arm.
-    if (budgetHit) return false;
+bool PerfectAssistPolicy::allowArmDelay(
+    bool candViable, bool budgetHit, bool softTrustPartial
+) {
+    // Only block inventing a Delay from an incomplete partial pick under budgetHit.
+    if (softTrustPartial && budgetHit) return false;
     return candViable;
 }
 
@@ -154,7 +156,8 @@ bool PerfectAssistPolicy::selfCheck(std::string& report) {
     expect(allowPassBudget(false, true, true), "budget-untrust-ok");
 
     expect(allowArmDelay(true, false), "arm-ok");
-    expect(!allowArmDelay(true, true), "arm-no-budgetHit");
+    expect(allowArmDelay(true, true, false), "arm-ok-budget-exhausted-search");
+    expect(!allowArmDelay(true, true, true), "arm-no-soft-partial");
     expect(!allowArmDelay(false, false), "arm-not-viable");
 
     expect(!allowInventClick(), "no-invent-click");

@@ -126,9 +126,10 @@ DevRejectLedger::RejectCode DevRejectLedger::skipCode(EarlyExit early) {
         case EarlyExit::WaveProximity: return RejectCode::WaveHazardProximity;
         case EarlyExit::WaveFutile: return RejectCode::WaveFutile;
         case EarlyExit::NoThreat: return RejectCode::NotViable;
-        case EarlyExit::None: return RejectCode::BudgetNotReached;
+        // Same-crash / prefix cut / unused order slots — not a wall-clock miss.
+        case EarlyExit::None: return RejectCode::NotViable; // detail via skipped-by-planner attr
     }
-    return RejectCode::BudgetNotReached;
+    return RejectCode::NotViable;
 }
 
 DevRejectLedger::RejectCode DevRejectLedger::classifyRejected(

@@ -3211,10 +3211,11 @@ SimPlan ShadowSimulator::plan(
     }
     if (chosen < 0) {
         // Commit 11: never soft-trust budgetHit into Delay via partial actMin.
-        // Survivor under incomplete search → PassBudget (Hold may still arm).
         if (plan.budgetHit && actMin >= 0 && actMin <= limit
             && cands[static_cast<size_t>(actMin)].viable
-            && PerfectAssistPolicy::allowArmDelay(true, plan.budgetHit)) {
+            && PerfectAssistPolicy::allowArmDelay(
+                true, plan.budgetHit, /*softTrustPartial=*/true
+            )) {
             chosen = actMin;
             doPass = false;
             applyChosenMeta(chosen);
@@ -3531,18 +3532,8 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    // Commit 11: never soft-trust budgetHit into a Delay arm.
-    if (plan.action == PlanAction::Delay
-        && !PerfectAssistPolicy::allowArmDelay(true, plan.budgetHit)) {
-        plan.action = PlanAction::Pass;
-        plan.delay = 0;
-        plan.reason = AssistReason::PassBudget;
-        plan.requireHold = false;
-        AssistLog::debug(fmt::format(
-            "PLAN id={} refuse Delay → pass-budget (no soft-trust budgetHit)",
-            plan.planId
-        ));
-    }
+    // Commit 11: fully evaluated Delay stays armed even if later search hit budget.
+    // Soft-trust partial pick is blocked above (budget-partial + softTrustPartial).
 
     if (plan.action == PlanAction::Delay && plan.reason == AssistReason::None) {
         plan.reason = AssistVerdict::inferDelayReason(

@@ -148,11 +148,16 @@ std::string AssistRealMetrics::reportLine(char const* corpusLabel) const {
 }
 
 std::string AssistRealMetrics::overlayBit() const {
-    if (this->m_arms <= 0 && this->m_parityProbes <= 0) return {};
+    if (this->m_arms <= 0 && this->m_parityProbes <= 0 && this->m_nOpp <= 0) {
+        return {};
+    }
+    // Commit 12: real metrics primary (DAF / AssistCov / TrustRate / Parity).
     return fmt::format(
-        "daf={}/{} par={}/{}",
+        "daf={}/{} cov={:.0f}% trust={:.0f}% par={}/{}",
         this->m_daf,
         this->m_arms,
+        this->assistCov() * 100.f,
+        this->trustRate() * 100.f,
         this->m_parityOk,
         this->m_parityProbes
     );

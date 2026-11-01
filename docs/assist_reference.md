@@ -278,6 +278,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 11 (PerfectAssistPolicy):** Opportunity + Trust → `MustDelaySearch` (skip spam-Pass / PassNoThreat early exit). Named Pass: `pass-parity-drift` / `pass-spot-untrusted` / `pass-untrust` / `pass-hard-unknown` / `pass-tw-empty` / `pass-budget`. Never soft-trust `budgetHit` into Delay; never invent auto-click/release. InterveneGate help-don't-hurt + Wave smallest-clear helpers. PlanGold: `perfect-assist-policy`.
 
+**Commit 12 (Real metrics primary + simEstimate secondary):** Ship gates stay on `AssistRealMetrics` (DAF / AssistCov / TrustRate / Parity / Wilson G5–G7b). Counterfactual `Prev` / `Caused` / `Net` / `HarmRate_sim` live in `AssistSimEstimate` — tagged `simEstimate`, **G10 diagnostic only** (never ship Pass/Fail). DevReport/eval notes d0 vs planned Delay; overlay `daf=… cov=… trust=…` then `simEst net=+P/-C harm=…%`. Freeze-world **forced on** while DevCycle records. PlanGold: `assist-sim-estimate`.
+
 Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2
@@ -296,7 +298,7 @@ Continuous modes also Pass release assist during spam. Reset on attempt / quit. 
 
 ### Assist contracts v1.4.0 LOCK (Commit 2)
 
-Frozen numbers live in `docs/assist_contracts_140.md` and `AssistContracts140` — **DO NOT RETUNE** without a new mod version. Real counters: `AssistRealMetrics` (`N_opp` / `N_trust_opp` / `A` / `DAF` / ParityOK + Wilson G5 / G6 / G7a / G7b TrustRate). Overlay bit `daf=a/A par=ok/n`. `dev-freeze-world` default **on**. Prev/Caused stay `simEstimate` only (G10). PlanGold: `assist-contracts-140`, `assist-real-metrics`.
+Frozen numbers live in `docs/assist_contracts_140.md` and `AssistContracts140` — **DO NOT RETUNE** without a new mod version. Real counters (primary): `AssistRealMetrics` (`N_opp` / `N_trust_opp` / `A` / `DAF` / ParityOK + Wilson G5 / G6 / G7a / G7b TrustRate). Overlay `daf=a/A cov=% trust=% par=ok/n`. Counterfactual Prev/Caused/Net/`HarmRate_sim` → `AssistSimEstimate` (`simEstimate`, G10 only). `dev-freeze-world` default **on**; record path forces freeze-world. PlanGold: `assist-contracts-140`, `assist-real-metrics`, `assist-sim-estimate`.
 
 ## Divergence / UNTRUST
 
