@@ -10,6 +10,7 @@
 #include "../core/SimCollisionPolicy.hpp"
 #include "../core/SimTrust.hpp"
 #include "../core/SpotTrustMap.hpp"
+#include "../core/Tg2BakeFixture.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
@@ -115,6 +116,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
     std::string collisionPolicyReport;
     expect(SimCollisionPolicy::selfCheck(collisionPolicyReport), "sim-collision-policy");
+    std::string tg2FixtureReport;
+    expect(Tg2BakeFixture::selfCheck(tg2FixtureReport), "tg2-bake-fixture");
     std::string diagDumpReport;
     expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;

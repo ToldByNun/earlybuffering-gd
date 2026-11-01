@@ -724,7 +724,8 @@ std::string DevDiagDump::buildReplayRemap() {
 
 std::string DevDiagDump::buildBakeProbe(int maxJobs) {
     std::ostringstream o;
-    o << "bakeOfflinePolicy=trust-toggle-pose; hard-death-only; parkReals; applyP2→P1\n";
+    o << "bakeOfflinePolicy=Soft-portals-Include; hard-death-only; parkReals; "
+         "P2→P1; parityGate=eps-locked; tg2-residual=TW-empty|TW-pose\n";
     o << "maxJobs=" << maxJobs << "\n";
 
     PlayLayer* layer = nullptr;

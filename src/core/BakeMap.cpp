@@ -1,7 +1,9 @@
 #include "BakeMap.hpp"
 #include "AssistClock.hpp"
+#include "AssistContracts140.hpp"
 #include "AssistController.hpp"
 #include "ShadowSimulator.hpp"
+#include "Tg2BakeFixture.hpp"
 #include "TriggerWorldBaker.hpp"
 #include "TriggerWorldStore.hpp"
 #include "LevelProfile.hpp"
@@ -620,6 +622,27 @@ Result<int> BakeMap::bakeReplay(
         lastFrame, jobs.size(), bakeRadius, tps
     ));
 
+    // Commit 6 Parity Gate: Soft portals Include + freeze ε before validate
+    // (portal Include must not retune noise).
+    {
+        std::string portalDetail;
+        if (!Tg2BakeFixture::bakeOfflinePortalsIncludeOk(portalDetail)) {
+            return Err(fmt::format(
+                "Bake portal policy failed ({}) — Soft portals must Include",
+                portalDetail.empty() ? "?" : portalDetail
+            ));
+        }
+        std::string parityDetail;
+        AssistContracts140::applyLockedEps();
+        if (!Tg2BakeFixture::parityGateOk(parityDetail)) {
+            return Err(fmt::format(
+                "Bake parity gate failed ({}) — ε LOCK required before validate",
+                parityDetail.empty() ? "?" : parityDetail
+            ));
+        }
+        AssistLog::debug("BAKE: parity gate OK (eps locked; Soft portals Include)");
+    }
+
     // ── Phase 1: full 1:1 macro run (must survive) ─────────────────────
     ShadowSimulator::BakeRunResult validate;
     {
@@ -657,14 +680,22 @@ Result<int> BakeMap::bakeReplay(
         }
         auto const top3 = DevDiagDump::formatUnknownTop3(validate.unknownHist);
         int const twTracks = TriggerWorldStore::get().trackCount();
+        auto const residual = Tg2BakeFixture::formatResidual(
+            twTracks,
+            validate.deathFrame,
+            validate.deathObjId,
+            validate.deathObjType
+        );
         AssistLog::info(fmt::format(
             "BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
             "objId={} objType={} gameId={} twTracks={} droppedP2={} "
-            "unknownTop3=[{}] soft={} hard={} (fix 1:1 before windows)",
+            "unknownTop3=[{}] soft={} hard={} residual={} "
+            "(fix 1:1 before windows)",
             validate.deathFrame, validate.deathX, validate.deathY,
             validate.deathObjId, validate.deathObjType, validate.deathObjGameId,
             twTracks, droppedP2, top3,
-            validate.unknownSoftHits, validate.unknownHardHits
+            validate.unknownSoftHits, validate.unknownHardHits,
+            residual.empty() ? "-" : residual
         ));
         {
             std::filesystem::path diagDir;
@@ -675,13 +706,20 @@ Result<int> BakeMap::bakeReplay(
                 ));
             }
         }
-        return Err(fmt::format(
+        // Commit 6: tg2 f185 solid#42181 → residual TW-empty/pose (not portal Unk).
+        std::string err = fmt::format(
             "Macro dies in sim at frame {} (x={:.0f}) deathObjId={} "
-            "twTracks={} unknownTop3=[{}] droppedP2={} — ghost path ≠ bot. "
-            "Reset→pause→Bake. Diag: /diag/bakefail_*",
+            "twTracks={} unknownTop3=[{}] droppedP2={}",
             validate.deathFrame, validate.deathX, validate.deathObjId,
             twTracks, top3, droppedP2
-        ));
+        );
+        if (!residual.empty()) {
+            err += " — ";
+            err += residual;
+        }
+        err += " — ghost path ≠ bot. Reset→pause→Bake. Diag: /diag/bakefail_* "
+               "parityGate=eps-locked";
+        return Err(err);
     }
 
     m_progress.done = validateWeight;
