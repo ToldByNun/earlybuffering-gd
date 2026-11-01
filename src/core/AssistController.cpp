@@ -163,6 +163,25 @@ static bool nearBakeWindowHint(
     ) != nullptr;
 }
 
+// Hybrid Live fallthrough: never HUS-inject before bake nominal (press or release).
+// Returns true when caller should Pass instead of armHoldUntilSafe.
+static bool husBlockedBeforeBakeNominal(
+    HybridPressReuse const& reuse,
+    int effectTick,
+    float simDt,
+    int& outNomTick
+) {
+    outNomTick = -1;
+    if (!reuse.hasWindow || simDt <= 0.f) return false;
+    double const bakeTps = reuse.bakeTps > 0.0
+        ? reuse.bakeTps
+        : AssistClock::kNominalTps;
+    outNomTick = AssistClock::get().unmapTick(
+        bakeTps, reuse.nominalFrame, simDt
+    );
+    return effectTick < outNomTick;
+}
+
 static bool nearOrbOrPadHint(
     PlayLayer* playLayer, PlayerObject* player, int limit, float simDt
 ) {
@@ -3038,33 +3057,28 @@ bool AssistController::planPress(
     if (plan.action != PlanAction::Delay) {
         bool const trustOk = SimTrust::get().okAt(x);
         if (shouldArmHoldUntilSafe(plan, trustOk)) {
-            // Hybrid: if a bake window is still ahead of nominal, do not HUS —
-            // Soft Hold would inject mid-window (seen as "too early assist").
-            if (shareHybrid && hybridReuse.hasWindow) {
-                double const bakeTps = hybridReuse.bakeTps > 0.0
-                    ? hybridReuse.bakeTps
-                    : AssistClock::kNominalTps;
-                int const nomTick = AssistClock::get().unmapTick(
-                    bakeTps, hybridReuse.nominalFrame, this->m_simDt
+            // Hybrid: bake window still ahead of nominal → no HUS mid-window.
+            int nomTick = -1;
+            if (shareHybrid
+                && husBlockedBeforeBakeNominal(
+                    hybridReuse, effectTick, this->m_simDt, nomTick
+                )) {
+                AssistLog::info(fmt::format(
+                    "MISS-BAKE-WIN hus-suppressed-before-nominal press "
+                    "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
+                    effectTick, nomTick,
+                    hybridReuse.earliest, hybridReuse.latest
+                ));
+                this->m_lastBakeHint = "MISS hus→before-nom → pass";
+                DevCycleRecorder::get().noteGatePass(
+                    AssistReason::PassHopeless, "hus-before-bake-nominal"
                 );
-                if (effectTick < nomTick) {
-                    AssistLog::info(fmt::format(
-                        "MISS-BAKE-WIN hus-suppressed-before-nominal "
-                        "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
-                        effectTick, nomTick,
-                        hybridReuse.earliest, hybridReuse.latest
-                    ));
-                    this->m_lastBakeHint = "MISS hus→before-nom → pass";
-                    DevCycleRecorder::get().noteGatePass(
-                        AssistReason::PassHopeless, "hus-before-bake-nominal"
-                    );
-                    this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
-                    this->recordDecision(
-                        playLayer, player, true, plan, effectTick, 0, false
-                    );
-                    this->updateOverlay();
-                    return true;
-                }
+                this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
+                this->recordDecision(
+                    playLayer, player, true, plan, effectTick, 0, false
+                );
+                this->updateOverlay();
+                return true;
             }
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, plan
@@ -3579,7 +3593,30 @@ bool AssistController::planRelease(
     if (plan.action != PlanAction::Delay) {
         bool const trustOk = SimTrust::get().okAt(x);
         // Soft Hold on release: keep Jump held, replan until Delay UP or deadline.
+        // Same before-nominal HUS block as press (release template parity).
         if (shouldArmHoldUntilSafe(plan, trustOk)) {
+            int nomTick = -1;
+            if (shareHybrid
+                && husBlockedBeforeBakeNominal(
+                    hybridReuse, effectTick, this->m_simDt, nomTick
+                )) {
+                AssistLog::info(fmt::format(
+                    "MISS-BAKE-WIN hus-suppressed-before-nominal release "
+                    "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
+                    effectTick, nomTick,
+                    hybridReuse.earliest, hybridReuse.latest
+                ));
+                this->m_lastBakeHint = "MISS hus→before-nom → pass";
+                DevCycleRecorder::get().noteGatePass(
+                    AssistReason::PassHopeless, "hus-before-bake-nominal"
+                );
+                this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
+                this->recordDecision(
+                    playLayer, player, false, plan, effectTick, 0, false
+                );
+                this->updateOverlay();
+                return true;
+            }
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, plan, false
             );
