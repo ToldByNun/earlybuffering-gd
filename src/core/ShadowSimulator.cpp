@@ -1973,6 +1973,28 @@ static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const
     return r.deathX > zone.endX;
 }
 
+// Commit 8 Score honesty: Delay-viable needs clearsThreat (or no zone / zoneCleared).
+// surviveBin alone is NOT enough (dropped soft-viable Escape). Unknown never viable.
+// Continuous equivalent: no-zone → !died (clearsThreatOf); idleSafer/ascentUseful
+// only steer search — they do not invent viability.
+static bool delayViableHonest(
+    bool diedBeforeAction,
+    bool died,
+    bool unknownTrunc,
+    bool toggleUnknown,
+    bool clearsThreat,
+    bool zoneCleared,
+    bool zoneValid
+) {
+    if (diedBeforeAction || died || unknownTrunc || toggleUnknown) return false;
+    return !zoneValid || clearsThreat || zoneCleared;
+}
+
+// planSequence exit: unknown truncation is NOT survival.
+static bool exitSurvivedHonest(bool died, bool unknown) {
+    return !died && !unknown;
+}
+
 // New (preferOutcome): rank by predicted exit — surviveBin/ticks, then
 // endX − λ·delay (how far the jump carries). No fixed mid/latest.
 static bool betterCand(
@@ -2075,14 +2097,16 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     out.diedBeforeAction = r.diedBeforeAction;
     out.clearsThreat = clearsThreatOf(r, zone);
     out.unknown = r.unknown || r.unknownTrunc || r.toggleUnknown;
-    // Survive-only: never ok a bake delay that dies or hits unknown (toggle honesty).
-    bool viable = false;
-    if (r.diedBeforeAction || r.died || r.unknownTrunc || r.toggleUnknown) {
-        viable = false;
-    }
-    else {
-        viable = !zone.valid || out.clearsThreat || r.zoneCleared;
-    }
+    // Commit 8: same honesty as plan finalizeViable (no soft-viable bin Escape).
+    bool viable = delayViableHonest(
+        r.diedBeforeAction,
+        r.died,
+        r.unknownTrunc,
+        r.toggleUnknown,
+        out.clearsThreat,
+        r.zoneCleared,
+        zone.valid
+    );
 
     // Linked dual: still one runOne for the other player (even when delay==0).
     if (viable && linkedDual()) {
@@ -2283,16 +2307,17 @@ SimPlan ShadowSimulator::plan(
 
     auto finalizeViable = [&](Cand& c, int releaseAfter) {
         c.clearsThreat = clearsThreatOf(c.raw, zone);
-        // Delay-viable ONLY if the sim survives. Death-past-zone used to count
-        // as "clear" and caused +N Delay that still died (early or late).
-        // Unknown / toggle-target overlap → never Delay-viable (honesty).
-        if (c.diedBeforeAction || c.raw.died || c.unknownTrunc || c.toggleUnknown) {
-            c.viable = false;
-        }
-        else {
-            c.viable = !zone.valid || c.clearsThreat || c.raw.zoneCleared
-                || c.surviveBin >= 1;
-        }
+        // Commit 8: Delay-viable = clearsThreat / zoneCleared / no-zone.
+        // No soft-viable surviveBin>=1 Escape (matches verifyDelay).
+        c.viable = delayViableHonest(
+            c.diedBeforeAction,
+            c.raw.died,
+            c.unknownTrunc,
+            c.toggleUnknown,
+            c.clearsThreat,
+            c.raw.zoneCleared,
+            zone.valid
+        );
         // Linked dual: other player's shadow must also survive the same plan.
         if (c.viable && linkedDual()) {
             PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
@@ -3256,7 +3281,7 @@ SimPlan ShadowSimulator::plan(
                 plan.releaseLatest = plan.releaseAfter;
             }
             plan.requireHold = plan.requireHold || winCand.requireHold;
-            // Non-orb: publish survivor band for planSequence exit prediction.
+            // Non-orb: publish survivor band for overlay / prefer.
             if (!plan.requireOrb) {
                 int sLo = -1;
                 int sHi = -1;
@@ -3271,6 +3296,17 @@ SimPlan ShadowSimulator::plan(
                     plan.dMax = sHi;
                 }
             }
+        }
+    }
+
+    // Commit 8: exact viable delays in window (exit-predict must not fill gaps).
+    {
+        plan.viableDelays.clear();
+        plan.viableDelays.reserve(static_cast<size_t>(limit) + 1);
+        for (int d = 0; d <= limit; ++d) {
+            auto const& c = cands[static_cast<size_t>(d)];
+            if (!c.viable || c.raw.died) continue;
+            plan.viableDelays.push_back(d);
         }
     }
 
@@ -3346,19 +3382,22 @@ SimPlan ShadowSimulator::planSequence(
     int const depth = std::clamp(options.smartDepth, 1, 3);
     bool const newPick = !options.legacyPick;
 
-    // Exit prediction: among candidate first delays, pick the one whose
-    // horizon replay actually survives / reaches furthest (not mid/latest).
+    // Exit prediction: among ALL Delay-viable first delays in the window
+    // (Commit 8 — not a filled dMin..dMax band with non-viable gaps).
     std::vector<int> allowed;
     if (single.action == PlanAction::Pass) {
         allowed.push_back(0);
     }
-    else {
-        int lo = single.dMin >= 0 ? single.dMin : single.delay;
-        int hi = single.dMax >= 0 ? single.dMax : single.delay;
-        for (int d = std::max(0, lo); d <= std::min(limit, hi); ++d) {
+    else if (!single.viableDelays.empty()) {
+        for (int d : single.viableDelays) {
+            if (d < 0 || d > limit) continue;
             allowed.push_back(d);
         }
         if (allowed.empty()) allowed.push_back(single.delay);
+    }
+    else {
+        // Fallback when plan skipped cand eval (rare): only the chosen delay.
+        allowed.push_back(std::clamp(single.delay, 0, limit));
     }
     bool const wantExitPredict = newPick && down && allowed.size() > 1;
     if ((!wantExitPredict && depth <= 1) || !down) {
@@ -3432,7 +3471,7 @@ SimPlan ShadowSimulator::planSequence(
             }
             auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
             ++combos;
-            bool const survived = !rr.died || rr.unknown;
+            bool const survived = exitSurvivedHonest(rr.died, rr.unknown);
             int sc = survived ? 100000 : rr.deathTick * 50;
             float const lat = std::max(0.f, options.latencyWeight);
             sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
@@ -3454,7 +3493,7 @@ SimPlan ShadowSimulator::planSequence(
             pushTap(tl, d0, tap);
             auto rr = replay(layer, slot, 0, tl, dt, horizon, false, 0);
             ++combos;
-            bool const survived = !rr.died || rr.unknown;
+            bool const survived = exitSurvivedHonest(rr.died, rr.unknown);
             int sc = survived ? 100000 : rr.deathTick * 50;
             float const lat = std::max(0.f, options.latencyWeight);
             sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
@@ -3470,7 +3509,7 @@ SimPlan ShadowSimulator::planSequence(
                 pushTap(tl2, d1, tap);
                 auto rr2 = replay(layer, slot, 0, tl2, dt, horizon, false, 0);
                 ++combos;
-                bool const survived2 = !rr2.died || rr2.unknown;
+                bool const survived2 = exitSurvivedHonest(rr2.died, rr2.unknown);
                 int sc2 = survived2 ? 100000 : rr2.deathTick * 50;
                 float const lat2 = std::max(0.f, options.latencyWeight);
                 sc2 += static_cast<int>(rr2.endX - lat2 * static_cast<float>(d0));
@@ -4016,7 +4055,41 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         expect(clears(dn, zone), "snap-delay-clears");
     }
 
-    if (fails == 0) report = "regressionSelfCheck OK (bins+zone+5 snaps)";
+    // Commit 8 Score honesty: soft-viable surviveBin Escape is gone.
+    expect(
+        !delayViableHonest(false, false, false, false, false, false, true),
+        "soft-viable-no-clear"
+    );
+    expect(
+        delayViableHonest(false, false, false, false, true, false, true),
+        "viable-clears-threat"
+    );
+    expect(
+        delayViableHonest(false, false, false, false, false, true, true),
+        "viable-zone-cleared"
+    );
+    expect(
+        delayViableHonest(false, false, false, false, false, false, false),
+        "viable-no-zone"
+    );
+    expect(
+        !delayViableHonest(false, true, false, false, true, false, true),
+        "died-not-viable"
+    );
+    expect(
+        !delayViableHonest(false, false, true, false, true, false, true),
+        "unknown-not-viable"
+    );
+    expect(
+        !delayViableHonest(false, false, false, true, true, false, true),
+        "toggle-unk-not-viable"
+    );
+    expect(exitSurvivedHonest(false, false), "exit-alive");
+    expect(!exitSurvivedHonest(true, false), "exit-died");
+    expect(!exitSurvivedHonest(false, true), "exit-unknown-not-survive");
+    expect(!exitSurvivedHonest(true, true), "exit-died-unk");
+
+    if (fails == 0) report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty)";
     else report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
     return fails == 0;
 }

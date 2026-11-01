@@ -94,6 +94,8 @@ struct SimPlan {
     bool requireHold = false;
     int dMin = -1;
     int dMax = -1;
+    // Commit 8: exact Delay-viable set for planSequence exit-predict (not a filled band).
+    std::vector<int> viableDelays;
     // Hold/release after assisted press (ticks after the press action).
     // earliest..latest = safe hold durations; preferred = best release timing.
     // -1 = unset (no probe / Pass).

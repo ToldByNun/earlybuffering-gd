@@ -267,8 +267,10 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 5. eval delays under tick + sim-budget-us
 6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter
 7. else d0 survived -> Pass; else New outcome / Legacy latest ±k-robust
-8. New: `planSequence` exit-predict over survivor band (horizon replay; smartDepth≥2 adds multi-jump)
+8. New: `planSequence` exit-predict over **all Delay-viable** delays in the window (`viableDelays` — not a filled `dMin..dMax` band). Horizon replay; smartDepth≥2 adds multi-jump. Survived = `!died && !unknown`.
 9. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
+
+**Commit 8 (Score honesty):** Delay-viable = `clearsThreat` / `zoneCleared` / no-zone — **no** soft-viable `surviveBin>=1` Escape. Continuous equivalent stays no-zone `!died` + `idleSafer`/`ascentUseful` search steer (does not invent viability).
 
 Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
@@ -444,7 +446,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
 | G1 Legacy | Setting `assist-pick` = **Legacy** (default): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
-| G1 Prefer (New) | `assist-pick` = **New**: **Delay-viable = sim survives**. d0 survived → Pass; else **exit prediction** ranks survivor delays by horizon outcome (survive / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
+| G1 Prefer (New) | `assist-pick` = **New**: **Delay-viable = clearsThreat** (or no-zone / zoneCleared — not soft `surviveBin≥1`). d0 viable → Pass; else **exit prediction** ranks **all viable** delays by horizon outcome (`!died && !unknown` / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2) with reduced caps — never hang: budget exhaust parks at deadline. Delay confirm updates `fireTick`; opportunity clear + safe → inject now; deadline → fire. Overlay `HUS` + `HOLD~`. |
