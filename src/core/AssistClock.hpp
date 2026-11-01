@@ -60,6 +60,11 @@ public:
     // authorTps * liveSimDt ≈ 1.
     int remapTick(double authorTps, int liveAbsTick, float liveSimDt) const;
 
+    // Inverse of remapTick: author/bake frame → live absolute attempt tick.
+    // liveAbs ≈ round(authorTick / (authorTps * liveSimDt)); identity when
+    // authorTps * liveSimDt ≈ 1. Used by Hybrid/Replay template arm.
+    int unmapTick(double authorTps, int authorTick, float liveSimDt) const;
+
     // True when warp is ~1 but sim TPS is far from nominal (MH dt scale).
     bool speedScaleSuspect(float timeWarp, double simTps) const;
 

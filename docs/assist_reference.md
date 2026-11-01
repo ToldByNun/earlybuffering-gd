@@ -37,8 +37,10 @@ HYBRID eb.hybrid.live   = 1.10ms | vfy=1 remTick=2800 remUs=500
 
 | Mode | Verify fail / past window / missing bake |
 |------|------------------------------------------|
-| Hybrid | Fall through to **Live** (`TravelForesight` + OpportunityProbe / HUS / idleSafer). Overlay hint `… → live`. No bake Pass verdict. |
+| Hybrid | Fall through to **Live** (`TravelForesight` + OpportunityProbe / HUS / idleSafer). Overlay hint `MISS … → live` or `… → live`. No bake Pass verdict. |
 | Replay / Brute | Pass with reason: `pass-bake-verify-fail`, `pass-bake-past-latest`, `pass-bake-missing`, `pass-bake-no-window`. |
+
+**In-window template (Hybrid/Replay):** Bake frames map to **absolute** live ticks via `AssistClock::unmapTick` (not relative to the press). `findNear` also requires `approxFrame` near `[earliest, latest]` (not X-only — avoids ~100f-early matches from `LOOKUP_X_TOL`). Delay: before earliest → wait earliest; inside but before nominal → wait **nominal**; at/after nominal → fire-now; `past latest` + spatial band → salvage fire-now after verify. Verify fail retries delay 0 once; still fail → loud `MISS-BAKE-WIN`. Arm logs: `bake-wait-earliest` / `bake-wait-nominal` / `bake-now` / `bake-salvage-now`.
 
 Early-before-window still buffers until bake earliest (clamped to `limit`).
 
@@ -489,7 +491,7 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 | `pass-spot-untrusted` | SpotTrustMap: X marked after prior parity drift (hard Pass until good-parity streak clears) |
 | `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / LevelProfile trust gates (`pass-untrust` softens near orb; parity/spot never soften) |
 | `pass-limit-zero` / `pass-debounce` / `pass-cps` / `pass-scope` / `pass-assist-off` / `pass-early-attempt` | Hard off / debounce / CPS / scope |
-| `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake paths (Hybrid falls through to Live) |
+| `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake miss paths (Hybrid: template arm or `MISS-BAKE-WIN` → live). In-window success arms Delay (`bake-wait-*` / `bake-now`), not silent in-window Pass. |
 | `delay-orb` / `delay-threat` / `delay-prefer` / `delay-generic` | Buffered Delay |
 | `hold-pending` | Soft Hold-Until-Safe (`HOLD~` / `HUS`) |
 

@@ -66,6 +66,9 @@ class BakeMap {
 public:
     static constexpr float LOOKUP_X_TOL = 120.f;
 
+    // Drawn bake-window half-width (matches BakePathVisualizer green/purple boxes).
+    static float windowHalfW(int earliest, int latest);
+
     static BakeMap& get();
 
     void clear();

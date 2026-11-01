@@ -74,6 +74,7 @@ static void fillPlanRobustLatency(
 }
 
 // Map a nearby BakeMap window onto delay ticks for Live prefer-band ordering.
+// Absolute bake frames → live ticks (unmapTick), then delays relative to effectTick.
 static void fillBakePreferBandFromReuse(
     PlanOptions& opts,
     HybridPressReuse const& reuse,
@@ -83,18 +84,19 @@ static void fillBakePreferBandFromReuse(
 ) {
     if (!reuse.hasWindow || limit <= 0 || simDt <= 0.f) return;
     double const tps = reuse.bakeTps > 0.0 ? reuse.bakeTps : AssistClock::kNominalTps;
-    auto frameToTick = [&](int frame) -> int {
-        double const scale = tps * static_cast<double>(simDt);
-        double const ticksPerBakeFrame = (scale > 0.0) ? (1.0 / scale) : 1.0;
-        int const delta = static_cast<int>(std::lround(
-            (frame - reuse.nominalFrame) * ticksPerBakeFrame
-        ));
-        return effectTick + delta;
-    };
-
-    int e = frameToTick(reuse.earliest) - effectTick;
-    int l = frameToTick(reuse.latest) - effectTick;
-    if (l < e) std::swap(l, e);
+    auto& clock = AssistClock::get();
+    int eAbs = clock.unmapTick(tps, reuse.earliest, simDt);
+    int lAbs = clock.unmapTick(tps, reuse.latest, simDt);
+    int nAbs = clock.unmapTick(tps, reuse.nominalFrame, simDt);
+    if (lAbs < eAbs) std::swap(lAbs, eAbs);
+    // Prefer band toward nominal when still before it.
+    int e = std::max(0, eAbs - effectTick);
+    int l = std::max(0, lAbs - effectTick);
+    int n = std::max(0, nAbs - effectTick);
+    if (n >= e && n <= l) {
+        // Tighten prefer toward nominal..latest when inside the window ahead.
+        e = n;
+    }
     e = std::max(0, std::min(limit, e));
     l = std::max(0, std::min(limit, l));
     if (e > l) return;
@@ -2328,23 +2330,65 @@ bool AssistController::tryBakeAssist(
     bool const bakeOnly =
         mode == AssistMode::Replay || mode == AssistMode::BruteForce;
     bool const hybrid = mode == AssistMode::Hybrid;
+    float const playerX = player->getPositionX();
+
+    // Loud miss line for Hybrid/Replay when a bake window was in play but we
+    // did not arm (screenshot bug: green box, press, nothing).
+    auto logMissBakeWin = [&](
+        char const* branch,
+        BakedClick const* w,
+        int earliestTick,
+        int latestTick,
+        int delay,
+        int approxFrame
+    ) {
+        float const clickX = w ? w->x : -1.f;
+        float const dx = w ? std::fabs(clickX - playerX) : -1.f;
+        AssistLog::info(fmt::format(
+            "MISS-BAKE-WIN {} {} pX={:.1f} clickX={:.1f} dx={:.1f} "
+            "approxF={} nom={} eF={} lF={} effectT={} eT={} lT={} delay={} "
+            "mode={} hybrid={}",
+            branch,
+            down ? "press" : "release",
+            playerX,
+            clickX,
+            dx,
+            approxFrame,
+            w ? w->nominalFrame : -1,
+            w ? w->earliest : -1,
+            w ? w->latest : -1,
+            effectTick,
+            earliestTick,
+            latestTick,
+            delay,
+            StageConfig::kindName(StageConfig::kindOf(player)),
+            hybrid ? 1 : 0
+        ));
+        this->m_lastBakeHint = fmt::format("MISS {}", branch);
+    };
 
     auto fallThroughOrPass = [&](char const* reason, AssistReason bakeReason) -> bool {
         AssistLog::debug(fmt::format("bake: {} → {}", reason, hybrid ? "live" : "pass"));
         if (hybrid) {
             handled = false;
-            // Live plan() runs TravelForesight + C4–C6 (probe / HUS / idleSafer).
-            this->m_lastBakeHint = fmt::format("{} → live", reason);
+            // Keep MISS hint if already set; else stamp fallthrough.
+            if (this->m_lastBakeHint.rfind("MISS", 0) != 0) {
+                this->m_lastBakeHint = fmt::format("{} → live", reason);
+            }
+            else {
+                this->m_lastBakeHint = fmt::format("{} → live", this->m_lastBakeHint);
+            }
             AssistLog::debug(fmt::format(
                 "bake hybrid: {} — fall through to live (foresight/miss-assist)",
                 reason
             ));
-            // Do not stamp bake Pass as final verdict — live owns the decision.
             this->updateOverlay();
             return true;
         }
         handled = true;
-        this->m_lastBakeHint = reason;
+        if (this->m_lastBakeHint.rfind("MISS", 0) != 0) {
+            this->m_lastBakeHint = reason;
+        }
         DevCycleRecorder::get().noteGatePass(bakeReason, reason);
         this->noteVerdict(bakeReason, reason);
         return true;
@@ -2357,7 +2401,7 @@ bool AssistController::tryBakeAssist(
             this->m_lastBakeHint = mode == AssistMode::BruteForce ? "brute missing" : "bake missing";
             DevCycleRecorder::get().noteGatePass(AssistReason::PassBakeMissing, "bake-missing");
             this->noteVerdict(AssistReason::PassBakeMissing, "bake-missing");
-            return true; // pass through — nothing to assist with
+            return true;
         }
         return fallThroughOrPass("bake missing", AssistReason::PassBakeMissing);
     }
@@ -2365,13 +2409,30 @@ bool AssistController::tryBakeAssist(
     double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
     int approxFrame = AssistClock::get().remapTick(tps, this->m_attemptTick, this->m_simDt);
     auto const kind = StageConfig::kindOf(player);
-    auto const* win = bake.findNear(
-        player->getPositionX(), approxFrame, down, !player1, kind
-    );
+    auto const* win = bake.findNear(playerX, approxFrame, down, !player1, kind);
     if (!win) {
+        // Only loud-miss when a drawn/nearby window exists but findNear skipped it
+        // (mode/frame filter) — not every press far from bake.
+        BakedClick const* spatialNear = nullptr;
+        float bestDx = BakeMap::LOOKUP_X_TOL + 1.f;
+        for (auto const& c : bake.data().clicks) {
+            if (c.down != down || c.player2 != (!player1)) continue;
+            float const dx = std::fabs(c.x - playerX);
+            float const halfW = BakeMap::windowHalfW(c.earliest, c.latest);
+            if (dx > BakeMap::LOOKUP_X_TOL && dx > halfW) continue;
+            if (dx < bestDx) {
+                bestDx = dx;
+                spatialNear = &c;
+            }
+        }
+        if (spatialNear) {
+            logMissBakeWin(
+                "no-window", spatialNear, -1, -1, -1, approxFrame
+            );
+        }
         if (bakeOnly) {
             handled = true;
-            this->m_lastBakeHint = "no window";
+            this->m_lastBakeHint = spatialNear ? "MISS no-window" : "no window";
             DevCycleRecorder::get().noteGatePass(AssistReason::PassBakeNoWindow, "bake-no-window");
             this->noteVerdict(AssistReason::PassBakeNoWindow, "bake-no-window");
             return true;
@@ -2388,125 +2449,180 @@ bool AssistController::tryBakeAssist(
         reuse->bakeTps = tps;
     }
 
-    // Map bake frames onto attempt ticks using bake TPS vs current sim dt.
-    auto frameToTick = [&](int frame) -> int {
-        if (this->m_simDt <= 0.f) return effectTick + (frame - win->nominalFrame);
-        double const scale = tps * static_cast<double>(this->m_simDt);
-        double const ticksPerBakeFrame = (scale > 0.0) ? (1.0 / scale) : 1.0;
-        int delta = static_cast<int>(std::lround(
-            (frame - win->nominalFrame) * ticksPerBakeFrame
-        ));
-        return effectTick + delta;
-    };
+    float const halfW = BakeMap::windowHalfW(win->earliest, win->latest);
+    bool const spatialIn = std::fabs(playerX - win->x) <= halfW;
 
-    int earliestTick = frameToTick(win->earliest);
-    int latestTick = frameToTick(win->latest);
+    // ABSOLUTE bake frame → live attempt tick (inverse of remapTick).
+    // Old relative mapping (effectTick + frame - nominal) recentered the window
+    // on the press: with LOOKUP_X_TOL≈120px (~100f early) that fired immediately
+    // while still far before earliest — green box, press, death.
+    float const simDt = this->m_simDt > 0.f
+        ? this->m_simDt
+        : static_cast<float>(1.0 / AssistClock::kNominalTps);
+    auto& clock = AssistClock::get();
+    int earliestTick = clock.unmapTick(tps, win->earliest, simDt);
+    int latestTick = clock.unmapTick(tps, win->latest, simDt);
+    int const nominalTick = clock.unmapTick(tps, win->nominalFrame, simDt);
     if (latestTick < earliestTick) std::swap(latestTick, earliestTick);
 
     int const limit = activeLimit(player);
 
-    // Too late for this window
+    // Past latest: if still inside the drawn green/purple band, salvage fire-now
+    // (template intent — replay said jump here). Else loud miss + fallthrough.
+    bool salvagedPastLatest = false;
     if (effectTick > latestTick) {
-        return fallThroughOrPass("past latest", AssistReason::PassBakePastLatest);
+        if (spatialIn) {
+            salvagedPastLatest = true;
+            AssistLog::info(fmt::format(
+                "MISS-BAKE-WIN past-latest→salvage-now {} pX={:.1f} clickX={:.1f} "
+                "dx={:.1f} halfW={:.1f} effectT={} lT={} eF={} lF={}",
+                down ? "press" : "release",
+                playerX, win->x, std::fabs(playerX - win->x), halfW,
+                effectTick, latestTick, win->earliest, win->latest
+            ));
+        }
+        else {
+            logMissBakeWin(
+                "past-latest", win, earliestTick, latestTick, -1, approxFrame
+            );
+            return fallThroughOrPass("past latest", AssistReason::PassBakePastLatest);
+        }
     }
 
-    // Planned delay: 0 if already inside window, else wait until earliest.
+    // Absolute template delay:
+    //  - before earliest → wait until earliest (never fire early of window)
+    //  - inside window but before nominal → wait until nominal (replay center)
+    //  - at/after nominal (still ≤ latest) or salvaged → fire now
+    // If assist limit cannot reach earliest, do not clamp-fire early — miss instead.
     int delay = 0;
-    if (effectTick < earliestTick) {
-        delay = earliestTick - effectTick;
-        if (limit > 0) delay = std::min(delay, limit);
-        if (delay <= 0) delay = 0;
+    if (!salvagedPastLatest) {
+        if (effectTick < earliestTick) {
+            delay = earliestTick - effectTick;
+            if (limit > 0 && delay > limit) {
+                logMissBakeWin(
+                    "limit-before-earliest", win, earliestTick, latestTick,
+                    delay, approxFrame
+                );
+                AssistLog::info(fmt::format(
+                    "MISS-BAKE-WIN limit-before-earliest need={} lim={} "
+                    "effectT={} eT={} — refuse early fire",
+                    delay, limit, effectTick, earliestTick
+                ));
+                return fallThroughOrPass(
+                    "limit before earliest", AssistReason::PassBakeNoWindow
+                );
+            }
+        }
+        else if (effectTick < nominalTick) {
+            delay = nominalTick - effectTick;
+            if (limit > 0 && delay > limit) {
+                // Reach as close to nominal as limit allows (still ≥ earliest).
+                delay = limit;
+                if (effectTick + delay > latestTick) {
+                    delay = std::max(0, latestTick - effectTick);
+                }
+            }
+        }
+        if (delay < 0) delay = 0;
     }
 
-    // Live re-verify: stale / wrong-mode / suicidal bake delay → Hybrid live
-    // (foresight + miss-assist), Replay/Brute Pass with reason.
-    // Hybrid: draw from shared press envelope (never soft-trust on budgetHit).
-    // Attempt-scoped HybridVerifyCache skips identical window+delay re-sims.
-    if (limit > 0 && this->m_simDt > 0.f) {
-        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
+    auto runVerify = [&](int d, BakeVerifier::Result& outVr) -> void {
+        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt)
+            ? firstDt
+            : this->m_simDt;
         if (verifyAttempted) *verifyAttempted = true;
 
         HybridVerifyCache::Key cacheKey;
         cacheKey.nominalFrame = win->nominalFrame;
         cacheKey.earliest = win->earliest;
         cacheKey.latest = win->latest;
-        cacheKey.delayTicks = delay;
+        cacheKey.delayTicks = d;
         cacheKey.limit = limit;
         cacheKey.down = down;
         cacheKey.player2 = !player1;
         cacheKey.mode = kind;
 
-        BakeVerifier::Result vr;
         bool cacheHit = false;
         if (hybrid) {
             cacheHit = HybridVerifyCache::get().tryGet(
-                cacheKey, player->getPositionX(), vr
+                cacheKey, playerX, outVr
             );
         }
         if (cacheHit) {
             LagProbe::Scope const hyVerify(
                 hybrid ? "eb.hybrid.verify" : nullptr,
                 fmt::format(
-                    "d={} lim={} cache=1 ok={}", delay, limit, vr.ok ? 1 : 0
+                    "d={} lim={} cache=1 ok={}", d, limit, outVr.ok ? 1 : 0
                 )
             );
             (void)hyVerify;
+            return;
         }
-        else {
-            LagProbe::Scope const hyVerify(
-                hybrid ? "eb.hybrid.verify" : nullptr,
-                fmt::format("d={} lim={} cache=0", delay, limit)
-            );
-            vr = BakeVerifier::verify(
-                playLayer, player, down, delay, limit, this->m_simDt, fd,
-                hybrid ? sharedBudget : nullptr
-            );
-            if (hybrid) {
-                HybridVerifyCache::get().put(
-                    cacheKey, player->getPositionX(), vr
-                );
-            }
-            (void)hyVerify;
+        LagProbe::Scope const hyVerify(
+            hybrid ? "eb.hybrid.verify" : nullptr,
+            fmt::format("d={} lim={} cache=0", d, limit)
+        );
+        outVr = BakeVerifier::verify(
+            playLayer, player, down, d, limit, this->m_simDt, fd,
+            hybrid ? sharedBudget : nullptr
+        );
+        if (hybrid) {
+            HybridVerifyCache::get().put(cacheKey, playerX, outVr);
         }
+        (void)hyVerify;
+    };
+
+    // Live re-verify. Never soft-trust budgetHit. On fail: retry delay=0 once
+    // (in-window salvage); still fail → loud MISS + fallthrough / Pass.
+    BakeVerifier::Result vr{};
+    vr.ok = true;
+    if (limit > 0 && this->m_simDt > 0.f) {
+        runVerify(delay, vr);
         if (reuse) reuse->verifyThreat = vr.threatZone;
+
+        if (!vr.ok && delay > 0) {
+            BakeVerifier::Result vr0{};
+            runVerify(0, vr0);
+            if (vr0.ok) {
+                AssistLog::info(fmt::format(
+                    "MISS-BAKE-WIN verify-fail→salvage-d0 {} delayWas={} "
+                    "pX={:.1f} clickX={:.1f} eF={} lF={}",
+                    down ? "press" : "release", delay,
+                    playerX, win->x, win->earliest, win->latest
+                ));
+                delay = 0;
+                vr = vr0;
+                if (reuse) reuse->verifyThreat = vr.threatZone;
+            }
+        }
+
         if (!vr.ok) {
-            char const* why = "verify fail";
-            if (vr.budgetHit) why = "verify budget";
-            else if (vr.diedBeforeAction) why = "verify died-before";
-            else if (!vr.clearsThreat) why = "verify threat";
+            char const* why = "verify-fail";
+            if (vr.budgetHit) why = "verify-budget";
+            else if (vr.diedBeforeAction) why = "verify-died-before";
+            else if (!vr.clearsThreat) why = "verify-threat";
+            logMissBakeWin(why, win, earliestTick, latestTick, delay, approxFrame);
             return fallThroughOrPass(why, AssistReason::PassBakeVerifyFail);
         }
     }
 
+    // Template arm — including delay 0 (fire-now). No more silent PassBakeInWindow
+    // while the icon sits in the green box.
     handled = true;
     this->m_lastBakeHint = fmt::format("bake [{},{}]", win->earliest, win->latest);
 
-    // Already inside the safe window → do it now.
-    if (delay <= 0) {
-        AssistLog::debug(fmt::format(
-            "bake: in window [{},{}] verify ok → pass", win->earliest, win->latest
-        ));
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassBakeInWindow, "bake-in-window");
-        this->noteVerdict(AssistReason::PassBakeInWindow, "bake-in-window");
-        return true;
-    }
-
-    // Too early → buffer until earliest
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
     this->m_buffer.down = down;
     this->m_buffer.player1 = player1;
     this->m_buffer.pressTick = effectTick;
     this->m_buffer.planDelay = delay;
-    this->m_buffer.limit = std::max(limit, delay);
-    // Bake has no sim jumpTick — fire at planned delay.
+    this->m_buffer.limit = std::max(limit, std::max(1, delay));
     this->m_buffer.fireTick = resolveFireTick(effectTick, delay, delay, false);
     this->m_buffer.expectedJumpTick = this->m_buffer.fireTick;
-    this->m_buffer.decisionX = player->getPositionX();
+    this->m_buffer.decisionX = playerX;
     this->m_buffer.mode = kind;
 
-    // G4 bake heuristic (no file format change): if Orb Assist would have intent
-    // near this bake delay, apply the same [dMin,dMax] recheck/requireOrb rules.
     if (down && StageConfig::assistOrbs()) {
         int const dMin = std::max(0, earliestTick - effectTick);
         int const dMax = std::max(dMin, latestTick - effectTick);
@@ -2529,10 +2645,16 @@ bool AssistController::tryBakeAssist(
         this->m_buffer.fireTick, this->m_buffer.pressTick + this->m_buffer.limit
     );
 
-    AssistLog::debug(fmt::format(
-        "bake ASSIST {} +{} ticks (window [{},{}] fire={})",
+    char const* armWhere = "bake-now";
+    if (salvagedPastLatest) armWhere = "bake-salvage-now";
+    else if (delay > 0 && effectTick < earliestTick) armWhere = "bake-wait-earliest";
+    else if (delay > 0) armWhere = "bake-wait-nominal";
+    AssistLog::info(fmt::format(
+        "bake ASSIST {} +{} ticks (window [{},{}] nomF={} "
+        "eT={} nT={} lT={} effectT={} fire={} where={} spatial={} approxF={})",
         down ? "press" : "release", delay, win->earliest, win->latest,
-        this->m_buffer.fireTick
+        win->nominalFrame, earliestTick, nominalTick, latestTick, effectTick,
+        this->m_buffer.fireTick, armWhere, spatialIn ? 1 : 0, approxFrame
     ));
     {
         DevCycleRecorder::DelayArmMeta meta{};
@@ -2540,7 +2662,7 @@ bool AssistController::tryBakeAssist(
         meta.budgetHitAtArm = false;
         this->m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
             AssistReason::DelayPrefer,
-            "bake-delay",
+            armWhere,
             delay,
             this->m_buffer.fireTick,
             0,
@@ -2548,8 +2670,8 @@ bool AssistController::tryBakeAssist(
             meta
         );
     }
-    this->noteVerdict(AssistReason::DelayPrefer, "bake-delay");
-    if (delay > 0) AssistRealMetrics::get().noteArm();
+    this->noteVerdict(AssistReason::DelayPrefer, armWhere);
+    AssistRealMetrics::get().noteArm();
     this->updateOverlay();
     return false;
 }

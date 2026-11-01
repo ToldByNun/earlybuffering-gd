@@ -210,9 +210,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         auto const mid = isPress ? bakeGreen(0.85f) : bakePurple(0.85f);
         auto const edge = isPress ? bakeGreen(0.7f) : bakePurple(0.7f);
 
-        int const span = (std::max)(0, m.latest - m.earliest);
-        // Window band width ~ frame span (capped); height fixed tick.
-        float const halfW = (std::clamp)(3.f + static_cast<float>(span) * 0.35f, 3.f, 28.f);
+        float const halfW = BakeMap::windowHalfW(m.earliest, m.latest);
         float const halfH = 14.f;
 
         // Soft window rect (two triangles).

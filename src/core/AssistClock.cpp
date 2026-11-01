@@ -99,6 +99,24 @@ int AssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) c
     return static_cast<int>(mapped);
 }
 
+int AssistClock::unmapTick(double authorTps, int authorTick, float liveSimDt) const {
+    if (authorTick < 0) return 0;
+    if (authorTps <= 0.0) authorTps = AssistClock::kNominalTps;
+    if (liveSimDt <= 0.f) {
+        return authorTick;
+    }
+    double const scale = authorTps * static_cast<double>(liveSimDt);
+    if (!std::isfinite(scale) || scale <= 1e-12) {
+        return authorTick;
+    }
+    long long const mapped = static_cast<long long>(
+        std::llround(static_cast<double>(authorTick) / scale)
+    );
+    if (mapped < 0) return 0;
+    if (mapped > static_cast<long long>(0x7fffffff)) return 0x7fffffff;
+    return static_cast<int>(mapped);
+}
+
 bool AssistClock::speedScaleSuspect(float timeWarp, double simTps) const {
     float tw = timeWarp;
     if (tw <= 0.f) tw = 1.f;
@@ -200,6 +218,12 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(clock.remapTick(0.0, 50, 1.f / 240.f) == 50, "remap-bad-author");
     // Replay @360 → game @240: frame 86 → round(86 * 240/360) = 57.
     expect(clock.remapTick(240.0, 86, 1.f / 360.f) == 57, "remap-360-to-240");
+    expect(clock.unmapTick(240.0, 100, 1.f / 240.f) == 100, "unmap-identity");
+    expect(clock.unmapTick(240.0, 200, 1.f / 120.f) == 100, "unmap-2x-dt");
+    expect(
+        clock.unmapTick(240.0, clock.remapTick(240.0, 86, 1.f / 360.f), 1.f / 360.f) == 86,
+        "unmap-roundtrip-360"
+    );
 
     expect(!clock.speedScaleSuspect(1.f, 240.0), "suspect-nominal");
     expect(!clock.speedScaleSuspect(1.f, 220.0), "suspect-within-band");

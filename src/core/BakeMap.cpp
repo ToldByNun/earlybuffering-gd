@@ -452,21 +452,45 @@ int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
     return touched;
 }
 
+float BakeMap::windowHalfW(int earliest, int latest) {
+    int const span = (std::max)(0, latest - earliest);
+    return (std::clamp)(3.f + static_cast<float>(span) * 0.35f, 3.f, 28.f);
+}
+
 BakedClick const* BakeMap::findNear(
     float playerX, int approxFrame, bool down, bool player2,
     std::optional<GameModeKind> preferMode
 ) const {
+    // Temporal gate: do not pick a window whose absolute bake frames are far
+    // from approxFrame. LOOKUP_X_TOL alone can match ~100f early at cube speed
+    // and the old relative frameToTick then treated that as "in window".
+    static constexpr int kFramePastSlop = 240;
+    static constexpr int kFrameFutureSlop = 48; // slightly before earliest OK
+
+    // Prefer clicks whose drawn band contains playerX (viz overlap), else nearest X.
+    // Among temporal candidates, prefer those with approxFrame inside [earliest, latest].
     auto pick = [&](bool requireMode) -> BakedClick const* {
         BakedClick const* best = nullptr;
-        float bestDx = LOOKUP_X_TOL + 1.f;
+        float bestScore = 1e9f;
         for (auto const& c : m_data.clicks) {
             if (c.down != down || c.player2 != player2) continue;
             if (requireMode && preferMode && c.mode != *preferMode) continue;
-            float dx = std::fabs(c.x - playerX);
+            float const dx = std::fabs(c.x - playerX);
             if (dx > LOOKUP_X_TOL) continue;
-            if (approxFrame >= 0 && c.nominalFrame + 240 < approxFrame) continue;
-            if (dx < bestDx) {
-                bestDx = dx;
+            if (approxFrame >= 0) {
+                if (c.latest + kFramePastSlop < approxFrame) continue; // long past
+                if (approxFrame + kFrameFutureSlop < c.earliest) continue; // too early
+            }
+            float const halfW = windowHalfW(c.earliest, c.latest);
+            bool const inBand = dx <= halfW;
+            bool const inTime = approxFrame < 0
+                || (approxFrame >= c.earliest && approxFrame <= c.latest);
+            // Score: in-time+in-band best, then in-time, then in-band, then dx.
+            float score = dx;
+            if (!inBand) score += LOOKUP_X_TOL;
+            if (!inTime) score += LOOKUP_X_TOL * 2.f;
+            if (score < bestScore) {
+                bestScore = score;
                 best = &c;
             }
         }
