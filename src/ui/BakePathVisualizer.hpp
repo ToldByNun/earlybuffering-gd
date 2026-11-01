@@ -37,13 +37,15 @@ private:
     // LOD: only draw clicks within this X of the player (± screens).
     static constexpr float kLodMarginX = 1000.f;
     static constexpr size_t kMaxMarkers = 48;
-    static constexpr int kRebuildEveryTicks = 20;
+    // Faster rebuild so windows dim/drop soon after latest (time-based, not only X).
+    static constexpr int kRebuildEveryTicks = 8;
 
     cocos2d::CCDrawNode* m_node = nullptr;
     bool m_enabled = false;
     int m_ticksSinceRebuild = 0;
     float m_lastRebuildX = -1e9f;
     int m_lastClickCount = -1;
+    int m_lastApproxFrame = -1;
     GameModeKind m_lastMode = GameModeKind::Cube;
     int m_drawnPress = 0;
     int m_drawnRelease = 0;

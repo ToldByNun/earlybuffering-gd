@@ -204,7 +204,10 @@ void LagProbe::writeLegend() {
     this->appendLine("HYBRID LINES (no episode — Lag Probe ON, Assist Mode Hybrid)");
     this->appendLine("  HYBRID eb.hybrid.verify = X.XXms | d=… lim=… cache=0|1");
     this->appendLine("  HYBRID eb.hybrid.live   = X.XXms | vfy=… remTick=… remUs=…");
-    this->appendLine("  Overlay bake hint: bake [lo,hi] vs \"… → live\" on fallthrough.");
+    this->appendLine(
+        "  Overlay bake hint: hy/rp bake↓|↑ now|wait-nom|salvage [lo,hi] +d; "
+        "MISS … → live on fallthrough; tpl↓|↑ while bake buffer waits."
+    );
     this->appendLine("================================================================");
 }
 

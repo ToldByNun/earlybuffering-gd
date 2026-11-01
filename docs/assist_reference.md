@@ -40,7 +40,9 @@ HYBRID eb.hybrid.live   = 1.10ms | vfy=1 remTick=2800 remUs=500
 | Hybrid | Fall through to **Live** (`TravelForesight` + OpportunityProbe / HUS / idleSafer). Overlay hint `MISS … → live` or `… → live`. No bake Pass verdict. |
 | Replay / Brute | Pass with reason: `pass-bake-verify-fail`, `pass-bake-past-latest`, `pass-bake-missing`, `pass-bake-no-window`. |
 
-**In-window template (Hybrid/Replay):** Bake frames map to **absolute** live ticks via `AssistClock::unmapTick` (not relative to the press). `findNear` also requires `approxFrame` near `[earliest, latest]` (not X-only — avoids ~100f-early matches from `LOOKUP_X_TOL`). Delay: before earliest → wait earliest; inside but before nominal → wait **nominal**; at/after nominal → fire-now; `past latest` + spatial band → salvage fire-now after verify. Verify fail retries delay 0 once; still fail → loud `MISS-BAKE-WIN`. Arm logs: `bake-wait-earliest` / `bake-wait-nominal` / `bake-now` / `bake-salvage-now`.
+**In-window template (Hybrid/Replay):** Bake frames map to **absolute** live ticks via `AssistClock::unmapTick` (not relative to the press). `findNear` also requires `approxFrame` near `[earliest, latest]` (not X-only — avoids ~100f-early matches from `LOOKUP_X_TOL`). Delay: before earliest → wait earliest; inside but before nominal → wait **nominal**; at/after nominal → fire-now; `past latest` + spatial band → salvage fire-now after verify. Verify fail retries delay 0 once; still fail → loud `MISS-BAKE-WIN`. Press and release share the same arm path (releases still gated by `shouldPlanRelease` / purple viz).
+
+**Overlay ownership:** `hy` / `rp` / `br` + `bake↓|↑ now|wait-earliest|wait-nominal|salvage [lo,hi] +d`. While the bake buffer waits: `· tpl↓|↑`. Miss fallthrough: `hy MISS … → live`.
 
 Early-before-window still buffers until bake earliest (clamped to `limit`).
 

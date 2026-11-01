@@ -453,8 +453,10 @@ int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
 }
 
 float BakeMap::windowHalfW(int earliest, int latest) {
+    // Keep the drawn band tight — oversized boxes invited late presses that
+    // still look "in window" after latest (salvage then dies).
     int const span = (std::max)(0, latest - earliest);
-    return (std::clamp)(3.f + static_cast<float>(span) * 0.35f, 3.f, 28.f);
+    return (std::clamp)(2.5f + static_cast<float>(span) * 0.28f, 2.5f, 16.f);
 }
 
 BakedClick const* BakeMap::findNear(

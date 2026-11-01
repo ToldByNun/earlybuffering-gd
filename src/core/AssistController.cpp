@@ -1414,18 +1414,21 @@ void AssistController::updateOverlay() {
         else {
             learnBit = "learn OFF";
         }
-        // Hybrid: prefer last press hint (bake [lo,hi] vs "… → live") over map status.
+        // Template ownership: last bake arm/miss hint over map status.
+        // Hybrid/Replay/Brute prefix so Live foresight is never confused with tpl.
         std::string bakeBit = m_lastBakeHint.empty()
             ? BakeMap::get().statusLine()
             : m_lastBakeHint;
-        if (mode == AssistMode::Hybrid && !m_lastBakeHint.empty()) {
-            // Keep "→ live" readable; prefix so it is not mistaken for Replay bake.
-            if (m_lastBakeHint.find("→ live") != std::string::npos) {
-                bakeBit = fmt::format("hy {}", m_lastBakeHint);
-            }
-            else if (m_lastBakeHint.rfind("bake ", 0) == 0) {
-                bakeBit = fmt::format("hy {}", m_lastBakeHint);
-            }
+        if (!m_lastBakeHint.empty()) {
+            char const* pref = nullptr;
+            if (mode == AssistMode::Hybrid) pref = "hy";
+            else if (mode == AssistMode::Replay) pref = "rp";
+            else if (mode == AssistMode::BruteForce) pref = "br";
+            if (pref) bakeBit = fmt::format("{} {}", pref, m_lastBakeHint);
+        }
+        // While a bake-armed buffer is waiting, mark tpl ownership on left=.
+        if (m_buffer.state == BufferState::Buffered && m_buffer.fromBake) {
+            bakeBit = fmt::format("{} · tpl{}", bakeBit, m_buffer.down ? "↓" : "↑");
         }
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
         std::string bakeVizBit = BakePathVisualizer::get().statusHint();
@@ -2467,23 +2470,26 @@ bool AssistController::tryBakeAssist(
 
     int const limit = activeLimit(player);
 
-    // Past latest: if still inside the drawn green/purple band, salvage fire-now
-    // (template intent — replay said jump here). Else loud miss + fallthrough.
+    // Past latest: only salvage a tiny tick slop while still in the drawn band.
+    // Deeply late + still spatially overlapping a wide box used to arm and die.
+    static constexpr int kPastLatestSalvageSlop = 2;
     bool salvagedPastLatest = false;
     if (effectTick > latestTick) {
-        if (spatialIn) {
+        int const lateBy = effectTick - latestTick;
+        if (spatialIn && lateBy <= kPastLatestSalvageSlop) {
             salvagedPastLatest = true;
             AssistLog::info(fmt::format(
                 "MISS-BAKE-WIN past-latest→salvage-now {} pX={:.1f} clickX={:.1f} "
-                "dx={:.1f} halfW={:.1f} effectT={} lT={} eF={} lF={}",
+                "dx={:.1f} halfW={:.1f} effectT={} lT={} lateBy={} eF={} lF={}",
                 down ? "press" : "release",
                 playerX, win->x, std::fabs(playerX - win->x), halfW,
-                effectTick, latestTick, win->earliest, win->latest
+                effectTick, latestTick, lateBy, win->earliest, win->latest
             ));
         }
         else {
             logMissBakeWin(
-                "past-latest", win, earliestTick, latestTick, -1, approxFrame
+                lateBy > kPastLatestSalvageSlop ? "past-latest-deep" : "past-latest",
+                win, earliestTick, latestTick, -1, approxFrame
             );
             return fallThroughOrPass("past latest", AssistReason::PassBakePastLatest);
         }
@@ -2514,13 +2520,13 @@ bool AssistController::tryBakeAssist(
             }
         }
         else if (effectTick < nominalTick) {
+            // Full wait to nominal — do NOT clamp to ticks-all/mode limit.
+            // Clamping fired mid-window (early) and made verify use the wrong
+            // delay → Hybrid fallthrough → HUS even earlier. Buffer.limit is
+            // raised below to cover this wait (template > live tick budget).
             delay = nominalTick - effectTick;
-            if (limit > 0 && delay > limit) {
-                // Reach as close to nominal as limit allows (still ≥ earliest).
-                delay = limit;
-                if (effectTick + delay > latestTick) {
-                    delay = std::max(0, latestTick - effectTick);
-                }
+            if (effectTick + delay > latestTick) {
+                delay = std::max(0, latestTick - effectTick);
             }
         }
         if (delay < 0) delay = 0;
@@ -2572,15 +2578,18 @@ bool AssistController::tryBakeAssist(
         (void)hyVerify;
     };
 
-    // Live re-verify. Never soft-trust budgetHit. On fail: retry delay=0 once
-    // (in-window salvage); still fail → loud MISS + fallthrough / Pass.
+    // Live re-verify. Never soft-trust budgetHit.
+    // d0 salvage only at/after nominal — before nominal it would fire early
+    // (Hybrid then Live/HUS made that worse: pass-hopeless → mid-window inject).
+    // Still fail before nominal → Pass (no Live). At/after nominal → Hybrid Live.
     BakeVerifier::Result vr{};
     vr.ok = true;
     if (limit > 0 && this->m_simDt > 0.f) {
         runVerify(delay, vr);
         if (reuse) reuse->verifyThreat = vr.threatZone;
 
-        if (!vr.ok && delay > 0) {
+        bool const beforeNominal = effectTick < nominalTick;
+        if (!vr.ok && delay > 0 && !beforeNominal) {
             BakeVerifier::Result vr0{};
             runVerify(0, vr0);
             if (vr0.ok) {
@@ -2602,14 +2611,53 @@ bool AssistController::tryBakeAssist(
             else if (vr.diedBeforeAction) why = "verify-died-before";
             else if (!vr.clearsThreat) why = "verify-threat";
             logMissBakeWin(why, win, earliestTick, latestTick, delay, approxFrame);
+            if (hybrid && beforeNominal) {
+                // Window known, still before replay center — Live must not
+                // invent an earlier fire via PassHopeless→HUS (session early assist).
+                handled = true;
+                this->m_lastBakeHint = fmt::format(
+                    "MISS {} → pass (before-nom)", why
+                );
+                AssistLog::info(fmt::format(
+                    "MISS-BAKE-WIN {} before-nominal → Pass (no Live/HUS) "
+                    "effectT={} nT={} eF={} lF={}",
+                    why, effectTick, nominalTick, win->earliest, win->latest
+                ));
+                DevCycleRecorder::get().noteGatePass(
+                    AssistReason::PassBakeVerifyFail, "verify-before-nominal"
+                );
+                this->noteVerdict(
+                    AssistReason::PassBakeVerifyFail, "verify-before-nominal"
+                );
+                this->updateOverlay();
+                return true;
+            }
             return fallThroughOrPass(why, AssistReason::PassBakeVerifyFail);
         }
     }
 
-    // Template arm — including delay 0 (fire-now). No more silent PassBakeInWindow
-    // while the icon sits in the green box.
+    // Template arm — press and release share this path (purple release gated
+    // upstream by shouldPlanRelease). No silent PassBakeInWindow.
+    char const* armTag = "now";
+    if (salvagedPastLatest) armTag = "salvage";
+    else if (delay > 0 && effectTick < earliestTick) armTag = "wait-earliest";
+    else if (delay > 0) armTag = "wait-nominal";
+    char const* armWhere = salvagedPastLatest
+        ? "bake-salvage-now"
+        : (delay > 0 && effectTick < earliestTick)
+            ? "bake-wait-earliest"
+            : (delay > 0 ? "bake-wait-nominal" : "bake-now");
+
     handled = true;
-    this->m_lastBakeHint = fmt::format("bake [{},{}]", win->earliest, win->latest);
+    // Overlay ownership: bake↓/↑ tag window + why (salvage / wait-nom / now).
+    this->m_lastBakeHint = fmt::format(
+        "bake{} {} [{},{}] +{}",
+        down ? "↓" : "↑",
+        armTag,
+        win->earliest,
+        win->latest,
+        delay
+    );
 
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
@@ -2622,7 +2670,9 @@ bool AssistController::tryBakeAssist(
     this->m_buffer.expectedJumpTick = this->m_buffer.fireTick;
     this->m_buffer.decisionX = playerX;
     this->m_buffer.mode = kind;
+    this->m_buffer.fromBake = true;
 
+    // Orb heuristic only for presses — releases keep pure template timing.
     if (down && StageConfig::assistOrbs()) {
         int const dMin = std::max(0, earliestTick - effectTick);
         int const dMax = std::max(dMin, latestTick - effectTick);
@@ -2645,10 +2695,6 @@ bool AssistController::tryBakeAssist(
         this->m_buffer.fireTick, this->m_buffer.pressTick + this->m_buffer.limit
     );
 
-    char const* armWhere = "bake-now";
-    if (salvagedPastLatest) armWhere = "bake-salvage-now";
-    else if (delay > 0 && effectTick < earliestTick) armWhere = "bake-wait-earliest";
-    else if (delay > 0) armWhere = "bake-wait-nominal";
     AssistLog::info(fmt::format(
         "bake ASSIST {} +{} ticks (window [{},{}] nomF={} "
         "eT={} nT={} lT={} effectT={} fire={} where={} spatial={} approxF={})",
@@ -2992,6 +3038,34 @@ bool AssistController::planPress(
     if (plan.action != PlanAction::Delay) {
         bool const trustOk = SimTrust::get().okAt(x);
         if (shouldArmHoldUntilSafe(plan, trustOk)) {
+            // Hybrid: if a bake window is still ahead of nominal, do not HUS —
+            // Soft Hold would inject mid-window (seen as "too early assist").
+            if (shareHybrid && hybridReuse.hasWindow) {
+                double const bakeTps = hybridReuse.bakeTps > 0.0
+                    ? hybridReuse.bakeTps
+                    : AssistClock::kNominalTps;
+                int const nomTick = AssistClock::get().unmapTick(
+                    bakeTps, hybridReuse.nominalFrame, this->m_simDt
+                );
+                if (effectTick < nomTick) {
+                    AssistLog::info(fmt::format(
+                        "MISS-BAKE-WIN hus-suppressed-before-nominal "
+                        "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
+                        effectTick, nomTick,
+                        hybridReuse.earliest, hybridReuse.latest
+                    ));
+                    this->m_lastBakeHint = "MISS hus→before-nom → pass";
+                    DevCycleRecorder::get().noteGatePass(
+                        AssistReason::PassHopeless, "hus-before-bake-nominal"
+                    );
+                    this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
+                    this->recordDecision(
+                        playLayer, player, true, plan, effectTick, 0, false
+                    );
+                    this->updateOverlay();
+                    return true;
+                }
+            }
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, plan
             );

@@ -58,6 +58,8 @@ struct BufferedInput {
     // Soft hold: foresight/opportunity but no hard Delay yet — replan until
     // Delay confirms, opportunity clears, or pressTick+limit deadline.
     bool holdUntilSafe = false;
+    // Armed from BakeMap template (Hybrid/Replay/Brute) — overlay ownership.
+    bool fromBake = false;
     // HUS replan cadence (C11): skip full plan() unless interval / ΔX / foresight edge.
     int husLastReplanTick = -1;
     float husLastReplanX = 0.f;

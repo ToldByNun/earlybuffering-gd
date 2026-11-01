@@ -1,4 +1,5 @@
 #include "BakePathVisualizer.hpp"
+#include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
 #include "../core/ShadowSimulator.hpp"
@@ -24,6 +25,11 @@ static ccColor4F bakePurple(float a = 0.92f) {
 
 static ccColor4F bakePurpleDim(float a = 0.35f) {
     return { 0.55f, 0.18f, 0.78f, a };
+}
+
+// Past-latest: faint so the box does not invite a late press.
+static ccColor4F bakeGone(float a = 0.18f) {
+    return { 0.45f, 0.45f, 0.48f, a };
 }
 
 bool BakePathVisualizer::releaseWindowMode(GameModeKind kind) {
@@ -58,6 +64,7 @@ void BakePathVisualizer::attach(PlayLayer* layer) {
     this->m_ticksSinceRebuild = 999;
     this->m_lastRebuildX = -1e9f;
     this->m_lastClickCount = -1;
+    this->m_lastApproxFrame = -1;
 }
 
 void BakePathVisualizer::detach(bool layerDying) {
@@ -148,15 +155,27 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     bool const showAllReleases = releaseWindowMode(liveMode);
     int const nClicks = static_cast<int>(bake.data().clicks.size());
 
+    double const tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    float simDt = AssistController::get().estimatedTps() > 1.0
+        ? static_cast<float>(1.0 / AssistController::get().estimatedTps())
+        : AssistClock::kNominalSimDt;
+    // Prefer live simDt when assist has one.
+    // (estimatedTps is the stable overlay clock; identity at 240.)
+    int const approxFrame = AssistClock::get().remapTick(
+        tps, AssistController::get().attemptTick(), simDt
+    );
+
     if (std::fabs(px - this->m_lastRebuildX) < 4.f
         && nClicks == this->m_lastClickCount
         && liveMode == this->m_lastMode
+        && std::abs(approxFrame - this->m_lastApproxFrame) < 4
         && (this->m_drawnPress + this->m_drawnRelease) > 0) {
         return;
     }
     this->m_lastRebuildX = px;
     this->m_lastClickCount = nClicks;
     this->m_lastMode = liveMode;
+    this->m_lastApproxFrame = approxFrame;
 
     // Collect P1 clicks near the player, keep closest N, draw left→right.
     // (Avoid identifier `near` — Win32 headers define it as a macro.)
@@ -164,6 +183,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         float x = 0.f;
         int earliest = 0;
         int latest = 0;
+        int nominal = 0;
         bool down = true;
     };
     std::vector<Mark> marks;
@@ -171,13 +191,15 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     for (auto const& c : bake.data().clicks) {
         if (c.player2) continue; // P1 map first
         if (std::fabs(c.x - px) > kLodMarginX) continue;
+        // Drop windows that are well past latest — drawing them invites late presses.
+        if (approxFrame > c.latest + 2) continue;
         if (c.down) {
-            marks.push_back(Mark{ c.x, c.earliest, c.latest, true });
+            marks.push_back(Mark{ c.x, c.earliest, c.latest, c.nominalFrame, true });
             continue;
         }
         // Purple release: always in wave/ship/swing/robot; else dash/hold tag only.
         if (!showAllReleases && !c.holdAssist) continue;
-        marks.push_back(Mark{ c.x, c.earliest, c.latest, false });
+        marks.push_back(Mark{ c.x, c.earliest, c.latest, c.nominalFrame, false });
     }
     if (marks.size() > kMaxMarkers) {
         std::nth_element(
@@ -199,52 +221,96 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     this->m_drawnRelease = 0;
     if (marks.empty()) return;
 
+    // ~px per bake frame (same scale as ShadowSimulator travel foresight).
+    float pxPerFrame = 1.05f;
+    {
+        float const spd = std::max(0.5f, player->m_playerSpeed) * 311.2f * simDt;
+        pxPerFrame = (std::clamp)(spd, 0.35f, 4.f);
+    }
+
     // Windows only — no connector line between clicks (coverage, not a path).
     for (auto const& m : marks) {
         bool const isPress = m.down;
         if (isPress) ++this->m_drawnPress;
         else ++this->m_drawnRelease;
 
-        auto const stroke = isPress ? bakeGreen(0.95f) : bakePurple(0.95f);
-        auto const fill = isPress ? bakeGreenDim(0.28f) : bakePurpleDim(0.28f);
-        auto const mid = isPress ? bakeGreen(0.85f) : bakePurple(0.85f);
-        auto const edge = isPress ? bakeGreen(0.7f) : bakePurple(0.7f);
+        bool const pastLatest = approxFrame > m.latest;
+        bool const pastNominal = approxFrame > m.nominal;
 
-        float const halfW = BakeMap::windowHalfW(m.earliest, m.latest);
+        ccColor4F stroke;
+        ccColor4F fill;
+        ccColor4F mid;
+        ccColor4F edge;
+        if (pastLatest) {
+            stroke = bakeGone(0.35f);
+            fill = bakeGone(0.10f);
+            mid = bakeGone(0.40f);
+            edge = bakeGone(0.25f);
+        }
+        else if (isPress) {
+            float const a = pastNominal ? 0.55f : 0.95f;
+            stroke = bakeGreen(a);
+            fill = bakeGreenDim(pastNominal ? 0.14f : 0.28f);
+            mid = bakeGreen(pastNominal ? 0.50f : 0.85f);
+            edge = bakeGreen(pastNominal ? 0.40f : 0.7f);
+        }
+        else {
+            float const a = pastNominal ? 0.55f : 0.95f;
+            stroke = bakePurple(a);
+            fill = bakePurpleDim(pastNominal ? 0.14f : 0.28f);
+            mid = bakePurple(pastNominal ? 0.50f : 0.85f);
+            edge = bakePurple(pastNominal ? 0.40f : 0.7f);
+        }
+
+        // Asymmetric band: earliest ← nominal → latest in world X (not a fat square).
+        float leftW = static_cast<float>((std::max)(0, m.nominal - m.earliest)) * pxPerFrame;
+        float rightW = static_cast<float>((std::max)(0, m.latest - m.nominal)) * pxPerFrame;
+        float const cap = BakeMap::windowHalfW(m.earliest, m.latest);
+        leftW = (std::clamp)(leftW, 2.f, cap);
+        rightW = (std::clamp)(rightW, 2.f, cap);
+        // Once past nominal, shrink the trailing (late) edge so it stops looking valid.
+        if (pastNominal && !pastLatest) {
+            int const remain = (std::max)(0, m.latest - approxFrame);
+            rightW = (std::min)(rightW, (std::max)(2.f, static_cast<float>(remain) * pxPerFrame));
+        }
+        if (pastLatest) {
+            rightW = 2.f;
+            leftW = (std::min)(leftW, 4.f);
+        }
+
         float const halfH = 14.f;
+        float const x0 = m.x - leftW;
+        float const x1 = m.x + rightW;
 
-        // Soft window rect (two triangles).
         CCPoint triA[3] = {
-            { m.x - halfW, py - halfH },
-            { m.x + halfW, py - halfH },
-            { m.x + halfW, py + halfH }
+            { x0, py - halfH },
+            { x1, py - halfH },
+            { x1, py + halfH }
         };
         CCPoint triB[3] = {
-            { m.x - halfW, py - halfH },
-            { m.x + halfW, py + halfH },
-            { m.x - halfW, py + halfH }
+            { x0, py - halfH },
+            { x1, py + halfH },
+            { x0, py + halfH }
         };
         this->m_node->drawPolygon(triA, 3, fill, 0.f, fill);
         this->m_node->drawPolygon(triB, 3, fill, 0.f, fill);
 
-        // Nominal marker + vertical tick.
-        this->m_node->drawDot({ m.x, py }, 4.f, mid);
+        this->m_node->drawDot({ m.x, py }, pastLatest ? 2.5f : 4.f, mid);
         this->m_node->drawSegment(
             { m.x, py - halfH - 2.f },
             { m.x, py + halfH + 2.f },
-            1.1f,
+            pastLatest ? 0.7f : 1.1f,
             stroke
         );
-        // Earliest / latest brackets.
         this->m_node->drawSegment(
-            { m.x - halfW, py - halfH },
-            { m.x - halfW, py + halfH },
+            { x0, py - halfH },
+            { x0, py + halfH },
             0.8f,
             edge
         );
         this->m_node->drawSegment(
-            { m.x + halfW, py - halfH },
-            { m.x + halfW, py + halfH },
+            { x1, py - halfH },
+            { x1, py + halfH },
             0.8f,
             edge
         );
