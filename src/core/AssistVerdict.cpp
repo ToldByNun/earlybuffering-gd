@@ -32,6 +32,8 @@ char const* AssistVerdict::name(AssistReason reason) {
         case AssistReason::PassToggleUnknown: return "pass-toggle-unknown";
         case AssistReason::PassParityDrift: return "pass-parity-drift";
         case AssistReason::PassSpotUntrusted: return "pass-spot-untrusted";
+        case AssistReason::PassHardUnknown: return "pass-hard-unknown";
+        case AssistReason::PassTwEmpty: return "pass-tw-empty";
         case AssistReason::PassUnknown: return "pass-unknown";
     }
     return "pass-unknown";
@@ -69,6 +71,8 @@ char const* AssistVerdict::overlayBit(AssistReason reason) {
         case AssistReason::PassToggleUnknown: return "PASS toggle-unk";
         case AssistReason::PassParityDrift: return "PASS parity";
         case AssistReason::PassSpotUntrusted: return "PASS spot";
+        case AssistReason::PassHardUnknown: return "PASS hard-unk";
+        case AssistReason::PassTwEmpty: return "PASS tw-empty";
         case AssistReason::PassUnknown: return "PASS unknown";
     }
     return "PASS unknown";

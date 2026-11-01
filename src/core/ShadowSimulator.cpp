@@ -10,6 +10,7 @@
 #include "OrbStackResolver.hpp"
 #include "ModeSurvival.hpp"
 #include "PrefixSim.hpp"
+#include "PerfectAssistPolicy.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -2470,7 +2471,7 @@ SimPlan ShadowSimulator::plan(
                 }
             }
 
-            bool const searchFurther = OpportunityProbe::shouldSearchFurther(
+            bool searchFurther = OpportunityProbe::shouldSearchFurther(
                 spatialHint,
                 orbHint.found,
                 c0.activatedRing,
@@ -2478,11 +2479,17 @@ SimPlan ShadowSimulator::plan(
                 probeSamples,
                 probeCount
             );
+            // Commit 11: trusted opportunity → MUST Delay-search (skip no-threat exit).
+            if (options.mustDelaySearch) searchFurther = true;
 
             if (!searchFurther) {
                 plan.action = PlanAction::Pass;
                 // Wanted probes but could not afford any → PassBudget (C6 may Hold).
-                if (plan.budgetHit && limit >= 1 && probeCount == 0) {
+                // Commit 11: PassBudget only when probe budget is exhausted (allowPassBudget).
+                if (plan.budgetHit && limit >= 1 && probeCount == 0
+                    && PerfectAssistPolicy::allowPassBudget(
+                        true, options.mustDelaySearch, false
+                    )) {
                     plan.reason = AssistReason::PassBudget;
                 }
                 else {
@@ -2494,9 +2501,11 @@ SimPlan ShadowSimulator::plan(
                 plan.jumpTick = c0.jumpTick;
                 plan.activatedRing = c0.activatedRing;
                 AssistLog::debug(fmt::format(
-                    "PLAN id={} Pass no-threat verdict={} foresight={} probes={} budgetHit={} limit={}",
+                    "PLAN id={} Pass no-threat verdict={} foresight={} probes={} "
+                    "budgetHit={} mustSearch={} limit={}",
                     plan.planId, AssistVerdict::name(plan.reason),
-                    plan.foresightOrbPad ? 1 : 0, probeCount, plan.budgetHit, limit
+                    plan.foresightOrbPad ? 1 : 0, probeCount, plan.budgetHit,
+                    options.mustDelaySearch ? 1 : 0, limit
                 ));
                 publishLedger(
                     0,
@@ -3201,9 +3210,11 @@ SimPlan ShadowSimulator::plan(
         }
     }
     if (chosen < 0) {
-        // Partial budget: if any activation survived, take earliest act ≤ limit.
+        // Commit 11: never soft-trust budgetHit into Delay via partial actMin.
+        // Survivor under incomplete search → PassBudget (Hold may still arm).
         if (plan.budgetHit && actMin >= 0 && actMin <= limit
-            && cands[static_cast<size_t>(actMin)].viable) {
+            && cands[static_cast<size_t>(actMin)].viable
+            && PerfectAssistPolicy::allowArmDelay(true, plan.budgetHit)) {
             chosen = actMin;
             doPass = false;
             applyChosenMeta(chosen);
@@ -3217,6 +3228,7 @@ SimPlan ShadowSimulator::plan(
 
     // Continuous miss-assist: idle safer + ascent helps → Delay, not Pass/hopeless.
     // Only when a later *surviving* cand exists in-window.
+    // Commit 11 InterveneGate: only if delay improves over viable d0 (help-don't-hurt).
     if (plan.idleSafer && plan.ascentUseful
         && (doPass || chosen <= 0)) {
         std::vector<int> pool;
@@ -3225,13 +3237,19 @@ SimPlan ShadowSimulator::plan(
             ? pickLatestRobust(pool, false)
             : pickRobust(pool, false, true);
         if (forced > 0 && cands[static_cast<size_t>(forced)].viable) {
-            chosen = forced;
-            doPass = false;
-            applyChosenMeta(chosen);
-            AssistLog::debug(fmt::format(
-                "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
-                plan.planId, chosen
-            ));
+            bool const d0Ok = cands[0].viable;
+            bool const improves = !d0Ok || plan.ascentUseful;
+            if (PerfectAssistPolicy::interveneOk(
+                    d0Ok, true, improves
+                )) {
+                chosen = forced;
+                doPass = false;
+                applyChosenMeta(chosen);
+                AssistLog::debug(fmt::format(
+                    "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
+                    plan.planId, chosen
+                ));
+            }
         }
     }
     // Re-assert viable gate after idleSafer / budget-partial.
@@ -3400,6 +3418,11 @@ SimPlan ShadowSimulator::plan(
                 plan.toggleUnknown = true;
                 plan.unknown = true;
             }
+            else if (cands[0].unknownTrunc) {
+                // Commit 11: Hard Unknown leftover → named Pass (never Delay).
+                plan.reason = AssistReason::PassHardUnknown;
+                plan.unknown = true;
+            }
         }
     }
     else {
@@ -3407,11 +3430,18 @@ SimPlan ShadowSimulator::plan(
         // Belt: never ship Delay on unknown/toggle-unknown path.
         if (winCand.unknownTrunc || winCand.toggleUnknown) {
             plan.action = PlanAction::Pass;
-            plan.reason = AssistReason::PassToggleUnknown;
             plan.delay = 0;
             plan.unknown = true;
-            plan.toggleUnknown = true;
             plan.nowIsSafe = false;
+            if (winCand.toggleUnknown || hadToggleTargets) {
+                plan.reason = AssistReason::PassToggleUnknown;
+                plan.toggleUnknown = true;
+            }
+            else {
+                // Commit 11: Hard Unknown → pass-hard-unknown.
+                plan.reason = AssistReason::PassHardUnknown;
+                plan.toggleUnknown = false;
+            }
         }
         else {
             plan.action = PlanAction::Delay;
@@ -3482,12 +3512,34 @@ SimPlan ShadowSimulator::plan(
     if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
         plan.action = PlanAction::Pass;
         plan.delay = 0;
-        plan.reason = AssistReason::PassToggleUnknown;
         plan.unknown = true;
-        plan.toggleUnknown = true;
+        plan.requireHold = false;
+        if (plan.toggleUnknown) {
+            plan.reason = AssistReason::PassToggleUnknown;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} refuse Delay → pass-toggle-unknown",
+                plan.planId
+            ));
+        }
+        else {
+            // Commit 11: Hard Unknown → named Pass.
+            plan.reason = AssistReason::PassHardUnknown;
+            AssistLog::debug(fmt::format(
+                "PLAN id={} refuse Delay → pass-hard-unknown",
+                plan.planId
+            ));
+        }
+    }
+
+    // Commit 11: never soft-trust budgetHit into a Delay arm.
+    if (plan.action == PlanAction::Delay
+        && !PerfectAssistPolicy::allowArmDelay(true, plan.budgetHit)) {
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        plan.reason = AssistReason::PassBudget;
         plan.requireHold = false;
         AssistLog::debug(fmt::format(
-            "PLAN id={} refuse Delay → pass-toggle-unknown",
+            "PLAN id={} refuse Delay → pass-budget (no soft-trust budgetHit)",
             plan.planId
         ));
     }

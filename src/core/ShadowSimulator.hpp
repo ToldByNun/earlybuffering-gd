@@ -53,6 +53,8 @@ struct PlanOptions {
     bool spamDense = false;
     // true = 1.2.0 earliest / d0-Pass pick; false = New outcome/exit prediction.
     bool legacyPick = false;
+    // Commit 11: PerfectAssistPolicy MustDelaySearch — skip PassNoThreat early exit.
+    bool mustDelaySearch = false;
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     ThreatZone seedThreatZone{};

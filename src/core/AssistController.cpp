@@ -13,6 +13,7 @@
 #include "AssistRealMetrics.hpp"
 #include "GhostParityProbe.hpp"
 #include "SimTrust.hpp"
+#include "PerfectAssistPolicy.hpp"
 #include "SpotTrustMap.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
@@ -2479,7 +2480,7 @@ bool AssistController::planPress(
     }
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
-    // Bad model must not arm Delay (Commit 1 PerfectAssist honesty).
+    // Commit 11: reasons via PerfectAssistPolicy / SimTrust (same tokens).
     {
         float const xGate = player->getPositionX();
         AssistReason parityReason = AssistReason::None;
@@ -2574,8 +2575,55 @@ bool AssistController::planPress(
         this->m_untrustPassHint = false;
     }
 
+    // Commit 11: Opportunity + Trust → MUST Delay-search (AssistCov).
+    // Named Pass for TW-empty-when-expected (effects baked, 0 tracks).
+    bool mustDelaySearch = false;
+    {
+        PerfectAssistPolicy::TrustInput trustIn;
+        trustIn.parityDrift = SimTrust::get().parityDrift();
+        trustIn.spotUntrusted = SpotTrustMap::get().isUntrusted(x);
+        trustIn.divergenceUntrusted =
+            DivergenceTracker::get().simUntrusted() && !nearOrb;
+        if (StageConfig::triggerBake()) {
+            auto& tw = TriggerWorldStore::get();
+            auto& baker = TriggerWorldBaker::get();
+            trustIn.twEmptyWhenExpected = tw.loaded()
+                && !tw.hasTracks()
+                && !baker.running()
+                && !baker.lastCollectIncomplete()
+                && (baker.lastBakedEffects() > 0 || baker.lastBakedStartTimed() > 0);
+        }
+        AssistReason namedPass = AssistReason::None;
+        if (PerfectAssistPolicy::forcePassReason(trustIn, namedPass)
+            && namedPass == AssistReason::PassTwEmpty) {
+            AssistLog::debug("PERFECT pass-tw-empty (expected movers, 0 tracks)");
+            this->m_untrustPassHint = true;
+            SimPlan dummy;
+            dummy.action = PlanAction::Pass;
+            dummy.reason = AssistReason::PassTwEmpty;
+            dummy.firstDeathTick = -1;
+            dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassTwEmpty, "press-tw-empty");
+            this->noteVerdict(AssistReason::PassTwEmpty, "press-tw-empty");
+            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+            this->updateOverlay();
+            return true;
+        }
+        PerfectAssistPolicy::OpportunityInput oppIn;
+        oppIn.foresightOrbPad = nearOrb;
+        oppIn.bakePreferBand = nearBake;
+        oppIn.orbWindowFound = nearOrb;
+        auto const decision = PerfectAssistPolicy::classify(trustIn, oppIn);
+        mustDelaySearch = (decision == PerfectAssistPolicy::Decision::MustDelaySearch);
+        if (mustDelaySearch) {
+            AssistLog::debug("PERFECT must-delay-search (trust+opportunity)");
+        }
+    }
+
     // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
-    if (ClickIntentGuard::get().shouldPassThrough(
+    // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
+    if (!mustDelaySearch
+        && ClickIntentGuard::get().shouldPassThrough(
             slot, effectTick, kind, nearOrb, nearBake
         )) {
         AssistLog::debug(fmt::format(
@@ -2594,7 +2642,9 @@ bool AssistController::planPress(
     }
 
     // Low trust at this spot → pass through (unless explore roll or orb ahead).
-    if (StageConfig::autoTune() && profile.loaded() && !nearOrb) {
+    // Commit 11: trusted opportunity MustDelaySearch overrides learned low-trust Pass.
+    if (!mustDelaySearch
+        && StageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= LevelProfile::TRUST_PASS_MIN_N
                 && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD
@@ -2656,6 +2706,7 @@ bool AssistController::planPress(
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
     opts.legacyPick = StageConfig::assistPickLegacy();
+    opts.mustDelaySearch = mustDelaySearch;
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
@@ -2713,6 +2764,18 @@ bool AssistController::planPress(
         plan.reason = AssistReason::PassToggleUnknown;
         plan.unknown = true;
         plan.toggleUnknown = true;
+    }
+
+    // Commit 11: never soft-trust budgetHit; never invent Delay without viable cand.
+    if (plan.action == PlanAction::Delay
+        && !PerfectAssistPolicy::allowArmDelay(true, plan.budgetHit)) {
+        AssistLog::debug(fmt::format(
+            "press: refuse Delay (budgetHit) → PassBudget id={}",
+            plan.planId
+        ));
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        plan.reason = AssistReason::PassBudget;
     }
 
     if (plan.action != PlanAction::Delay) {

@@ -276,6 +276,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 10 (PrefixSim + two-pass / same-crash):** Ideas reimplemented (no upstream). Shared-prefix: idle death at tick T marks all delays `d > T` without re-sim. Same `deathTick` after press across ≥2 delays → stop (next obstacle). Two-pass: quick cand fill, then hold/release theories only on `delaysForFullScore` (survivors + top died-acted). Mode-gated WaveTurn/ship recover. Jitter (±3% firstDt) only Top-2 picks. PlanGold: `prefix-sim`.
 
+**Commit 11 (PerfectAssistPolicy):** Opportunity + Trust → `MustDelaySearch` (skip spam-Pass / PassNoThreat early exit). Named Pass: `pass-parity-drift` / `pass-spot-untrusted` / `pass-untrust` / `pass-hard-unknown` / `pass-tw-empty` / `pass-budget`. Never soft-trust `budgetHit` into Delay; never invent auto-click/release. InterveneGate help-don't-hurt + Wave smallest-clear helpers. PlanGold: `perfect-assist-policy`.
+
 Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2

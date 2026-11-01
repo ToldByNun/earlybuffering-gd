@@ -52,6 +52,10 @@ enum class AssistReason {
     // SpotTrustMap: this X was marked after prior drift (Pass until cleared)
     PassSpotUntrusted,
 
+    // Commit 11 PerfectAssistPolicy named Passes
+    PassHardUnknown, // Hard Unknown overlap (dual/follow/pre-toggle) — never Delay
+    PassTwEmpty,     // Trigger World expected movers but 0 tracks
+
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown
 };

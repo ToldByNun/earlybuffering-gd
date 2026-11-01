@@ -1,4 +1,5 @@
 #include "ModeSurvival.hpp"
+#include "PerfectAssistPolicy.hpp"
 
 #include <cmath>
 #include <cstring>
@@ -36,7 +37,10 @@ float ModeSurvival::clearMarginPx(float obstacleX, float endX) {
 }
 
 bool ModeSurvival::waveSmallestClearOk(float clearPx, float marginPx) {
-    return clearPx >= marginPx + ModeSurvival::kWaveClearMarginPx;
+    // Commit 11: same +1px margin rule as PerfectAssistPolicy wave helper.
+    return PerfectAssistPolicy::preferSmallerWaveClear(
+        clearPx, clearPx, marginPx
+    );
 }
 
 bool ModeSurvival::waveFlipProbeClears(
