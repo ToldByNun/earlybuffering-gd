@@ -12,6 +12,7 @@
 #include "../core/SpotTrustMap.hpp"
 #include "../core/Tg2BakeFixture.hpp"
 #include "../core/OrbStackResolver.hpp"
+#include "../core/ModeSurvival.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
@@ -121,6 +122,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(Tg2BakeFixture::selfCheck(tg2FixtureReport), "tg2-bake-fixture");
     std::string orbStackReport;
     expect(OrbStackResolver::selfCheck(orbStackReport), "orb-stack-resolver");
+    std::string modeSurvivalReport;
+    expect(ModeSurvival::selfCheck(modeSurvivalReport), "mode-survival");
     std::string diagDumpReport;
     expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;

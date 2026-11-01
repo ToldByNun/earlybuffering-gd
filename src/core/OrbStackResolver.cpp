@@ -255,7 +255,7 @@ bool OrbStackResolver::selfCheck(std::string& report) {
     expect(!OrbStackResolver::shouldSkipToggleFlip(nullptr, nullptr), "null-skip");
     expect(!OrbStackResolver::withinColocateEps(nullptr, nullptr), "null-eps");
     expect(
-        OrbStackResolver::fireStackedPartners(nullptr, nullptr, nullptr) == 0,
+        OrbStackResolver::get().fireStackedPartners(nullptr, nullptr, nullptr) == 0,
         "null-fire"
     );
 

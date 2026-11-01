@@ -8,6 +8,7 @@
 #include "SimSessionGuard.hpp"
 #include "ToggleOrbSim.hpp"
 #include "OrbStackResolver.hpp"
+#include "ModeSurvival.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -1973,10 +1974,10 @@ static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const
     return r.deathX > zone.endX;
 }
 
-// Commit 8 Score honesty: Delay-viable needs clearsThreat (or no zone / zoneCleared).
-// surviveBin alone is NOT enough (dropped soft-viable Escape). Unknown never viable.
-// Continuous equivalent: no-zone → !died (clearsThreatOf); idleSafer/ascentUseful
-// only steer search — they do not invent viability.
+// Commit 8 Score honesty + Commit 9 ModeSurvival:
+// Delay-viable needs clearsThreat (or no zone / zoneCleared). surviveBin alone
+// is NOT enough. Unknown never viable. Died can still be viable when ModeSurvival
+// says Landing / Recoverable / LateCrashAfterClear (false-lethal cut).
 static bool delayViableHonest(
     bool diedBeforeAction,
     bool died,
@@ -1984,10 +1985,73 @@ static bool delayViableHonest(
     bool toggleUnknown,
     bool clearsThreat,
     bool zoneCleared,
-    bool zoneValid
+    bool zoneValid,
+    ModeSurvival::Class survival = ModeSurvival::Class::Alive
 ) {
-    if (diedBeforeAction || died || unknownTrunc || toggleUnknown) return false;
-    return !zoneValid || clearsThreat || zoneCleared;
+    if (diedBeforeAction || unknownTrunc || toggleUnknown) return false;
+    if (died && !ModeSurvival::countsAsSafeForDelay(survival)) return false;
+    // Alive path: still need threat clear when a zone exists.
+    // LateCrash/Landing/Recoverable already imply clear geometry in classify.
+    if (!died) return !zoneValid || clearsThreat || zoneCleared;
+    return ModeSurvival::countsAsSafeForDelay(survival)
+        && (!zoneValid || clearsThreat || zoneCleared);
+}
+
+static ModeSurvival::Input survivalInputFrom(
+    ShadowSimulator::RunResult const& r,
+    ThreatZone const& zone,
+    ShadowSimulator::Model const& model,
+    PlayerObject* real
+) {
+    ModeSurvival::Input in;
+    in.continuous = model.continuous;
+    if (real) {
+        in.isWave = real->m_isDart;
+        in.isShipLike = real->m_isShip || real->m_isBird || real->m_isSpider
+            || real->m_isSwing;
+        in.isCubeLike = real->m_isRobot || real->m_isBall
+            || (!real->m_isDart && !real->m_isShip && !real->m_isBird
+                && !real->m_isSpider && !real->m_isSwing && !model.continuous);
+        in.upsideDown = real->m_isUpsideDown;
+        in.playerY = real->getPositionY();
+    }
+    else {
+        in.isCubeLike = !model.continuous;
+        in.isWave = model.continuous;
+    }
+    in.died = r.died;
+    in.diedBeforeAction = r.diedBeforeAction;
+    in.zoneValid = zone.valid;
+    in.zoneCleared = r.zoneCleared;
+    in.groundedSettled = r.zoneCleared && r.ticksBeforeNeutral > 0 && !model.continuous;
+    in.activatedRing = r.activatedRing;
+    in.deathX = r.deathX;
+    in.zoneEndX = zone.endX;
+    in.deathY = 0.f;
+    in.deathTick = r.deathTick;
+    in.ticksBeforeNeutral = r.ticksBeforeNeutral;
+    return in;
+}
+
+static bool runResultDelaySafe(
+    ShadowSimulator::RunResult const& r,
+    ThreatZone const& zone,
+    ShadowSimulator::Model const& model,
+    PlayerObject* real
+) {
+    auto const cls = ModeSurvival::classify(
+        survivalInputFrom(r, zone, model, real)
+    );
+    return delayViableHonest(
+        r.diedBeforeAction,
+        r.died,
+        r.unknownTrunc,
+        r.toggleUnknown,
+        clearsThreatOf(r, zone),
+        r.zoneCleared,
+        zone.valid,
+        cls
+    );
 }
 
 // planSequence exit: unknown truncation is NOT survival.
@@ -2002,7 +2066,8 @@ static bool betterCand(
 ) {
     if (a.viable != b.viable) return a.viable && !b.viable;
     if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
-    if (preferOutcome && a.raw.died != b.raw.died) {
+    // Prefer truly lethal death last; Landing/Recoverable may still set raw.died.
+    if (preferOutcome && a.viable && b.viable && a.raw.died != b.raw.died) {
         return !a.raw.died && b.raw.died;
     }
     if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
@@ -2097,16 +2162,8 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     out.diedBeforeAction = r.diedBeforeAction;
     out.clearsThreat = clearsThreatOf(r, zone);
     out.unknown = r.unknown || r.unknownTrunc || r.toggleUnknown;
-    // Commit 8: same honesty as plan finalizeViable (no soft-viable bin Escape).
-    bool viable = delayViableHonest(
-        r.diedBeforeAction,
-        r.died,
-        r.unknownTrunc,
-        r.toggleUnknown,
-        out.clearsThreat,
-        r.zoneCleared,
-        zone.valid
-    );
+    // Commit 8+9: clearsThreat honesty + ModeSurvival landing/recoverable.
+    bool viable = runResultDelaySafe(r, zone, model, real);
 
     // Linked dual: still one runOne for the other player (even when delay==0).
     if (viable && linkedDual()) {
@@ -2117,7 +2174,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
                 zone.valid ? &zone : nullptr, &tickBudget
             );
             this->resetCaptureForNextRun(layer);
-            if (r2.died || r2.diedBeforeAction || !clearsThreatOf(r2, zone)) {
+            if (!runResultDelaySafe(r2, zone, model, other)) {
                 viable = false;
                 out.clearsThreat = false;
             }
@@ -2307,17 +2364,8 @@ SimPlan ShadowSimulator::plan(
 
     auto finalizeViable = [&](Cand& c, int releaseAfter) {
         c.clearsThreat = clearsThreatOf(c.raw, zone);
-        // Commit 8: Delay-viable = clearsThreat / zoneCleared / no-zone.
-        // No soft-viable surviveBin>=1 Escape (matches verifyDelay).
-        c.viable = delayViableHonest(
-            c.diedBeforeAction,
-            c.raw.died,
-            c.unknownTrunc,
-            c.toggleUnknown,
-            c.clearsThreat,
-            c.raw.zoneCleared,
-            zone.valid
-        );
+        // Commit 8+9: clearsThreat + ModeSurvival (landing / recoverable / late-crash).
+        c.viable = runResultDelaySafe(c.raw, zone, model, real);
         // Linked dual: other player's shadow must also survive the same plan.
         if (c.viable && linkedDual()) {
             PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
@@ -2327,8 +2375,7 @@ SimPlan ShadowSimulator::plan(
                     zone.valid ? &zone : nullptr, &tickBudget
                 );
                 this->resetCaptureForNextRun(layer);
-                if (r2.died || r2.diedBeforeAction
-                    || !clearsThreatOf(r2, zone)) {
+                if (!runResultDelaySafe(r2, zone, model, other)) {
                     c.viable = false;
                     c.clearsThreat = false;
                     c.dualFailed = true;
@@ -3026,10 +3073,11 @@ SimPlan ShadowSimulator::plan(
 
     // G1 window-cap assert.
     if (chosen > limit) chosen = limit;
-    // Hard gate: never arm a Delay the sim marked as death or unknown.
+    // Hard gate: never arm a non-viable Delay (Commit 9: Landing/Recoverable may
+    // have raw.died but still be Delay-safe via ModeSurvival).
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.raw.died || ch.diedBeforeAction
+        if (!ch.viable || ch.diedBeforeAction
             || ch.unknownTrunc || ch.toggleUnknown) {
             if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
                 sawToggleUnknown = true;
@@ -3046,8 +3094,7 @@ SimPlan ShadowSimulator::plan(
     if (chosen < 0) {
         // Partial budget: if any activation survived, take earliest act ≤ limit.
         if (plan.budgetHit && actMin >= 0 && actMin <= limit
-            && cands[static_cast<size_t>(actMin)].viable
-            && !cands[static_cast<size_t>(actMin)].raw.died) {
+            && cands[static_cast<size_t>(actMin)].viable) {
             chosen = actMin;
             doPass = false;
             applyChosenMeta(chosen);
@@ -3068,9 +3115,7 @@ SimPlan ShadowSimulator::plan(
         int forced = legacyPick
             ? pickLatestRobust(pool, false)
             : pickRobust(pool, false, true);
-        if (forced > 0
-            && cands[static_cast<size_t>(forced)].viable
-            && !cands[static_cast<size_t>(forced)].raw.died) {
+        if (forced > 0 && cands[static_cast<size_t>(forced)].viable) {
             chosen = forced;
             doPass = false;
             applyChosenMeta(chosen);
@@ -3080,10 +3125,10 @@ SimPlan ShadowSimulator::plan(
             ));
         }
     }
-    // Re-assert lethal / unknown gate after idleSafer / budget-partial.
+    // Re-assert viable gate after idleSafer / budget-partial.
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.raw.died || ch.diedBeforeAction
+        if (!ch.viable || ch.diedBeforeAction
             || ch.unknownTrunc || ch.toggleUnknown) {
             if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
                 sawToggleUnknown = true;
@@ -3169,10 +3214,8 @@ SimPlan ShadowSimulator::plan(
             this->resetCaptureForNextRun(layer);
             ++plan.candidatesTried;
 
-            // Hold branch must survive — same rule as Delay-viable.
-            bool const ok = !r.died && !r.diedBeforeAction
-                && (clearsThreatOf(r, zone) || !zone.valid || r.unknownTrunc);
-            if (!ok) continue;
+            // Hold branch — same Delay-viable rule (Commit 9 ModeSurvival).
+            if (!runResultDelaySafe(r, zone, model, real)) continue;
 
             int const sTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
             int const sBin = surviveBinOf(sTicks);
@@ -3287,7 +3330,7 @@ SimPlan ShadowSimulator::plan(
                 int sHi = -1;
                 for (int d = 0; d <= limit; ++d) {
                     auto const& c = cands[static_cast<size_t>(d)];
-                    if (!c.viable || c.raw.died) continue;
+                    if (!c.viable) continue; // Commit 9: Landing may set raw.died
                     if (sLo < 0) sLo = d;
                     sHi = d;
                 }
@@ -3305,7 +3348,7 @@ SimPlan ShadowSimulator::plan(
         plan.viableDelays.reserve(static_cast<size_t>(limit) + 1);
         for (int d = 0; d <= limit; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable || c.raw.died) continue;
+            if (!c.viable) continue;
             plan.viableDelays.push_back(d);
         }
     }
@@ -4072,9 +4115,27 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         delayViableHonest(false, false, false, false, false, false, false),
         "viable-no-zone"
     );
+    // Commit 9: raw death + Landing/LateCrash can be Delay-viable; Lethal cannot.
     expect(
-        !delayViableHonest(false, true, false, false, true, false, true),
-        "died-not-viable"
+        !delayViableHonest(
+            false, true, false, false, true, false, true,
+            ModeSurvival::Class::Lethal
+        ),
+        "lethal-died-not-viable"
+    );
+    expect(
+        delayViableHonest(
+            false, true, false, false, true, true, true,
+            ModeSurvival::Class::Landing
+        ),
+        "landing-died-viable"
+    );
+    expect(
+        delayViableHonest(
+            false, true, false, false, true, true, true,
+            ModeSurvival::Class::LateCrashAfterClear
+        ),
+        "late-crash-viable"
     );
     expect(
         !delayViableHonest(false, false, true, false, true, false, true),

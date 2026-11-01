@@ -272,6 +272,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 8 (Score honesty):** Delay-viable = `clearsThreat` / `zoneCleared` / no-zone — **no** soft-viable `surviveBin>=1` Escape. Continuous equivalent stays no-zone `!died` + `idleSafer`/`ascentUseful` search steer (does not invent viability).
 
+**Commit 9 (ModeSurvival — lethal vs recoverable vs landing):** Ideas reimplemented (no upstream code). `ModeSurvival` classifies cand outcomes: Cube/Ball **Landing** after settle past threat; Wave **Recoverable** after clear (3 flip-probe helpers + smallest clear +1px); Ship/UFO/Spider **Recoverable** after clear; **LateCrashAfterClear** when death is past the threat; **Lethal** inside the zone. Narrow overlap-ignore only for follow/spent hazards already overlapping at click. ParityGate: ascent-shaped death alone ≠ Landing. `finalizeViable` / `verifyDelay` use this so land-then-late-spike is not false-lethal. PlanGold: `mode-survival`.
+
 Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2

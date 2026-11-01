@@ -18,6 +18,13 @@ public:
     // Compact bake-fail dump (auto from BakeMap on 0 windows).
     static bool dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg);
 
+    // Pure helpers (PlanGold + BakeMap validate Err).
+    static int deathTraceUntil(int deathFrame, int lastEventFrame);
+    static std::string formatUnknownTop3(
+        std::vector<ShadowSimulator::UnknownHistBin> const& hist
+    );
+    static bool selfCheck(std::string& report);
+
 private:
     DevDiagDump() = default;
 
@@ -46,13 +53,6 @@ private:
     static std::string buildReplayRemap();
     static std::string buildSelfChecks();
     static std::string buildOverlay();
-
-    // Pure helpers (PlanGold).
-    static int deathTraceUntil(int deathFrame, int lastEventFrame);
-    static std::string formatUnknownTop3(
-        std::vector<ShadowSimulator::UnknownHistBin> const& hist
-    );
-    static bool selfCheck(std::string& report);
 
     struct BakePrepStats {
         int droppedP2 = 0;
