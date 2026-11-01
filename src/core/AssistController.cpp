@@ -472,6 +472,98 @@ bool AssistController::continuousModePlayer(PlayerObject* player) {
     return continuousModeKind(StageConfig::kindOf(player));
 }
 
+bool AssistController::releaseAssistModeKind(GameModeKind kind) {
+    // Same set as BakePathVisualizer purple windows (not ufo/spider).
+    switch (kind) {
+        case GameModeKind::Wave:
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+        case GameModeKind::Robot:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool AssistController::releaseAssistModePlayer(PlayerObject* player) {
+    if (!player) return false;
+    return releaseAssistModeKind(StageConfig::kindOf(player));
+}
+
+bool AssistController::shouldPlanRelease(
+    PlayLayer* /*playLayer*/,
+    PlayerObject* player,
+    bool player1,
+    int effectTick
+) const {
+    if (!player) return false;
+    if (releaseAssistModePlayer(player)) return true;
+
+    // Discrete (cube/ball/ufo/spider): only dash / hold-orb contexts.
+    if (player->m_isDashing) return true;
+    if (this->m_pendingReleaseHold) return true;
+    if (this->m_buffer.requireHold) return true;
+
+    auto& bake = BakeMap::get();
+    if (!bake.loaded() || bake.data().clicks.empty()) return false;
+
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    float const simDt = this->m_simDt > 0.f
+        ? this->m_simDt
+        : static_cast<float>(1.0 / AssistClock::kNominalTps);
+    int const approxFrame = AssistClock::get().remapTick(
+        tps, this->m_attemptTick > 0 ? this->m_attemptTick : effectTick, simDt
+    );
+    auto const kind = StageConfig::kindOf(player);
+    auto const* win = bake.findNear(
+        player->getPositionX(), approxFrame, false, !player1, kind
+    );
+    return win && win->holdAssist;
+}
+
+bool AssistController::releaseGateSelfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok) return;
+        ++fails;
+        if (!report.empty()) report += "; ";
+        report += name;
+    };
+
+    expect(releaseAssistModeKind(GameModeKind::Wave), "rel-wave");
+    expect(releaseAssistModeKind(GameModeKind::Ship), "rel-ship");
+    expect(releaseAssistModeKind(GameModeKind::Swing), "rel-swing");
+    expect(releaseAssistModeKind(GameModeKind::Robot), "rel-robot");
+    expect(!releaseAssistModeKind(GameModeKind::Cube), "rel-not-cube");
+    expect(!releaseAssistModeKind(GameModeKind::Ball), "rel-not-ball");
+    expect(!releaseAssistModeKind(GameModeKind::Ufo), "rel-not-ufo");
+    expect(!releaseAssistModeKind(GameModeKind::Spider), "rel-not-spider");
+    // Viz parity: BakePathVisualizer must match this set.
+    expect(
+        BakePathVisualizer::releaseWindowMode(GameModeKind::Wave)
+            == releaseAssistModeKind(GameModeKind::Wave),
+        "viz-wave"
+    );
+    expect(
+        BakePathVisualizer::releaseWindowMode(GameModeKind::Cube)
+            == releaseAssistModeKind(GameModeKind::Cube),
+        "viz-cube"
+    );
+    expect(
+        BakePathVisualizer::releaseWindowMode(GameModeKind::Robot)
+            == releaseAssistModeKind(GameModeKind::Robot),
+        "viz-robot"
+    );
+
+    if (fails == 0) {
+        report = "releaseGateSelfCheck OK";
+        return true;
+    }
+    report = fmt::format("releaseGateSelfCheck {} fails: {}", fails, report);
+    return false;
+}
+
 int AssistController::resolveEffectTick(int attemptTick, bool midStep, bool continuous) {
     // Single time basis: DevClockContract (Vertrag C). Live and eval share this.
     return DevClockContract::get().effectTick(attemptTick, midStep, continuous);
@@ -3047,6 +3139,23 @@ bool AssistController::planRelease(
     DevClockContract::Stamp const& clockIn
 ) {
     DevClockContract::Stamp clock = clockIn;
+
+    // Same rules as purple bake viz: wave/ship/swing/robot, else dash/holdAssist only.
+    // Cube/ball/ufo/spider normal UP → Pass (no false release ASSIST).
+    if (!this->shouldPlanRelease(playLayer, player, player1, effectTick)) {
+        AssistLog::debug(fmt::format(
+            "release: discrete-skip mode={} dashing={} holdAssistBake=0",
+            StageConfig::kindName(StageConfig::kindOf(player)),
+            player && player->m_isDashing ? 1 : 0
+        ));
+        DevCycleRecorder::get().noteGatePass(
+            AssistReason::PassReleaseDiscrete, "release-discrete-skip"
+        );
+        this->noteVerdict(AssistReason::PassReleaseDiscrete, "release-discrete-skip");
+        this->updateOverlay();
+        return true;
+    }
+
     int const limit = this->activeLimit(player);
     if (limit <= 0) {
         DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");

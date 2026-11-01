@@ -56,6 +56,9 @@ enum class AssistReason {
     PassHardUnknown, // Hard Unknown overlap (dual/follow/pre-toggle) — never Delay
     PassTwEmpty,     // Trigger World expected movers but 0 tracks
 
+    // Cube/ball/ufo/spider UP without dash/holdAssist — no false release assist
+    PassReleaseDiscrete,
+
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown
 };

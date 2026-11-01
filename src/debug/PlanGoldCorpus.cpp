@@ -65,6 +65,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(InLevelSettingsFilter::selfCheck(filterReport), "inlevel-settings-filter");
     std::string attribReport;
     expect(AssistController::effectTickSelfCheck(attribReport), "effect-tick-attrib");
+    std::string releaseGateReport;
+    expect(AssistController::releaseGateSelfCheck(releaseGateReport), "release-gate");
     std::string fireReport;
     expect(AssistController::fireTickSelfCheck(fireReport), "fire-tick-jump");
     std::string queuedHoldReport;

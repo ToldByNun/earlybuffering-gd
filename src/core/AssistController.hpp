@@ -116,6 +116,17 @@ public:
     // Discrete modes: mid-step → attemptTick; between frames → attemptTick+1.
     static bool continuousModePlayer(PlayerObject* player);
     static bool continuousModeKind(GameModeKind kind);
+    // Purple viz / release assist mode gate: wave/ship/swing/robot (not ufo/spider).
+    static bool releaseAssistModeKind(GameModeKind kind);
+    static bool releaseAssistModePlayer(PlayerObject* player);
+    // Full release gate: mode above, or dashing / hold-pending / bake holdAssist.
+    bool shouldPlanRelease(
+        PlayLayer* playLayer,
+        PlayerObject* player,
+        bool player1,
+        int effectTick
+    ) const;
+    static bool releaseGateSelfCheck(std::string& report);
     static int resolveEffectTick(int attemptTick, bool midStep, bool continuous);
     static bool effectTickSelfCheck(std::string& report);
 

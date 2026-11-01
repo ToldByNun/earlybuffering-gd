@@ -298,6 +298,10 @@ Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean �
 
 Continuous modes also Pass release assist during spam **unless** PerfectAssist `MustDelaySearch` (trust + orb/bake opportunity). Release Soft Hold (HUS) mirrors press on trusted PassBudget / PassHopeless. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
+## Release assist gate (= Bake Visualizer purple)
+
+`shouldPlanRelease` matches purple release windows: **wave / ship / swing / robot** always; **cube / ball / ufo / spider** only when dashing, pending/`requireHold`, or a nearby bake release with `holdAssist`. Otherwise Pass `release-discrete-skip` (`PassReleaseDiscrete` / overlay `PASS rel-skip`) — no false UP assists. Self-check: `AssistController::releaseGateSelfCheck` (PlanGold `release-gate`); viz uses `releaseAssistModeKind`.
+
 ## GhostParity / SpotTrust (hard Pass)
 
 `GhostParityProbe` records live pose each physics tick, anchors every 16t into reserved shadow slots 14/15 (`PARITY_SLOT_A/B`, outside the plan capture ring 1..13), and every 16t replays the past ≤48t path via `samplePath`. Drift (ε **LOCKED** 12px via `AssistContracts140::kLockedEps*` / `applyLockedEps` at boot, or death mismatch) → `SimTrust::noteParityDrift` + `SpotTrustMap::markUntrusted(x)` + LagProbe `eb.parity.drift` + `AssistRealMetrics::noteParityProbe`. AssistController: mid-buffer drift clears the buffer (`pass-parity-drift`); `planPress`/`planRelease` hard-Pass on parity drift or spot-untrusted — **never** softened by orb foresight. Overlay: `trust=1` / `trust=0 parity` / `trust=spot`. PlanGold: `spot-trust-map`, `sim-trust`, `ghost-parity-probe`.

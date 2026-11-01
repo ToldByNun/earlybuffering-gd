@@ -1,4 +1,5 @@
 #include "BakePathVisualizer.hpp"
+#include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../debug/PerfTrace.hpp"
@@ -26,15 +27,8 @@ static ccColor4F bakePurpleDim(float a = 0.35f) {
 }
 
 bool BakePathVisualizer::releaseWindowMode(GameModeKind kind) {
-    switch (kind) {
-        case GameModeKind::Wave:
-        case GameModeKind::Ship:
-        case GameModeKind::Swing:
-        case GameModeKind::Robot:
-            return true;
-        default:
-            return false;
-    }
+    // Single source of truth: AssistController release gate (WU3).
+    return AssistController::releaseAssistModeKind(kind);
 }
 
 BakePathVisualizer& BakePathVisualizer::get() {
