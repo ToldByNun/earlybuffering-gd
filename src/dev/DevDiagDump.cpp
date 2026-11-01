@@ -5,6 +5,7 @@
 #include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
 #include "../core/ConfigBundleKeys.hpp"
+#include "../core/SectionObjectWalk.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/TriggerWorldBaker.hpp"
 #include "../core/TriggerWorldStore.hpp"
@@ -346,18 +347,12 @@ int countHazardOverlaps(
     };
     if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
         for (unsigned i = 0; i < children->count(); ++i) {
-            consider(typeinfo_cast<GameObject*>(children->objectAtIndex(i)));
+            // Same live-pointer filter as sections — children can be stale too.
+            consider(SectionObjectWalk::asGameObject(children->objectAtIndex(i)));
         }
     }
-    for (auto* mid : layer->m_sections) {
-        if (!mid) continue;
-        for (auto* inner : *mid) {
-            if (!inner) continue;
-            for (auto* raw : *inner) {
-                consider(typeinfo_cast<GameObject*>(raw));
-            }
-        }
-    }
+    // Never raw typeinfo_cast on m_sections — poison slots AV (bakefail diag).
+    SectionObjectWalk::forEachInSections(layer, consider);
     return n;
 }
 
@@ -1082,18 +1077,27 @@ bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMs
         return writeFile(outDir, name, body, errMsg);
     };
 
-    if (!put("00_INDEX.txt", buildIndex(outDir, true))) return false;
-    if (!put("02_clock_assist.txt", buildClockAssist())) return false;
-    if (!put("02b_ghost_hitbox.txt", buildGhostHitbox())) return false;
-    if (!put("03_replay.txt", buildReplay())) return false;
-    if (!put("03b_replay_remap.txt", buildReplayRemap())) return false;
-    if (!put("04_bakemap.txt", buildBakeMap())) return false;
-    if (!put("05_trigger_world.txt", buildTriggerWorld())) return false;
-    if (!put("06_bake_probe.txt", buildBakeProbe(64))) return false;
-    if (!put("06b_bake_frames.txt", buildBakeFrameTrace())) return false;
-    if (!put("06c_unknown_hist.txt", buildUnknownHistogram())) return false;
-    if (!put("08_overlay.txt", buildOverlay())) return false;
+    // Soft per-file: bakefail must still surface an alert even if one builder
+    // returns empty — never abort the whole dump after the first miss.
+    int wrote = 0;
+    auto softPut = [&](char const* name, std::string const& body) {
+        if (put(name, body)) ++wrote;
+    };
+    softPut("00_INDEX.txt", buildIndex(outDir, true));
+    softPut("02_clock_assist.txt", buildClockAssist());
+    // Hazard overlap uses SectionObjectWalk (poison-safe m_sections).
+    softPut("02b_ghost_hitbox.txt", buildGhostHitbox());
+    softPut("03_replay.txt", buildReplay());
+    softPut("03b_replay_remap.txt", buildReplayRemap());
+    softPut("04_bakemap.txt", buildBakeMap());
+    softPut("05_trigger_world.txt", buildTriggerWorld());
+    softPut("06_bake_probe.txt", buildBakeProbe(64));
+    softPut("06b_bake_frames.txt", buildBakeFrameTrace());
+    softPut("06c_unknown_hist.txt", buildUnknownHistogram());
+    softPut("08_overlay.txt", buildOverlay());
 
-    AssistLog::info(fmt::format("DIAG: bake-fail dump → {}", outDir.string()));
-    return true;
+    AssistLog::info(fmt::format(
+        "DIAG: bake-fail dump → {} (files={})", outDir.string(), wrote
+    ));
+    return wrote > 0;
 }

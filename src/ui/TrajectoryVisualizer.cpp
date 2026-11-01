@@ -1,8 +1,10 @@
 #include "TrajectoryVisualizer.hpp"
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
-#include "../core/BakeMap.hpp"
+#include "../core/AssistHorizon.hpp"
+#include "../core/LevelProfile.hpp"
 #include "../core/ShadowSimulator.hpp"
+#include "../core/SimTrust.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/PerfTrace.hpp"
@@ -16,14 +18,14 @@ ccColor4F col(float r, float g, float b, float a = 0.95f) {
     return { r, g, b, a };
 }
 
-static std::vector<ReplayEvent> makeClickEvents(int delay, bool tapRelease) {
-    if (delay < 0) delay = 0;
-    std::vector<ReplayEvent> e;
-    e.push_back(ReplayEvent{ delay, 1, false, true });
-    if (tapRelease) {
-        e.push_back(ReplayEvent{ delay + 2, 1, false, false });
-    }
-    return e;
+// Hold Jump from frame 0 for the whole sample (never release).
+static std::vector<ReplayEvent> makeHoldEvents() {
+    return { ReplayEvent{ 0, 1, false, true } };
+}
+
+// Coast / not-hold: force Jump up from frame 0.
+static std::vector<ReplayEvent> makeCoastEvents() {
+    return { ReplayEvent{ 0, 1, false, false } };
 }
 
 // Drop near-duplicate points so DrawNode work stays cheap.
@@ -33,8 +35,9 @@ static std::vector<CCPoint> decimate(std::vector<CCPoint> const& pts, float minD
     out.reserve(pts.size() / 2 + 2);
     out.push_back(pts.front());
     for (size_t i = 1; i + 1 < pts.size(); ++i) {
-        static float dx = pts[i].x - out.back().x;
-        static float dy = pts[i].y - out.back().y;
+        // Commit 15: must NOT be static — recompute each point.
+        float const dx = pts[i].x - out.back().x;
+        float const dy = pts[i].y - out.back().y;
         if (dx * dx + dy * dy >= minDistSq) out.push_back(pts[i]);
     }
     out.push_back(pts.back());
@@ -63,19 +66,18 @@ void TrajectoryVisualizer::toggle() {
 
 std::string TrajectoryVisualizer::statusHint() const {
     if (!m_enabled) return {};
-    if (!m_hasWindow) return "traj G/R";
-    if (m_fromBake) {
-        return fmt::format("traj G..R [{:.0f}..{:.0f}]", m_lastWindowEarly, m_lastWindowLate);
+    if (m_trustLong) {
+        return fmt::format("traj H/C {}t", m_lastDrawCap);
     }
-    return fmt::format("traj G..R 0..{:.0f}t", m_lastWindowLate);
+    return fmt::format("traj H/C {}t (short)", m_lastDrawCap);
 }
 
 void TrajectoryVisualizer::attach(PlayLayer* layer) {
     ensureNode(layer);
     m_ticksSinceRebuild = 999;
     m_lastRebuildX = -1e9f;
-    m_lastDelayEarly = -1;
-    m_lastDelayLate = -1;
+    m_lastDrawCap = -1;
+    m_trustLong = false;
 }
 
 void TrajectoryVisualizer::detach(bool layerDying) {
@@ -131,13 +133,11 @@ void TrajectoryVisualizer::drawPath(
     if (stride < 1) stride = 1;
     for (size_t i = stride; i < pts.size(); i += static_cast<size_t>(stride)) {
         size_t prev = i - static_cast<size_t>(stride);
-        // Fade slightly toward the tip so the near path reads stronger
         float t = static_cast<float>(i) / static_cast<float>(pts.size());
         ccColor4F c = color;
         c.a = color.a * (1.f - 0.45f * t);
         node->drawSegment(pts[prev], pts[i], width, c);
     }
-    // Always connect last segment
     if (pts.size() > 2) {
         size_t lastAligned = ((pts.size() - 1) / stride) * stride;
         if (lastAligned + 1 < pts.size()) {
@@ -155,7 +155,6 @@ void TrajectoryVisualizer::drawBand(
     size_t n = std::min(early.size(), late.size());
     if (n < 2) return;
 
-    // Soft cyan band = click window thickness (keep sparse — DrawNode polygons are costly)
     ccColor4F fill = col(0.35f, 0.85f, 1.f, 0.10f);
     int step = std::max(2, static_cast<int>(n) / 16);
     for (size_t i = 0; i + static_cast<size_t>(step) < n; i += static_cast<size_t>(step)) {
@@ -177,8 +176,9 @@ void TrajectoryVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     }
 
     ++m_ticksSinceRebuild;
-    // ~15 Hz rebuild (2 sims only) — snappier than full-horizon redraws
-    if (m_ticksSinceRebuild < 16) return;
+    // Longer trust draws: rebuild a bit less often (~12 Hz).
+    int const period = m_trustLong && m_lastDrawCap > 96 ? 20 : 16;
+    if (m_ticksSinceRebuild < period) return;
     m_ticksSinceRebuild = 0;
     rebuild(layer);
 }
@@ -198,102 +198,58 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     float dt = AssistController::get().simDt();
     if (dt <= 0.f) dt = static_cast<float>(1.0 / AssistClock::kNominalTps);
 
-    auto model = ShadowSimulator::modelFor(player, StageConfig::ticksAll());
     auto params = StageConfig::paramsFor(player);
     int liveLimit = params.overwrite ? params.ticks : StageConfig::ticksAll();
-
-    auto& bake = BakeMap::get();
-    double bakeTps = bake.loaded() && bake.data().tps > 0.0
-        ? bake.data().tps
-        : AssistClock::kNominalTps;
-    int approxFrame = AssistClock::get().remapTick(
-        bakeTps, AssistController::get().attemptTick(), dt
-    );
-
-    auto const* win = bake.loaded()
-        ? bake.findNear(
-            player->getPositionX(), approxFrame, true, false,
-            StageConfig::kindOf(player)
-          )
-        : nullptr;
-
-    int delayEarly = 0;
-    int delayLate = std::max(0, liveLimit);
-    m_fromBake = false;
-
-    if (win) {
-        m_fromBake = true;
-        delayEarly = std::max(0, win->earliest - approxFrame);
-        delayLate = std::max(delayEarly, win->latest - approxFrame);
-        m_lastWindowEarly = static_cast<float>(win->earliest);
-        m_lastWindowLate = static_cast<float>(win->latest);
-        m_hasWindow = true;
-    }
-    else {
-        m_lastWindowEarly = 0.f;
-        m_lastWindowLate = static_cast<float>(delayLate);
-        m_hasWindow = delayLate > 0;
-    }
-
+    auto const kind = StageConfig::kindOf(player);
     float const x = player->getPositionX();
-    // Skip resim when nearly still and the window hasn't changed
-    if (std::fabs(x - m_lastRebuildX) < 2.f
-        && delayEarly == m_lastDelayEarly
-        && delayLate == m_lastDelayLate) {
+    bool const trustOk = SimTrust::get().okAt(x);
+    float const capMul = StageConfig::autoTune()
+        ? LevelProfile::get().capMul(kind)
+        : 1.f;
+    auto const caps = AssistHorizon::resolve(
+        kind,
+        trustOk,
+        liveLimit,
+        capMul,
+        params.cap,
+        StageConfig::lookAheadCap()
+    );
+    // Commit 15: draw = trust cap (scoreHorizon when trusted, short otherwise).
+    int const lookAhead = caps.trajDraw;
+    m_trustLong = trustOk;
+    m_hasWindow = lookAhead > 0;
+
+    // Skip resim when nearly still and draw cap unchanged.
+    if (std::fabs(x - m_lastRebuildX) < 2.f && lookAhead == m_lastDrawCap) {
         return;
     }
     m_lastRebuildX = x;
-    m_lastDelayEarly = delayEarly;
-    m_lastDelayLate = delayLate;
-
-    // Short look-ahead: click + a bit after — not a full plan horizon
-    int lookAhead = std::clamp(delayLate + 28, 32, 56);
+    m_lastDrawCap = lookAhead;
 
     int slot = ShadowSimulator::get().captureSnapshot(player);
     if (slot < 0) return;
 
     auto& sim = ShadowSimulator::get();
-    bool const tap = model.tapRelease;
 
-    // Only two sims: earliest vs latest in the window
-    auto earlyRaw = sim.samplePath(layer, slot, makeClickEvents(delayEarly, tap), dt, lookAhead);
-    auto lateRaw = (delayLate == delayEarly)
-        ? earlyRaw
-        : sim.samplePath(layer, slot, makeClickEvents(delayLate, tap), dt, lookAhead);
+    // Two lines: HOLD vs NOT-HOLD (coast). One may die earlier — that is fine.
+    auto holdRaw = sim.samplePath(layer, slot, makeHoldEvents(), dt, lookAhead);
+    auto coastRaw = sim.samplePath(layer, slot, makeCoastEvents(), dt, lookAhead);
 
-    auto early = decimate(earlyRaw.points, 3.f * 3.f);
-    auto late = decimate(lateRaw.points, 3.f * 3.f);
+    auto hold = decimate(holdRaw.points, 3.f * 3.f);
+    auto coast = decimate(coastRaw.points, 3.f * 3.f);
 
     m_node->clear();
 
-    if (delayLate != delayEarly) {
-        drawBand(m_node, early, late);
-    }
+    // Soft band between hold and coast where both share samples.
+    drawBand(m_node, hold, coast);
 
-    // Green = click early · Red = click late
-    drawPath(m_node, early, col(0.15f, 1.f, 0.4f, 0.95f), 1.35f, 1);
-    if (delayLate != delayEarly) {
-        drawPath(m_node, late, col(1.f, 0.28f, 0.22f, 0.75f), 1.0f, 1);
-    }
+    // Green = hold · Red = coast (not hold)
+    drawPath(m_node, hold, col(0.15f, 1.f, 0.4f, 0.95f), 1.35f, 1);
+    drawPath(m_node, coast, col(1.f, 0.28f, 0.22f, 0.75f), 1.0f, 1);
 
-    // Player anchor
     auto p0 = player->getPosition();
     m_node->drawDot(p0, 3.f, col(1.f, 1.f, 1.f, 1.f));
 
-    // Click moment from raw samples (frame-accurate, not decimated guess)
-    auto clickAt = [&](std::vector<CCPoint> const& raw, int delay, ccColor4F c) {
-        if (raw.empty()) return;
-        size_t idx = static_cast<size_t>(std::clamp(delay, 0, static_cast<int>(raw.size()) - 1));
-        auto pt = raw[idx];
-        m_node->drawDot(pt, 3.5f, c);
-        m_node->drawSegment({ pt.x, pt.y - 8.f }, { pt.x, pt.y + 8.f }, 0.9f, c);
-    };
-    clickAt(earlyRaw.points, delayEarly, col(0.15f, 1.f, 0.4f, 1.f));
-    if (delayLate != delayEarly) {
-        clickAt(lateRaw.points, delayLate, col(1.f, 0.28f, 0.22f, 1.f));
-    }
-
-    // Death = small X (only when that path dies)
     auto markDeath = [&](ShadowSimulator::PathSample const& s, ccColor4F c) {
         if (!s.died || s.points.empty()) return;
         auto pt = s.points.back();
@@ -301,6 +257,6 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         m_node->drawSegment({ pt.x - r, pt.y - r }, { pt.x + r, pt.y + r }, 1.1f, c);
         m_node->drawSegment({ pt.x - r, pt.y + r }, { pt.x + r, pt.y - r }, 1.1f, c);
     };
-    if (earlyRaw.died) markDeath(earlyRaw, col(0.15f, 1.f, 0.4f, 0.7f));
-    if (lateRaw.died && delayLate != delayEarly) markDeath(lateRaw, col(1.f, 0.28f, 0.22f, 0.7f));
+    if (holdRaw.died) markDeath(holdRaw, col(0.15f, 1.f, 0.4f, 0.7f));
+    if (coastRaw.died) markDeath(coastRaw, col(1.f, 0.28f, 0.22f, 0.7f));
 }

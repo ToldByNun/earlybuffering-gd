@@ -6,7 +6,8 @@
 #include <vector>
 
 
-// Lean debug overlay: two predicted paths (early vs late click) + fill band.
+// Debug overlay: HOLD vs NOT-HOLD (coast) ghost paths.
+// Draw length = AssistHorizon trajDraw (trust cap when SimTrust OK).
 class TrajectoryVisualizer {
 public:
     static TrajectoryVisualizer& get();
@@ -45,12 +46,9 @@ private:
     bool m_enabled = false;
     int m_ticksSinceRebuild = 0;
     float m_lastRebuildX = -1e9f;
-    int m_lastDelayEarly = -1;
-    int m_lastDelayLate = -1;
-    float m_lastWindowEarly = 0.f;
-    float m_lastWindowLate = 0.f;
+    int m_lastDrawCap = -1;
+    bool m_trustLong = false;
     bool m_hasWindow = false;
-    bool m_fromBake = false;
 };
 
 #endif // EARLYBUFFER_UI_TRAJECTORYVISUALIZER_HPP

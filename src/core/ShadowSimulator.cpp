@@ -1,7 +1,9 @@
 #include "ShadowSimulator.hpp"
 #include "AssistClock.hpp"
+#include "AssistHorizon.hpp"
 #include "BakeMap.hpp"
 #include "MissAssistContracts.hpp"
+#include "SimTrust.hpp"
 #include "TravelForesight.hpp"
 #include "OpportunityProbe.hpp"
 #include "SimCollisionPolicy.hpp"
@@ -1412,40 +1414,39 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
     if (!p) return m;
     auto const params = StageConfig::paramsFor(p);
     m.slack = std::max(0, params.slack);
-    int const x = limit > 0 ? limit : 1;
-    if (capMul < 0.25f) capMul = 0.25f;
-    if (capMul > 3.f) capMul = 3.f;
 
-    auto horizon = [&](int automatic) {
-        int base = params.cap > 0 ? params.cap : automatic;
-        return std::max(8, static_cast<int>(std::lround(base * capMul)));
-    };
+    // Commit 15: planCap from AssistHorizon — long only when SimTrust OK.
+    bool const trustOk = SimTrust::get().okAt(p->getPositionX());
+    auto const kind = StageConfig::kindOf(p);
+    auto const caps = AssistHorizon::resolve(
+        kind,
+        trustOk,
+        limit,
+        capMul,
+        params.cap,
+        StageConfig::lookAheadCap()
+    );
+    m.cap = caps.planCap;
 
     if (p->m_isDart) {
         m.continuous = true;
-        m.cap = horizon(std::max(32, x + 16));
     }
     else if (p->m_isShip || p->m_isSwing) {
         m.continuous = true;
-        m.cap = horizon(std::max(64, x * 3));
     }
     else if (p->m_isBird) {
         m.continuous = true;
         m.tapRelease = true;
-        m.cap = horizon(std::max(40, x + 20));
     }
     else if (p->m_isSpider) {
         m.continuous = true;
         m.tapRelease = true;
-        m.cap = horizon(std::max(36, x + 16));
     }
     else if (p->m_isRobot) {
         m.tapRelease = false;
-        m.cap = horizon(150);
     }
     else {
         m.tapRelease = true;
-        m.cap = horizon(150);
     }
     return m;
 }
@@ -2372,10 +2373,43 @@ SimPlan ShadowSimulator::plan(
         return c;
     };
 
+    bool const trustLong = real && SimTrust::get().okAt(real->getPositionX());
+    auto const horizonCaps = AssistHorizon::resolve(
+        real ? StageConfig::kindOf(real) : GameModeKind::Cube,
+        trustLong,
+        limit,
+        options.capMul,
+        0,
+        StageConfig::lookAheadCap()
+    );
+    int const minSurviveLong = AssistHorizon::minSurviveTicksForSuccess(
+        horizonCaps.scoreHorizon, trustLong
+    );
+
     auto finalizeViable = [&](Cand& c, int releaseAfter) {
         c.clearsThreat = clearsThreatOf(c.raw, zone);
         // Commit 8+9: clearsThreat + ModeSurvival (landing / recoverable / late-crash).
         c.viable = runResultDelaySafe(c.raw, zone, model, real);
+        // Commit 15: trust-long — alive path must run far enough to see continue
+        // (platform after jump). Budget-truncated short runs are not failed here.
+        if (c.viable && minSurviveLong > 0) {
+            bool const truncated = !c.raw.died && !c.raw.unknownTrunc
+                && c.raw.ticksRan < model.cap
+                && c.raw.ticksRan < minSurviveLong;
+            if (!truncated) {
+                auto const cls = ModeSurvival::classify(
+                    survivalInputFrom(c.raw, zone, model, real)
+                );
+                if (!AssistHorizon::longPathSuccessOk(
+                        c.surviveTicks,
+                        c.raw.died,
+                        ModeSurvival::countsAsSafeForDelay(cls),
+                        minSurviveLong
+                    )) {
+                    c.viable = false;
+                }
+            }
+        }
         // Linked dual: other player's shadow must also survive the same plan.
         if (c.viable && linkedDual()) {
             PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
@@ -3612,7 +3646,20 @@ SimPlan ShadowSimulator::planSequence(
     }
 
     Model model = modelFor(real, limit, options.capMul);
-    int horizon = options.smartHorizon > 0 ? options.smartHorizon : std::max(model.cap, 180);
+    // Commit 15: scoreHorizon from AssistHorizon (long only when trusted).
+    int horizon = options.smartHorizon;
+    if (horizon <= 0) {
+        bool const trustOk = SimTrust::get().okAt(real->getPositionX());
+        horizon = AssistHorizon::resolve(
+            StageConfig::kindOf(real),
+            trustOk,
+            limit,
+            options.capMul,
+            0,
+            StageConfig::lookAheadCap()
+        ).scoreHorizon;
+        horizon = std::max(horizon, model.cap);
+    }
     horizon = std::clamp(horizon, 32, 320);
     int comboBudget = std::clamp(options.smartCombos, 8, 256);
 

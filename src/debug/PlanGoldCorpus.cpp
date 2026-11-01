@@ -17,6 +17,9 @@
 #include "../core/PrefixSim.hpp"
 #include "../core/PerfectAssistPolicy.hpp"
 #include "../core/OrbAlign.hpp"
+#include "../core/AssistHorizon.hpp"
+#include "../core/RealCorpusFixtures.hpp"
+#include "../core/SectionObjectWalk.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
@@ -136,6 +139,12 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(PerfectAssistPolicy::selfCheck(perfectAssistReport), "perfect-assist-policy");
     std::string orbAlignReport;
     expect(OrbAlign::selfCheck(orbAlignReport), "orb-align");
+    std::string assistHorizonReport;
+    expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
+    std::string realCorpusReport;
+    expect(RealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures");
+    std::string sectionWalkReport;
+    expect(SectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk");
     std::string diagDumpReport;
     expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;
