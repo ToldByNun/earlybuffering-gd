@@ -326,16 +326,22 @@ public:
     );
 
     // Pure wave anti-phase gates for plan() / selfCheck (no layer).
+    // Press only — release Delay = hold longer (often the save near spikes).
     // foresightOrbPad: TravelForesight orb/pad ahead → never Pass (search/Delay).
     static bool shouldWaveHazardProximityPass(
-        bool isWave, bool nearHazard, bool noOrbTarget, bool foresightOrbPad
+        bool isWave,
+        bool nearHazard,
+        bool noOrbTarget,
+        bool foresightOrbPad,
+        bool pressDown = true
     );
     static bool shouldWaveFutileDelayPass(
         bool isWave,
         bool orbIntent,
         int bestSurviveBin,
         float bestEndXGain,
-        bool foresightOrbPad
+        bool foresightOrbPad,
+        bool pressDown = true
     );
 
     // Continuous idleSafer / ascentUseful (pure; PlanGold / regressionSelfCheck).

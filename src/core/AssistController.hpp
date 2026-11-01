@@ -3,6 +3,7 @@
 
 #include "BakeVerifier.hpp"
 #include "DecisionLog.hpp"
+#include "OrbAlign.hpp"
 #include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevClockContract.hpp"
@@ -141,9 +142,10 @@ public:
     );
     static bool queuedHoldSelfCheck(std::string& report);
 
-    // Soft Hold-Until-Safe (press): arm when PassBudget / budget+foresight /
-    // unknown+foresight — never past limit. Pure helpers for PlanGold.
-    static bool shouldArmHoldUntilSafe(SimPlan const& plan);
+    // Soft Hold-Until-Safe (press or release): PassBudget / hopeless / foresight —
+    // never past limit. Commit 13: only when trustOk (sonst Pass).
+    // Release: swallow UP, keep Jump held, inject release when Delay confirms.
+    static bool shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk = true);
     static int holdUntilSafeEtaTicks(SimPlan const& plan, int limit);
     // Full plan() only every N ticks, on ΔX, foresight edge, first call, or near deadline.
     static constexpr int kHusReplanEveryTicks = 3;
@@ -159,9 +161,9 @@ public:
     );
     static bool holdUntilSafeSelfCheck(std::string& report);
 
-    // Recheck slide: never earlier than oldFire (non-orb). Later up to
-    // deadline/absMax (miss-assist may need more than +2). Returns -1 = reject.
-    static constexpr int kRecheckMaxSlide = 2; // kept for docs / callers; late uncapped
+    // Recheck slide (Commit 13): never earlier; late ≤+1 (OrbAlign::kRecheckMaxSlide).
+    // requireOrb kept for API; slide cap is shared. Returns -1 = reject.
+    static constexpr int kRecheckMaxSlide = OrbAlign::kRecheckMaxSlide;
     static int acceptRecheckSlide(
         int oldFire,
         int attemptTick,
@@ -222,14 +224,15 @@ private:
     void pollOutcome(PlayLayer* playLayer);
     void logPlan(SimPlan const& plan, char const* kind);
     void noteVerdict(AssistReason reason, char const* where);
-    // Arm soft hold buffer (swallows press). Returns false for onHandleButton.
+    // Arm soft hold buffer (swallows press or release). Returns false for onHandleButton.
     bool armHoldUntilSafe(
         PlayLayer* playLayer,
         PlayerObject* player,
         bool player1,
         int effectTick,
         int limit,
-        SimPlan const& plan
+        SimPlan const& plan,
+        bool down = true
     );
     // Cadenced replan while holdUntilSafe buffer is armed (not every tick).
     void tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player);

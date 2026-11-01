@@ -1558,8 +1558,14 @@ bool ShadowSimulator::spatialHazardProximity(
 }
 
 bool ShadowSimulator::shouldWaveHazardProximityPass(
-    bool isWave, bool nearHazard, bool noOrbTarget, bool foresightOrbPad
+    bool isWave,
+    bool nearHazard,
+    bool noOrbTarget,
+    bool foresightOrbPad,
+    bool pressDown
 ) {
+    // Release assist = delay the UP (keep holding). Never early-Pass that near hazards.
+    if (!pressDown) return false;
     if (!isWave) return false;
     if (!nearHazard) return false;
     if (!noOrbTarget) return false;
@@ -1573,8 +1579,10 @@ bool ShadowSimulator::shouldWaveFutileDelayPass(
     bool orbIntent,
     int bestSurviveBin,
     float bestEndXGain,
-    bool foresightOrbPad
+    bool foresightOrbPad,
+    bool pressDown
 ) {
+    if (!pressDown) return false;
     if (!isWave) return false;
     if (orbIntent) return false;
     if (foresightOrbPad) return false;
@@ -2404,7 +2412,8 @@ SimPlan ShadowSimulator::plan(
         cands[0] = c0;
         candReady[0] = 1;
 
-        // Continuous: idle (baseline) safer than d0 action → miss-assist may Delay.
+        // Continuous: idle (baseline coast) safer than d0 action → miss-assist may Delay.
+        // For release, baseline = keep holding, d0 = UP now — same compare (enable always).
         plan.idleSafer = classifyIdleSafer(
             model.continuous,
             true,
@@ -2522,8 +2531,9 @@ SimPlan ShadowSimulator::plan(
             ));
         }
 
-        // Wave zigzag: hazards in proximity ahead + no orb → Pass even if d0
-        // built a distant ThreatZone. Delaying phase-shifts into spikes.
+        // Wave zigzag (press only): hazards in proximity ahead + no orb → Pass
+        // even if d0 built a distant ThreatZone. Delaying phase-shifts into spikes.
+        // Release Delay = hold longer — never Pass that path near hazards.
         // AFTER foresight: foresightOrbPad blocks this Pass (miss-assist orb).
         bool const isWave = real && real->m_isDart;
         float const proxX = std::clamp(
@@ -2534,7 +2544,7 @@ SimPlan ShadowSimulator::plan(
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
         // idleSafer or d0 death: never early-Pass when immediate action dies in sim; search delays.
         if (!c0.raw.died && !plan.idleSafer && shouldWaveHazardProximityPass(
-                isWave, nearHazard, noOrbTarget, plan.foresightOrbPad
+                isWave, nearHazard, noOrbTarget, plan.foresightOrbPad, down
             )) {
             plan.action = PlanAction::Pass;
             plan.reason = AssistReason::PassWaveProximity;
@@ -2849,9 +2859,10 @@ SimPlan ShadowSimulator::plan(
         auto const& c0ref = cands[0];
         for (int d = 1; d <= limit; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
+            // Enable for press and release (hold-longer can beat immediate UP).
             if (classifyAscentUseful(
                     model.continuous,
-                    down,
+                    true,
                     c0ref.viable,
                     c0ref.surviveBin,
                     c0ref.endX,
@@ -2883,7 +2894,7 @@ SimPlan ShadowSimulator::plan(
             }
         }
         if (!anySavesFromD0Death && !plan.idleSafer && shouldWaveFutileDelayPass(
-                isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad
+                isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad, down
             )) {
             plan.action = PlanAction::Pass;
             plan.reason = AssistReason::PassWaveFutile;
@@ -4139,43 +4150,51 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
 
     // Wave proximity / futile-delay gates (+ foresight orb/pad must not Pass)
     expect(
-        shouldWaveHazardProximityPass(true, true, true, false),
+        shouldWaveHazardProximityPass(true, true, true, false, true),
         "wave-prox-pass"
     );
     expect(
-        !shouldWaveHazardProximityPass(true, true, false, false),
+        !shouldWaveHazardProximityPass(true, true, true, false, false),
+        "wave-prox-release-never"
+    );
+    expect(
+        !shouldWaveHazardProximityPass(true, true, false, false, true),
         "wave-prox-orb-target-blocks"
     );
     expect(
-        !shouldWaveHazardProximityPass(true, true, true, true),
+        !shouldWaveHazardProximityPass(true, true, true, true, true),
         "wave-prox-foresight-blocks"
     );
     expect(
-        !shouldWaveHazardProximityPass(false, true, true, false),
+        !shouldWaveHazardProximityPass(false, true, true, false, true),
         "wave-prox-not-cube"
     );
     expect(
-        !shouldWaveHazardProximityPass(true, false, true, false),
+        !shouldWaveHazardProximityPass(true, false, true, false, true),
         "wave-prox-no-hazard"
     );
     expect(
-        shouldWaveFutileDelayPass(true, false, 0, 3.f, false),
+        shouldWaveFutileDelayPass(true, false, 0, 3.f, false, true),
         "wave-futile-pass"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, true, 0, 3.f, false),
+        !shouldWaveFutileDelayPass(true, false, 0, 3.f, false, false),
+        "wave-futile-release-never"
+    );
+    expect(
+        !shouldWaveFutileDelayPass(true, true, 0, 3.f, false, true),
         "wave-futile-orb-intent"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, false, 0, 3.f, true),
+        !shouldWaveFutileDelayPass(true, false, 0, 3.f, true, true),
         "wave-futile-foresight"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, false, 1, 3.f, false),
+        !shouldWaveFutileDelayPass(true, false, 1, 3.f, false, true),
         "wave-futile-bin"
     );
     expect(
-        !shouldWaveFutileDelayPass(true, false, 0, 12.f, false),
+        !shouldWaveFutileDelayPass(true, false, 0, 12.f, false, true),
         "wave-futile-gain"
     );
 

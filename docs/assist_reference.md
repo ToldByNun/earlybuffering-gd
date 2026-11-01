@@ -261,8 +261,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 2. modelFor; capture state
 3. d0 press baseline -> ThreatZone clusterGapX=50
 4. **no-threat Pass (G2)**: baseline did not die, zone invalid, no orb/pad hint → run `OpportunityProbe` (foresight already forces search; else cheap `d=mid` / `d=limit` sims). Pass only if probe empty; else full cand search. Budget starve with no probes → `PassBudget`.
-4b. **wave-hazard-proximity Pass**: Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). **`foresightOrbPad` blocks this Pass** (keep searching for the orb). Runs after foresight/orb checks.
-4c. After cand eval: **wave-futile-delay Pass** if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further. Skipped when `idleSafer`.
+4b. **wave-hazard-proximity Pass** (**press only**): Wave + hazard AABB within ahead proximity (~70–140px) + no orb/pad → Pass even if a distant ThreatZone exists (avoids phase-shift “assists” in zigzag spam). **Never on release** (delayed UP = hold longer, often the save). **`foresightOrbPad` blocks this Pass** (keep searching for the orb). Runs after foresight/orb checks.
+4c. After cand eval: **wave-futile-delay Pass** (**press only**) if Wave, no orbIntent, no foresight orb/pad, all surviveBin ≤0 and best endX gain &lt; 8 → Pass. Foresight orb/pad → search further. Skipped when `idleSafer`. Release plans never take this Pass.
 4d. **Continuous idleSafer / ascentUseful**: Ship/Wave/Swing/Ufo — if baseline idle survives better than d0 press (`idleSafer`) and some delay &gt;0 improves survival (`ascentUseful`), force Delay (New outcome / Legacy latest) instead of Pass/hopeless. No forever block if nothing in-window is viable; controller may Soft Hold when both flags set. Wave proximity/futile early-Pass skipped when `idleSafer`.
 5. eval delays under tick + sim-budget-us
 6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter
@@ -280,6 +280,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 12 (Real metrics primary + simEstimate secondary):** Ship gates stay on `AssistRealMetrics` (DAF / AssistCov / TrustRate / Parity / Wilson G5–G7b). Counterfactual `Prev` / `Caused` / `Net` / `HarmRate_sim` live in `AssistSimEstimate` — tagged `simEstimate`, **G10 diagnostic only** (never ship Pass/Fail). DevReport/eval notes d0 vs planned Delay; overlay `daf=… cov=… trust=…` then `simEst net=+P/-C harm=…%`. Freeze-world **forced on** while DevCycle records. PlanGold: `assist-sim-estimate`.
 
+**Commit 13 (Recheck / HUS / Orb align / Robust):** Recheck late slide ≤**+1** (never earlier; orb/toggle same cap — dMin wait is a separate path). Robust **±1** verify before Delay arm (fail → Pass/HUS). Orb align: clamp fire into `[dMin,dMax]`, wait until inside ring; wrong-orb (activation outside window) → Pass. **HUS only when `SimTrust.okAt`** — untrusted → Pass; trust lost mid-HUS aborts hold. PlanGold: `orb-align`.
+
 Lexico (New): orbUseful > surviveBin > surviveTicks > endX−λ·delay. Legacy non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
 ## Click intent (spam) v2
@@ -290,7 +292,7 @@ Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean �
 
 **Do not Pass** (allow assist) when spatial orb/pad ahead **or** a BakeMap window is nearby. Portal/teleport corridor spam looks rhythmic → Pass unless orb/pad. Gate Pass sets overlay `PASS spam` / `VERDICT pass-spam`.
 
-Continuous modes also Pass release assist during spam. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
+Continuous modes also Pass release assist during spam **unless** PerfectAssist `MustDelaySearch` (trust + orb/bake opportunity). Release Soft Hold (HUS) mirrors press on trusted PassBudget / PassHopeless. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
 ## GhostParity / SpotTrust (hard Pass)
 
@@ -354,12 +356,12 @@ Helpers: `AssistController::resolveFireTick` / `shouldFireBuffered` / `fireTickS
 
 ## Recheck slide safety
 
-Before inject, live recheck may slide `fireTick`. Rules (`acceptRecheckSlide`):
+Before inject, live recheck may slide `fireTick`. Rules (`OrbAlign::acceptRecheckSlide` / Commit 13):
 
 - Plan must be Delay, `delay > 0`, `!budgetHit`, and (`threatCleared` or orb).
-- Cap late slides to `oldFire + 2` (non-orb); orb may wait for `dMin`.
+- Cap late slides to `oldFire + 1` (orb/toggle and non-orb). Orb **dMin wait** is a separate path (not a slide).
 - Never past `absMax - robustK` (collapsed margin falls back to `absMax`).
-- Clamp to `pressTick + limit`. **Non-orb: reject early slides** (must not undo the planned wait).
+- Clamp to `pressTick + limit`. **Reject early slides** (must not undo the planned wait).
 - Log `recheck: oldFire→newFire` via AssistLog + PerfTrace.
 - CPS / mode-change force-fire: `allowRecheck=false` (inject immediately).
 
@@ -457,7 +459,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 Prefer (New) | `assist-pick` = **New**: **Delay-viable = clearsThreat** (or no-zone / zoneCleared — not soft `surviveBin≥1`). d0 viable → Pass; else **exit prediction** ranks **all viable** delays by horizon outcome (`!died && !unknown` / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
-| Soft Hold-Until-Safe | `PassBudget`, or `budgetHit`/`unknown` with foresight/orb opportunity, or continuous `idleSafer`+`ascentUseful` → arm buffer (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2) with reduced caps — never hang: budget exhaust parks at deadline. Delay confirm updates `fireTick`; opportunity clear + safe → inject now; deadline → fire. Overlay `HUS` + `HOLD~`. |
+| Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |
 | No lethal assist | Learning never pulls earlier than the plan; recheck slides ≤+2 later (never earlier); only surviving Delays arm; verify-fail → Pass (vanilla). |
 | Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
 | Bake / Hybrid | Hybrid uses bake only after verify ok; **never soft-trust `budgetHit`**. Verify-fail / past-latest / missing → Live under the **shared press budget** (reserve + remainder; hitch caps after reject). Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |

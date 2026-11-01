@@ -16,6 +16,7 @@
 #include "../core/ModeSurvival.hpp"
 #include "../core/PrefixSim.hpp"
 #include "../core/PerfectAssistPolicy.hpp"
+#include "../core/OrbAlign.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
@@ -133,6 +134,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(PrefixSim::selfCheck(prefixSimReport), "prefix-sim");
     std::string perfectAssistReport;
     expect(PerfectAssistPolicy::selfCheck(perfectAssistReport), "perfect-assist-policy");
+    std::string orbAlignReport;
+    expect(OrbAlign::selfCheck(orbAlignReport), "orb-align");
     std::string diagDumpReport;
     expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;

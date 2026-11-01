@@ -15,6 +15,7 @@
 #include "GhostParityProbe.hpp"
 #include "SimTrust.hpp"
 #include "PerfectAssistPolicy.hpp"
+#include "OrbAlign.hpp"
 #include "SpotTrustMap.hpp"
 #include "LevelProfile.hpp"
 #include "ShadowSimulator.hpp"
@@ -714,7 +715,9 @@ bool AssistController::queuedHoldSelfCheck(std::string& report) {
     return false;
 }
 
-bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
+bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk) {
+    // Commit 13: HUS only when trusted — sonst Pass.
+    if (!trustOk) return false;
     if (plan.action == PlanAction::Delay) return false;
     if (plan.reason == AssistReason::PassBudget) return true;
     bool const opp = plan.foresightOrbPad || plan.usedOrbWindow;
@@ -722,9 +725,7 @@ bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan) {
     if (plan.unknown && opp) return true;
     // Continuous: idle safer + ascent helped in eval but pick starved → soft hold.
     if (plan.continuous && plan.idleSafer && plan.ascentUseful) return true;
-    // Hopeless after a real search: Soft Hold + replan (same-crash / no-clear
-    // must not leave Live as silent vanilla — that felt "assist off" unless Dev
-    // Record was running and budget→PassBudget→Hold was more common).
+    // Hopeless after a real search: Soft Hold + replan (trusted only).
     if (plan.reason == AssistReason::PassHopeless) return true;
     (void)opp;
     return false;
@@ -760,30 +761,31 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     SimPlan budgetPass;
     budgetPass.action = PlanAction::Pass;
     budgetPass.reason = AssistReason::PassBudget;
-    expect(shouldArmHoldUntilSafe(budgetPass), "arm-budget");
+    expect(shouldArmHoldUntilSafe(budgetPass, true), "arm-budget");
+    expect(!shouldArmHoldUntilSafe(budgetPass, false), "no-hus-untrust");
 
     SimPlan delayOk;
     delayOk.action = PlanAction::Delay;
     delayOk.delay = 4;
     delayOk.reason = AssistReason::DelayThreat;
-    expect(!shouldArmHoldUntilSafe(delayOk), "no-arm-delay");
+    expect(!shouldArmHoldUntilSafe(delayOk, true), "no-arm-delay");
 
     SimPlan noThreat;
     noThreat.action = PlanAction::Pass;
     noThreat.reason = AssistReason::PassNoThreat;
-    expect(!shouldArmHoldUntilSafe(noThreat), "no-arm-no-threat");
+    expect(!shouldArmHoldUntilSafe(noThreat, true), "no-arm-no-threat");
 
     SimPlan foresightBudget;
     foresightBudget.action = PlanAction::Pass;
     foresightBudget.reason = AssistReason::PassHopeless;
     foresightBudget.budgetHit = true;
     foresightBudget.foresightOrbPad = true;
-    expect(shouldArmHoldUntilSafe(foresightBudget), "arm-foresight-budget");
+    expect(shouldArmHoldUntilSafe(foresightBudget, true), "arm-foresight-budget");
 
     SimPlan hopelessBare;
     hopelessBare.action = PlanAction::Pass;
     hopelessBare.reason = AssistReason::PassHopeless;
-    expect(shouldArmHoldUntilSafe(hopelessBare), "arm-hopeless");
+    expect(shouldArmHoldUntilSafe(hopelessBare, true), "arm-hopeless");
 
     SimPlan unknownOrb;
     unknownOrb.action = PlanAction::Pass;
@@ -804,13 +806,13 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
 
     SimPlan idleAscent;
     idleAscent.action = PlanAction::Pass;
-    idleAscent.reason = AssistReason::PassHopeless;
+    idleAscent.reason = AssistReason::PassD0Safe;
     idleAscent.continuous = true;
     idleAscent.idleSafer = true;
     idleAscent.ascentUseful = true;
-    expect(shouldArmHoldUntilSafe(idleAscent), "arm-idle-ascent");
+    expect(shouldArmHoldUntilSafe(idleAscent, true), "arm-idle-ascent");
     idleAscent.continuous = false;
-    expect(!shouldArmHoldUntilSafe(idleAscent), "no-arm-idle-cube");
+    expect(!shouldArmHoldUntilSafe(idleAscent, true), "no-arm-idle-cube");
 
     SimPlan etaPlan;
     etaPlan.dMin = 6;
@@ -883,15 +885,18 @@ bool AssistController::armHoldUntilSafe(
     bool player1,
     int effectTick,
     int limit,
-    SimPlan const& plan
+    SimPlan const& plan,
+    bool down
 ) {
     (void)playLayer;
     if (!player || limit <= 0) return true; // fall through vanilla
+    // Commit 13: HUS nur Trust.
+    if (!SimTrust::get().okAt(player->getPositionX())) return true;
 
     int const eta = holdUntilSafeEtaTicks(plan, limit);
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
-    this->m_buffer.down = true;
+    this->m_buffer.down = down;
     this->m_buffer.player1 = player1;
     this->m_buffer.pressTick = effectTick;
     this->m_buffer.limit = limit;
@@ -936,14 +941,15 @@ bool AssistController::armHoldUntilSafe(
     this->noteVerdict(AssistReason::HoldPending, "hus-arm");
     if (eta > 0) AssistRealMetrics::get().noteArm();
     AssistLog::debug(fmt::format(
-        "HOLD-UNTIL-SAFE arm eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
+        "HOLD-UNTIL-SAFE arm {} eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
+        down ? "press" : "release",
         eta, limit,
         plan.foresightOrbPad ? 1 : 0,
         plan.usedOrbWindow ? 1 : 0,
         plan.budgetHit ? 1 : 0,
         plan.planId
     ));
-    this->recordDecision(playLayer, player, true, plan, effectTick, eta, limit);
+    this->recordDecision(playLayer, player, down, plan, effectTick, eta, limit);
     this->updateOverlay();
     return false; // swallow
 }
@@ -953,6 +959,20 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     if (this->m_buffer.state != BufferState::Buffered) return;
     if (!this->m_buffer.holdUntilSafe) return;
     if (this->m_simDt <= 0.f) return;
+
+    // Commit 13: trust lost mid-HUS → Pass (drop soft hold, no inject).
+    if (!SimTrust::get().okAt(player->getPositionX())) {
+        AssistLog::debug("HOLD-UNTIL-SAFE abort (trust lost) → Pass");
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::PassUntrust,
+            "hus-trust-lost",
+            this->m_attemptTick
+        );
+        this->noteVerdict(AssistReason::PassUntrust, "hus-trust-lost");
+        this->clearBuffer();
+        return;
+    }
 
     int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
     int const remaining = deadline - this->m_attemptTick;
@@ -1043,8 +1063,9 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     opts.attemptStartTick = this->m_attemptTick;
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
 
+    bool const husDown = this->m_buffer.down;
     auto re = ShadowSimulator::get().plan(
-        playLayer, player, true, remLimit, this->m_simDt, this->m_simDt, opts
+        playLayer, player, husDown, remLimit, this->m_simDt, this->m_simDt, opts
     );
 
     this->m_buffer.husLastReplanTick = this->m_attemptTick;
@@ -1175,36 +1196,10 @@ int AssistController::acceptRecheckSlide(
     bool requireOrb,
     bool planOk
 ) {
-    if (!planOk) return -1;
-    if (proposedFire <= attemptTick) return -1;
-
-    int const k = std::clamp(robustK, 0, 3);
-    int safeMax = absMax;
-    if (k > 0) {
-        safeMax = absMax - k;
-        // Collapsed margin → keep absMax so we can still fire inside the window.
-        if (safeMax <= attemptTick) {
-            safeMax = absMax;
-        }
-    }
-    proposedFire = std::min(proposedFire, safeMax);
-    proposedFire = std::min(proposedFire, deadline);
-    if (proposedFire <= attemptTick) return -1;
-
-    // Never slide earlier than the armed fire (undo wait → early death).
-    // Never slide more than +k later without a fresh plan (late death).
-    // Orb may wait further for dMin (caller).
-    if (!requireOrb && proposedFire < oldFire) {
-        return -1;
-    }
-    if (!requireOrb && proposedFire > oldFire + kRecheckMaxSlide) {
-        proposedFire = oldFire + kRecheckMaxSlide;
-    }
-    if (proposedFire <= attemptTick) return -1;
-
-    // No-op / already due — caller should inject, not re-arm.
-    if (proposedFire == oldFire) return -1;
-    return proposedFire;
+    (void)requireOrb; // Commit 13: same ≤+1 / never-earlier for orb + non-orb
+    return OrbAlign::acceptRecheckSlide(
+        oldFire, attemptTick, proposedFire, absMax, robustK, deadline, planOk
+    );
 }
 
 bool AssistController::recheckSlideSelfCheck(std::string& report) {
@@ -1217,24 +1212,19 @@ bool AssistController::recheckSlideSelfCheck(std::string& report) {
         report += name;
     };
 
-    // planOk false → reject
     expect(acceptRecheckSlide(10, 8, 12, 20, 1, 20, false, false) < 0, "reject-bad-plan");
-    // Late slide capped at +2 (avoid late death from huge replan swings)
-    expect(acceptRecheckSlide(10, 8, 20, 30, 0, 30, false, true) == 12, "cap-slide-plus2");
-    // Early slide (earlier than oldFire) rejected
+    // Commit 13: late slide capped at +1
+    expect(acceptRecheckSlide(10, 8, 20, 30, 0, 30, false, true) == 11, "cap-slide-plus1");
     expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, false, true) < 0, "early-slide-reject");
-    // robustK: absMax 20, k=2 → safeMax 18, then +2 cap from oldFire=10 → 12
-    expect(acceptRecheckSlide(10, 8, 19, 20, 2, 30, false, true) == 12, "robust-then-cap");
-    // past attempt → reject
+    // robustK: absMax 20, k=2 → safeMax 18, then +1 cap from oldFire=10 → 11
+    expect(acceptRecheckSlide(10, 8, 19, 20, 2, 30, false, true) == 11, "robust-then-cap");
     expect(acceptRecheckSlide(10, 12, 12, 20, 0, 20, false, true) < 0, "not-future");
-    // orb: allow large late slide (dMin wait)
-    expect(acceptRecheckSlide(10, 8, 18, 20, 0, 20, true, true) == 18, "orb-allow-late");
-    expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, true, true) == 11, "orb-early-for-dmin");
-    // same fire → reject (inject instead)
+    // Orb/toggle: same ≤+1 / never earlier (dMin wait is a separate path)
+    expect(acceptRecheckSlide(10, 8, 18, 20, 0, 20, true, true) == 11, "orb-slide-plus1");
+    expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, true, true) < 0, "orb-no-earlier");
     expect(acceptRecheckSlide(12, 8, 12, 20, 0, 20, false, true) < 0, "noop-reject");
-    // deadline clamp
     expect(acceptRecheckSlide(10, 8, 14, 30, 0, 8, false, true) < 0, "deadline-collapse");
-    expect(acceptRecheckSlide(10, 8, 14, 30, 0, 13, false, true) == 12, "deadline-cap-slide");
+    expect(acceptRecheckSlide(10, 8, 14, 30, 0, 13, false, true) == 11, "deadline-cap-slide");
 
     if (fails == 0) {
         report = "recheckSlideSelfCheck OK";
@@ -2786,7 +2776,8 @@ bool AssistController::planPress(
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
     if (plan.action != PlanAction::Delay) {
-        if (shouldArmHoldUntilSafe(plan)) {
+        bool const trustOk = SimTrust::get().okAt(x);
+        if (shouldArmHoldUntilSafe(plan, trustOk)) {
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, plan
             );
@@ -2895,6 +2886,73 @@ bool AssistController::planPress(
         armVerifyOk = vr.ok;
     }
 
+    // Commit 13: wrong-orb reject — activation outside intended window.
+    if (plan.requireOrb
+        && OrbAlign::wrongOrbReject(delay, plan.dMin, plan.dMax)) {
+        AssistLog::debug(fmt::format(
+            "ASSIST wrong-orb reject delay={} win=[{},{}] → Pass",
+            delay, plan.dMin, plan.dMax
+        ));
+        SimPlan pass = plan;
+        pass.action = PlanAction::Pass;
+        pass.delay = 0;
+        pass.reason = AssistReason::PassUnknown;
+        bool const trustOk = SimTrust::get().okAt(x);
+        if (shouldArmHoldUntilSafe(pass, trustOk)) {
+            return this->armHoldUntilSafe(
+                playLayer, player, player1, effectTick, limit, pass
+            );
+        }
+        DevCycleRecorder::get().notePassThrough(pass.reason, "press-wrong-orb");
+        this->noteVerdict(pass.reason, "press-wrong-orb");
+        this->recordDecision(playLayer, player, true, pass, effectTick, 0, limit);
+        this->updateOverlay();
+        return true;
+    }
+
+    // Commit 13: Robust ±1 vor Arm — center + existing neighbors must clear.
+    if (delay > 0 && this->m_simDt > 0.f) {
+        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
+        PlanOptions vopts = opts;
+        vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
+        vopts.budgetUs = StageConfig::husReplanBudgetUs();
+        vopts.maxBranches = 0;
+        vopts.smartDepth = 1;
+        auto verifyOne = [&](int d) -> bool {
+            if (d < 1 || d > limit) return true;
+            return ShadowSimulator::get().verifyDelay(
+                playLayer, player, true, d, limit, this->m_simDt, fd, vopts
+            ).ok;
+        };
+        bool const centerOk = verifyOne(delay);
+        bool const hasLo = delay - 1 >= 1;
+        bool const hasHi = delay + 1 <= limit;
+        bool const loOk = !hasLo || verifyOne(delay - 1);
+        bool const hiOk = !hasHi || verifyOne(delay + 1);
+        if (!OrbAlign::robustNeighborsOk(centerOk, hasLo, loOk, hasHi, hiOk)) {
+            AssistLog::debug(fmt::format(
+                "ASSIST robust±1 fail delay={} c={} lo={} hi={} → Pass/HUS",
+                delay, centerOk ? 1 : 0, loOk ? 1 : 0, hiOk ? 1 : 0
+            ));
+            armVerifyOk = false;
+            SimPlan pass = plan;
+            pass.action = PlanAction::Pass;
+            pass.delay = 0;
+            pass.reason = AssistReason::PassHopeless;
+            bool const trustOk = SimTrust::get().okAt(x);
+            if (shouldArmHoldUntilSafe(pass, trustOk)) {
+                return this->armHoldUntilSafe(
+                    playLayer, player, player1, effectTick, limit, pass
+                );
+            }
+            DevCycleRecorder::get().notePassThrough(pass.reason, "press-robust-fail");
+            this->noteVerdict(pass.reason, "press-robust-fail");
+            this->recordDecision(playLayer, player, true, pass, effectTick, 0, limit);
+            this->updateOverlay();
+            return true;
+        }
+    }
+
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
     this->m_buffer.down = true;
@@ -2915,22 +2973,20 @@ bool AssistController::planPress(
     this->m_buffer.releaseAfter = plan.releaseAfter;
     this->m_buffer.releaseEarliest = plan.releaseEarliest;
     this->m_buffer.releaseLatest = plan.releaseLatest;
-    // Orb activation band only constrains fire when we are waiting FOR the orb.
-    // Incidental actMin/actMax from other cands must not collapse a threat Delay
-    // (that made +N feedback lie while the jump fired almost immediately).
+    // Commit 13 orb align: early press waits inside ring window.
     if (plan.requireOrb) {
         this->m_buffer.dMin = plan.dMin;
         this->m_buffer.dMax = plan.dMax;
-        if (plan.dMin >= 0) {
-            this->m_buffer.fireTick = std::max(
-                this->m_buffer.fireTick, effectTick + plan.dMin
-            );
-        }
-        if (plan.dMax >= 0) {
-            this->m_buffer.fireTick = std::min(
-                this->m_buffer.fireTick, effectTick + plan.dMax
-            );
-        }
+        this->m_buffer.fireTick = OrbAlign::clampFireIntoOrbWindow(
+            this->m_buffer.fireTick,
+            effectTick,
+            plan.dMin,
+            plan.dMax,
+            limit
+        );
+        this->m_buffer.fireTick = OrbAlign::waitUntilInsideRing(
+            this->m_buffer.fireTick, effectTick, plan.dMin
+        );
     }
     else {
         this->m_buffer.dMin = -1;
@@ -3070,11 +3126,54 @@ bool AssistController::planRelease(
         AssistLog::debug("UNTRUST soft (release orb foresight — allow plan)");
         this->m_untrustPassHint = false;
     }
+    else {
+        this->m_untrustPassHint = false;
+    }
 
-    // Continuous spam: do not delay releases either (would steal hold state).
+    // Commit 11/13: same PerfectAssist as press — trust+opportunity must Delay-search
+    // (wave hold-longer saves must not lose to spam / PassNoThreat).
+    bool mustDelaySearch = false;
+    {
+        PerfectAssistPolicy::TrustInput trustIn;
+        trustIn.parityDrift = SimTrust::get().parityDrift();
+        trustIn.spotUntrusted = SpotTrustMap::get().isUntrusted(x);
+        trustIn.divergenceUntrusted =
+            DivergenceTracker::get().simUntrusted() && !nearOrb;
+        if (StageConfig::triggerBake()) {
+            auto& tw = TriggerWorldStore::get();
+            auto& baker = TriggerWorldBaker::get();
+            trustIn.twEmptyWhenExpected = tw.loaded()
+                && !tw.hasTracks()
+                && !baker.running()
+                && !baker.lastCollectIncomplete()
+                && (baker.lastBakedEffects() > 0 || baker.lastBakedStartTimed() > 0);
+        }
+        AssistReason namedPass = AssistReason::None;
+        if (PerfectAssistPolicy::forcePassReason(trustIn, namedPass)
+            && namedPass == AssistReason::PassTwEmpty) {
+            AssistLog::debug("PERFECT pass-tw-empty (release)");
+            this->m_untrustPassHint = true;
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassTwEmpty, "release-tw-empty");
+            this->noteVerdict(AssistReason::PassTwEmpty, "release-tw-empty");
+            this->updateOverlay();
+            return true;
+        }
+        PerfectAssistPolicy::OpportunityInput oppIn;
+        oppIn.foresightOrbPad = nearOrb;
+        oppIn.bakePreferBand = nearBake;
+        oppIn.orbWindowFound = nearOrb;
+        auto const decision = PerfectAssistPolicy::classify(trustIn, oppIn);
+        mustDelaySearch = (decision == PerfectAssistPolicy::Decision::MustDelaySearch);
+        if (mustDelaySearch) {
+            AssistLog::debug("PERFECT must-delay-search release (trust+opportunity)");
+        }
+    }
+
+    // Continuous spam: do not delay releases (would steal hold rhythm) unless
+    // PerfectAssist demands a Delay-search (orb/bake opportunity).
     bool const continuous =
         player->m_isDart || player->m_isShip || player->m_isSwing;
-    if (continuous) {
+    if (continuous && !mustDelaySearch) {
         if (ClickIntentGuard::get().shouldPassThrough(
                 slot, effectTick, kind, nearOrb, nearBake
             )) {
@@ -3089,7 +3188,8 @@ bool AssistController::planRelease(
         }
     }
 
-    if (StageConfig::autoTune() && profile.loaded() && !nearOrb) {
+    if (!mustDelaySearch
+        && StageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= LevelProfile::TRUST_PASS_MIN_N
                 && spot->trust < LevelProfile::TRUST_PASS_THRESHOLD
@@ -3136,6 +3236,7 @@ bool AssistController::planRelease(
     opts.maxBranches = 4;
     opts.attemptStartTick = effectTick;
     opts.legacyPick = StageConfig::assistPickLegacy();
+    opts.mustDelaySearch = mustDelaySearch;
     bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind
     );
@@ -3157,7 +3258,27 @@ bool AssistController::planRelease(
         plan, effectTick, limit, clock, playLayer, player
     );
 
+    // Belt: never arm Delay when sim marked unknown / toggle-target uncertainty.
+    if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
+        AssistLog::debug(fmt::format(
+            "release: refuse Delay (toggle/unknown) → Pass id={}",
+            plan.planId
+        ));
+        plan.action = PlanAction::Pass;
+        plan.delay = 0;
+        plan.reason = AssistReason::PassToggleUnknown;
+        plan.unknown = true;
+        plan.toggleUnknown = true;
+    }
+
     if (plan.action != PlanAction::Delay) {
+        bool const trustOk = SimTrust::get().okAt(x);
+        // Soft Hold on release: keep Jump held, replan until Delay UP or deadline.
+        if (shouldArmHoldUntilSafe(plan, trustOk)) {
+            return this->armHoldUntilSafe(
+                playLayer, player, player1, effectTick, limit, plan, false
+            );
+        }
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
