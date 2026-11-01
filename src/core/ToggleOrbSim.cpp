@@ -1,4 +1,5 @@
 #include "ToggleOrbSim.hpp"
+#include "OrbStackResolver.hpp"
 #include "TriggerClassify.hpp"
 #include "../debug/AssistLog.hpp"
 
@@ -143,6 +144,12 @@ bool ToggleOrbSim::onToggleHit(
         if (typeinfo_cast<PlayerObject*>(obj)) continue;
         if (obj == hit) continue;
         if (!obj->belongsToGroup(groupId)) continue;
+
+        // Commit 7 (a): never flip jump/dash rings (or ε-near rings) — stack keeps boost.
+        if (OrbStackResolver::shouldSkipToggleFlip(obj, hit)) {
+            OrbStackResolver::get().noteFlipSkipped();
+            continue;
+        }
 
         // Already modeled this run (multi-effect same group) — keep last wantActive.
         if (this->isModeled(obj->m_uniqueID)) continue;

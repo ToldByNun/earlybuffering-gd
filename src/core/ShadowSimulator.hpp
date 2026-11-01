@@ -208,6 +208,8 @@ public:
     bool isApplyingRing() const { return m_applyingRing; }
     bool isOrbScanning() const { return m_orbScanning; }
     void noteOrbOverlap();
+    // Absolute sim tick during runOne / bake (for OrbStack evidence).
+    int simAbsTick() const { return this->m_simAbsTick; }
 
     static void copyPlayerState(PlayerObject* dst, PlayerObject* src);
 

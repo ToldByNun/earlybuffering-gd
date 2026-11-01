@@ -91,6 +91,8 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 **Commit 6 (Bake portals + tg2 fixture):** Soft portals stay `Include` for bakeOffline (Parity Gate: `AssistContracts140::applyLockedEps` before validate — Soft Include must not retune ε). Frozen corpus `Tg2BakeFixture` (`id_80045794` / `tg2.gdr2` / f185 solid#42181): validate Fail adds `residual=TW-empty|TW-tracks-present` when that death matches (mover pose, not Soft portal Unknown) + `parityGate=eps-locked`. PlanGold: `tg2-bake-fixture`.
 
+**Commit 7 (Orb stack dual-fire):** Vanilla clicks **both** when a toggle orb (1594) is stacked with a normal orb — sim must too. `OrbStackResolver`: touch log (debug), toggle group flip **skips** jump/dash rings (ε 12px), and `fireStackedPartners` always fires the other partner (toggle↔jump) when one is hit. Same ring never double-boosts (claim/`touchedRings`). PlanGold: `orb-stack-resolver`.
+
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Softcap **100 000** tracks / 32 768 keys/track (AssistLog + overlay `tw softcap`); hard OOM valve 250 000 / 65 536 with loud truncate — **no silent 2048 drop**.
 
 **Commit 4 (TW empty):** Init can race `objectLayer` → WaitObjects then Collect; empty on-disk cache is discarded as miss; `kickIfStaleEmpty` rebuilds when children appear; non-spawn StaticMove/Rotate/Scale/Toggle bake at **t=0** (touch still skipped); Bake Map **`waitUntilReady`** (≤45s) before validate — loud Fail if effects existed but 0 tracks. Incomplete empty is **not** written to `triggers/*.json`.
@@ -487,6 +489,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Budget starve mid-search + foresight orb | `HUS` → cadenced replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass / never hang; LagProbe `eb.hus.replan` |
 | Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
 | Toggle-orb corridor (solids flip on 1594) | Delay only after modeled flip; else `PASS toggle-unk` / HUS | Same | `ToggleOrbSim` restores on capture teardown |
+| Toggle+Jump orb stack (co-located) | Both fire (toggle flip + jump boost) | Same | `OrbStackResolver::fireStackedPartners` — vanilla clicks both |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |

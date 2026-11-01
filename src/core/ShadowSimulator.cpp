@@ -7,6 +7,7 @@
 #include "SimCollisionPolicy.hpp"
 #include "SimSessionGuard.hpp"
 #include "ToggleOrbSim.hpp"
+#include "OrbStackResolver.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -700,6 +701,8 @@ void ShadowSimulator::captureToggleUnknownTargets(PlayLayer* layer) {
             if (typeinfo_cast<PlayerObject*>(obj)) continue;
             if (obj == effect) continue;
             if (!obj->belongsToGroup(groupId)) continue;
+            // Commit 7: jump/dash rings keep orb path — not Hard toggle-Unknown.
+            if (OrbStackResolver::shouldSkipToggleFlip(obj, effect)) continue;
             this->m_toggleTargetIds.insert(obj->m_uniqueID);
         }
     }
@@ -898,6 +901,7 @@ void ShadowSimulator::beginCapture(PlayLayer* layer) {
     this->m_toggleUnknownHit = false;
     this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
     ToggleOrbSim::get().restore();
+    OrbStackResolver::get().begin();
     this->captureTriggerTransforms(layer);
     this->captureDynamicFollows(layer);
     this->captureToggleUnknownTargets(layer);

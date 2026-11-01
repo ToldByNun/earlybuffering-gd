@@ -11,6 +11,7 @@
 #include "../core/SimTrust.hpp"
 #include "../core/SpotTrustMap.hpp"
 #include "../core/Tg2BakeFixture.hpp"
+#include "../core/OrbStackResolver.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
 #include "../core/OpportunityProbe.hpp"
@@ -118,6 +119,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(SimCollisionPolicy::selfCheck(collisionPolicyReport), "sim-collision-policy");
     std::string tg2FixtureReport;
     expect(Tg2BakeFixture::selfCheck(tg2FixtureReport), "tg2-bake-fixture");
+    std::string orbStackReport;
+    expect(OrbStackResolver::selfCheck(orbStackReport), "orb-stack-resolver");
     std::string diagDumpReport;
     expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;

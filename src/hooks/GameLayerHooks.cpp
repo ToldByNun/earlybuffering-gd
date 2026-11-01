@@ -1,5 +1,6 @@
 #include "../core/AssistController.hpp"
 #include "../core/BakeScheduler.hpp"
+#include "../core/OrbStackResolver.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimCollisionPolicy.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -68,6 +69,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     // Requires Jump held (applyRingJump) — wait-ticks must not claim early.
     // Orb-window scan records overlap only (no boost / claim).
     // Toggle orb 1594: reversible group flip via ToggleOrbSim (no triggerObject).
+    // Commit 7: Toggle+normal stack → BOTH fire (vanilla clicks both partners).
     void playerTouchedRing(PlayerObject* player, RingObject* ring) {
         if (simulating()) {
             auto& sim = ShadowSimulator::get();
@@ -78,10 +80,29 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
             if (ring && TriggerClassify::isToggleOrbId(ring->m_objectID)) {
                 if (!sim.isShadow(player)) return;
                 auto* playLayer = typeinfo_cast<PlayLayer*>(this);
+                OrbStackResolver::get().noteTouch(
+                    player, ring, false, sim.simAbsTick()
+                );
                 ToggleOrbSim::get().onToggleHit(playLayer, player, ring);
+                // Stacked normal orb must also fire.
+                OrbStackResolver::get().fireStackedPartners(
+                    playLayer, player, ring
+                );
                 return;
             }
+            bool const beforeClaim = ring
+                && (ring->m_claimTouch || ring->m_activated);
             sim.applyRingJump(player, ring);
+            bool const afterClaim = ring
+                && (ring->m_claimTouch || ring->m_activated);
+            OrbStackResolver::get().noteTouch(
+                player, ring, !beforeClaim && afterClaim, sim.simAbsTick()
+            );
+            // Stacked toggle must also fire (whichever partner collision hit first).
+            auto* playLayer = typeinfo_cast<PlayLayer*>(this);
+            OrbStackResolver::get().fireStackedPartners(
+                playLayer, player, ring
+            );
             return;
         }
         // Live: null-reject only — never invent a call. Half-restored / poisoned
@@ -99,6 +120,10 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                 && object->m_isTouchTriggered) {
                 auto* playLayer = typeinfo_cast<PlayLayer*>(this);
                 ToggleOrbSim::get().onToggleHit(playLayer, player, object);
+                // Stacked normal orb must also fire (same rule as 1594).
+                OrbStackResolver::get().fireStackedPartners(
+                    playLayer, player, object
+                );
             }
             return;
         }
