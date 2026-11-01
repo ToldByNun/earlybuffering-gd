@@ -425,9 +425,14 @@ int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
         if (match) {
             int const prevE = match->earliest;
             int const prevL = match->latest;
+            bool const prevHold = match->holdAssist;
             match->earliest = std::min(match->earliest, neu.earliest);
             match->latest = std::max(match->latest, neu.latest);
-            if (match->earliest != prevE || match->latest != prevL) ++touched;
+            match->holdAssist = match->holdAssist || neu.holdAssist;
+            if (match->earliest != prevE || match->latest != prevL
+                || match->holdAssist != prevHold) {
+                ++touched;
+            }
             continue;
         }
         if (m_data.clicks.size() >= kMaxMapClicks) continue;
@@ -643,7 +648,23 @@ Result<int> BakeMap::bakeReplay(
         AssistLog::debug("BAKE: parity gate OK (eps locked; Soft portals Include)");
     }
 
-    // ── Phase 1: full 1:1 macro run (must survive) ─────────────────────
+    // Start pose (StartPos / normal). Snapshot X tells Hybrid parts where bake begins.
+    bool const startPosAttempt = layer->m_isTestMode;
+    float startX = 0.f;
+    if (auto* snap = ShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
+        startX = snap->getPositionX();
+    }
+    AssistLog::info(fmt::format(
+        "BAKE: startPose startPos={} startX={:.1f} attemptTick={} twTracks={}",
+        startPosAttempt ? 1 : 0,
+        startX,
+        attemptTick,
+        TriggerWorldStore::get().trackCount()
+    ));
+
+    // ── Validate 1:1 from start snapshot. Death ≠ hard fail: keep the
+    // surviving prefix (Hybrid often only needs a StartPos part, not the
+    // whole macro). Only frame-0 (no prefix) still errors.
     ShadowSimulator::BakeRunResult validate;
     {
         std::lock_guard lock(m_simMutex);
@@ -666,8 +687,9 @@ Result<int> BakeMap::bakeReplay(
     }
     if (m_progress.cancel.load()) return Err("Bake cancelled");
 
+    int partialCut = -1; // frames >= cut are dropped; -1 = full macro OK
     if (validate.died) {
-        // P2 drop stats for err string (same policy as prepareBakeTimeline).
+        // P2 drop stats for err / log (same policy as prepareBakeTimeline).
         int droppedP2 = 0;
         {
             int p1 = 0;
@@ -689,47 +711,96 @@ Result<int> BakeMap::bakeReplay(
         AssistLog::info(fmt::format(
             "BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
             "objId={} objType={} gameId={} twTracks={} droppedP2={} "
-            "unknownTop3=[{}] soft={} hard={} residual={} "
-            "(fix 1:1 before windows)",
+            "unknownTop3=[{}] soft={} hard={} residual={} startPos={} startX={:.1f}",
             validate.deathFrame, validate.deathX, validate.deathY,
             validate.deathObjId, validate.deathObjType, validate.deathObjGameId,
             twTracks, droppedP2, top3,
             validate.unknownSoftHits, validate.unknownHardHits,
-            residual.empty() ? "-" : residual
+            residual.empty() ? "-" : residual,
+            startPosAttempt ? 1 : 0,
+            startX
         ));
         {
             std::filesystem::path diagDir;
             std::string diagErr;
             if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
                 AssistLog::info(fmt::format(
-                    "BAKE: validate fail — wrote diag {}", diagDir.string()
+                    "BAKE: validate death — wrote diag {}", diagDir.string()
                 ));
             }
         }
-        // Commit 6: tg2 f185 solid#42181 → residual TW-empty/pose (not portal Unk).
-        std::string err = fmt::format(
-            "Macro dies in sim at frame {} (x={:.0f}) deathObjId={} "
-            "twTracks={} unknownTop3=[{}] droppedP2={}",
-            validate.deathFrame, validate.deathX, validate.deathObjId,
-            twTracks, top3, droppedP2
-        );
-        if (!residual.empty()) {
-            err += " — ";
-            err += residual;
+
+        int const cut = validate.deathFrame;
+        if (cut <= 0) {
+            // No surviving prefix — cannot expand any click from this pose.
+            std::string err = fmt::format(
+                "Macro dies in sim at frame {} (x={:.0f}) deathObjId={} "
+                "twTracks={} unknownTop3=[{}] droppedP2={} startPos={} startX={:.0f}",
+                validate.deathFrame, validate.deathX, validate.deathObjId,
+                twTracks, top3, droppedP2,
+                startPosAttempt ? 1 : 0, startX
+            );
+            if (!residual.empty()) {
+                err += " — ";
+                err += residual;
+            }
+            if (startPosAttempt) {
+                err += " — StartPos bake: reset on the StartPos, pause, bake; "
+                       "macro frames must be from the same StartPos attempt; "
+                       "TW empty often kills frame 0 (wait Trigger World).";
+            }
+            else {
+                err += " — ghost path ≠ bot. Reset→pause→Bake.";
+            }
+            err += " Diag: /diag/bakefail_* parityGate=eps-locked";
+            return Err(err);
         }
-        err += " — ghost path ≠ bot. Reset→pause→Bake. Diag: /diag/bakefail_* "
-               "parityGate=eps-locked";
-        return Err(err);
+
+        // Partial prefix: keep clicks strictly before death; Hybrid parts OK.
+        partialCut = cut;
+        int const before = static_cast<int>(jobs.size());
+        jobs.erase(
+            std::remove_if(
+                jobs.begin(),
+                jobs.end(),
+                [cut](JumpJob const& j) { return j.frame >= cut; }
+            ),
+            jobs.end()
+        );
+        for (auto& j : jobs) {
+            if (j.until > cut) j.until = cut;
+        }
+        AssistLog::info(fmt::format(
+            "BAKE: partial prefix — died @{} keeping {}/{} clicks before cut "
+            "(Hybrid parts; not whole-macro)",
+            cut, jobs.size(), before
+        ));
+        if (jobs.empty()) {
+            return Err(fmt::format(
+                "Macro dies at frame {} before any bake click "
+                "(x={:.0f}, startPos={}, startX={:.0f}, twTracks={}). "
+                "Diag: /diag/bakefail_*",
+                cut, validate.deathX, startPosAttempt ? 1 : 0, startX, twTracks
+            ));
+        }
     }
 
     m_progress.done = validateWeight;
     m_progress.setStatus(fmt::format(
         "expand windows · {} clicks · radius {}", jobs.size(), bakeRadius
     ));
-    AssistLog::info(fmt::format(
-        "BAKE: validate OK through frame {} — expanding {} click windows",
-        lastFrame, jobs.size()
-    ));
+    if (partialCut >= 0) {
+        AssistLog::info(fmt::format(
+            "BAKE: expanding {} click windows (partial cut @{})",
+            jobs.size(), partialCut
+        ));
+    }
+    else {
+        AssistLog::info(fmt::format(
+            "BAKE: validate OK through frame {} — expanding {} click windows",
+            lastFrame, jobs.size()
+        ));
+    }
 
     // ── Phase 2: binary-search earliest/latest around each click ───────
     for (auto const& job : jobs) {
@@ -791,6 +862,8 @@ Result<int> BakeMap::bakeReplay(
         c.player2 = job.player2;
         c.x = x;
         c.mode = mode;
+        // Release while dashing → dash/hold-orb; purple viz + later release gate.
+        c.holdAssist = !job.down && sample.sampled && sample.dashingAtSample;
         out.clicks.push_back(c);
 
         m_progress.done.fetch_add(1);
@@ -803,8 +876,10 @@ Result<int> BakeMap::bakeReplay(
 
     int const nClicks = static_cast<int>(out.clicks.size());
     AssistLog::info(fmt::format(
-        "BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} (replay)",
-        nClicks, jobs.size(), lastFrame, tps, out.sourceReplay
+        "BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} "
+        "partialCut={} startPos={} (replay)",
+        nClicks, jobs.size(), lastFrame, tps, out.sourceReplay,
+        partialCut, startPosAttempt ? 1 : 0
     ));
 
     if (nClicks <= 0) {
@@ -818,9 +893,16 @@ Result<int> BakeMap::bakeReplay(
             }
         }
         return Err(
-            "Replay bake produced 0 windows after macro validated — expand failed. "
+            "Replay bake produced 0 windows — expand failed. "
             "Diag: /diag/bakefail_*"
         );
+    }
+
+    if (partialCut >= 0) {
+        // Surface partial in progress status (scheduler success alert stays click count).
+        m_progress.setStatus(fmt::format(
+            "partial {} windows (cut @{})", nClicks, partialCut
+        ));
     }
 
     m_data = std::move(out);
@@ -1094,6 +1176,7 @@ Result<int> BakeMap::bakeBrute(
         c.player2 = false;
         c.x = x;
         c.mode = mode;
+        c.holdAssist = false;
         out.clicks.push_back(c);
 
         // Also bake release window if we committed a tap-release
@@ -1106,6 +1189,13 @@ Result<int> BakeMap::bakeBrute(
             rel.player2 = false;
             rel.x = x;
             rel.mode = mode;
+            // Probe dash while press is held through the release frame.
+            {
+                auto holdTl = committed;
+                holdTl.push_back(ReplayEvent{ nominal, 1, false, true });
+                auto dashProbe = runUntil(holdTl, pickRel, pickRel);
+                rel.holdAssist = dashProbe.sampled && dashProbe.dashingAtSample;
+            }
             out.clicks.push_back(rel);
         }
 
@@ -1177,6 +1267,7 @@ Result<> BakeMap::writeFile() const {
         j["player2"] = c.player2;
         j["x"] = c.x;
         j["mode"] = StageConfig::kindName(c.mode);
+        if (c.holdAssist) j["holdAssist"] = true;
         arr.push_back(std::move(j));
     }
     root["clicks"] = arr;
@@ -1202,6 +1293,9 @@ Result<> BakeMap::readFile() {
         c.down = j["down"].asBool().unwrapOr(true);
         c.player2 = j["player2"].asBool().unwrapOr(false);
         c.x = static_cast<float>(j["x"].asDouble().unwrapOr(0.0));
+        c.holdAssist = j.contains("holdAssist")
+            ? j["holdAssist"].asBool().unwrapOr(false)
+            : false;
         auto modeName = j.contains("mode") ? j["mode"].asString().unwrapOr("cube") : "cube";
         c.mode = GameModeKind::Cube;
         for (int i = 0; i < StageConfig::MODE_COUNT; ++i) {

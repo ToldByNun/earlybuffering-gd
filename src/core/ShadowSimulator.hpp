@@ -436,6 +436,7 @@ public:
         float deathX = 0.f;
         float deathY = 0.f;
         GameModeKind modeAtSample = GameModeKind::Cube;
+        bool dashingAtSample = false;
         bool sampled = false;
         int deathObjId = -1;
         int deathObjType = -1;

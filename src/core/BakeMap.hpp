@@ -21,6 +21,8 @@ struct BakedClick {
     bool player2 = false;
     float x = 0.f;
     GameModeKind mode = GameModeKind::Cube;
+    // Release after dash/hold-orb (or tagged hold). Viz/gate: purple on discrete modes.
+    bool holdAssist = false;
 };
 
 struct BakeMapData {

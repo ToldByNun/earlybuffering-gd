@@ -35,6 +35,7 @@ public:
         GameModeKind mode = GameModeKind::Cube;
         bool down = true;
         bool player2 = false;
+        bool holdAssist = false;
     };
 
     static SelfBakeRecorder& get();

@@ -95,6 +95,8 @@ void SelfBakeRecorder::noteVanillaInput(
     s.mode = StageConfig::kindOf(player);
     s.down = down;
     s.player2 = !player1;
+    // Release while dashing → dash/hold-orb tag for purple viz / release gate.
+    s.holdAssist = !down && player->m_isDashing;
     this->m_pending.push_back(s);
 }
 
@@ -112,6 +114,7 @@ void SelfBakeRecorder::mergeSamples(std::vector<Sample>& samples, char const* re
         c.player2 = s.player2;
         c.x = s.x;
         c.mode = s.mode;
+        c.holdAssist = s.holdAssist;
         clicks.push_back(c);
     }
     samples.clear();

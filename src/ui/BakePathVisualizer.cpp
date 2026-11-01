@@ -17,6 +17,26 @@ static ccColor4F bakeGreenDim(float a = 0.35f) {
     return { 0.10f, 0.75f, 0.32f, a };
 }
 
+static ccColor4F bakePurple(float a = 0.92f) {
+    return { 0.72f, 0.28f, 0.95f, a };
+}
+
+static ccColor4F bakePurpleDim(float a = 0.35f) {
+    return { 0.55f, 0.18f, 0.78f, a };
+}
+
+bool BakePathVisualizer::releaseWindowMode(GameModeKind kind) {
+    switch (kind) {
+        case GameModeKind::Wave:
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+        case GameModeKind::Robot:
+            return true;
+        default:
+            return false;
+    }
+}
+
 BakePathVisualizer& BakePathVisualizer::get() {
     static BakePathVisualizer inst;
     return inst;
@@ -34,7 +54,9 @@ std::string BakePathVisualizer::statusHint() const {
     if (!this->m_enabled) return {};
     auto& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) return "bake-viz empty";
-    return fmt::format("bake-viz {} near", this->m_drawnNear);
+    return fmt::format(
+        "bake-viz P={} R={}", this->m_drawnPress, this->m_drawnRelease
+    );
 }
 
 void BakePathVisualizer::attach(PlayLayer* layer) {
@@ -47,7 +69,8 @@ void BakePathVisualizer::attach(PlayLayer* layer) {
 void BakePathVisualizer::detach(bool layerDying) {
     this->m_enabled = false;
     this->m_ticksSinceRebuild = 0;
-    this->m_drawnNear = 0;
+    this->m_drawnPress = 0;
+    this->m_drawnRelease = 0;
     if (!this->m_node) return;
     if (layerDying) {
         this->m_node->release();
@@ -63,7 +86,8 @@ void BakePathVisualizer::detach(bool layerDying) {
 
 void BakePathVisualizer::clear() {
     if (this->m_node && this->m_node->getParent()) this->m_node->clear();
-    this->m_drawnNear = 0;
+    this->m_drawnPress = 0;
+    this->m_drawnRelease = 0;
 }
 
 void BakePathVisualizer::ensureNode(PlayLayer* layer) {
@@ -111,28 +135,34 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     auto* player = layer->m_player1;
     if (player->m_isDead) {
         this->m_node->clear();
-        this->m_drawnNear = 0;
+        this->m_drawnPress = 0;
+        this->m_drawnRelease = 0;
         return;
     }
 
     auto& bake = BakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) {
         this->m_node->clear();
-        this->m_drawnNear = 0;
+        this->m_drawnPress = 0;
+        this->m_drawnRelease = 0;
         return;
     }
 
     float const px = player->getPositionX();
     float const py = player->getPositionY();
+    auto const liveMode = StageConfig::kindOf(player);
+    bool const showAllReleases = releaseWindowMode(liveMode);
     int const nClicks = static_cast<int>(bake.data().clicks.size());
 
     if (std::fabs(px - this->m_lastRebuildX) < 4.f
         && nClicks == this->m_lastClickCount
-        && this->m_drawnNear > 0) {
+        && liveMode == this->m_lastMode
+        && (this->m_drawnPress + this->m_drawnRelease) > 0) {
         return;
     }
     this->m_lastRebuildX = px;
     this->m_lastClickCount = nClicks;
+    this->m_lastMode = liveMode;
 
     // Collect P1 clicks near the player, keep closest N, draw left→right.
     // (Avoid identifier `near` — Win32 headers define it as a macro.)
@@ -147,7 +177,13 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     for (auto const& c : bake.data().clicks) {
         if (c.player2) continue; // P1 map first
         if (std::fabs(c.x - px) > kLodMarginX) continue;
-        marks.push_back(Mark{ c.x, c.earliest, c.latest, c.down });
+        if (c.down) {
+            marks.push_back(Mark{ c.x, c.earliest, c.latest, true });
+            continue;
+        }
+        // Purple release: always in wave/ship/swing/robot; else dash/hold tag only.
+        if (!showAllReleases && !c.holdAssist) continue;
+        marks.push_back(Mark{ c.x, c.earliest, c.latest, false });
     }
     if (marks.size() > kMaxMarkers) {
         std::nth_element(
@@ -165,31 +201,27 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     });
 
     this->m_node->clear();
-    this->m_drawnNear = static_cast<int>(marks.size());
+    this->m_drawnPress = 0;
+    this->m_drawnRelease = 0;
     if (marks.empty()) return;
 
-    auto const stroke = bakeGreen(0.95f);
-    auto const fill = bakeGreenDim(0.28f);
-    auto const mid = bakeGreen(0.85f);
-
-    // Path through nominal X positions.
-    for (size_t i = 1; i < marks.size(); ++i) {
-        float const y0 = py;
-        this->m_node->drawSegment(
-            { marks[i - 1].x, y0 },
-            { marks[i].x, y0 },
-            1.6f,
-            stroke
-        );
-    }
-
+    // Windows only — no connector line between clicks (coverage, not a path).
     for (auto const& m : marks) {
+        bool const isPress = m.down;
+        if (isPress) ++this->m_drawnPress;
+        else ++this->m_drawnRelease;
+
+        auto const stroke = isPress ? bakeGreen(0.95f) : bakePurple(0.95f);
+        auto const fill = isPress ? bakeGreenDim(0.28f) : bakePurpleDim(0.28f);
+        auto const mid = isPress ? bakeGreen(0.85f) : bakePurple(0.85f);
+        auto const edge = isPress ? bakeGreen(0.7f) : bakePurple(0.7f);
+
         int const span = (std::max)(0, m.latest - m.earliest);
         // Window band width ~ frame span (capped); height fixed tick.
         float const halfW = (std::clamp)(3.f + static_cast<float>(span) * 0.35f, 3.f, 28.f);
         float const halfH = 14.f;
 
-        // Soft green window rect (two triangles).
+        // Soft window rect (two triangles).
         CCPoint triA[3] = {
             { m.x - halfW, py - halfH },
             { m.x + halfW, py - halfH },
@@ -204,7 +236,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         this->m_node->drawPolygon(triB, 3, fill, 0.f, fill);
 
         // Nominal marker + vertical tick.
-        this->m_node->drawDot({ m.x, py }, m.down ? 4.f : 3.f, mid);
+        this->m_node->drawDot({ m.x, py }, 4.f, mid);
         this->m_node->drawSegment(
             { m.x, py - halfH - 2.f },
             { m.x, py + halfH + 2.f },
@@ -216,13 +248,13 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
             { m.x - halfW, py - halfH },
             { m.x - halfW, py + halfH },
             0.8f,
-            bakeGreen(0.7f)
+            edge
         );
         this->m_node->drawSegment(
             { m.x + halfW, py - halfH },
             { m.x + halfW, py + halfH },
             0.8f,
-            bakeGreen(0.7f)
+            edge
         );
     }
 }

@@ -995,7 +995,7 @@
 		"show-bake-path": {
 			"type": "bool",
 			"name": "Bake Visualizer",
-			"description": "Draws green BakeMap click windows near the player (coverage check). Needs a loaded bake. Off by default — no draw when empty or disabled.",
+			"description": "Draws BakeMap windows near the player: green = press, purple = release (wave/ship/swing/robot, or dash-hold). Needs a loaded bake. Off by default.",
 			"default": false
 		},
 		"save-feedback-sound": {

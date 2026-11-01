@@ -45,12 +45,17 @@ bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMetho
             FLAlertLayer::create("EarlyBuffer", msg, "OK")->show();
             return;
         }
-        AssistLog::info(fmt::format("BAKE done clicks={} (scheduler ok)", n));
-        FLAlertLayer::create(
-            "EarlyBuffer",
-            fmt::format("Bake done — {} windows.", n).c_str(),
-            "OK"
-        )->show();
+        auto const status = BakeMap::get().progress().getStatus();
+        AssistLog::info(fmt::format(
+            "BAKE done clicks={} status={} (scheduler ok)", n, status
+        ));
+        std::string msg = fmt::format("Bake done — {} windows.", n);
+        if (status.find("partial") != std::string::npos) {
+            msg += "\n(";
+            msg += status;
+            msg += " — Hybrid part OK)";
+        }
+        FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
     });
     return true;
 }

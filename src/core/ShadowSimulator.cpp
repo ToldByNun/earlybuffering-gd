@@ -3974,6 +3974,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
             if (sampleFrame >= 0 && frame == sampleFrame) {
                 out.xAtSample = s->getPositionX();
                 out.modeAtSample = StageConfig::kindOf(s);
+                out.dashingAtSample = s->m_isDashing;
                 out.sampled = true;
             }
 
