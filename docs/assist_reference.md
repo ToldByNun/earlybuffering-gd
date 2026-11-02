@@ -222,7 +222,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
 | show-overlay | bool | false | | | Main |
-| show-trajectory | bool | false | | | Visual |
+| show-trajectory | bool | false | | | Visual — HOLD/coast ghosts; **v2** also LongForesight horizon + yellow prediction windows + dark-green best path |
 | show-bake-path | bool | false | | | Visual — green BakeMap **press windows** near player (no connector line; release marks omitted) |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
 | show-pause-hub | bool | true | | | Main — EB button |
@@ -507,6 +507,10 @@ When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `As
 ### assist-engine (Live V2)
 
 `planPress` / `planRelease` pass `effectiveAssistEngine()` into `PlanOptions`. On **v2 + Trajectory**, Live `plan()` cand eval / hold probes / jitter use `runTrajectoryOne` (hold/coast button path, no orb pre-scan). **ShadowPlayer** keeps full `runOne`. Hybrid bake `verifyDelay` always uses ShadowPlayer. Overlay `eng=` + PLAN `eng=Trajectory|ShadowPlayer`.
+
+### TrajectoryVisualizer (Live debug / 13b)
+
+`show-trajectory`: green HOLD + red coast. On **assist-pick v2**, horizon matches `LongForesight` (`scoreHorizon` min 48, one extend if hold dies). Yellow prediction windows + faint yellow paths for sparse delay samples (including deaths). Dark-green path = best foresight among those samples (`AssistPickV2::foresightBetter`). Overlay hint `traj v2 LF Nt [+] P=k d=n`.
 
 ### OpportunityProbe (G2)
 
