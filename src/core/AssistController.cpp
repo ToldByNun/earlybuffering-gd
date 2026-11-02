@@ -834,6 +834,7 @@ static bool husHasEscape(SimPlan const& plan) {
     return !plan.viableDelays.empty();
 }
 
+
 bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk) {
     // HUS only when trusted — sonst Pass. Escape required (orb or Alive delay).
     if (!trustOk) return false;
@@ -1115,7 +1116,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     if (remaining <= 0 || this->m_attemptTick >= deadline) {
         bool const mayInject = this->m_buffer.requireOrb || foresightNow;
         if (!mayInject) {
-            AssistLog::debug(fmt::format(
+            AssistLog::info(fmt::format(
                 "HOLD-UNTIL-SAFE drop (no escape at deadline) @{} "
                 "(press={} limit={})",
                 this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit
@@ -1788,6 +1789,25 @@ void AssistController::noteVerdict(AssistReason reason, char const* where) {
         AssistVerdict::name(reason),
         where ? where : "?",
         AssistVerdict::overlayBit(reason)
+    ));
+}
+
+void AssistController::noteNoEscapeHonesty(SimPlan const& plan, char const* where) {
+    if (husHasEscape(plan)) return;
+    if (plan.reason != AssistReason::PassHopeless
+        && plan.reason != AssistReason::PassBudget) {
+        return;
+    }
+    this->m_lastBakeHint = "PASS no-escape";
+    AssistLog::info(fmt::format(
+        "ASSIST {} PASS no-escape id={} reason={} lfBothDead={} "
+        "idleSafer={} ascent={}",
+        where ? where : "?",
+        plan.planId,
+        AssistVerdict::name(plan.reason),
+        plan.longForesightBothDead ? 1 : 0,
+        plan.idleSafer ? 1 : 0,
+        plan.ascentUseful ? 1 : 0
     ));
 }
 
@@ -3128,6 +3148,13 @@ bool AssistController::planPress(
                 playLayer, player, player1, effectTick, limit, plan
             );
         }
+        if (plan.longForesightBothDead) {
+            AssistLog::info(fmt::format(
+                "ASSIST press LF both-dead id={} — Pass (no escape force)",
+                plan.planId
+            ));
+        }
+        this->noteNoEscapeHonesty(plan, "press-plan");
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
@@ -3139,6 +3166,7 @@ bool AssistController::planPress(
         if (StageConfig::autoTune() && profile.loaded()) {
             profile.noteEarliness(kind, x, 0, "pass");
         }
+        this->updateOverlay();
         return true;
     }
 
@@ -3294,6 +3322,7 @@ bool AssistController::planPress(
                     playLayer, player, player1, effectTick, limit, pass
                 );
             }
+            this->noteNoEscapeHonesty(pass, "press-robust-fail");
             DevCycleRecorder::get().notePassThrough(pass.reason, "press-robust-fail");
             this->noteVerdict(pass.reason, "press-robust-fail");
             this->recordDecision(playLayer, player, true, pass, effectTick, 0, limit);
@@ -3672,6 +3701,13 @@ bool AssistController::planRelease(
                 playLayer, player, player1, effectTick, limit, plan, false
             );
         }
+        if (plan.longForesightBothDead) {
+            AssistLog::info(fmt::format(
+                "ASSIST release LF both-dead id={} — Pass (no escape force)",
+                plan.planId
+            ));
+        }
+        this->noteNoEscapeHonesty(plan, "release-plan");
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
@@ -3679,6 +3715,7 @@ bool AssistController::planRelease(
         DevCycleRecorder::get().notePassThrough(passReason, "release-plan");
         this->noteVerdict(passReason, "release-plan");
         this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
+        this->updateOverlay();
         return true;
     }
 

@@ -42,7 +42,7 @@ HYBRID eb.hybrid.live   = 1.10ms | vfy=1 remTick=2800 remUs=500
 
 **In-window template (Hybrid/Replay):** Bake frames map to **absolute** live ticks via `AssistClock::unmapTick` (not relative to the press). `findNear` also requires `approxFrame` near `[earliest, latest]` (not X-only — avoids ~100f-early matches from `LOOKUP_X_TOL`). Delay: before earliest → wait earliest (if `ticks-*` cannot reach earliest → miss, never clamp-fire early); inside but before nominal → wait **full nominal** (`buffer.limit` raised — not clamped to `ticks-all`); at/after nominal → fire-now; `past latest` + spatial band + ≤2 tick slop → salvage fire-now after verify (deeper late → miss / Live). Verify fail: **no delay-0 salvage before nominal**; before nominal → Hybrid **Pass** (no Live/HUS mid-window); at/after nominal → once retry delay 0, else `MISS-BAKE-WIN` → Live. Press and release share the same arm path (releases still gated by `shouldPlanRelease` / purple viz). Live fallthrough never HUS before bake nominal when a window was found.
 
-**Overlay ownership:** `hy` / `rp` / `br` + `bake↓|↑ now|wait-earliest|wait-nominal|salvage [lo,hi] +d`. While the bake buffer waits: `· tpl↓|↑`. Miss fallthrough: `hy MISS … → live`. Before-nominal verify/HUS block: `MISS … → pass (before-nom)` / `hus→before-nom → pass`.
+**Overlay ownership:** `hy` / `rp` / `br` + `bake↓|↑ now|wait-earliest|wait-nominal|salvage [lo,hi] +d`. While the bake buffer waits: `· tpl↓|↑`. Miss fallthrough: `hy MISS … → live`. Before-nominal verify/HUS block: `MISS … → pass (before-nom)` / `hus→before-nom → pass`. Honesty: `PASS no-escape` when PassHopeless/Budget with no Alive delay and no orb foresight; `HUS drop` when Soft Hold ends at deadline without orb still ahead (no inject).
 
 **Shared-budget Hybrid policy (not soft-trust):** a bake is used only when `BakeVerifier` returns ok (`clearsThreat`, not `budgetHit`). Exhausted verify never injects the bake window “on faith.” Live fallthrough always keeps a reserve / remainder under the same press envelope; `usLeft==0` is a tight exit, not unlimited wall. Hitch path after reject: no near-bake spam override, no prefer-band from that window, ≤½ press tick/wall, skip exit-predict if remUs &lt; 600.
 
@@ -222,7 +222,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
 | show-overlay | bool | false | | | Main |
-| show-trajectory | bool | false | | | Visual — HOLD/coast ghosts; **v2** also LongForesight horizon + yellow prediction windows + dark-green best path |
+| show-trajectory | bool | false | | | Visual — HOLD/coast until death (hard max 960); **v2** also short yellow delay preds + dark-green best Alive path |
 | show-bake-path | bool | false | | | Visual — green BakeMap **press windows** near player (no connector line; release marks omitted) |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
 | show-pause-hub | bool | true | | | Main — EB button |
@@ -509,9 +509,9 @@ When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `As
 
 `planPress` / `planRelease` pass `effectiveAssistEngine()` into `PlanOptions`. On **v2 + Trajectory**, Live `plan()` cand eval / hold probes / jitter use `runTrajectoryOne` (hold/coast button path, no orb pre-scan). **ShadowPlayer** keeps full `runOne`. Hybrid bake `verifyDelay` always uses ShadowPlayer. Overlay `eng=` + PLAN `eng=Trajectory|ShadowPlayer`.
 
-### TrajectoryVisualizer (Live debug / 13b)
+### TrajectoryVisualizer (Live debug)
 
-`show-trajectory`: green HOLD + red coast. On **assist-pick v2**, horizon matches `LongForesight` (`scoreHorizon` min 48, one extend if hold dies). Yellow prediction windows + faint yellow paths for sparse delay samples (including deaths). Dark-green path = best foresight among those samples (`AssistPickV2::foresightBetter`). Overlay hint `traj v2 LF Nt [+] P=k d=n`.
+`show-trajectory`: green HOLD + red coast, each sampled **until death** or hard max **960** ticks (`TrajDrawHorizon` — draw-only, not planner caps). Cap without death → small end tick (no false death X). Rebuild period 28 when draw max &gt; 96. On **assist-pick v2**, yellow delay preds stay on short `scoreHorizon` (min 48); dark-green = best **Delay-worthy Alive** among those short samples. Overlay hint `traj H/C untilDeath Nt [cap] pred=Mt P=k d=n`.
 
 ### OpportunityProbe (G2)
 

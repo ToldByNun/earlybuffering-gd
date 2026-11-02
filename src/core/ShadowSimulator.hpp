@@ -100,6 +100,8 @@ struct SimPlan {
     bool ascentUseful = false;
     // Live V2 LongForesight: press dies on long horizon → choose prefers Delay.
     bool longForesightNeedSearch = false;
+    // Live V2 LongForesight: press and idle both die on the horizon used.
+    bool longForesightBothDead = false;
     // Live V2: plan cand eval used Trajectory engine (else ShadowPlayer).
     bool trajectoryEngine = false;
     bool requireOrb = false;

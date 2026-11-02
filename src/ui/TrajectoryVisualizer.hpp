@@ -6,10 +6,9 @@
 #include <vector>
 
 
-// Debug overlay: HOLD vs NOT-HOLD (coast) ghost paths.
-// v1: draw length = AssistHorizon trajDraw.
-// v2 Live debug: LongForesight horizon (+extend) + yellow prediction windows
-// for candidate delays + dark-green best foresight path (13b).
+// Debug overlay: HOLD vs NOT-HOLD (coast) ghost paths until death
+// (TrajDrawHorizon hard max). v2 also draws short yellow delay preds +
+// dark-green best Delay-worthy Alive path (preds stay on scoreHorizon).
 class TrajectoryVisualizer {
 public:
     static TrajectoryVisualizer& get();
@@ -54,12 +53,13 @@ private:
     bool m_enabled = false;
     int m_ticksSinceRebuild = 0;
     float m_lastRebuildX = -1e9f;
-    int m_lastDrawCap = -1;   // drawn horizon (may be LF-extended)
-    int m_lastBaseCap = -1;   // pre-extend horizon for skip gate
+    int m_lastDrawCap = -1;    // HOLD/coast until-death max used
+    int m_lastDrawnTicks = -1; // max(hold,coast) frames actually drawn
+    int m_lastPredCap = -1;    // short pred horizon
+    bool m_hitDrawCap = false; // either path reached max without death
     bool m_trustLong = false;
     bool m_hasWindow = false;
     bool m_v2Live = false;
-    bool m_lfExtended = false;
     int m_predCount = 0;
     int m_bestDelay = -1;
 };

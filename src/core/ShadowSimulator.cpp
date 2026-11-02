@@ -2720,6 +2720,7 @@ SimPlan ShadowSimulator::plan(
                 // Only invent idleSafer / force search when idle still lives.
                 if (lf.idleSafer) plan.idleSafer = true;
                 plan.longForesightNeedSearch = lf.needDelaySearch;
+                plan.longForesightBothDead = lf.bothDead;
                 AssistLog::debug(fmt::format(
                     "PLAN id={} longForesight eng={} h={} ext={} "
                     "pressDie={} idleDie={} idleSafer={} needSearch={} bothDead={} budget={}",
@@ -2734,6 +2735,12 @@ SimPlan ShadowSimulator::plan(
                     lf.bothDead ? 1 : 0,
                     tickBudget
                 ));
+                if (lf.bothDead) {
+                    AssistLog::info(fmt::format(
+                        "PLAN id={} LF both-dead — no Delay-search force",
+                        plan.planId
+                    ));
+                }
             }
         }
 
@@ -3561,6 +3568,16 @@ SimPlan ShadowSimulator::plan(
         auto const& ch = cands[static_cast<size_t>(chosen)];
         if (!ch.viable || ch.raw.died || ch.diedBeforeAction
             || ch.unknownTrunc || ch.toggleUnknown) {
+            AssistLog::info(fmt::format(
+                "PLAN id={} refuse Delay +{} — not Delay-worthy "
+                "(viable={} died={} beforeAct={} unk={})",
+                plan.planId,
+                chosen,
+                ch.viable ? 1 : 0,
+                ch.raw.died ? 1 : 0,
+                ch.diedBeforeAction ? 1 : 0,
+                (ch.unknownTrunc || ch.toggleUnknown) ? 1 : 0
+            ));
             if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
                 sawToggleUnknown = true;
             }
@@ -3707,6 +3724,22 @@ SimPlan ShadowSimulator::plan(
                 plan.reason = AssistReason::PassHardUnknown;
                 plan.toggleUnknown = false;
             }
+        }
+        else if (winCand.raw.died || !winCand.viable) {
+            // Soft-dead / non-worthy must never ship as Delay.
+            AssistLog::info(fmt::format(
+                "PLAN id={} refuse Delay +{} — not Delay-worthy at publish "
+                "(viable={} died={})",
+                plan.planId, chosen, winCand.viable ? 1 : 0, winCand.raw.died ? 1 : 0
+            ));
+            plan.action = PlanAction::Pass;
+            plan.delay = 0;
+            plan.nowIsSafe = false;
+            plan.reason = plan.budgetHit
+                ? AssistReason::PassBudget
+                : AssistReason::PassHopeless;
+            plan.unknown = false;
+            plan.toggleUnknown = false;
         }
         else {
             plan.action = PlanAction::Delay;

@@ -4,9 +4,9 @@
 #include "../core/AssistHorizon.hpp"
 #include "../core/AssistPickV2.hpp"
 #include "../core/LevelProfile.hpp"
-#include "../core/LongForesight.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimTrust.hpp"
+#include "../core/TrajDrawHorizon.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/PerfTrace.hpp"
@@ -94,25 +94,18 @@ void TrajectoryVisualizer::toggle() {
 
 std::string TrajectoryVisualizer::statusHint() const {
     if (!m_enabled) return {};
+    int const drawn = m_lastDrawnTicks > 0 ? m_lastDrawnTicks : m_lastDrawCap;
+    std::string s = fmt::format(
+        "traj H/C untilDeath {}t",
+        drawn
+    );
+    if (m_hitDrawCap) s += " cap";
     if (m_v2Live) {
-        std::string s = fmt::format(
-            "traj v2 LF {}t",
-            m_lastDrawCap
-        );
-        if (m_lfExtended) s += "+";
-        if (m_predCount > 0) {
-            s += fmt::format(" P={}", m_predCount);
-        }
-        if (m_bestDelay >= 0) {
-            s += fmt::format(" d={}", m_bestDelay);
-        }
-        if (!m_trustLong) s += " short";
-        return s;
+        s += fmt::format(" pred={}t", m_lastPredCap);
+        if (m_predCount > 0) s += fmt::format(" P={}", m_predCount);
+        if (m_bestDelay >= 0) s += fmt::format(" d={}", m_bestDelay);
     }
-    if (m_trustLong) {
-        return fmt::format("traj H/C {}t", m_lastDrawCap);
-    }
-    return fmt::format("traj H/C {}t (short)", m_lastDrawCap);
+    return s;
 }
 
 void TrajectoryVisualizer::attach(PlayLayer* layer) {
@@ -120,10 +113,11 @@ void TrajectoryVisualizer::attach(PlayLayer* layer) {
     m_ticksSinceRebuild = 999;
     m_lastRebuildX = -1e9f;
     m_lastDrawCap = -1;
-    m_lastBaseCap = -1;
+    m_lastDrawnTicks = -1;
+    m_lastPredCap = -1;
+    m_hitDrawCap = false;
     m_trustLong = false;
     m_v2Live = false;
-    m_lfExtended = false;
     m_predCount = 0;
     m_bestDelay = -1;
 }
@@ -255,8 +249,9 @@ void TrajectoryVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     }
 
     ++m_ticksSinceRebuild;
-    // Longer trust / v2 LF draws: rebuild a bit less often.
-    int const period = (m_trustLong || m_v2Live) && m_lastDrawCap > 96 ? 20 : 16;
+    int const period = TrajDrawHorizon::rebuildPeriod(
+        m_lastDrawCap > 0 ? m_lastDrawCap : TrajDrawHorizon::kDrawUntilDeathMax
+    );
     if (m_ticksSinceRebuild < period) return;
     m_ticksSinceRebuild = 0;
     rebuild(layer);
@@ -296,20 +291,18 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
 
     bool const v2 = !StageConfig::assistPickLegacy();
     m_v2Live = v2;
-    m_lfExtended = false;
     m_predCount = 0;
     m_bestDelay = -1;
+    m_hitDrawCap = false;
 
-    // v1: trajDraw. v2 Live debug: LongForesight scoreHorizon (min 48).
-    int lookAhead = v2
-        ? std::max(LongForesight::kMinHorizon, caps.scoreHorizon)
-        : caps.trajDraw;
+    // HOLD/coast: until death (hard max). Preds stay on short scoreHorizon.
+    int const drawMax = TrajDrawHorizon::holdCoastDrawMax();
+    int const predCap = TrajDrawHorizon::predHorizon(caps.scoreHorizon);
     m_trustLong = trustOk;
-    m_hasWindow = lookAhead > 0;
+    m_hasWindow = drawMax > 0;
 
-    int const baseLookAhead = lookAhead;
-    // Skip resim when nearly still and base draw cap unchanged.
-    if (std::fabs(x - m_lastRebuildX) < 2.f && baseLookAhead == m_lastBaseCap) {
+    // Skip resim when nearly still and draw max unchanged.
+    if (std::fabs(x - m_lastRebuildX) < 2.f && drawMax == m_lastDrawCap) {
         return;
     }
 
@@ -318,32 +311,23 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
 
     auto& sim = ShadowSimulator::get();
 
-    auto holdRaw = sim.samplePath(layer, slot, makeHoldEvents(), dt, lookAhead);
-    auto coastRaw = sim.samplePath(layer, slot, makeCoastEvents(), dt, lookAhead);
+    auto holdRaw = sim.samplePath(layer, slot, makeHoldEvents(), dt, drawMax);
+    auto coastRaw = sim.samplePath(layer, slot, makeCoastEvents(), dt, drawMax);
 
-    // LongForesight parity: extend once if press/hold dies inside the window.
-    if (v2 && holdRaw.died && holdRaw.deathFrame >= 0) {
-        int const lookCap = StageConfig::lookAheadCap();
-        int const hMax = lookCap > 0
-            ? std::max(lookAhead, lookCap)
-            : std::min(
-                320,
-                lookAhead + lookAhead / 2 + LongForesight::kExtendStep
-            );
-        int const h1 = LongForesight::extendHorizon(
-            lookAhead, holdRaw.deathFrame, hMax
-        );
-        if (h1 > lookAhead) {
-            lookAhead = h1;
-            m_lfExtended = true;
-            holdRaw = sim.samplePath(layer, slot, makeHoldEvents(), dt, lookAhead);
-            coastRaw = sim.samplePath(layer, slot, makeCoastEvents(), dt, lookAhead);
-        }
-    }
+    int const holdTicks = holdRaw.died
+        ? std::max(0, holdRaw.deathFrame)
+        : std::max(0, static_cast<int>(holdRaw.points.size()) - 1);
+    int const coastTicks = coastRaw.died
+        ? std::max(0, coastRaw.deathFrame)
+        : std::max(0, static_cast<int>(coastRaw.points.size()) - 1);
 
     m_lastRebuildX = x;
-    m_lastBaseCap = baseLookAhead;
-    m_lastDrawCap = lookAhead;
+    m_lastDrawCap = drawMax;
+    m_lastDrawnTicks = std::max(holdTicks, coastTicks);
+    m_lastPredCap = predCap;
+    m_hitDrawCap =
+        TrajDrawHorizon::hitDrawCap(holdRaw.died, holdTicks, drawMax)
+        || TrajDrawHorizon::hitDrawCap(coastRaw.died, coastTicks, drawMax);
 
     auto hold = decimate(holdRaw.points, 3.f * 3.f);
     auto coast = decimate(coastRaw.points, 3.f * 3.f);
@@ -363,10 +347,19 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     markDeathX(m_node, holdRaw, col(0.15f, 1.f, 0.4f, 0.7f));
     markDeathX(m_node, coastRaw, col(1.f, 0.28f, 0.22f, 0.7f));
 
+    // Cap tick (no false death X) when a path hits hard max still alive.
+    auto markCap = [&](ShadowSimulator::PathSample const& s, bool died, int ticks) {
+        if (!TrajDrawHorizon::hitDrawCap(died, ticks, drawMax)) return;
+        if (s.points.empty()) return;
+        m_node->drawDot(s.points.back(), 2.2f, col(0.85f, 0.85f, 0.9f, 0.55f));
+    };
+    markCap(holdRaw, holdRaw.died, holdTicks);
+    markCap(coastRaw, coastRaw.died, coastTicks);
+
     if (!v2) return;
 
-    // --- 13b: yellow prediction windows + dark-green best foresight path ---
-    // Sparse delay samples across the Live window (incl. deaths).
+    // Yellow prediction windows + dark-green best Delay-worthy Alive path.
+    // Preds use short foresight horizon — never the until-death drawMax.
     int const limit = std::max(0, liveLimit);
     std::vector<int> delays;
     delays.reserve(8);
@@ -396,6 +389,8 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         ShadowSimulator::PathSample const& raw,
         AssistPickV2::CandView const& view
     ) {
+        // Dark-green only among Delay-worthy Alive preds.
+        if (!AssistPickV2::isDelayWorthy(view)) return;
         if (!haveBest) {
             haveBest = true;
             bestView = view;
@@ -403,27 +398,9 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
             bestRaw = raw;
             return;
         }
-        // Survivors beat deaths; else foresightBetter / later death.
-        if (view.viable && !bestView.viable) {
-            bestView = view;
-            bestDelay = d;
-            bestRaw = raw;
-            return;
-        }
-        if (!view.viable && bestView.viable) return;
-        if (view.viable) {
-            if (AssistPickV2::foresightBetter(
-                    view, d, bestView, bestDelay, lam
-                )) {
-                bestView = view;
-                bestDelay = d;
-                bestRaw = raw;
-            }
-            return;
-        }
-        if (view.surviveTicks > bestView.surviveTicks
-            || (view.surviveTicks == bestView.surviveTicks
-                && view.endX > bestView.endX + 0.5f)) {
+        if (AssistPickV2::foresightBetter(
+                view, d, bestView, bestDelay, lam
+            )) {
             bestView = view;
             bestDelay = d;
             bestRaw = raw;
@@ -431,11 +408,10 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     };
 
     for (int d : delays) {
-        auto raw = (d == 0)
-            ? holdRaw
-            : sim.samplePath(layer, slot, makeDelayedHoldEvents(d), dt, lookAhead);
+        auto raw = sim.samplePath(
+            layer, slot, makeDelayedHoldEvents(d), dt, predCap
+        );
 
-        // Jump / prediction window at the delay frame (or start).
         size_t idx = 0;
         if (d > 0 && raw.points.size() > static_cast<size_t>(d)) {
             idx = static_cast<size_t>(d);
@@ -446,14 +422,13 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         }
 
         // Yellow ghost for every candidate (including deaths).
-        if (d != 0) {
-            auto pts = decimate(raw.points, 4.f * 4.f);
-            drawPath(m_node, pts, yellowPath, 0.85f, 1);
-            if (raw.died) markDeathX(m_node, raw, yellowStroke);
-        }
+        auto pts = decimate(raw.points, 4.f * 4.f);
+        drawPath(m_node, pts, yellowPath, 0.85f, 1);
+        if (raw.died) markDeathX(m_node, raw, yellowStroke);
 
         AssistPickV2::CandView view{};
         view.viable = !raw.died;
+        view.died = raw.died;
         view.surviveTicks = raw.died
             ? std::max(0, raw.deathFrame)
             : std::max(0, static_cast<int>(raw.points.size()) - 1);
@@ -474,6 +449,5 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
             }
             m_node->drawDot(bestRaw.points[idx], 4.f, darkGreen);
         }
-        if (bestRaw.died) markDeathX(m_node, bestRaw, darkGreen);
     }
 }

@@ -237,6 +237,8 @@ private:
     void pollOutcome(PlayLayer* playLayer);
     void logPlan(SimPlan const& plan, char const* kind);
     void noteVerdict(AssistReason reason, char const* where);
+    // Overlay + log: PassHopeless/Budget with no Alive/orb escape.
+    void noteNoEscapeHonesty(SimPlan const& plan, char const* where);
     // Arm soft hold buffer (swallows press or release). Returns false for onHandleButton.
     bool armHoldUntilSafe(
         PlayLayer* playLayer,

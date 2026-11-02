@@ -21,6 +21,7 @@
 #include "../core/PerfectAssistPolicy.hpp"
 #include "../core/OrbAlign.hpp"
 #include "../core/AssistHorizon.hpp"
+#include "../core/TrajDrawHorizon.hpp"
 #include "../core/RealCorpusFixtures.hpp"
 #include "../core/SectionObjectWalk.hpp"
 #include "../dev/DevDiagDump.hpp"
@@ -146,6 +147,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(OrbAlign::selfCheck(orbAlignReport), "orb-align");
     std::string assistHorizonReport;
     expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
+    std::string trajDrawHorizonReport;
+    expect(TrajDrawHorizon::selfCheck(trajDrawHorizonReport), "traj-draw-horizon");
     std::string realCorpusReport;
     expect(RealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures");
     std::string sectionWalkReport;
