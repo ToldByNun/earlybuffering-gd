@@ -502,7 +502,7 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 
 ### LongForesight (Live V2)
 
-When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `AssistHorizon` scoreHorizon (min 48). If press dies inside the window, horizon extends once (capped by look-ahead / 320). **Trajectory** engine uses a lightweight hold/coast loop; **ShadowPlayer** uses `runOne(0)` + `runBaseline` at the long cap. Results feed `idleSafer` and can force delay-search (skip Pass no-threat) when press still dies. V1 skips this entirely. Fixtures: `LongForesight::selfCheck` (PlanGold `long-foresight`).
+When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `AssistHorizon` scoreHorizon (min 48). If press dies inside the window, horizon extends once (capped by look-ahead / 320). **Trajectory** engine uses a lightweight hold/coast loop; **ShadowPlayer** uses `runOne(0)` + `runBaseline` at the long cap. `needDelaySearch` / LF `idleSafer` only when press dies **and idle still lives** (real coast escape). Both-dead (even later idle deathTick) → `bothDead`, no forced Delay search. V1 skips this entirely. Fixtures: `LongForesight::selfCheck` (PlanGold `long-foresight`).
 
 ### assist-engine (Live V2)
 

@@ -36,8 +36,11 @@ public:
         bool idleSurvived = false;
         bool idleSafer = false;
         bool pressBetter = false;
-        // Press still dies after the (extended) horizon → do not early-Pass.
+        // Press died and idle still lives → Delay search may find an escape.
+        // Both-dead (even later idle deathTick) is not an escape signal.
         bool needDelaySearch = false;
+        // Press and idle both die on the horizon used (no living coast).
+        bool bothDead = false;
         bool extended = false;
         int horizonUsed = 0;
     };

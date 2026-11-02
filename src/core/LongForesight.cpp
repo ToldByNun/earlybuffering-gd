@@ -44,8 +44,14 @@ LongForesight::Result LongForesight::decide(Input const& in) {
 
     r.pressSurvived = !press->died;
     r.idleSurvived = !idle->died;
-    r.idleSafer = idleLooksSafer(*press, *idle);
-    r.needDelaySearch = press->died;
+    r.bothDead = press->died && idle->died;
+
+    // Escape-shaped only: press dies and idle still lives on this horizon.
+    // Both-dead (even with a later idle deathTick / endX) must not force
+    // Delay search or invent idleSafer — that needs an Alive later cand.
+    bool const idleEscape = press->died && r.idleSurvived;
+    r.idleSafer = idleEscape;
+    r.needDelaySearch = idleEscape;
 
     if (!r.idleSafer) {
         if (!press->died && idle->died) {
@@ -115,7 +121,7 @@ bool LongForesight::selfCheck(std::string& report) {
         in.horizon = 64;
         auto const r = decide(in);
         expect(r.idleSafer && r.needDelaySearch && !r.pressSurvived, "decide-idle");
-        expect(r.idleSurvived && !r.pressBetter, "decide-idle-flags");
+        expect(r.idleSurvived && !r.pressBetter && !r.bothDead, "decide-idle-flags");
         expect(r.horizonUsed == 64 && !r.extended, "decide-base-h");
     }
 
@@ -127,7 +133,7 @@ bool LongForesight::selfCheck(std::string& report) {
         in.horizon = 64;
         auto const r = decide(in);
         expect(!r.needDelaySearch && r.pressSurvived && r.pressBetter, "decide-press");
-        expect(!r.idleSafer, "decide-press-not-idle");
+        expect(!r.idleSafer && !r.bothDead, "decide-press-not-idle");
     }
 
     // Extended pass: base press dies, extended press lives.
@@ -143,9 +149,10 @@ bool LongForesight::selfCheck(std::string& report) {
         auto const r = decide(in);
         expect(r.extended && r.horizonUsed == 128, "decide-ext-h");
         expect(!r.needDelaySearch && r.pressSurvived && r.pressBetter, "decide-ext-ok");
+        expect(!r.bothDead, "decide-ext-not-both-dead");
     }
 
-    // Extended still dies → needDelaySearch
+    // Extended still dies, idle lives → needDelaySearch (real coast escape).
     {
         Input in;
         in.press = pressDead;
@@ -157,6 +164,30 @@ bool LongForesight::selfCheck(std::string& report) {
         in.idleExt = idleLive;
         auto const r = decide(in);
         expect(r.needDelaySearch && r.idleSafer && r.extended, "decide-ext-still-dead");
+        expect(!r.bothDead, "decide-ext-escape-not-both");
+    }
+
+    // Both die (idle later deathTick) → no Delay search / no LF idleSafer.
+    {
+        Input in;
+        in.press = pressDead;
+        in.idle = idleLater;
+        in.horizon = 64;
+        auto const r = decide(in);
+        expect(r.bothDead, "decide-both-dead");
+        expect(!r.needDelaySearch && !r.idleSafer, "decide-both-dead-no-search");
+        expect(idleLooksSafer(pressDead, idleLater), "helper-idle-later-still");
+    }
+
+    // Both die, idle worse → bothDead, pressBetter, no search.
+    {
+        Input in;
+        in.press = pressDead;
+        in.idle = idleWorse;
+        in.horizon = 64;
+        auto const r = decide(in);
+        expect(r.bothDead && r.pressBetter, "decide-both-dead-press-better");
+        expect(!r.needDelaySearch && !r.idleSafer, "decide-both-dead-worse-no-search");
     }
 
     if (fails == 0) {

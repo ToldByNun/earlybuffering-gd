@@ -2717,11 +2717,12 @@ SimPlan ShadowSimulator::plan(
                 }
 
                 auto const lf = LongForesight::decide(lfIn);
+                // Only invent idleSafer / force search when idle still lives.
                 if (lf.idleSafer) plan.idleSafer = true;
                 plan.longForesightNeedSearch = lf.needDelaySearch;
                 AssistLog::debug(fmt::format(
                     "PLAN id={} longForesight eng={} h={} ext={} "
-                    "pressDie={} idleDie={} idleSafer={} needSearch={} budget={}",
+                    "pressDie={} idleDie={} idleSafer={} needSearch={} bothDead={} budget={}",
                     plan.planId,
                     StageConfig::assistEngineName(options.assistEngine),
                     lf.horizonUsed,
@@ -2730,6 +2731,7 @@ SimPlan ShadowSimulator::plan(
                     lf.idleSurvived ? 0 : 1,
                     lf.idleSafer ? 1 : 0,
                     lf.needDelaySearch ? 1 : 0,
+                    lf.bothDead ? 1 : 0,
                     tickBudget
                 ));
             }
