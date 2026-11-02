@@ -7,6 +7,7 @@
 #include "../core/AssistSimEstimate.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
+#include "../core/AssistPickV1.hpp"
 #include "../core/MissAssistContracts.hpp"
 #include "../core/SimCollisionPolicy.hpp"
 #include "../core/SimTrust.hpp"
@@ -151,6 +152,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(DevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string missReport;
     expect(MissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
+    std::string pickV1Report;
+    expect(AssistPickV1::selfCheck(pickV1Report), "assist-pick-v1");
     std::string foresightReport;
     expect(TravelForesight::selfCheck(foresightReport), "travel-foresight");
     std::string probeReport;

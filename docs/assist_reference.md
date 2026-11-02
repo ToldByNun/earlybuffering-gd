@@ -465,7 +465,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
+| G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. Live choose lives in `AssistPickV1` (PlanGold `assist-pick-v1`); ShadowSimulator only adds jitter / shared cand eval. |
 | G1 v2 | `assist-pick` = **v2** (ex-New): **Delay-viable = clearsThreat** (or no-zone / zoneCleared — not soft `surviveBin≥1`). d0 viable → Pass; else **exit prediction** ranks **all viable** delays by horizon outcome (`!died && !unknown` / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |

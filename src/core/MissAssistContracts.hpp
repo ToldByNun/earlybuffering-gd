@@ -6,7 +6,7 @@
 #include <string>
 
 // Pure logic contracts for early-press / miss-assist (no PlayLayer).
-// PlanGold + future pick modes (Legacy vs New) share these fixtures.
+// PlanGold + pick modes share these fixtures. Live v1 choose is AssistPickV1.
 class MissAssistContracts {
 public:
     enum class PickMode {

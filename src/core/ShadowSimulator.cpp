@@ -1,6 +1,7 @@
 #include "ShadowSimulator.hpp"
 #include "AssistClock.hpp"
 #include "AssistHorizon.hpp"
+#include "AssistPickV1.hpp"
 #include "BakeMap.hpp"
 #include "MissAssistContracts.hpp"
 #include "SimTrust.hpp"
@@ -3066,80 +3067,29 @@ SimPlan ShadowSimulator::plan(
 
     bool const legacyPick = options.legacyPick;
 
-    // Legacy orb: earliest ±k-robust activation (first hit in band).
-    auto pickEarliestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
-        if (pool.empty()) return -1;
-        int const k = robustK;
-        int best = -1;
-        for (int d : pool) {
-            if (d < 0 || d > limit) continue;
+    // v1 (frozen Legacy) pick helpers — see AssistPickV1.
+    std::vector<AssistPickV1::CandView> pickViews(
+        static_cast<size_t>(std::max(0, limit)) + 1u
+    );
+    auto syncPickViews = [&]() {
+        for (int d = 0; d <= limit; ++d) {
+            auto& v = pickViews[static_cast<size_t>(d)];
             auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable) continue;
-            if (needActivation && !c.activatedRing) continue;
-            bool ok = true;
-            for (int e = d - k; e <= d + k; ++e) {
-                if (e < 0 || e > limit) continue;
-                auto const& n = cands[static_cast<size_t>(e)];
-                if (!n.viable) {
-                    ok = false;
-                    break;
-                }
-                if (needActivation && !n.activatedRing) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (!ok) continue;
-            if (best < 0 || d < best) best = d;
+            v.viable = c.viable;
+            v.activatedRing = c.activatedRing;
         }
-        if (best >= 0) return best;
-        for (int d : pool) {
-            if (d < 0 || d > limit) continue;
-            auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable) continue;
-            if (needActivation && !c.activatedRing) continue;
-            return d;
-        }
-        return -1;
     };
-
-    // Legacy/non-orb miss-assist: latest ±k-robust (then latest viable).
-    // Earliest-viable jumped too soon after a short delay and still died.
+    auto pickEarliestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
+        syncPickViews();
+        return AssistPickV1::pickEarliestRobust(
+            pickViews.data(), limit, robustK, pool, needActivation
+        );
+    };
     auto pickLatestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
-        if (pool.empty()) return -1;
-        int const k = robustK;
-        int best = -1;
-        for (int d : pool) {
-            if (d < 0 || d > limit) continue;
-            auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable) continue;
-            if (needActivation && !c.activatedRing) continue;
-            bool ok = true;
-            for (int e = d - k; e <= d + k; ++e) {
-                if (e < 0 || e > limit) continue;
-                auto const& n = cands[static_cast<size_t>(e)];
-                if (!n.viable) {
-                    ok = false;
-                    break;
-                }
-                if (needActivation && !n.activatedRing) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (!ok) continue;
-            if (best < 0 || d > best) best = d;
-        }
-        if (best >= 0) return best;
-        for (int i = static_cast<int>(pool.size()) - 1; i >= 0; --i) {
-            int const d = pool[static_cast<size_t>(i)];
-            if (d < 0 || d > limit) continue;
-            auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable) continue;
-            if (needActivation && !c.activatedRing) continue;
-            return d;
-        }
-        return -1;
+        syncPickViews();
+        return AssistPickV1::pickLatestRobust(
+            pickViews.data(), limit, robustK, pool, needActivation
+        );
     };
 
     auto applyChosenMeta = [&](int pick) {
