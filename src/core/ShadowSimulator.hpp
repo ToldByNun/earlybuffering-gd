@@ -366,7 +366,8 @@ public:
         int d0DeathTick,
         float d0DeathX
     );
-    // Some delay > 0 improves on d0 (viable, or better bin / endX).
+    // Some delay > 0 improves on d0 — later must be Delay-worthy Alive
+    // (viable + !died). Bare bin/endX gains on dead soft cands never count.
     static bool classifyAscentUseful(
         bool continuous,
         bool pressDown,
@@ -375,7 +376,8 @@ public:
         float d0EndX,
         bool laterViable,
         int laterSurviveBin,
-        float laterEndX
+        float laterEndX,
+        bool laterAlive
     );
     // Overhead / ceiling-style death relative to player Y.
     static bool deathLooksLikeAscent(
@@ -494,6 +496,9 @@ public:
         bool tapRelease = false;
         int cap = 48;
         int slack = 2;
+        // Live Delay-worthy: after zone clear keep sim until death / cap
+        // (skip the short +24 early cut used for soft bake scoring).
+        bool continuePastClear = false;
     };
     static Model modelFor(PlayerObject* p, int limit, float capMul = 1.f);
 

@@ -1636,12 +1636,15 @@ bool ShadowSimulator::classifyAscentUseful(
     float d0EndX,
     bool laterViable,
     int laterSurviveBin,
-    float laterEndX
+    float laterEndX,
+    bool laterAlive
 ) {
     if (!continuous || !pressDown) return false;
-    if (laterViable && !d0Viable) return true;
+    // Dead / soft Landing-LateCrash ghosts must not invent ascentUseful.
+    if (!laterViable || !laterAlive) return false;
+    if (!d0Viable) return true;
     if (laterSurviveBin > d0SurviveBin) return true;
-    if (laterViable && laterEndX > d0EndX + kFutileEndXGain) return true;
+    if (laterEndX > d0EndX + kFutileEndXGain) return true;
     return false;
 }
 
@@ -1837,7 +1840,8 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             }
         }
 
-        if (pastZone && t + 1 - r.ticksBeforeNeutral > 24) {
+        if (pastZone && !model.continuePastClear
+            && t + 1 - r.ticksBeforeNeutral > 24) {
             return finish(r);
         }
     }
@@ -1960,7 +1964,8 @@ ShadowSimulator::RunResult ShadowSimulator::runTrajectoryOne(
             }
         }
 
-        if (pastZone && t + 1 - r.ticksBeforeNeutral > 24) {
+        if (pastZone && !model.continuePastClear
+            && t + 1 - r.ticksBeforeNeutral > 24) {
             return finish(r);
         }
     }
@@ -2102,6 +2107,13 @@ static int surviveBinOf(int ticks) {
     return 3;
 }
 
+// Ranking / ascent inputs: ticks until death, else full run — not neutral stamp.
+static int rankingSurviveTicks(ShadowSimulator::RunResult const& r) {
+    if (r.died && r.deathTick >= 0) return r.deathTick + 1;
+    if (r.ticksRan > 0) return r.ticksRan;
+    return r.ticksBeforeNeutral;
+}
+
 static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const& zone) {
     if (!zone.valid) {
         if (r.unknownTrunc) return true;
@@ -2228,6 +2240,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     delay = std::max(0, delay);
 
     Model model = modelFor(real, limit, options.capMul);
+    model.continuePastClear = options.requireAliveForDelay;
     int tickBudget = options.tickBudget > 0 ? options.tickBudget : kDefaultTickBudget;
     int const tickBudgetStart = tickBudget;
     auto const wall0 = std::chrono::steady_clock::now();
@@ -2346,6 +2359,7 @@ SimPlan ShadowSimulator::plan(
     if (firstDt <= 0.f || firstDt > dt) firstDt = dt;
 
     Model model = modelFor(real, limit, options.capMul);
+    model.continuePastClear = options.requireAliveForDelay;
     plan.continuous = model.continuous;
     int const robustK = resolveRobustK(real, options);
     float const latencyWeight = std::max(0.f, options.latencyWeight);
@@ -2507,7 +2521,7 @@ SimPlan ShadowSimulator::plan(
         c.endX = r.endX;
         c.deathX = r.deathX;
         c.jumpTick = r.jumped ? r.jumpTick : d;
-        c.surviveTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
+        c.surviveTicks = rankingSurviveTicks(r);
         c.surviveBin = surviveBinOf(c.surviveTicks);
         c.requireHold = false; // set only if tap fails and hold-branch wins
         return c;
@@ -2618,9 +2632,7 @@ SimPlan ShadowSimulator::plan(
                 s.died = rr.died;
                 s.deathTick = rr.died ? rr.deathTick : -1;
                 s.endX = rr.died ? rr.deathX : rr.endX;
-                s.surviveTicks = rr.ticksBeforeNeutral > 0
-                    ? rr.ticksBeforeNeutral
-                    : rr.ticksRan;
+                s.surviveTicks = rankingSurviveTicks(rr);
                 return s;
             };
 
@@ -2674,7 +2686,7 @@ SimPlan ShadowSimulator::plan(
                     idleOut = sampleLight(!down, horizon);
                     return;
                 }
-                Model longModel = model;
+                Model longModel = model; // inherits continuePastClear
                 longModel.cap = std::max(1, horizon);
                 auto pressR = runOne(
                     layer, real, down, 0, limit, dt, firstDt, longModel, -1,
@@ -3094,8 +3106,7 @@ SimPlan ShadowSimulator::plan(
                         }
                         c.endX = br.endX;
                         c.deathX = br.deathX;
-                        c.surviveTicks = br.ticksBeforeNeutral > 0
-                            ? br.ticksBeforeNeutral : br.ticksRan;
+                        c.surviveTicks = rankingSurviveTicks(br);
                         c.surviveBin = surviveBinOf(c.surviveTicks);
                         c.releaseAfter = k;
                         c.requireHold = false;
@@ -3122,8 +3133,7 @@ SimPlan ShadowSimulator::plan(
                 }
                 h.endX = hold.endX;
                 h.deathX = hold.deathX;
-                h.surviveTicks = hold.ticksBeforeNeutral > 0
-                    ? hold.ticksBeforeNeutral : hold.ticksRan;
+                h.surviveTicks = rankingSurviveTicks(hold);
                 h.surviveBin = surviveBinOf(h.surviveTicks);
                 finalizeViable(h, 40);
                 if (h.viable && !c.viable) {
@@ -3149,7 +3159,7 @@ SimPlan ShadowSimulator::plan(
     bool orbIntent = orbAssist && (orbHint.found || spatialHint || anyActivation);
     ledgerOrbIntent = orbIntent;
 
-    // Continuous ascentUseful: any later delay beats d0 (viable / bin / endX).
+    // Continuous ascentUseful: later Delay-worthy Alive beats d0 (not soft-dead).
     {
         auto const& c0ref = cands[0];
         for (int d = 1; d <= limit; ++d) {
@@ -3163,7 +3173,8 @@ SimPlan ShadowSimulator::plan(
                     c0ref.endX,
                     c.viable,
                     c.surviveBin,
-                    c.endX
+                    c.endX,
+                    !c.raw.died
                 )) {
                 plan.ascentUseful = true;
                 break;
@@ -3569,7 +3580,7 @@ SimPlan ShadowSimulator::plan(
             // Hold branch — same Delay-viable rule (soft bake vs Live Alive-only).
             if (!runResultDelaySafe(r, zone, model, real, requireAlive)) continue;
 
-            int const sTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
+            int const sTicks = rankingSurviveTicks(r);
             int const sBin = surviveBinOf(sTicks);
             if (earliest < 0 || rel < earliest) earliest = rel;
             if (latest < 0 || rel > latest) latest = rel;
@@ -3824,7 +3835,8 @@ SimPlan ShadowSimulator::planSequence(
     }
 
     Model model = modelFor(real, limit, options.capMul);
-    // Commit 15: scoreHorizon from AssistHorizon (long only when trusted).
+    model.continuePastClear = options.requireAliveForDelay;
+    // ScoreHorizon from AssistHorizon (long only when trusted).
     int horizon = options.smartHorizon;
     if (horizon <= 0) {
         bool const trustOk = SimTrust::get().okAt(real->getPositionX());
@@ -4454,16 +4466,29 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         "ascent-death-flipped"
     );
     expect(
-        classifyAscentUseful(true, true, false, 0, 50.f, true, 0, 50.f),
+        classifyAscentUseful(true, true, false, 0, 50.f, true, 0, 50.f, true),
         "ascent-later-viable"
     );
     expect(
-        classifyAscentUseful(true, true, true, 0, 50.f, true, 2, 50.f),
+        classifyAscentUseful(true, true, true, 0, 50.f, true, 2, 50.f, true),
         "ascent-better-bin"
     );
     expect(
-        !classifyAscentUseful(true, true, true, 1, 50.f, true, 1, 52.f),
+        !classifyAscentUseful(true, true, true, 1, 50.f, true, 1, 52.f, true),
         "ascent-no-gain"
+    );
+    // Dead soft / high bin without Alive later must not invent ascentUseful.
+    expect(
+        !classifyAscentUseful(true, true, false, 0, 50.f, false, 3, 90.f, false),
+        "ascent-dead-not-useful"
+    );
+    expect(
+        !classifyAscentUseful(true, true, false, 0, 50.f, true, 3, 90.f, false),
+        "ascent-soft-died-not-useful"
+    );
+    expect(
+        !classifyAscentUseful(true, true, true, 0, 50.f, true, 2, 50.f, false),
+        "ascent-alive-flag-required"
     );
 
     expect(pickPreferredRelease(2, 10, true) == 2, "pref-rel-cont");
