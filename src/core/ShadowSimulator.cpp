@@ -3746,13 +3746,14 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    // Commit 8: exact viable delays in window (exit-predict must not fill gaps).
+    // Exact Delay-worthy delays in window (Alive when requireAliveForDelay).
+    // HUS arm uses this list as the escape signal — never soft-dead only.
     {
         plan.viableDelays.clear();
         plan.viableDelays.reserve(static_cast<size_t>(limit) + 1);
         for (int d = 0; d <= limit; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable) continue;
+            if (!c.viable || c.raw.died) continue;
             plan.viableDelays.push_back(d);
         }
     }

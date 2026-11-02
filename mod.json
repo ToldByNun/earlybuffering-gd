@@ -407,6 +407,12 @@
 			"description": "On = planner prefers delays that hit a needed orb when one matters. Off = only hazard/threat logic (orbs ignored for timing). On helps orb sections; off if orb logic feels wrong on a level.",
 			"default": true
 		},
+		"disable-hus": {
+			"type": "bool",
+			"name": "Disable Soft Hold (HUS)",
+			"description": "On (default) = Soft Hold-Until-Safe never arms. Off = HUS may soft-hold when orb foresight or an Alive delay escape exists — never deadline-injects without that escape.",
+			"default": true
+		},
 		"sim-budget-us": {
 			"type": "int",
 			"name": "Sim Budget (µs)",
