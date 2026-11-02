@@ -5,24 +5,26 @@
 #include <vector>
 
 // Live choose for assist-pick **v2**.
-// Skeleton (WU10): same policy as AssistPickV1 via thin delegate.
-// WU11 fills long-path / foresight ranking using surviveBin / endX / Context.
+// Foresight-first: among ±k-robust viable delays, rank by
+//   orbUseful > surviveBin > surviveTicks > endX − λ·delay
+// (not v1's latest-robust). Orb band still earliest activation.
 // Pure over cand views — no PlayLayer / sim. ShadowSimulator owns jitter.
 class AssistPickV2 {
 public:
     struct CandView {
         bool viable = false;
         bool activatedRing = false;
-        // Reserved for WU11 ranking (ignored by skeleton choose).
+        bool orbUseful = false;
         int surviveBin = 0;
+        int surviveTicks = 0;
         float endX = 0.f;
     };
 
-    // Optional foresight / miss-assist hints (ignored by skeleton choose).
     struct Context {
         bool idleSafer = false;
         bool ascentUseful = false;
         bool longForesightNeedSearch = false;
+        float latencyWeight = 0.f;
     };
 
     struct Result {
@@ -30,6 +32,15 @@ public:
         bool doPass = false;
         bool requireOrb = false;
     };
+
+    // Lexico foresight compare: true if a (at delayA) beats b (at delayB).
+    static bool foresightBetter(
+        CandView const& a,
+        int delayA,
+        CandView const& b,
+        int delayB,
+        float latencyWeight
+    );
 
     static int pickEarliestRobust(
         CandView const* cands,
@@ -47,7 +58,19 @@ public:
         bool needActivation
     );
 
-    // Skeleton: same rules as AssistPickV1::choose (Context unused).
+    // Best ±k-robust (else any viable) in pool by foresightBetter.
+    static int pickBestForesight(
+        CandView const* cands,
+        int limit,
+        int robustK,
+        std::vector<int> const& pool,
+        bool needActivation,
+        float latencyWeight
+    );
+
+    // Orb → earliest ±k-robust in band.
+    // Else foresight-rank; idleSafer / longForesightNeedSearch prefer Delay
+    // when a later cand beats or matches d0 foresight.
     static Result choose(
         CandView const* cands,
         int limit,
@@ -62,6 +85,14 @@ public:
 
 private:
     AssistPickV2() = default;
+
+    static bool neighborRobust(
+        CandView const* cands,
+        int limit,
+        int robustK,
+        int delay,
+        bool needActivation
+    );
 };
 
 #endif // EARLYBUFFER_CORE_ASSISTPICKV2_HPP

@@ -2443,7 +2443,6 @@ SimPlan ShadowSimulator::plan(
         );
 
         // Live V2: LongForesight press-vs-idle over AssistHorizon (extend if press dies).
-        bool longForesightNeedSearch = false;
         if (!options.legacyPick) {
             int const h0 = std::max(
                 LongForesight::kMinHorizon, horizonCaps.scoreHorizon
@@ -2547,7 +2546,7 @@ SimPlan ShadowSimulator::plan(
 
                 auto const lf = LongForesight::decide(lfIn);
                 if (lf.idleSafer) plan.idleSafer = true;
-                longForesightNeedSearch = lf.needDelaySearch;
+                plan.longForesightNeedSearch = lf.needDelaySearch;
                 AssistLog::debug(fmt::format(
                     "PLAN id={} longForesight eng={} h={} ext={} "
                     "pressDie={} idleDie={} idleSafer={} needSearch={} budget={}",
@@ -2630,7 +2629,7 @@ SimPlan ShadowSimulator::plan(
             // Commit 11: trusted opportunity → MUST Delay-search (skip no-threat exit).
             if (options.mustDelaySearch) searchFurther = true;
             // Live V2 LongForesight: press dies on long horizon → keep searching.
-            if (longForesightNeedSearch) searchFurther = true;
+            if (plan.longForesightNeedSearch) searchFurther = true;
 
             if (!searchFurther) {
                 plan.action = PlanAction::Pass;
@@ -3121,7 +3120,7 @@ SimPlan ShadowSimulator::plan(
     ledgerActMin = actMin;
     ledgerActMax = actMax;
 
-    // Live choose: v1 = AssistPickV1; v2 = AssistPickV2 (skeleton ≡ v1 until WU11).
+    // Live choose: v1 = AssistPickV1 (latest-robust); v2 = AssistPickV2 (foresight-first).
     bool const usePickV2 = !options.legacyPick;
     std::vector<AssistPickV1::CandView> pickViewsV1(
         static_cast<size_t>(std::max(0, limit)) + 1u
@@ -3136,7 +3135,9 @@ SimPlan ShadowSimulator::plan(
                 auto& v = pickViewsV2[static_cast<size_t>(d)];
                 v.viable = c.viable;
                 v.activatedRing = c.activatedRing;
+                v.orbUseful = c.orbUseful;
                 v.surviveBin = c.surviveBin;
+                v.surviveTicks = c.surviveTicks;
                 v.endX = c.endX;
             }
             else {
@@ -3168,7 +3169,6 @@ SimPlan ShadowSimulator::plan(
             pickViewsV1.data(), limit, robustK, pool, needActivation
         );
     };
-
     auto applyChosenMeta = [&](int pick) {
         if (pick < 0 || pick > limit) return;
         auto const& c = cands[static_cast<size_t>(pick)];
@@ -3201,6 +3201,61 @@ SimPlan ShadowSimulator::plan(
             applyChosenMeta(chosen);
             plan.requireOrb = true;
         }
+    }
+    else if (usePickV2) {
+        // V2 foresight-first (Hybrid bake wins never reach this Live path).
+        AssistPickV2::Context ctx;
+        ctx.idleSafer = plan.idleSafer;
+        ctx.ascentUseful = plan.ascentUseful;
+        ctx.longForesightNeedSearch = plan.longForesightNeedSearch;
+        ctx.latencyWeight = latencyWeight;
+
+        auto runV2Choose = [&]() -> AssistPickV2::Result {
+            syncPickViews();
+            return AssistPickV2::choose(
+                pickViewsV2.data(),
+                limit,
+                robustK,
+                false,
+                -1,
+                -1,
+                ctx
+            );
+        };
+
+        // Jitter top-2 around foresight pick; then re-choose on surviving cands.
+        chosen = pickWithJitterTop2([&]() {
+            return runV2Choose().chosen;
+        });
+        {
+            auto r = runV2Choose();
+            if (r.chosen >= 0) {
+                chosen = r.chosen;
+                doPass = r.doPass;
+            }
+            else if (chosen >= 0 && chosen <= limit
+                && cands[static_cast<size_t>(chosen)].viable) {
+                doPass = (chosen == 0);
+            }
+            else {
+                chosen = -1;
+                doPass = false;
+            }
+            if (chosen >= 0) applyChosenMeta(chosen);
+            if (doPass && chosen == 0) {
+                plan.threatCleared = true;
+                plan.nowIsSafe = true;
+            }
+        }
+        AssistLog::debug(fmt::format(
+            "PLAN id={} pickV2 foresight chosen={} pass={} idleSafer={} lfSearch={} ascent={}",
+            plan.planId,
+            chosen,
+            doPass ? 1 : 0,
+            plan.idleSafer ? 1 : 0,
+            plan.longForesightNeedSearch ? 1 : 0,
+            plan.ascentUseful ? 1 : 0
+        ));
     }
     else {
         // v1: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
@@ -3308,11 +3363,11 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    // assist-verify=ab formerly coin-flipped Legacy vs New; New choose is gone.
+    // assist-verify=ab formerly coin-flipped Legacy vs New; now logs active pick.
     if (StageConfig::assistVerifyAb()) {
         AssistLog::debug(fmt::format(
-            "VERIFY id={} ab-noop (v1-only) chosen={} doPass={}",
-            plan.planId, chosen, doPass ? 1 : 0
+            "VERIFY id={} ab-noop pick={} chosen={} doPass={}",
+            plan.planId, usePickV2 ? "v2" : "v1", chosen, doPass ? 1 : 0
         ));
     }
 

@@ -95,6 +95,8 @@ struct SimPlan {
     // later delay in-window improves survival (ascent/hold). → Delay not Pass.
     bool idleSafer = false;
     bool ascentUseful = false;
+    // Live V2 LongForesight: press dies on long horizon → choose prefers Delay.
+    bool longForesightNeedSearch = false;
     bool requireOrb = false;
     bool requireHold = false;
     int dMin = -1;
