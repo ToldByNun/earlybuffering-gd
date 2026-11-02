@@ -237,8 +237,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
-| assist-pick | string | v1 | v1/v2 (aliases Legacy/New; v2 currently = v1) | | Assist / Algorithm — G1 pick (v1 default; New choose removed) |
-| assist-engine | string | ShadowPlayer | ShadowPlayer/Trajectory | | Live V2 foresight backend; **v1 always ShadowPlayer** (effective) |
+| assist-pick | string | v1 | v1/v2 (aliases Legacy/New; v2 choose still AssistPickV1) | | Assist / Algorithm — G1 pick (v1 default; New choose removed). **v2** also runs `LongForesight` |
+| assist-engine | string | ShadowPlayer | ShadowPlayer/Trajectory | | Live V2 foresight backend for `LongForesight` (and later plan wire); **v1 always ShadowPlayer** (effective) |
 | bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
@@ -467,7 +467,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
 | G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. Live choose lives in `AssistPickV1` (PlanGold `assist-pick-v1`); ShadowSimulator only adds jitter / shared cand eval. |
-| G1 v2 | Setting slot reserved. Former **New** outcome-rank choose + depth-1 `planSequence` exit-predict **removed**. Until AssistPickV2 ships, v2 uses the same Live path as v1. `planSequence` only when `smart-depth` > 1. |
+| G1 v2 | Former **New** outcome-rank choose + depth-1 `planSequence` exit-predict **removed**. Until AssistPickV2 ships, v2 choose = AssistPickV1, plus **LongForesight** press-vs-idle (`assist-engine`). `planSequence` only when `smart-depth` > 1. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |
@@ -499,6 +499,10 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 ### TravelForesight
 
 `TravelForesight` replaces the old fixed `(limit+8)*5.5` ahead-X for orb hints. Ahead distance = clamp(`speedMul * (5.5/(1/240)) * (limit+slack)*simDt + 16`, 60…320). Scans **orbs and jump pads**; skips activated / claimed. `ShadowSimulator::spatialOrbHint` and controller spam overrides use the same cone. `PLAN` / `logPlan` emit `foresight=0|1` from `SimPlan.foresightOrbPad`.
+
+### LongForesight (Live V2)
+
+When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `AssistHorizon` scoreHorizon (min 48). If press dies inside the window, horizon extends once (capped by look-ahead / 320). **Trajectory** engine uses a lightweight hold/coast loop; **ShadowPlayer** uses `runOne(0)` + `runBaseline` at the long cap. Results feed `idleSafer` and can force delay-search (skip Pass no-threat) when press still dies. V1 skips this entirely. Fixtures: `LongForesight::selfCheck` (PlanGold `long-foresight`).
 
 ### OpportunityProbe (G2)
 

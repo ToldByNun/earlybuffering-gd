@@ -2,6 +2,7 @@
 #include "AssistClock.hpp"
 #include "AssistHorizon.hpp"
 #include "AssistPickV1.hpp"
+#include "LongForesight.hpp"
 #include "BakeMap.hpp"
 #include "MissAssistContracts.hpp"
 #include "SimTrust.hpp"
@@ -2440,6 +2441,128 @@ SimPlan ShadowSimulator::plan(
             c0.raw.died ? c0.raw.deathX : c0.endX
         );
 
+        // Live V2: LongForesight press-vs-idle over AssistHorizon (extend if press dies).
+        bool longForesightNeedSearch = false;
+        if (!options.legacyPick) {
+            int const h0 = std::max(
+                LongForesight::kMinHorizon, horizonCaps.scoreHorizon
+            );
+            int const lookCap = StageConfig::lookAheadCap();
+            int const hMax = lookCap > 0
+                ? std::max(h0, lookCap)
+                : std::min(320, h0 + h0 / 2 + LongForesight::kExtendStep);
+            int const minBudget = h0 * 2 + OpportunityProbe::kMinBudgetForProbe;
+
+            auto pathFromRun = [](RunResult const& rr) {
+                LongForesight::PathStats s;
+                s.died = rr.died;
+                s.deathTick = rr.died ? rr.deathTick : -1;
+                s.endX = rr.died ? rr.deathX : rr.endX;
+                s.surviveTicks = rr.ticksBeforeNeutral > 0
+                    ? rr.ticksBeforeNeutral
+                    : rr.ticksRan;
+                return s;
+            };
+
+            // Trajectory: lightweight hold/coast (same button semantics as traj viz).
+            // ShadowPlayer: full runOne(d0) + runBaseline at long cap.
+            auto sampleLight = [&](bool holdJump, int horizon) {
+                LongForesight::PathStats s;
+                if (!layer || !real || !m_shadow || horizon <= 0) return s;
+                copyPlayerState(m_shadow, real);
+                m_dead = false;
+                m_jumped = false;
+                m_unknown = false;
+                m_activatedRing = false;
+                m_ringCount = 0;
+                m_deathObject = nullptr;
+                auto* sh = m_shadow;
+                sh->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = holdJump;
+                for (int t = 0; t < horizon; ++t) {
+                    if (tickBudget <= 0) {
+                        plan.budgetHit = true;
+                        break;
+                    }
+                    --tickBudget;
+                    float const stepDt = (t == 0) ? firstDt : dt;
+                    this->m_simAbsTick = this->m_simTickBase + t;
+                    stepPhysics(layer, sh, stepDt, dt);
+                    s.surviveTicks = t + 1;
+                    s.endX = sh->getPositionX();
+                    if (m_dead) {
+                        s.died = true;
+                        s.deathTick = t;
+                        s.endX = sh->getPositionX();
+                        break;
+                    }
+                    if (m_unknown) {
+                        s.died = true;
+                        s.deathTick = t;
+                        break;
+                    }
+                }
+                this->resetCaptureForNextRun(layer);
+                return s;
+            };
+
+            auto samplePair = [&](int horizon, LongForesight::PathStats& pressOut,
+                                  LongForesight::PathStats& idleOut) {
+                if (options.assistEngine
+                    == StageConfig::AssistEngineKind::Trajectory) {
+                    // down=press → action holds Jump; idle coasts. Release flips.
+                    pressOut = sampleLight(down, horizon);
+                    idleOut = sampleLight(!down, horizon);
+                    return;
+                }
+                Model longModel = model;
+                longModel.cap = std::max(1, horizon);
+                auto pressR = runOne(
+                    layer, real, down, 0, limit, dt, firstDt, longModel, -1,
+                    zone.valid ? &zone : nullptr, &tickBudget
+                );
+                this->resetCaptureForNextRun(layer);
+                auto idleR = runBaseline(
+                    layer, real, down, dt, firstDt, longModel, &tickBudget
+                );
+                this->resetCaptureForNextRun(layer);
+                pressOut = pathFromRun(pressR);
+                idleOut = pathFromRun(idleR);
+            };
+
+            if (tickBudget >= minBudget && !wallExceeded()) {
+                LongForesight::Input lfIn;
+                lfIn.horizon = h0;
+                samplePair(h0, lfIn.press, lfIn.idle);
+
+                int const h1 = LongForesight::extendHorizon(
+                    h0, lfIn.press.died ? lfIn.press.deathTick : -1, hMax
+                );
+                if (h1 > h0 && tickBudget >= h1 * 2
+                    && !wallExceeded()) {
+                    lfIn.hasExtended = true;
+                    lfIn.horizonExt = h1;
+                    samplePair(h1, lfIn.pressExt, lfIn.idleExt);
+                }
+
+                auto const lf = LongForesight::decide(lfIn);
+                if (lf.idleSafer) plan.idleSafer = true;
+                longForesightNeedSearch = lf.needDelaySearch;
+                AssistLog::debug(fmt::format(
+                    "PLAN id={} longForesight eng={} h={} ext={} "
+                    "pressDie={} idleDie={} idleSafer={} needSearch={} budget={}",
+                    plan.planId,
+                    StageConfig::assistEngineName(options.assistEngine),
+                    lf.horizonUsed,
+                    lf.extended ? 1 : 0,
+                    lf.pressSurvived ? 0 : 1,
+                    lf.idleSurvived ? 0 : 1,
+                    lf.idleSafer ? 1 : 0,
+                    lf.needDelaySearch ? 1 : 0,
+                    tickBudget
+                ));
+            }
+        }
+
         // No threat target: baseline survives and no orb/pad ahead.
         // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
         bool const noThreat = !c0.raw.died && !zone.valid;
@@ -2505,6 +2628,8 @@ SimPlan ShadowSimulator::plan(
             );
             // Commit 11: trusted opportunity → MUST Delay-search (skip no-threat exit).
             if (options.mustDelaySearch) searchFurther = true;
+            // Live V2 LongForesight: press dies on long horizon → keep searching.
+            if (longForesightNeedSearch) searchFurther = true;
 
             if (!searchFurther) {
                 plan.action = PlanAction::Pass;
@@ -2996,9 +3121,7 @@ SimPlan ShadowSimulator::plan(
     ledgerActMax = actMax;
 
     // Live choose = AssistPickV1 only (New / outcome-rank choose deleted).
-    // assist-pick v2 + assist-engine Trajectory wired in later units (WU9–12).
-    (void)options.legacyPick;
-    (void)options.assistEngine;
+    // LongForesight already consumed legacyPick + assistEngine (V2). Pick V2 = WU10+.
     std::vector<AssistPickV1::CandView> pickViews(
         static_cast<size_t>(std::max(0, limit)) + 1u
     );
