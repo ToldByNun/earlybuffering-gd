@@ -2856,8 +2856,9 @@ SimPlan ShadowSimulator::plan(
             kHazardProximityXMax
         );
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
-        // idleSafer or d0 death: never early-Pass when immediate action dies in sim; search delays.
-        if (!c0.raw.died && !plan.idleSafer && shouldWaveHazardProximityPass(
+        // Only suppress when d0 died (need to search for a living save).
+        // idleSafer alone must not skip this Pass — Alive later is checked later.
+        if (!c0.raw.died && shouldWaveHazardProximityPass(
                 isWave, nearHazard, noOrbTarget, plan.foresightOrbPad, down
             )) {
             plan.action = PlanAction::Pass;
@@ -3184,24 +3185,31 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    // Wave: no delay improves surviveBin / endX → Pass (avoid phase-shift "assists").
-    // Never discard a surviving delay when d0 actually died in sim.
+    // Wave: no Alive delay improves surviveBin / endX → Pass (avoid phase-shift).
+    // Never discard a living delay when d0 died. idleSafer alone does not skip
+    // this Pass — need an Alive later cand.
     {
         bool const isWave = real && real->m_isDart;
         int bestBin = 0;
         float bestGain = 0.f;
         float const baseEnd = cands[0].endX;
         bool anySavesFromD0Death = false;
+        bool anyAliveLater = false;
         for (int d = 0; d <= limit; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
+            bool const aliveWorthy = c.viable && !c.raw.died;
+            if (!aliveWorthy) continue;
             if (c.surviveBin > bestBin) bestBin = c.surviveBin;
             float const gain = c.endX - baseEnd;
             if (gain > bestGain) bestGain = gain;
-            if (d > 0 && cands[0].raw.died && c.viable && !c.raw.died) {
-                anySavesFromD0Death = true;
+            if (d > 0) {
+                anyAliveLater = true;
+                if (cands[0].raw.died) anySavesFromD0Death = true;
             }
         }
-        if (!anySavesFromD0Death && !plan.idleSafer && shouldWaveFutileDelayPass(
+        // idleSafer skips futile Pass only when an Alive later escape exists.
+        bool const idleHoldsEscape = plan.idleSafer && anyAliveLater;
+        if (!anySavesFromD0Death && !idleHoldsEscape && shouldWaveFutileDelayPass(
                 isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad, down
             )) {
             plan.action = PlanAction::Pass;
@@ -3506,34 +3514,52 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    // Continuous miss-assist: idle safer + ascent helps → Delay, not Pass/hopeless.
-    // Only when a later *surviving* cand exists in-window.
-    // Commit 11 InterveneGate: only if delay improves over viable d0 (help-don't-hurt).
+    // Continuous miss-assist: idle safer + ascent → Delay only with Alive later.
+    // Never force Delay on soft-dead. InterveneGate: ascentUseful alone is NOT
+    // "improves" when d0 is already Delay-worthy Alive (help-don't-hurt).
     if (plan.idleSafer && plan.ascentUseful
         && (doPass || chosen <= 0)) {
         std::vector<int> pool;
         for (int d = 1; d <= limit; ++d) pool.push_back(d);
         int forced = pickLatestRobust(pool, false);
-        if (forced > 0 && cands[static_cast<size_t>(forced)].viable) {
-            bool const d0Ok = cands[0].viable;
-            bool const improves = !d0Ok || plan.ascentUseful;
-            if (PerfectAssistPolicy::interveneOk(
-                    d0Ok, true, improves
-                )) {
-                chosen = forced;
-                doPass = false;
-                applyChosenMeta(chosen);
+        if (forced > 0) {
+            auto const& fc = cands[static_cast<size_t>(forced)];
+            bool const forcedWorthy = fc.viable && !fc.raw.died;
+            if (forcedWorthy) {
+                bool const d0Ok = cands[0].viable && !cands[0].raw.died;
+                bool improves = !d0Ok;
+                if (d0Ok) {
+                    improves = fc.surviveBin > cands[0].surviveBin
+                        || fc.endX > cands[0].endX + kFutileEndXGain;
+                }
+                if (PerfectAssistPolicy::interveneOk(
+                        d0Ok, true, improves
+                    )) {
+                    chosen = forced;
+                    doPass = false;
+                    applyChosenMeta(chosen);
+                    AssistLog::debug(fmt::format(
+                        "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
+                        plan.planId, chosen
+                    ));
+                }
+            }
+            else {
                 AssistLog::debug(fmt::format(
-                    "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
-                    plan.planId, chosen
+                    "PLAN id={} idleSafer+ascent skip — no Alive later "
+                    "(forced={} viable={} died={})",
+                    plan.planId,
+                    forced,
+                    fc.viable ? 1 : 0,
+                    fc.raw.died ? 1 : 0
                 ));
             }
         }
     }
-    // Re-assert viable gate after idleSafer / budget-partial.
+    // Re-assert Delay-worthy gate after idleSafer / budget-partial.
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
-        if (!ch.viable || ch.diedBeforeAction
+        if (!ch.viable || ch.raw.died || ch.diedBeforeAction
             || ch.unknownTrunc || ch.toggleUnknown) {
             if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
                 sawToggleUnknown = true;

@@ -166,6 +166,9 @@ bool PerfectAssistPolicy::selfCheck(std::string& report) {
     expect(interveneOk(false, true, true), "intervene-save");
     expect(!interveneOk(true, true, false), "intervene-no-hurt");
     expect(!interveneOk(false, false, true), "intervene-not-viable");
+    // Callers must not pass ascentUseful alone as delayClearsBetter when d0 Alive.
+    expect(interveneOk(true, true, true), "intervene-real-improve");
+    expect(!interveneOk(true, true, false), "intervene-ascent-flag-not-enough");
 
     expect(preferSmallerWaveClear(3.f, 8.f, 1.f), "wave-smaller");
     expect(!preferSmallerWaveClear(8.f, 3.f, 1.f), "wave-not-larger");
