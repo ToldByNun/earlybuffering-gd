@@ -287,7 +287,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
             { true, false, false, 1, 30, 110.f, false },
             { true, false, false, 1, 30, 120.f, false }
         };
-        auto const r = choose(c, 2, 0, false, -1, -1);
+        auto const r = choose(c, 2, 0, false, -1, -1, Context{});
         expect(r.doPass && r.chosen == 0, "d0-pass");
     }
 
@@ -300,7 +300,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
         };
         std::vector<int> pool = { 0, 1, 2 };
         expect(pickBestForesight(c, 2, 0, pool, false, 0.f) == 1, "best-bin");
-        auto const r = choose(c, 2, 0, false, -1, -1);
+        auto const r = choose(c, 2, 0, false, -1, -1, Context{});
         expect(!r.doPass && r.chosen == 1, "choose-bin-not-latest");
     }
 
@@ -403,7 +403,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
             { true, true, true, 2, 60, 200.f, false },
             { true, true, true, 2, 60, 210.f, false }
         };
-        auto const r = choose(c, 3, 0, true, 1, 3);
+        auto const r = choose(c, 3, 0, true, 1, 3, Context{});
         expect(!r.doPass && r.chosen == 1 && r.requireOrb, "orb-earliest");
     }
 
@@ -423,7 +423,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
             { false, false, false, 0, 0, 0.f, true },
             { false, false, false, 0, 0, 0.f, true }
         };
-        auto const r = choose(c, 1, 0, false, -1, -1);
+        auto const r = choose(c, 1, 0, false, -1, -1, Context{});
         expect(r.chosen < 0 && !r.doPass, "hopeless");
     }
 
