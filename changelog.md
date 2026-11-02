@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.4.0
+
+**Escape honesty, portal-stack crash fix, assist cost attribution** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+### Live Delay honesty
+- **Delay-worthy** = `ModeSurvival` **Alive** only for Live arm (`requireAliveForDelay`). Soft Landing / Recoverable / LateCrash stay bake-verify soft-safe, never invent Live Delay.
+- AssistPickV2: `died` / Delay-worthy gate; both-dead and soft-died → hopeless (`chosen=-1`), never force Delay.
+- LongForesight: `needDelaySearch` / LF `idleSafer` only when idle still lives; both-dead → no Delay-search force.
+- Continuous: `ascentUseful` needs a later Alive cand; idleSafer+ascent post-pick force-Delay only with Alive later.
+- Overlay / logs: `PASS no-escape` when PassHopeless/Budget without escape; PlanGold fixtures for soft vs worthy, LF both-dead, PickV2, HUS bare arm.
+
+### Soft Hold-Until-Safe
+- Setting **`disable-hus` default on** (HUS never arms unless you turn it off).
+- When HUS is enabled: arm only with orb foresight / Alive `viableDelays`; deadline without orb → **`HUS drop`** (clear buffer, no inject).
+
+### Trajectory draw
+- HOLD/coast sample **until death**, hard max **960** (`TrajDrawHorizon`); v2 yellow preds stay on short scoreHorizon; dark-green only among Alive preds.
+
+### Portal-stack crash
+- Live assist sims **truncate** Soft vehicle/mirror/teleport/enter portals (`softPortalLiveTruncate`); bakeOffline still Includes them.
+- Block Soft-portal `activatedByPlayer` during live sim; poison-safe section walks (`SectionObjectWalk`) + collision candidate filter (AV read @ `0xFFF…` after stacked portals).
+
+### Main-thread cost (no quality cut)
+- **`AssistSpikeWatch`**: last press/release/HUS section breakdown on overlay (`plan.lf` / `plan.cands` / `plan.holdProbe` / `plan.twApply`, traj/parity/tw scopes).
+- **`TravelForesightCache`**: same-tick foresight cone reuse (press gate + spatial + HUS).
+- LongForesight reuses d0/baseline when `pathCoversHorizon`; OpportunityProbe skips mid/limit when search is already forced; linked dual skips dead P2.
+
+### Docs / packaging
+- `docs/assist_reference.md` Escape honesty + Guarantees / playtest rows; README / about / support → **v1.4.0**.
+
 ## v1.3.2
 
 **Assist honesty + bake fidelity + Main Window IA + iOS harden** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
