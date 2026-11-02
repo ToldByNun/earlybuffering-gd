@@ -2071,26 +2071,6 @@ static bool exitSurvivedHonest(bool died, bool unknown) {
     return !died && !unknown;
 }
 
-// New (preferOutcome): rank by predicted exit — surviveBin/ticks, then
-// endX − λ·delay (how far the jump carries). No fixed mid/latest.
-static bool betterCand(
-    Cand const& a, Cand const& b, float latencyWeight, bool preferOutcome
-) {
-    if (a.viable != b.viable) return a.viable && !b.viable;
-    if (a.orbUseful != b.orbUseful) return a.orbUseful && !b.orbUseful;
-    // Prefer truly lethal death last; Landing/Recoverable may still set raw.died.
-    if (preferOutcome && a.viable && b.viable && a.raw.died != b.raw.died) {
-        return !a.raw.died && b.raw.died;
-    }
-    if (a.surviveBin != b.surviveBin) return a.surviveBin > b.surviveBin;
-    if (a.surviveTicks != b.surviveTicks) return a.surviveTicks > b.surviveTicks;
-    float const scoreA = a.endX - latencyWeight * static_cast<float>(a.delay);
-    float const scoreB = b.endX - latencyWeight * static_cast<float>(b.delay);
-    if (scoreA != scoreB) return scoreA > scoreB;
-    // Weak early bias when prediction ties (gap-jump height).
-    return a.delay < b.delay;
-}
-
 // 0 = auto from mode / speed / dt variance / spam density; else clamp 1–3.
 static int resolveRobustK(PlayerObject* real, PlanOptions const& options) {
     int forced = options.robustK;
@@ -2751,12 +2731,11 @@ SimPlan ShadowSimulator::plan(
         }
 
         // Early-exit once prefer±k margin is evaluated and a robust prefer delay exists.
-        // New: never early-exit — full survivor band needed for outcome / exit predict.
-        // Legacy: orb foresight still blocks exit so activations outside prefer stay.
-        bool const preferExitOk = options.legacyPick
-            && MissAssistContracts::preferBandEarlyExitAllowed(
-                orbAssist, orbHint.found, spatialHint, plan.foresightOrbPad
-            );
+        // v1 only (New choose removed): orb foresight still blocks exit so activations
+        // outside prefer stay searchable.
+        bool const preferExitOk = MissAssistContracts::preferBandEarlyExitAllowed(
+            orbAssist, orbHint.found, spatialHint, plan.foresightOrbPad
+        );
         if (hasPrefer && preferExitOk && !plan.budgetHit
             && d == preferLastInOrder && preferBandRobust()) {
             AssistLog::debug(fmt::format(
@@ -2769,10 +2748,8 @@ SimPlan ShadowSimulator::plan(
         if (hasPrefer && !preferExitOk && d == preferLastInOrder
             && preferBandRobust()) {
             AssistLog::debug(fmt::format(
-                "PLAN id={} prefer-band early-exit suppressed ({} ) [{},{}]",
-                plan.planId,
-                options.legacyPick ? "orb foresight" : "new outcome",
-                preferLo, preferHi
+                "PLAN id={} prefer-band early-exit suppressed (orb foresight) [{},{}]",
+                plan.planId, preferLo, preferHi
             ));
         }
     }
@@ -2964,53 +2941,6 @@ SimPlan ShadowSimulator::plan(
         c.orbUseful = true;
     }
 
-    auto pickRobust = [&](std::vector<int> const& pool, bool needActivation, bool preferOutcome) -> int {
-        if (pool.empty()) return -1;
-        int const k = robustK;
-        int best = -1;
-        Cand bestC{};
-        bool have = false;
-        for (int d : pool) {
-            if (d < 0 || d > limit) continue;
-            auto const& c = cands[static_cast<size_t>(d)];
-            if (!c.viable) continue;
-            if (needActivation && !c.activatedRing) continue;
-            bool ok = true;
-            for (int e = d - k; e <= d + k; ++e) {
-                if (e < 0 || e > limit) continue;
-                auto const& n = cands[static_cast<size_t>(e)];
-                if (!n.viable) {
-                    ok = false;
-                    break;
-                }
-                if (needActivation && !n.activatedRing) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (!ok) continue;
-            if (!have || betterCand(c, bestC, latencyWeight, preferOutcome)) {
-                best = d;
-                bestC = c;
-                have = true;
-            }
-        }
-        if (!have) {
-            for (int d : pool) {
-                if (d < 0 || d > limit) continue;
-                auto const& c = cands[static_cast<size_t>(d)];
-                if (!c.viable) continue;
-                if (needActivation && !c.activatedRing) continue;
-                if (!have || betterCand(c, bestC, latencyWeight, preferOutcome)) {
-                    best = d;
-                    bestC = c;
-                    have = true;
-                }
-            }
-        }
-        return best;
-    };
-
     // Optional: cand must also clear threat under firstDt ±3%.
     // Commit 10: jitter only Top-2 ranked picks (never walk the whole pool).
     auto jitterOk = [&](int d, int releaseAfter) -> bool {
@@ -3065,9 +2995,9 @@ SimPlan ShadowSimulator::plan(
     ledgerActMin = actMin;
     ledgerActMax = actMax;
 
-    bool const legacyPick = options.legacyPick;
-
-    // v1 (frozen Legacy) pick helpers — see AssistPickV1.
+    // Live choose = AssistPickV1 only (New / outcome-rank choose deleted).
+    // assist-pick v2 setting is reserved until AssistPickV2; behavior is v1.
+    (void)options.legacyPick;
     std::vector<AssistPickV1::CandView> pickViews(
         static_cast<size_t>(std::max(0, limit)) + 1u
     );
@@ -3111,9 +3041,7 @@ SimPlan ShadowSimulator::plan(
         int const k = robustK;
         auto tryPick = [&](std::vector<int> const& p) -> int {
             return pickWithJitterTop2([&]() {
-                return legacyPick
-                    ? pickEarliestRobust(p, true)
-                    : pickRobust(p, true, true);
+                return pickEarliestRobust(p, true);
             });
         };
         if (actMax - actMin >= 2 * k) {
@@ -3127,10 +3055,9 @@ SimPlan ShadowSimulator::plan(
             plan.requireOrb = true;
         }
     }
-    else if (legacyPick) {
-        // Legacy: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
+    else {
+        // v1: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
         if (cands[0].viable) {
-            // d0 Pass: single jitter attempt (counts as Top-1 of Top-2).
             chosen = pickWithJitterTop2([&]() {
                 return cands[0].viable ? 0 : -1;
             });
@@ -3154,32 +3081,6 @@ SimPlan ShadowSimulator::plan(
             chosen = pickWithJitterTop2([&]() {
                 return pickLatestRobust(pool, false);
             });
-            applyChosenMeta(chosen);
-        }
-    }
-    else {
-        // New (G1): d0 survived → Pass. Else best predicted exit among survivors (±k).
-        if (cands[0].viable) {
-            chosen = pickWithJitterTop2([&]() {
-                return cands[0].viable ? 0 : -1;
-            });
-            if (chosen == 0) {
-                doPass = true;
-                plan.threatCleared = true;
-                plan.nowIsSafe = true;
-            }
-        }
-        if (!doPass) {
-            std::vector<int> pool;
-            for (int d = 0; d <= limit; ++d) pool.push_back(d);
-            chosen = pickWithJitterTop2([&]() {
-                return pickRobust(pool, false, true);
-            });
-            if (chosen == 0) {
-                doPass = true;
-                plan.threatCleared = true;
-                plan.nowIsSafe = cands[0].viable;
-            }
             applyChosenMeta(chosen);
         }
     }
@@ -3229,9 +3130,7 @@ SimPlan ShadowSimulator::plan(
         && (doPass || chosen <= 0)) {
         std::vector<int> pool;
         for (int d = 1; d <= limit; ++d) pool.push_back(d);
-        int forced = legacyPick
-            ? pickLatestRobust(pool, false)
-            : pickRobust(pool, false, true);
+        int forced = pickLatestRobust(pool, false);
         if (forced > 0 && cands[static_cast<size_t>(forced)].viable) {
             bool const d0Ok = cands[0].viable;
             bool const improves = !d0Ok || plan.ascentUseful;
@@ -3262,50 +3161,12 @@ SimPlan ShadowSimulator::plan(
         }
     }
 
-    // G0 A/B: on disagreement with earliest-viable (legacy), fair coin + log arm.
+    // assist-verify=ab formerly coin-flipped Legacy vs New; New choose is gone.
     if (StageConfig::assistVerifyAb()) {
-        int legacy = -1;
-        if (cands[0].viable) legacy = 0;
-        else {
-            for (int d = 1; d <= limit; ++d) {
-                if (cands[static_cast<size_t>(d)].viable) {
-                    legacy = d;
-                    break;
-                }
-            }
-        }
-        int const neu = (doPass || chosen == 0) ? 0 : chosen;
-        if (legacy >= 0 && legacy != neu) {
-            bool const useLegacy = (std::rand() & 1) != 0;
-            AssistLog::debug(fmt::format(
-                "VERIFY id={} arm={} legacy={} new={} picked={}",
-                plan.planId, useLegacy ? "legacy" : "new", legacy, neu,
-                useLegacy ? legacy : neu
-            ));
-            if (useLegacy) {
-                if (neu >= 0 && neu <= limit && neu != legacy) {
-                    cands[static_cast<size_t>(neu)].verifyFailed = true;
-                }
-                chosen = legacy;
-                doPass = (legacy == 0);
-                plan.requireOrb = false;
-                plan.requireHold = false;
-                if (legacy > 0 && legacy <= limit) {
-                    auto const& c = cands[static_cast<size_t>(legacy)];
-                    plan.threatCleared = c.clearsThreat;
-                    plan.activatedRing = c.activatedRing;
-                    plan.requireHold = c.requireHold;
-                }
-            }
-            else {
-                if (legacy >= 0 && legacy <= limit && legacy != neu) {
-                    cands[static_cast<size_t>(legacy)].verifyFailed = true;
-                }
-                AssistLog::debug(fmt::format(
-                    "VERIFY id={} keeping new={}", plan.planId, neu
-                ));
-            }
-        }
+        AssistLog::debug(fmt::format(
+            "VERIFY id={} ab-noop (v1-only) chosen={} doPass={}",
+            plan.planId, chosen, doPass ? 1 : 0
+        ));
     }
 
     // Hold/release window for the chosen Delay: how long can they hold, when
@@ -3570,10 +3431,9 @@ SimPlan ShadowSimulator::planSequence(
 ) {
     auto single = plan(layer, real, down, limit, dt, firstDt, options);
     int const depth = std::clamp(options.smartDepth, 1, 3);
-    bool const newPick = !options.legacyPick;
 
-    // Exit prediction: among ALL Delay-viable first delays in the window
-    // (Commit 8 — not a filled dMin..dMax band with non-viable gaps).
+    // Smart multi-jump / bake-chain only when smartDepth > 1.
+    // Former New default (exit-predict at depth 1) removed with New choose.
     std::vector<int> allowed;
     if (single.action == PlanAction::Pass) {
         allowed.push_back(0);
@@ -3589,8 +3449,7 @@ SimPlan ShadowSimulator::planSequence(
         // Fallback when plan skipped cand eval (rare): only the chosen delay.
         allowed.push_back(std::clamp(single.delay, 0, limit));
     }
-    bool const wantExitPredict = newPick && down && allowed.size() > 1;
-    if ((!wantExitPredict && depth <= 1) || !down) {
+    if (depth <= 1 || !down) {
         single.smartDepthUsed = 1;
         return single;
     }
@@ -3724,7 +3583,7 @@ SimPlan ShadowSimulator::planSequence(
         }
     }
 
-    single.smartDepthUsed = std::max(depth, wantExitPredict ? 1 : depth);
+    single.smartDepthUsed = depth;
     single.smartCombosUsed = combos;
     // Only accept a predicted exit that actually survived the horizon.
     if (!best.found || !best.survived) {
@@ -3753,9 +3612,9 @@ SimPlan ShadowSimulator::planSequence(
         }
     }
     AssistLog::debug(fmt::format(
-        "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={} exitPredict={}",
+        "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={}",
         single.planId, depth, best.d0, AssistVerdict::name(single.reason),
-        allowed.size(), combos, useBakeChain, wantExitPredict ? 1 : 0
+        allowed.size(), combos, useBakeChain
     ));
     return single;
 }

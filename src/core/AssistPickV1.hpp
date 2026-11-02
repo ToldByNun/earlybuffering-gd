@@ -6,7 +6,7 @@
 
 // Frozen Live choose for assist-pick **v1** (former Legacy).
 // Pure over cand viability / ring activation — no PlayLayer / sim.
-// ShadowSimulator owns jitter + New/v2 ranking; this class is the v1 policy.
+// ShadowSimulator owns jitter; former New outcome-rank choose is deleted (WU7).
 class AssistPickV1 {
 public:
     struct CandView {

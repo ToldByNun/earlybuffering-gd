@@ -3012,10 +3012,9 @@ bool AssistController::planPress(
     }
 
     auto const t0 = std::chrono::steady_clock::now();
-    // New pick always runs planSequence exit-predict (even at smartDepth 1).
-    // Legacy stays on single plan() unless Smart Depth > 1.
-    // After Hybrid verify, skip exit-predict when wall remainder is tight.
-    bool useSequence = !opts.legacyPick || opts.smartDepth > 1;
+    // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
+    // After Hybrid verify, skip when wall remainder is tight.
+    bool useSequence = opts.smartDepth > 1;
     if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
         useSequence = false;
     }

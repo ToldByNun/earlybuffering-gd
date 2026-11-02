@@ -45,8 +45,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 | Mode | Behavior |
 |------|----------|
-| **v1** (default, ex-Legacy) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
-| **v2** (ex-New) | Surviving delays only; **Smart Prediction** picks the delay with the best predicted exit (not fixed mid/latest). |
+| **v1** (default) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
+| **v2** | Reserved (currently same as v1). Former New outcome-rank choose removed. |
 
 Neither mode waits past your Limit (G1 window-cap). Old configs with `Legacy` / `New` still load.
 

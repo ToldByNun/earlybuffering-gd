@@ -237,7 +237,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
-| assist-pick | string | v1 | v1/v2 (aliases Legacy/New) | | Assist / Algorithm — G1 pick (v1 default) |
+| assist-pick | string | v1 | v1/v2 (aliases Legacy/New; v2 currently = v1) | | Assist / Algorithm — G1 pick (v1 default; New choose removed) |
 | bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
@@ -271,7 +271,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 5. eval delays under tick + sim-budget-us
 6. orbIntent: Legacy earliest ±k act; New outcome rank ±k; optional firstDt ±3% jitter
 7. else d0 survived -> Pass; else New outcome / Legacy latest ±k-robust
-8. New: `planSequence` exit-predict over **all Delay-viable** delays in the window (`viableDelays` — not a filled `dMin..dMax` band). Horizon replay; smartDepth≥2 adds multi-jump. Survived = `!died && !unknown`.
+8. `planSequence` only when `smart-depth` ≥ 2 (multi-jump / bake-chain over Delay-viable `viableDelays`). Depth 1 = AssistPickV1 only. Survived = `!died && !unknown`.
 9. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
 
 **Commit 8 (Score honesty):** Delay-viable = `clearsThreat` / `zoneCleared` / no-zone — **no** soft-viable `surviveBin>=1` Escape. Continuous equivalent stays no-zone `!died` + `idleSafer`/`ascentUseful` search steer (does not invent viability).
@@ -466,7 +466,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
 | G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. Live choose lives in `AssistPickV1` (PlanGold `assist-pick-v1`); ShadowSimulator only adds jitter / shared cand eval. |
-| G1 v2 | `assist-pick` = **v2** (ex-New): **Delay-viable = clearsThreat** (or no-zone / zoneCleared — not soft `surviveBin≥1`). d0 viable → Pass; else **exit prediction** ranks **all viable** delays by horizon outcome (`!died && !unknown` / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
+| G1 v2 | Setting slot reserved. Former **New** outcome-rank choose + depth-1 `planSequence` exit-predict **removed**. Until AssistPickV2 ships, v2 uses the same Live path as v1. `planSequence` only when `smart-depth` > 1. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |

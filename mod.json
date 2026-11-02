@@ -368,7 +368,7 @@
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window. v1 (default, ex-Legacy) = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). v2 (ex-New) = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Never waits past your Limit. Old config values Legacy/New still load.",
+			"description": "How Live/Hybrid picks a delay inside your tick window. v1 (default) = if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). v2 is reserved for a future pick (currently same as v1 — former New outcome-rank choose removed). Never waits past your Limit. Old Legacy/New values still load as v1/v2.",
 			"one-of": [
 				"v1",
 				"v2"
@@ -433,7 +433,7 @@
 		"smart-depth": {
 			"type": "int",
 			"name": "Smart Depth (Jumps Ahead)",
-			"description": "How many jumps ahead Live/Hybrid may look. With Pick=v2, depth 1 still exit-predicts the first delay over the survivor band (single-press horizon). 2–3 also search follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
+			"description": "How many jumps ahead Live/Hybrid may look. Depth 1 = single plan() (v1 choose). 2–3 run planSequence follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
 			"default": 1,
 			"min": 1,
 			"max": 3
