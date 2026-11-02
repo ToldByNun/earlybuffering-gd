@@ -1844,6 +1844,129 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     return finish(r);
 }
 
+ShadowSimulator::RunResult ShadowSimulator::runTrajectoryOne(
+    PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
+    float dt, float firstDt, Model const& model, int releaseAfter,
+    ThreatZone const* zone, int* tickBudgetLeft
+) {
+    // Lighter Live V2 path: same button timing as runOne, no delay-0 orb pre-scan.
+    RunResult r;
+    (void)limit;
+    if (!layer || !real || !m_shadow) return r;
+    copyPlayerState(m_shadow, real);
+    m_dead = false;
+    m_jumped = false;
+    m_unknown = false;
+    m_toggleUnknownHit = false;
+    m_activatedRing = false;
+    m_ringCount = 0;
+    m_deathObject = nullptr;
+
+    auto* s = m_shadow;
+    s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
+
+    bool acted = false;
+    bool tapReleased = false;
+    int groundedStreak = 0;
+    int settledAfterClear = 0;
+    bool pastZone = false;
+    int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
+
+    auto finish = [&](RunResult out) {
+        out.activatedRing = m_activatedRing;
+        out.ringCount = m_ringCount;
+        out.endX = s->getPositionX();
+        out.wasDashing = s->m_isDashing;
+        out.toggleUnknown = m_toggleUnknownHit;
+        if (out.toggleUnknown) out.unknownTrunc = true;
+        out.ticksRan = std::max(out.ticksRan, out.deathTick >= 0 ? out.deathTick + 1 : 0);
+        if (out.ticksBeforeNeutral <= 0) out.ticksBeforeNeutral = out.ticksRan;
+        return out;
+    };
+
+    auto spend = [&]() -> bool {
+        if (!tickBudgetLeft) return false;
+        if (*tickBudgetLeft <= 0) return true;
+        --(*tickBudgetLeft);
+        return false;
+    };
+
+    for (int t = 0; t < maxTicks; ++t) {
+        if (spend()) break;
+        float const stepDt = (t == 0) ? firstDt : dt;
+        r.ticksRan = t + 1;
+        this->m_simAbsTick = this->m_simTickBase + t;
+
+        if (!acted && t == delay) {
+            acted = true;
+            if (down) {
+                s->pushButton(PlayerButton::Jump);
+                s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
+            }
+            else {
+                s->releaseButton(PlayerButton::Jump);
+                s->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+            }
+        }
+        else if (acted && down && releaseAfter >= 0 && !tapReleased
+            && t == delay + releaseAfter) {
+            tapReleased = true;
+            s->releaseButton(PlayerButton::Jump);
+        }
+
+        stepPhysics(layer, s, stepDt, dt);
+        if (m_dead) {
+            r.died = true;
+            r.deathTick = t;
+            r.deathX = s->getPositionX();
+            r.deathObject = m_deathObject;
+            r.diedBeforeAction = !acted;
+            return finish(r);
+        }
+        if (m_unknown) {
+            r.unknown = true;
+            r.unknownTrunc = true;
+            r.unknownTick = t;
+            return finish(r);
+        }
+
+        if (m_jumped && !r.jumped) {
+            r.jumped = true;
+            r.jumpTick = t;
+        }
+        if (s->m_isDashing) r.wasDashing = true;
+
+        if (zone && zone->valid && !pastZone) {
+            if (s->getPositionX() > zone->endX) {
+                bool settled = false;
+                if (model.continuous) {
+                    settledAfterClear++;
+                    settled = settledAfterClear >= 8;
+                }
+                else {
+                    bool const grounded = s->m_isOnGround || s->m_isOnGround2;
+                    if (grounded) ++groundedStreak;
+                    else groundedStreak = 0;
+                    settled = groundedStreak >= 2;
+                }
+                if (settled) {
+                    pastZone = true;
+                    r.zoneCleared = true;
+                    r.ticksBeforeNeutral = t + 1;
+                }
+            }
+            else {
+                settledAfterClear = 0;
+            }
+        }
+
+        if (pastZone && t + 1 - r.ticksBeforeNeutral > 24) {
+            return finish(r);
+        }
+    }
+    return finish(r);
+}
+
 ShadowSimulator::RunResult ShadowSimulator::runBaseline(
     PlayLayer* layer, PlayerObject* real, bool down,
     float dt, float firstDt, Model const& model, int* tickBudgetLeft
@@ -2236,6 +2359,28 @@ SimPlan ShadowSimulator::plan(
         return real == layer->m_player1 || real == layer->m_player2;
     };
 
+    // Live V2 only: Trajectory cand eval. V1 / Hybrid verify stay on ShadowPlayer.
+    bool const useTrajEngine = !options.legacyPick
+        && options.assistEngine == StageConfig::AssistEngineKind::Trajectory;
+    plan.trajectoryEngine = useTrajEngine;
+    auto runEngine = [&](
+        PlayerObject* who,
+        int delay,
+        int releaseAfter,
+        ThreatZone const* z
+    ) -> RunResult {
+        if (useTrajEngine) {
+            return runTrajectoryOne(
+                layer, who, down, delay, limit, dt, firstDt, model,
+                releaseAfter, z, &tickBudget
+            );
+        }
+        return runOne(
+            layer, who, down, delay, limit, dt, firstDt, model,
+            releaseAfter, z, &tickBudget
+        );
+    };
+
     this->m_simTickBase = std::max(0, options.attemptStartTick);
     this->m_simAbsTick = -1;
     SimSessionGuard session(*this, layer);
@@ -2333,9 +2478,8 @@ SimPlan ShadowSimulator::plan(
             plan.budgetHit = true;
             return c;
         }
-        auto r = runOne(
-            layer, real, down, d, limit, dt, firstDt, model, releaseAfter,
-            zone.valid ? &zone : nullptr, &tickBudget
+        auto r = runEngine(
+            real, d, releaseAfter, zone.valid ? &zone : nullptr
         );
         this->resetCaptureForNextRun(layer);
         ++plan.candidatesTried;
@@ -2397,9 +2541,8 @@ SimPlan ShadowSimulator::plan(
         if (c.viable && linkedDual()) {
             PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
             if (other && tickBudget > 0) {
-                auto r2 = runOne(
-                    layer, other, down, c.delay, limit, dt, firstDt, model, releaseAfter,
-                    zone.valid ? &zone : nullptr, &tickBudget
+                auto r2 = runEngine(
+                    other, c.delay, releaseAfter, zone.valid ? &zone : nullptr
                 );
                 this->resetCaptureForNextRun(layer);
                 if (!runResultDelaySafe(r2, zone, model, other)) {
@@ -2920,9 +3063,8 @@ SimPlan ShadowSimulator::plan(
                     if (tried >= options.maxBranches) break;
                     if (tickBudget <= 0) break;
                     ++tried;
-                    auto br = runOne(
-                        layer, real, down, d, limit, dt, firstDt, model, k,
-                        zone.valid ? &zone : nullptr, &tickBudget
+                    auto br = runEngine(
+                        real, d, k, zone.valid ? &zone : nullptr
                     );
                     this->resetCaptureForNextRun(layer);
                     if (!br.died || br.unknownTrunc) {
@@ -2949,9 +3091,8 @@ SimPlan ShadowSimulator::plan(
             // Dash hold salvage (still two-pass gated to full-score set).
             if (c.raw.activatedRing && c.raw.wasDashing && !c.viable
                 && tickBudget > 0) {
-                auto hold = runOne(
-                    layer, real, down, c.delay, limit, dt, firstDt, model, 40,
-                    zone.valid ? &zone : nullptr, &tickBudget
+                auto hold = runEngine(
+                    real, c.delay, 40, zone.valid ? &zone : nullptr
                 );
                 this->resetCaptureForNextRun(layer);
                 Cand h = c;
@@ -3075,10 +3216,19 @@ SimPlan ShadowSimulator::plan(
         for (float s : kScales) {
             float jd = firstDt * s;
             if (jd <= 0.f || jd > dt * 1.5f) jd = firstDt;
-            auto r = runOne(
-                layer, real, down, d, limit, dt, jd, model, releaseAfter,
-                zone.valid ? &zone : nullptr, &tickBudget
-            );
+            RunResult r;
+            if (useTrajEngine) {
+                r = runTrajectoryOne(
+                    layer, real, down, d, limit, dt, jd, model, releaseAfter,
+                    zone.valid ? &zone : nullptr, &tickBudget
+                );
+            }
+            else {
+                r = runOne(
+                    layer, real, down, d, limit, dt, jd, model, releaseAfter,
+                    zone.valid ? &zone : nullptr, &tickBudget
+                );
+            }
             this->resetCaptureForNextRun(layer);
             if (!clearsThreatOf(r, zone) || r.diedBeforeAction) return false;
         }
@@ -3393,9 +3543,8 @@ SimPlan ShadowSimulator::plan(
             if (tickBudget <= 0 || wallExceeded()) break;
             if (base.releaseAfter >= 0 && rel == base.releaseAfter) continue;
             ++tried;
-            auto r = runOne(
-                layer, real, down, chosen, limit, dt, firstDt, model, rel,
-                zone.valid ? &zone : nullptr, &tickBudget
+            auto r = runEngine(
+                real, chosen, rel, zone.valid ? &zone : nullptr
             );
             this->resetCaptureForNextRun(layer);
             ++plan.candidatesTried;
@@ -3604,7 +3753,7 @@ SimPlan ShadowSimulator::plan(
 
     bool const orbIntentOut = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
     AssistLog::debug(fmt::format(
-        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight={} idleSafer={} ascent={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
+        "PLAN id={} {} verdict={} delay={} orbIntent={} foresight={} idleSafer={} ascent={} eng={} ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         plan.planId,
         plan.action == PlanAction::Pass ? "Pass" : "Delay",
         AssistVerdict::name(plan.reason),
@@ -3613,6 +3762,7 @@ SimPlan ShadowSimulator::plan(
         plan.foresightOrbPad ? 1 : 0,
         plan.idleSafer ? 1 : 0,
         plan.ascentUseful ? 1 : 0,
+        plan.trajectoryEngine ? "Trajectory" : "ShadowPlayer",
         plan.activatedRing, plan.orbUseful, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget

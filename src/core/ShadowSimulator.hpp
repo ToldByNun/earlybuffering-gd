@@ -97,6 +97,8 @@ struct SimPlan {
     bool ascentUseful = false;
     // Live V2 LongForesight: press dies on long horizon → choose prefers Delay.
     bool longForesightNeedSearch = false;
+    // Live V2: plan cand eval used Trajectory engine (else ShadowPlayer).
+    bool trajectoryEngine = false;
     bool requireOrb = false;
     bool requireHold = false;
     int dMin = -1;
@@ -565,6 +567,13 @@ private:
     static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self);
 
     RunResult runOne(
+        PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
+        float dt, float firstDt, Model const& model, int releaseAfter,
+        ThreatZone const* zone, int* tickBudgetLeft
+    );
+    // Live V2 Trajectory engine: hold/coast button path (no orb pre-scan).
+    // Same delay / releaseAfter / zone-settle contract as runOne for cand eval.
+    RunResult runTrajectoryOne(
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
         float dt, float firstDt, Model const& model, int releaseAfter,
         ThreatZone const* zone, int* tickBudgetLeft

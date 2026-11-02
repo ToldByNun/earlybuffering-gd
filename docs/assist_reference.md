@@ -238,7 +238,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
 | assist-pick | string | v1 | v1/v2 (aliases Legacy/New) | | Assist / Algorithm — G1 pick. **v1** = latest-robust; **v2** = foresight-first (`AssistPickV2`) + `LongForesight` |
-| assist-engine | string | ShadowPlayer | ShadowPlayer/Trajectory | | Live V2 foresight backend for `LongForesight` (and later plan wire); **v1 always ShadowPlayer** (effective) |
+| assist-engine | string | ShadowPlayer | ShadowPlayer/Trajectory | | Live V2 sim backend for cand eval + `LongForesight`; **v1 / Hybrid verify always ShadowPlayer** (effective) |
 | bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
@@ -503,6 +503,10 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 ### LongForesight (Live V2)
 
 When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `AssistHorizon` scoreHorizon (min 48). If press dies inside the window, horizon extends once (capped by look-ahead / 320). **Trajectory** engine uses a lightweight hold/coast loop; **ShadowPlayer** uses `runOne(0)` + `runBaseline` at the long cap. Results feed `idleSafer` and can force delay-search (skip Pass no-threat) when press still dies. V1 skips this entirely. Fixtures: `LongForesight::selfCheck` (PlanGold `long-foresight`).
+
+### assist-engine (Live V2)
+
+`planPress` / `planRelease` pass `effectiveAssistEngine()` into `PlanOptions`. On **v2 + Trajectory**, Live `plan()` cand eval / hold probes / jitter use `runTrajectoryOne` (hold/coast button path, no orb pre-scan). **ShadowPlayer** keeps full `runOne`. Hybrid bake `verifyDelay` always uses ShadowPlayer. Overlay `eng=` + PLAN `eng=Trajectory|ShadowPlayer`.
 
 ### OpportunityProbe (G2)
 
