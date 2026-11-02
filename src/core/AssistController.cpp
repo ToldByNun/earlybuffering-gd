@@ -2,6 +2,7 @@
 #include "AssistClock.hpp"
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
+#include "AssistSpikeWatch.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
@@ -1212,9 +1213,16 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
 
     bool const husDown = this->m_buffer.down;
+    AssistSpikeWatch::get().beginSearch("hus");
+    auto const husT0 = std::chrono::steady_clock::now();
     auto re = ShadowSimulator::get().plan(
         playLayer, player, husDown, remLimit, this->m_simDt, this->m_simDt, opts
     );
+    int const husUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - husT0
+    ).count());
+    AssistSpikeWatch::get().endSearch(husUs, re.budgetHit);
+    AssistPerfStats::get().notePlan(husUs, re.budgetHit);
 
     this->m_buffer.husLastReplanTick = this->m_attemptTick;
     this->m_buffer.husLastReplanX = x;
@@ -1567,6 +1575,10 @@ void AssistController::updateOverlay() {
         }
         {
             auto bit = AssistPerfStats::get().overlayBit();
+            if (!bit.empty()) m_overlayText += " | " + bit;
+        }
+        {
+            auto bit = AssistSpikeWatch::get().overlayBit();
             if (!bit.empty()) m_overlayText += " | " + bit;
         }
         {
@@ -3082,12 +3094,14 @@ bool AssistController::planPress(
     if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
         useSequence = false;
     }
+    AssistSpikeWatch::get().beginSearch("press");
     auto plan = useSequence
         ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
     int const planUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0
     ).count());
+    AssistSpikeWatch::get().endSearch(planUs, plan.budgetHit);
     AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
 
     this->logPlan(plan, "press");
@@ -3649,7 +3663,14 @@ bool AssistController::planRelease(
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
+    AssistSpikeWatch::get().beginSearch("release");
+    auto const relT0 = std::chrono::steady_clock::now();
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
+    int const relUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - relT0
+    ).count());
+    AssistSpikeWatch::get().endSearch(relUs, plan.budgetHit);
+    AssistPerfStats::get().notePlan(relUs, plan.budgetHit);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     DevCycleRecorder::get().notePlanFinished(

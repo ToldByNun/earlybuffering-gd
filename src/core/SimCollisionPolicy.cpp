@@ -27,6 +27,31 @@ SimUnknownClass SimCollisionPolicy::unknownClassForType(int objectType) {
     }
 }
 
+bool SimCollisionPolicy::softPortalLiveTruncate(int objectType) {
+    auto const t = static_cast<GameObjectType>(objectType);
+    switch (t) {
+        case GameObjectType::CollisionObject:
+        case GameObjectType::ShipPortal:
+        case GameObjectType::CubePortal:
+        case GameObjectType::BallPortal:
+        case GameObjectType::UfoPortal:
+        case GameObjectType::WavePortal:
+        case GameObjectType::RobotPortal:
+        case GameObjectType::SpiderPortal:
+        case GameObjectType::SwingPortal:
+        case GameObjectType::InverseMirrorPortal:
+        case GameObjectType::NormalMirrorPortal:
+        case GameObjectType::TeleportPortal:
+        case GameObjectType::TeleportOrb:
+        case GameObjectType::Modifier:
+        case GameObjectType::Special:
+        case GameObjectType::EnterEffectObject:
+            return true;
+        default:
+            return false;
+    }
+}
+
 SimObjectAction SimCollisionPolicy::classifyObjectType(int objectType, int objectId) {
     if (isSpeedPortalId(objectId)) return SimObjectAction::Include;
 
@@ -94,6 +119,13 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
 
     auto& sim = ShadowSimulator::get();
     if (sim.isSimulating()) {
+        // Live (not bakeOffline): never Include Soft vehicle/mirror/teleport —
+        // stacked portal activatedByPlayer on shared objects poisons m_sections.
+        if (!sim.bakeOffline()
+            && softPortalLiveTruncate(static_cast<int>(obj->m_objectType))) {
+            return SimObjectAction::UnknownOnOverlap;
+        }
+
         // Toggle orb / touch-toggle: modeled flip → Include/Skip; else Hard Unknown
         // for live plan honesty. Offline bake trusts the current powered/visible
         // pose so a working macro is not aborted on every toggle-group solid.
@@ -173,8 +205,8 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
     if (warned) return false;
     warned = true;
     AssistLog::info(
-        "sim: limited (Hard Unknown only: toggle pre-model / follow-dynamic / dual; "
-        "Soft vehicle·mirror·teleport·modifier → Include since Commit 5; "
+        "sim: limited (Hard Unknown: toggle pre-model / follow-dynamic / dual; "
+        "Soft vehicle·mirror·teleport → Include bakeOffline only, live truncate; "
         "ready static bake → include when active)"
     );
     return true;
@@ -239,6 +271,12 @@ bool SimCollisionPolicy::selfCheck(std::string& report) {
         classifyObjectType(wave) != SimObjectAction::UnknownOnOverlap,
         "no-soft-continue-wave"
     );
+
+    expect(softPortalLiveTruncate(wave), "live-trunc-wave");
+    expect(softPortalLiveTruncate(tele), "live-trunc-tele");
+    expect(softPortalLiveTruncate(dual) == false, "live-trunc-not-dual");
+    expect(softPortalLiveTruncate(grav) == false, "live-trunc-not-grav");
+    expect(softPortalLiveTruncate(solid) == false, "live-trunc-not-solid");
 
     if (fails == 0) {
         report = "SimCollisionPolicy selfCheck OK";

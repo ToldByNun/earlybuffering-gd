@@ -29,6 +29,11 @@ public:
     static SimObjectAction classifyObjectType(int objectType, int objectId = 0);
     static SimUnknownClass unknownClassForType(int objectType);
 
+    // Soft vehicle/mirror/teleport/enter (Commit 5) — Include only for bakeOffline.
+    // Live assist sims truncate: stacked portal activatedByPlayer mutates shared
+    // layer/sections and was an AV source (read @ 0xFFF…).
+    static bool softPortalLiveTruncate(int objectType);
+
     // Only meaningful when classify would be UnknownOnOverlap (Hard leftovers).
     static SimUnknownClass unknownClass(GameObject* obj);
     static char const* unknownClassId(SimUnknownClass c);

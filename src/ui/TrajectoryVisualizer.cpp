@@ -3,6 +3,7 @@
 #include "../core/AssistController.hpp"
 #include "../core/AssistHorizon.hpp"
 #include "../core/AssistPickV2.hpp"
+#include "../core/AssistSpikeWatch.hpp"
 #include "../core/LevelProfile.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimTrust.hpp"
@@ -311,8 +312,19 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
 
     auto& sim = ShadowSimulator::get();
 
-    auto holdRaw = sim.samplePath(layer, slot, makeHoldEvents(), dt, drawMax);
-    auto coastRaw = sim.samplePath(layer, slot, makeCoastEvents(), dt, drawMax);
+    ShadowSimulator::PathSample holdRaw;
+    ShadowSimulator::PathSample coastRaw;
+    {
+        AssistSpikeWatch::Scope const sessionScope("traj.session");
+        {
+            AssistSpikeWatch::Scope const holdScope("traj.hold");
+            holdRaw = sim.samplePath(layer, slot, makeHoldEvents(), dt, drawMax);
+        }
+        {
+            AssistSpikeWatch::Scope const coastScope("traj.coast");
+            coastRaw = sim.samplePath(layer, slot, makeCoastEvents(), dt, drawMax);
+        }
+    }
 
     int const holdTicks = holdRaw.died
         ? std::max(0, holdRaw.deathFrame)

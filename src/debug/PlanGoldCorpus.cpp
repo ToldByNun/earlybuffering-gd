@@ -21,6 +21,7 @@
 #include "../core/PerfectAssistPolicy.hpp"
 #include "../core/OrbAlign.hpp"
 #include "../core/AssistHorizon.hpp"
+#include "../core/AssistSpikeWatch.hpp"
 #include "../core/TrajDrawHorizon.hpp"
 #include "../core/RealCorpusFixtures.hpp"
 #include "../core/SectionObjectWalk.hpp"
@@ -149,6 +150,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
     std::string trajDrawHorizonReport;
     expect(TrajDrawHorizon::selfCheck(trajDrawHorizonReport), "traj-draw-horizon");
+    std::string spikeWatchReport;
+    expect(AssistSpikeWatch::selfCheck(spikeWatchReport), "assist-spike-watch");
     std::string realCorpusReport;
     expect(RealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures");
     std::string sectionWalkReport;

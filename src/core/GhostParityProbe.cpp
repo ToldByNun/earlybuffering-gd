@@ -1,5 +1,6 @@
 #include "GhostParityProbe.hpp"
 #include "AssistRealMetrics.hpp"
+#include "AssistSpikeWatch.hpp"
 #include "SimTrust.hpp"
 #include "SpotTrustMap.hpp"
 #include "ShadowSimulator.hpp"
@@ -128,7 +129,9 @@ void GhostParityProbe::maybeRunProbe(
     auto const livePose = this->findPose(anchor->tick + until);
     if (!livePose) return;
 
+    // Keep legacy "ghostParity" name for tick summaries; also tag probe body.
     PerfTrace::Scope const scope("ghostParity");
+    AssistSpikeWatch::Scope const probeScope("parity.probe");
     auto const start = std::chrono::steady_clock::now();
 
     auto sample = ShadowSimulator::get().samplePath(

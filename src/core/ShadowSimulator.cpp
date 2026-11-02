@@ -16,6 +16,8 @@
 #include "ModeSurvival.hpp"
 #include "PrefixSim.hpp"
 #include "PerfectAssistPolicy.hpp"
+#include "SectionObjectWalk.hpp"
+#include "AssistSpikeWatch.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -626,18 +628,9 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     }
     // Secondary: section lists often hold objects children miss (same as TW baker).
     // Without this, bake at spawn can get tw=false → toggled spikes stay lethal.
-    {
-        auto& sections = layer->m_sections;
-        for (auto* mid : sections) {
-            if (!mid) continue;
-            for (auto* inner : *mid) {
-                if (!inner) continue;
-                for (auto* raw : *inner) {
-                    consider(typeinfo_cast<GameObject*>(raw));
-                }
-            }
-        }
-    }
+    // Must use SectionObjectWalk — poison / 0xFFF… slots AV on raw typeinfo_cast
+    // (portal stacks leave holes; crash read @ -1 during GJBGL::update sims).
+    SectionObjectWalk::forEachInSections(layer, consider);
 }
 
 bool ShadowSimulator::isDynamicTriggerTarget(int uniqueId) const {
@@ -1024,6 +1017,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
     if (!store.loaded() || !store.hasTracks()) return;
 
     LagProbe::Scope const lagScope("eb.trigger.apply");
+    auto const twApply0 = std::chrono::steady_clock::now();
 
     float const gx = ghost ? ghost->getPositionX() : 0.f;
     struct Cand {
@@ -1081,6 +1075,12 @@ void ShadowSimulator::applyTriggerWorldAtTick(
     }
     // Far / over-budget tracks hold last written pose (or capture baseline).
     this->m_triggerWorldAppliedThisTick = true;
+    if (AssistSpikeWatch::get().recording()) {
+        auto const twUs = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - twApply0
+        ).count();
+        AssistSpikeWatch::get().addSectionUs("plan.twApply", twUs);
+    }
 }
 
 void ShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* s, float dt) {
@@ -2618,6 +2618,7 @@ SimPlan ShadowSimulator::plan(
 
         // Live V2: LongForesight press-vs-idle over AssistHorizon (extend if press dies).
         if (!options.legacyPick) {
+            AssistSpikeWatch::Scope const lfScope("plan.lf");
             int const h0 = std::max(
                 LongForesight::kMinHorizon, horizonCaps.scoreHorizon
             );
@@ -2955,6 +2956,8 @@ SimPlan ShadowSimulator::plan(
         || real->m_isSpider || real->m_isSwing);
     bool const isRobot = real && real->m_isRobot;
 
+    {
+    AssistSpikeWatch::Scope const candsScope("plan.cands");
     for (int d : order) {
         if (d == 0) continue;
         if (d >= 0 && d <= limit && candReady[static_cast<size_t>(d)]) {
@@ -3161,6 +3164,7 @@ SimPlan ShadowSimulator::plan(
             ));
         }
     }
+    } // plan.cands
 
     bool anyActivation = false;
     for (auto const& c : cands) {
@@ -3598,6 +3602,7 @@ SimPlan ShadowSimulator::plan(
     // Hold/release window for the chosen Delay: how long can they hold, when
     // to let go without dying. Covers ship/wave hold, robot, orb dash holds.
     if (chosen > 0 && down && tickBudget > 0 && !wallExceeded()) {
+        AssistSpikeWatch::Scope const holdScope("plan.holdProbe");
         auto const& base = cands[static_cast<size_t>(chosen)];
         int earliest = -1;
         int latest = -1;
