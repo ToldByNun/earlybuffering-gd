@@ -368,6 +368,19 @@ bool AssistPickV2::selfCheck(std::string& report) {
         expect(r.chosen < 0 && !r.doPass, "soft-died-no-delay");
     }
 
+    // ascentUseful alone + soft-died later → hopeless (no invent Delay)
+    {
+        CandView c[] = {
+            { false, false, false, 0, 5, 40.f, true },
+            { true, false, false, 3, 80, 160.f, true },
+            { true, false, false, 3, 90, 180.f, true }
+        };
+        Context ctx;
+        ctx.ascentUseful = true;
+        auto const r = choose(c, 2, 0, false, -1, -1, ctx);
+        expect(r.chosen < 0 && !r.doPass, "ascent-alone-soft-no-delay");
+    }
+
     // Coast/d0 dies, later Alive → may Delay
     {
         CandView c[] = {
