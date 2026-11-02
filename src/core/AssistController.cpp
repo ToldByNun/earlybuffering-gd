@@ -3901,10 +3901,14 @@ bool AssistController::onHandleButton(
     }
 
     if (ours && this->m_buffer.state == BufferState::Buffered && this->m_buffer.down) {
-        if (!this->m_buffer.releaseSeen) {
-            return false; // same press still armed; swallow duplicate downs
-        }
-        // Press B before fireTick after Release A: fire A first, then plan B.
+        // Second DOWN while A is still armed:
+        //  - after early UP (releaseSeen): classic re-click → fire A, plan B
+        //  - still holding (multi-key double-click): never swallow — GD must see
+        //    both clicks. Deliver A now, then fall through to plan B.
+        AssistLog::debug(fmt::format(
+            "buffer: 2nd DOWN while armed (releaseSeen={}) → fire A then plan B",
+            this->m_buffer.releaseSeen ? 1 : 0
+        ));
         this->fireBuffered(playLayer, player);
     }
     if (ours && this->m_buffer.state == BufferState::Buffered && !this->m_buffer.down) {

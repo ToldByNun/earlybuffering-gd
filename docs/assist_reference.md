@@ -345,7 +345,7 @@ On inject (`resolveQueuedHoldTicks`):
 - User already up + plain Delay (no hold plan) → ASAP release.
 - Hard rule: while `userHolding`, never inject UP.
 
-**Re-click** while ArmedPress + `releaseSeen` → fire A first, then plan B. **Re-click** while pending → cancel scheduled release and re-plan. Dash `requireHold` keeps release deferred while `m_isDashing` after a held inject. Helpers: `AssistController::resolveQueuedHoldTicks` / `queuedHoldSelfCheck`.
+**Re-click** while ArmedPress (with or without `releaseSeen`, including multi-key double-click) → fire A first, then plan B — never swallow the second DOWN. **Re-click** while pending → cancel scheduled release and re-plan. Dash `requireHold` keeps release deferred while `m_isDashing` after a held inject. Helpers: `AssistController::resolveQueuedHoldTicks` / `queuedHoldSelfCheck`.
 
 Branch releases `{2,5,10,18}` and dash-hold `40` seed the window when they already won viability.
 
@@ -378,7 +378,7 @@ Before inject, live recheck may slide `fireTick`. Rules (`OrbAlign::acceptRechec
 ## Pseudocode fireBuffered()
 
 Wait for dMin if requireOrb; up to 2 safe reclamps into [dMin,dMax] (recheck also re-aligns jumpTick); inject; if `releaseSeen` + queued hold → PendingRelease for N ticks; else if `releaseSeen` → ASAP; else if `requireHold` and still holding → arm extend-after-release; else plain tap (user owns hold).
-Press B while ArmedPress + releaseSeen: fire A first, then plan B.
+Press B while ArmedPress (releaseSeen or still-held multi-key): fire A first, then plan B — second DOWN is never swallowed.
 
 ## Buffer states
 
