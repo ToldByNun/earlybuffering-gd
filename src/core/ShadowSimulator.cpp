@@ -2,6 +2,7 @@
 #include "AssistClock.hpp"
 #include "AssistHorizon.hpp"
 #include "AssistPickV1.hpp"
+#include "AssistPickV2.hpp"
 #include "LongForesight.hpp"
 #include "BakeMap.hpp"
 #include "MissAssistContracts.hpp"
@@ -3120,29 +3121,51 @@ SimPlan ShadowSimulator::plan(
     ledgerActMin = actMin;
     ledgerActMax = actMax;
 
-    // Live choose = AssistPickV1 only (New / outcome-rank choose deleted).
-    // LongForesight already consumed legacyPick + assistEngine (V2). Pick V2 = WU10+.
-    std::vector<AssistPickV1::CandView> pickViews(
+    // Live choose: v1 = AssistPickV1; v2 = AssistPickV2 (skeleton ≡ v1 until WU11).
+    bool const usePickV2 = !options.legacyPick;
+    std::vector<AssistPickV1::CandView> pickViewsV1(
+        static_cast<size_t>(std::max(0, limit)) + 1u
+    );
+    std::vector<AssistPickV2::CandView> pickViewsV2(
         static_cast<size_t>(std::max(0, limit)) + 1u
     );
     auto syncPickViews = [&]() {
         for (int d = 0; d <= limit; ++d) {
-            auto& v = pickViews[static_cast<size_t>(d)];
             auto const& c = cands[static_cast<size_t>(d)];
-            v.viable = c.viable;
-            v.activatedRing = c.activatedRing;
+            if (usePickV2) {
+                auto& v = pickViewsV2[static_cast<size_t>(d)];
+                v.viable = c.viable;
+                v.activatedRing = c.activatedRing;
+                v.surviveBin = c.surviveBin;
+                v.endX = c.endX;
+            }
+            else {
+                auto& v = pickViewsV1[static_cast<size_t>(d)];
+                v.viable = c.viable;
+                v.activatedRing = c.activatedRing;
+            }
         }
     };
     auto pickEarliestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         syncPickViews();
+        if (usePickV2) {
+            return AssistPickV2::pickEarliestRobust(
+                pickViewsV2.data(), limit, robustK, pool, needActivation
+            );
+        }
         return AssistPickV1::pickEarliestRobust(
-            pickViews.data(), limit, robustK, pool, needActivation
+            pickViewsV1.data(), limit, robustK, pool, needActivation
         );
     };
     auto pickLatestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         syncPickViews();
+        if (usePickV2) {
+            return AssistPickV2::pickLatestRobust(
+                pickViewsV2.data(), limit, robustK, pool, needActivation
+            );
+        }
         return AssistPickV1::pickLatestRobust(
-            pickViews.data(), limit, robustK, pool, needActivation
+            pickViewsV1.data(), limit, robustK, pool, needActivation
         );
     };
 

@@ -237,7 +237,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
-| assist-pick | string | v1 | v1/v2 (aliases Legacy/New; v2 choose still AssistPickV1) | | Assist / Algorithm — G1 pick (v1 default; New choose removed). **v2** also runs `LongForesight` |
+| assist-pick | string | v1 | v1/v2 (aliases Legacy/New) | | Assist / Algorithm — G1 pick. **v1** = `AssistPickV1`; **v2** = `AssistPickV2` skeleton (≡ v1) + `LongForesight` |
 | assist-engine | string | ShadowPlayer | ShadowPlayer/Trajectory | | Live V2 foresight backend for `LongForesight` (and later plan wire); **v1 always ShadowPlayer** (effective) |
 | bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
@@ -467,7 +467,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
 | G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. Live choose lives in `AssistPickV1` (PlanGold `assist-pick-v1`); ShadowSimulator only adds jitter / shared cand eval. |
-| G1 v2 | Former **New** outcome-rank choose + depth-1 `planSequence` exit-predict **removed**. Until AssistPickV2 ships, v2 choose = AssistPickV1, plus **LongForesight** press-vs-idle (`assist-engine`). `planSequence` only when `smart-depth` > 1. |
+| G1 v2 | `AssistPickV2` skeleton (WU10): same choose as v1 via thin delegate; CandView carries `surviveBin`/`endX` + Context hooks for WU11. Plus **LongForesight** press-vs-idle (`assist-engine`). Former New choose removed. `planSequence` only when `smart-depth` > 1. PlanGold `assist-pick-v2`. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |

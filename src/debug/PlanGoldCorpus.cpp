@@ -8,6 +8,7 @@
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
 #include "../core/AssistPickV1.hpp"
+#include "../core/AssistPickV2.hpp"
 #include "../core/LongForesight.hpp"
 #include "../core/MissAssistContracts.hpp"
 #include "../core/SimCollisionPolicy.hpp"
@@ -155,6 +156,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(MissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;
     expect(AssistPickV1::selfCheck(pickV1Report), "assist-pick-v1");
+    std::string pickV2Report;
+    expect(AssistPickV2::selfCheck(pickV2Report), "assist-pick-v2");
     std::string longForesightReport;
     expect(LongForesight::selfCheck(longForesightReport), "long-foresight");
     std::string foresightReport;
