@@ -1175,6 +1175,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     opts.legacyPick = StageConfig::assistPickLegacy();
     opts.assistEngine = StageConfig::effectiveAssistEngine();
     opts.attemptStartTick = this->m_attemptTick;
+    opts.requireAliveForDelay = true;
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
 
     bool const husDown = this->m_buffer.down;
@@ -1963,6 +1964,7 @@ void AssistController::fireBuffered(
             opts.smartDepth = 1;
             opts.legacyPick = StageConfig::assistPickLegacy();
             opts.assistEngine = StageConfig::effectiveAssistEngine();
+            opts.requireAliveForDelay = true;
             fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, this->m_buffer.down, remaining,
@@ -3000,6 +3002,8 @@ bool AssistController::planPress(
     opts.legacyPick = StageConfig::assistPickLegacy();
     opts.assistEngine = StageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
+    // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
+    opts.requireAliveForDelay = true;
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
@@ -3564,6 +3568,8 @@ bool AssistController::planRelease(
     opts.legacyPick = StageConfig::assistPickLegacy();
     opts.assistEngine = StageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
+    // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
+    opts.requireAliveForDelay = true;
     bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind
     );

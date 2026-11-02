@@ -46,8 +46,12 @@ public:
 
     static Class classify(Input const& in);
 
-    // Delay-viable outcome classes (Commit 9 false-lethal cut).
+    // Soft not-lethal (Landing / Recoverable / LateCrash) — false-lethal cut only.
+    // Does NOT mean Live may arm Delay into a death the ghost already recorded.
     static bool countsAsSafeForDelay(Class c);
+
+    // Live Delay-arm / pick: only a still-living ghost (Class::Alive).
+    static bool countsAsDelayWorthy(Class c);
 
     // Late crash after land → do not invent a Delay opportunity for this click.
     static bool shouldSkipFalseOpportunity(Class c);

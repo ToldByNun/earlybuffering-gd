@@ -2111,10 +2111,13 @@ static bool clearsThreatOf(ShadowSimulator::RunResult const& r, ThreatZone const
     return r.deathX > zone.endX;
 }
 
-// Commit 8 Score honesty + Commit 9 ModeSurvival:
+// Score honesty + ModeSurvival:
 // Delay-viable needs clearsThreat (or no zone / zoneCleared). surviveBin alone
-// is NOT enough. Unknown never viable. Died can still be viable when ModeSurvival
-// says Landing / Recoverable / LateCrashAfterClear (false-lethal cut).
+// is NOT enough. Unknown never viable.
+// Soft (requireAliveForDelay=false): died may still be not-false-lethal when
+// Landing / Recoverable / LateCrashAfterClear (bake verify).
+// Live arm (requireAliveForDelay=true): Delay-worthy = Alive only; Landing /
+// LateCrash never invent a Delay opportunity.
 static bool delayViableHonest(
     bool diedBeforeAction,
     bool died,
@@ -2123,15 +2126,22 @@ static bool delayViableHonest(
     bool clearsThreat,
     bool zoneCleared,
     bool zoneValid,
-    ModeSurvival::Class survival = ModeSurvival::Class::Alive
+    ModeSurvival::Class survival = ModeSurvival::Class::Alive,
+    bool requireAliveForDelay = false
 ) {
     if (diedBeforeAction || unknownTrunc || toggleUnknown) return false;
-    if (died && !ModeSurvival::countsAsSafeForDelay(survival)) return false;
+    if (requireAliveForDelay
+        && ModeSurvival::shouldSkipFalseOpportunity(survival)) {
+        return false;
+    }
+    bool const classOk = requireAliveForDelay
+        ? ModeSurvival::countsAsDelayWorthy(survival)
+        : ModeSurvival::countsAsSafeForDelay(survival);
+    if (died && !classOk) return false;
     // Alive path: still need threat clear when a zone exists.
-    // LateCrash/Landing/Recoverable already imply clear geometry in classify.
-    if (!died) return !zoneValid || clearsThreat || zoneCleared;
-    return ModeSurvival::countsAsSafeForDelay(survival)
-        && (!zoneValid || clearsThreat || zoneCleared);
+    // Soft LateCrash/Landing/Recoverable already imply clear geometry in classify.
+    if (!died) return classOk && (!zoneValid || clearsThreat || zoneCleared);
+    return classOk && (!zoneValid || clearsThreat || zoneCleared);
 }
 
 static ModeSurvival::Input survivalInputFrom(
@@ -2174,7 +2184,8 @@ static bool runResultDelaySafe(
     ShadowSimulator::RunResult const& r,
     ThreatZone const& zone,
     ShadowSimulator::Model const& model,
-    PlayerObject* real
+    PlayerObject* real,
+    bool requireAliveForDelay = false
 ) {
     auto const cls = ModeSurvival::classify(
         survivalInputFrom(r, zone, model, real)
@@ -2187,7 +2198,8 @@ static bool runResultDelaySafe(
         clearsThreatOf(r, zone),
         r.zoneCleared,
         zone.valid,
-        cls
+        cls,
+        requireAliveForDelay
     );
 }
 
@@ -2279,8 +2291,9 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     out.diedBeforeAction = r.diedBeforeAction;
     out.clearsThreat = clearsThreatOf(r, zone);
     out.unknown = r.unknown || r.unknownTrunc || r.toggleUnknown;
-    // Commit 8+9: clearsThreat honesty + ModeSurvival landing/recoverable.
-    bool viable = runResultDelaySafe(r, zone, model, real);
+    // clearsThreat honesty + ModeSurvival (soft or Alive-only via options).
+    bool const requireAlive = options.requireAliveForDelay;
+    bool viable = runResultDelaySafe(r, zone, model, real, requireAlive);
 
     // Linked dual: still one runOne for the other player (even when delay==0).
     if (viable && linkedDual()) {
@@ -2291,7 +2304,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
                 zone.valid ? &zone : nullptr, &tickBudget
             );
             this->resetCaptureForNextRun(layer);
-            if (!runResultDelaySafe(r2, zone, model, other)) {
+            if (!runResultDelaySafe(r2, zone, model, other, requireAlive)) {
                 viable = false;
                 out.clearsThreat = false;
             }
@@ -2513,11 +2526,12 @@ SimPlan ShadowSimulator::plan(
         horizonCaps.scoreHorizon, trustLong
     );
 
+    bool const requireAlive = options.requireAliveForDelay;
     auto finalizeViable = [&](Cand& c, int releaseAfter) {
         c.clearsThreat = clearsThreatOf(c.raw, zone);
-        // Commit 8+9: clearsThreat + ModeSurvival (landing / recoverable / late-crash).
-        c.viable = runResultDelaySafe(c.raw, zone, model, real);
-        // Commit 15: trust-long — alive path must run far enough to see continue
+        // clearsThreat + ModeSurvival (soft bake vs Live Delay-worthy Alive).
+        c.viable = runResultDelaySafe(c.raw, zone, model, real, requireAlive);
+        // Trust-long — alive path must run far enough to see continue
         // (platform after jump). Budget-truncated short runs are not failed here.
         if (c.viable && minSurviveLong > 0) {
             bool const truncated = !c.raw.died && !c.raw.unknownTrunc
@@ -2527,10 +2541,13 @@ SimPlan ShadowSimulator::plan(
                 auto const cls = ModeSurvival::classify(
                     survivalInputFrom(c.raw, zone, model, real)
                 );
+                bool const longSafe = requireAlive
+                    ? ModeSurvival::countsAsDelayWorthy(cls)
+                    : ModeSurvival::countsAsSafeForDelay(cls);
                 if (!AssistHorizon::longPathSuccessOk(
                         c.surviveTicks,
                         c.raw.died,
-                        ModeSurvival::countsAsSafeForDelay(cls),
+                        longSafe,
                         minSurviveLong
                     )) {
                     c.viable = false;
@@ -2545,7 +2562,7 @@ SimPlan ShadowSimulator::plan(
                     other, c.delay, releaseAfter, zone.valid ? &zone : nullptr
                 );
                 this->resetCaptureForNextRun(layer);
-                if (!runResultDelaySafe(r2, zone, model, other)) {
+                if (!runResultDelaySafe(r2, zone, model, other, requireAlive)) {
                     c.viable = false;
                     c.clearsThreat = false;
                     c.dualFailed = true;
@@ -3549,8 +3566,8 @@ SimPlan ShadowSimulator::plan(
             this->resetCaptureForNextRun(layer);
             ++plan.candidatesTried;
 
-            // Hold branch — same Delay-viable rule (Commit 9 ModeSurvival).
-            if (!runResultDelaySafe(r, zone, model, real)) continue;
+            // Hold branch — same Delay-viable rule (soft bake vs Live Alive-only).
+            if (!runResultDelaySafe(r, zone, model, real, requireAlive)) continue;
 
             int const sTicks = r.ticksBeforeNeutral > 0 ? r.ticksBeforeNeutral : r.ticksRan;
             int const sBin = surviveBinOf(sTicks);
@@ -4478,7 +4495,7 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         expect(clears(dn, zone), "snap-delay-clears");
     }
 
-    // Commit 8 Score honesty: soft-viable surviveBin Escape is gone.
+    // Score honesty: soft-viable surviveBin Escape is gone.
     expect(
         !delayViableHonest(false, false, false, false, false, false, true),
         "soft-viable-no-clear"
@@ -4495,7 +4512,7 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
         delayViableHonest(false, false, false, false, false, false, false),
         "viable-no-zone"
     );
-    // Commit 9: raw death + Landing/LateCrash can be Delay-viable; Lethal cannot.
+    // Soft bake: raw death + Landing/LateCrash can be not-false-lethal; Lethal cannot.
     expect(
         !delayViableHonest(
             false, true, false, false, true, false, true,
@@ -4508,14 +4525,43 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
             false, true, false, false, true, true, true,
             ModeSurvival::Class::Landing
         ),
-        "landing-died-viable"
+        "landing-died-soft-viable"
     );
     expect(
         delayViableHonest(
             false, true, false, false, true, true, true,
             ModeSurvival::Class::LateCrashAfterClear
         ),
-        "late-crash-viable"
+        "late-crash-soft-viable"
+    );
+    // Live Delay-worthy: Alive only; Landing/LateCrash never invent Delay.
+    expect(
+        delayViableHonest(
+            false, false, false, false, true, false, true,
+            ModeSurvival::Class::Alive, true
+        ),
+        "alive-require-worthy"
+    );
+    expect(
+        !delayViableHonest(
+            false, true, false, false, true, true, true,
+            ModeSurvival::Class::Landing, true
+        ),
+        "landing-not-delay-worthy"
+    );
+    expect(
+        !delayViableHonest(
+            false, true, false, false, true, true, true,
+            ModeSurvival::Class::LateCrashAfterClear, true
+        ),
+        "late-crash-not-delay-worthy"
+    );
+    expect(
+        !delayViableHonest(
+            false, true, false, false, true, true, true,
+            ModeSurvival::Class::Recoverable, true
+        ),
+        "recoverable-not-delay-worthy"
     );
     expect(
         !delayViableHonest(false, false, true, false, true, false, true),

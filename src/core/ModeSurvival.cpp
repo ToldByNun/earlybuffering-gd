@@ -23,6 +23,10 @@ bool ModeSurvival::countsAsSafeForDelay(Class c) {
         || c == Class::LateCrashAfterClear;
 }
 
+bool ModeSurvival::countsAsDelayWorthy(Class c) {
+    return c == Class::Alive;
+}
+
 bool ModeSurvival::shouldSkipFalseOpportunity(Class c) {
     return c == Class::LateCrashAfterClear || c == Class::Landing;
 }
@@ -130,11 +134,18 @@ bool ModeSurvival::selfCheck(std::string& report) {
     expect(countsAsSafeForDelay(Class::Recoverable), "safe-recoverable");
     expect(countsAsSafeForDelay(Class::LateCrashAfterClear), "safe-late");
     expect(!countsAsSafeForDelay(Class::Lethal), "lethal-unsafe");
+    expect(countsAsDelayWorthy(Class::Alive), "worthy-alive");
+    expect(!countsAsDelayWorthy(Class::Landing), "worthy-not-landing");
+    expect(!countsAsDelayWorthy(Class::Recoverable), "worthy-not-recover");
+    expect(!countsAsDelayWorthy(Class::LateCrashAfterClear), "worthy-not-late");
+    expect(!countsAsDelayWorthy(Class::Lethal), "worthy-not-lethal");
     expect(shouldSkipFalseOpportunity(Class::Landing), "skip-landing");
     expect(shouldSkipFalseOpportunity(Class::LateCrashAfterClear), "skip-late");
     expect(!shouldSkipFalseOpportunity(Class::Lethal), "no-skip-lethal");
+    expect(!shouldSkipFalseOpportunity(Class::Recoverable), "no-skip-recover");
+    expect(!shouldSkipFalseOpportunity(Class::Alive), "no-skip-alive");
 
-    // Cube: zoneCleared + death past end → Landing / safe.
+    // Cube: zoneCleared + death past end → Landing / soft-safe, not Delay-worthy.
     {
         Input in{};
         in.isCubeLike = true;
@@ -147,7 +158,9 @@ bool ModeSurvival::selfCheck(std::string& report) {
         in.zoneEndX = 200.f;
         auto const c = classify(in);
         expect(c == Class::Landing, "cube-landing");
-        expect(countsAsSafeForDelay(c), "cube-landing-viable");
+        expect(countsAsSafeForDelay(c), "cube-landing-soft-safe");
+        expect(!countsAsDelayWorthy(c), "cube-landing-not-worthy");
+        expect(shouldSkipFalseOpportunity(c), "cube-landing-skip-opp");
     }
 
     // Cube: die inside zone, no settle → Lethal.
