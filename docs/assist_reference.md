@@ -238,6 +238,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
 | assist-pick | string | v1 | v1/v2 (aliases Legacy/New; v2 currently = v1) | | Assist / Algorithm — G1 pick (v1 default; New choose removed) |
+| assist-engine | string | ShadowPlayer | ShadowPlayer/Trajectory | | Live V2 foresight backend; **v1 always ShadowPlayer** (effective) |
 | bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |

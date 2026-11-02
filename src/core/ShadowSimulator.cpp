@@ -2996,8 +2996,9 @@ SimPlan ShadowSimulator::plan(
     ledgerActMax = actMax;
 
     // Live choose = AssistPickV1 only (New / outcome-rank choose deleted).
-    // assist-pick v2 setting is reserved until AssistPickV2; behavior is v1.
+    // assist-pick v2 + assist-engine Trajectory wired in later units (WU9–12).
     (void)options.legacyPick;
+    (void)options.assistEngine;
     std::vector<AssistPickV1::CandView> pickViews(
         static_cast<size_t>(std::max(0, limit)) + 1u
     );

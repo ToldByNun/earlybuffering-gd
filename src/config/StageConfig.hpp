@@ -44,6 +44,12 @@ public:
         BruteForce
     };
 
+    // Live V2 sim backend (WU8). V1 effective engine is always ShadowPlayer.
+    enum class AssistEngineKind {
+        ShadowPlayer = 0,
+        Trajectory
+    };
+
     static constexpr int MODE_COUNT = static_cast<int>(GameModeKind::Count);
 
     static void refreshCache();
@@ -129,6 +135,12 @@ public:
     static char const* assistPickName(); // "v1" / "v2"
     // Map store/export aliases: v1|Legacy → v1, v2|New → v2. Empty if unknown.
     static char const* canonicalizeAssistPick(std::string const& raw);
+    // Raw assist-engine setting (ShadowPlayer / Trajectory).
+    static AssistEngineKind assistEngine();
+    // V1 → always ShadowPlayer; V2 → honors assist-engine.
+    static AssistEngineKind effectiveAssistEngine();
+    static char const* assistEngineName(AssistEngineKind engine);
+    static char const* assistEngineName(); // effective
     static int simBudgetUs();
     static int bakeRadius();
     static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
@@ -176,5 +188,6 @@ public:
 
 using GameModeKind = StageConfig::GameModeKind;
 using AssistMode = StageConfig::AssistMode;
+using AssistEngineKind = StageConfig::AssistEngineKind;
 
 #endif // EARLYBUFFER_CONFIG_STAGECONFIG_HPP

@@ -23,7 +23,7 @@ public:
         SettingsCategory cat;
     };
 
-    static constexpr int kCount = 165;
+    static constexpr int kCount = 166;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -82,6 +82,7 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "death-slack", SettingsCategory::Assist },
     { "look-ahead-cap", SettingsCategory::Assist },
     { "assist-pick", SettingsCategory::Assist },
+    { "assist-engine", SettingsCategory::Assist },
     { "cps-limit", SettingsCategory::Assist },
     { "min-click-interval-ms", SettingsCategory::Assist },
     { "assist-orbs", SettingsCategory::Assist },
@@ -796,6 +797,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("bake-radius") == SettingsCategory::Bake, "cat-bake-radius");
     expect(categoryForKey("reset-learn-action") == SettingsCategory::Assist, "cat-reset-learn");
     expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
+    expect(categoryForKey("assist-engine") == SettingsCategory::Assist, "cat-assist-engine");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
     expect(categoryForKey("show-bake-path") == SettingsCategory::Visual, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");

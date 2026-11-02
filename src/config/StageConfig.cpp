@@ -72,6 +72,7 @@ bool g_cachedTriggerBake = true;
 bool g_cachedTriggerBakeSkipDynamic = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
 bool g_cachedAssistPickLegacy = true; // mod.json default v1 (ex-Legacy)
+AssistEngineKind g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
 int g_cachedCpsLimit = 0;
@@ -267,6 +268,30 @@ void StageConfig::refreshCache() {
         // mod.json default is v1.
         g_cachedAssistPickLegacy = true;
     }
+    try {
+        auto engStr = mod->getSettingValue<std::string>("assist-engine");
+        if (engStr == "Trajectory") {
+            g_cachedAssistEngine = AssistEngineKind::Trajectory;
+        }
+        else {
+            g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+            if (engStr != "ShadowPlayer") {
+                bool const nested = g_applying;
+                if (!nested) g_applying = true;
+                try {
+                    mod->setSettingValue<std::string>(
+                        "assist-engine", std::string("ShadowPlayer")
+                    );
+                }
+                catch (...) {
+                }
+                if (!nested) g_applying = false;
+            }
+        }
+    }
+    catch (...) {
+        g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+    }
 
     for (int i = 0; i < MODE_COUNT; ++i) {
         auto const& ids = MODE_IDS[i];
@@ -450,6 +475,30 @@ char const* StageConfig::canonicalizeAssistPick(std::string const& raw) {
     if (raw == "v1" || raw == "Legacy") return "v1";
     if (raw == "v2" || raw == "New") return "v2";
     return nullptr;
+}
+
+StageConfig::AssistEngineKind StageConfig::assistEngine() {
+    ensureCache();
+    return g_cachedAssistEngine;
+}
+
+StageConfig::AssistEngineKind StageConfig::effectiveAssistEngine() {
+    ensureCache();
+    // V1 choose is frozen on full ghost runOne — never Trajectory.
+    if (g_cachedAssistPickLegacy) return AssistEngineKind::ShadowPlayer;
+    return g_cachedAssistEngine;
+}
+
+char const* StageConfig::assistEngineName(AssistEngineKind engine) {
+    switch (engine) {
+        case AssistEngineKind::Trajectory: return "Trajectory";
+        case AssistEngineKind::ShadowPlayer:
+        default: return "ShadowPlayer";
+    }
+}
+
+char const* StageConfig::assistEngineName() {
+    return assistEngineName(effectiveAssistEngine());
 }
 int StageConfig::simBudgetUs() {
     ensureCache();

@@ -50,6 +50,8 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 Neither mode waits past your Limit (G1 window-cap). Old configs with `Legacy` / `New` still load.
 
+**Assist Engine** (`assist-engine`, Live V2): **ShadowPlayer** (full ghost, default) vs **Trajectory** (`samplePath`). Pick **v1** always uses ShadowPlayer.
+
 ---
 
 ## Modes

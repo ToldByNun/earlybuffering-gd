@@ -1173,6 +1173,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     opts.maxBranches = 2;
     opts.smartDepth = 1;
     opts.legacyPick = StageConfig::assistPickLegacy();
+    opts.assistEngine = StageConfig::effectiveAssistEngine();
     opts.attemptStartTick = this->m_attemptTick;
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
 
@@ -1511,6 +1512,10 @@ void AssistController::updateOverlay() {
         }
         if (StageConfig::assistOrbs()) m_overlayText += " | orbs";
         this->m_overlayText += fmt::format(" | pick={}", StageConfig::assistPickName());
+        this->m_overlayText += fmt::format(
+            " | eng={}",
+            StageConfig::assistEngineName()
+        );
         if (StageConfig::assistVerifyAb()) m_overlayText += " | VERIFY AB ON";
         if (!StageConfig::safeMode() && StageConfig::isEnabled()) m_overlayText += " | UNSAFE";
         if (auto* pl = PlayLayer::get()) {
@@ -1956,6 +1961,7 @@ void AssistController::fireBuffered(
             opts.maxBranches = 2;
             opts.smartDepth = 1;
             opts.legacyPick = StageConfig::assistPickLegacy();
+            opts.assistEngine = StageConfig::effectiveAssistEngine();
             fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, this->m_buffer.down, remaining,
@@ -2991,6 +2997,7 @@ bool AssistController::planPress(
     opts.smartHorizon = StageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
     opts.legacyPick = StageConfig::assistPickLegacy();
+    opts.assistEngine = StageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
@@ -3554,6 +3561,7 @@ bool AssistController::planRelease(
     opts.maxBranches = 4;
     opts.attemptStartTick = effectTick;
     opts.legacyPick = StageConfig::assistPickLegacy();
+    opts.assistEngine = StageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
     bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind

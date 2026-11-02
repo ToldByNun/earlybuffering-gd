@@ -375,6 +375,16 @@
 			],
 			"default": "v1"
 		},
+		"assist-engine": {
+			"type": "string",
+			"name": "Assist Engine (Live V2)",
+			"description": "Which physics backend Live V2 may use for foresight. ShadowPlayer = full ghost PlayerObject (runOne) — default, matches v1. Trajectory = lighter samplePath foresight (V2 only; optional Shadow verify before arm comes later). Pick v1 always uses ShadowPlayer regardless of this setting.",
+			"one-of": [
+				"ShadowPlayer",
+				"Trajectory"
+			],
+			"default": "ShadowPlayer"
+		},
 		"cps-limit": {
 			"type": "int",
 			"name": "CPS Limit",

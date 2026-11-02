@@ -52,6 +52,7 @@ Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
 
 - **Enabled / Assist Mode / Window** — master control, Live / Hybrid / Replay / BruteForce, and tick windows (unit + default + wave) on **Main** (no Preset packs)
 - **Pick Mode** (`assist-pick`) — **v1** (default); **v2** reserved (currently same as v1)
+- **Assist Engine** (`assist-engine`) — **ShadowPlayer** (default) vs **Trajectory** for Live V2; v1 always ShadowPlayer
 - **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
 - **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
 - **Assist Off Ranges** — six From/To percent slots (`-1` = unused); assist forced off inside those ranges
