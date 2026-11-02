@@ -16,6 +16,14 @@ int LongForesight::extendHorizon(
     return next > currentHorizon ? next : 0;
 }
 
+bool LongForesight::pathCoversHorizon(PathStats const& s, int horizon) {
+    if (horizon <= 0) return false;
+    if (s.died) {
+        return s.deathTick >= 0 && s.deathTick < horizon;
+    }
+    return s.surviveTicks >= horizon;
+}
+
 bool LongForesight::idleLooksSafer(PathStats const& press, PathStats const& idle) {
     // Idle must look better than pressing/releasing now.
     if (!press.died) return false;
@@ -102,6 +110,31 @@ bool LongForesight::selfCheck(std::string& report) {
 
     expect(idleLooksSafer(pressDead, idleLive), "idle-live-safer");
     expect(!idleLooksSafer(idleLive, pressDead), "press-live-not-idle");
+
+    expect(pathCoversHorizon(pressDead, 64), "cover-died-inside");
+    expect(pathCoversHorizon(idleLive, 64), "cover-lived");
+    expect(!pathCoversHorizon(idleLive, 128), "cover-short-live");
+    {
+        PathStats edge = pressDead;
+        edge.deathTick = 63;
+        expect(pathCoversHorizon(edge, 64), "cover-death-near-end");
+        edge.deathTick = 64;
+        expect(!pathCoversHorizon(edge, 64), "cover-death-at-horizon");
+    }
+    // Reuse vs fresh: same PathStats → identical decide (surviveTicks honesty).
+    {
+        Input reused;
+        reused.press = pressDead;
+        reused.idle = idleLive;
+        reused.horizon = 64;
+        Input fresh = reused;
+        auto const a = decide(reused);
+        auto const b = decide(fresh);
+        expect(a.needDelaySearch == b.needDelaySearch, "reuse-eq-need");
+        expect(a.idleSafer == b.idleSafer, "reuse-eq-idle");
+        expect(a.bothDead == b.bothDead, "reuse-eq-both");
+        expect(a.horizonUsed == b.horizonUsed, "reuse-eq-h");
+    }
 
     PathStats idleLater = pressDead;
     idleLater.deathTick = 40;

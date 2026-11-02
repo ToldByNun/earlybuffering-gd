@@ -3,6 +3,7 @@
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
 #include "AssistSpikeWatch.hpp"
+#include "TravelForesightCache.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
@@ -298,6 +299,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     HybridVerifyCache::get().clearAttempt();
     SimTrust::get().resetAttempt();
     GhostParityProbe::get().resetAttempt();
+    TravelForesightCache::get().clear();
     m_attemptTick = 0;
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
@@ -400,6 +402,7 @@ void AssistController::onLevelQuit() {
     TriggerWorldStore::get().clear();
     SimTrust::get().onLevelQuit();
     GhostParityProbe::get().onLevelQuit();
+    TravelForesightCache::get().clear();
     this->m_dafWatch = false;
     // Keep AssistRealMetrics session across levels (corpus report); do not resetSession.
 
@@ -1109,8 +1112,13 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     // Cheap foresight edge (no full plan) so cadence can wake on orb/pad enter/leave.
     int const slack = StageConfig::deathSlack();
     bool const foresightNow = StageConfig::assistOrbs()
-        && TravelForesight::hasOrbOrPadAhead(
-            playLayer, player, remLimit, this->m_simDt, slack
+        && TravelForesightCache::get().hasOrbOrPadAhead(
+            playLayer,
+            player,
+            remLimit,
+            this->m_simDt,
+            slack,
+            this->m_attemptTick
         );
 
     // Window end: inject only with orb escape still ahead — else drop (no inject).

@@ -27,6 +27,7 @@
 #include "../core/SectionObjectWalk.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
+#include "../core/TravelForesightCache.hpp"
 #include "../core/OpportunityProbe.hpp"
 #include "../core/DivergenceTracker.hpp"
 #include "../core/ClickIntentGuard.hpp"
@@ -168,6 +169,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(LongForesight::selfCheck(longForesightReport), "long-foresight");
     std::string foresightReport;
     expect(TravelForesight::selfCheck(foresightReport), "travel-foresight");
+    std::string foresightCacheReport;
+    expect(TravelForesightCache::selfCheck(foresightCacheReport), "travel-foresight-cache");
     std::string probeReport;
     expect(OpportunityProbe::selfCheck(probeReport), "opportunity-probe");
     std::string husReport;

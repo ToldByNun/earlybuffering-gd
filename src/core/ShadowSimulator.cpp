@@ -18,6 +18,8 @@
 #include "PerfectAssistPolicy.hpp"
 #include "SectionObjectWalk.hpp"
 #include "AssistSpikeWatch.hpp"
+#include "AssistController.hpp"
+#include "TravelForesightCache.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include "../debug/LagProbe.hpp"
@@ -1526,8 +1528,11 @@ bool ShadowSimulator::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int l
     if (real) {
         slack = StageConfig::paramsFor(real).slack;
     }
-    // Dt-/speed-aware orb + jump-pad cone (replaces fixed (limit+8)*5.5).
-    return TravelForesight::hasOrbOrPadAhead(layer, real, limit, dt, slack);
+    // Same cone as TravelForesight; cache per attempt tick / X bucket.
+    int const tick = AssistController::get().attemptTick();
+    return TravelForesightCache::get().hasOrbOrPadAhead(
+        layer, real, limit, dt, slack, tick
+    );
 }
 
 bool ShadowSimulator::spatialHazardProximity(
@@ -2311,7 +2316,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     // Linked dual: still one runOne for the other player (even when delay==0).
     if (viable && linkedDual()) {
         PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
-        if (other && tickBudget > 0 && !wallExceeded()) {
+        if (other && !other->m_isDead && tickBudget > 0 && !wallExceeded()) {
             auto r2 = this->runOne(
                 layer, other, down, delay, limit, dt, firstDt, model, -1,
                 zone.valid ? &zone : nullptr, &tickBudget
@@ -2414,13 +2419,16 @@ SimPlan ShadowSimulator::plan(
     bool sawToggleUnknown = false;
     bool const hadToggleTargets = !this->m_toggleTargetIds.empty();
 
+    RunResult baselineRaw{};
+    bool haveBaselineRaw = false;
     {
-        auto base = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
+        baselineRaw = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
+        haveBaselineRaw = true;
         this->resetCaptureForNextRun(layer);
-        if (base.died) {
-            plan.baselineDeathTick = base.deathTick;
-            plan.baselineDeathObject = base.deathObject;
-            plan.baselineDeathX = base.deathX;
+        if (baselineRaw.died) {
+            plan.baselineDeathTick = baselineRaw.deathTick;
+            plan.baselineDeathObject = baselineRaw.deathObject;
+            plan.baselineDeathX = baselineRaw.deathX;
         }
     }
 
@@ -2568,10 +2576,11 @@ SimPlan ShadowSimulator::plan(
                 }
             }
         }
-        // Linked dual: other player's shadow must also survive the same plan.
+        // Linked dual: other player's shadow must also survive the same delay.
+        // Skip when not linked, missing, or already dead (no equal-work sim).
         if (c.viable && linkedDual()) {
             PlayerObject* other = (real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
-            if (other && tickBudget > 0) {
+            if (other && !other->m_isDead && tickBudget > 0) {
                 auto r2 = runEngine(
                     other, c.delay, releaseAfter, zone.valid ? &zone : nullptr
                 );
@@ -2680,26 +2689,53 @@ SimPlan ShadowSimulator::plan(
 
             auto samplePair = [&](int horizon, LongForesight::PathStats& pressOut,
                                   LongForesight::PathStats& idleOut) {
+                // Reuse d0 / baseline when they already cover `horizon` (equal PathStats).
+                auto tryReusePress = [&]() -> bool {
+                    auto const& raw = c0.raw;
+                    auto const ps = pathFromRun(raw);
+                    if (!LongForesight::pathCoversHorizon(ps, horizon)) return false;
+                    // Cap must have been long enough to produce that cover.
+                    if (model.cap < horizon && !raw.died) return false;
+                    pressOut = ps;
+                    return true;
+                };
+                auto tryReuseIdle = [&]() -> bool {
+                    if (!haveBaselineRaw) return false;
+                    auto const ps = pathFromRun(baselineRaw);
+                    if (!LongForesight::pathCoversHorizon(ps, horizon)) return false;
+                    if (model.cap < horizon && !baselineRaw.died) return false;
+                    idleOut = ps;
+                    return true;
+                };
+
                 if (options.assistEngine
                     == StageConfig::AssistEngineKind::Trajectory) {
                     // down=press → action holds Jump; idle coasts. Release flips.
-                    pressOut = sampleLight(down, horizon);
-                    idleOut = sampleLight(!down, horizon);
+                    if (!tryReusePress()) {
+                        pressOut = sampleLight(down, horizon);
+                    }
+                    if (!tryReuseIdle()) {
+                        idleOut = sampleLight(!down, horizon);
+                    }
                     return;
                 }
                 Model longModel = model; // inherits continuePastClear
                 longModel.cap = std::max(1, horizon);
-                auto pressR = runOne(
-                    layer, real, down, 0, limit, dt, firstDt, longModel, -1,
-                    zone.valid ? &zone : nullptr, &tickBudget
-                );
-                this->resetCaptureForNextRun(layer);
-                auto idleR = runBaseline(
-                    layer, real, down, dt, firstDt, longModel, &tickBudget
-                );
-                this->resetCaptureForNextRun(layer);
-                pressOut = pathFromRun(pressR);
-                idleOut = pathFromRun(idleR);
+                if (!tryReusePress()) {
+                    auto pressR = runOne(
+                        layer, real, down, 0, limit, dt, firstDt, longModel, -1,
+                        zone.valid ? &zone : nullptr, &tickBudget
+                    );
+                    this->resetCaptureForNextRun(layer);
+                    pressOut = pathFromRun(pressR);
+                }
+                if (!tryReuseIdle()) {
+                    auto idleR = runBaseline(
+                        layer, real, down, dt, firstDt, longModel, &tickBudget
+                    );
+                    this->resetCaptureForNextRun(layer);
+                    idleOut = pathFromRun(idleR);
+                }
             };
 
             if (tickBudget >= minBudget && !wallExceeded()) {
@@ -2750,6 +2786,10 @@ SimPlan ShadowSimulator::plan(
         bool const noThreat = !c0.raw.died && !zone.valid;
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
+            // Already must search → skip mid/limit probes (equal outcome: full search).
+            bool const alreadyMustSearch = options.mustDelaySearch
+                || plan.longForesightNeedSearch;
+
             OpportunityProbe::Sample baseSample{};
             baseSample.activatedRing = c0.activatedRing;
             baseSample.diedBeforeAction = c0.diedBeforeAction;
@@ -2793,25 +2833,22 @@ SimPlan ShadowSimulator::plan(
                 }
             };
 
-            if (limit >= 1) {
+            if (!alreadyMustSearch && limit >= 1) {
                 runProbeDelay(mid);
                 if (limit != mid) {
                     runProbeDelay(limit);
                 }
             }
 
-            bool searchFurther = OpportunityProbe::shouldSearchFurther(
-                spatialHint,
-                orbHint.found,
-                c0.activatedRing,
-                baseSample,
-                probeSamples,
-                probeCount
-            );
-            // Commit 11: trusted opportunity → MUST Delay-search (skip no-threat exit).
-            if (options.mustDelaySearch) searchFurther = true;
-            // Live V2 LongForesight: press dies on long horizon → keep searching.
-            if (plan.longForesightNeedSearch) searchFurther = true;
+            bool searchFurther = alreadyMustSearch
+                || OpportunityProbe::shouldSearchFurther(
+                    spatialHint,
+                    orbHint.found,
+                    c0.activatedRing,
+                    baseSample,
+                    probeSamples,
+                    probeCount
+                );
 
             if (!searchFurther) {
                 plan.action = PlanAction::Pass;
