@@ -122,9 +122,13 @@ public:
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
     static char const* assistModeHint(AssistMode mode);
-    // Assist pick inside the tick window: Legacy (default, 1.2.0 feel) vs New.
+    // Assist pick inside the tick window: v1 (default, ex-Legacy) vs v2 (ex-New).
+    // assistPickLegacy() == v1 (kept name until Live choose extract).
     static bool assistPickLegacy();
-    static char const* assistPickName();
+    static bool assistPickV1();
+    static char const* assistPickName(); // "v1" / "v2"
+    // Map store/export aliases: v1|Legacy → v1, v2|New → v2. Empty if unknown.
+    static char const* canonicalizeAssistPick(std::string const& raw);
     static int simBudgetUs();
     static int bakeRadius();
     static int cpsLimit(); // 0 = off; assist pauses while CPS >= this

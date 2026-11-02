@@ -10,7 +10,7 @@
 	"name": "EarlyBuffer",
 	"version": "v1.3.2",
 	"developer": "Audesign",
-	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick New vs Legacy). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -368,12 +368,12 @@
 		"assist-pick": {
 			"type": "string",
 			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window. Legacy (default) = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). New = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Never waits past your Limit.",
+			"description": "How Live/Hybrid picks a delay inside your tick window. v1 (default, ex-Legacy) = 1.2.0 feel: if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). v2 (ex-New) = only delays that survive the sim, then Smart Prediction picks the first delay with the best predicted exit (further survival / reach — not a fixed mid or latest). Never waits past your Limit. Old config values Legacy/New still load.",
 			"one-of": [
-				"New",
-				"Legacy"
+				"v1",
+				"v2"
 			],
-			"default": "Legacy"
+			"default": "v1"
 		},
 		"cps-limit": {
 			"type": "int",
@@ -433,7 +433,7 @@
 		"smart-depth": {
 			"type": "int",
 			"name": "Smart Depth (Jumps Ahead)",
-			"description": "How many jumps ahead Live/Hybrid may look. With Pick=New, depth 1 still exit-predicts the first delay over the survivor band (single-press horizon). 2–3 also search follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
+			"description": "How many jumps ahead Live/Hybrid may look. With Pick=v2, depth 1 still exit-predicts the first delay over the survivor band (single-press horizon). 2–3 also search follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
 			"default": 1,
 			"min": 1,
 			"max": 3

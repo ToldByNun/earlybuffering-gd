@@ -237,7 +237,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
-| assist-pick | string | Legacy | New/Legacy | | Assist / Algorithm — G1 pick (Legacy default) |
+| assist-pick | string | v1 | v1/v2 (aliases Legacy/New) | | Assist / Algorithm — G1 pick (v1 default) |
 | bake-radius | int | 0 | 0 | 128 | Bake — 0=auto |
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
@@ -458,15 +458,15 @@ clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. HUS replan
 
 ## Miss-assist contracts
 
-Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` are tick windows (Main → Window). Beginner defaults: Pick **Legacy**, windows **4/4**, Assist **Live**, Safe Mode **on**, Auto-Tune / Self-Bake **off**.
+Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the same: 10 display frames ≈ 40 ticks at 240 TPS. Settings `ticks-*` are tick windows (Main → Window). Beginner defaults: Pick **v1**, windows **4/4**, Assist **Live**, Safe Mode **on**, Auto-Tune / Self-Bake **off**.
 
 ### Guarantees
 
 | Id | Rule |
 |----|------|
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
-| G1 Legacy | Setting `assist-pick` = **Legacy** (default): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
-| G1 Prefer (New) | `assist-pick` = **New**: **Delay-viable = clearsThreat** (or no-zone / zoneCleared — not soft `surviveBin≥1`). d0 viable → Pass; else **exit prediction** ranks **all viable** delays by horizon outcome (`!died && !unknown` / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
+| G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. |
+| G1 v2 | `assist-pick` = **v2** (ex-New): **Delay-viable = clearsThreat** (or no-zone / zoneCleared — not soft `surviveBin≥1`). d0 viable → Pass; else **exit prediction** ranks **all viable** delays by horizon outcome (`!died && !unknown` / endX−λ·delay / bake-chain). Always runs `planSequence` exit probe. Live `verifyDelay` before arm; refuse lethal Delay → Pass. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |
@@ -484,7 +484,7 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 |-------|----------------|
 | `pass-no-threat` | Empty corridor after foresight + OpportunityProbe |
 | `pass-wave-proximity` / `pass-wave-futile` | Wave spam / no useful delay (blocked by foresight orb) |
-| `pass-d0-safe` | Delay 0 already clears (Legacy preference / New best=0) |
+| `pass-d0-safe` | Delay 0 already clears (v1 preference / v2 best=0) |
 | `pass-hopeless` / `pass-budget` | Nothing viable / tick wall; may arm HUS if foresight/ascent |
 | `pass-toggle-unknown` | Toggle-orb / touch-toggle target overlapped in sim — refuse Delay (honesty; ToggleOrbSim accuracy is separate) |
 | `pass-parity-drift` | GhostParityProbe: shadow replay of recent path drifted vs live (attempt-wide hard Pass; clears buffer) |
@@ -505,7 +505,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 
 ### Manual playtest matrix
 
-| Scene | Expect (New) | Expect (Legacy) | Notes |
+| Scene | Expect (v2) | Expect (v1) | Notes |
 |-------|--------------|-----------------|-------|
 | Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
 | Budget starve mid-search + foresight orb | `HUS` → cadenced replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass / never hang; LagProbe `eb.hus.replan` |

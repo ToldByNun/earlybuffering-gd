@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -70,7 +71,7 @@ bool g_cachedSelfBakeRefine = true;
 bool g_cachedTriggerBake = true;
 bool g_cachedTriggerBakeSkipDynamic = true;
 AssistMode g_cachedAssistMode = AssistMode::Hybrid;
-bool g_cachedAssistPickLegacy = true; // mod.json default Legacy
+bool g_cachedAssistPickLegacy = true; // mod.json default v1 (ex-Legacy)
 int g_cachedSimBudgetUs = 1500;
 int g_cachedBakeRadius = 0;
 int g_cachedCpsLimit = 0;
@@ -241,10 +242,29 @@ void StageConfig::refreshCache() {
     }
     try {
         auto pickStr = mod->getSettingValue<std::string>("assist-pick");
-        g_cachedAssistPickLegacy = (pickStr == "Legacy");
+        char const* canon = canonicalizeAssistPick(pickStr);
+        if (!canon) {
+            // Unknown → v1 default.
+            g_cachedAssistPickLegacy = true;
+            canon = "v1";
+        }
+        else {
+            g_cachedAssistPickLegacy = (std::strcmp(canon, "v1") == 0);
+        }
+        // Migrate store Legacy/New → v1/v2 so Geode one-of stays valid.
+        if (pickStr != canon) {
+            bool const nested = g_applying;
+            if (!nested) g_applying = true;
+            try {
+                mod->setSettingValue<std::string>("assist-pick", std::string(canon));
+            }
+            catch (...) {
+            }
+            if (!nested) g_applying = false;
+        }
     }
     catch (...) {
-        // mod.json default is Legacy.
+        // mod.json default is v1.
         g_cachedAssistPickLegacy = true;
     }
 
@@ -417,9 +437,19 @@ bool StageConfig::assistPickLegacy() {
     return g_cachedAssistPickLegacy;
 }
 
+bool StageConfig::assistPickV1() {
+    return assistPickLegacy();
+}
+
 char const* StageConfig::assistPickName() {
     ensureCache();
-    return g_cachedAssistPickLegacy ? "Legacy" : "New";
+    return g_cachedAssistPickLegacy ? "v1" : "v2";
+}
+
+char const* StageConfig::canonicalizeAssistPick(std::string const& raw) {
+    if (raw == "v1" || raw == "Legacy") return "v1";
+    if (raw == "v2" || raw == "New") return "v2";
+    return nullptr;
 }
 int StageConfig::simBudgetUs() {
     ensureCache();

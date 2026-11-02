@@ -45,10 +45,10 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 | Mode | Behavior |
 |------|----------|
-| **Legacy** (default) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
-| **New** | Surviving delays only; **Smart Prediction** picks the delay with the best predicted exit (not fixed mid/latest). |
+| **v1** (default, ex-Legacy) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
+| **v2** (ex-New) | Surviving delays only; **Smart Prediction** picks the delay with the best predicted exit (not fixed mid/latest). |
 
-Neither mode waits past your Limit (G1 window-cap).
+Neither mode waits past your Limit (G1 window-cap). Old configs with `Legacy` / `New` still load.
 
 ---
 
@@ -67,7 +67,7 @@ Contracts G1–G3, Pass-reason list, Hold-Until-Safe, Hybrid / mobile: [`docs/as
 
 ## Defaults that matter
 
-- Windows **4/4** on Main, Pick **Legacy**, Assist Mode **Live**, **Safe Mode** on
+- Windows **4/4** on Main, Pick **v1**, Assist Mode **Live**, **Safe Mode** on
 - **Platformer** hard off
 - **Auto-Tune** / **Self-Bake** off — no per-level learning or practice recording until you turn them on
 - No Preset packs — set Window sliders on Main; **Enabled** off kills assist

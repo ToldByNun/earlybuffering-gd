@@ -4,6 +4,7 @@
 #include "../config/StageConfig.hpp"
 #include "../dev/DevConfig.hpp"
 
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <system_error>
@@ -186,7 +187,14 @@ static bool applyOneSetting(
                     ++skipped;
                     return false;
                 }
-                mod->setSettingValue<std::string>(entry.key, std::string(parsed.unwrap()));
+                std::string s(parsed.unwrap());
+                // assist-pick: accept Legacy/New aliases from old exports → v1/v2.
+                if (std::strcmp(entry.key, "assist-pick") == 0) {
+                    if (char const* canon = StageConfig::canonicalizeAssistPick(s)) {
+                        s = canon;
+                    }
+                }
+                mod->setSettingValue<std::string>(entry.key, s);
                 ++applied;
                 return true;
             }
