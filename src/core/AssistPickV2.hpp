@@ -5,9 +5,11 @@
 #include <vector>
 
 // Live choose for assist-pick **v2**.
-// Foresight-first: among ±k-robust viable delays, rank by
+// Foresight-first: among ±k-robust Delay-worthy delays, rank by
 //   orbUseful > surviveBin > surviveTicks > endX − λ·delay
 // (not v1's latest-robust). Orb band still earliest activation.
+// Delay-worthy = viable && !died (Alive escape). Force-search never
+// invents Delay when every later cand is dead.
 // Pure over cand views — no PlayLayer / sim. ShadowSimulator owns jitter.
 class AssistPickV2 {
 public:
@@ -18,6 +20,9 @@ public:
         int surviveBin = 0;
         int surviveTicks = 0;
         float endX = 0.f;
+        // Ghost died on this delay (soft Landing/LateCrash may still be
+        // "viable" only on bake paths — Live Delay requires !died).
+        bool died = false;
     };
 
     struct Context {
@@ -32,6 +37,9 @@ public:
         bool doPass = false;
         bool requireOrb = false;
     };
+
+    // Live Delay-arm / force-search: still-living viable ghost only.
+    static bool isDelayWorthy(CandView const& c);
 
     // Lexico foresight compare: true if a (at delayA) beats b (at delayB).
     static bool foresightBetter(
@@ -68,9 +76,9 @@ public:
         float latencyWeight
     );
 
-    // Orb → earliest ±k-robust in band.
-    // Else foresight-rank; idleSafer / longForesightNeedSearch prefer Delay
-    // when a later cand beats or matches d0 foresight.
+    // Orb → earliest ±k-robust Delay-worthy in band.
+    // Else foresight-rank; idleSafer / LF / ascent prefer a later Alive Delay
+    // when one exists — otherwise hopeless (chosen=-1), never soft-dead Delay.
     static Result choose(
         CandView const* cands,
         int limit,

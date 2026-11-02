@@ -3319,6 +3319,7 @@ SimPlan ShadowSimulator::plan(
                 v.surviveBin = c.surviveBin;
                 v.surviveTicks = c.surviveTicks;
                 v.endX = c.endX;
+                v.died = c.raw.died;
             }
             else {
                 auto& v = pickViewsV1[static_cast<size_t>(d)];

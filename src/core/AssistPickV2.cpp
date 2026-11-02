@@ -4,6 +4,10 @@
 #include <cmath>
 #include <fmt/format.h>
 
+bool AssistPickV2::isDelayWorthy(CandView const& c) {
+    return c.viable && !c.died;
+}
+
 bool AssistPickV2::neighborRobust(
     CandView const* cands,
     int limit,
@@ -13,13 +17,13 @@ bool AssistPickV2::neighborRobust(
 ) {
     if (!cands || delay < 0 || delay > limit) return false;
     auto const& c = cands[static_cast<size_t>(delay)];
-    if (!c.viable) return false;
+    if (!isDelayWorthy(c)) return false;
     if (needActivation && !c.activatedRing) return false;
     int const k = std::max(0, robustK);
     for (int e = delay - k; e <= delay + k; ++e) {
         if (e < 0 || e > limit) continue;
         auto const& n = cands[static_cast<size_t>(e)];
-        if (!n.viable) return false;
+        if (!isDelayWorthy(n)) return false;
         if (needActivation && !n.activatedRing) return false;
     }
     return true;
@@ -62,7 +66,7 @@ int AssistPickV2::pickEarliestRobust(
     for (int d : pool) {
         if (d < 0 || d > limit) continue;
         auto const& c = cands[static_cast<size_t>(d)];
-        if (!c.viable) continue;
+        if (!isDelayWorthy(c)) continue;
         if (needActivation && !c.activatedRing) continue;
         return d;
     }
@@ -87,7 +91,7 @@ int AssistPickV2::pickLatestRobust(
         int const d = pool[static_cast<size_t>(i)];
         if (d < 0 || d > limit) continue;
         auto const& c = cands[static_cast<size_t>(d)];
-        if (!c.viable) continue;
+        if (!isDelayWorthy(c)) continue;
         if (needActivation && !c.activatedRing) continue;
         return d;
     }
@@ -124,7 +128,7 @@ int AssistPickV2::pickBestForesight(
     for (int d : pool) {
         if (d < 0 || d > limit) continue;
         auto const& c = cands[static_cast<size_t>(d)];
-        if (!c.viable) continue;
+        if (!isDelayWorthy(c)) continue;
         if (needActivation && !c.activatedRing) continue;
         if (bestAny < 0
             || foresightBetter(
@@ -165,7 +169,7 @@ AssistPickV2::Result AssistPickV2::choose(
         if (chosen < 0) {
             chosen = pickEarliestRobust(cands, limit, robustK, pool, true);
         }
-        if (chosen >= 0) {
+        if (chosen >= 0 && isDelayWorthy(cands[static_cast<size_t>(chosen)])) {
             out.chosen = chosen;
             out.requireOrb = true;
             return out;
@@ -183,19 +187,25 @@ AssistPickV2::Result AssistPickV2::choose(
     int chosen = pickBestForesight(
         cands, limit, robustK, all, false, lam
     );
+    if (chosen >= 0 && !isDelayWorthy(cands[static_cast<size_t>(chosen)])) {
+        chosen = -1;
+    }
 
-    // Foresight-first miss-assist: when idle/LF/ascent flags, prefer a later
-    // delay that beats (or ties) d0 instead of Pass-now.
+    // Force-search: prefer a later Alive Delay when one exists.
+    // No Alive later → hopeless (chosen=-1), never soft-dead Delay.
     if (forceSearch) {
         std::vector<int> later;
         for (int d = 1; d <= limit; ++d) later.push_back(d);
         int const laterBest = pickBestForesight(
             cands, limit, robustK, later, false, lam
         );
-        if (laterBest > 0) {
+        bool const laterOk = laterBest > 0
+            && isDelayWorthy(cands[static_cast<size_t>(laterBest)]);
+
+        if (laterOk) {
             bool takeLater = false;
             if (chosen < 0 || chosen == 0) {
-                if (!cands[0].viable) {
+                if (chosen < 0 || !isDelayWorthy(cands[0])) {
                     takeLater = true;
                 }
                 else if (ctx.idleSafer) {
@@ -227,14 +237,27 @@ AssistPickV2::Result AssistPickV2::choose(
             }
             if (takeLater) chosen = laterBest;
         }
+        else {
+            // Flags wanted Delay, but no Alive later escape.
+            if (chosen > 0) chosen = -1;
+            if (chosen == 0 && !isDelayWorthy(cands[0])) chosen = -1;
+            if (chosen < 0) {
+                // d0 also not Delay-worthy → hopeless (both-dead / soft-dead).
+                return out;
+            }
+            // d0 Alive → fall through to Pass.
+        }
     }
 
     if (chosen < 0) return out;
+    if (!isDelayWorthy(cands[static_cast<size_t>(chosen)])) {
+        return out; // never arm Delay / Pass on dead soft
+    }
 
     out.chosen = chosen;
-    if (chosen == 0 && cands[0].viable) {
+    if (chosen == 0) {
         // idleSafer with a viable later already handled above; Pass only if
-        // still on d0.
+        // still on d0 Alive.
         out.doPass = true;
     }
     return out;
@@ -250,12 +273,19 @@ bool AssistPickV2::selfCheck(std::string& report) {
         report += name;
     };
 
-    // d0 viable, no foresight flags → Pass
+    expect(isDelayWorthy(CandView{ true, false, false, 1, 30, 100.f, false }),
+        "worthy-alive");
+    expect(!isDelayWorthy(CandView{ true, false, false, 2, 60, 150.f, true }),
+        "worthy-not-soft-died");
+    expect(!isDelayWorthy(CandView{ false, false, false, 0, 5, 40.f, true }),
+        "worthy-not-dead");
+
+    // d0 viable Alive, no foresight flags → Pass
     {
         CandView c[] = {
-            { true, false, false, 1, 30, 100.f },
-            { true, false, false, 1, 30, 110.f },
-            { true, false, false, 1, 30, 120.f }
+            { true, false, false, 1, 30, 100.f, false },
+            { true, false, false, 1, 30, 110.f, false },
+            { true, false, false, 1, 30, 120.f, false }
         };
         auto const r = choose(c, 2, 0, false, -1, -1);
         expect(r.doPass && r.chosen == 0, "d0-pass");
@@ -264,9 +294,9 @@ bool AssistPickV2::selfCheck(std::string& report) {
     // Foresight rank: higher surviveBin wins over "latest"
     {
         CandView c[] = {
-            { false, false, false, 0, 5, 50.f },
-            { true, false, false, 3, 100, 200.f },
-            { true, false, false, 1, 40, 300.f }
+            { false, false, false, 0, 5, 50.f, true },
+            { true, false, false, 3, 100, 200.f, false },
+            { true, false, false, 1, 40, 300.f, false }
         };
         std::vector<int> pool = { 0, 1, 2 };
         expect(pickBestForesight(c, 2, 0, pool, false, 0.f) == 1, "best-bin");
@@ -276,18 +306,18 @@ bool AssistPickV2::selfCheck(std::string& report) {
 
     // endX − λ·delay: earlier with similar endX wins when λ high
     {
-        CandView a{ true, false, false, 2, 50, 100.f };
-        CandView b{ true, false, false, 2, 50, 105.f };
+        CandView a{ true, false, false, 2, 50, 100.f, false };
+        CandView b{ true, false, false, 2, 50, 105.f, false };
         expect(foresightBetter(a, 1, b, 10, 1.f), "latency-earlier");
         expect(!foresightBetter(a, 1, b, 2, 0.f), "no-lam-farther");
     }
 
-    // idleSafer → Delay later even if d0 viable
+    // idleSafer → Delay later even if d0 Alive viable
     {
         CandView c[] = {
-            { true, false, false, 1, 30, 100.f },
-            { true, false, false, 2, 60, 150.f },
-            { true, false, false, 2, 60, 160.f }
+            { true, false, false, 1, 30, 100.f, false },
+            { true, false, false, 2, 60, 150.f, false },
+            { true, false, false, 2, 60, 160.f, false }
         };
         Context ctx;
         ctx.idleSafer = true;
@@ -299,9 +329,9 @@ bool AssistPickV2::selfCheck(std::string& report) {
     // longForesightNeedSearch + later same bin → prefer later Delay
     {
         CandView c[] = {
-            { true, false, false, 1, 40, 100.f },
-            { true, false, false, 1, 45, 120.f },
-            { true, false, false, 1, 50, 140.f }
+            { true, false, false, 1, 40, 100.f, false },
+            { true, false, false, 1, 45, 120.f, false },
+            { true, false, false, 1, 50, 140.f, false }
         };
         Context ctx;
         ctx.longForesightNeedSearch = true;
@@ -309,13 +339,56 @@ bool AssistPickV2::selfCheck(std::string& report) {
         expect(!r.doPass && r.chosen >= 1, "lf-need-search");
     }
 
-    // Orb band: earliest activation
+    // Both dead + force flags → hopeless, no Delay
     {
         CandView c[] = {
-            { false, false, false, 0, 0, 0.f },
-            { true, true, true, 1, 30, 100.f },
-            { true, true, true, 2, 60, 200.f },
-            { true, true, true, 2, 60, 210.f }
+            { false, false, false, 0, 10, 50.f, true },
+            { false, false, false, 2, 80, 150.f, true },
+            { false, false, false, 3, 100, 200.f, true }
+        };
+        Context ctx;
+        ctx.idleSafer = true;
+        ctx.ascentUseful = true;
+        ctx.longForesightNeedSearch = true;
+        auto const r = choose(c, 2, 0, false, -1, -1, ctx);
+        expect(r.chosen < 0 && !r.doPass, "both-dead-no-delay");
+    }
+
+    // Soft-viable but died must never arm Delay under force-search
+    {
+        CandView c[] = {
+            { false, false, false, 0, 5, 40.f, true },
+            { true, false, false, 2, 60, 120.f, true },
+            { true, false, false, 3, 90, 180.f, true }
+        };
+        Context ctx;
+        ctx.idleSafer = true;
+        ctx.ascentUseful = true;
+        auto const r = choose(c, 2, 0, false, -1, -1, ctx);
+        expect(r.chosen < 0 && !r.doPass, "soft-died-no-delay");
+    }
+
+    // Coast/d0 dies, later Alive → may Delay
+    {
+        CandView c[] = {
+            { false, false, false, 0, 8, 50.f, true },
+            { true, false, false, 2, 64, 180.f, false },
+            { true, false, false, 2, 70, 200.f, false }
+        };
+        Context ctx;
+        ctx.idleSafer = true;
+        ctx.longForesightNeedSearch = true;
+        auto const r = choose(c, 2, 0, false, -1, -1, ctx);
+        expect(!r.doPass && r.chosen >= 1, "coast-die-alive-later");
+    }
+
+    // Orb band: earliest activation (Alive)
+    {
+        CandView c[] = {
+            { false, false, false, 0, 0, 0.f, true },
+            { true, true, true, 1, 30, 100.f, false },
+            { true, true, true, 2, 60, 200.f, false },
+            { true, true, true, 2, 60, 210.f, false }
         };
         auto const r = choose(c, 3, 0, true, 1, 3);
         expect(!r.doPass && r.chosen == 1 && r.requireOrb, "orb-earliest");
@@ -323,9 +396,9 @@ bool AssistPickV2::selfCheck(std::string& report) {
 
     {
         CandView c[] = {
-            { true, false, false, 1, 30, 100.f },
-            { true, false, false, 1, 30, 110.f },
-            { true, false, false, 1, 30, 120.f }
+            { true, false, false, 1, 30, 100.f, false },
+            { true, false, false, 1, 30, 110.f, false },
+            { true, false, false, 1, 30, 120.f, false }
         };
         std::vector<int> pool = { 0, 1, 2 };
         expect(pickEarliestRobust(c, 2, 0, pool, false) == 0, "earliest0");
@@ -333,7 +406,10 @@ bool AssistPickV2::selfCheck(std::string& report) {
     }
 
     {
-        CandView c[] = { { false, false }, { false, false } };
+        CandView c[] = {
+            { false, false, false, 0, 0, 0.f, true },
+            { false, false, false, 0, 0, 0.f, true }
+        };
         auto const r = choose(c, 1, 0, false, -1, -1);
         expect(r.chosen < 0 && !r.doPass, "hopeless");
     }
