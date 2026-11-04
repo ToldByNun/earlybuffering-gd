@@ -87,8 +87,10 @@ void ShadowSimulator::detach(bool layerDying) {
     this->m_simulating = false;
     this->m_bakeOffline = false;
     this->m_bakeForceTriggerWorld = false;
+    this->m_bakeNoDeathBeforeFrame = -1;
     this->m_bakeSpawnOverlapIds.clear();
     this->m_bakeSpawnGraceUntilTick = -1;
+    this->m_bakeSpawnGraceHardCap = -1;
     this->m_applyingRing = false;
     this->m_orbScanning = false;
     this->m_orbOverlapTick = false;
@@ -472,16 +474,38 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_evalAbort = true;
 }
 
+bool ShadowSimulator::bakeSpawnDeathIgnored(
+    int absTick, int untilTick, int hardCap, bool stillIntersects
+) {
+    if (absTick < 0) return false;
+    if (untilTick >= 0 && absTick <= untilTick) return true;
+    if (hardCap >= 0 && absTick <= hardCap && stillIntersects) return true;
+    return false;
+}
+
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {
     // Active sim body (live shadow or eval ghost) drives m_dead.
     if (p != m_shadow && !(m_evalActive && p == m_evalActive)) return;
-    if (this->m_bakeOffline
-        && object
-        && this->m_bakeSpawnGraceUntilTick >= 0
-        && this->m_simAbsTick >= 0
-        && this->m_simAbsTick <= this->m_bakeSpawnGraceUntilTick
-        && this->m_bakeSpawnOverlapIds.count(object->m_uniqueID) > 0) {
-        return;
+    if (this->m_bakeOffline && this->m_simAbsTick >= 0) {
+        // Per-click expand: ghost through pre-click deaths so later macro
+        // events still get windows when 1:1 diverged mid-level.
+        if (this->m_bakeNoDeathBeforeFrame >= 0
+            && this->m_simAbsTick < this->m_bakeNoDeathBeforeFrame) {
+            return;
+        }
+        if (object
+            && this->m_bakeSpawnOverlapIds.count(object->m_uniqueID) > 0) {
+            bool const still =
+                p && p->getObjectRect().intersectsRect(object->getObjectRect());
+            if (ShadowSimulator::bakeSpawnDeathIgnored(
+                    this->m_simAbsTick,
+                    this->m_bakeSpawnGraceUntilTick,
+                    this->m_bakeSpawnGraceHardCap,
+                    still
+                )) {
+                return;
+            }
+        }
     }
     m_dead = true;
     m_deathObject = object;
@@ -4295,6 +4319,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     this->m_collectUnknownHist = true;
     this->m_bakeSpawnOverlapIds.clear();
     this->m_bakeSpawnGraceUntilTick = -1;
+    this->m_bakeSpawnGraceHardCap = -1;
 
     auto* s = m_shadow;
     size_t nextEv = 0;
@@ -4335,7 +4360,8 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
         }
         SectionObjectWalk::forEachInSections(layer, consider);
         if (!this->m_bakeSpawnOverlapIds.empty()) {
-            this->m_bakeSpawnGraceUntilTick = 4; // ticks 0..4 inclusive
+            this->m_bakeSpawnGraceUntilTick = kBakeSpawnGraceFloor;
+            this->m_bakeSpawnGraceHardCap = kBakeSpawnGraceHardCap;
         }
     }
 
@@ -4428,8 +4454,10 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
 
     this->m_collectUnknownHist = false;
     this->m_bakeOffline = false;
+    this->m_bakeNoDeathBeforeFrame = -1;
     this->m_bakeSpawnOverlapIds.clear();
     this->m_bakeSpawnGraceUntilTick = -1;
+    this->m_bakeSpawnGraceHardCap = -1;
     // Seal Soft/Hard unknown histogram (count desc).
     out.unknownHist.clear();
     out.unknownHist.reserve(this->m_unknownHistMap.size());
@@ -4542,6 +4570,48 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(SNAPSHOT_RING_END == PARITY_SLOT_A, "parity-after-ring");
     expect(PARITY_SLOT_B == SNAPSHOT_SLOTS - 1, "parity-b-last");
     expect(SNAPSHOT_RING_END < SNAPSHOT_SLOTS, "ring-end-lt-slots");
+
+    // jacheronbe.gdr2 bakefail: spawn spike uid=8962 kills at frame 5 (x≈7.8)
+    // after floor 0..4; player still intersects until ~x>18 (~14 ticks @ 1.3u).
+    // Floor alone must NOT suffice; still-intersects must cover deathF=5.
+    {
+        int const floor = kBakeSpawnGraceFloor;
+        int const cap = kBakeSpawnGraceHardCap;
+        expect(floor == 4, "spawn-grace-floor-4");
+        expect(cap == 64, "spawn-grace-cap-64");
+        expect(bakeSpawnDeathIgnored(0, floor, cap, true), "spawn-grace-f0");
+        expect(bakeSpawnDeathIgnored(4, floor, cap, true), "spawn-grace-f4-floor");
+        expect(
+            bakeSpawnDeathIgnored(5, floor, cap, true),
+            "spawn-grace-f5-still-intersect"
+        );
+        expect(
+            !bakeSpawnDeathIgnored(5, floor, cap, false),
+            "spawn-grace-f5-cleared-counts"
+        );
+        expect(
+            bakeSpawnDeathIgnored(14, floor, cap, true),
+            "spawn-grace-f14-still"
+        );
+        expect(
+            !bakeSpawnDeathIgnored(14, floor, cap, false),
+            "spawn-grace-f14-cleared"
+        );
+        expect(
+            !bakeSpawnDeathIgnored(65, floor, cap, true),
+            "spawn-grace-past-hardcap"
+        );
+        // Clearance math from bakefail_20261104_105847 (halfW=15, spikeR=3).
+        float const needX = 3.f + 15.f + 0.01f;
+        float const step = 1.30f;
+        int const clearTicks = static_cast<int>(std::ceil(needX / step));
+        expect(clearTicks > floor, "jacheronbe-needs-past-floor");
+        expect(clearTicks <= cap, "jacheronbe-within-hardcap");
+        expect(
+            bakeSpawnDeathIgnored(clearTicks, floor, cap, true),
+            "jacheronbe-clear-tick-still-ok"
+        );
+    }
 
     // Fixed survive bins [0,24), [24,48), [48,96), [96,∞)
     expect(binOf(0) == 0, "bin0");
@@ -4803,8 +4873,12 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(!exitSurvivedHonest(false, true), "exit-unknown-not-survive");
     expect(!exitSurvivedHonest(true, true), "exit-died-unk");
 
-    if (fails == 0) report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty)";
-    else report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
+    if (fails == 0) {
+        report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty+spawn-grace)";
+    }
+    else {
+        report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
+    }
     return fails == 0;
 }
 

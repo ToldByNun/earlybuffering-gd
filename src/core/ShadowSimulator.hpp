@@ -173,6 +173,10 @@ public:
     // (spawn hazards that are movers). Cleared when bakeOffline ends.
     void setBakeForceTriggerWorld(bool on) { this->m_bakeForceTriggerWorld = on; }
     bool bakeForceTriggerWorld() const { return this->m_bakeForceTriggerWorld; }
+    // Expand post-validate-death clicks: ignore markDead while absTick < frame
+    // so the ghost can reach that click (1:1 may have diverged earlier).
+    void setBakeNoDeathBeforeFrame(int frame) { this->m_bakeNoDeathBeforeFrame = frame; }
+    int bakeNoDeathBeforeFrame() const { return this->m_bakeNoDeathBeforeFrame; }
     bool triggerWorldWanted() const {
         return StageConfig::triggerBake()
             || (this->m_bakeOffline && this->m_bakeForceTriggerWorld);
@@ -411,6 +415,15 @@ public:
         bool spamDense
     );
 
+    // Bake spawn-overlap death gate (pure). Floor ticks always ignore; after that
+    // ignore only while still intersecting, up to hardCap. jacheronbe: deathF=5
+    // on spawn spike needs still-intersects path (floor alone dies at frame 5).
+    static constexpr int kBakeSpawnGraceFloor = 4;
+    static constexpr int kBakeSpawnGraceHardCap = 64;
+    static bool bakeSpawnDeathIgnored(
+        int absTick, int untilTick, int hardCap, bool stillIntersects
+    );
+
     // Headless regression checks (threat bins / zone clear math). Returns false on fail.
     static bool regressionSelfCheck(std::string& report);
 
@@ -643,11 +656,15 @@ private:
     bool m_simulating = false;
     bool m_bakeOffline = false;
     bool m_bakeForceTriggerWorld = false;
+    int m_bakeNoDeathBeforeFrame = -1;
     // Bake: uniqueIds that already overlapped the start-snap ghost before physics.
-    // Deaths from those ids are ignored through m_bakeSpawnGraceUntilTick so TW
-    // movers can leave spawn (and thin spawn overlaps do not hard-fail frame 0).
+    // Deaths from those ids are ignored through m_bakeSpawnGraceUntilTick, and
+    // further while the ghost AABB still intersects them (up to HardCap) so a
+    // spawn-centered spike is cleared by walking (~15 ticks) and TW movers can
+    // leave — fixed 0..4 alone still dies at frame 5 (jacheronbe objId=8).
     std::unordered_set<int> m_bakeSpawnOverlapIds;
     int m_bakeSpawnGraceUntilTick = -1;
+    int m_bakeSpawnGraceHardCap = -1;
     bool m_applyingRing = false;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;

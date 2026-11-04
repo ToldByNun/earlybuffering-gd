@@ -142,6 +142,9 @@ private:
     geode::Result<> writeFile() const;
     geode::Result<> readFile();
 
+    // Shift one click to testFrame; survive through untilFrame.
+    // minSurviveFrame>=0: OK if deathFrame >= that (1:1 validate death).
+    // noDeathBeforeFrame>=0: ignore deaths before that tick (reach late clicks).
     bool testShiftedClick(
         PlayLayer* layer,
         int startSnapshotSlot,
@@ -150,7 +153,9 @@ private:
         int testFrame,
         int untilFrame,
         float dt,
-        int substeps = 1
+        int substeps = 1,
+        int minSurviveFrame = -1,
+        int noDeathBeforeFrame = -1
     ) const;
 
     geode::Result<int> bakeReplay(

@@ -135,6 +135,10 @@ private:
     size_t m_skippedDynamic = 0;
     size_t m_skippedNonSpawn = 0; // touch-triggered only (legacy name)
     size_t m_skippedTouch = 0;
+    size_t m_skippedIgnore = 0; // pulse/camera/etc — not static movers
+    size_t m_skippedSpawnTrig = 0; // Spawn trigger objects (not Move targets)
+    size_t m_staticMoverSeen = 0; // Move/Rotate/Scale/Toggle considered
+    size_t m_staticMoverMissed = 0; // no group / empty targets / bad scale
     int m_waitSlices = 0;
     bool m_collectIncomplete = false;
 
@@ -144,6 +148,10 @@ private:
     size_t m_lastSkippedDynamic = 0;
     size_t m_lastSkippedNonSpawn = 0;
     size_t m_lastSkippedTouch = 0;
+    size_t m_lastSkippedIgnore = 0;
+    size_t m_lastSkippedSpawnTrig = 0;
+    size_t m_lastStaticMoverSeen = 0;
+    size_t m_lastStaticMoverMissed = 0;
     size_t m_lastChildCount = 0;
     size_t m_lastEffectCount = 0;
     size_t m_lastSectionExtras = 0;

@@ -99,7 +99,7 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Softcap **100 000** tracks / 32 768 keys/track (AssistLog + overlay `tw softcap`); hard OOM valve 250 000 / 65 536 with loud truncate — **no silent 2048 drop**.
 
-**Commit 4 (TW empty):** Init can race `objectLayer` → WaitObjects then Collect; empty on-disk cache is discarded as miss; `kickIfStaleEmpty` rebuilds when children appear; non-spawn StaticMove/Rotate/Scale/Toggle bake at **t=0** (touch still skipped); Bake Map **`waitUntilReady`** (≤45s) before validate — loud Fail if effects existed but 0 tracks. Incomplete empty is **not** written to `triggers/*.json`.
+**Commit 4 (TW empty):** Init can race `objectLayer` → WaitObjects then Collect; empty on-disk cache is discarded as miss; `kickIfStaleEmpty` rebuilds when children appear; non-spawn StaticMove/Rotate/Scale/Toggle bake at **t=0** (touch still skipped); Bake Map **`waitUntilReady`** (≤45s) before validate — loud Fail only if real static movers were seen but 0 tracks (pulse/spawn/camera EffectGameObjects alone do **not** fail). Incomplete empty is **not** written to `triggers/*.json`.
 
 `ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 

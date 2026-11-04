@@ -167,6 +167,16 @@ bool BakeSpawnProbe::selfCheck(std::string& report) {
         report = "BakeSpawnProbe selfCheck FAIL format";
         return false;
     }
+    // Contract with ShadowSimulator spawn grace (jacheronbe frame-5 spike).
+    if (!ShadowSimulator::bakeSpawnDeathIgnored(
+            5,
+            ShadowSimulator::kBakeSpawnGraceFloor,
+            ShadowSimulator::kBakeSpawnGraceHardCap,
+            true
+        )) {
+        report = "BakeSpawnProbe selfCheck FAIL spawn-grace-f5";
+        return false;
+    }
     report = "BakeSpawnProbe selfCheck OK";
     return true;
 }

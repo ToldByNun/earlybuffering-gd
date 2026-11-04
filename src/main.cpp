@@ -2,6 +2,7 @@
 #include "core/AssistContracts140.hpp"
 #include "core/AssistController.hpp"
 #include "core/BakeMap.hpp"
+#include "core/BakeSpawnProbe.hpp"
 #include "core/SaveDropPaths.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "core/TriggerClassify.hpp"
@@ -90,6 +91,12 @@ $on_mod(Loaded) {
     {
         std::string report;
         bool const ok = TriggerWorldStore::selfCheck(report);
+        if (ok) AssistLog::info(report);
+        else AssistLog::info(fmt::format("WARN {}", report));
+    }
+    {
+        std::string report;
+        bool const ok = BakeSpawnProbe::selfCheck(report);
         if (ok) AssistLog::info(report);
         else AssistLog::info(fmt::format("WARN {}", report));
     }

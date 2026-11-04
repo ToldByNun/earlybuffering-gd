@@ -514,18 +514,34 @@ bool BakeMap::testShiftedClick(
     int testFrame,
     int untilFrame,
     float dt,
-    int substeps
+    int substeps,
+    int minSurviveFrame,
+    int noDeathBeforeFrame
 ) const {
     if (eventIndex < 0 || eventIndex >= static_cast<int>(timeline.size())) return false;
     timeline[static_cast<size_t>(eventIndex)].frame = testFrame;
     std::stable_sort(timeline.begin(), timeline.end(), [](auto const& a, auto const& b) {
         return a.frame < b.frame;
     });
-    auto r = ShadowSimulator::get().runBakeTimeline(
-        layer, startSnapshotSlot, timeline, dt, untilFrame, -1,
+    // Need to reach the 1:1 death frame to compare; otherwise a short until
+    // can false-pass a shift that would have died earlier than validate.
+    int runUntil = untilFrame;
+    if (minSurviveFrame >= 0) {
+        runUntil = std::max(runUntil, minSurviveFrame);
+    }
+    auto& sim = ShadowSimulator::get();
+    // Reach clicks after a mid-macro 1:1 divergence by ignoring pre-click deaths.
+    int const gate = noDeathBeforeFrame >= 0 ? noDeathBeforeFrame : testFrame;
+    sim.setBakeNoDeathBeforeFrame(gate);
+    auto r = sim.runBakeTimeline(
+        layer, startSnapshotSlot, timeline, dt, runUntil, -1,
         true, false, true, substeps
     );
-    return !r.died;
+    sim.setBakeNoDeathBeforeFrame(-1);
+    if (!r.died) return true;
+    // Prefix clicks: dying at/after the validate death matches 1:1.
+    if (minSurviveFrame >= 0 && r.deathFrame >= minSurviveFrame) return true;
+    return false;
 }
 
 Result<int> BakeMap::bake(
@@ -880,33 +896,17 @@ Result<int> BakeMap::bakeReplay(
             return Err(err);
         }
 
-        // Partial prefix: keep clicks strictly before death; Hybrid parts OK.
+        // 1:1 died — still expand EVERY macro click. Prefix uses minSurvive;
+        // post-death clicks ghost through pre-click deaths to reach the event.
         partialCut = cut;
-        int const before = static_cast<int>(jobs.size());
-        jobs.erase(
-            std::remove_if(
-                jobs.begin(),
-                jobs.end(),
-                [cut](JumpJob const& j) { return j.frame >= cut; }
-            ),
-            jobs.end()
-        );
         for (auto& j : jobs) {
-            if (j.until > cut) j.until = cut;
+            if (j.frame < cut && j.until > cut) j.until = cut;
         }
         AssistLog::info(fmt::format(
-            "BAKE: partial prefix — died @{} keeping {}/{} clicks before cut "
-            "(Hybrid parts; not whole-macro)",
-            cut, jobs.size(), before
+            "BAKE: validate died @{} x={:.0f} — expanding all {} clicks "
+            "(pre-click deaths ignored for post-cut events)",
+            cut, validate.deathX, jobs.size()
         ));
-        if (jobs.empty()) {
-            return Err(fmt::format(
-                "Macro dies at frame {} before any bake click "
-                "(x={:.0f}, startPos={}, startX={:.0f}, twTracks={}). "
-                "Diag: /diag/bakefail_*",
-                cut, validate.deathX, startPosAttempt ? 1 : 0, startX, twTracks
-            ));
-        }
     }
 
     m_progress.done = validateWeight;
@@ -915,7 +915,7 @@ Result<int> BakeMap::bakeReplay(
     ));
     if (partialCut >= 0) {
         AssistLog::info(fmt::format(
-            "BAKE: expanding {} click windows (partial cut @{})",
+            "BAKE: expanding {} click windows (validateDeath @{})",
             jobs.size(), partialCut
         ));
     }
@@ -927,22 +927,33 @@ Result<int> BakeMap::bakeReplay(
     }
 
     // ── Phase 2: binary-search earliest/latest around each click ───────
+    // Every Jump event gets a window attempt. 1:1 death does not drop later jobs.
     for (auto const& job : jobs) {
         if (m_progress.cancel.load()) return Err("Bake cancelled");
 
+        // Prefix (before validate death): must not die earlier than 1:1.
+        // Later clicks: ignore deaths before the click so expand can reach it.
+        bool const postCut = partialCut >= 0 && job.frame >= partialCut;
+        int const minSurvive = postCut ? -1 : partialCut;
+        int const noDeathBefore = job.frame;
+
         std::lock_guard lock(m_simMutex);
-        auto sample = ShadowSimulator::get().runBakeTimeline(
+        auto& sim = ShadowSimulator::get();
+        sim.setBakeNoDeathBeforeFrame(noDeathBefore);
+        auto sample = sim.runBakeTimeline(
             layer, startSnapshotSlot, ev, dt, job.frame, job.frame
         );
+        sim.setBakeNoDeathBeforeFrame(-1);
         float x = sample.sampled ? sample.xAtSample : 0.f;
         auto mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
 
-        // Nominal already survived full validate — still re-check shift window.
         if (!testShiftedClick(
-                layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt
+                layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt,
+                1, minSurvive, noDeathBefore
             )) {
             AssistLog::debug(fmt::format(
-                "BAKE: skip click @{} (shift re-check died)", job.frame
+                "BAKE: skip click @{} (expand re-check fail postCut={} minSurvive={})",
+                job.frame, postCut ? 1 : 0, minSurvive
             ));
             m_progress.done.fetch_add(1);
             continue;
@@ -953,7 +964,8 @@ Result<int> BakeMap::bakeReplay(
         while (lo < hi) {
             int mid = lo + (hi - lo) / 2;
             if (testShiftedClick(
-                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt
+                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt,
+                    1, minSurvive, mid
                 )) {
                 hi = mid;
             }
@@ -968,7 +980,8 @@ Result<int> BakeMap::bakeReplay(
         while (lo < hi) {
             int mid = lo + (hi - lo + 1) / 2;
             if (testShiftedClick(
-                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt
+                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt,
+                    1, minSurvive, mid
                 )) {
                 lo = mid;
             }
@@ -1016,10 +1029,11 @@ Result<int> BakeMap::bakeReplay(
                 ));
             }
         }
-        return Err(
-            "Replay bake produced 0 windows — expand failed. "
-            "Diag: /diag/bakefail_*"
-        );
+        return Err(fmt::format(
+            "Replay bake produced 0 windows — expand failed "
+            "(jobs={} validateDeath={}). Diag: /diag/bakefail_*",
+            jobs.size(), partialCut
+        ));
     }
 
     if (partialCut >= 0) {

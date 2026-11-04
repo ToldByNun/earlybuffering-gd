@@ -128,6 +128,10 @@ void TriggerWorldBaker::clearJob() {
     this->m_skippedDynamic = 0;
     this->m_skippedNonSpawn = 0;
     this->m_skippedTouch = 0;
+    this->m_skippedIgnore = 0;
+    this->m_skippedSpawnTrig = 0;
+    this->m_staticMoverSeen = 0;
+    this->m_staticMoverMissed = 0;
     this->m_waitSlices = 0;
     this->m_collectIncomplete = false;
     this->m_levelKey.clear();
@@ -162,6 +166,10 @@ void TriggerWorldBaker::finishOk() {
     this->m_lastSkippedDynamic = this->m_skippedDynamic;
     this->m_lastSkippedNonSpawn = this->m_skippedNonSpawn;
     this->m_lastSkippedTouch = this->m_skippedTouch;
+    this->m_lastSkippedIgnore = this->m_skippedIgnore;
+    this->m_lastSkippedSpawnTrig = this->m_skippedSpawnTrig;
+    this->m_lastStaticMoverSeen = this->m_staticMoverSeen;
+    this->m_lastStaticMoverMissed = this->m_staticMoverMissed;
     this->m_lastChildCount = this->m_childCount;
     this->m_lastEffectCount = this->m_effects.size();
     this->m_lastSectionExtras = this->m_sectionExtras;
@@ -184,20 +192,29 @@ void TriggerWorldBaker::finishOk() {
         store.clearDirty();
         store.discardCacheFile();
         this->m_status = fmt::format(
-            "trigger-world: empty (baked={} startTimed={} skip follow={} dyn={} touch={} effects={} children={})",
+            "trigger-world: empty (baked={} staticSeen={} missed={} ignore={} "
+            "spawnTrig={} dyn={} follow={} touch={} effects={} children={})",
             this->m_lastBakedEffects,
-            this->m_lastBakedStartTimed,
-            this->m_lastSkippedFollow,
+            this->m_lastStaticMoverSeen,
+            this->m_lastStaticMoverMissed,
+            this->m_lastSkippedIgnore,
+            this->m_lastSkippedSpawnTrig,
             this->m_lastSkippedDynamic,
+            this->m_lastSkippedFollow,
             this->m_lastSkippedTouch,
             this->m_lastEffectCount,
             this->m_lastChildCount
         );
         AssistLog::info(fmt::format(
             "TRIGGER-WORLD: EMPTY after full collect — baked={} startTimed={} "
+            "staticSeen={} missed={} ignore={} spawnTrig={} "
             "skip follow={} dynamic={} touch={} children={} effects={} sectionExtras={}",
             this->m_lastBakedEffects,
             this->m_lastBakedStartTimed,
+            this->m_lastStaticMoverSeen,
+            this->m_lastStaticMoverMissed,
+            this->m_lastSkippedIgnore,
+            this->m_lastSkippedSpawnTrig,
             this->m_lastSkippedFollow,
             this->m_lastSkippedDynamic,
             this->m_lastSkippedTouch,
@@ -359,23 +376,45 @@ bool TriggerWorldBaker::waitUntilReady(
     auto& store = TriggerWorldStore::get();
     if (store.hasTracks()) return true;
 
-    // Loud empty: effects existed but nothing baked, or collect incomplete.
+    // Loud empty: collect incomplete, or real static movers found but 0 tracks.
     if (this->m_lastCollectIncomplete) {
         err = "Trigger World empty — collect incomplete (objectLayer not ready). Reset and retry bake.";
         return false;
     }
-    if (this->m_lastEffectCount > 0 && this->m_lastBakedEffects == 0) {
+    // staticMoverSeen counts Move/Rotate/Scale/Toggle past follow/touch/dyn gates.
+    // Do NOT use raw EffectGameObject count — pulses/spawns/camera used to false-fail
+    // bake (e.g. jacheronbe: effects=89 dyn=1 → 0 tracks, no static movers).
+    if (this->m_lastStaticMoverSeen > 0) {
         err = fmt::format(
-            "Trigger World empty after build (effects={} skip follow={} dyn={} touch={}). "
+            "Trigger World empty after build (staticMovers={} missed={} baked={} "
+            "effects={} ignore={} spawnTrig={} skip follow={} dyn={} touch={}). "
             "Movers not modeled — bake would lie.",
+            this->m_lastStaticMoverSeen,
+            this->m_lastStaticMoverMissed,
+            this->m_lastBakedEffects,
             this->m_lastEffectCount,
+            this->m_lastSkippedIgnore,
+            this->m_lastSkippedSpawnTrig,
             this->m_lastSkippedFollow,
             this->m_lastSkippedDynamic,
             this->m_lastSkippedTouch
         );
         return false;
     }
-    // Truly no static movers in level — allow bake with TW empty.
+    // Pulse/spawn/camera / dynamic-only — allow bake with TW empty
+    // (spawn-overlap grace covers static hazards on the start snap).
+    if (this->m_lastEffectCount > 0) {
+        AssistLog::info(fmt::format(
+            "TRIGGER-WORLD: no static movers (effects={} ignore={} spawnTrig={} "
+            "dyn={} follow={} touch={}) — bake continues with empty TW",
+            this->m_lastEffectCount,
+            this->m_lastSkippedIgnore,
+            this->m_lastSkippedSpawnTrig,
+            this->m_lastSkippedDynamic,
+            this->m_lastSkippedFollow,
+            this->m_lastSkippedTouch
+        ));
+    }
     return true;
 }
 
@@ -506,14 +545,20 @@ std::vector<GameObject*> TriggerWorldBaker::objectsInGroup(int groupId) const {
 void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     if (!effect) return;
 
-        TriggerKind const kind = TriggerClassify::classify(effect);
-        // Follow-player / Dynamic* never enter static JSON (live probe only).
-        if (TriggerClassify::isDynamic(kind)) {
-            ++this->m_skippedDynamic;
-            return;
-        }
-    if (!TriggerClassify::isStatic(kind)) return;
-    if (kind == TriggerKind::StaticSpawn) return;
+    TriggerKind const kind = TriggerClassify::classify(effect);
+    // Follow-player / Dynamic* never enter static JSON (live probe only).
+    if (TriggerClassify::isDynamic(kind)) {
+        ++this->m_skippedDynamic;
+        return;
+    }
+    if (!TriggerClassify::isStatic(kind)) {
+        ++this->m_skippedIgnore;
+        return;
+    }
+    if (kind == TriggerKind::StaticSpawn) {
+        ++this->m_skippedSpawnTrig;
+        return;
+    }
     if (TriggerWorldBaker::isFollowLikeStatic(effect, kind)) {
         ++this->m_skippedFollow;
         return;
@@ -524,11 +569,20 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
         return;
     }
 
+    // Move / Rotate / Scale / Toggle — real static mover candidates.
+    ++this->m_staticMoverSeen;
+
     int const groupId = effect->m_targetGroupID;
-    if (groupId <= 0) return;
+    if (groupId <= 0) {
+        ++this->m_staticMoverMissed;
+        return;
+    }
 
     auto targets = this->objectsInGroup(groupId);
-    if (targets.empty()) return;
+    if (targets.empty()) {
+        ++this->m_staticMoverMissed;
+        return;
+    }
 
     // Spawn-triggered: use spawn delay. Non-spawn (Commit 4): start-of-level t=0
     // — previously skipped all non-spawn → empty TW on many levels (e.g. id_80045794).
@@ -540,6 +594,7 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     int const dur = TriggerWorldBaker::durationTicks(effect->m_duration, this->m_tps);
 
     if (kind == TriggerKind::StaticToggle) {
+        bool any = false;
         for (auto* obj : targets) {
             if (obj == effect && targets.size() > 1) continue;
             auto* track = this->ensureTrack(obj, TriggerKind::StaticToggle);
@@ -548,6 +603,11 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
             pose.active = effect->m_activateGroup;
             TriggerWorldBaker::pushKey(*track, startTick, pose);
             track->ready = track->keys.size() >= 1;
+            any = true;
+        }
+        if (!any) {
+            ++this->m_staticMoverMissed;
+            return;
         }
         ++this->m_bakedEffects;
         return;
@@ -556,6 +616,7 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     if (kind != TriggerKind::StaticMove
         && kind != TriggerKind::StaticRotate
         && kind != TriggerKind::StaticScale) {
+        ++this->m_staticMoverMissed;
         return;
     }
 
@@ -582,7 +643,10 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
     bool relativeScale = false;
     if (kind == TriggerKind::StaticScale) {
         auto* xf = typeinfo_cast<TransformTriggerGameObject*>(effect);
-        if (!xf) return;
+        if (!xf) {
+            ++this->m_staticMoverMissed;
+            return;
+        }
         scaleTargetX = xf->m_objectScaleX;
         scaleTargetY = xf->m_objectScaleY;
         if (xf->m_divideX && std::fabs(scaleTargetX) > 1e-6f) {
@@ -640,6 +704,11 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
             }
         }
         bakes.push_back(tb);
+    }
+
+    if (bakes.empty()) {
+        ++this->m_staticMoverMissed;
+        return;
     }
 
     int const endTick = startTick + std::max(0, dur);
