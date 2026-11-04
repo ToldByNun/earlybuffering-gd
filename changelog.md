@@ -1,8 +1,18 @@
 # Changelog
 
+## v1.4.1
+
+**Cloud Configs browser** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+- **Cloud Configs UI** — Assist → Cloud Configs opens catalog browser (search / detail / Install); Share… collects name / author / description → outbox + clipboard; settings `cloud-catalog-url`, `cloud-auto-refresh`.
+- **Maintainer auto-publish** — optional `cloud-publish-enable` + fine-grained PAT (`cloud-publish-token`) pushes pack + `index.json` to `cloud-publish-repo` via GitHub Contents API (no anonymous public upload; token never in ConfigBundle).
+- **Catalog pipeline** — `CloudConfigClient` / `Service` (primary → fallback, disk cache, bundled `safe-defaults` seed); `CloudConfigApply` skips keybinds + `dev-*`; `CloudConfigShare` outbox envelopes.
+- **ConfigBundle** — `exportToString` / `importFromString` + `ApplyOptions`; portable key count **126** (includes catalog URL / auto-refresh / `disable-hus`, not publish token); Assist category map **171**.
+- **Docs** — `docs/cloud_configs.md` (catalog layout, seed, share + PAT publish).
+
 ## Hotfix on v1.4.0
 
-- **ConfigBundle string I/O** — `exportToString` / `importFromString` plus `ApplyOptions` (skip keybinds / `dev-*`); path import/export wrap the string path; Assist Import still applies everything; shared `PauseActionBridge::afterConfigApplied` for post-apply UI sync; portable key count **123**.
+- **ConfigBundle string I/O** — `exportToString` / `importFromString` plus `ApplyOptions` (skip keybinds / `dev-*`); path import/export wrap the string path; Assist Import still applies everything; shared `PauseActionBridge::afterConfigApplied` for post-apply UI sync; portable key count **123** (later 126 in v1.4.1).
 - **Cloud config store** — `saveDir/cloud-configs/` (index cache, packs, active, meta, outbox) via `CloudConfigStore` + `SaveDropPaths::cloudConfigsDir`; created on load with the other drop folders.
 - **Cloud catalog primitives** — `CloudConfigHostPolicy` (jsDelivr + GitHub raw allowlist), `CloudConfigSha256`, `CloudConfigIndex` (schema-1 validate), bundled offline `resources/cloud-seed/` (`safe-defaults` pack).
 - **Live look-ahead vs Delay** — `minSurviveTicksForSuccess` never demands more ticks than `scoreHorizon` (look-ahead-cap=14 used to keep minSurvive at 48 while planCap≤14 → every plan PassHopeless). Config-bundle / in-level filter no longer expect removed assist-pick / assist-engine keys.

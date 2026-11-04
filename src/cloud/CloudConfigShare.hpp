@@ -4,17 +4,22 @@
 #include <filesystem>
 #include <string>
 
-// Export current settings → outbox envelope + clipboard (no HTTP upload).
+// Export current settings → outbox envelope + clipboard.
+// Optional: if cloud-publish-* is configured, also push to the catalog repo (maintainer PAT).
 class CloudConfigShare {
 public:
     struct Result {
         bool ok = false;
         bool clipboardOk = false;
+        bool publishAttempted = false;
+        bool published = false;
         std::filesystem::path outboxPath;
         std::string envelopeJson;
         std::string clipboardText;
         std::string error;
         std::string suggestedId;
+        std::string publishError;
+        std::string publishUrl;
     };
 
     // nameHint empty → "shared-config". Author/description optional.

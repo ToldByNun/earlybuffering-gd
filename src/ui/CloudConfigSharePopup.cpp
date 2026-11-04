@@ -147,14 +147,36 @@ void CloudConfigSharePopup::onConfirm(CCObject*) {
 
     this->onClose(nullptr);
 
+    std::string publishLine;
+    if (shared.published) {
+        publishLine = fmt::format(
+            "Published to catalog.\n{}\n"
+            "(CDN may take a minute — then Refresh.)\n\n",
+            shared.publishUrl.empty() ? "(see GitHub repo)" : shared.publishUrl
+        );
+    }
+    else if (shared.publishAttempted) {
+        publishLine = fmt::format(
+            "Catalog publish failed:\n{}\n"
+            "Outbox still saved — fix token/repo and retry.\n\n",
+            shared.publishError.empty() ? "(unknown)" : shared.publishError
+        );
+    }
+    else {
+        publishLine =
+            "Not published online (enable Cloud Publish + PAT in Assist settings).\n"
+            "Outbox/clipboard still work for manual Discord submit.\n\n";
+    }
+
     auto const msg = fmt::format(
         "Shared \"{}\" (id: {}).\n\n"
+        "{}"
         "Outbox:\n{}\n\n"
         "{}\n\n"
-        "Post the file/envelope in Discord so maintainers can add it.\n"
         "{}",
         name,
         shared.suggestedId,
+        publishLine,
         shared.outboxPath.string(),
         shared.clipboardOk
             ? "Envelope copied to clipboard."

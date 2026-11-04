@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[125];
-    static constexpr int kEntryCount = 125;
+    static ConfigBundleKeys::Entry const kEntries[126];
+    static constexpr int kEntryCount = 126;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[125] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[126] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
     { "show-overlay", ConfigBundleKeys::Kind::Bool },
@@ -55,6 +55,7 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[125] = {
     { "cps-limit", ConfigBundleKeys::Kind::Int },
     { "min-click-interval-ms", ConfigBundleKeys::Kind::Int },
     { "assist-orbs", ConfigBundleKeys::Kind::Bool },
+    { "disable-hus", ConfigBundleKeys::Kind::Bool },
     { "sim-budget-us", ConfigBundleKeys::Kind::Int },
     { "tick-budget", ConfigBundleKeys::Kind::Int },
     { "assist-press", ConfigBundleKeys::Kind::Bool },
@@ -178,7 +179,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 125, "count-125");
+    expect(ConfigBundleKeysTable::kEntryCount == 126, "count-126");
     expect(
         ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount,
         "count-api"
@@ -230,7 +231,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         static_cast<int>(seen.size()) == ConfigBundleKeysTable::kEntryCount,
         "unique-count"
     );
-    expect(kindBool == 49, "kind-bool-49");
+    expect(kindBool == 50, "kind-bool-50");
     expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
     expect(kindString == 5, "kind-string-5");
@@ -248,6 +249,13 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     expect(hotkey && hotkey->kind == Kind::Keybind, "find-keybind");
     auto const* offFrom = ConfigBundleKeys::find("assist-off-1-from");
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
+    auto const* hus = ConfigBundleKeys::find("disable-hus");
+    expect(hus && hus->kind == Kind::Bool, "find-disable-hus");
+    auto const* cloudUrl = ConfigBundleKeys::find("cloud-catalog-url");
+    expect(cloudUrl && cloudUrl->kind == Kind::String, "find-cloud-url");
+    auto const* cloudAuto = ConfigBundleKeys::find("cloud-auto-refresh");
+    expect(cloudAuto && cloudAuto->kind == Kind::Bool, "find-cloud-auto");
+    expect(ConfigBundleKeys::find("browse-cloud-configs-action") == nullptr, "action-not-portable");
     expect(ConfigBundleKeys::find("preset") == nullptr, "preset-removed");
     expect(ConfigBundleKeys::find("stage-index") == nullptr, "stage-index-removed");
     expect(ConfigBundleKeys::find("no-such-setting") == nullptr, "find-miss");
