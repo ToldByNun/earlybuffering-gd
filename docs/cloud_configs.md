@@ -30,7 +30,7 @@ Pack files are bare ConfigBundle v2 JSON. Cloud apply skips keybinds and `dev-*`
 
 ## Local cache
 
-`{mod saveDir}/cloud-configs/` — index cache, packs, outbox. Refresh cache-busts the network fetch.
+`{mod saveDir}/cloud-configs/` — index cache, packs, outbox, anonymous `client-id.txt`, and `local-stats.json` (already-downloaded / already-rated pack ids). Refresh cache-busts the network fetch. Track calls always send `clientId`; local sets skip redundant POSTs.
 
 ## Bundled seed
 
