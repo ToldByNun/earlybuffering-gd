@@ -133,14 +133,15 @@ bool CloudConfigService::loadLocalCatalog(RefreshResult& out) {
                     : m_impl->catalogUrl,
                 CatalogSource::DiskCache,
                 err
-            )) {
+            )
+            && !m_impl->catalog.packs.empty()) {
             out.ok = true;
             out.source = CatalogSource::DiskCache;
             out.catalog = m_impl->catalog;
             out.catalogUrl = m_impl->catalogUrl;
             return true;
         }
-        // Corrupt cache — fall through to seed.
+        // Corrupt / empty cache — fall through to seed.
         body.clear();
         err.clear();
     }

@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[123];
-    static constexpr int kEntryCount = 123;
+    static ConfigBundleKeys::Entry const kEntries[125];
+    static constexpr int kEntryCount = 125;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[123] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[125] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
     { "show-overlay", ConfigBundleKeys::Kind::Bool },
@@ -119,6 +119,8 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[123] = {
     { "swing-cap", ConfigBundleKeys::Kind::Int },
     { "swing-slack", ConfigBundleKeys::Kind::Int },
     { "swing-latency", ConfigBundleKeys::Kind::Float },
+    { "cloud-catalog-url", ConfigBundleKeys::Kind::String },
+    { "cloud-auto-refresh", ConfigBundleKeys::Kind::Bool },
     { "hotkey-debug", ConfigBundleKeys::Kind::Keybind },
     { "hotkey-reset-level", ConfigBundleKeys::Kind::Keybind },
     { "hotkey-auto-tune", ConfigBundleKeys::Kind::Keybind },
@@ -176,7 +178,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 123, "count-123");
+    expect(ConfigBundleKeysTable::kEntryCount == 125, "count-125");
     expect(
         ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount,
         "count-api"

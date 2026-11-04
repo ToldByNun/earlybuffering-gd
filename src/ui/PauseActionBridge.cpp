@@ -1,4 +1,5 @@
 #include "PauseActionBridge.hpp"
+#include "CloudConfigPopup.hpp"
 #include "InLevelSettingsFilter.hpp"
 
 #include "../core/AssistController.hpp"
@@ -513,6 +514,10 @@ void PauseActionBridge::importConfig() {
     PauseActionBridge::afterConfigApplied(
         PauseActionBridgeDetail::formatImportSuccess(path)
     );
+}
+
+void PauseActionBridge::openCloudConfigs() {
+    CloudConfigPopup::open();
 }
 
 void PauseActionBridge::afterConfigApplied(std::string const& successMsg) {

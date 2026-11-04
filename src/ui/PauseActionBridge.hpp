@@ -22,6 +22,8 @@ public:
     static void toggleTrajectory();
     static void exportConfig();
     static void importConfig();
+    // Opens Cloud Configs browser (catalog / install / share).
+    static void openCloudConfigs();
 
     // After ConfigBundle apply: sync overlay/visualizers, rebuild open settings UI,
     // then show successMsg on the next main-thread tick (keeps alert on top).

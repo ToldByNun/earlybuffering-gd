@@ -43,6 +43,8 @@
 #include "../cloud/CloudConfigSeed.hpp"
 #include "../cloud/CloudConfigClient.hpp"
 #include "../cloud/CloudConfigService.hpp"
+#include "../cloud/CloudConfigApply.hpp"
+#include "../cloud/CloudConfigShare.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -106,6 +108,10 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(CloudConfigClient::selfCheck(cloudClientReport), "cloud-config-client");
     std::string cloudServiceReport;
     expect(CloudConfigService::selfCheck(cloudServiceReport), "cloud-config-service");
+    std::string cloudApplyReport;
+    expect(CloudConfigApply::selfCheck(cloudApplyReport), "cloud-config-apply");
+    std::string cloudShareReport;
+    expect(CloudConfigShare::selfCheck(cloudShareReport), "cloud-config-share");
     std::string configKeysReport;
     expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string configCodecReport;

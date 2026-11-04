@@ -324,7 +324,7 @@
 		"title-assist-actions": {
 			"type": "title",
 			"name": "Assist Actions",
-			"description": "Quick actions for learning reset and config files."
+			"description": "Quick actions for learning reset, local config files, and cloud configs."
 		},
 		"reset-learn-action": {
 			"type": "custom:eb-action",
@@ -343,6 +343,24 @@
 			"name": "Import Config",
 			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
 			"button-text": "import"
+		},
+		"browse-cloud-configs-action": {
+			"type": "custom:eb-action",
+			"name": "Cloud Configs",
+			"description": "Browse, search, download, and install community settings packs. Share your current setup to the local outbox (no anonymous upload).",
+			"button-text": "cloud"
+		},
+		"cloud-catalog-url": {
+			"type": "string",
+			"name": "Cloud Catalog URL",
+			"description": "Optional custom HTTPS index.json URL. Leave empty for the built-in catalog (jsDelivr + GitHub raw fallback). Host must be allowlisted or match this URL's host.",
+			"default": ""
+		},
+		"cloud-auto-refresh": {
+			"type": "bool",
+			"name": "Cloud Auto Refresh",
+			"description": "When opening Cloud Configs, refresh the catalog from the network (falls back to cache/seed offline).",
+			"default": true
 		},
 		"title-algorithm": {
 			"type": "title",
