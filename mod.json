@@ -10,7 +10,7 @@
 	"name": "EarlyBuffer",
 	"version": "v1.4.0",
 	"developer": "Audesign",
-	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick (v1 + ShadowPlayer). Miss-assist / Pass-verdict overlay. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -347,7 +347,7 @@
 		"title-algorithm": {
 			"type": "title",
 			"name": "Algorithm",
-			"description": "How the planner decides delays: pick mode, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section. Bake Radius lives under Bake."
+			"description": "How the planner decides delays: click-rate limits, CPU budgets, press/release (pick is fixed v1 + ShadowPlayer). Smart multi-jump is the next section. Bake Radius lives under Bake."
 		},
 		"death-slack": {
 			"type": "int",
@@ -364,26 +364,6 @@
 			"default": 0,
 			"min": 0,
 			"max": 240
-		},
-		"assist-pick": {
-			"type": "string",
-			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window. v1 (default) = if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). v2 is reserved for a future pick (currently same as v1 — former New outcome-rank choose removed). Never waits past your Limit. Old Legacy/New values still load as v1/v2.",
-			"one-of": [
-				"v1",
-				"v2"
-			],
-			"default": "v1"
-		},
-		"assist-engine": {
-			"type": "string",
-			"name": "Assist Engine (Live V2)",
-			"description": "Which physics backend Live V2 may use for foresight. ShadowPlayer = full ghost PlayerObject (runOne) — default, matches v1. Trajectory = lighter samplePath foresight (V2 only; optional Shadow verify before arm comes later). Pick v1 always uses ShadowPlayer regardless of this setting.",
-			"one-of": [
-				"ShadowPlayer",
-				"Trajectory"
-			],
-			"default": "ShadowPlayer"
 		},
 		"cps-limit": {
 			"type": "int",

@@ -1359,18 +1359,13 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
         get().copyWaveTrail(dst, src);
     }
 
-    // Ghost is created as icon cube (create 1,1). Mode flags alone leave a
-    // cube-sized collide rect → false deaths on tight wave. Rebuild body, then
-    // re-apply pose/holds/ground switchedToMode may clobber.
+    // Ghost starts as icon cube. Non-cube flags alone leave a cube collide rect
+    // → false deaths on tight wave/ship. Rebuild body for vehicles; cube skips
+    // switchedToMode so ground/jump buffer from EB_COPY stay intact.
     {
-        GameObjectType portal = GameObjectType::CubePortal;
-        if (src->m_isDart) portal = GameObjectType::WavePortal;
-        else if (src->m_isShip) portal = GameObjectType::ShipPortal;
-        else if (src->m_isBall) portal = GameObjectType::BallPortal;
-        else if (src->m_isBird) portal = GameObjectType::UfoPortal;
-        else if (src->m_isRobot) portal = GameObjectType::RobotPortal;
-        else if (src->m_isSpider) portal = GameObjectType::SpiderPortal;
-        else if (src->m_isSwing) portal = GameObjectType::SwingPortal;
+        bool const nonCube = src->m_isDart || src->m_isShip || src->m_isBall
+            || src->m_isBird || src->m_isRobot || src->m_isSpider
+            || src->m_isSwing;
 
         auto const pos = src->getPosition();
         auto const rot = src->getRotation();
@@ -1382,9 +1377,21 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
             src->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
 
         dst->setContentSize(src->getContentSize());
-        dst->switchedToMode(portal);
-        dst->updatePlayerScale();
-        dst->updatePlayerArt();
+
+        if (nonCube) {
+            GameObjectType portal = GameObjectType::CubePortal;
+            if (src->m_isDart) portal = GameObjectType::WavePortal;
+            else if (src->m_isShip) portal = GameObjectType::ShipPortal;
+            else if (src->m_isBall) portal = GameObjectType::BallPortal;
+            else if (src->m_isBird) portal = GameObjectType::UfoPortal;
+            else if (src->m_isRobot) portal = GameObjectType::RobotPortal;
+            else if (src->m_isSpider) portal = GameObjectType::SpiderPortal;
+            else if (src->m_isSwing) portal = GameObjectType::SwingPortal;
+
+            dst->switchedToMode(portal);
+            dst->updatePlayerScale();
+            dst->updatePlayerArt();
+        }
 
         dst->setPosition(pos);
         dst->m_position = src->m_position;
@@ -1404,9 +1411,10 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
             dst->m_holdingButtons[jumpIdx] = false;
         }
 
-        // Mode rebuild clears ground/slope/jump buffer — without these, cube
-        // pushButton is a no-op and every delay coasts to the same death
-        // (PassHopeless under Alive-only). Re-seat from src after art update.
+        // Vehicle rebuild clears ground/slope/jump/dash/robot/spider/ship state —
+        // without re-seat, pushButton/hold is a no-op or wrong vehicle feel
+        // (PassHopeless under Alive-only). Cube skip above already kept copies;
+        // still re-seat when nonCube (and harmless if cube).
         EB_COPY(m_isOnGround);
         EB_COPY(m_isOnGround2);
         EB_COPY(m_isOnGround3);
@@ -1419,6 +1427,8 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
         EB_COPY(m_groundObjectMaterial);
         EB_COPY(m_lastLandTime);
         EB_COPY(m_lastJumpTime);
+        EB_COPY(m_lastFlipTime);
+        EB_COPY(m_lastSpiderFlipTime);
         EB_COPY(m_isOnSlope);
         EB_COPY(m_wasOnSlope);
         EB_COPY(m_slopeVelocity);
@@ -1430,15 +1440,28 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
         EB_COPY(m_isCollidingWithSlope);
         EB_COPY(m_collidingWithSlopeId);
         EB_COPY(m_wasJumpBuffered);
+        EB_COPY(m_wasRobotJump);
+        EB_COPY(m_fixRobotJump);
         EB_COPY(m_stateJumpBuffered);
         EB_COPY(m_jumpBuffered);
         EB_COPY(m_stateOnGround);
         EB_COPY(m_stateRingJump);
         EB_COPY(m_stateRingJump2);
+        EB_COPY(m_touchedRing);
+        EB_COPY(m_touchedPad);
+        EB_COPY(m_padRingRelated);
+        EB_COPY(m_ringJumpRelated);
+        EB_COPY(m_hasEverJumped);
         EB_COPY(m_isLocked);
         EB_COPY(m_controlsDisabled);
         EB_COPY(m_inputsLocked);
         EB_COPY(m_maybeIsFalling);
+        EB_COPY(m_maybeIsBoosted);
+        EB_COPY(m_decreaseBoostSlide);
+        EB_COPY(m_shipRotation);
+        EB_COPY(m_accelerationOrSpeed);
+        EB_COPY(m_isAccelerating);
+        EB_COPY(m_stateDartSlide);
         EB_COPY(m_isDashing);
         EB_COPY(m_dashX);
         EB_COPY(m_dashY);

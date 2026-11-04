@@ -2,6 +2,10 @@
 
 ## Hotfix on v1.4.0
 
+- **Live look-ahead vs Delay** — `minSurviveTicksForSuccess` never demands more ticks than `scoreHorizon` (look-ahead-cap=14 used to keep minSurvive at 48 while planCap≤14 → every plan PassHopeless). Config-bundle / in-level filter no longer expect removed assist-pick / assist-engine keys.
+- **Boot crash selfCheck** — after dropping assist-pick/engine, SettingsCategoryMap `kCount` stayed 166 and ConfigBundleKeys stayed 125 → null table slots → `strcmp` AV on load; counts are 164/123 and lookups skip null keys.
+- **Single assist type** — Live plan is **v1 + ShadowPlayer** only; Pick Mode v2 and Assist Engine Trajectory settings removed (imports still accept old keys as v1/ShadowPlayer).
+- **Vehicle jump fidelity** — cube skips unnecessary `switchedToMode` so ground/jump buffer stay; ship/ball/ufo/wave/robot/spider/swing still rebuild then re-seat ground, robot/spider jump, ship boost, wave slide, dash, and ring/pad state so Delay is not jump-noop PassHopeless after portals.
 - **Bake frame-0 spawn / TW** — BakeSpawnProbe detects lethal overlaps on the start snap; bake auto-builds Trigger World for that session when overlaps exist even if the setting is off; frame-0 errors name killer uid/pos/TW (no false parityGate blame).
 - **Bake frame-0 spawn grace** — ignore deaths from hazards already overlapping the start snap for ticks 0–4, and keep ignoring those same ids while the ghost AABB still intersects them (hard cap 64) so a spawn-centered spike is walked clear instead of dying at frame 5; BakeSpawnProbe ignores player/proxy solids and only forces TW for real hazards; sparse wave macros get an explicit re-export hint.
 - **Live ghost ground re-seat** — after `switchedToMode` / player art rebuild, restore ground, slope, jump buffer, dash, and lock flags from the real player so cube `pushButton` can jump again (Alive-only Delay was starving on identical coast deaths).

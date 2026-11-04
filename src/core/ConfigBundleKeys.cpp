@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[125];
-    static constexpr int kEntryCount = 125;
+    static ConfigBundleKeys::Entry const kEntries[123];
+    static constexpr int kEntryCount = 123;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[125] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[123] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
     { "show-overlay", ConfigBundleKeys::Kind::Bool },
@@ -51,8 +51,6 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[125] = {
     { "death-slack", ConfigBundleKeys::Kind::Int },
     { "look-ahead-cap", ConfigBundleKeys::Kind::Int },
     { "assist-mode", ConfigBundleKeys::Kind::String },
-    { "assist-pick", ConfigBundleKeys::Kind::String },
-    { "assist-engine", ConfigBundleKeys::Kind::String },
     { "bake-radius", ConfigBundleKeys::Kind::Int },
     { "cps-limit", ConfigBundleKeys::Kind::Int },
     { "min-click-interval-ms", ConfigBundleKeys::Kind::Int },
@@ -159,7 +157,9 @@ ConfigBundleKeys::Entry const* ConfigBundleKeys::find(char const* key) {
         return nullptr;
     }
     for (int i = 0; i < ConfigBundleKeysTable::kEntryCount; ++i) {
-        if (std::strcmp(ConfigBundleKeysTable::kEntries[i].key, key) == 0) {
+        char const* const ek = ConfigBundleKeysTable::kEntries[i].key;
+        if (!ek) continue;
+        if (std::strcmp(ek, key) == 0) {
             return &ConfigBundleKeysTable::kEntries[i];
         }
     }
@@ -176,7 +176,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 125, "count-125");
+    expect(ConfigBundleKeysTable::kEntryCount == 123, "count-123");
     expect(
         ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount,
         "count-api"
@@ -197,6 +197,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     for (int i = 0; i < ConfigBundleKeysTable::kEntryCount; ++i) {
         auto const& e = ConfigBundleKeysTable::kEntries[i];
         expect(e.key != nullptr && e.key[0] != '\0', "nonempty-key");
+        if (!e.key) continue;
         bool const inserted = seen.insert(std::string(e.key)).second;
         expect(inserted, "unique");
         switch (e.kind) {
@@ -230,7 +231,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     expect(kindBool == 49, "kind-bool-49");
     expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 6, "kind-string-6");
+    expect(kindString == 5, "kind-string-5");
     expect(kindColor == 1, "kind-color-1");
     expect(kindKeybind == 5, "kind-keybind-5");
 

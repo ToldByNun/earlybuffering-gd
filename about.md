@@ -41,16 +41,9 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 ---
 
-## Pick Mode (assist-pick)
+## Assist type
 
-| Mode | Behavior |
-|------|----------|
-| **v1** (default) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
-| **v2** | Reserved (currently same as v1). Former New outcome-rank choose removed. |
-
-Neither mode waits past your Limit (G1 window-cap). Old configs with `Legacy` / `New` still load.
-
-**Assist Engine** (`assist-engine`, Live V2): **ShadowPlayer** (full ghost, default) vs **Trajectory** (`samplePath`). Pick **v1** always uses ShadowPlayer.
+Locked to **v1 + ShadowPlayer**: if delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest). Full ghost `runOne` physics only — no pick-v2 / Trajectory engine. Never waits past your Limit (G1 window-cap).
 
 ---
 

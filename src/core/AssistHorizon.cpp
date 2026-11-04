@@ -121,8 +121,9 @@ AssistHorizon::Caps AssistHorizon::resolve(
 int AssistHorizon::minSurviveTicksForSuccess(int scoreHorizon, bool trustOk) {
     if (!trustOk) return 0; // short mode: threat-clear honesty alone
     int const h = std::max(8, scoreHorizon);
-    // Need a long ghost run — platform-after-jump must appear in-horizon.
-    return std::max(48, h / 2);
+    // Floor 48 when the horizon is long enough; never demand more ticks than we score.
+    // look-ahead-cap=14 used to force minSurvive=48 while planCap≤14 → Alive Delay impossible.
+    return std::min(h, std::max(48, h / 2));
 }
 
 bool AssistHorizon::longPathSuccessOk(
@@ -173,6 +174,8 @@ bool AssistHorizon::selfCheck(std::string& report) {
     expect(minSurviveTicksForSuccess(160, false) == 0, "min-short-zero");
     expect(minSurviveTicksForSuccess(160, true) == 80, "min-long-half");
     expect(minSurviveTicksForSuccess(64, true) == 48, "min-long-floor48");
+    expect(minSurviveTicksForSuccess(14, true) == 14, "min-long-cap-horizon");
+    expect(minSurviveTicksForSuccess(80, true) == 48, "min-long-floor-vs-half");
 
     expect(longPathSuccessOk(100, false, false, 80), "alive-long-ok");
     expect(!longPathSuccessOk(40, false, false, 80), "alive-short-fail");

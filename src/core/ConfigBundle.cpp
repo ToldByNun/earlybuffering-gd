@@ -188,12 +188,6 @@ static bool applyOneSetting(
                     return false;
                 }
                 std::string s(parsed.unwrap());
-                // assist-pick: accept Legacy/New aliases from old exports → v1/v2.
-                if (std::strcmp(entry.key, "assist-pick") == 0) {
-                    if (char const* canon = StageConfig::canonicalizeAssistPick(s)) {
-                        s = canon;
-                    }
-                }
                 mod->setSettingValue<std::string>(entry.key, s);
                 ++applied;
                 return true;

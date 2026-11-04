@@ -243,57 +243,9 @@ void StageConfig::refreshCache() {
     catch (...) {
         g_cachedAssistMode = AssistMode::Hybrid;
     }
-    try {
-        auto pickStr = mod->getSettingValue<std::string>("assist-pick");
-        char const* canon = canonicalizeAssistPick(pickStr);
-        if (!canon) {
-            // Unknown → v1 default.
-            g_cachedAssistPickLegacy = true;
-            canon = "v1";
-        }
-        else {
-            g_cachedAssistPickLegacy = (std::strcmp(canon, "v1") == 0);
-        }
-        // Migrate store Legacy/New → v1/v2 so Geode one-of stays valid.
-        if (pickStr != canon) {
-            bool const nested = g_applying;
-            if (!nested) g_applying = true;
-            try {
-                mod->setSettingValue<std::string>("assist-pick", std::string(canon));
-            }
-            catch (...) {
-            }
-            if (!nested) g_applying = false;
-        }
-    }
-    catch (...) {
-        // mod.json default is v1.
-        g_cachedAssistPickLegacy = true;
-    }
-    try {
-        auto engStr = mod->getSettingValue<std::string>("assist-engine");
-        if (engStr == "Trajectory") {
-            g_cachedAssistEngine = AssistEngineKind::Trajectory;
-        }
-        else {
-            g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
-            if (engStr != "ShadowPlayer") {
-                bool const nested = g_applying;
-                if (!nested) g_applying = true;
-                try {
-                    mod->setSettingValue<std::string>(
-                        "assist-engine", std::string("ShadowPlayer")
-                    );
-                }
-                catch (...) {
-                }
-                if (!nested) g_applying = false;
-            }
-        }
-    }
-    catch (...) {
-        g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
-    }
+    // Single assist type: v1 pick + ShadowPlayer only (v2 / Trajectory removed).
+    g_cachedAssistPickLegacy = true;
+    g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
 
     for (int i = 0; i < MODE_COUNT; ++i) {
         auto const& ids = MODE_IDS[i];
@@ -463,7 +415,7 @@ AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode;
 
 bool StageConfig::assistPickLegacy() {
     ensureCache();
-    return g_cachedAssistPickLegacy;
+    return true; // locked: v1 only
 }
 
 bool StageConfig::assistPickV1() {
@@ -471,26 +423,24 @@ bool StageConfig::assistPickV1() {
 }
 
 char const* StageConfig::assistPickName() {
-    ensureCache();
-    return g_cachedAssistPickLegacy ? "v1" : "v2";
+    return "v1";
 }
 
 char const* StageConfig::canonicalizeAssistPick(std::string const& raw) {
-    if (raw == "v1" || raw == "Legacy") return "v1";
-    if (raw == "v2" || raw == "New") return "v2";
+    // Only v1 ships; map old aliases so imports stay quiet.
+    if (raw == "v1" || raw == "Legacy" || raw == "v2" || raw == "New" || raw.empty()) {
+        return "v1";
+    }
     return nullptr;
 }
 
 StageConfig::AssistEngineKind StageConfig::assistEngine() {
     ensureCache();
-    return g_cachedAssistEngine;
+    return AssistEngineKind::ShadowPlayer;
 }
 
 StageConfig::AssistEngineKind StageConfig::effectiveAssistEngine() {
-    ensureCache();
-    // V1 choose is frozen on full ghost runOne — never Trajectory.
-    if (g_cachedAssistPickLegacy) return AssistEngineKind::ShadowPlayer;
-    return g_cachedAssistEngine;
+    return AssistEngineKind::ShadowPlayer;
 }
 
 char const* StageConfig::assistEngineName(AssistEngineKind engine) {

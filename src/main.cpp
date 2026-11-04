@@ -234,12 +234,6 @@ $on_mod(Loaded) {
     listenForSettingChanges<std::string>("assist-mode", [](std::string) {
         onAnySetting();
     });
-    listenForSettingChanges<std::string>("assist-pick", [](std::string) {
-        onAnySetting();
-    });
-    listenForSettingChanges<std::string>("assist-engine", [](std::string) {
-        onAnySetting();
-    });
     listenForSettingChanges<std::string>("assist-verify", [](std::string) {
         onAnySetting();
     });

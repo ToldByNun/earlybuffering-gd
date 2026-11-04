@@ -290,8 +290,7 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         StageConfig::lookAheadCap()
     );
 
-    bool const v2 = !StageConfig::assistPickLegacy();
-    m_v2Live = v2;
+    m_v2Live = false; // assist locked to v1 + ShadowPlayer
     m_predCount = 0;
     m_bestDelay = -1;
     m_hitDrawCap = false;
@@ -368,8 +367,10 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     markCap(holdRaw, holdRaw.died, holdTicks);
     markCap(coastRaw, coastRaw.died, coastTicks);
 
-    if (!v2) return;
+    // v1-only: no yellow foresight preds (former v2 AssistPickV2 overlay).
+    return;
 
+#if 0 // former v2 yellow preds — kept for reference, not compiled
     // Yellow prediction windows + dark-green best Delay-worthy Alive path.
     // Preds use short foresight horizon — never the until-death drawMax.
     int const limit = std::max(0, liveLimit);
@@ -462,4 +463,5 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
             m_node->drawDot(bestRaw.points[idx], 4.f, darkGreen);
         }
     }
+#endif
 }
