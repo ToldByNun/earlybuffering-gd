@@ -142,6 +142,12 @@ float CloudConfigStats::averageRating(PackStats const& s) {
     return static_cast<float>(s.ratingSum) / static_cast<float>(s.ratingCount);
 }
 
+float CloudConfigStats::popularityScore(PackStats const& s) {
+    return static_cast<float>(s.downloads)
+        + static_cast<float>(s.ratingCount) * kPopularityRatingCountWeight
+        + averageRating(s) * kPopularityAverageWeight;
+}
+
 namespace {
 
 std::filesystem::path clientIdPath() {
@@ -660,6 +666,14 @@ bool CloudConfigStats::selfCheck(std::string& report) {
     avgIn.ratingCount = 2;
     expect(averageRating(avgIn) == 4.f, "avg-ok");
     expect(averageRating(PackStats{}) == 0.f, "avg-empty");
+    {
+        PackStats pop{};
+        pop.downloads = 10;
+        pop.ratingSum = 8;
+        pop.ratingCount = 2; // avg 4 → 10 + 2*5 + 4*20 = 100
+        expect(popularityScore(pop) == 100.f, "pop-score");
+        expect(popularityScore(PackStats{}) == 0.f, "pop-empty");
+    }
 
     auto& stats = CloudConfigStats::get();
     stats.cancelFetch();

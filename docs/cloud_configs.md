@@ -4,7 +4,7 @@ EarlyBuffer browses the public catalog **`ToldByNun/earlybuffer-configs`** and c
 
 ## In-game
 
-Assist → **Cloud Configs**: search / detail / Install. List and detail show download counts and average rating when `/api/stats` is reachable. Successful Install records one download per anonymous `clientId`; the detail pane has a one-shot 1–5 star rate. **Share…** writes a local outbox and POSTs to the built-in submit endpoint.
+Assist → **Cloud Configs**: search / detail / Install. Tap **Sort:** to cycle Default → Downloads → Rating → Popular → Name (composes with search). List and detail show download counts and average rating when `/api/stats` is reachable. Successful Install records one download per anonymous `clientId`; stars are editable (one vote per pack, re-rate replaces). **Share…** writes a local outbox and POSTs to the built-in submit endpoint.
 
 ## Fixed endpoints
 

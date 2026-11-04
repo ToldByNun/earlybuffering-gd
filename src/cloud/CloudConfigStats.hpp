@@ -41,6 +41,11 @@ public:
     // Average stars; 0 when ratingCount == 0.
     static float averageRating(PackStats const& s);
 
+    // Popularity sort key: downloads + ratingCount*k + average*k2.
+    static constexpr float kPopularityRatingCountWeight = 5.f;
+    static constexpr float kPopularityAverageWeight = 20.f;
+    static float popularityScore(PackStats const& s);
+
     // Load or create UUID in cloud-configs/client-id.txt.
     std::string ensureClientId();
 

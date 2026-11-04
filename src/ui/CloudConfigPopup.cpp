@@ -112,29 +112,60 @@ bool CloudConfigPopup::init() {
 
     m_listWidth = tight ? (w - pad * 2.f) : ((w - pad * 2.f - gap) * 0.50f);
     m_detailWidth = tight ? (w - pad * 2.f) : ((w - pad * 2.f - gap) * 0.50f);
-    m_listHeight = tight ? 78.f : (h - 122.f);
-    m_detailHeight = tight ? 56.f : m_listHeight;
+    // Extra row for sort cycle under search.
+    m_listHeight = tight ? 68.f : (h - 136.f);
+    m_detailHeight = tight ? 56.f : (h - 122.f);
+
+    float const sortRowH = 16.f;
+    float const searchY = -54.f;
+    float const sortY = searchY - 16.f;
 
     m_search = TextInput::create(m_listWidth, "Search packs…", "bigFont.fnt");
     m_search->setID("cloud-search"_spr);
     m_search->setMaxCharCount(64);
     m_search->setCommonFilter(CommonFilter::Any);
     m_search->setTextAlign(TextInputAlign::Left);
-    m_search->setScale(0.90f);
+    m_search->setScale(0.86f);
     m_search->setCallback([this](std::string const& text) {
         m_searchQuery = text;
         this->rebuildList();
     });
     if (tight) {
-        m_mainLayer->addChildAtPosition(m_search, Anchor::Top, ccp(0.f, -56.f));
+        m_mainLayer->addChildAtPosition(m_search, Anchor::Top, ccp(0.f, searchY));
     }
     else {
         m_mainLayer->addChildAtPosition(
             m_search,
             Anchor::TopLeft,
-            ccp(pad + m_listWidth * 0.5f, -56.f)
+            ccp(pad + m_listWidth * 0.5f, searchY)
         );
     }
+
+    auto* sortMenu = CCMenu::create();
+    sortMenu->setContentSize({ m_listWidth, sortRowH });
+    sortMenu->ignoreAnchorPointForPosition(false);
+    sortMenu->setAnchorPoint({ 0.f, 0.5f });
+    sortMenu->setID("cloud-sort-menu"_spr);
+    m_sortLabel = CCLabelBMFont::create("Sort: Default", "goldFont.fnt");
+    m_sortLabel->setScale(0.28f);
+    m_sortLabel->setAnchorPoint({ 0.f, 0.5f });
+    m_sortLabel->setOpacity(220);
+    m_sortLabel->setID("cloud-sort-label"_spr);
+    m_sortBtn = CCMenuItemSpriteExtra::create(
+        m_sortLabel, this, menu_selector(CloudConfigPopup::onSortCycle)
+    );
+    m_sortBtn->setAnchorPoint({ 0.f, 0.5f });
+    m_sortBtn->setID("cloud-sort-btn"_spr);
+    sortMenu->addChildAtPosition(m_sortBtn, Anchor::Left, ccp(0.f, 0.f));
+    if (tight) {
+        m_mainLayer->addChildAtPosition(
+            sortMenu, Anchor::Top, ccp(-m_listWidth * 0.5f, sortY)
+        );
+    }
+    else {
+        m_mainLayer->addChildAtPosition(sortMenu, Anchor::TopLeft, ccp(pad, sortY));
+    }
+    this->updateSortLabel();
 
     m_listScroll = ScrollLayer::create(
         CCSize{ m_listWidth, m_listHeight }, true, true
@@ -505,6 +536,77 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
     this->startStatsFetch();
 }
 
+char const* CloudConfigPopup::sortModeLabel() const {
+    switch (m_sortMode) {
+    case SortMode::Downloads: return "Downloads";
+    case SortMode::Rating: return "Rating";
+    case SortMode::Popular: return "Popular";
+    case SortMode::Name: return "Name";
+    case SortMode::Default:
+    default: return "Default";
+    }
+}
+
+void CloudConfigPopup::updateSortLabel() {
+    if (!m_sortLabel) return;
+    m_sortLabel->setString(fmt::format("Sort: {}", this->sortModeLabel()).c_str());
+}
+
+void CloudConfigPopup::onSortCycle(CCObject*) {
+    int next = static_cast<int>(m_sortMode) + 1;
+    if (next >= static_cast<int>(SortMode::Count)) next = 0;
+    m_sortMode = static_cast<SortMode>(next);
+    this->updateSortLabel();
+    this->rebuildList();
+}
+
+void CloudConfigPopup::applySort(std::vector<CloudConfigIndex::PackEntry const*>& rows) const {
+    if (rows.size() < 2) return;
+    if (m_sortMode == SortMode::Default) return; // catalog order
+
+    auto statsOf = [](CloudConfigIndex::PackEntry const* p) {
+        return CloudConfigStats::get().statsFor(p->id);
+    };
+
+    std::stable_sort(
+        rows.begin(),
+        rows.end(),
+        [&](CloudConfigIndex::PackEntry const* a, CloudConfigIndex::PackEntry const* b) {
+            if (!a || !b) return a != nullptr;
+            auto const sa = statsOf(a);
+            auto const sb = statsOf(b);
+            switch (m_sortMode) {
+            case SortMode::Downloads:
+                if (sa.downloads != sb.downloads) return sa.downloads > sb.downloads;
+                break;
+            case SortMode::Rating: {
+                float const ra = CloudConfigStats::averageRating(sa);
+                float const rb = CloudConfigStats::averageRating(sb);
+                if (ra != rb) return ra > rb;
+                if (sa.ratingCount != sb.ratingCount) return sa.ratingCount > sb.ratingCount;
+                break;
+            }
+            case SortMode::Popular: {
+                float const pa = CloudConfigStats::popularityScore(sa);
+                float const pb = CloudConfigStats::popularityScore(sb);
+                if (pa != pb) return pa > pb;
+                break;
+            }
+            case SortMode::Name: {
+                auto const na = toLower(a->name);
+                auto const nb = toLower(b->name);
+                if (na != nb) return na < nb;
+                break;
+            }
+            case SortMode::Default:
+            default:
+                break;
+            }
+            return a->id < b->id;
+        }
+    );
+}
+
 void CloudConfigPopup::rebuildList() {
     if (!m_listScroll || !m_listScroll->m_contentLayer) return;
     auto* content = m_listScroll->m_contentLayer;
@@ -518,6 +620,7 @@ void CloudConfigPopup::rebuildList() {
     for (auto const& p : catalog.packs) {
         if (this->packMatchesSearch(p)) rows.push_back(&p);
     }
+    this->applySort(rows);
 
     content->setLayout(
         ColumnLayout::create()

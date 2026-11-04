@@ -12,6 +12,7 @@
 #include <Geode/ui/TextArea.hpp>
 #include <Geode/ui/TextInput.hpp>
 #include <string>
+#include <vector>
 
 // Catalog browser matching GD / Geode popup + list aesthetics.
 class CloudConfigPopup : public geode::Popup {
@@ -26,6 +27,7 @@ protected:
     void onInstall(cocos2d::CCObject*);
     void onShare(cocos2d::CCObject*);
     void onRate(cocos2d::CCObject*);
+    void onSortCycle(cocos2d::CCObject*);
 
     void loadInitial();
     void startRefresh(bool force);
@@ -33,9 +35,12 @@ protected:
     void startStatsFetch();
     void ensureLocalCatalog();
     void rebuildList();
+    void applySort(std::vector<CloudConfigIndex::PackEntry const*>& rows) const;
+    void updateSortLabel();
     void updateDetail();
     void updateRateUi();
     void setStatus(std::string const& text, bool isError);
+    char const* sortModeLabel() const;
     void selectPack(std::string const& id);
     void doInstall(std::string const& id);
     void onPackFetched(
@@ -69,15 +74,27 @@ protected:
     cocos2d::CCSprite* m_rateStarSpr[5] = {};
     CCMenuItemSpriteExtra* m_installBtn = nullptr;
     CCMenuItemSpriteExtra* m_refreshBtn = nullptr;
+    CCMenuItemSpriteExtra* m_sortBtn = nullptr;
+    cocos2d::CCLabelBMFont* m_sortLabel = nullptr;
 
     float m_listWidth = 0.f;
     float m_listHeight = 0.f;
     float m_detailWidth = 0.f;
     float m_detailHeight = 0.f;
 
+    enum class SortMode : int {
+        Default = 0,
+        Downloads,
+        Rating,
+        Popular,
+        Name,
+        Count
+    };
+
     std::string m_searchQuery;
     std::string m_selectedId;
     std::string m_activeId;
+    SortMode m_sortMode = SortMode::Default;
     bool m_busyUi = false;
     bool m_rateBusy = false;
     bool m_shareOpen = false;
