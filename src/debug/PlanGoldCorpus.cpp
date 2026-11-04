@@ -37,6 +37,10 @@
 #include "../core/PlatformLimits.hpp"
 #include "../core/SaveDropPaths.hpp"
 #include "../cloud/CloudConfigStore.hpp"
+#include "../cloud/CloudConfigSha256.hpp"
+#include "../cloud/CloudConfigHostPolicy.hpp"
+#include "../cloud/CloudConfigIndex.hpp"
+#include "../cloud/CloudConfigSeed.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -88,6 +92,14 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(SaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
     std::string cloudStoreReport;
     expect(CloudConfigStore::selfCheck(cloudStoreReport), "cloud-config-store");
+    std::string cloudShaReport;
+    expect(CloudConfigSha256::selfCheck(cloudShaReport), "cloud-config-sha256");
+    std::string cloudHostReport;
+    expect(CloudConfigHostPolicy::selfCheck(cloudHostReport), "cloud-config-host");
+    std::string cloudIndexReport;
+    expect(CloudConfigIndex::selfCheck(cloudIndexReport), "cloud-config-index");
+    std::string cloudSeedReport;
+    expect(CloudConfigSeed::selfCheck(cloudSeedReport), "cloud-config-seed");
     std::string configKeysReport;
     expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string configCodecReport;

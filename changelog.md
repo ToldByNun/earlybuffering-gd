@@ -4,6 +4,7 @@
 
 - **ConfigBundle string I/O** — `exportToString` / `importFromString` plus `ApplyOptions` (skip keybinds / `dev-*`); path import/export wrap the string path; Assist Import still applies everything; shared `PauseActionBridge::afterConfigApplied` for post-apply UI sync; portable key count **123**.
 - **Cloud config store** — `saveDir/cloud-configs/` (index cache, packs, active, meta, outbox) via `CloudConfigStore` + `SaveDropPaths::cloudConfigsDir`; created on load with the other drop folders.
+- **Cloud catalog primitives** — `CloudConfigHostPolicy` (jsDelivr + GitHub raw allowlist), `CloudConfigSha256`, `CloudConfigIndex` (schema-1 validate), bundled offline `resources/cloud-seed/` (`safe-defaults` pack).
 - **Live look-ahead vs Delay** — `minSurviveTicksForSuccess` never demands more ticks than `scoreHorizon` (look-ahead-cap=14 used to keep minSurvive at 48 while planCap≤14 → every plan PassHopeless). Config-bundle / in-level filter no longer expect removed assist-pick / assist-engine keys.
 - **Boot crash selfCheck** — after dropping assist-pick/engine, SettingsCategoryMap `kCount` stayed 166 and ConfigBundleKeys stayed 125 → null table slots → `strcmp` AV on load; counts are 164/123 and lookups skip null keys.
 - **Single assist type** — Live plan is **v1 + ShadowPlayer** only; Pick Mode v2 and Assist Engine Trajectory settings removed (imports still accept old keys as v1/ShadowPlayer).
