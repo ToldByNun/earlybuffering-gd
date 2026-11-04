@@ -1,5 +1,8 @@
 /**
  * stats.json load / save / public strip / actor hash helpers.
+ *
+ * Rate rules: 1 clientId = 1 rating row per pack. Re-rate replaces stars
+ * (ratingSum adjusts; ratingCount stays the same).
  */
 
 const { createHash } = require("node:crypto");
@@ -41,6 +44,64 @@ function actorHash(clientId, packId, op) {
     .update(`${clientId}|${packId}|${salt}`, "utf8")
     .digest("hex")
     .slice(0, HASH_LEN);
+}
+
+/** rt entries: legacy string hash, or { h, s }. */
+function findRateEntry(pack, hash) {
+  for (let i = 0; i < pack.rt.length; i++) {
+    const e = pack.rt[i];
+    if (typeof e === "string" && e === hash) {
+      return { index: i, hash, stars: 0, legacy: true };
+    }
+    if (e && typeof e === "object" && e.h === hash) {
+      const s = Number(e.s);
+      return {
+        index: i,
+        hash,
+        stars: Number.isInteger(s) && s >= 1 && s <= 5 ? s : 0,
+        legacy: false,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * First vote or replace. Never bumps ratingCount on replace.
+ * @returns {{ kind: "new"|"updated"|"same", error?: string, status?: number }}
+ */
+function applyRateToPack(pack, hash, stars) {
+  const existing = findRateEntry(pack, hash);
+  if (!existing) {
+    if (pack.rt.length >= MAX_HASHES) {
+      return { kind: "error", status: 503, error: "rating set full" };
+    }
+    pack.rt.push({ h: hash, s: stars });
+    pack.ratingSum += stars;
+    pack.ratingCount += 1;
+    return { kind: "new" };
+  }
+
+  let oldStars = existing.stars;
+  if (existing.legacy || oldStars < 1 || oldStars > 5) {
+    // Legacy hash-only row: approximate previous vote with current average.
+    oldStars =
+      pack.ratingCount > 0
+        ? Math.round(pack.ratingSum / pack.ratingCount)
+        : stars;
+    if (oldStars < 1) oldStars = 1;
+    if (oldStars > 5) oldStars = 5;
+  }
+
+  if (oldStars === stars && !existing.legacy) {
+    return { kind: "same" };
+  }
+
+  pack.ratingSum += stars - oldStars;
+  if (pack.ratingSum < 0) pack.ratingSum = 0;
+  pack.rt[existing.index] = { h: hash, s: stars };
+  // ratingCount unchanged
+  return { kind: "updated" };
 }
 
 function publicStatsView(stats) {
@@ -92,7 +153,6 @@ async function saveStats(token, stats, sha, message) {
     return { ok: true };
   } catch (e) {
     const msg = String(e.message || e);
-    // GitHub SHA mismatch
     if (msg.includes("409") || /sha/i.test(msg) || /conflict/i.test(msg)) {
       return { ok: false, conflict: true, error: msg };
     }
@@ -100,9 +160,16 @@ async function saveStats(token, stats, sha, message) {
   }
 }
 
+function countersOf(pack) {
+  return {
+    downloads: pack.downloads,
+    ratingSum: pack.ratingSum,
+    ratingCount: pack.ratingCount,
+  };
+}
+
 /**
  * Apply track once; returns result object for HTTP layer.
- * @param {object} opts
  */
 async function applyTrack(token, opts) {
   const { op, id, clientId, stars } = opts;
@@ -110,16 +177,11 @@ async function applyTrack(token, opts) {
   let { stats, sha } = await loadStats(token);
   const pack = ensurePack(stats, id);
   const hash = actorHash(clientId, id, op);
+  let rateKind = null;
 
   if (op === "download") {
     if (pack.dl.includes(hash)) {
-      return {
-        ok: true,
-        duplicate: true,
-        downloads: pack.downloads,
-        ratingSum: pack.ratingSum,
-        ratingCount: pack.ratingCount,
-      };
+      return { ok: true, duplicate: true, updated: false, ...countersOf(pack) };
     }
     if (pack.dl.length >= MAX_HASHES) {
       return { ok: false, status: 503, error: "download set full" };
@@ -127,46 +189,26 @@ async function applyTrack(token, opts) {
     pack.dl.push(hash);
     pack.downloads += 1;
   } else if (op === "rate") {
-    if (pack.rt.includes(hash)) {
-      return {
-        ok: false,
-        status: 409,
-        error: "already rated",
-        downloads: pack.downloads,
-        ratingSum: pack.ratingSum,
-        ratingCount: pack.ratingCount,
-      };
+    const r = applyRateToPack(pack, hash, stars);
+    if (r.kind === "error") {
+      return { ok: false, status: r.status || 400, error: r.error, ...countersOf(pack) };
     }
-    if (pack.rt.length >= MAX_HASHES) {
-      return { ok: false, status: 503, error: "rating set full" };
+    if (r.kind === "same") {
+      return { ok: true, duplicate: true, updated: false, ...countersOf(pack) };
     }
-    pack.rt.push(hash);
-    pack.ratingSum += stars;
-    pack.ratingCount += 1;
+    rateKind = r.kind;
   } else {
     return { ok: false, status: 400, error: "invalid op" };
   }
 
-  let saved = await saveStats(
-    token,
-    stats,
-    sha,
-    `cloud-stats: ${op} ${id}`
-  );
+  let saved = await saveStats(token, stats, sha, `cloud-stats: ${op} ${id}`);
   if (!saved.ok && saved.conflict) {
-    // One CAS retry
     ({ stats, sha } = await loadStats(token));
     const pack2 = ensurePack(stats, id);
     const hash2 = actorHash(clientId, id, op);
     if (op === "download") {
       if (pack2.dl.includes(hash2)) {
-        return {
-          ok: true,
-          duplicate: true,
-          downloads: pack2.downloads,
-          ratingSum: pack2.ratingSum,
-          ratingCount: pack2.ratingCount,
-        };
+        return { ok: true, duplicate: true, updated: false, ...countersOf(pack2) };
       }
       if (pack2.dl.length >= MAX_HASHES) {
         return { ok: false, status: 503, error: "download set full" };
@@ -174,22 +216,19 @@ async function applyTrack(token, opts) {
       pack2.dl.push(hash2);
       pack2.downloads += 1;
     } else {
-      if (pack2.rt.includes(hash2)) {
+      const r2 = applyRateToPack(pack2, hash2, stars);
+      if (r2.kind === "error") {
         return {
           ok: false,
-          status: 409,
-          error: "already rated",
-          downloads: pack2.downloads,
-          ratingSum: pack2.ratingSum,
-          ratingCount: pack2.ratingCount,
+          status: r2.status || 400,
+          error: r2.error,
+          ...countersOf(pack2),
         };
       }
-      if (pack2.rt.length >= MAX_HASHES) {
-        return { ok: false, status: 503, error: "rating set full" };
+      if (r2.kind === "same") {
+        return { ok: true, duplicate: true, updated: false, ...countersOf(pack2) };
       }
-      pack2.rt.push(hash2);
-      pack2.ratingSum += stars;
-      pack2.ratingCount += 1;
+      rateKind = r2.kind;
     }
     saved = await saveStats(token, stats, sha, `cloud-stats: ${op} ${id} retry`);
     if (!saved.ok) {
@@ -198,9 +237,8 @@ async function applyTrack(token, opts) {
     return {
       ok: true,
       duplicate: false,
-      downloads: pack2.downloads,
-      ratingSum: pack2.ratingSum,
-      ratingCount: pack2.ratingCount,
+      updated: op === "rate" && rateKind === "updated",
+      ...countersOf(ensurePack(stats, id)),
     };
   }
 
@@ -211,9 +249,8 @@ async function applyTrack(token, opts) {
   return {
     ok: true,
     duplicate: false,
-    downloads: pack.downloads,
-    ratingSum: pack.ratingSum,
-    ratingCount: pack.ratingCount,
+    updated: op === "rate" && rateKind === "updated",
+    ...countersOf(pack),
   };
 }
 
@@ -239,5 +276,7 @@ module.exports = {
   publicStatsView,
   loadStats,
   applyTrack,
+  applyRateToPack,
+  findRateEntry,
   packExistsInIndex,
 };

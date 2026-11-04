@@ -4,7 +4,7 @@ EarlyBuffer browses the public catalog **`ToldByNun/earlybuffer-configs`** and c
 
 ## In-game
 
-Assist → **Cloud Configs**: search / detail / Install. List and detail show download counts and average rating when `/api/stats` is reachable. **Share…** writes a local outbox and POSTs to the built-in submit endpoint.
+Assist → **Cloud Configs**: search / detail / Install. List and detail show download counts and average rating when `/api/stats` is reachable. Successful Install records one download per anonymous `clientId`; the detail pane has a one-shot 1–5 star rate. **Share…** writes a local outbox and POSTs to the built-in submit endpoint.
 
 ## Fixed endpoints
 
@@ -16,7 +16,7 @@ Assist → **Cloud Configs**: search / detail / Install. List and detail show do
 | Stats (GET) | `https://earlybuffer-config.vercel.app/api/stats` |
 | Track (POST) | `https://earlybuffer-config.vercel.app/api/track` |
 
-The Vercel functions hold `GITHUB_TOKEN` as a server secret. Pack files live in `index.json` / `packs/`; download and rating counters live in `stats.json`. Each anonymous `clientId` may count **one download** and **one rating** per pack. Deploy notes: [`tools/cloud-submit-vercel/README.md`](../tools/cloud-submit-vercel/README.md).
+The Vercel functions hold `GITHUB_TOKEN` as a server secret. Pack files live in `index.json` / `packs/`; download and rating counters live in `stats.json`. Each anonymous `clientId` may count **one download** per pack and keep **one editable rating** (changing stars updates the average, it does not add another vote). Deploy notes: [`tools/cloud-submit-vercel/README.md`](../tools/cloud-submit-vercel/README.md).
 
 ## Layout
 

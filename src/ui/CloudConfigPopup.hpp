@@ -25,6 +25,7 @@ protected:
     void onRefresh(cocos2d::CCObject*);
     void onInstall(cocos2d::CCObject*);
     void onShare(cocos2d::CCObject*);
+    void onRate(cocos2d::CCObject*);
 
     void loadInitial();
     void startRefresh(bool force);
@@ -33,6 +34,7 @@ protected:
     void ensureLocalCatalog();
     void rebuildList();
     void updateDetail();
+    void updateRateUi();
     void setStatus(std::string const& text, bool isError);
     void selectPack(std::string const& id);
     void doInstall(std::string const& id);
@@ -40,6 +42,7 @@ protected:
         CloudConfigService::PackFetchResult const& fr,
         CloudConfigIndex::PackEntry entry
     );
+    void trackInstallDownload(std::string const& packId);
     CloudConfigListCell::StatsBadge statsBadgeFor(std::string const& id) const;
 
     bool packMatchesSearch(CloudConfigIndex::PackEntry const& e) const;
@@ -60,6 +63,10 @@ protected:
     geode::SimpleTextArea* m_detailBody = nullptr;
     cocos2d::CCLabelBMFont* m_detailFoot = nullptr;
     cocos2d::CCLayerColor* m_detailBg = nullptr;
+    cocos2d::CCMenu* m_rateMenu = nullptr;
+    cocos2d::CCLabelBMFont* m_rateHint = nullptr;
+    CCMenuItemSpriteExtra* m_rateBtns[5] = {};
+    cocos2d::CCSprite* m_rateStarSpr[5] = {};
     CCMenuItemSpriteExtra* m_installBtn = nullptr;
     CCMenuItemSpriteExtra* m_refreshBtn = nullptr;
 
@@ -72,9 +79,11 @@ protected:
     std::string m_selectedId;
     std::string m_activeId;
     bool m_busyUi = false;
+    bool m_rateBusy = false;
     bool m_shareOpen = false;
     uint64_t m_opGen = 0;
     uint64_t m_statsGen = 0;
+    uint64_t m_rateGen = 0;
 };
 
 #endif // EARLYBUFFER_UI_CLOUDCONFIGPOPUP_HPP

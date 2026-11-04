@@ -15,6 +15,7 @@
 #include <cocos-ext.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 
 using namespace geode::prelude;
@@ -67,8 +68,8 @@ void CloudConfigPopup::open() {
 
 bool CloudConfigPopup::init() {
     bool const tight = PlatformLimits::isConstrainedDevice();
-    float const w = tight ? 300.f : 360.f;
-    float const h = tight ? 230.f : 248.f;
+    float const w = tight ? 310.f : 380.f;
+    float const h = tight ? 240.f : 268.f;
 
     if (!Popup::init(w, h, "GJ_square01.png")) {
         return false;
@@ -84,20 +85,20 @@ bool CloudConfigPopup::init() {
         }
     }
 
-    float const pad = 16.f;
+    float const pad = 14.f;
     float const gap = 8.f;
 
     // Status left, Refresh right — keeps the control off the close-button side.
     m_statusLabel = CCLabelBMFont::create("Loading…", "goldFont.fnt");
-    m_statusLabel->setScale(0.30f);
+    m_statusLabel->setScale(0.28f);
     m_statusLabel->setAnchorPoint({ 0.f, 0.5f });
     m_statusLabel->setID("cloud-status"_spr);
-    m_mainLayer->addChildAtPosition(m_statusLabel, Anchor::TopLeft, ccp(pad, -36.f));
+    m_mainLayer->addChildAtPosition(m_statusLabel, Anchor::TopLeft, ccp(pad, -34.f));
 
     auto* topMenu = CCMenu::create();
     topMenu->setContentSize({ 70.f, 24.f });
     topMenu->setID("cloud-top-menu"_spr);
-    m_mainLayer->addChildAtPosition(topMenu, Anchor::TopRight, ccp(-pad, -36.f));
+    m_mainLayer->addChildAtPosition(topMenu, Anchor::TopRight, ccp(-pad, -34.f));
 
     auto* refreshSpr = ButtonSprite::create(
         "Refresh", "bigFont.fnt", "GJ_button_05.png", 0.8f
@@ -109,10 +110,10 @@ bool CloudConfigPopup::init() {
     m_refreshBtn->setID("cloud-refresh-btn"_spr);
     topMenu->addChildAtPosition(m_refreshBtn, Anchor::Center);
 
-    m_listWidth = tight ? (w - pad * 2.f) : ((w - pad * 2.f - gap) * 0.52f);
-    m_detailWidth = tight ? (w - pad * 2.f) : ((w - pad * 2.f - gap) * 0.48f);
-    m_listHeight = tight ? 72.f : (h - 128.f);
-    m_detailHeight = tight ? 52.f : m_listHeight;
+    m_listWidth = tight ? (w - pad * 2.f) : ((w - pad * 2.f - gap) * 0.50f);
+    m_detailWidth = tight ? (w - pad * 2.f) : ((w - pad * 2.f - gap) * 0.50f);
+    m_listHeight = tight ? 78.f : (h - 122.f);
+    m_detailHeight = tight ? 56.f : m_listHeight;
 
     m_search = TextInput::create(m_listWidth, "Search packs…", "bigFont.fnt");
     m_search->setID("cloud-search"_spr);
@@ -202,25 +203,78 @@ bool CloudConfigPopup::init() {
     m_detailBody = SimpleTextArea::create(
         "Pick a pack, then Install.\nShare… sets name & description.",
         "chatFont.fnt",
-        0.40f,
+        0.38f,
         m_detailWidth - 12.f
     );
     m_detailBody->setWrappingMode(WORD_WRAP);
-    m_detailBody->setMaxLines(tight ? 2 : 5);
+    m_detailBody->setMaxLines(tight ? 2 : 3);
     m_detailBody->setAlignment(kCCTextAlignmentLeft);
     m_detailBody->setAnchorPoint({ 0.f, 1.f });
     m_detailBody->setID("cloud-detail-body"_spr);
     m_detailRoot->addChildAtPosition(
-        m_detailBody, Anchor::TopLeft, ccp(6.f, -38.f)
+        m_detailBody, Anchor::TopLeft, ccp(6.f, -36.f)
+    );
+
+    // Gray star sprite (resources/ui/eb_star.png) — tinted gold/gray in updateRateUi.
+    m_rateHint = CCLabelBMFont::create("Rate", "goldFont.fnt");
+    m_rateHint->setScale(0.26f);
+    m_rateHint->setAnchorPoint({ 0.f, 0.5f });
+    m_rateHint->setOpacity(210);
+    m_rateHint->setID("cloud-rate-hint"_spr);
+    m_detailRoot->addChildAtPosition(
+        m_rateHint, Anchor::BottomLeft, ccp(6.f, 34.f)
+    );
+
+    m_rateMenu = CCMenu::create();
+    m_rateMenu->setContentSize({ m_detailWidth - 12.f, 22.f });
+    m_rateMenu->ignoreAnchorPointForPosition(false);
+    m_rateMenu->setAnchorPoint({ 0.f, 0.5f });
+    m_rateMenu->setID("cloud-rate-menu"_spr);
+    m_rateMenu->setLayout(
+        RowLayout::create()
+            ->setGap(2.f)
+            ->setAxisAlignment(AxisAlignment::Start)
+            ->setCrossAxisAlignment(AxisAlignment::Center)
+            ->setAutoScale(false)
+    );
+    for (int i = 0; i < 5; ++i) {
+        auto* spr = CCSprite::create("eb_star.png"_spr);
+        if (!spr) {
+            // Fallback if resource missing from package.
+            spr = CCSprite::createWithSpriteFrameName("GJ_starsIcon_001.png");
+        }
+        if (!spr) {
+            auto* lab = CCLabelBMFont::create("*", "goldFont.fnt");
+            lab->setScale(0.45f);
+            m_rateStarSpr[i] = nullptr;
+            m_rateBtns[i] = CCMenuItemSpriteExtra::create(
+                lab, this, menu_selector(CloudConfigPopup::onRate)
+            );
+        }
+        else {
+            spr->setScale(0.42f);
+            spr->setColor({ 170, 170, 170 });
+            m_rateStarSpr[i] = spr;
+            m_rateBtns[i] = CCMenuItemSpriteExtra::create(
+                spr, this, menu_selector(CloudConfigPopup::onRate)
+            );
+        }
+        m_rateBtns[i]->setTag(i + 1);
+        m_rateBtns[i]->setID(fmt::format("cloud-rate-{}", i + 1));
+        m_rateMenu->addChild(m_rateBtns[i]);
+    }
+    m_rateMenu->updateLayout();
+    m_detailRoot->addChildAtPosition(
+        m_rateMenu, Anchor::BottomLeft, ccp(38.f, 34.f)
     );
 
     m_detailFoot = CCLabelBMFont::create(" ", "chatFont.fnt");
-    m_detailFoot->setScale(0.40f);
+    m_detailFoot->setScale(0.34f);
     m_detailFoot->setAnchorPoint({ 0.f, 0.f });
     m_detailFoot->setOpacity(200);
     m_detailFoot->setID("cloud-detail-foot"_spr);
     m_detailRoot->addChildAtPosition(
-        m_detailFoot, Anchor::BottomLeft, ccp(6.f, 6.f)
+        m_detailFoot, Anchor::BottomLeft, ccp(6.f, 4.f)
     );
 
     if (tight) {
@@ -467,7 +521,7 @@ void CloudConfigPopup::rebuildList() {
 
     content->setLayout(
         ColumnLayout::create()
-            ->setGap(0.f)
+            ->setGap(2.f)
             ->setAxisReverse(true)
             ->setAxisAlignment(AxisAlignment::End)
             ->setAutoGrowAxis(m_listScroll->getContentHeight())
@@ -515,6 +569,72 @@ void CloudConfigPopup::selectPack(std::string const& id) {
     this->updateDetail();
 }
 
+void CloudConfigPopup::updateRateUi() {
+    auto const* e = this->selectedEntry();
+    bool const hasPack = e != nullptr;
+    bool const enable = hasPack && !m_busyUi && !m_rateBusy;
+    int const mine = hasPack ? CloudConfigStats::get().myStarsFor(e->id) : 0;
+
+    // Paint: own vote if set, else community average (display only).
+    int filled = 0;
+    if (mine >= 1 && mine <= 5) {
+        filled = mine;
+    }
+    else if (hasPack) {
+        auto const s = CloudConfigStats::get().statsFor(e->id);
+        if (s.ratingCount > 0) {
+            filled = static_cast<int>(std::lround(
+                static_cast<double>(CloudConfigStats::averageRating(s))
+            ));
+            if (filled < 1) filled = 1;
+            if (filled > 5) filled = 5;
+        }
+    }
+
+    if (m_rateHint) {
+        if (!hasPack) {
+            m_rateHint->setString(" ");
+            m_rateHint->setOpacity(0);
+        }
+        else if (m_rateBusy) {
+            m_rateHint->setString("…");
+            m_rateHint->setOpacity(210);
+        }
+        else if (mine > 0) {
+            m_rateHint->setString("Yours");
+            m_rateHint->setOpacity(210);
+        }
+        else {
+            m_rateHint->setString("Rate");
+            m_rateHint->setOpacity(210);
+        }
+    }
+
+    ccColor3B const colOn = { 255, 210, 70 };
+    ccColor3B const colOff = { 150, 150, 150 };
+
+    for (int i = 0; i < 5; ++i) {
+        auto* btn = m_rateBtns[i];
+        if (!btn) continue;
+        btn->setVisible(hasPack);
+        btn->setEnabled(enable);
+
+        bool const on = filled > 0 && (i < filled);
+        ccColor3B const col = on ? colOn : colOff;
+        GLubyte const op = !hasPack ? 0 : (enable ? 255 : 140);
+
+        if (auto* spr = m_rateStarSpr[i]) {
+            spr->setColor(col);
+            spr->setOpacity(op);
+        }
+        else {
+            btn->setColor(col);
+            btn->setOpacity(op);
+        }
+    }
+    if (m_rateMenu) m_rateMenu->setVisible(hasPack);
+}
+
 void CloudConfigPopup::updateDetail() {
     auto const* e = this->selectedEntry();
     if (!e) {
@@ -527,6 +647,7 @@ void CloudConfigPopup::updateDetail() {
         }
         if (m_detailFoot) m_detailFoot->setString(" ");
         if (m_installBtn) m_installBtn->setEnabled(false);
+        this->updateRateUi();
         return;
     }
 
@@ -570,7 +691,7 @@ void CloudConfigPopup::updateDetail() {
         if (s.downloads > 0 || s.ratingCount > 0) {
             if (s.ratingCount > 0) {
                 statsBit = fmt::format(
-                    " · \xE2\x86\x93{} · \xE2\x98\x85{:.1f} ({} rating{})",
+                    " · {}dl · {:.1f}* ({} rating{})",
                     formatDownloads(s.downloads),
                     CloudConfigStats::averageRating(s),
                     s.ratingCount,
@@ -579,7 +700,7 @@ void CloudConfigPopup::updateDetail() {
             }
             else {
                 statsBit = fmt::format(
-                    " · \xE2\x86\x93{} downloads",
+                    " · {} dl",
                     formatDownloads(s.downloads)
                 );
             }
@@ -595,6 +716,7 @@ void CloudConfigPopup::updateDetail() {
         ).c_str());
     }
     if (m_installBtn) m_installBtn->setEnabled(verOk && !m_busyUi);
+    this->updateRateUi();
 }
 
 void CloudConfigPopup::onRefresh(CCObject*) {
@@ -690,12 +812,80 @@ void CloudConfigPopup::onPackFetched(
     this->updateDetail();
     this->setStatus(fmt::format("Installed · {}", entry.name), false);
 
+    // Fire-and-forget; never fails install UX. Local/server dedupe = 1 dl / actor.
+    this->trackInstallDownload(entry.id);
+
     PauseActionBridge::afterConfigApplied(fmt::format(
         "Installed cloud config \"{}\".\nApplied {} settings ({} skipped).",
         entry.name,
         applied.stats.applied,
         applied.stats.skipped
     ));
+}
+
+void CloudConfigPopup::trackInstallDownload(std::string const& packId) {
+    Ref<CloudConfigPopup> self = this;
+    CloudConfigStats::get().trackDownload(
+        packId,
+        [self](CloudConfigStats::TrackResult const& r) {
+            if (!self) return;
+            // Refresh badges when counters moved; silent on network errors.
+            if (r.ok || r.duplicate || r.skippedLocal) {
+                self->rebuildList();
+                self->updateDetail();
+            }
+        }
+    );
+}
+
+void CloudConfigPopup::onRate(CCObject* sender) {
+    auto const* e = this->selectedEntry();
+    if (!e || m_busyUi || m_rateBusy) return;
+
+    auto* item = typeinfo_cast<CCMenuItem*>(sender);
+    if (!item) return;
+    int const stars = item->getTag();
+    if (stars < 1 || stars > 5) return;
+
+    // Same as current vote — just refresh paint.
+    if (CloudConfigStats::get().myStarsFor(e->id) == stars) {
+        this->updateRateUi();
+        return;
+    }
+
+    m_rateBusy = true;
+    uint64_t const gen = ++m_rateGen;
+    this->updateRateUi();
+
+    std::string const id = e->id;
+    Ref<CloudConfigPopup> self = this;
+    CloudConfigStats::get().trackRate(
+        id,
+        stars,
+        [self, gen, stars](CloudConfigStats::TrackResult const& r) {
+            if (!self || gen != self->m_rateGen) return;
+            self->m_rateBusy = false;
+
+            if (r.ok || r.duplicate || r.skippedLocal) {
+                self->rebuildList();
+                self->updateDetail();
+                if (r.updated) {
+                    self->setStatus(fmt::format("Updated {}/5", stars), false);
+                }
+                else if (r.ok && !r.duplicate && !r.skippedLocal) {
+                    self->setStatus(fmt::format("Rated {}/5", stars), false);
+                }
+                return;
+            }
+
+            self->updateRateUi();
+            FLAlertLayer::create(
+                "Cloud Configs",
+                r.error.empty() ? "Could not submit rating." : r.error.c_str(),
+                "OK"
+            )->show();
+        }
+    );
 }
 
 void CloudConfigPopup::onShare(CCObject*) {

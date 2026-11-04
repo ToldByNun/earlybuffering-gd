@@ -19,6 +19,7 @@ public:
         bool attempted = false;
         bool ok = false;
         bool duplicate = false;
+        bool updated = false; // re-rate: same voter, new stars (count unchanged)
         bool skippedLocal = false;
         std::string error;
         PackStats stats;
@@ -45,8 +46,10 @@ public:
 
     bool hasDownloaded(std::string const& packId) const;
     bool hasRated(std::string const& packId) const;
+    // 0 if this install has not rated the pack yet.
+    int myStarsFor(std::string const& packId) const;
     void markDownloaded(std::string const& packId);
-    void markRated(std::string const& packId);
+    void markRated(std::string const& packId, int stars = 0);
 
     PackStats statsFor(std::string const& packId) const;
     std::unordered_map<std::string, PackStats> const& all() const;
@@ -59,8 +62,8 @@ public:
     void cancelFetch();
     bool isFetchBusy() const;
 
-    // Fire-and-forget POST. Skips network when pack already in local set.
-    // Always sends clientId. On success or duplicate/already-rated, marks local.
+    // Fire-and-forget POST. Download skips when already in local set.
+    // Rate skips only when local myStars == stars (re-rate with a new value is allowed).
     void trackDownload(std::string const& packId, TrackCallback cb = {});
     void trackRate(std::string const& packId, int stars, TrackCallback cb = {});
 
@@ -73,6 +76,10 @@ private:
 
     CloudConfigStats(CloudConfigStats const&) = delete;
     CloudConfigStats& operator=(CloudConfigStats const&) = delete;
+
+    void loadLocalSets() const;
+    void saveLocalSets();
+    void unmarkLocal(std::string const& packId, bool downloaded, bool rated);
 
     class Impl;
     Impl* m_impl = nullptr;

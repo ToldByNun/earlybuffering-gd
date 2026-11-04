@@ -84,10 +84,12 @@ class CloudConfigStats::Impl {
 public:
     CloudConfigClient client;
     std::unordered_map<std::string, PackStats> packs;
-    std::unordered_set<std::string> downloaded;
-    std::unordered_set<std::string> rated;
+    // Lazy disk load may run from const getters.
+    mutable std::unordered_set<std::string> downloaded;
+    mutable std::unordered_set<std::string> rated;
+    mutable std::unordered_map<std::string, int> myStars;
+    mutable bool localLoaded = false;
     std::string clientId;
-    bool localLoaded = false;
     uint64_t trackGen = 0;
 };
 
@@ -150,11 +152,14 @@ std::filesystem::path localStatsPath() {
     return CloudConfigStore::get().rootDir() / "local-stats.json";
 }
 
-void loadLocalSets(CloudConfigStats::Impl* impl) {
-    if (!impl || impl->localLoaded) return;
-    impl->localLoaded = true;
-    impl->downloaded.clear();
-    impl->rated.clear();
+} // namespace
+
+void CloudConfigStats::loadLocalSets() const {
+    if (!m_impl || m_impl->localLoaded) return;
+    m_impl->localLoaded = true;
+    m_impl->downloaded.clear();
+    m_impl->rated.clear();
+    m_impl->myStars.clear();
 
     std::string err;
     std::string body;
@@ -168,52 +173,65 @@ void loadLocalSets(CloudConfigStats::Impl* impl) {
         for (auto const& v : root["downloaded"].asArray().unwrap()) {
             if (!v.isString()) continue;
             auto const id = v.asString().unwrapOrDefault();
-            if (CloudConfigStore::isValidPackId(id)) impl->downloaded.insert(id);
+            if (CloudConfigStore::isValidPackId(id)) m_impl->downloaded.insert(id);
         }
     }
     if (root.contains("rated") && root["rated"].isArray()) {
         for (auto const& v : root["rated"].asArray().unwrap()) {
             if (!v.isString()) continue;
             auto const id = v.asString().unwrapOrDefault();
-            if (CloudConfigStore::isValidPackId(id)) impl->rated.insert(id);
+            if (CloudConfigStore::isValidPackId(id)) m_impl->rated.insert(id);
+        }
+    }
+    if (root.contains("myStars") && root["myStars"].isObject()) {
+        for (auto const& [id, raw] : root["myStars"]) {
+            if (!CloudConfigStore::isValidPackId(id)) continue;
+            int const s = static_cast<int>(raw.asInt().unwrapOr(0));
+            if (s < 1 || s > 5) continue;
+            m_impl->myStars[id] = s;
+            m_impl->rated.insert(id);
         }
     }
 }
 
-void saveLocalSets(CloudConfigStats::Impl* impl) {
-    if (!impl) return;
+void CloudConfigStats::saveLocalSets() {
+    if (!m_impl) return;
     std::string dirErr;
     if (!CloudConfigStore::get().ensureDirs(dirErr)) return;
 
     matjson::Value downloaded = matjson::Value::array();
-    for (auto const& id : impl->downloaded) downloaded.push(id);
+    for (auto const& id : m_impl->downloaded) downloaded.push(id);
     matjson::Value rated = matjson::Value::array();
-    for (auto const& id : impl->rated) rated.push(id);
+    for (auto const& id : m_impl->rated) rated.push(id);
+    matjson::Value myStars = matjson::Value::object();
+    for (auto const& [id, s] : m_impl->myStars) {
+        myStars[id] = s;
+    }
 
     matjson::Value root = matjson::Value::object();
     root["downloaded"] = downloaded;
     root["rated"] = rated;
+    root["myStars"] = myStars;
 
     std::string err;
     (void)CloudConfigStore::writeTextFile(localStatsPath(), root.dump(), err);
 }
 
-// Keep local-stats.json tidy after PlanGold fixtures.
-void unmarkLocal(
-    CloudConfigStats::Impl* impl,
+void CloudConfigStats::unmarkLocal(
     std::string const& packId,
     bool downloaded,
     bool rated
 ) {
-    if (!impl || !CloudConfigStore::isValidPackId(packId)) return;
-    loadLocalSets(impl);
+    if (!m_impl || !CloudConfigStore::isValidPackId(packId)) return;
+    this->loadLocalSets();
     bool changed = false;
-    if (downloaded) changed = impl->downloaded.erase(packId) > 0 || changed;
-    if (rated) changed = impl->rated.erase(packId) > 0 || changed;
-    if (changed) saveLocalSets(impl);
+    if (downloaded) changed = m_impl->downloaded.erase(packId) > 0 || changed;
+    if (rated) {
+        changed = m_impl->rated.erase(packId) > 0 || changed;
+        changed = m_impl->myStars.erase(packId) > 0 || changed;
+    }
+    if (changed) this->saveLocalSets();
 }
-
-} // namespace
 
 std::string CloudConfigStats::ensureClientId() {
     if (!m_impl) return {};
@@ -260,30 +278,44 @@ std::string CloudConfigStats::ensureClientId() {
 
 bool CloudConfigStats::hasDownloaded(std::string const& packId) const {
     if (!m_impl || !CloudConfigStore::isValidPackId(packId)) return false;
-    loadLocalSets(m_impl);
+    this->loadLocalSets();
     return m_impl->downloaded.count(packId) > 0;
 }
 
 bool CloudConfigStats::hasRated(std::string const& packId) const {
     if (!m_impl || !CloudConfigStore::isValidPackId(packId)) return false;
-    loadLocalSets(m_impl);
-    return m_impl->rated.count(packId) > 0;
+    this->loadLocalSets();
+    return m_impl->rated.count(packId) > 0 || m_impl->myStars.count(packId) > 0;
+}
+
+int CloudConfigStats::myStarsFor(std::string const& packId) const {
+    if (!m_impl || !CloudConfigStore::isValidPackId(packId)) return 0;
+    this->loadLocalSets();
+    auto it = m_impl->myStars.find(packId);
+    if (it == m_impl->myStars.end()) return 0;
+    return it->second;
 }
 
 void CloudConfigStats::markDownloaded(std::string const& packId) {
     if (!m_impl || !CloudConfigStore::isValidPackId(packId)) return;
-    loadLocalSets(m_impl);
+    this->loadLocalSets();
     if (m_impl->downloaded.insert(packId).second) {
-        saveLocalSets(m_impl);
+        this->saveLocalSets();
     }
 }
 
-void CloudConfigStats::markRated(std::string const& packId) {
+void CloudConfigStats::markRated(std::string const& packId, int stars) {
     if (!m_impl || !CloudConfigStore::isValidPackId(packId)) return;
-    loadLocalSets(m_impl);
-    if (m_impl->rated.insert(packId).second) {
-        saveLocalSets(m_impl);
+    this->loadLocalSets();
+    bool changed = m_impl->rated.insert(packId).second;
+    if (stars >= 1 && stars <= 5) {
+        auto it = m_impl->myStars.find(packId);
+        if (it == m_impl->myStars.end() || it->second != stars) {
+            m_impl->myStars[packId] = stars;
+            changed = true;
+        }
     }
+    if (changed) this->saveLocalSets();
 }
 
 CloudConfigStats::PackStats CloudConfigStats::statsFor(std::string const& packId) const {
@@ -452,24 +484,14 @@ CloudConfigStats::TrackResult postTrackSync(
             if (root.contains("duplicate") && root["duplicate"].isBool()) {
                 r.duplicate = root["duplicate"].asBool().unwrapOr(false);
             }
+            if (root.contains("updated") && root["updated"].isBool()) {
+                r.updated = root["updated"].asBool().unwrapOr(false);
+            }
         }
     }
 
     if (res.ok()) {
         r.ok = true;
-        return r;
-    }
-
-    // Rate already counted — treat as settled for local lock.
-    if (res.code() == 409
-        || (haveJson && root.contains("error") && root["error"].isString()
-            && root["error"].asString().unwrapOrDefault().find("already rated")
-                != std::string::npos)) {
-        r.ok = false;
-        r.duplicate = true;
-        r.error = haveJson && root.contains("error") && root["error"].isString()
-            ? root["error"].asString().unwrapOrDefault()
-            : "already rated";
         return r;
     }
 
@@ -496,7 +518,7 @@ void CloudConfigStats::trackDownload(std::string const& packId, TrackCallback cb
         if (cb) cb(early);
         return;
     }
-    loadLocalSets(m_impl);
+    this->loadLocalSets();
     if (m_impl->downloaded.count(packId) > 0) {
         early.skippedLocal = true;
         early.ok = true;
@@ -558,10 +580,12 @@ void CloudConfigStats::trackRate(std::string const& packId, int stars, TrackCall
         if (cb) cb(early);
         return;
     }
-    loadLocalSets(m_impl);
-    if (m_impl->rated.count(packId) > 0) {
+    this->loadLocalSets();
+    // Same vote again → no network. Different stars → re-rate (server keeps count).
+    if (this->myStarsFor(packId) == stars) {
         early.skippedLocal = true;
         early.ok = true;
+        early.duplicate = true;
         early.stats = this->statsFor(packId);
         if (cb) cb(early);
         return;
@@ -589,10 +613,10 @@ void CloudConfigStats::trackRate(std::string const& packId, int stars, TrackCall
     std::thread([this, impl, url, clientId, idCopy = std::move(idCopy), stars, cb = std::move(cb)]() mutable {
         TrackResult r = postTrackSync(url, clientId, "rate", idCopy, stars);
         geode::queueInMainThread(
-            [this, impl, idCopy = std::move(idCopy), cb = std::move(cb), r = std::move(r)]() mutable {
+            [this, impl, idCopy = std::move(idCopy), stars, cb = std::move(cb), r = std::move(r)]() mutable {
                 if (!impl) return;
                 if (r.ok || r.duplicate) {
-                    this->markRated(idCopy);
+                    this->markRated(idCopy, stars);
                     if (r.stats.downloads > 0 || r.stats.ratingCount > 0 || r.stats.ratingSum > 0) {
                         impl->packs[idCopy] = r.stats;
                     }
@@ -684,8 +708,9 @@ bool CloudConfigStats::selfCheck(std::string& report) {
 
     bool rtCalled = false;
     TrackResult rtRes{};
-    stats.markRated("selfcheck-stats-rt");
+    stats.markRated("selfcheck-stats-rt", 5);
     expect(stats.hasRated("selfcheck-stats-rt"), "mark-rt");
+    expect(stats.myStarsFor("selfcheck-stats-rt") == 5, "my-stars");
     stats.trackRate("selfcheck-stats-rt", 5, [&](TrackResult const& r) {
         rtCalled = true;
         rtRes = r;
@@ -693,6 +718,7 @@ bool CloudConfigStats::selfCheck(std::string& report) {
     expect(rtCalled, "track-rt-skip-called");
     expect(rtRes.skippedLocal, "track-rt-skip-local");
     expect(rtRes.ok, "track-rt-skip-ok");
+    expect(!rtRes.attempted, "track-rt-skip-no-net");
 
     TrackResult badId{};
     bool badCalled = false;
@@ -719,8 +745,8 @@ bool CloudConfigStats::selfCheck(std::string& report) {
     }
 
     // Drop PlanGold fixture ids from persisted local sets.
-    unmarkLocal(stats.m_impl, "selfcheck-stats-dl", true, false);
-    unmarkLocal(stats.m_impl, "selfcheck-stats-rt", false, true);
+    stats.unmarkLocal("selfcheck-stats-dl", true, false);
+    stats.unmarkLocal("selfcheck-stats-rt", false, true);
 
     if (fails == 0) {
         report = "CloudConfigStats selfCheck OK";

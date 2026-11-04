@@ -89,6 +89,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       duplicate: !!result.duplicate,
+      updated: !!result.updated,
       id,
       downloads: result.downloads,
       ratingSum: result.ratingSum,

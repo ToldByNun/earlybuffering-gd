@@ -8,16 +8,15 @@
 
 using namespace geode::prelude;
 
+namespace {
+
 std::string formatDlBadge(int n) {
-    if (n >= 1000000) return fmt::format("\xE2\x86\x93{:.1f}M", n / 1000000.0);
-    if (n >= 10000) return fmt::format("\xE2\x86\x93{}k", n / 1000);
-    return fmt::format("\xE2\x86\x93{}", n);
+    if (n >= 1000000) return fmt::format("{}M", n / 1000000);
+    if (n >= 10000) return fmt::format("{}k", n / 1000);
+    return fmt::format("{}", n);
 }
 
-std::string formatStarBadge(float avg) {
-    // ★ U+2605
-    return fmt::format("\xE2\x98\x85{:.1f}", avg);
-}
+} // namespace
 
 CloudConfigListCell* CloudConfigListCell::create(
     CloudConfigIndex::PackEntry const& entry,
@@ -64,39 +63,43 @@ bool CloudConfigListCell::init(
 
     m_id = entry.id;
     m_onSelect = std::move(onSelect);
+    // Lock size before children so ColumnLayout never measures overflow.
     this->setContentSize({ width, kHeight });
     this->ignoreAnchorPointForPosition(false);
+    this->setAnchorPoint({ 0.5f, 0.5f });
 
-    // Classic GD list stripes (same family as comment / level cells).
-    GLubyte const a = selected ? 255 : 200;
+    GLubyte const a = selected ? 255 : 210;
     ccColor4B stripe = (index % 2 == 0)
         ? ccColor4B{ 161, 88, 44, a }
         : ccColor4B{ 191, 114, 62, a };
     if (selected) {
-        stripe = ccColor4B{ 84, 140, 200, 230 };
+        stripe = ccColor4B{ 70, 120, 185, 255 };
     }
 
     auto* bg = CCLayerColor::create(stripe, width, kHeight);
+    bg->setAnchorPoint({ 0.5f, 0.5f });
     bg->ignoreAnchorPointForPosition(false);
     bg->setID("cloud-cell-bg"_spr);
     this->addChildAtPosition(bg, Anchor::Center);
 
     if (selected) {
-        auto* rim = CCScale9Sprite::create("square02b_001.png");
-        rim->setContentSize({ width - 2.f, kHeight - 2.f });
-        rim->setColor({ 255, 255, 255 });
-        rim->setOpacity(40);
-        rim->setID("cloud-cell-sel"_spr);
-        this->addChildAtPosition(rim, Anchor::Center);
+        // Thin left accent — no Scale9 (that was bleeding into the neighbor row).
+        auto* accent = CCLayerColor::create({ 255, 255, 255, 220 }, 3.f, kHeight - 4.f);
+        accent->setAnchorPoint({ 0.f, 0.5f });
+        accent->ignoreAnchorPointForPosition(false);
+        accent->setID("cloud-cell-accent"_spr);
+        this->addChildAtPosition(accent, Anchor::Left, ccp(2.f, 0.f));
     }
 
     auto* menu = CCMenu::create();
-    menu->setContentSize(this->getContentSize());
+    menu->setContentSize({ width, kHeight });
+    menu->setAnchorPoint({ 0.5f, 0.5f });
     menu->ignoreAnchorPointForPosition(false);
     menu->setID("cloud-cell-menu"_spr);
     this->addChildAtPosition(menu, Anchor::Center);
 
     auto* hitBg = CCLayerColor::create({ 0, 0, 0, 0 }, width, kHeight);
+    hitBg->setAnchorPoint({ 0.5f, 0.5f });
     hitBg->ignoreAnchorPointForPosition(false);
     auto* hit = CCMenuItemSpriteExtra::create(
         hitBg, this, menu_selector(CloudConfigListCell::onClick)
@@ -105,57 +108,51 @@ bool CloudConfigListCell::init(
     hit->setID("cloud-cell-hit"_spr);
     menu->addChildAtPosition(hit, Anchor::Center);
 
+    // Right-side status: one badge only (ACTIVE wins).
     float badgeX = -8.f;
     auto addBadge = [&](char const* text, ccColor3B color) {
         auto* lab = CCLabelBMFont::create(text, "bigFont.fnt");
-        lab->setScale(0.25f);
+        lab->setScale(0.22f);
         lab->setColor(color);
         lab->setAnchorPoint({ 1.f, 0.5f });
-        this->addChildAtPosition(lab, Anchor::Right, ccp(badgeX, 0.f));
-        badgeX -= lab->getScaledContentSize().width + 8.f;
+        this->addChildAtPosition(lab, Anchor::Right, ccp(badgeX, 8.f));
+        badgeX -= lab->getScaledContentSize().width + 6.f;
     };
 
-    if (active) addBadge("ACTIVE", { 100, 255, 140 });
-    if (updateAvailable) addBadge("UPDATE", { 255, 200, 80 });
-    else if (cached) addBadge("SAVED", { 180, 210, 255 });
-
-    // Compact ↓N / ★x.x (chatFont covers these glyphs better than bigFont).
-    if (stats.show && (stats.downloads > 0 || stats.ratingCount > 0)) {
-        float const stackX = badgeX;
-        if (stats.ratingCount > 0) {
-            auto* star = CCLabelBMFont::create(
-                formatStarBadge(stats.ratingAvg).c_str(), "chatFont.fnt"
-            );
-            star->setScale(0.48f);
-            star->setColor({ 255, 220, 100 });
-            star->setAnchorPoint({ 1.f, 0.5f });
-            star->setID("cloud-cell-star"_spr);
-            this->addChildAtPosition(star, Anchor::Right, ccp(stackX, 7.f));
-            badgeX = std::min(
-                badgeX,
-                stackX - star->getScaledContentSize().width - 6.f
-            );
-        }
-        {
-            auto* dl = CCLabelBMFont::create(
-                formatDlBadge(stats.downloads).c_str(), "chatFont.fnt"
-            );
-            dl->setScale(0.48f);
-            dl->setColor({ 200, 230, 255 });
-            dl->setAnchorPoint({ 1.f, 0.5f });
-            dl->setID("cloud-cell-dl"_spr);
-            this->addChildAtPosition(dl, Anchor::Right, ccp(stackX, -7.f));
-            badgeX = std::min(
-                badgeX,
-                stackX - dl->getScaledContentSize().width - 6.f
-            );
-        }
+    if (active) {
+        addBadge("ACTIVE", { 100, 255, 140 });
+    }
+    else if (updateAvailable) {
+        addBadge("UPDATE", { 255, 200, 80 });
+    }
+    else if (cached) {
+        addBadge("SAVED", { 180, 210, 255 });
     }
 
-    float const nameMax = std::max(40.f, width + badgeX - 14.f);
+    // ASCII counters — BMFonts often lack ↓/★.
+    if (stats.show && (stats.downloads > 0 || stats.ratingCount > 0)) {
+        std::string bits;
+        if (stats.downloads > 0) {
+            bits += formatDlBadge(stats.downloads);
+            bits += "dl";
+        }
+        if (stats.ratingCount > 0) {
+            if (!bits.empty()) bits += " ";
+            bits += fmt::format("{:.1f}*", stats.ratingAvg);
+        }
+        auto* lab = CCLabelBMFont::create(bits.c_str(), "goldFont.fnt");
+        lab->setScale(0.26f);
+        lab->setColor({ 220, 235, 255 });
+        lab->setAnchorPoint({ 1.f, 0.5f });
+        lab->setID("cloud-cell-stats"_spr);
+        this->addChildAtPosition(lab, Anchor::Right, ccp(-8.f, -8.f));
+        badgeX = std::min(badgeX, -8.f - lab->getScaledContentSize().width - 4.f);
+    }
+
+    float const nameMax = std::max(48.f, width + badgeX - 16.f);
 
     auto* name = CCLabelBMFont::create(entry.name.c_str(), "bigFont.fnt");
-    name->setScale(0.38f);
+    name->setScale(0.36f);
     name->setAnchorPoint({ 0.f, 0.5f });
     name->setID("cloud-cell-name"_spr);
     if (name->getScaledContentSize().width > nameMax && name->getContentSize().width > 0.f) {
@@ -165,16 +162,18 @@ bool CloudConfigListCell::init(
 
     std::string sub = entry.author.empty() ? entry.id : (entry.author + " · " + entry.id);
     auto* author = CCLabelBMFont::create(sub.c_str(), "goldFont.fnt");
-    author->setScale(0.30f);
+    author->setScale(0.28f);
     author->setAnchorPoint({ 0.f, 0.5f });
     author->setOpacity(200);
     author->setID("cloud-cell-author"_spr);
-    float const subMax = std::max(40.f, nameMax);
+    float const subMax = std::max(48.f, nameMax);
     if (author->getScaledContentSize().width > subMax && author->getContentSize().width > 0.f) {
         author->setScale(subMax / author->getContentSize().width);
     }
     this->addChildAtPosition(author, Anchor::Left, ccp(10.f, -8.f));
 
+    // Re-lock after children (some nodes nudge measured size).
+    this->setContentSize({ width, kHeight });
     return true;
 }
 

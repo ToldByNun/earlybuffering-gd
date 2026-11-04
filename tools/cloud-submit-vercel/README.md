@@ -35,8 +35,8 @@ Rules:
 
 - `clientId` required (`[a-zA-Z0-9-]{32,64}`)
 - Pack `id` must exist in catalog `index.json`
-- Same `clientId` + pack: **at most one download** and **at most one rating** (server stores hashed actor ids in private `stats.json` fields; GET never returns those lists)
-- Re-rate is rejected (`409 already rated`)
+- Same `clientId` + pack: **at most one download**; **one rating row** (re-rate replaces stars — `ratingSum` adjusts, `ratingCount` does not grow)
+- Rate rows store `{ h, s }` (hash + stars); legacy string hashes are migrated on first change
 - Soft IP limit ~10 track requests / minute / isolate
 
 `stats.json` lives in `ToldByNun/earlybuffer-configs` (created on first track).
@@ -78,4 +78,4 @@ curl -sS -X POST https://earlybuffer-config.vercel.app/api/track \
   -d "{\"op\":\"rate\",\"id\":\"safe-defaults\",\"clientId\":\"11111111-1111-1111-1111-111111111111\",\"stars\":5}"
 ```
 
-Second download with the same `clientId` should return `"duplicate":true` without bumping the counter. Second rate should fail with `already rated`.
+Second download with the same `clientId` should return `"duplicate":true` without bumping the counter. Second rate with a different `stars` value should return `"updated":true` with the same `ratingCount`.
