@@ -23,14 +23,27 @@ public:
         int skipped = 0;
     };
 
-    static geode::Result<> exportTo(std::filesystem::path const& path);
-    static geode::Result<> importFrom(std::filesystem::path const& path);
+    // Filters for cloud / partial apply. Local file import uses defaults (apply all).
+    struct ApplyOptions {
+        bool skipKeybinds = false;
+        bool skipDevKeys = false; // keys whose name starts with "dev-"
+    };
 
-    // Filled by the last successful importFrom / exportTo (zeros if never run).
+    static geode::Result<> exportTo(std::filesystem::path const& path);
+    static geode::Result<> exportToString(std::string& outJson);
+
+    static geode::Result<> importFrom(std::filesystem::path const& path);
+    static geode::Result<> importFromString(
+        std::string const& json,
+        ApplyOptions const& opt = {}
+    );
+
+    // Filled by the last successful import / export (zeros if never run).
     static ImportStats lastImportStats();
     static ExportStats lastExportStats();
 
-    // Temp-file export→import + applying-guard. Restores prior values.
+    // Temp-file + string round-trips, ApplyOptions filters, applying-guard.
+    // Restores prior values.
     static bool selfCheck(std::string& report);
 
 private:

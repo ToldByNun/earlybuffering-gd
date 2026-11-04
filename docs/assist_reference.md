@@ -173,7 +173,8 @@ Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Wi
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **124** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **`settings`**: all **123** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
+- **String I/O**: `exportToString` / `importFromString` share the same merge + applying-guard path as file import/export. `ApplyOptions` can skip Keybind keys and/or keys whose name starts with `dev-` (used by cloud apply; local Assist Import applies everything).
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
