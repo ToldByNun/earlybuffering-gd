@@ -581,7 +581,7 @@
 		"bake-radius": {
 			"type": "int",
 			"name": "Bake Radius",
-			"description": "When baking, how many frames each click may shift while searching a window. 0 = automatic. Higher = wider searched windows (more bake time). Lower = tighter/faster bake, may miss some timings.",
+			"description": "Half-width of each baked click window in frames: earliest = nominal − radius, latest = nominal + radius (same length for every click). 0 = automatic from Default Window ticks. Assist aims near earliest so you can press early and still survive.",
 			"default": 0,
 			"min": 0,
 			"max": 128

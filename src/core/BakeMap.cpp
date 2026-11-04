@@ -926,70 +926,35 @@ Result<int> BakeMap::bakeReplay(
         ));
     }
 
-    // ── Phase 2: binary-search earliest/latest around each click ───────
-    // Every Jump event gets a window attempt. 1:1 death does not drop later jobs.
+    // ── Phase 2: fixed ±radius windows around every reachable click ────
+    // Bake Radius is the window half-width (same length for every click), not a
+    // dynamic binary-search shrink. 1:1 may die mid-macro — ghost through
+    // pre-click deaths so later events still get a window; assist uses earliest.
+    int skippedUnreachable = 0;
     for (auto const& job : jobs) {
         if (m_progress.cancel.load()) return Err("Bake cancelled");
 
-        // Prefix (before validate death): must not die earlier than 1:1.
-        // Later clicks: ignore deaths before the click so expand can reach it.
-        bool const postCut = partialCut >= 0 && job.frame >= partialCut;
-        int const minSurvive = postCut ? -1 : partialCut;
-        int const noDeathBefore = job.frame;
-
         std::lock_guard lock(m_simMutex);
         auto& sim = ShadowSimulator::get();
-        sim.setBakeNoDeathBeforeFrame(noDeathBefore);
+        sim.setBakeNoDeathBeforeFrame(job.frame);
         auto sample = sim.runBakeTimeline(
             layer, startSnapshotSlot, ev, dt, job.frame, job.frame
         );
         sim.setBakeNoDeathBeforeFrame(-1);
-        float x = sample.sampled ? sample.xAtSample : 0.f;
-        auto mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
 
-        if (!testShiftedClick(
-                layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt,
-                1, minSurvive, noDeathBefore
-            )) {
+        if (!sample.sampled
+            || (sample.died && sample.deathFrame >= 0 && sample.deathFrame < job.frame)) {
+            ++skippedUnreachable;
             AssistLog::debug(fmt::format(
-                "BAKE: skip click @{} (expand re-check fail postCut={} minSurvive={})",
-                job.frame, postCut ? 1 : 0, minSurvive
+                "BAKE: skip click @{} (unreachable deathF={})",
+                job.frame, sample.deathFrame
             ));
             m_progress.done.fetch_add(1);
             continue;
         }
 
-        int lo = std::max(0, job.frame - bakeRadius);
-        int hi = job.frame;
-        while (lo < hi) {
-            int mid = lo + (hi - lo) / 2;
-            if (testShiftedClick(
-                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt,
-                    1, minSurvive, mid
-                )) {
-                hi = mid;
-            }
-            else {
-                lo = mid + 1;
-            }
-        }
-        int earliest = lo;
-
-        lo = job.frame;
-        hi = job.frame + bakeRadius;
-        while (lo < hi) {
-            int mid = lo + (hi - lo + 1) / 2;
-            if (testShiftedClick(
-                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt,
-                    1, minSurvive, mid
-                )) {
-                lo = mid;
-            }
-            else {
-                hi = mid - 1;
-            }
-        }
-        int latest = lo;
+        int const earliest = std::max(0, job.frame - bakeRadius);
+        int const latest = job.frame + bakeRadius;
 
         BakedClick c;
         c.nominalFrame = job.frame;
@@ -997,25 +962,26 @@ Result<int> BakeMap::bakeReplay(
         c.latest = latest;
         c.down = job.down;
         c.player2 = job.player2;
-        c.x = x;
-        c.mode = mode;
+        c.x = sample.xAtSample;
+        c.mode = sample.modeAtSample;
         // Release while dashing → dash/hold-orb; purple viz + later release gate.
-        c.holdAssist = !job.down && sample.sampled && sample.dashingAtSample;
+        c.holdAssist = !job.down && sample.dashingAtSample;
         out.clicks.push_back(c);
 
         m_progress.done.fetch_add(1);
         m_progress.setStatus(fmt::format(
-            "expand {}/{} · @{} → [{},{}]",
+            "window {}/{} · @{} ±{} → [{},{}]",
             static_cast<int>(out.clicks.size()), jobs.size(),
-            job.frame, earliest, latest
+            job.frame, bakeRadius, earliest, latest
         ));
     }
 
     int const nClicks = static_cast<int>(out.clicks.size());
     AssistLog::info(fmt::format(
-        "BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} "
-        "partialCut={} startPos={} (replay)",
-        nClicks, jobs.size(), lastFrame, tps, out.sourceReplay,
+        "BAKE done clicks={} jobs={} skippedUnreachable={} radius={} "
+        "lastFrame={} tps={:.0f} source={} validateDeath={} startPos={} (replay)",
+        nClicks, jobs.size(), skippedUnreachable, bakeRadius,
+        lastFrame, tps, out.sourceReplay,
         partialCut, startPosAttempt ? 1 : 0
     ));
 

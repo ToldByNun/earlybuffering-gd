@@ -9,7 +9,8 @@
 - **Bake-fail diag AV** — `SectionObjectWalk` rejects slots whose vtable qword is poison (`0xFFF…`) before `typeinfo_cast`, so bakefail ghost-hitbox dump no longer AVs reading `@ 0xFFFFFFFFFFFFFFFF`.
 - **TW empty false fail** — “Trigger World empty after build (effects=N)” no longer blocks bake when those effects are only pulse/spawn/camera; hard-fail only if real static movers were seen but produced 0 tracks.
 - **Bake expand vs 1:1 death** — validate may die; window expand no longer requires immortality past that death — a shifted click is OK if it dies at/after the 1:1 death frame (earliest/latest binary search).
-- **Bake all macro clicks** — 1:1 death no longer drops later Jump jobs; expand runs every event, ghosting through deaths before that click so post-divergence frames still get earliest/latest windows.
+- **Bake all macro clicks** — 1:1 death no longer drops later Jump jobs; expand runs every event, ghosting through deaths before that click so post-divergence frames still get windows.
+- **Bake Radius = fixed window** — replay bake stores ±Bake Radius around every reachable click (equal length); no more asymmetric binary-search shrink. Unreachable clicks (sim never reaches that frame) are skipped and counted in the bake log.
 
 ## v1.4.0
 
