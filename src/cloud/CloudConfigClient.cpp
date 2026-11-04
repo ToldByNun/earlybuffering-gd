@@ -32,6 +32,9 @@ static CloudConfigClient::FetchResult cloudConfigFetchSync(
     req.timeout(std::chrono::seconds(timeoutSec));
     req.followRedirects(false);
     req.certVerification(true);
+    // Avoid stale CDN / HTTP caches of index.json after catalog edits.
+    req.header("Cache-Control", "no-cache");
+    req.header("Pragma", "no-cache");
 
     web::WebResponse const res = req.getSync(url);
 

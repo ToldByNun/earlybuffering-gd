@@ -24,7 +24,7 @@ public:
     };
 
     // Keep in sync with kEntries below (assist-pick / assist-engine removed).
-    static constexpr int kCount = 171;
+    static constexpr int kCount = 166;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -81,11 +81,6 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "export-config-action", SettingsCategory::Assist },
     { "import-config-action", SettingsCategory::Assist },
     { "browse-cloud-configs-action", SettingsCategory::Assist },
-    { "cloud-catalog-url", SettingsCategory::Assist },
-    { "cloud-auto-refresh", SettingsCategory::Assist },
-    { "cloud-publish-enable", SettingsCategory::Assist },
-    { "cloud-publish-token", SettingsCategory::Assist },
-    { "cloud-publish-repo", SettingsCategory::Assist },
     { "title-algorithm", SettingsCategory::Assist },
     { "death-slack", SettingsCategory::Assist },
     { "look-ahead-cap", SettingsCategory::Assist },
@@ -826,13 +821,11 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");
     expect(!keepKey("import-bake-replay", SettingsCategory::Main), "drop-import-on-main");
     expect(keepKey("browse-cloud-configs-action", SettingsCategory::Assist), "keep-cloud-browse");
-    expect(keepKey("cloud-catalog-url", SettingsCategory::Assist), "keep-cloud-url");
-    expect(keepKey("cloud-auto-refresh", SettingsCategory::Assist), "keep-cloud-auto");
-    expect(keepKey("cloud-publish-enable", SettingsCategory::Assist), "keep-cloud-pub-en");
-    expect(keepKey("cloud-publish-token", SettingsCategory::Assist), "keep-cloud-pub-tok");
-    expect(keepKey("cloud-publish-repo", SettingsCategory::Assist), "keep-cloud-pub-repo");
     expect(keepKey("disable-hus", SettingsCategory::Assist), "keep-disable-hus");
     expect(!keepKey("browse-cloud-configs-action", SettingsCategory::Main), "drop-cloud-on-main");
+    expect(!keepKey("cloud-catalog-url"), "legacy-drop-cloud-url");
+    expect(!keepKey("cloud-publish-token"), "legacy-drop-cloud-token");
+    expect(ConfigBundleKeys::find("cloud-catalog-url") == nullptr, "cloud-url-not-portable");
     expect(ConfigBundleKeys::find("cloud-publish-token") == nullptr, "token-not-portable");
 
     // Every table entry maps to a real tab (not Count).
@@ -847,7 +840,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
         expect(c != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-count-171");
+    expect(mapped == SettingsCategoryMap::kCount, "map-count-166");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {

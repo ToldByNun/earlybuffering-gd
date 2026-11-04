@@ -59,6 +59,8 @@ public:
 
     bool readIndexCache(std::string& out, std::string& err) const;
     bool writeIndexCache(std::string const& body, std::string& err) const;
+    // Deletes index-cache.json if present (force refresh). true if gone or absent.
+    bool clearIndexCache(std::string& err) const;
 
     bool readPack(std::string const& id, std::string& out, std::string& err) const;
     bool writePack(std::string const& id, std::string const& body, std::string& err) const;

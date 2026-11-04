@@ -150,22 +150,21 @@ void CloudConfigSharePopup::onConfirm(CCObject*) {
     std::string publishLine;
     if (shared.published) {
         publishLine = fmt::format(
-            "Published to catalog.\n{}\n"
+            "Sent to catalog.\n{}\n"
             "(CDN may take a minute — then Refresh.)\n\n",
             shared.publishUrl.empty() ? "(see GitHub repo)" : shared.publishUrl
         );
     }
     else if (shared.publishAttempted) {
         publishLine = fmt::format(
-            "Catalog publish failed:\n{}\n"
-            "Outbox still saved — fix token/repo and retry.\n\n",
+            "Online submit failed:\n{}\n"
+            "Outbox still saved. If you are the maintainer, check the submit Worker / PAT.\n\n",
             shared.publishError.empty() ? "(unknown)" : shared.publishError
         );
     }
     else {
         publishLine =
-            "Not published online (enable Cloud Publish + PAT in Assist settings).\n"
-            "Outbox/clipboard still work for manual Discord submit.\n\n";
+            "Online submit off — outbox/clipboard only.\n\n";
     }
 
     auto const msg = fmt::format(

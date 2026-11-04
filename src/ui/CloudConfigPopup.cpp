@@ -326,7 +326,7 @@ bool CloudConfigPopup::packMatchesSearch(CloudConfigIndex::PackEntry const& e) c
 
 void CloudConfigPopup::setStatus(std::string const& text, bool isError) {
     if (!m_statusLabel) return;
-    m_statusLabel->setString(truncate(text, 34).c_str());
+    m_statusLabel->setString(truncate(text, 48).c_str());
     m_statusLabel->setColor(isError ? ccColor3B{ 255, 90, 90 } : ccColor3B{ 255, 255, 255 });
 }
 
@@ -352,25 +352,17 @@ void CloudConfigPopup::loadInitial() {
     this->rebuildList();
     this->updateDetail();
 
-    bool autoRefresh = true;
-    if (auto* mod = Mod::get()) {
-        if (mod->hasSetting("cloud-auto-refresh")) {
-            autoRefresh = mod->getSettingValue<bool>("cloud-auto-refresh");
-        }
-    }
-    if (autoRefresh) {
-        this->startRefresh(false);
-    }
+    this->startRefresh(false);
 }
 
-void CloudConfigPopup::startRefresh(bool /*force*/) {
+void CloudConfigPopup::startRefresh(bool force) {
     if (m_busyUi || CloudConfigService::get().isBusy()) {
         this->setStatus("Busy…", false);
         return;
     }
     m_busyUi = true;
     uint64_t const gen = ++m_opGen;
-    this->setStatus("Refreshing…", false);
+    this->setStatus(force ? "Refreshing (force)…" : "Refreshing…", false);
     if (m_refreshBtn) m_refreshBtn->setEnabled(false);
 
     std::string const custom = CloudConfigService::readCatalogUrlSetting();
@@ -380,7 +372,8 @@ void CloudConfigPopup::startRefresh(bool /*force*/) {
         [self, gen](CloudConfigService::RefreshResult const& r) {
             if (!self || gen != self->m_opGen) return;
             self->onRefreshDone(r);
-        }
+        },
+        force
     );
 }
 
@@ -405,7 +398,17 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
     }
 
     char const* src = r.usedFallback ? "Online*" : "Online";
-    this->setStatus(fmt::format("{} · {} packs", src, r.catalog.packs.size()), false);
+    std::string stamp = r.catalog.updatedAt;
+    if (stamp.size() > 16) stamp = stamp.substr(0, 16); // 2026-11-04T15:16
+    if (!stamp.empty()) {
+        this->setStatus(
+            fmt::format("{} · {} packs · {}", src, r.catalog.packs.size(), stamp),
+            false
+        );
+    }
+    else {
+        this->setStatus(fmt::format("{} · {} packs", src, r.catalog.packs.size()), false);
+    }
     if (r.catalog.packs.empty()) {
         this->ensureLocalCatalog();
     }

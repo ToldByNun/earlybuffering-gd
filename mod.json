@@ -347,38 +347,8 @@
 		"browse-cloud-configs-action": {
 			"type": "custom:eb-action",
 			"name": "Cloud Configs",
-			"description": "Browse, search, download, and install community settings packs. Share your current setup to the local outbox (no anonymous upload).",
+			"description": "Browse and install community settings packs from ToldByNun/earlybuffer-configs. Share… submits to the catalog via the built-in Vercel endpoint (no token in the mod).",
 			"button-text": "cloud"
-		},
-		"cloud-catalog-url": {
-			"type": "string",
-			"name": "Cloud Catalog URL",
-			"description": "Optional custom HTTPS index.json URL. Leave empty for the built-in catalog (jsDelivr + GitHub raw fallback). Host must be allowlisted or match this URL's host.",
-			"default": ""
-		},
-		"cloud-auto-refresh": {
-			"type": "bool",
-			"name": "Cloud Auto Refresh",
-			"description": "When opening Cloud Configs, refresh the catalog from the network (falls back to cache/seed offline).",
-			"default": true
-		},
-		"cloud-publish-enable": {
-			"type": "bool",
-			"name": "Cloud Publish (Maintainer)",
-			"description": "When ON and a GitHub token is set, Share… also pushes the pack + index into the catalog repo (Contents API). Leave OFF for normal players — outbox/clipboard only. Never share your token.",
-			"default": false
-		},
-		"cloud-publish-token": {
-			"type": "string",
-			"name": "Cloud Publish Token",
-			"description": "GitHub fine-grained PAT with Contents: Read and write on ToldByNun/earlybuffer-configs only. Stored locally in Geode save — NOT exported in config bundles. Empty = no auto-publish.",
-			"default": ""
-		},
-		"cloud-publish-repo": {
-			"type": "string",
-			"name": "Cloud Publish Repo",
-			"description": "owner/name of the public catalog repo (default ToldByNun/earlybuffer-configs). Branch is always main.",
-			"default": "ToldByNun/earlybuffer-configs"
 		},
 		"title-algorithm": {
 			"type": "title",

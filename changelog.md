@@ -5,10 +5,10 @@
 **Cloud Configs browser** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
 
 - **Cloud Configs UI** — Assist → Cloud Configs opens catalog browser (search / detail / Install); Share… collects name / author / description → outbox + clipboard; settings `cloud-catalog-url`, `cloud-auto-refresh`.
-- **Maintainer auto-publish** — optional `cloud-publish-enable` + fine-grained PAT (`cloud-publish-token`) pushes pack + `index.json` to `cloud-publish-repo` via GitHub Contents API (no anonymous public upload; token never in ConfigBundle).
-- **Catalog pipeline** — `CloudConfigClient` / `Service` (primary → fallback, disk cache, bundled `safe-defaults` seed); `CloudConfigApply` skips keybinds + `dev-*`; `CloudConfigShare` outbox envelopes.
-- **ConfigBundle** — `exportToString` / `importFromString` + `ApplyOptions`; portable key count **126** (includes catalog URL / auto-refresh / `disable-hus`, not publish token); Assist category map **171**.
-- **Docs** — `docs/cloud_configs.md` (catalog layout, seed, share + PAT publish).
+- **Public Share submit** — Share… POSTs to built-in `earlybuffer-config.vercel.app` (GitHub token **only** on Vercel; see `tools/cloud-submit-vercel/`). No cloud URL/token settings in the mod UI.
+- **Catalog pipeline** — fixed `ToldByNun/earlybuffer-configs` (jsDelivr + GitHub raw), disk cache + seed, cache-busting Refresh; `CloudConfigApply` skips keybinds + `dev-*`.
+- **ConfigBundle** — portable key count **124**; Assist category map **166** (Cloud Configs action only).
+- **Docs** — `docs/cloud_configs.md`.
 
 ## Hotfix on v1.4.0
 

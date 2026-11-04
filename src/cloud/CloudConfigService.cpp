@@ -107,11 +107,8 @@ CloudConfigService::CatalogSource CloudConfigService::source() const {
 }
 
 std::string CloudConfigService::readCatalogUrlSetting() {
-    auto* mod = Mod::get();
-    if (!mod) return {};
-    // Setting is added in a later slice; tolerate missing key.
-    if (!mod->hasSetting("cloud-catalog-url")) return {};
-    return mod->getSettingValue<std::string>("cloud-catalog-url");
+    // Built-in catalog only (ToldByNun/earlybuffer-configs via HostPolicy).
+    return {};
 }
 
 bool CloudConfigService::loadLocalCatalog(RefreshResult& out) {
@@ -168,9 +165,29 @@ bool CloudConfigService::loadLocalCatalog(RefreshResult& out) {
     return false;
 }
 
+namespace {
+
+std::string stripUrlQuery(std::string url) {
+    auto const q = url.find_first_of("?#");
+    if (q != std::string::npos) url.resize(q);
+    return url;
+}
+
+std::string withCacheBust(std::string url) {
+    url = stripUrlQuery(std::move(url));
+    auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()
+    )
+                        .count();
+    return url + "?eb=" + std::to_string(ms);
+}
+
+} // namespace
+
 void CloudConfigService::refreshCatalog(
     std::string const& customCatalogUrl,
-    RefreshCallback cb
+    RefreshCallback cb,
+    bool forceRefresh
 ) {
     RefreshResult early{};
     if (!m_impl) {
@@ -195,6 +212,11 @@ void CloudConfigService::refreshCatalog(
         customCatalogUrl.empty()
         || !CloudConfigHostPolicy::isAllowedUrl(customCatalogUrl, customCatalogUrl);
 
+    if (forceRefresh) {
+        std::string clearErr;
+        (void)CloudConfigStore::get().clearIndexCache(clearErr);
+    }
+
     m_impl->busy = true;
     m_impl->allowCustom = useBuiltInFallback ? std::string{} : customCatalogUrl;
     m_impl->tryFallbackPending = useBuiltInFallback;
@@ -206,12 +228,14 @@ void CloudConfigService::refreshCatalog(
         bool usedFallback
     ) {
         if (!m_impl) return;
+        // Pack resolve must use a clean catalog URL (no ?eb= cache buster).
+        std::string const cleanUrl = stripUrlQuery(url);
         std::string err;
         RefreshResult r{};
         r.usedFallback = usedFallback;
-        r.catalogUrl = url;
-        if (!m_impl->applyCatalogBody(body, url, CatalogSource::Network, err)) {
-            m_impl->writeMeta(false, url, err);
+        r.catalogUrl = cleanUrl;
+        if (!m_impl->applyCatalogBody(body, cleanUrl, CatalogSource::Network, err)) {
+            m_impl->writeMeta(false, cleanUrl, err);
             m_impl->clearBusy();
             r.error = err.empty() ? "index parse failed" : err;
             r.catalog = m_impl->catalog;
@@ -225,7 +249,7 @@ void CloudConfigService::refreshCatalog(
             // Keep in-memory catalog even if disk cache write fails.
             m_impl->lastRefreshError = writeErr;
         }
-        m_impl->writeMeta(true, url, {});
+        m_impl->writeMeta(true, cleanUrl, {});
         m_impl->clearBusy();
         r.ok = true;
         r.source = CatalogSource::Network;
@@ -236,19 +260,21 @@ void CloudConfigService::refreshCatalog(
 
     auto finishFail = [this, cb](std::string const& url, std::string const& error) {
         if (!m_impl) return;
-        m_impl->writeMeta(false, url, error);
+        std::string const cleanUrl = stripUrlQuery(url);
+        m_impl->writeMeta(false, cleanUrl, error);
         m_impl->clearBusy();
         RefreshResult r{};
         r.error = error;
-        r.catalogUrl = url;
+        r.catalogUrl = cleanUrl;
         r.catalog = m_impl->catalog;
         r.source = m_impl->source;
         if (cb) cb(r);
     };
 
     auto startGet = [this, finishOk, finishFail](std::string const& url, bool isFallback) {
+        std::string const fetchUrl = withCacheBust(url);
         m_impl->client.getText(
-            url,
+            fetchUrl,
             CloudConfigStore::kMaxIndexBytes,
             CloudConfigClient::kDefaultTimeoutSec,
             m_impl->allowCustom,
@@ -266,6 +292,7 @@ void CloudConfigService::refreshCatalog(
                     return;
                 }
                 if (fr.ok) {
+                    // Prefer clean base URL for storage / pack resolve.
                     finishOk(fr.body, url, isFallback);
                     return;
                 }
@@ -275,8 +302,9 @@ void CloudConfigService::refreshCatalog(
                 if (!isFallback && m_impl->tryFallbackPending) {
                     m_impl->tryFallbackPending = false;
                     std::string const fb = CloudConfigHostPolicy::fallbackIndexUrl();
+                    std::string const fbFetch = withCacheBust(fb);
                     m_impl->client.getText(
-                        fb,
+                        fbFetch,
                         CloudConfigStore::kMaxIndexBytes,
                         CloudConfigClient::kDefaultTimeoutSec,
                         m_impl->allowCustom,

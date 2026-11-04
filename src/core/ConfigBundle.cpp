@@ -370,7 +370,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
     };
 
     expect(ConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(ConfigBundleKeys::count() == 126, "keys-126");
+    expect(ConfigBundleKeys::count() == 124, "keys-124");
     expect(ConfigBundleApplyHelpers::isDevKey("dev-overlay"), "dev-key-yes");
     expect(!ConfigBundleApplyHelpers::isDevKey("look-ahead-cap"), "dev-key-no");
     expect(!ConfigBundleApplyHelpers::isDevKey(nullptr), "dev-key-null");

@@ -209,6 +209,20 @@ bool CloudConfigStore::readIndexCache(std::string& out, std::string& err) const 
     return readTextFile(this->indexCachePath(), out, kMaxIndexBytes, err);
 }
 
+bool CloudConfigStore::clearIndexCache(std::string& err) const {
+    err.clear();
+    auto const path = this->indexCachePath();
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec) || ec) {
+        return true;
+    }
+    if (!std::filesystem::remove(path, ec) || ec) {
+        err = ec ? ec.message() : "remove index-cache failed";
+        return false;
+    }
+    return true;
+}
+
 bool CloudConfigStore::writeIndexCache(std::string const& body, std::string& err) const {
     if (body.size() > kMaxIndexBytes) {
         err = "index body too large";

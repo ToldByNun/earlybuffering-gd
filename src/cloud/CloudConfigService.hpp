@@ -46,7 +46,12 @@ public:
 
     // Network refresh. Single-flight: second call gets busy=true.
     // customCatalogUrl empty → HostPolicy default (+ built-in fallback on fail).
-    void refreshCatalog(std::string const& customCatalogUrl, RefreshCallback cb);
+    // forceRefresh: drop disk index-cache first + cache-bust query on fetch URLs.
+    void refreshCatalog(
+        std::string const& customCatalogUrl,
+        RefreshCallback cb,
+        bool forceRefresh = false
+    );
 
     // Download pack if not cached or forceNetwork. Verifies size + sha256.
     void fetchPack(

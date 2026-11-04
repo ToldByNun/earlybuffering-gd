@@ -1,5 +1,6 @@
 #include "CloudConfigShare.hpp"
 #include "CloudConfigPublish.hpp"
+#include "CloudConfigSubmit.hpp"
 #include "CloudConfigStore.hpp"
 
 #include "../core/ConfigBundle.hpp"
@@ -125,22 +126,21 @@ CloudConfigShare::Result CloudConfigShare::shareCurrent(
     r.clipboardOk = clipboard::write(r.clipboardText);
     r.ok = true;
 
-    // Maintainer auto-publish (optional). Failure does not undo outbox share.
-    if (CloudConfigPublish::isConfigured()) {
-        CloudConfigPublish::PackMeta meta{};
-        meta.id = r.suggestedId;
-        meta.name = name;
-        meta.author = author;
-        meta.description = description;
-        meta.tags = { "shared" };
-        meta.minModVersion = "1.4.1";
-        meta.bundleVersion = 2;
-        auto const pub = CloudConfigPublish::publishPack(meta, bundleJson);
-        r.publishAttempted = pub.attempted;
-        r.published = pub.ok;
-        r.publishUrl = pub.commitUrl;
-        r.publishError = pub.error;
-    }
+    // Public submit via built-in Vercel endpoint (token only on server).
+    CloudConfigPublish::PackMeta meta{};
+    meta.id = r.suggestedId;
+    meta.name = name;
+    meta.author = author;
+    meta.description = description;
+    meta.tags = { "shared" };
+    meta.minModVersion = "1.4.1";
+    meta.bundleVersion = 2;
+
+    auto const sub = CloudConfigSubmit::submit(meta, bundleJson);
+    r.publishAttempted = sub.attempted;
+    r.published = sub.ok;
+    r.publishUrl = sub.prOrCommitUrl;
+    r.publishError = sub.error;
 
     return r;
 }

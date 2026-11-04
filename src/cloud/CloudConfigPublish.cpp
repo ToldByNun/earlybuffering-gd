@@ -187,30 +187,20 @@ std::string CloudConfigPublish::isoNowUtc() {
 }
 
 bool CloudConfigPublish::readEnableSetting() {
-    auto* mod = Mod::get();
-    if (!mod || !mod->hasSetting("cloud-publish-enable")) return false;
-    return mod->getSettingValue<bool>("cloud-publish-enable");
+    // No in-mod maintainer settings — public Share goes through Vercel submit.
+    return false;
 }
 
 std::string CloudConfigPublish::readTokenSetting() {
-    auto* mod = Mod::get();
-    if (!mod || !mod->hasSetting("cloud-publish-token")) return {};
-    return mod->getSettingValue<std::string>("cloud-publish-token");
+    return {};
 }
 
 std::string CloudConfigPublish::readRepoSetting() {
-    auto* mod = Mod::get();
-    if (!mod || !mod->hasSetting("cloud-publish-repo")) return kDefaultRepo;
-    auto const v = mod->getSettingValue<std::string>("cloud-publish-repo");
-    if (v.empty()) return kDefaultRepo;
-    return v;
+    return kDefaultRepo;
 }
 
 bool CloudConfigPublish::isConfigured() {
-    if (!readEnableSetting()) return false;
-    auto const token = readTokenSetting();
-    if (token.empty()) return false;
-    return isValidRepoSlug(readRepoSetting());
+    return false;
 }
 
 CloudConfigPublish::Result CloudConfigPublish::publishPack(
