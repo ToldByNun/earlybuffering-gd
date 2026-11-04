@@ -41,6 +41,8 @@
 #include "../cloud/CloudConfigHostPolicy.hpp"
 #include "../cloud/CloudConfigIndex.hpp"
 #include "../cloud/CloudConfigSeed.hpp"
+#include "../cloud/CloudConfigClient.hpp"
+#include "../cloud/CloudConfigService.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -100,6 +102,10 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(CloudConfigIndex::selfCheck(cloudIndexReport), "cloud-config-index");
     std::string cloudSeedReport;
     expect(CloudConfigSeed::selfCheck(cloudSeedReport), "cloud-config-seed");
+    std::string cloudClientReport;
+    expect(CloudConfigClient::selfCheck(cloudClientReport), "cloud-config-client");
+    std::string cloudServiceReport;
+    expect(CloudConfigService::selfCheck(cloudServiceReport), "cloud-config-service");
     std::string configKeysReport;
     expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string configCodecReport;

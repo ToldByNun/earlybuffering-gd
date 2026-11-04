@@ -37,8 +37,10 @@ endif()
 
 # MSVC batch-compiles TUs and can ICE on some Geode/arc headers; one TU per cl.exe.
 if (MSVC)
+    set(CMAKE_VS_NO_COMPILE_BATCHING ON)
     set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_UseMultiToolTask false)
     set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_CL_MPCount 1)
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_EnableClServerMode false)
 endif()
 
 # GeodeBindings GeneratedSource.cpp uses FMOD_* types without including fmod.h.
