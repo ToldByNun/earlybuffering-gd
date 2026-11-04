@@ -13,14 +13,17 @@ Assist → **Cloud Configs**: search / detail / Install. **Share…** writes a l
 | Catalog (primary) | `https://cdn.jsdelivr.net/gh/ToldByNun/earlybuffer-configs@main/index.json` |
 | Catalog (fallback) | `https://raw.githubusercontent.com/ToldByNun/earlybuffer-configs/main/index.json` |
 | Share submit | `https://earlybuffer-config.vercel.app/api/submit` |
+| Stats (GET) | `https://earlybuffer-config.vercel.app/api/stats` |
+| Track (POST) | `https://earlybuffer-config.vercel.app/api/track` |
 
-The Vercel function holds `GITHUB_TOKEN` as a server secret and updates the catalog repo. Deploy notes: [`tools/cloud-submit-vercel/README.md`](../tools/cloud-submit-vercel/README.md).
+The Vercel functions hold `GITHUB_TOKEN` as a server secret. Pack files live in `index.json` / `packs/`; download and rating counters live in `stats.json`. Each anonymous `clientId` may count **one download** and **one rating** per pack. Deploy notes: [`tools/cloud-submit-vercel/README.md`](../tools/cloud-submit-vercel/README.md).
 
 ## Layout
 
 ```
 index.json
 packs/<id>.json
+stats.json
 ```
 
 Pack files are bare ConfigBundle v2 JSON. Cloud apply skips keybinds and `dev-*` keys.

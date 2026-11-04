@@ -1,53 +1,81 @@
 # eb-cloud-submit (Vercel)
 
-Same idea as the Cloudflare Worker: **no server of your own**, free Vercel hobby plan is enough. The GitHub token stays in Vercel Environment Variables — never in the EarlyBuffer mod package.
+Public endpoints for EarlyBuffer cloud configs. The GitHub token stays in Vercel Environment Variables — never in the mod package.
 
-## One-time setup (~5 min)
+## Endpoints
 
-1. **Revoke** any PAT that was pasted into chat.
-2. New fine-grained PAT: only `ToldByNun/earlybuffer-configs`, **Contents → Read and write**.
-3. Install CLI (once): `npm i -g vercel`
-4. From this folder:
+| Path | Method | Role |
+| --- | --- | --- |
+| `/api/submit` (alias `/submit`) | POST | Publish pack + update `index.json` |
+| `/api/stats` (alias `/stats`) | GET | Public counters only (`downloads`, `ratingSum`, `ratingCount`) |
+| `/api/track` (alias `/track`) | POST | Record one download or one rating per `clientId` |
+
+### Track body
+
+```json
+{
+  "op": "download",
+  "id": "safe-defaults",
+  "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
+
+or
+
+```json
+{
+  "op": "rate",
+  "id": "safe-defaults",
+  "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "stars": 5
+}
+```
+
+Rules:
+
+- `clientId` required (`[a-zA-Z0-9-]{32,64}`)
+- Pack `id` must exist in catalog `index.json`
+- Same `clientId` + pack: **at most one download** and **at most one rating** (server stores hashed actor ids in private `stats.json` fields; GET never returns those lists)
+- Re-rate is rejected (`409 already rated`)
+- Soft IP limit ~10 track requests / minute / isolate
+
+`stats.json` lives in `ToldByNun/earlybuffer-configs` (created on first track).
+
+## Setup
+
+1. Fine-grained PAT: only `earlybuffer-configs`, **Contents → Read and write**.
+2. From this folder:
 
 ```bash
 cd tools/cloud-submit-vercel
 vercel login
 vercel
-# follow prompts: new project, accept defaults
-```
-
-5. Set the secret (Production + Preview):
-
-```bash
 vercel env add GITHUB_TOKEN
-# paste PAT, choose Production (and Preview if you want)
 vercel --prod
 ```
 
-Optional env (defaults are fine):
-- `REPO=ToldByNun/earlybuffer-configs`
-- `BRANCH=main`
+Optional env: `REPO=ToldByNun/earlybuffer-configs`, `BRANCH=main`.
 
-6. Production URL for EarlyBuffer: **`https://earlybuffer-config.vercel.app`**.
-   Submit endpoint: **`https://earlybuffer-config.vercel.app/api/submit`**  
-   (alias `/submit` also works via `vercel.json`). For a fresh project, Vercel may print
-   `https://YOUR-PROJECT.vercel.app` instead — same path `/api/submit`.
+Production host used by EarlyBuffer: **`https://earlybuffer-config.vercel.app`**.
 
-7. In Geometry Dash → EarlyBuffer → Assist:
-   - **Cloud Public Submit** = ON  
-   - **Cloud Submit URL** = empty (uses built-in `https://earlybuffer-config.vercel.app/api/submit`) or set that URL explicitly
-
-8. Share… in-game → check the GitHub repo → Refresh after ~1 minute.
-
-## Test
+After adding stats/track, redeploy:
 
 ```bash
-curl -sS -X POST https://earlybuffer-config.vercel.app/api/submit \
-  -H "Content-Type: application/json" \
-  -d "{\"schema\":1,\"id\":\"curl-test\",\"name\":\"Curl Test\",\"author\":\"you\",\"description\":\"\",\"tags\":[\"shared\"],\"minModVersion\":\"1.4.1\",\"bundleVersion\":2,\"bundle\":{\"version\":2,\"settings\":{\"safe-mode\":true}}}"
+vercel --prod
 ```
 
-## Notes
+## Quick tests
 
-- Cloudflare Worker (`../cloud-submit-worker`) is equivalent — pick **one**.
-- Hobby Vercel is fine for catalog submits; add rate-limiting later if spam appears.
+```bash
+curl -sS https://earlybuffer-config.vercel.app/api/stats
+
+curl -sS -X POST https://earlybuffer-config.vercel.app/api/track \
+  -H "Content-Type: application/json" \
+  -d "{\"op\":\"download\",\"id\":\"safe-defaults\",\"clientId\":\"11111111-1111-1111-1111-111111111111\"}"
+
+curl -sS -X POST https://earlybuffer-config.vercel.app/api/track \
+  -H "Content-Type: application/json" \
+  -d "{\"op\":\"rate\",\"id\":\"safe-defaults\",\"clientId\":\"11111111-1111-1111-1111-111111111111\",\"stars\":5}"
+```
+
+Second download with the same `clientId` should return `"duplicate":true` without bumping the counter. Second rate should fail with `already rated`.
