@@ -10,16 +10,23 @@ bool SectionObjectWalk::pointerLooksLive(void const* p) {
     auto const addr = reinterpret_cast<uintptr_t>(p);
     // Null-page and classic freelist / -1 poison — do not deref or cast.
     if (addr < 0x10000ull) return false;
-    if (addr == ~uintptr_t{0}) return false;
-    // Common low poison patterns (0xDEAD… left for platform; keep cheap).
-    if (addr == 0xFFFFFFFFFFFFFFFEull) return false;
+    if (addr >= ~uintptr_t{0} - 0xFFull) return false; // -1 .. -256
+    // High nibble all-ones is a common MSVC debug fill / section hole.
+    if ((addr & 0xFFFFFFFF00000000ull) == 0xFFFFFFFF00000000ull) return false;
     return true;
 }
 
+bool SectionObjectWalk::pointerAndVtableLive(void const* p) {
+    if (!pointerLooksLive(p)) return false;
+    // Freed slots often keep a user-looking address but vtable qword is -1.
+    // typeinfo_cast then AVs reading @ 0xFFFFFFFFFFFFFFFF (bakefail diag).
+    void* const vt = *reinterpret_cast<void* const*>(p);
+    return pointerLooksLive(vt);
+}
+
 GameObject* SectionObjectWalk::asGameObject(void* raw) {
-    if (!pointerLooksLive(raw)) return nullptr;
+    if (!pointerAndVtableLive(raw)) return nullptr;
     // void* is not polymorphic — cast through CCObject* then typeinfo_cast.
-    // Poison / null-page already rejected above so vtable read is safe enough.
     auto* asCc = reinterpret_cast<cocos2d::CCObject*>(raw);
     return typeinfo_cast<GameObject*>(asCc);
 }
@@ -69,13 +76,24 @@ bool SectionObjectWalk::selfCheck(std::string& report) {
     expect(!pointerLooksLive(reinterpret_cast<void*>(0x100ull)), "null-page");
     expect(!pointerLooksLive(reinterpret_cast<void*>(~uintptr_t{0})), "poison-ff");
     expect(!pointerLooksLive(reinterpret_cast<void*>(0xFFFFFFFFFFFFFFFEull)), "poison-fe");
+    expect(!pointerLooksLive(reinterpret_cast<void*>(0xFFFFFFFF00001234ull)), "poison-hi");
 
     // Stack / heap addresses used as “live-looking” for the filter only.
     int stackProbe = 0;
     expect(pointerLooksLive(&stackProbe), "stack-live");
+    // Positive vtable case: one-slot fake whose first qword is a live address.
+    // Do not call pointerAndVtableLive(&stackProbe) — that reads past the int.
+    void* fakeVtLive[1] = { &stackProbe };
+    expect(pointerAndVtableLive(fakeVtLive), "vt-live");
 
     expect(asGameObject(nullptr) == nullptr, "as-null");
     expect(asGameObject(reinterpret_cast<void*>(~uintptr_t{0})) == nullptr, "as-poison");
+    expect(!pointerAndVtableLive(nullptr), "vt-null");
+
+    // Fake object whose "vtable" qword is -1 must not enter typeinfo_cast.
+    void* fakeVtPoison[1] = { reinterpret_cast<void*>(~uintptr_t{0}) };
+    expect(asGameObject(fakeVtPoison) == nullptr, "as-vt-poison");
+    expect(!pointerAndVtableLive(fakeVtPoison), "vt-poison");
 
     // No layer → zero visits, no crash.
     expect(forEachInSections(nullptr, [](GameObject*) {}) == 0, "no-layer");

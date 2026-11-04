@@ -1,5 +1,13 @@
 # Changelog
 
+## Hotfix on v1.4.0
+
+- **Bake frame-0 spawn / TW** — BakeSpawnProbe detects lethal overlaps on the start snap; bake auto-builds Trigger World for that session when overlaps exist even if the setting is off; frame-0 errors name killer uid/pos/TW (no false parityGate blame).
+- **Bake frame-0 spawn grace** — ignore deaths from hazards already overlapping the start snap for ticks 0–4 (TW movers / thin overlaps); BakeSpawnProbe ignores player/proxy solids and only forces TW for real hazards; sparse wave macros get an explicit re-export hint.
+- **Live ghost ground re-seat** — after `switchedToMode` / player art rebuild, restore ground, slope, jump buffer, dash, and lock flags from the real player so cube `pushButton` can jump again (Alive-only Delay was starving on identical coast deaths).
+- **Live PassNoThreat foresight** — OpportunityProbe treats wait-window `diedBeforeAction` as must-search; adds a short `nearDelay` probe; Live also forces search on idleSafer / baseline death / dash-or-ring coast so PassNoThreat cannot skip a later death.
+- **Bake-fail diag AV** — `SectionObjectWalk` rejects slots whose vtable qword is poison (`0xFFF…`) before `typeinfo_cast`, so bakefail ghost-hitbox dump no longer AVs reading `@ 0xFFFFFFFFFFFFFFFF`.
+
 ## v1.4.0
 
 **Escape honesty, portal-stack crash fix, assist cost attribution** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

@@ -4,6 +4,7 @@
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
+#include "../core/BakeSpawnProbe.hpp"
 #include "../core/ConfigBundleKeys.hpp"
 #include "../core/SectionObjectWalk.hpp"
 #include "../core/ShadowSimulator.hpp"
@@ -332,6 +333,9 @@ int countHazardOverlaps(
     auto const pref = p->getObjectRect();
     int n = 0;
     auto consider = [&](GameObject* obj) {
+        // Belt: section walk already filters, but children / stale casts can
+        // still hand a GameObject* whose vtable went poison mid-bake.
+        if (!SectionObjectWalk::pointerAndVtableLive(obj)) return;
         if (!isHazardType(obj)) return;
         auto const hr = obj->getObjectRect();
         if (!pref.intersectsRect(hr)) return;
@@ -411,6 +415,14 @@ std::string DevDiagDump::buildGhostHitbox() {
         "exclusiveShadowHazards={}\n",
         shHits > p1Hits ? "LIKELY (ghost hitbox/world mismatch)" : "none-or-equal"
     );
+
+    {
+        int const slot = AssistController::get().startSnapshotSlot();
+        auto const spawn = BakeSpawnProbe::probe(
+            layer, slot >= 0 ? slot : ShadowSimulator::START_SNAPSHOT_SLOT
+        );
+        o << "\n" << BakeSpawnProbe::formatText(spawn);
+    }
 
     // TW capture size + bake gdStep for current pending replay dt.
     o << fmt::format(
@@ -1029,6 +1041,13 @@ std::string DevDiagDump::buildSelfChecks() {
     }
     else {
         o << "PlanGoldCorpus: FAIL\n" << report << "\n";
+    }
+    report.clear();
+    if (BakeSpawnProbe::selfCheck(report)) {
+        o << "BakeSpawnProbe: OK\n" << report << "\n";
+    }
+    else {
+        o << "BakeSpawnProbe: FAIL\n" << report << "\n";
     }
     return o.str();
 }

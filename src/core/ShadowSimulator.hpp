@@ -169,6 +169,14 @@ public:
     // Offline bake timeline: trust current toggle pose (Include/Skip) instead of
     // UnknownOnOverlap — otherwise every toggle-group solid aborts the macro.
     bool bakeOffline() const { return this->m_bakeOffline; }
+    // Bake validate may apply TW tracks even when the Trigger World setting is off
+    // (spawn hazards that are movers). Cleared when bakeOffline ends.
+    void setBakeForceTriggerWorld(bool on) { this->m_bakeForceTriggerWorld = on; }
+    bool bakeForceTriggerWorld() const { return this->m_bakeForceTriggerWorld; }
+    bool triggerWorldWanted() const {
+        return StageConfig::triggerBake()
+            || (this->m_bakeOffline && this->m_bakeForceTriggerWorld);
+    }
     // True after applyTriggerWorldAtTick ran for the current sim step.
     bool triggerWorldAppliedThisTick() const {
         return this->m_triggerWorldAppliedThisTick;
@@ -182,6 +190,7 @@ public:
     }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* p) const;
+    bool isOwnedGhostPtr(void const* p) const;
     PlayerObject* shadow() const { return m_shadow; }
     bool isShadowTrail(HardStreak* trail) const {
         if (!trail) return false;
@@ -633,6 +642,12 @@ private:
     int m_nextSnapshot = 0;
     bool m_simulating = false;
     bool m_bakeOffline = false;
+    bool m_bakeForceTriggerWorld = false;
+    // Bake: uniqueIds that already overlapped the start-snap ghost before physics.
+    // Deaths from those ids are ignored through m_bakeSpawnGraceUntilTick so TW
+    // movers can leave spawn (and thin spawn overlaps do not hard-fail frame 0).
+    std::unordered_set<int> m_bakeSpawnOverlapIds;
+    int m_bakeSpawnGraceUntilTick = -1;
     bool m_applyingRing = false;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;

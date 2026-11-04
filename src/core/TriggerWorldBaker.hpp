@@ -51,7 +51,12 @@ public:
     // Physics tick: objects appeared after init race → rebuild empty TW.
     void kickIfStaleEmpty(PlayLayer* layer);
     // Bake validate: drain slices until idle or wallMs. err on cancel / incomplete.
-    bool waitUntilReady(PlayLayer* layer, int wallMs, std::string& err);
+    // forceForBake: build/load even when Trigger World setting is off (spawn movers).
+    bool waitUntilReady(
+        PlayLayer* layer, int wallMs, std::string& err, bool forceForBake = false
+    );
+    // Cache load + start when setting is off (bake-only movers). No-op if tracks exist.
+    bool beginForceBuild(PlayLayer* layer);
 
 private:
     enum class Phase {
@@ -98,6 +103,8 @@ private:
         std::vector<GameObject*> const& objects,
         std::unordered_map<int, LivePose> const& live
     );
+
+    bool startInternal(PlayLayer* layer, bool forceForBake);
 
     bool m_running = false;
     bool m_cancel = false;

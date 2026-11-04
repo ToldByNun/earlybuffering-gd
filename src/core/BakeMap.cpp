@@ -2,6 +2,7 @@
 #include "AssistClock.hpp"
 #include "AssistContracts140.hpp"
 #include "AssistController.hpp"
+#include "BakeSpawnProbe.hpp"
 #include "ShadowSimulator.hpp"
 #include "Tg2BakeFixture.hpp"
 #include "TriggerWorldBaker.hpp"
@@ -570,19 +571,48 @@ Result<int> BakeMap::bakeReplay(
             attemptTick
         ));
     }
-    // Commit 4: never validate while TW is still building / stale-empty.
-    if (StageConfig::triggerBake()) {
-        m_progress.setStatus("waiting Trigger World…");
+    // Spawn probe: hazards/solids already overlapping the start-snap ghost.
+    auto const spawnProbe = BakeSpawnProbe::probe(layer, startSnapshotSlot);
+    AssistLog::info(fmt::format(
+        "BAKE: spawnProbe overlaps={} tracked={} recommendsTW={} snap=({:.1f},{:.1f}) dart={}",
+        spawnProbe.overlapCount,
+        spawnProbe.trackedOverlapCount,
+        spawnProbe.recommendsTriggerWorld ? 1 : 0,
+        spawnProbe.snapX,
+        spawnProbe.snapY,
+        spawnProbe.snapIsDart ? 1 : 0
+    ));
+    if (!spawnProbe.overlaps.empty()) {
+        auto const& h0 = spawnProbe.overlaps.front();
+        AssistLog::info(fmt::format(
+            "BAKE: spawnHit0 uid={} objId={} type={} @({:.1f},{:.1f}) tw={} keys={}",
+            h0.uniqueId, h0.objectId, h0.objectType, h0.x, h0.y,
+            h0.inTriggerWorld ? 1 : 0, h0.twKeyCount
+        ));
+    }
+
+    // Never validate while TW is still building / stale-empty when setting on.
+    // Also force TW for this bake when spawn already overlaps a lethal object
+    // (movers parked on spawn with Trigger World setting off — e.g. Grief).
+    bool const forceTwForSpawn =
+        spawnProbe.recommendsTriggerWorld && !StageConfig::triggerBake();
+    if (StageConfig::triggerBake() || forceTwForSpawn) {
+        m_progress.setStatus(
+            forceTwForSpawn ? "Trigger World (spawn movers)…" : "waiting Trigger World…"
+        );
         std::string twErr;
-        if (!TriggerWorldBaker::get().waitUntilReady(layer, 45000, twErr)) {
+        if (!TriggerWorldBaker::get().waitUntilReady(
+                layer, 45000, twErr, forceTwForSpawn
+            )) {
             return Err(twErr.empty() ? "Trigger World not ready for bake" : twErr);
         }
         auto& tw = TriggerWorldStore::get();
         AssistLog::info(fmt::format(
-            "BAKE: TW ready tracks={} ready={} softcap={} ({})",
+            "BAKE: TW ready tracks={} ready={} softcap={} forceSpawn={} ({})",
             tw.trackCount(),
             tw.readyTrackCount(),
             tw.softcapHit() ? 1 : 0,
+            forceTwForSpawn ? 1 : 0,
             TriggerWorldBaker::get().statusLine()
         ));
         if (tw.softcapHit()) {
@@ -591,7 +621,31 @@ Result<int> BakeMap::bakeReplay(
                 tw.trackCount()
             ));
         }
+        // Re-probe TW membership after build.
+        auto const spawnAfter = BakeSpawnProbe::probe(layer, startSnapshotSlot);
+        if (spawnAfter.trackedOverlapCount > 0 || tw.hasTracks()) {
+            ShadowSimulator::get().setBakeForceTriggerWorld(true);
+            AssistLog::info(fmt::format(
+                "BAKE: bakeForceTriggerWorld=1 (trackedOverlaps={} tracks={})",
+                spawnAfter.trackedOverlapCount,
+                tw.trackCount()
+            ));
+        }
+        else if (forceTwForSpawn) {
+            AssistLog::info(
+                "BAKE warn: spawn overlap but no TW tracks for those uids — "
+                "frame-0 death may remain (static spike or unmodeled mover)"
+            );
+        }
     }
+
+    class BakeTwForceGuard {
+    public:
+        ~BakeTwForceGuard() {
+            ShadowSimulator::get().setBakeForceTriggerWorld(false);
+        }
+    };
+    BakeTwForceGuard twForceGuard;
 
     // Mild FPS (60/360) → resample onto live ~240. Physics-bypass (1000–3000)
     // stays 1:1 at author TPS so the ghost matches the bot quantum exactly.
@@ -759,26 +813,70 @@ Result<int> BakeMap::bakeReplay(
         int const cut = validate.deathFrame;
         if (cut <= 0) {
             // No surviving prefix — cannot expand any click from this pose.
+            auto const spawnFail = BakeSpawnProbe::probe(layer, startSnapshotSlot);
+            std::string killerDetail;
+            if (validate.deathObjId >= 0) {
+                killerDetail = fmt::format(
+                    " deathObjId={} type={} gameId={}",
+                    validate.deathObjId, validate.deathObjType, validate.deathObjGameId
+                );
+            }
+            if (!spawnFail.overlaps.empty()) {
+                auto const& h = spawnFail.overlaps.front();
+                killerDetail += fmt::format(
+                    " spawnHazard uid={} objId={} @({:.0f},{:.0f}) twTracked={}/{}",
+                    h.uniqueId, h.objectId, h.x, h.y,
+                    spawnFail.trackedOverlapCount, spawnFail.overlapCount
+                );
+            }
+            int firstJump = -1;
+            bool firstJumpDown = false;
+            for (auto const& e : m_replay.events) {
+                if (e.button != 1) continue;
+                firstJump = e.frame;
+                firstJumpDown = e.down;
+                break;
+            }
             std::string err = fmt::format(
-                "Macro dies in sim at frame {} (x={:.0f}) deathObjId={} "
-                "twTracks={} unknownTop3=[{}] droppedP2={} startPos={} startX={:.0f}",
-                validate.deathFrame, validate.deathX, validate.deathObjId,
+                "Macro dies in sim at frame {} (x={:.0f}) twTracks={} "
+                "unknownTop3=[{}] droppedP2={} startPos={} startX={:.0f} "
+                "snapDart={} jumpHeld={} events={} firstJump={}{}",
+                validate.deathFrame, validate.deathX,
                 twTracks, top3, droppedP2,
-                startPosAttempt ? 1 : 0, startX
+                startPosAttempt ? 1 : 0, startX,
+                spawnFail.snapIsDart ? 1 : 0,
+                spawnFail.jumpHeld ? 1 : 0,
+                static_cast<int>(m_replay.events.size()),
+                firstJump,
+                killerDetail
             );
             if (!residual.empty()) {
                 err += " — ";
                 err += residual;
             }
-            if (startPosAttempt) {
+            if (static_cast<int>(m_replay.events.size()) <= 2
+                && firstJump > 16
+                && (spawnFail.snapIsDart
+                    || spawnFail.snapMode == static_cast<int>(GameModeKind::Ship)
+                    || spawnFail.snapMode == static_cast<int>(GameModeKind::Swing))
+                && !spawnFail.jumpHeld
+                && firstJumpDown) {
+                err += " — wave/ship/swing start needs hold from frame 0; this macro's "
+                       "first click is late (sparse/stub export — grief20 was 1 input / "
+                       "58 bytes). Re-export a full macro from attempt start.";
+            }
+            else if (twTracks <= 0 && spawnFail.overlapCount > 0) {
+                err += " — spawn hazard with Trigger World empty; "
+                       "enable Trigger World or reset→pause→Bake after TW builds.";
+            }
+            else if (startPosAttempt) {
                 err += " — StartPos bake: reset on the StartPos, pause, bake; "
-                       "macro frames must be from the same StartPos attempt; "
-                       "TW empty often kills frame 0 (wait Trigger World).";
+                       "macro frames must be from the same StartPos attempt.";
             }
             else {
-                err += " — ghost path ≠ bot. Reset→pause→Bake.";
+                err += " — ghost path ≠ bot at frame 0. Reset→pause→Bake.";
             }
-            err += " Diag: /diag/bakefail_* parityGate=eps-locked";
+            err += " Diag: /diag/bakefail_*";
             return Err(err);
         }
 

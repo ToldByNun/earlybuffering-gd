@@ -86,6 +86,9 @@ void ShadowSimulator::detach(bool layerDying) {
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
     this->m_simulating = false;
     this->m_bakeOffline = false;
+    this->m_bakeForceTriggerWorld = false;
+    this->m_bakeSpawnOverlapIds.clear();
+    this->m_bakeSpawnGraceUntilTick = -1;
     this->m_applyingRing = false;
     this->m_orbScanning = false;
     this->m_orbOverlapTick = false;
@@ -149,6 +152,10 @@ void ShadowSimulator::detach(bool layerDying) {
 }
 
 bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
+    return this->isOwnedGhostPtr(p);
+}
+
+bool ShadowSimulator::isOwnedGhostPtr(void const* p) const {
     if (!p) return false;
     if (p == m_shadow) return true;
     for (auto* s : m_snapshots) {
@@ -467,11 +474,19 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
 
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {
     // Active sim body (live shadow or eval ghost) drives m_dead.
-    if (p == m_shadow || (m_evalActive && p == m_evalActive)) {
-        m_dead = true;
-        m_deathObject = object;
+    if (p != m_shadow && !(m_evalActive && p == m_evalActive)) return;
+    if (this->m_bakeOffline
+        && object
+        && this->m_bakeSpawnGraceUntilTick >= 0
+        && this->m_simAbsTick >= 0
+        && this->m_simAbsTick <= this->m_bakeSpawnGraceUntilTick
+        && this->m_bakeSpawnOverlapIds.count(object->m_uniqueID) > 0) {
+        return;
     }
+    m_dead = true;
+    m_deathObject = object;
 }
+
 
 void ShadowSimulator::noteJump() {
     m_jumped = true;
@@ -582,7 +597,7 @@ void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
 
 void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     this->m_savedTransforms.clear();
-    if (!layer || !StageConfig::triggerBake()) return;
+    if (!layer || !this->triggerWorldWanted()) return;
 
     auto& store = TriggerWorldStore::get();
     LagProbe::Scope const scope("eb.trigger.capture");
@@ -715,7 +730,7 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
     this->m_dynamicTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
-    if (!layer || !StageConfig::triggerBake()) return;
+    if (!layer || !this->triggerWorldWanted()) return;
 
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children) return;
@@ -811,7 +826,7 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
 void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost) {
     this->m_liveDynamicAppliedIds.clear();
     if (!layer || !ghost) return;
-    if (!StageConfig::triggerBake()) return;
+    if (!this->triggerWorldWanted()) return;
     if (StageConfig::triggerBakeSkipDynamic()) return;
     // Dual follow is ambiguous (P1 vs P2) — leave Unknown.
     if (layer->m_gameState.m_isDualMode && layer->m_player2) return;
@@ -1012,7 +1027,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
 ) {
     this->m_triggerWorldAppliedThisTick = false;
     if (!layer || absTick < 0) return;
-    if (!StageConfig::triggerBake()) return;
+    if (!this->triggerWorldWanted()) return;
     if (this->m_savedTransforms.empty()) return;
 
     auto& store = TriggerWorldStore::get();
@@ -1322,7 +1337,7 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
 
     // Ghost is created as icon cube (create 1,1). Mode flags alone leave a
     // cube-sized collide rect → false deaths on tight wave. Rebuild body, then
-    // re-apply pose/holds switchedToMode may clobber.
+    // re-apply pose/holds/ground switchedToMode may clobber.
     {
         GameObjectType portal = GameObjectType::CubePortal;
         if (src->m_isDart) portal = GameObjectType::WavePortal;
@@ -1364,6 +1379,48 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
             dst->releaseButton(PlayerButton::Jump);
             dst->m_holdingButtons[jumpIdx] = false;
         }
+
+        // Mode rebuild clears ground/slope/jump buffer — without these, cube
+        // pushButton is a no-op and every delay coasts to the same death
+        // (PassHopeless under Alive-only). Re-seat from src after art update.
+        EB_COPY(m_isOnGround);
+        EB_COPY(m_isOnGround2);
+        EB_COPY(m_isOnGround3);
+        EB_COPY(m_isOnGround4);
+        EB_COPY(m_lastGroundObject);
+        EB_COPY(m_maybeLastGroundObject);
+        EB_COPY(m_preLastGroundObject);
+        EB_COPY(m_lastGroundedPos);
+        EB_COPY(m_groundYVelocity);
+        EB_COPY(m_groundObjectMaterial);
+        EB_COPY(m_lastLandTime);
+        EB_COPY(m_lastJumpTime);
+        EB_COPY(m_isOnSlope);
+        EB_COPY(m_wasOnSlope);
+        EB_COPY(m_slopeVelocity);
+        EB_COPY(m_slopeAngle);
+        EB_COPY(m_slopeAngleRadians);
+        EB_COPY(m_currentSlope);
+        EB_COPY(m_currentSlope2);
+        EB_COPY(m_currentPotentialSlope);
+        EB_COPY(m_isCollidingWithSlope);
+        EB_COPY(m_collidingWithSlopeId);
+        EB_COPY(m_wasJumpBuffered);
+        EB_COPY(m_stateJumpBuffered);
+        EB_COPY(m_jumpBuffered);
+        EB_COPY(m_stateOnGround);
+        EB_COPY(m_stateRingJump);
+        EB_COPY(m_stateRingJump2);
+        EB_COPY(m_isLocked);
+        EB_COPY(m_controlsDisabled);
+        EB_COPY(m_inputsLocked);
+        EB_COPY(m_maybeIsFalling);
+        EB_COPY(m_isDashing);
+        EB_COPY(m_dashX);
+        EB_COPY(m_dashY);
+        EB_COPY(m_dashAngle);
+        EB_COPY(m_dashStartTime);
+        EB_COPY(m_dashRing);
     }
 
     hideGhost(dst);
@@ -2782,13 +2839,20 @@ SimPlan ShadowSimulator::plan(
         }
 
         // No threat target: baseline survives and no orb/pad ahead.
-        // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
+        // G2: OpportunityProbe (foresight / near+mid+limit) may still force full search.
         bool const noThreat = !c0.raw.died && !zone.valid;
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
-            // Already must search → skip mid/limit probes (equal outcome: full search).
+            // Live requireAlive: idleSafer / baseline death / mid-dash-orb also
+            // force search so PassNoThreat cannot skip a wait-window or dash coast.
+            bool const dashOrRingCoast = requireAlive && real
+                && (real->m_isDashing || real->m_stateRingJump
+                    || real->m_stateRingJump2);
             bool const alreadyMustSearch = options.mustDelaySearch
-                || plan.longForesightNeedSearch;
+                || plan.longForesightNeedSearch
+                || (requireAlive && plan.idleSafer)
+                || (requireAlive && haveBaselineRaw && baselineRaw.died)
+                || dashOrRingCoast;
 
             OpportunityProbe::Sample baseSample{};
             baseSample.activatedRing = c0.activatedRing;
@@ -2796,9 +2860,11 @@ SimPlan ShadowSimulator::plan(
             baseSample.surviveBin = c0.surviveBin;
             baseSample.endX = c0.endX;
 
-            OpportunityProbe::Sample probeSamples[2];
+            OpportunityProbe::Sample probeSamples[3];
             int probeCount = 0;
-            int const mid = OpportunityProbe::midDelay(limit);
+            // Avoid identifier `near` — Windows headers may macro it.
+            int const nearDelay = OpportunityProbe::nearDelay(limit);
+            int const midDelay = OpportunityProbe::midDelay(limit);
             auto runProbeDelay = [&](int d) {
                 if (d <= 0 || d > limit) return;
                 if (candReady[static_cast<size_t>(d)]) return;
@@ -2808,11 +2874,11 @@ SimPlan ShadowSimulator::plan(
                 }
                 auto c = evalDelay(d, -1);
                 if (c.diedBeforeAction) {
-                    // Still record — probe may show nothing useful.
+                    // Still record — wait-death forces searchFurther below.
                     finalizeViable(c, -1);
                     cands[static_cast<size_t>(d)] = c;
                     candReady[static_cast<size_t>(d)] = 1;
-                    if (probeCount < 2) {
+                    if (probeCount < 3) {
                         auto& ps = probeSamples[probeCount++];
                         ps.activatedRing = c.activatedRing;
                         ps.diedBeforeAction = c.diedBeforeAction;
@@ -2824,7 +2890,7 @@ SimPlan ShadowSimulator::plan(
                 finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
                 cands[static_cast<size_t>(d)] = c;
                 candReady[static_cast<size_t>(d)] = 1;
-                if (probeCount < 2) {
+                if (probeCount < 3) {
                     auto& ps = probeSamples[probeCount++];
                     ps.activatedRing = c.activatedRing;
                     ps.diedBeforeAction = c.diedBeforeAction;
@@ -2834,8 +2900,11 @@ SimPlan ShadowSimulator::plan(
             };
 
             if (!alreadyMustSearch && limit >= 1) {
-                runProbeDelay(mid);
-                if (limit != mid) {
+                runProbeDelay(nearDelay);
+                if (midDelay != nearDelay) {
+                    runProbeDelay(midDelay);
+                }
+                if (limit != midDelay && limit != nearDelay) {
                     runProbeDelay(limit);
                 }
             }
@@ -4224,6 +4293,8 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     m_deathObject = nullptr;
     this->m_unknownHistMap.clear();
     this->m_collectUnknownHist = true;
+    this->m_bakeSpawnOverlapIds.clear();
+    this->m_bakeSpawnGraceUntilTick = -1;
 
     auto* s = m_shadow;
     size_t nextEv = 0;
@@ -4244,6 +4315,30 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = dt; // TW remap must match bake physics, not live hitch dt
     this->m_bakeOffline = true;
+
+    // Collect hazards already overlapping the start pose (same as live at pause).
+    // Ignore deaths from those ids for a few ticks so TW can move them off spawn.
+    {
+        auto const pref = s->getObjectRect();
+        auto consider = [&](GameObject* obj) {
+            if (!obj || !isHazardLike(obj)) return;
+            if (typeinfo_cast<PlayerObject*>(obj)) return;
+            if (this->isOwnedGhostPtr(obj)) return;
+            if (!pref.intersectsRect(obj->getObjectRect())) return;
+            this->m_bakeSpawnOverlapIds.insert(obj->m_uniqueID);
+        };
+        if (auto* children = layer->m_objectLayer
+                ? layer->m_objectLayer->getChildren() : nullptr) {
+            for (unsigned i = 0; i < children->count(); ++i) {
+                consider(SectionObjectWalk::asGameObject(children->objectAtIndex(i)));
+            }
+        }
+        SectionObjectWalk::forEachInSections(layer, consider);
+        if (!this->m_bakeSpawnOverlapIds.empty()) {
+            this->m_bakeSpawnGraceUntilTick = 4; // ticks 0..4 inclusive
+        }
+    }
+
     {
         SimSessionGuard session(*this, layer);
 
@@ -4333,6 +4428,8 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
 
     this->m_collectUnknownHist = false;
     this->m_bakeOffline = false;
+    this->m_bakeSpawnOverlapIds.clear();
+    this->m_bakeSpawnGraceUntilTick = -1;
     // Seal Soft/Hard unknown histogram (count desc).
     out.unknownHist.clear();
     out.unknownHist.reserve(this->m_unknownHistMap.size());

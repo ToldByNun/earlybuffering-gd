@@ -55,8 +55,7 @@ std::string Tg2BakeFixture::enrichValidateFail(
         msg += " — ";
         msg += residual;
     }
-    msg += " — ghost path ≠ bot. Reset→pause→Bake. Diag: /diag/bakefail_*";
-    msg += " parityGate=eps-locked";
+    msg += " — ghost path ≠ bot at frame 0. Reset→pause→Bake. Diag: /diag/bakefail_*";
     return msg;
 }
 
@@ -179,7 +178,7 @@ bool Tg2BakeFixture::selfCheck(std::string& report) {
     expect(err.find("deathObjId=42181") != std::string::npos, "err-oid");
     expect(err.find("twTracks=0") != std::string::npos, "err-tw");
     expect(err.find("residual=TW-empty") != std::string::npos, "err-residual");
-    expect(err.find("parityGate=eps-locked") != std::string::npos, "err-parity");
+    expect(err.find("frame 0") != std::string::npos, "err-frame0");
 
     std::string portalDetail;
     expect(

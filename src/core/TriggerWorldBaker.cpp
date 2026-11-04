@@ -298,17 +298,42 @@ void TriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
     this->start(layer);
 }
 
-bool TriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string& err) {
+bool TriggerWorldBaker::beginForceBuild(PlayLayer* layer) {
+    if (!layer) return false;
+    if (StageConfig::triggerBake()) {
+        // Normal path already owns load/build.
+        this->loadOrBuild(layer);
+        return this->m_running || TriggerWorldStore::get().hasTracks();
+    }
+    if (layer->m_level) {
+        LagProbe::Scope const lagScope("eb.triggerBake.load");
+        TriggerWorldStore::get().loadForLevel(layer->m_level);
+    }
+    if (TriggerWorldStore::get().hasTracks()) {
+        this->m_status = TriggerWorldStore::get().statusLine();
+        return true;
+    }
+    return this->startInternal(layer, true);
+}
+
+bool TriggerWorldBaker::waitUntilReady(
+    PlayLayer* layer, int wallMs, std::string& err, bool forceForBake
+) {
     err.clear();
     if (!layer) {
         err = "no PlayLayer for TW wait";
         return false;
     }
-    if (!StageConfig::triggerBake()) return true;
+    if (!StageConfig::triggerBake() && !forceForBake) return true;
 
-    this->kickIfStaleEmpty(layer);
-    if (!this->m_running && !TriggerWorldStore::get().hasTracks()) {
-        this->resumeIfEmpty(layer);
+    if (forceForBake && !StageConfig::triggerBake()) {
+        (void)this->beginForceBuild(layer);
+    }
+    else {
+        this->kickIfStaleEmpty(layer);
+        if (!this->m_running && !TriggerWorldStore::get().hasTracks()) {
+            this->resumeIfEmpty(layer);
+        }
     }
 
     if (wallMs < 100) wallMs = 100;
@@ -355,8 +380,12 @@ bool TriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string
 }
 
 bool TriggerWorldBaker::start(PlayLayer* layer) {
+    return this->startInternal(layer, false);
+}
+
+bool TriggerWorldBaker::startInternal(PlayLayer* layer, bool forceForBake) {
     if (!layer) return false;
-    if (!StageConfig::triggerBake()) return false;
+    if (!StageConfig::triggerBake() && !forceForBake) return false;
     if (this->m_running) return false;
 
     this->clearJob();
