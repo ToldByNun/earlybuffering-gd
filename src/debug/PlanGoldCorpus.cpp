@@ -36,6 +36,7 @@
 #include "../core/ConfigBundleKeys.hpp"
 #include "../core/PlatformLimits.hpp"
 #include "../core/SaveDropPaths.hpp"
+#include "../cloud/CloudConfigStore.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -85,6 +86,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(ClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
     std::string saveDropReport;
     expect(SaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
+    std::string cloudStoreReport;
+    expect(CloudConfigStore::selfCheck(cloudStoreReport), "cloud-config-store");
     std::string configKeysReport;
     expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string configCodecReport;

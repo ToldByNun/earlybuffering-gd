@@ -52,7 +52,7 @@ $on_mod(Loaded) {
     DevConfig::refreshCache();
     syncPerfTrace();
     syncLagProbe();
-    // Mobile drop folders (replay-drop / config) — soft-fail if save dir is read-only.
+    // Drop folders (replay-drop / config / cloud-configs) — soft-fail if save dir is read-only.
     {
         std::string dropErr;
         if (!SaveDropPaths::get().ensureDirs(dropErr) && !dropErr.empty()) {

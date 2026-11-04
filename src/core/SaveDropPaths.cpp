@@ -32,10 +32,17 @@ std::filesystem::path SaveDropPaths::reportPath() const {
     return this->rootDir() / "earlybuffer-dev-report.txt";
 }
 
+std::filesystem::path SaveDropPaths::cloudConfigsDir() const {
+    return this->rootDir() / "cloud-configs";
+}
+
 bool SaveDropPaths::ensureDirs(std::string& err) const {
     err.clear();
     auto const root = this->rootDir();
     auto const replay = this->replayDropDir();
+    auto const cloud = this->cloudConfigsDir();
+    auto const cloudPacks = cloud / "packs";
+    auto const cloudOutbox = cloud / "outbox";
 
     auto rootRes = file::createDirectoryAll(root);
     if (rootRes.isErr()) {
@@ -51,6 +58,33 @@ bool SaveDropPaths::ensureDirs(std::string& err) const {
         );
         return false;
     }
+    auto cloudRes = file::createDirectoryAll(cloud);
+    if (cloudRes.isErr()) {
+        err = fmt::format(
+            "cannot create cloud-configs dir {}: {}",
+            cloud.string(),
+            cloudRes.unwrapErr()
+        );
+        return false;
+    }
+    auto packsRes = file::createDirectoryAll(cloudPacks);
+    if (packsRes.isErr()) {
+        err = fmt::format(
+            "cannot create cloud packs dir {}: {}",
+            cloudPacks.string(),
+            packsRes.unwrapErr()
+        );
+        return false;
+    }
+    auto outboxRes = file::createDirectoryAll(cloudOutbox);
+    if (outboxRes.isErr()) {
+        err = fmt::format(
+            "cannot create cloud outbox dir {}: {}",
+            cloudOutbox.string(),
+            outboxRes.unwrapErr()
+        );
+        return false;
+    }
 
     std::error_code ec;
     if (!std::filesystem::is_directory(root, ec) || ec) {
@@ -59,6 +93,18 @@ bool SaveDropPaths::ensureDirs(std::string& err) const {
     }
     if (!std::filesystem::is_directory(replay, ec) || ec) {
         err = fmt::format("replay drop dir missing or not a directory: {}", replay.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(cloud, ec) || ec) {
+        err = fmt::format("cloud-configs missing or not a directory: {}", cloud.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(cloudPacks, ec) || ec) {
+        err = fmt::format("cloud packs missing or not a directory: {}", cloudPacks.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(cloudOutbox, ec) || ec) {
+        err = fmt::format("cloud outbox missing or not a directory: {}", cloudOutbox.string());
         return false;
     }
     return true;
@@ -89,7 +135,7 @@ std::vector<std::filesystem::path> SaveDropPaths::listReplayCandidates() const {
         if (!entry.is_regular_file(ec) || ec) continue;
         auto const path = entry.path();
         if (!SaveDropPaths::isReplayExtension(path)) continue;
-        // Skip zero-byte placeholders — Commit 4 will still surface clear errors.
+        // Skip zero-byte placeholders.
         auto const sz = entry.file_size(ec);
         if (ec || sz == 0) continue;
         out.push_back(path);
@@ -122,6 +168,7 @@ bool SaveDropPaths::selfCheck(std::string& report) {
     auto const replay = paths.replayDropDir();
     auto const config = paths.configPath();
     auto const reportFile = paths.reportPath();
+    auto const cloud = paths.cloudConfigsDir();
 
     expect(!root.empty(), "root-nonempty");
     expect(replay.filename() == "replay-drop", "replay-dir-name");
@@ -130,6 +177,8 @@ bool SaveDropPaths::selfCheck(std::string& report) {
     expect(config.parent_path() == root, "config-under-root");
     expect(reportFile.filename() == "earlybuffer-dev-report.txt", "report-name");
     expect(reportFile.parent_path() == root, "report-under-root");
+    expect(cloud.filename() == "cloud-configs", "cloud-dir-name");
+    expect(cloud.parent_path() == root, "cloud-under-root");
     expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.gdr")), "ext-gdr");
     expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.GDR2")), "ext-gdr2-case");
     expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.mhr")), "ext-mhr");
