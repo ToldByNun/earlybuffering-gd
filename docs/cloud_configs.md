@@ -4,7 +4,7 @@ EarlyBuffer browses the public catalog **`ToldByNun/earlybuffer-configs`** and c
 
 ## In-game
 
-Assist → **Cloud Configs**: search / detail / Install. **Share…** writes a local outbox and POSTs to the built-in submit endpoint.
+Assist → **Cloud Configs**: search / detail / Install. List and detail show download counts and average rating when `/api/stats` is reachable. **Share…** writes a local outbox and POSTs to the built-in submit endpoint.
 
 ## Fixed endpoints
 

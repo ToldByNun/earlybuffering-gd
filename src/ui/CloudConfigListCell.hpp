@@ -14,6 +14,13 @@ public:
 
     static constexpr float kHeight = 42.f;
 
+    struct StatsBadge {
+        bool show = false;
+        int downloads = 0;
+        float ratingAvg = 0.f;
+        int ratingCount = 0;
+    };
+
     static CloudConfigListCell* create(
         CloudConfigIndex::PackEntry const& entry,
         float width,
@@ -22,6 +29,7 @@ public:
         bool active,
         bool cached,
         bool updateAvailable,
+        StatsBadge const& stats,
         SelectCallback onSelect
     );
 
@@ -36,6 +44,7 @@ protected:
         bool active,
         bool cached,
         bool updateAvailable,
+        StatsBadge const& stats,
         SelectCallback onSelect
     );
 

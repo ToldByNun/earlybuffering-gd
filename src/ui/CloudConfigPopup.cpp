@@ -5,6 +5,7 @@
 
 #include "../cloud/CloudConfigApply.hpp"
 #include "../cloud/CloudConfigShare.hpp"
+#include "../cloud/CloudConfigStats.hpp"
 #include "../cloud/CloudConfigStore.hpp"
 #include "../core/PlatformLimits.hpp"
 
@@ -17,8 +18,6 @@
 #include <cctype>
 
 using namespace geode::prelude;
-
-namespace {
 
 std::string toLower(std::string s) {
     for (char& c : s) {
@@ -44,7 +43,11 @@ std::string formatBytes(size_t n) {
     return fmt::format("{:.1f} MB", n / (1024.0 * 1024.0));
 }
 
-} // namespace
+std::string formatDownloads(int n) {
+    if (n >= 1000000) return fmt::format("{:.1f}M", n / 1000000.0);
+    if (n >= 10000) return fmt::format("{}k", n / 1000);
+    return fmt::format("{}", n);
+}
 
 CloudConfigPopup* CloudConfigPopup::create() {
     auto* ret = new CloudConfigPopup();
@@ -336,6 +339,28 @@ void CloudConfigPopup::ensureLocalCatalog() {
     (void)CloudConfigService::get().loadLocalCatalog(local);
 }
 
+CloudConfigListCell::StatsBadge CloudConfigPopup::statsBadgeFor(std::string const& id) const {
+    CloudConfigListCell::StatsBadge b{};
+    auto const s = CloudConfigStats::get().statsFor(id);
+    if (s.downloads <= 0 && s.ratingCount <= 0) return b;
+    b.show = true;
+    b.downloads = s.downloads;
+    b.ratingCount = s.ratingCount;
+    b.ratingAvg = CloudConfigStats::averageRating(s);
+    return b;
+}
+
+void CloudConfigPopup::startStatsFetch() {
+    uint64_t const gen = ++m_statsGen;
+    Ref<CloudConfigPopup> self = this;
+    CloudConfigStats::get().fetchStats([self, gen](bool ok, std::string const&) {
+        if (!self || gen != self->m_statsGen) return;
+        if (!ok) return;
+        self->rebuildList();
+        self->updateDetail();
+    });
+}
+
 void CloudConfigPopup::loadInitial() {
     this->ensureLocalCatalog();
     auto const& cat = CloudConfigService::get().catalog();
@@ -352,6 +377,7 @@ void CloudConfigPopup::loadInitial() {
     this->rebuildList();
     this->updateDetail();
 
+    this->startStatsFetch();
     this->startRefresh(false);
 }
 
@@ -394,6 +420,7 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
         }
         this->rebuildList();
         this->updateDetail();
+        this->startStatsFetch();
         return;
     }
 
@@ -421,6 +448,7 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
     }
     this->rebuildList();
     this->updateDetail();
+    this->startStatsFetch();
 }
 
 void CloudConfigPopup::rebuildList() {
@@ -456,6 +484,7 @@ void CloudConfigPopup::rebuildList() {
             this->isActive(p->id),
             this->isCached(p->id),
             this->hasUpdate(*p),
+            this->statsBadgeFor(p->id),
             [self](std::string const& id) {
                 if (self) self->selectPack(id);
             }
@@ -536,9 +565,29 @@ void CloudConfigPopup::updateDetail() {
         );
     }
     if (m_detailFoot) {
+        auto const s = CloudConfigStats::get().statsFor(e->id);
+        std::string statsBit;
+        if (s.downloads > 0 || s.ratingCount > 0) {
+            if (s.ratingCount > 0) {
+                statsBit = fmt::format(
+                    " · \xE2\x86\x93{} · \xE2\x98\x85{:.1f} ({} rating{})",
+                    formatDownloads(s.downloads),
+                    CloudConfigStats::averageRating(s),
+                    s.ratingCount,
+                    s.ratingCount == 1 ? "" : "s"
+                );
+            }
+            else {
+                statsBit = fmt::format(
+                    " · \xE2\x86\x93{} downloads",
+                    formatDownloads(s.downloads)
+                );
+            }
+        }
         m_detailFoot->setString(fmt::format(
-            "{} · min {}\n{}",
+            "{}{} · min {}\n{}",
             formatBytes(e->size),
+            statsBit,
             e->minModVersion.empty() ? "any" : e->minModVersion,
             verOk
                 ? (this->isCached(e->id) ? "Ready to install." : "Downloads on Install.")

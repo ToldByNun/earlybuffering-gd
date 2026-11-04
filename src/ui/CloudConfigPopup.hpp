@@ -3,6 +3,7 @@
 
 #include "../cloud/CloudConfigIndex.hpp"
 #include "../cloud/CloudConfigService.hpp"
+#include "CloudConfigListCell.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/ui/General.hpp>
@@ -28,6 +29,7 @@ protected:
     void loadInitial();
     void startRefresh(bool force);
     void onRefreshDone(CloudConfigService::RefreshResult const& r);
+    void startStatsFetch();
     void ensureLocalCatalog();
     void rebuildList();
     void updateDetail();
@@ -38,6 +40,7 @@ protected:
         CloudConfigService::PackFetchResult const& fr,
         CloudConfigIndex::PackEntry entry
     );
+    CloudConfigListCell::StatsBadge statsBadgeFor(std::string const& id) const;
 
     bool packMatchesSearch(CloudConfigIndex::PackEntry const& e) const;
     std::string liveModVersion() const;
@@ -71,6 +74,7 @@ protected:
     bool m_busyUi = false;
     bool m_shareOpen = false;
     uint64_t m_opGen = 0;
+    uint64_t m_statsGen = 0;
 };
 
 #endif // EARLYBUFFER_UI_CLOUDCONFIGPOPUP_HPP
