@@ -24,6 +24,10 @@ public:
     static void importConfig();
     // Opens Cloud Configs browser (catalog / install / share).
     static void openCloudConfigs();
+    // Deletes level-cache/{fullKey}/ (all startpos shards) for the open level.
+    static void clearLevelCache();
+    // Deletes the entire level-cache/ tree.
+    static void clearAllLevelCaches();
 
     // After ConfigBundle apply: sync overlay/visualizers, rebuild open settings UI,
     // then show successMsg on the next main-thread tick (keeps alert on top).

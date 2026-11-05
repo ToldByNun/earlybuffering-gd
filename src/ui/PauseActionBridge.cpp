@@ -6,6 +6,8 @@
 #include "../core/BakeMap.hpp"
 #include "../core/BakeScheduler.hpp"
 #include "../core/ConfigBundle.hpp"
+#include "../core/LevelCacheIndex.hpp"
+#include "../core/LevelProfile.hpp"
 #include "../core/ReplayImport.hpp"
 #include "../core/SaveDropPaths.hpp"
 #include "../debug/AssistLog.hpp"
@@ -380,6 +382,58 @@ void PauseActionBridge::toggleDebug() {
 void PauseActionBridge::resetLearning() {
     AssistController::get().resetLevelProfile();
     AssistLog::info("LEARN: level profile reset");
+}
+
+void PauseActionBridge::clearLevelCache() {
+    std::string key = LevelProfile::get().key();
+    if (key.empty()) {
+        key = BakeMap::get().data().levelKey;
+    }
+    if (key.empty()) {
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            "No level key loaded — enter a level first.",
+            "OK"
+        )->show();
+        return;
+    }
+    std::string err;
+    if (!LevelCacheIndex::clearLevel(key, err)) {
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            err.empty() ? "Could not clear this level cache." : err.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    BakeMap::get().clear();
+    AssistLog::info(fmt::format("LEVEL-CACHE cleared {}", key));
+    FLAlertLayer::create(
+        "EarlyBuffer",
+        fmt::format("Cleared level cache for\n{}", key).c_str(),
+        "OK"
+    )->show();
+    AssistController::get().updateOverlay();
+}
+
+void PauseActionBridge::clearAllLevelCaches() {
+    std::string err;
+    if (!LevelCacheIndex::clearAll(err)) {
+        FLAlertLayer::create(
+            "EarlyBuffer",
+            err.empty() ? "Could not clear all level caches." : err.c_str(),
+            "OK"
+        )->show();
+        return;
+    }
+    BakeMap::get().clear();
+    AssistLog::info("LEVEL-CACHE cleared all");
+    FLAlertLayer::create(
+        "EarlyBuffer",
+        "Cleared all level caches.",
+        "OK"
+    )->show();
+    AssistController::get().updateOverlay();
 }
 
 void PauseActionBridge::toggleAutoTune() {

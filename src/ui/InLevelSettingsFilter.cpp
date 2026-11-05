@@ -24,7 +24,7 @@ public:
     };
 
     // Keep in sync with kEntries below (assist-pick / assist-engine removed).
-    static constexpr int kCount = 166;
+    static constexpr int kCount = 168;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -113,6 +113,8 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "bake-map-action", SettingsCategory::Bake },
     { "brute-bake-action", SettingsCategory::Bake },
     { "cancel-bake-action", SettingsCategory::Bake },
+    { "clear-level-cache-action", SettingsCategory::Bake },
+    { "clear-all-level-caches-action", SettingsCategory::Bake },
     { "bake-radius", SettingsCategory::Bake },
     { "title-cube", SettingsCategory::Modes },
     { "cube-enable", SettingsCategory::Modes },
@@ -620,6 +622,8 @@ public:
             || match("bake-map-action")
             || match("brute-bake-action")
             || match("cancel-bake-action")
+            || match("clear-level-cache-action")
+            || match("clear-all-level-caches-action")
             || match("reset-learn-action")
             || match("export-config-action")
             || match("import-config-action")

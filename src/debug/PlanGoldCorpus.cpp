@@ -8,6 +8,7 @@
 #include "../core/ClickBakeStore.hpp"
 #include "../core/LevelCacheAtomicIo.hpp"
 #include "../core/LevelCacheIndex.hpp"
+#include "../core/LevelFingerprint.hpp"
 #include "../core/AssistSimEstimate.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
@@ -177,6 +178,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(LevelCacheAtomicIo::selfCheck(levelCacheAtomicReport), "level-cache-atomic-io");
     std::string levelCacheIndexReport;
     expect(LevelCacheIndex::selfCheck(levelCacheIndexReport), "level-cache-index");
+    std::string levelFingerprintReport;
+    expect(LevelFingerprint::selfCheck(levelFingerprintReport), "level-fingerprint");
     std::string clickBakeStoreReport;
     expect(ClickBakeStore::selfCheck(clickBakeStoreReport), "click-bake-store");
     std::string simEstimateReport;

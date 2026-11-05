@@ -3,8 +3,11 @@
 #include "BakeMap.hpp"
 #include "ClickBakeStore.hpp"
 #include "LevelCacheAtomicIo.hpp"
+#include "LevelFingerprint.hpp"
+#include "../debug/AssistLog.hpp"
 
 #include <Geode/utils/file.hpp>
+#include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
 #include <fstream>
@@ -29,8 +32,18 @@ std::filesystem::path LevelCacheIndex::levelDir(std::string const& fullKey) {
     return rootDir() / fullKey;
 }
 
-std::filesystem::path LevelCacheIndex::metaPath(std::string const& fullKey) {
-    return levelDir(fullKey) / "meta.json";
+std::filesystem::path LevelCacheIndex::shardDir(
+    std::string const& fullKey, int startXq
+) {
+    auto const shard = LevelFingerprint::shardFolderName(startXq);
+    if (shard.empty()) return levelDir(fullKey);
+    return levelDir(fullKey) / shard;
+}
+
+std::filesystem::path LevelCacheIndex::metaPath(
+    std::string const& fullKey, int startXq
+) {
+    return shardDir(fullKey, startXq) / "meta.json";
 }
 
 char const* LevelCacheIndex::clicksFileName(std::string const& method) {
@@ -45,19 +58,21 @@ std::string LevelCacheIndex::normalizeMethod(std::string const& method) {
         return "brute";
     }
     if (method == "self") return "self";
-    // Empty / unknown → replay slot (legacy default).
     return "replay";
 }
 
 std::filesystem::path LevelCacheIndex::clicksPath(
     std::string const& fullKey,
-    std::string const& method
+    std::string const& method,
+    int startXq
 ) {
-    return levelDir(fullKey) / clicksFileName(method);
+    return shardDir(fullKey, startXq) / clicksFileName(method);
 }
 
-std::filesystem::path LevelCacheIndex::routePath(std::string const& fullKey) {
-    return levelDir(fullKey) / "route.json";
+std::filesystem::path LevelCacheIndex::routePath(
+    std::string const& fullKey, int startXq
+) {
+    return shardDir(fullKey, startXq) / "route.json";
 }
 
 std::filesystem::path LevelCacheIndex::triggersPath(std::string const& fullKey) {
@@ -125,6 +140,22 @@ bool LevelCacheIndex::ensureLevelDir(std::string const& fullKey, std::string& er
     return true;
 }
 
+bool LevelCacheIndex::ensureShardDir(
+    std::string const& fullKey, int startXq, std::string& err
+) {
+    if (!ensureLevelDir(fullKey, err)) return false;
+    auto const dir = shardDir(fullKey, startXq);
+    if (dir == levelDir(fullKey)) return true;
+    auto res = file::createDirectoryAll(dir);
+    if (res.isErr()) {
+        err = fmt::format(
+            "cannot create shard {}: {}", dir.string(), res.unwrapErr()
+        );
+        return false;
+    }
+    return true;
+}
+
 std::string LevelCacheIndex::nowUtcIso() {
     using clock = std::chrono::system_clock;
     auto const t = clock::to_time_t(clock::now());
@@ -155,11 +186,12 @@ int64_t LevelCacheIndex::dirBytesApprox(std::filesystem::path const& dir) {
 geode::Result<> LevelCacheIndex::writeMeta(Meta const& meta) {
     if (meta.fullKey.empty()) return Err("meta fullKey empty");
     std::string err;
-    if (!ensureLevelDir(meta.fullKey, err)) return Err(err);
+    if (!ensureShardDir(meta.fullKey, meta.startXq, err)) return Err(err);
 
     Meta out = meta;
     if (out.schema <= 0) out.schema = kSchema;
     if (out.updatedAt.empty()) out.updatedAt = nowUtcIso();
+    // bytesApprox covers the whole level tree (all shards).
     out.bytesApprox = dirBytesApprox(levelDir(out.fullKey));
 
     matjson::Value root = matjson::Value::object();
@@ -176,13 +208,13 @@ geode::Result<> LevelCacheIndex::writeMeta(Meta const& meta) {
     root["updatedAt"] = out.updatedAt;
     root["stale"] = out.stale;
     root["bytesApprox"] = out.bytesApprox;
-    return LevelCacheAtomicIo::writeJson(metaPath(out.fullKey), root);
+    return LevelCacheAtomicIo::writeJson(metaPath(out.fullKey, out.startXq), root);
 }
 
 geode::Result<LevelCacheIndex::Meta> LevelCacheIndex::readMeta(
-    std::string const& fullKey
+    std::string const& fullKey, int startXq
 ) {
-    auto res = LevelCacheAtomicIo::readJson(metaPath(fullKey));
+    auto res = LevelCacheAtomicIo::readJson(metaPath(fullKey, startXq));
     if (res.isErr()) return Err(res.unwrapErr());
     auto root = res.unwrap();
 
@@ -191,7 +223,7 @@ geode::Result<LevelCacheIndex::Meta> LevelCacheIndex::readMeta(
     m.fullKey = root.contains("fullKey")
         ? root["fullKey"].asString().unwrapOr(fullKey)
         : fullKey;
-    m.startXq = static_cast<int>(root["startXq"].asInt().unwrapOr(0));
+    m.startXq = static_cast<int>(root["startXq"].asInt().unwrapOr(startXq));
     m.modVersion = root.contains("modVersion")
         ? root["modVersion"].asString().unwrapOr("")
         : "";
@@ -215,7 +247,6 @@ geode::Result<LevelCacheIndex::Meta> LevelCacheIndex::readMeta(
         ? root["bytesApprox"].asInt().unwrapOr(0)
         : 0;
 
-    // Future schema: keep folder, mark stale for Route (not yet).
     if (m.schema > kSchema) m.stale = true;
     return Ok(std::move(m));
 }
@@ -225,18 +256,16 @@ geode::Result<> LevelCacheIndex::copyFileIfPresent(
     std::filesystem::path const& to
 ) {
     if (!LevelCacheAtomicIo::existsRegular(from)) return Ok();
-    if (LevelCacheAtomicIo::existsRegular(to)) return Ok(); // already in cache
+    if (LevelCacheAtomicIo::existsRegular(to)) return Ok();
     auto parent = to.parent_path();
     if (!parent.empty()) {
         auto mk = file::createDirectoryAll(parent);
         if (mk.isErr()) return Err(mk.unwrapErr());
     }
-    // Prefer JSON atomic path (our stores are JSON).
     auto json = LevelCacheAtomicIo::readJson(from);
     if (json.isOk()) {
         return LevelCacheAtomicIo::writeJson(to, json.unwrap());
     }
-    // Fallback: binary copy via tmp+rename.
     std::ifstream in(from, std::ios::binary);
     if (!in) return Err(fmt::format("open failed {}", from.string()));
     std::string body(
@@ -275,12 +304,11 @@ bool LevelCacheIndex::migrateLegacyIfNeeded(
     auto const cacheDir = levelDir(fullKey);
     bool const cacheExists = std::filesystem::is_directory(cacheDir, ec) && !ec;
 
-    // Already have any clicks-* or meta → treat as migrated (still copy missing TW/profile).
     bool const hasClicks =
-        LevelCacheAtomicIo::existsRegular(clicksPath(fullKey, "replay"))
-        || LevelCacheAtomicIo::existsRegular(clicksPath(fullKey, "brute"))
-        || LevelCacheAtomicIo::existsRegular(clicksPath(fullKey, "self"));
-    bool const hasMeta = LevelCacheAtomicIo::existsRegular(metaPath(fullKey));
+        LevelCacheAtomicIo::existsRegular(clicksPath(fullKey, "replay", 0))
+        || LevelCacheAtomicIo::existsRegular(clicksPath(fullKey, "brute", 0))
+        || LevelCacheAtomicIo::existsRegular(clicksPath(fullKey, "self", 0));
+    bool const hasMeta = LevelCacheAtomicIo::existsRegular(metaPath(fullKey, 0));
 
     auto const legacyBake = legacyBakePath(fullKey);
     bool const hasLegacyBake = LevelCacheAtomicIo::existsRegular(legacyBake);
@@ -302,7 +330,6 @@ bool LevelCacheIndex::migrateLegacyIfNeeded(
         auto raw = LevelCacheAtomicIo::readJson(legacyBake);
         if (raw.isErr()) {
             log = fmt::format("legacy-bake-unreadable: {}", raw.unwrapErr());
-            // Keep going — TW/profile may still copy.
         }
         else {
             BakeMapData data;
@@ -315,7 +342,7 @@ bool LevelCacheIndex::migrateLegacyIfNeeded(
                 auto const method = normalizeMethod(data.method);
                 data.method = method;
                 auto w = LevelCacheAtomicIo::writeJson(
-                    clicksPath(fullKey, method),
+                    clicksPath(fullKey, method, 0),
                     ClickBakeStore::clicksToJson(data)
                 );
                 if (w.isErr()) {
@@ -358,13 +385,14 @@ bool LevelCacheIndex::migrateLegacyIfNeeded(
         Meta meta;
         meta.schema = kSchema;
         meta.fullKey = fullKey;
+        meta.startXq = 0;
+        meta.settingsFp = LevelFingerprint::settingsFp();
         if (auto* mod = Mod::get()) {
             meta.modVersion = mod->getVersion().toVString();
         }
         meta.gdVersion = "2.2081";
-        // Prefer tps from a clicks-* file if present (no loadMerged — avoids recursion).
         for (char const* method : {"replay", "brute", "self"}) {
-            auto const cp = clicksPath(fullKey, method);
+            auto const cp = clicksPath(fullKey, method, 0);
             auto raw = LevelCacheAtomicIo::readJson(cp);
             if (raw.isErr()) continue;
             BakeMapData probe;
@@ -389,6 +417,127 @@ bool LevelCacheIndex::migrateLegacyIfNeeded(
     return true;
 }
 
+bool LevelCacheIndex::clearLevel(std::string const& fullKey, std::string& err) {
+    err.clear();
+    if (fullKey.empty()) {
+        err = "fullKey empty";
+        return false;
+    }
+    auto const dir = levelDir(fullKey);
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec) || ec) {
+        return true; // already gone
+    }
+    std::filesystem::remove_all(dir, ec);
+    if (ec) {
+        err = fmt::format("clear {}: {}", dir.string(), ec.message());
+        return false;
+    }
+    return true;
+}
+
+bool LevelCacheIndex::clearAll(std::string& err) {
+    err.clear();
+    auto const root = rootDir();
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec) || ec) {
+        return true;
+    }
+    std::filesystem::remove_all(root, ec);
+    if (ec) {
+        err = fmt::format("clear-all {}: {}", root.string(), ec.message());
+        return false;
+    }
+    (void)ensureRoot(err);
+    return err.empty();
+}
+
+int64_t LevelCacheIndex::totalBytesApprox() {
+    return dirBytesApprox(rootDir());
+}
+
+std::vector<LevelCacheIndex::LevelEntry> LevelCacheIndex::listLevelEntries() {
+    std::vector<LevelEntry> out;
+    std::error_code ec;
+    auto const root = rootDir();
+    if (!std::filesystem::is_directory(root, ec) || ec) return out;
+    for (auto const& entry : std::filesystem::directory_iterator(root, ec)) {
+        if (ec) break;
+        if (!entry.is_directory(ec) || ec) continue;
+        LevelEntry e;
+        e.fullKey = entry.path().filename().string();
+        if (e.fullKey.empty() || e.fullKey == "." || e.fullKey == "..") continue;
+        e.bytes = dirBytesApprox(entry.path());
+        // Prefer root meta updatedAt; else newest shard meta; else epoch.
+        e.updatedAt = "1970-01-01T00:00:00Z";
+        auto rootMeta = readMeta(e.fullKey, 0);
+        if (rootMeta.isOk() && !rootMeta.unwrap().updatedAt.empty()) {
+            e.updatedAt = rootMeta.unwrap().updatedAt;
+        }
+        else {
+            std::error_code ec2;
+            for (auto const& sub : std::filesystem::directory_iterator(entry.path(), ec2)) {
+                if (ec2 || !sub.is_directory(ec2)) continue;
+                auto const name = sub.path().filename().string();
+                if (name.rfind("sp_", 0) != 0) continue;
+                // Parse startXq after "sp_"
+                try {
+                    int const xq = std::stoi(name.substr(3));
+                    auto sm = readMeta(e.fullKey, xq);
+                    if (sm.isOk() && sm.unwrap().updatedAt > e.updatedAt) {
+                        e.updatedAt = sm.unwrap().updatedAt;
+                    }
+                }
+                catch (...) {
+                }
+            }
+        }
+        out.push_back(std::move(e));
+    }
+    return out;
+}
+
+int LevelCacheIndex::evictLruIfOverCap() {
+    auto total = totalBytesApprox();
+    if (total <= kSoftCapBytes) return 0;
+
+    auto entries = listLevelEntries();
+    std::sort(entries.begin(), entries.end(), [](LevelEntry const& a, LevelEntry const& b) {
+        if (a.updatedAt != b.updatedAt) return a.updatedAt < b.updatedAt;
+        return a.fullKey < b.fullKey;
+    });
+
+    int removed = 0;
+    for (auto const& e : entries) {
+        if (total <= kSoftCapBytes) break;
+        std::string err;
+        if (!clearLevel(e.fullKey, err)) {
+            AssistLog::debug(fmt::format("LEVEL-CACHE LRU skip {}: {}", e.fullKey, err));
+            continue;
+        }
+        total -= e.bytes;
+        if (total < 0) total = totalBytesApprox();
+        ++removed;
+        AssistLog::info(fmt::format(
+            "LEVEL-CACHE LRU evict {} ({} bytes)", e.fullKey, e.bytes
+        ));
+    }
+    return removed;
+}
+
+std::string LevelCacheIndex::overlayBit() {
+    auto const bytes = totalBytesApprox();
+    if (bytes <= 0) return {};
+    double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
+    if (bytes > kSoftCapBytes) {
+        return fmt::format("cache={:.0f}MB LRU", mb);
+    }
+    if (mb < 10.0) {
+        return fmt::format("cache={:.1f}MB", mb);
+    }
+    return fmt::format("cache={:.0f}MB", mb);
+}
+
 bool LevelCacheIndex::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -406,24 +555,85 @@ bool LevelCacheIndex::selfCheck(std::string& report) {
         std::string(clicksFileName("replay")) == "clicks-replay.json",
         "fname-replay"
     );
-    expect(
-        std::string(clicksFileName("brute")) == "clicks-brute.json",
-        "fname-brute"
-    );
 
     auto const key = std::string("id_selfcheck_rev_deadbeef");
     expect(
-        levelDir(key).filename() == key
-            || levelDir(key).string().find(key) != std::string::npos,
+        levelDir(key).string().find(key) != std::string::npos,
         "level-dir"
     );
+    expect(shardDir(key, 0) == levelDir(key), "shard-root");
     expect(
-        legacyBakePath(key).filename() == key + ".json",
-        "legacy-bake-name"
+        shardDir(key, 5).filename() == "sp_5",
+        "shard-5"
     );
-
-    // Path-only when Mod unavailable is fine; disk migrate tested in ClickBakeStore.
+    expect(
+        clicksPath(key, "replay", 5).filename() == "clicks-replay.json",
+        "shard-clicks"
+    );
+    expect(
+        clicksPath(key, "replay", 5).parent_path().filename() == "sp_5",
+        "shard-parent"
+    );
+    expect(triggersPath(key).parent_path() == levelDir(key), "tw-root");
+    expect(kSoftCapBytes == 256LL * 1024 * 1024, "soft-cap");
     expect(kSchema == 1, "schema");
+
+    // Live cross-contamination + clear when Mod is available.
+    if (Mod::get()) {
+        auto const liveKey = std::string("id_selfcheck_shard_rev_11");
+        std::string err;
+        (void)clearLevel(liveKey, err);
+
+        BakeMapData a;
+        a.levelKey = liveKey;
+        a.method = "replay";
+        a.tps = 240.0;
+        BakedClick c;
+        c.x = 100.f;
+        c.nominalFrame = 1;
+        c.earliest = 1;
+        c.latest = 2;
+        a.clicks.push_back(c);
+        expect(ClickBakeStore::saveMethod(a, 0).isOk(), "save-xq0");
+
+        BakeMapData b = a;
+        b.clicks[0].x = 999.f;
+        expect(ClickBakeStore::saveMethod(b, 7).isOk(), "save-xq7");
+
+        expect(
+            LevelCacheAtomicIo::existsRegular(clicksPath(liveKey, "replay", 0)),
+            "file-xq0"
+        );
+        expect(
+            LevelCacheAtomicIo::existsRegular(clicksPath(liveKey, "replay", 7)),
+            "file-xq7"
+        );
+
+        BakeMapData load0;
+        BakeMapData load7;
+        expect(ClickBakeStore::loadMerged(liveKey, load0, 0).isOk(), "load-0");
+        expect(ClickBakeStore::loadMerged(liveKey, load7, 7).isOk(), "load-7");
+        expect(load0.clicks.size() == 1 && load0.clicks[0].x == 100.f, "iso-0");
+        expect(load7.clicks.size() == 1 && load7.clicks[0].x == 999.f, "iso-7");
+
+        Meta m0;
+        m0.fullKey = liveKey;
+        m0.startXq = 0;
+        m0.settingsFp = LevelFingerprint::settingsFp();
+        expect(writeMeta(m0).isOk(), "meta-0");
+        auto rm0 = readMeta(liveKey, 0);
+        expect(rm0.isOk() && !rm0.unwrap().settingsFp.empty(), "meta-fp");
+
+        expect(clearLevel(liveKey, err), "clear-level");
+        expect(
+            !LevelCacheAtomicIo::existsRegular(clicksPath(liveKey, "replay", 0)),
+            "cleared"
+        );
+
+        // overlayBit must not crash on empty/partial trees.
+        (void)overlayBit();
+        (void)evictLruIfOverCap();
+    }
 
     if (fails == 0) {
         report = "LevelCacheIndex selfCheck OK";

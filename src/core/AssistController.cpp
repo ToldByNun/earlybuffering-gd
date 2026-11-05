@@ -14,6 +14,8 @@
 #include "DivergenceTracker.hpp"
 #include "AssistRealMetrics.hpp"
 #include "AssistSimEstimate.hpp"
+#include "LevelCacheIndex.hpp"
+#include "LevelFingerprint.hpp"
 #include "GhostParityProbe.hpp"
 #include "SimTrust.hpp"
 #include "PerfectAssistPolicy.hpp"
@@ -354,7 +356,8 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     BakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
-        BakeMap::get().loadForLevel(playLayer->m_level);
+        BakeMap::get().loadForLevel(playLayer->m_level, 0);
+        (void)LevelCacheIndex::evictLruIfOverCap();
         TriggerWorldBaker::get().loadOrBuild(playLayer);
         // Movers / TW tracks → dynamic-labelled TrustRate floor (G7b).
         bool const dynamicLabelled = TriggerWorldStore::get().hasTracks();
@@ -1628,6 +1631,12 @@ void AssistController::updateOverlay() {
                 this->m_overlayText += " | " + simBit;
             }
         }
+        {
+            auto const cacheBit = LevelCacheIndex::overlayBit();
+            if (!cacheBit.empty()) {
+                this->m_overlayText += " | " + cacheBit;
+            }
+        }
         if (m_savesAttempt > 0) {
             m_overlayText += fmt::format(" | saves {}/{}", m_savesAttempt, m_savesLevel);
         }
@@ -2343,6 +2352,15 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
             PerfTrace::Scope const scope("captureStartSnapshot");
             this->m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(p1);
             this->m_startSnapshotTaken = this->m_startSnapshotSlot >= 0;
+            if (this->m_startSnapshotTaken) {
+                float startX = 0.f;
+                if (auto* snap = ShadowSimulator::get().snapshotSlot(
+                        this->m_startSnapshotSlot
+                    )) {
+                    startX = snap->getPositionX();
+                }
+                BakeMap::get().setStartXq(LevelFingerprint::startXq(startX));
+            }
         }
 
         bool const modeChanged = this->m_modeKnown && (

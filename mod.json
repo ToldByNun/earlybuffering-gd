@@ -564,6 +564,18 @@
 			"description": "Stops an in-progress bake. Only active while baking.",
 			"button-text": "cancel"
 		},
+		"clear-level-cache-action": {
+			"type": "custom:eb-action",
+			"name": "Clear This Level Cache",
+			"description": "Deletes EarlyBuffer's on-disk cache for the current level (all start-position shards: clicks, route, meta). Does not change settings or legacy bakes/ until you re-bake. Learning profile reset is a separate button.",
+			"button-text": "clear lvl"
+		},
+		"clear-all-level-caches-action": {
+			"type": "custom:eb-action",
+			"name": "Clear All Level Caches",
+			"description": "Deletes the entire level-cache folder under the mod save dir. Re-bake or replay import rebuilds what you need. Soft cap is 256 MB with LRU eviction while saving.",
+			"button-text": "clear all"
+		},
 		"bake-radius": {
 			"type": "int",
 			"name": "Bake Radius",

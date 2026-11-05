@@ -6,22 +6,26 @@
 
 struct BakeMapData;
 
-// Per-source click files under level-cache/{fullKey}/clicks-{method}.json.
+// Per-source click files under level-cache/{fullKey}/[sp_N/]clicks-{method}.json.
 // BakeMap load/save goes through here; legacy bakes/{key}.json stays readable.
 class ClickBakeStore {
 public:
     static constexpr int kFileSchema = 1;
 
-    // Load merged clicks for a level key (migrate legacy → cache first).
+    // Load merged clicks for a level key + startpos shard (migrate legacy first).
     // Empty sources → Ok with empty clicks (caller may mark loaded).
     static geode::Result<> loadMerged(
         std::string const& fullKey,
-        BakeMapData& out
+        BakeMapData& out,
+        int startXq = 0
     );
 
-    // Write only clicks-{method}.json for data.method; refresh meta.json.
-    // Does not delete other method files.
-    static geode::Result<> saveMethod(BakeMapData const& data);
+    // Write only clicks-{method}.json for data.method into the shard;
+    // refresh shard meta.json. Does not delete other method files or shards.
+    static geode::Result<> saveMethod(
+        BakeMapData const& data,
+        int startXq = 0
+    );
 
     // Parse / emit one clicks-*.json body (shared with migration + selfCheck).
     static geode::Result<> parseClicksJson(

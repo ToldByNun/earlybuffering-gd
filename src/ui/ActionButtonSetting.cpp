@@ -71,6 +71,14 @@ void fireSettingAction(std::string const& key) {
         PauseActionBridge::resetLearning();
         return;
     }
+    if (key == "clear-level-cache-action") {
+        PauseActionBridge::clearLevelCache();
+        return;
+    }
+    if (key == "clear-all-level-caches-action") {
+        PauseActionBridge::clearAllLevelCaches();
+        return;
+    }
     if (key == "export-config-action") {
         PauseActionBridge::exportConfig();
         return;

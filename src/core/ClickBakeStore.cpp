@@ -3,6 +3,7 @@
 #include "BakeMap.hpp"
 #include "LevelCacheAtomicIo.hpp"
 #include "LevelCacheIndex.hpp"
+#include "LevelFingerprint.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 
@@ -119,7 +120,8 @@ void ClickBakeStore::appendUniqueClicks(
 
 geode::Result<> ClickBakeStore::loadMerged(
     std::string const& fullKey,
-    BakeMapData& out
+    BakeMapData& out,
+    int startXq
 ) {
     out = {};
     out.levelKey = fullKey;
@@ -128,16 +130,18 @@ geode::Result<> ClickBakeStore::loadMerged(
 
     if (fullKey.empty()) return Err("fullKey empty");
 
-    std::string migLog;
-    if (!LevelCacheIndex::migrateLegacyIfNeeded(fullKey, migLog)) {
-        AssistLog::debug(fmt::format(
-            "LEVEL-CACHE migrate fail {}: {}", fullKey, migLog
-        ));
-        // Fall through — may still read legacy directly below.
-    }
-    else if (migLog.find("migrated") != std::string::npos
-        || migLog.find("copied") != std::string::npos) {
-        AssistLog::info(fmt::format("LEVEL-CACHE {}", migLog));
+    // Legacy flat bake migrates into startXq=0 only.
+    if (startXq == 0) {
+        std::string migLog;
+        if (!LevelCacheIndex::migrateLegacyIfNeeded(fullKey, migLog)) {
+            AssistLog::debug(fmt::format(
+                "LEVEL-CACHE migrate fail {}: {}", fullKey, migLog
+            ));
+        }
+        else if (migLog.find("migrated") != std::string::npos
+            || migLog.find("copied") != std::string::npos) {
+            AssistLog::info(fmt::format("LEVEL-CACHE {}", migLog));
+        }
     }
 
     BakeMapData primary;
@@ -147,7 +151,7 @@ geode::Result<> ClickBakeStore::loadMerged(
     for (char const* method : {"replay", "brute", "self"}) {
         BakeMapData part;
         part.levelKey = fullKey;
-        auto const path = LevelCacheIndex::clicksPath(fullKey, method);
+        auto const path = LevelCacheIndex::clicksPath(fullKey, method, startXq);
         auto r = readOneSource(path, part);
         if (r.isErr()) continue;
         part.method = method;
@@ -167,19 +171,19 @@ geode::Result<> ClickBakeStore::loadMerged(
         return Ok();
     }
 
-    // Cache miss → legacy read fallback (no write). Keeps old installs working
-    // even if migration could not create the cache dir.
-    auto legacy = LevelCacheAtomicIo::readJson(
-        LevelCacheIndex::legacyBakePath(fullKey)
-    );
-    if (legacy.isOk()) {
-        out.levelKey = fullKey;
-        auto p = parseClicksJson(legacy.unwrap(), out);
-        if (p.isOk()) return Ok();
-        return p;
+    // Legacy fallback only for normal start (startXq==0).
+    if (startXq == 0) {
+        auto legacy = LevelCacheAtomicIo::readJson(
+            LevelCacheIndex::legacyBakePath(fullKey)
+        );
+        if (legacy.isOk()) {
+            out.levelKey = fullKey;
+            auto p = parseClicksJson(legacy.unwrap(), out);
+            if (p.isOk()) return Ok();
+            return p;
+        }
     }
 
-    // Empty store is a successful load (self-bake can start writing).
     out.levelKey = fullKey;
     out.tps = 240.0;
     out.method.clear();
@@ -188,11 +192,14 @@ geode::Result<> ClickBakeStore::loadMerged(
     return Ok();
 }
 
-geode::Result<> ClickBakeStore::saveMethod(BakeMapData const& data) {
+geode::Result<> ClickBakeStore::saveMethod(
+    BakeMapData const& data,
+    int startXq
+) {
     if (data.levelKey.empty()) return Err("levelKey empty");
 
     std::string err;
-    if (!LevelCacheIndex::ensureLevelDir(data.levelKey, err)) {
+    if (!LevelCacheIndex::ensureShardDir(data.levelKey, startXq, err)) {
         return Err(err);
     }
 
@@ -200,16 +207,20 @@ geode::Result<> ClickBakeStore::saveMethod(BakeMapData const& data) {
     written.method = LevelCacheIndex::normalizeMethod(
         data.method.empty() ? "self" : data.method
     );
-    auto const path = LevelCacheIndex::clicksPath(data.levelKey, written.method);
+    auto const path = LevelCacheIndex::clicksPath(
+        data.levelKey, written.method, startXq
+    );
     auto w = LevelCacheAtomicIo::writeJson(path, clicksToJson(written));
     if (w.isErr()) return w;
 
     LevelCacheIndex::Meta meta;
-    auto existing = LevelCacheIndex::readMeta(data.levelKey);
+    auto existing = LevelCacheIndex::readMeta(data.levelKey, startXq);
     if (existing.isOk()) meta = existing.unwrap();
     meta.schema = LevelCacheIndex::kSchema;
     meta.fullKey = data.levelKey;
+    meta.startXq = startXq;
     meta.tps = written.tps > 0.0 ? written.tps : meta.tps;
+    meta.settingsFp = LevelFingerprint::settingsFp();
     meta.stale = false;
     if (auto* mod = Mod::get()) {
         meta.modVersion = mod->getVersion().toVString();
@@ -221,6 +232,7 @@ geode::Result<> ClickBakeStore::saveMethod(BakeMapData const& data) {
             "LEVEL-CACHE meta save: {}", mw.unwrapErr()
         ));
     }
+    (void)LevelCacheIndex::evictLruIfOverCap();
     return Ok();
 }
 

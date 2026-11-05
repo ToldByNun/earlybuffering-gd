@@ -4,6 +4,8 @@
 #include "AssistController.hpp"
 #include "BakeSpawnProbe.hpp"
 #include "ClickBakeStore.hpp"
+#include "LevelFingerprint.hpp"
+#include "LevelCacheIndex.hpp"
 #include "ShadowSimulator.hpp"
 #include "Tg2BakeFixture.hpp"
 #include "TriggerWorldBaker.hpp"
@@ -157,6 +159,7 @@ BakeMap& BakeMap::get() {
 void BakeMap::clear() {
     m_data = {};
     m_loaded = false;
+    this->m_startXq = 0;
     this->m_dirty = false;
 }
 
@@ -174,10 +177,11 @@ void BakeMap::setPendingReplay(ImportedReplay replay) {
 ));
 }
 
-void BakeMap::loadForLevel(GJGameLevel* level) {
+void BakeMap::loadForLevel(GJGameLevel* level, int startXq) {
     m_data = {};
     m_loaded = false;
     this->m_dirty = false;
+    this->m_startXq = startXq;
     if (!level) return;
     m_data.levelKey = LevelProfile::makeKey(level);
     auto res = readFile();
@@ -186,32 +190,75 @@ void BakeMap::loadForLevel(GJGameLevel* level) {
         m_loaded = true;
         if (!m_data.clicks.empty()) {
             AssistLog::debug(fmt::format(
-                "BAKE: loaded map {} ({} clicks, {}, {})",
+                "BAKE: loaded map {} sp={} ({} clicks, {}, {})",
                 m_data.levelKey,
+                this->m_startXq,
                 m_data.clicks.size(),
                 m_data.sourceReplay,
                 m_data.method
-));
+            ));
         }
         else {
             m_data.sourceReplay.clear();
             m_data.method.clear();
             m_data.tps = AssistClock::kNominalTps;
             AssistLog::debug(fmt::format(
-                "BAKE: empty store ready {}", m_data.levelKey
-));
+                "BAKE: empty store ready {} sp={}",
+                m_data.levelKey,
+                this->m_startXq
+            ));
         }
         return;
     }
     // Read error — keep levelKey; still mark loaded empty so self-bake works.
     AssistLog::debug(fmt::format(
-        "BAKE: load miss {}: {}", m_data.levelKey, res.unwrapErr()
-));
+        "BAKE: load miss {} sp={}: {}",
+        m_data.levelKey,
+        this->m_startXq,
+        res.unwrapErr()
+    ));
     m_data.sourceReplay.clear();
     m_data.method.clear();
     m_data.tps = AssistClock::kNominalTps;
     m_data.clicks.clear();
     m_loaded = true;
+}
+
+void BakeMap::setStartXq(int startXq) {
+    if (this->m_startXq == startXq && this->m_loaded) return;
+    if (this->m_data.levelKey.empty()) {
+        this->m_startXq = startXq;
+        return;
+    }
+    // Persist dirty clicks into the previous shard before switching.
+    if (this->m_dirty && this->m_loaded) {
+        this->save();
+    }
+    std::string const key = this->m_data.levelKey;
+    bool const hadReplay = this->m_hasReplay;
+    ImportedReplay replay = this->m_replay;
+    this->m_data = {};
+    this->m_data.levelKey = key;
+    this->m_startXq = startXq;
+    this->m_dirty = false;
+    this->m_loaded = false;
+    auto res = this->readFile();
+    this->m_loaded = true;
+    if (res.isErr()) {
+        this->m_data.sourceReplay.clear();
+        this->m_data.method.clear();
+        this->m_data.tps = AssistClock::kNominalTps;
+        this->m_data.clicks.clear();
+    }
+    if (hadReplay) {
+        this->m_replay = std::move(replay);
+        this->m_hasReplay = true;
+    }
+    AssistLog::debug(fmt::format(
+        "BAKE: startpos shard sp={} clicks={}",
+        this->m_startXq,
+        this->m_data.clicks.size()
+    ));
 }
 
 void BakeMap::save() const {
@@ -758,13 +805,15 @@ Result<int> BakeMap::bakeReplay(
     if (auto* snap = ShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
         startX = snap->getPositionX();
     }
+    this->setStartXq(LevelFingerprint::startXq(startX));
     AssistLog::info(fmt::format(
-        "BAKE: startPose startPos={} startX={:.1f} attemptTick={} twTracks={}",
+        "BAKE: startPose startPos={} startX={:.1f} sp={} attemptTick={} twTracks={}",
         startPosAttempt ? 1 : 0,
         startX,
+        this->m_startXq,
         attemptTick,
         TriggerWorldStore::get().trackCount()
-));
+    ));
 
     // ── Validate 1:1 from start snapshot. Death ≠ hard fail: keep the
     // surviving prefix (Hybrid often only needs a StartPos part, not the
@@ -1043,9 +1092,15 @@ Result<int> BakeMap::bakeBrute(
     int const maxClicks = 400;
     int const horizon = ShadowSimulator::modelFor(
         layer->m_player1, StageConfig::ticksAll()
-).cap;
+    ).cap;
     bool const doRelease = StageConfig::assistRelease();
     auto const model = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll());
+
+    float startX = 0.f;
+    if (auto* snap = ShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
+        startX = snap->getPositionX();
+    }
+    this->setStartXq(LevelFingerprint::startXq(startX));
 
     BakeMapData out;
     out.levelKey = m_data.levelKey.empty() && layer->m_level
@@ -1360,12 +1415,12 @@ Result<int> BakeMap::bakeBrute(
 }
 
 Result<> BakeMap::writeFile() const {
-    return ClickBakeStore::saveMethod(m_data);
+    return ClickBakeStore::saveMethod(m_data, this->m_startXq);
 }
 
 Result<> BakeMap::readFile() {
     std::string const key = m_data.levelKey;
-    auto res = ClickBakeStore::loadMerged(key, m_data);
+    auto res = ClickBakeStore::loadMerged(key, m_data, this->m_startXq);
     if (res.isErr()) return res;
     m_data.levelKey = key;
     return Ok();

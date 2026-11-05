@@ -72,7 +72,11 @@ public:
     static BakeMap& get();
 
     void clear();
-    void loadForLevel(GJGameLevel* level);
+    // Loads clicks for the startpos shard (startXq==0 = level-root cache).
+    void loadForLevel(GJGameLevel* level, int startXq = 0);
+    // Switch shard without clearing levelKey; reloads clicks when xq changes.
+    void setStartXq(int startXq);
+    int startXq() const { return m_startXq; }
     void save() const;
 
     bool loaded() const { return m_loaded; }
@@ -170,6 +174,7 @@ private:
     ImportedReplay m_replay;
     bool m_hasReplay = false;
     bool m_loaded = false;
+    int m_startXq = 0;
     // Set by mergeSelfClicks; cleared by save(). Avoids disk I/O on death flush.
     mutable bool m_dirty = false;
     BakeProgress m_progress;
