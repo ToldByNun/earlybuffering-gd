@@ -19,6 +19,7 @@ struct ImportedReplay {
     double tps = 240.0;
     std::string sourceName;
     std::string format; // "gdr2", "mhr.json", "mhr", "slc"
+    uint32_t recordedLevelId = 0;
 };
 
 class ReplayImport {

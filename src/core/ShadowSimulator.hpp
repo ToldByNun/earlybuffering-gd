@@ -464,6 +464,7 @@ public:
         bool twApplied = false;
         int eventsApplied = 0; // count this frame
         int mode = 0;
+        bool dashing = false;
         bool upsideDown = false;
         bool mini = false;
         bool dual = false;

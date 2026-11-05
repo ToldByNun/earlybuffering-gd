@@ -1092,6 +1092,24 @@ bool DevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
     return true;
 }
 
+bool DevDiagDump::dumpReplayDivergence(ShadowSimulator::BakeRunResult const& run,
+    ImportedReplay const& replay, std::filesystem::path& outDir, std::string& errMsg) {
+    outDir = makeStampDir("bakefail", errMsg);
+    if (outDir.empty()) return false;
+    auto* layer = PlayLayer::get();
+    int const currentId = layer && layer->m_level ? static_cast<int>(layer->m_level->m_levelID) : 0;
+    std::ostringstream body;
+    body << fmt::format("replay={} recordedLevel={} currentLevel={} events={} ghostDeathFrame={} killerUid={} objectId={}\n",
+        replay.sourceName, replay.recordedLevelId, currentId, replay.events.size(),
+        run.deathFrame, run.deathObjId, run.deathObjGameId);
+    for (auto const& f : run.frames) {
+        if (f.frame >= run.deathFrame - 32)
+            body << fmt::format("frame={} x={} y={} vy={} held={} mode={} events={} dead={}\n",
+                f.frame, f.x, f.y, f.yVel, f.jumpHeld, f.mode, f.eventsApplied, f.dead);
+    }
+    return writeFile(outDir, "ghost-divergence.txt", body.str(), errMsg);
+}
+
 bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg) {
     outDir = makeStampDir("bakefail", errMsg);
     if (outDir.empty()) return false;

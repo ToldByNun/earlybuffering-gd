@@ -44,7 +44,9 @@ struct TriggerWorldData {
 // Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
 class TriggerWorldStore {
 public:
-    static constexpr int kFileVersion = 1;
+    // v2 keys normal Move triggers to their actual level time.  v1 assumed
+    // every non-spawn trigger fired at tick zero.
+    static constexpr int kFileVersion = 2;
     // Soft ceiling: refuse NEW tracks/keys with AssistLog — never silent drop under soft.
     static constexpr size_t kSoftMaxTracks = 100000;
     static constexpr size_t kSoftMaxKeysPerTrack = 32768;

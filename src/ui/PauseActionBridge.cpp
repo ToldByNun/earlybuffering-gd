@@ -278,13 +278,22 @@ void PauseActionBridge::handleImportedPath(std::filesystem::path const& path) {
     BakeMap::get().setPendingReplay(loaded.unwrap());
     AssistController::get().updateOverlay();
     auto const* r = BakeMap::get().pendingReplay();
+    std::string levelNote;
+    auto* layer = PlayLayer::get();
+    if (r->recordedLevelId && layer && layer->m_level) {
+        int const currentId = layer->m_level->m_levelID;
+        if (currentId > 0 && r->recordedLevelId != static_cast<uint32_t>(currentId)) {
+            levelNote = fmt::format("\nRecorded on level {}. Current level: {}. "
+                "Baking uses the current layout.\n", r->recordedLevelId, currentId);
+        }
+    }
     FLAlertLayer::create(
         "EarlyBuffer",
         fmt::format(
-            "Imported {}\n{} events @ {:.0f} tps ({})\n\n"
+            "Imported {}\n{} events @ {:.0f} tps ({})\n{}\n"
             "Press Bake Map for replay windows.\n"
             "Brute Bake ignores this and searches the level itself.",
-            r->sourceName, r->events.size(), r->tps, r->format
+            r->sourceName, r->events.size(), r->tps, r->format, levelNote
         ).c_str(),
         "OK"
     )->show();

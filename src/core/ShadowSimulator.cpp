@@ -4326,7 +4326,10 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     auto* s = m_shadow;
     size_t nextEv = 0;
     if (traceFrames) {
-        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 2048)) + 2);
+        // Route/full-replay bakes reuse this trace for every click window.
+        // Reserve the bounded full run so long macros do not repeatedly grow
+        // the vector while the main thread is simulating.
+        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 65536)) + 2);
     }
 
     auto applyEv = [&](ReplayEvent const& ev) {
@@ -4430,6 +4433,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 tr.twApplied = this->m_triggerWorldAppliedThisTick;
                 tr.eventsApplied = evThis;
                 tr.mode = static_cast<int>(StageConfig::kindOf(s));
+                tr.dashing = s->m_isDashing;
                 tr.upsideDown = s->m_isUpsideDown;
                 // The 2.2081 PlayerObject binding does not expose mini state;
                 // preserve the schema field as false until a binding-backed

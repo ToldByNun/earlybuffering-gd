@@ -56,9 +56,9 @@ bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMetho
                 // A partial replay still has useful click windows, but must
                 // never be presented as a usable Route: it has no complete
                 // validated pose trace and therefore no route.json.
-                msg = "Replay validation was partial — Route was not created.\n\n"
-                    "The click windows were saved for Replay/Hybrid, but Route needs "
-                    "a replay that survives validation from this exact StartPos.\n\n(";
+                msg = "EarlyBuffer's offline ghost died during playback.\n\n"
+                    "Only the preceding click windows were saved for Replay/Hybrid. "
+                    "Route needs a complete simulated path.\n\n(";
                 msg += status;
                 msg += ")";
             }

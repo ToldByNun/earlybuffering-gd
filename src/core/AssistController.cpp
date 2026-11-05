@@ -1087,6 +1087,7 @@ bool AssistController::armHoldUntilSafe(
  (void)playLayer;
     if (!player || limit <= 0) return true; // fall through vanilla
     if (!StageConfig::husSoftHoldEnabled()) return true; // disable-hus
+    if (StageConfig::assistMode() == AssistMode::Route) return true;
     // HUS nur Trust.
     if (!SimTrust::get().okAt(player->getPositionX())) return true;
 
@@ -1159,6 +1160,22 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     if (this->m_buffer.state != BufferState::Buffered) return;
     if (!this->m_buffer.holdUntilSafe) return;
     if (this->m_simDt <= 0.f) return;
+
+    // Route is intentionally Delay-or-Pass only. A soft hold would turn a
+    // corridor-gated miss into an injected input beyond the recorded route.
+    if (StageConfig::assistMode() == AssistMode::Route) {
+        AssistLog::debug("HOLD-UNTIL-SAFE abort (Route mode) -> Pass");
+        DevCycleRecorder::get().noteHus(
+            this->m_buffer.devPressId,
+            AssistReason::PassHopeless,
+            "hus-route-disabled",
+            this->m_attemptTick
+        );
+        this->noteVerdict(AssistReason::PassHopeless, "hus-route-disabled");
+        this->clearBuffer();
+        this->updateOverlay();
+        return;
+    }
 
     // Trust lost mid-HUS → Pass (drop soft hold, no inject).
     if (!SimTrust::get().okAt(player->getPositionX())) {
@@ -3024,6 +3041,7 @@ bool AssistController::planPress(
 );
 
     auto const kind = StageConfig::kindOf(player);
+    bool const routeMode = StageConfig::assistMode() == AssistMode::Route;
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
@@ -3035,7 +3053,7 @@ bool AssistController::planPress(
         player, player1, true, effectTick, this->m_simDt,
         shareHybrid ? &hybridReuse : nullptr
 );
-    if (hybridVerifyAttempted) nearBake = false;
+    if (hybridVerifyAttempted || routeMode) nearBake = false;
 
     // Live/Hybrid-live: sim mismatch → hard Pass, unless orb/pad ahead
     // (allow Delay / Soft Hold — solitary early orb miss must still assist).
@@ -3230,7 +3248,7 @@ bool AssistController::planPress(
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDense);
     // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
     // Otherwise reuse findNear window fields from tryBakeAssist.
-    if (!hybridVerifyAttempted) {
+    if (!hybridVerifyAttempted && !routeMode) {
         fillBakePreferBand(
             opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt,
             shareHybrid ? &hybridReuse : nullptr
@@ -3670,6 +3688,7 @@ bool AssistController::planRelease(
 );
 
     auto const kind = StageConfig::kindOf(player);
+    bool const routeMode = StageConfig::assistMode() == AssistMode::Route;
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
@@ -3678,7 +3697,7 @@ bool AssistController::planRelease(
         player, player1, false, effectTick, this->m_simDt,
         shareHybrid ? &hybridReuse : nullptr
 );
-    if (hybridVerifyAttempted) nearBake = false;
+    if (hybridVerifyAttempted || routeMode) nearBake = false;
 
     if (DivergenceTracker::get().simUntrusted()) {
         if (!nearOrb) {
@@ -3830,7 +3849,7 @@ bool AssistController::planRelease(
         slot, effectTick, kind
 );
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDenseRel);
-    if (!hybridVerifyAttempted) {
+    if (!hybridVerifyAttempted && !routeMode) {
         fillBakePreferBand(
             opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt,
             shareHybrid ? &hybridReuse : nullptr

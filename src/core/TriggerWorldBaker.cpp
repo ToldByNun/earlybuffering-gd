@@ -79,7 +79,11 @@ bool TriggerWorldBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKind
     if (kind != TriggerKind::StaticMove) return false;
     if (TriggerClassify::isFollowTriggerId(effect->m_objectID)) return true;
     if (effect->m_useMoveTarget || effect->m_followCPP) return true;
-    if (effect->m_isDynamicMode || effect->m_isDirectionFollowSnap360) return true;
+    // Dynamic mode still runs a normal Move trigger at its timeline position.
+    // It is only player-coupled when TriggerClassify has already identified a
+    // player/camera lock. Treating every dynamic move as a follow dropped the
+    // spike group at the first Slaughterhouse transition from the bake world.
+    if (effect->m_isDirectionFollowSnap360) return true;
     return false;
 }
 
@@ -120,6 +124,7 @@ void TriggerWorldBaker::clearJob() {
     this->m_objects.clear();
     this->m_effects.clear();
     this->m_seenIds.clear();
+    this->m_seenSectionRaw.clear();
     this->m_live.clear();
     this->m_tracks.clear();
     this->m_bakedEffects = 0;
@@ -584,13 +589,26 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
         return;
     }
 
-    // Spawn-triggered: use spawn delay. Non-spawn: start-of-level t=0
-    // — previously skipped all non-spawn → empty TW on many levels (e.g. id_80045794).
+    // Spawn-triggered: use spawn delay. Normal triggers fire when the run
+    // reaches their timeline position. Starting each one at tick 0 leaves
+    // moved hazards in their end pose long before the real trigger fires.
     bool const spawn = effect->m_isSpawnTriggered;
-    int const startTick = spawn
-        ? TriggerWorldBaker::durationTicks(effect->m_spawnTriggerDelay, this->m_tps)
-        : 0;
-    if (!spawn) ++this->m_bakedStartTimed;
+    int startTick = 0;
+    if (spawn) {
+        startTick = TriggerWorldBaker::durationTicks(effect->m_spawnTriggerDelay, this->m_tps);
+    }
+    else if (this->m_layer) {
+        // GD owns the speed-portal-aware conversion.  This also keeps a bake
+        // from a StartPos on the same absolute level clock as the trigger.
+        float const triggerTime = this->m_layer->timeForPos(
+            effect->getPosition(), effect->m_ordValue, effect->m_channelValue,
+            false, effect->m_uniqueID
+        );
+        if (std::isfinite(triggerTime) && triggerTime > 0.f) {
+            startTick = TriggerWorldBaker::durationTicks(triggerTime, this->m_tps);
+        }
+        ++this->m_bakedStartTimed;
+    }
     int const dur = TriggerWorldBaker::durationTicks(effect->m_duration, this->m_tps);
 
     if (kind == TriggerKind::StaticToggle) {
@@ -800,6 +818,7 @@ void TriggerWorldBaker::tickSlice() {
                 this->m_objects.clear();
                 this->m_effects.clear();
                 this->m_seenIds.clear();
+                this->m_seenSectionRaw.clear();
                 if (children > 0) {
                     this->m_objects.reserve(children);
                     this->m_effects.reserve(256);
@@ -910,6 +929,9 @@ void TriggerWorldBaker::tickSlice() {
                 auto* raw = (*inner)[this->m_secSlot];
                 ++this->m_secSlot;
                 ++n;
+                if (!this->m_seenSectionRaw.insert(raw).second) {
+                    continue;
+                }
                 size_t const before = this->m_seenIds.size();
                 // Never typeinfo_cast poison section slots (AV read @ -1).
                 this->considerCollectedObject(

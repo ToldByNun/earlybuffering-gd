@@ -12,15 +12,37 @@ using namespace geode::prelude;
 bool readableRange(void const* p, size_t bytes) {
     if (!p || bytes == 0) return false;
 #if defined(_WIN32)
+    struct ReadableRegion {
+        uintptr_t begin = 0;
+        uintptr_t end = 0;
+    };
+    // Section grids repeat the same object and vtable pages thousands of
+    // times. Cache a few VirtualQuery results so safety checks remain cheap
+    // during a trigger-world collection pass.
+    thread_local ReadableRegion regions[8]{};
+    thread_local size_t nextRegion = 0;
+    auto const start = reinterpret_cast<uintptr_t>(p);
+    for (auto const& region : regions) {
+        if (start >= region.begin && start <= region.end
+            && bytes <= region.end - start) {
+            return true;
+        }
+    }
+
     MEMORY_BASIC_INFORMATION info{};
     if (::VirtualQuery(p, &info, sizeof(info)) != sizeof(info)) return false;
     if (info.State != MEM_COMMIT || (info.Protect & PAGE_GUARD)
         || (info.Protect & 0xffu) == PAGE_NOACCESS) {
         return false;
     }
-    auto const start = reinterpret_cast<uintptr_t>(p);
     auto const regionEnd = reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize;
-    return start <= regionEnd && bytes <= regionEnd - start;
+    if (start > regionEnd || bytes > regionEnd - start) return false;
+    regions[nextRegion] = {
+        reinterpret_cast<uintptr_t>(info.BaseAddress),
+        regionEnd,
+    };
+    nextRegion = (nextRegion + 1) % 8;
+    return true;
 #else
     (void)p;
     (void)bytes;

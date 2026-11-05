@@ -126,6 +126,9 @@ private:
     std::vector<GameObject*> m_objects;
     std::vector<EffectGameObject*> m_effects;
     std::unordered_set<int> m_seenIds;
+    // Section cells can contain the same raw object pointer many times.
+    // De-duplicate before the defensive RTTI probe, not only by uniqueId after it.
+    std::unordered_set<void*> m_seenSectionRaw;
     std::unordered_map<int, LivePose> m_live;
     std::unordered_map<int, TriggerTrack> m_tracks;
 

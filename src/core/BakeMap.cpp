@@ -619,9 +619,10 @@ Result<int> BakeMap::bake(
 
     auto finish = [&](Result<int> r) -> Result<int> {
         m_progress.running = false;
-        m_progress.setStatus(r.isOk()
-            ? fmt::format("done: {} clicks", r.unwrap())
-            : fmt::format("failed: {}", r.unwrapErr()));
+        if (r.isErr()) m_progress.setStatus(fmt::format("failed: {}", r.unwrapErr()));
+        else if (!m_progress.getStatus().starts_with("partial ")) {
+            m_progress.setStatus(fmt::format("done: {} clicks", r.unwrap()));
+        }
         return r;
     };
 
@@ -889,7 +890,7 @@ Result<int> BakeMap::bakeReplay(
         {
             std::filesystem::path diagDir;
             std::string diagErr;
-            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+            if (DevDiagDump::dumpReplayDivergence(validate, m_replay, diagDir, diagErr)) {
                 AssistLog::info(fmt::format(
                     "BAKE: validate death — wrote diag {}", diagDir.string()
 ));
@@ -966,15 +967,18 @@ Result<int> BakeMap::bakeReplay(
             return Err(err);
         }
 
-        // 1:1 died — still expand EVERY macro click. Prefix uses minSurvive;
-        // post-death clicks ghost through pre-click deaths to reach the event.
+        // Keep only the physically validated prefix. Re-simulating every
+        // post-death click by ignoring earlier deaths is both dishonest (the
+        // macro no longer has a matching state) and quadratic for full runs.
+        // Replay/Hybrid still receive useful prefix windows; Route never gets
+        // a path from this branch.
         partialCut = cut;
         for (auto& j : jobs) {
             if (j.frame < cut && j.until > cut) j.until = cut;
         }
         AssistLog::info(fmt::format(
-            "BAKE: validate died @{} x={:.0f} — expanding all {} clicks "
-            "(pre-click deaths ignored for post-cut events)",
+            "BAKE: validate died @{} x={:.0f} — retaining only clicks before it "
+            "({} jobs total)",
             cut, validate.deathX, jobs.size()
 ));
     }
@@ -1000,25 +1004,22 @@ Result<int> BakeMap::bakeReplay(
     // Bake Radius is the window half-width (same length for every click), not a
     // dynamic binary-search shrink. 1:1 may die mid-macro — ghost through
     // pre-click deaths so later events still get a window; assist uses earliest.
+    // Validation has the exact pose for every frame that it actually reached.
+    // Never replay from frame zero per click: that makes long replays quadratic
+    // and blocks the game for minutes. A partial bake is intentionally limited
+    // to its validated prefix instead of manufacturing post-death windows.
+    auto traceAtFrame = [&](int frame) -> ShadowSimulator::BakeFrameTrace const* {
+        if (frame < 0 || frame >= static_cast<int>(validate.frames.size())) return nullptr;
+        auto const& tr = validate.frames[static_cast<size_t>(frame)];
+        return tr.frame == frame ? &tr : nullptr;
+    };
+
     int skippedUnreachable = 0;
     for (auto const& job : jobs) {
         if (m_progress.cancel.load()) return Err("Bake cancelled");
 
-        std::lock_guard lock(m_simMutex);
-        auto& sim = ShadowSimulator::get();
-        sim.setBakeNoDeathBeforeFrame(job.frame);
-        auto sample = sim.runBakeTimeline(
-            layer, startSnapshotSlot, ev, dt, job.frame, job.frame
-);
-        sim.setBakeNoDeathBeforeFrame(-1);
-
-        if (!sample.sampled
-            || (sample.died && sample.deathFrame >= 0 && sample.deathFrame < job.frame)) {
+        if (partialCut >= 0 && job.frame >= partialCut) {
             ++skippedUnreachable;
-            AssistLog::debug(fmt::format(
-                "BAKE: skip click @{} (unreachable deathF={})",
-                job.frame, sample.deathFrame
-));
             m_progress.done.fetch_add(1);
             continue;
         }
@@ -1032,10 +1033,18 @@ Result<int> BakeMap::bakeReplay(
         c.latest = latest;
         c.down = job.down;
         c.player2 = job.player2;
-        c.x = sample.xAtSample;
-        c.mode = sample.modeAtSample;
-        // Release while dashing → dash/hold-orb; purple viz + later release gate.
-        c.holdAssist = !job.down && sample.dashingAtSample;
+        if (auto const* tr = traceAtFrame(job.frame)) {
+            c.x = tr->x;
+            c.mode = static_cast<GameModeKind>(tr->mode);
+            // Release while dashing → dash/hold-orb; purple viz + later release gate.
+            c.holdAssist = !job.down && tr->dashing;
+        }
+        else {
+            ++skippedUnreachable;
+            AssistLog::debug(fmt::format("BAKE: trace missing click @{}", job.frame));
+            m_progress.done.fetch_add(1);
+            continue;
+        }
         out.clicks.push_back(c);
 
         m_progress.done.fetch_add(1);
@@ -1056,7 +1065,7 @@ Result<int> BakeMap::bakeReplay(
 ));
 
     if (nClicks <= 0) {
-        {
+        if (!validate.died) {
             std::filesystem::path diagDir;
             std::string diagErr;
             if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {

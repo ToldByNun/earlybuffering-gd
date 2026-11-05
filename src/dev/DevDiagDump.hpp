@@ -17,6 +17,8 @@ public:
 
     // Compact bake-fail dump (auto from BakeMap on 0 windows).
     static bool dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg);
+    static bool dumpReplayDivergence(ShadowSimulator::BakeRunResult const& run,
+        ImportedReplay const& replay, std::filesystem::path& outDir, std::string& errMsg);
 
     // Pure helpers (PlanGold + BakeMap validate Err).
     static int deathTraceUntil(int deathFrame, int lastEventFrame);
