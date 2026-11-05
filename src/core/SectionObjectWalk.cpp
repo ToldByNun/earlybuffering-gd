@@ -3,7 +3,30 @@
 #include <Geode/Geode.hpp>
 #include <fmt/format.h>
 
+#if defined(_WIN32)
+    #include <windows.h>
+#endif
+
 using namespace geode::prelude;
+
+bool readableRange(void const* p, size_t bytes) {
+    if (!p || bytes == 0) return false;
+#if defined(_WIN32)
+    MEMORY_BASIC_INFORMATION info{};
+    if (::VirtualQuery(p, &info, sizeof(info)) != sizeof(info)) return false;
+    if (info.State != MEM_COMMIT || (info.Protect & PAGE_GUARD)
+        || (info.Protect & 0xffu) == PAGE_NOACCESS) {
+        return false;
+    }
+    auto const start = reinterpret_cast<uintptr_t>(p);
+    auto const regionEnd = reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize;
+    return start <= regionEnd && bytes <= regionEnd - start;
+#else
+    (void)p;
+    (void)bytes;
+    return true;
+#endif
+}
 
 bool SectionObjectWalk::pointerLooksLive(void const* p) {
     if (!p) return false;
@@ -13,7 +36,7 @@ bool SectionObjectWalk::pointerLooksLive(void const* p) {
     if (addr >= ~uintptr_t{0} - 0xFFull) return false; // -1 .. -256
     // High nibble all-ones is a common MSVC debug fill / section hole.
     if ((addr & 0xFFFFFFFF00000000ull) == 0xFFFFFFFF00000000ull) return false;
-    return true;
+    return readableRange(p, sizeof(void*));
 }
 
 bool SectionObjectWalk::pointerAndVtableLive(void const* p) {
@@ -21,14 +44,32 @@ bool SectionObjectWalk::pointerAndVtableLive(void const* p) {
     // Freed slots often keep a user-looking address but vtable qword is -1.
     // typeinfo_cast then AVs reading @ 0xFFFFFFFFFFFFFFFF (bakefail diag).
     void* const vt = *reinterpret_cast<void* const*>(p);
-    return pointerLooksLive(vt);
+    if (!pointerLooksLive(vt)) return false;
+
+    auto const vtAddr = reinterpret_cast<uintptr_t>(vt);
+    if (vtAddr < sizeof(void*)
+        || !readableRange(reinterpret_cast<void const*>(vtAddr - sizeof(void*)),
+            sizeof(void*) * 2)) {
+        return false;
+    }
+    void* const rtti = *(reinterpret_cast<void* const*>(vt) - 1);
+    return pointerLooksLive(rtti);
 }
 
 GameObject* SectionObjectWalk::asGameObject(void* raw) {
     if (!pointerAndVtableLive(raw)) return nullptr;
     // void* is not polymorphic — cast through CCObject* then typeinfo_cast.
     auto* asCc = reinterpret_cast<cocos2d::CCObject*>(raw);
+#if defined(_MSC_VER) && defined(_WIN32)
+    __try {
+        return typeinfo_cast<GameObject*>(asCc);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        return nullptr;
+    }
+#else
     return typeinfo_cast<GameObject*>(asCc);
+#endif
 }
 
 int SectionObjectWalk::forEachInSections(
@@ -83,8 +124,9 @@ bool SectionObjectWalk::selfCheck(std::string& report) {
     expect(pointerLooksLive(&stackProbe), "stack-live");
     // Positive vtable case: one-slot fake whose first qword is a live address.
     // Do not call pointerAndVtableLive(&stackProbe) — that reads past the int.
-    void* fakeVtLive[1] = { &stackProbe };
-    expect(pointerAndVtableLive(fakeVtLive), "vt-live");
+    void* fakeVtLive[2] = { &stackProbe, &stackProbe };
+    void* fakeObjLive[1] = { &fakeVtLive[1] };
+    expect(pointerAndVtableLive(fakeObjLive), "vt-live");
 
     expect(asGameObject(nullptr) == nullptr, "as-null");
     expect(asGameObject(reinterpret_cast<void*>(~uintptr_t{0})) == nullptr, "as-poison");
