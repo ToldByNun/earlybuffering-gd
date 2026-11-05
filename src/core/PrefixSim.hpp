@@ -1,6 +1,8 @@
 #ifndef EARLYBUFFER_CORE_PREFIXSIM_HPP
 #define EARLYBUFFER_CORE_PREFIXSIM_HPP
 
+#include "../config/StageConfig.hpp"
+
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -46,6 +48,10 @@ public:
     static bool allowWaveTurnTheory(bool isWave);
     static bool allowShipRecoverTheory(bool isShipLike);
     static bool allowHoldBranchTheory(bool continuous, bool isRobot, bool isWave, bool isShipLike);
+    // ModeAssist SoT overloads (parity with bool flags above).
+    static bool allowWaveTurnTheory(GameModeKind kind);
+    static bool allowShipRecoverTheory(GameModeKind kind);
+    static bool allowHoldBranchTheory(GameModeKind kind);
 
     // Two-pass: after a quick skim of all delays, which need expensive full score
     // (hold-branch / deep re-sim)? Survivors + best died-but-acted by endX, capped.

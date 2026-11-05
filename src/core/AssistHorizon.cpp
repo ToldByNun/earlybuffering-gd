@@ -1,4 +1,5 @@
 #include "AssistHorizon.hpp"
+#include "ModeAssist.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -11,77 +12,14 @@ int AssistHorizon::applyMul(int base, float capMul) {
 }
 
 AssistHorizon::Caps AssistHorizon::shortCaps(GameModeKind mode, int limit) {
-    int const x = limit > 0 ? limit : 1;
     Caps c;
-    switch (mode) {
-        case GameModeKind::Wave:
-            c.planCap = std::max(32, x + 16);
-            c.scoreHorizon = c.planCap;
-            c.trajDraw = std::clamp(c.planCap + 24, 32, 56);
-            break;
-        case GameModeKind::Ship:
-        case GameModeKind::Swing:
-            c.planCap = std::max(64, x * 3);
-            c.scoreHorizon = c.planCap;
-            c.trajDraw = std::clamp(c.planCap + 16, 40, 72);
-            break;
-        case GameModeKind::Ufo:
-            c.planCap = std::max(40, x + 20);
-            c.scoreHorizon = c.planCap;
-            c.trajDraw = std::clamp(c.planCap + 20, 36, 64);
-            break;
-        case GameModeKind::Spider:
-            c.planCap = std::max(36, x + 16);
-            c.scoreHorizon = c.planCap;
-            c.trajDraw = std::clamp(c.planCap + 20, 36, 64);
-            break;
-        case GameModeKind::Robot:
-            c.planCap = 150;
-            c.scoreHorizon = 150;
-            c.trajDraw = std::clamp(96, 64, 120);
-            break;
-        default: // Cube / Ball
-            c.planCap = 150;
-            c.scoreHorizon = 150;
-            c.trajDraw = std::clamp(96, 64, 120);
-            break;
-    }
+    ModeAssist::forKind(mode).fillShortCaps(limit, c.planCap, c.scoreHorizon, c.trajDraw);
     return c;
 }
 
 AssistHorizon::Caps AssistHorizon::longCaps(GameModeKind mode, int limit) {
-    int const x = limit > 0 ? limit : 1;
     Caps c;
-    switch (mode) {
-        case GameModeKind::Wave:
-            // Plan: short≈heute; long nur Trust — Wave ≥96 / score ≥160.
-            c.planCap = std::max(96, x + 64);
-            c.scoreHorizon = std::max(160, c.planCap);
-            c.trajDraw = c.scoreHorizon;
-            break;
-        case GameModeKind::Ship:
-        case GameModeKind::Swing:
-            c.planCap = std::max(120, x * 4);
-            c.scoreHorizon = std::max(200, c.planCap);
-            c.trajDraw = c.scoreHorizon;
-            break;
-        case GameModeKind::Ufo:
-        case GameModeKind::Spider:
-            c.planCap = std::max(96, x + 48);
-            c.scoreHorizon = std::max(160, c.planCap);
-            c.trajDraw = c.scoreHorizon;
-            break;
-        case GameModeKind::Robot:
-            c.planCap = std::max(180, x + 80);
-            c.scoreHorizon = std::max(280, c.planCap);
-            c.trajDraw = c.scoreHorizon;
-            break;
-        default:
-            c.planCap = std::max(180, x + 80);
-            c.scoreHorizon = std::max(240, c.planCap);
-            c.trajDraw = c.scoreHorizon;
-            break;
-    }
+    ModeAssist::forKind(mode).fillLongCaps(limit, c.planCap, c.scoreHorizon, c.trajDraw);
     return c;
 }
 

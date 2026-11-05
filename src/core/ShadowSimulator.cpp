@@ -1,6 +1,7 @@
 #include "ShadowSimulator.hpp"
 #include "AssistClock.hpp"
 #include "AssistHorizon.hpp"
+#include "ModeAssist.hpp"
 #include "AssistPickV1.hpp"
 #include "AssistPickV2.hpp"
 #include "LongForesight.hpp"
@@ -1537,26 +1538,9 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
 );
     m.cap = caps.planCap;
 
-    if (p->m_isDart) {
-        m.continuous = true;
-    }
-    else if (p->m_isShip || p->m_isSwing) {
-        m.continuous = true;
-    }
-    else if (p->m_isBird) {
-        m.continuous = true;
-        m.tapRelease = true;
-    }
-    else if (p->m_isSpider) {
-        m.continuous = true;
-        m.tapRelease = true;
-    }
-    else if (p->m_isRobot) {
-        m.tapRelease = false;
-    }
-    else {
-        m.tapRelease = true;
-    }
+    ModeAssist const& ma = ModeAssist::forKind(kind);
+    m.continuous = ma.continuous();
+    m.tapRelease = ma.tapRelease();
     return m;
 }
 
@@ -1646,7 +1630,7 @@ bool ShadowSimulator::spatialHazardProximity(
 
     float const px = real->getPositionX();
     float const py = real->getPositionY();
-    float const yReach = real->m_isShip || real->m_isDart || real->m_isSwing ? 100.f : 70.f;
+    float const yReach = ModeAssist::forKind(StageConfig::kindOf(real)).hazardYReach();
 
     auto* children = layer->m_objectLayer->getChildren();
     if (!children) return false;
@@ -3104,11 +3088,6 @@ SimPlan ShadowSimulator::plan(
     int sameCrashPrevTick = -1;
     bool sameCrashStopped = false;
 
-    bool const isWaveMode = real && real->m_isDart;
-    bool const isShipLike = real && (real->m_isShip || real->m_isBird
-        || real->m_isSpider || real->m_isSwing);
-    bool const isRobot = real && real->m_isRobot;
-
     {
     AssistSpikeWatch::Scope const candsScope("plan.cands");
     for (int d : order) {
@@ -3239,7 +3218,7 @@ SimPlan ShadowSimulator::plan(
             quick.data(), static_cast<int>(quick.size()), PrefixSim::kFullScoreTopK
 );
         bool const holdTheoryOk = PrefixSim::allowHoldBranchTheory(
-            model.continuous, isRobot, isWaveMode, isShipLike
+            StageConfig::kindOf(real)
 );
 
         for (int d : fullDelays) {

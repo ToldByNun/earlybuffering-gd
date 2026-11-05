@@ -16,6 +16,10 @@ Corpus label for measurement: `corpus=solo` (solo play + PlanGold). Multi-player
 
 Assist behavior is **unchanged** while this stub is UNFROZEN — instrumentation only.
 
+## ModeAssist (parity hierarchy)
+
+Per-`GameModeKind` policy lives in `ModeAssist` / `ModeAssistSnapshot` (DiscreteJump / FeatherContinuous / TapContinuous / Robot / Wave leaves). `AssistHorizon`, `ClickIntentGuard` spam tables, `AssistController` continuous/release + Wave spam-λ, `ShadowSimulator::modelFor` continuous/tapRelease, and `PrefixSim` kind gates thin-wrap it. Hot path: fill `PlanOptions.modeSnap` once per press. PlanGold: `mode-assist`. Tune numbers later — this step is structure + parity only.
+
 ## Sample sizes (placeholders)
 
 | Symbol | Solo | Multi |

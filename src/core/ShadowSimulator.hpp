@@ -2,6 +2,7 @@
 #define EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
 
 #include "AssistVerdict.hpp"
+#include "ModeAssist.hpp"
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevClockContract.hpp"
@@ -51,6 +52,9 @@ struct PlanOptions {
     // ClickIntentGuard density (assist still running, e.g. orb) → wider auto k,
     // slightly softer Wave λ so earliest-delay bias does not phase-shift spam.
     bool spamDense = false;
+    // Once-per-press ModeAssist POD (filled by AssistController); hot path reads this.
+    ModeAssistSnapshot modeSnap{};
+    bool modeSnapValid = false;
     // true = assist-pick v1; false = v2 slot (AssistPickV2 TBD — currently v1 choose).
     bool legacyPick = false;
     // Live V2 sim backend (WU8). V1 effective = ShadowPlayer always.

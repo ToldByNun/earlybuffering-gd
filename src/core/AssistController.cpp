@@ -8,6 +8,7 @@
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
+#include "ModeAssist.hpp"
 #include "HybridVerifyCache.hpp"
 #include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
@@ -68,12 +69,18 @@ static void fillPlanRobustLatency(
     opts.dtVariance = dtVariance;
     opts.spamDense = spamDense;
     if (player) {
-        opts.latencyWeight = StageConfig::paramsFor(player).latencyWeight;
-        // Wave λ=1.0 prefers earliest hard — in spam+orb assists that phase-shifts
-        // into spikes. Soften only on spam-dense assists (Pass-excluded paths).
-        if (spamDense && player->m_isDart && opts.latencyWeight > 0.5f) {
+        auto const kind = StageConfig::kindOf(player);
+        auto const params = StageConfig::paramsFor(player);
+        opts.latencyWeight = params.latencyWeight;
+        // Wave λ prefers earliest hard — spam+orb assists phase-shift into spikes.
+        // Soften only on spam-dense assists (Pass-excluded paths). Parity: ModeAssist.
+        if (spamDense
+            && ModeAssist::forKind(kind).kind() == GameModeKind::Wave
+            && opts.latencyWeight > 0.5f) {
             opts.latencyWeight *= 0.65f;
         }
+        opts.modeSnap = ModeAssist::snapshotFor(kind, params.ticks, true);
+        opts.modeSnapValid = true;
     }
 }
 
@@ -497,16 +504,7 @@ void AssistController::onSubStep(PlayerObject* player, float dt) {
 }
 
 bool AssistController::continuousModeKind(GameModeKind kind) {
-    switch (kind) {
-        case GameModeKind::Wave:
-        case GameModeKind::Ship:
-        case GameModeKind::Swing:
-        case GameModeKind::Ufo:
-        case GameModeKind::Spider:
-            return true;
-        default:
-            return false;
-    }
+    return ModeAssist::forKind(kind).continuous();
 }
 
 bool AssistController::continuousModePlayer(PlayerObject* player) {
@@ -516,15 +514,7 @@ bool AssistController::continuousModePlayer(PlayerObject* player) {
 
 bool AssistController::releaseAssistModeKind(GameModeKind kind) {
     // Same set as BakePathVisualizer purple windows (not ufo/spider).
-    switch (kind) {
-        case GameModeKind::Wave:
-        case GameModeKind::Ship:
-        case GameModeKind::Swing:
-        case GameModeKind::Robot:
-            return true;
-        default:
-            return false;
-    }
+    return ModeAssist::forKind(kind).releaseAssistAlways();
 }
 
 bool AssistController::releaseAssistModePlayer(PlayerObject* player) {
