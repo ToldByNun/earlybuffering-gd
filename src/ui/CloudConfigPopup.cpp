@@ -88,22 +88,25 @@ bool CloudConfigPopup::init() {
     float const pad = 14.f;
     float const gap = 8.f;
 
-    // Status left, Refresh right — keeps the control off the close-button side.
+    // Status left; Refresh nudged inward so it clears title/close chrome.
     m_statusLabel = CCLabelBMFont::create("Loading…", "goldFont.fnt");
-    m_statusLabel->setScale(0.28f);
+    m_statusLabel->setScale(tight ? 0.26f : 0.28f);
     m_statusLabel->setAnchorPoint({ 0.f, 0.5f });
     m_statusLabel->setID("cloud-status"_spr);
     m_mainLayer->addChildAtPosition(m_statusLabel, Anchor::TopLeft, ccp(pad, -34.f));
 
+    float const refreshNudge = tight ? 28.f : 36.f; // plan: ~28–40px left of TopRight
     auto* topMenu = CCMenu::create();
     topMenu->setContentSize({ 70.f, 24.f });
     topMenu->setID("cloud-top-menu"_spr);
-    m_mainLayer->addChildAtPosition(topMenu, Anchor::TopRight, ccp(-pad, -34.f));
+    m_mainLayer->addChildAtPosition(
+        topMenu, Anchor::TopRight, ccp(-(pad + refreshNudge), -34.f)
+    );
 
     auto* refreshSpr = ButtonSprite::create(
         "Refresh", "bigFont.fnt", "GJ_button_05.png", 0.8f
     );
-    refreshSpr->setScale(0.34f);
+    refreshSpr->setScale(tight ? 0.30f : 0.34f);
     m_refreshBtn = CCMenuItemSpriteExtra::create(
         refreshSpr, this, menu_selector(CloudConfigPopup::onRefresh)
     );
@@ -120,12 +123,16 @@ bool CloudConfigPopup::init() {
     float const searchY = -54.f;
     float const sortY = searchY - 16.f;
 
-    m_search = TextInput::create(m_listWidth, "Search packs…", "bigFont.fnt");
+    // No setScale on TextInput — scale shrinks the visual while layout uses full width.
+    m_search = TextInput::create(
+        tight ? (m_listWidth - 8.f) : m_listWidth,
+        "Search packs…",
+        "bigFont.fnt"
+    );
     m_search->setID("cloud-search"_spr);
     m_search->setMaxCharCount(64);
     m_search->setCommonFilter(CommonFilter::Any);
     m_search->setTextAlign(TextInputAlign::Left);
-    m_search->setScale(0.86f);
     m_search->setCallback([this](std::string const& text) {
         m_searchQuery = text;
         this->rebuildList();
@@ -147,7 +154,7 @@ bool CloudConfigPopup::init() {
     sortMenu->setAnchorPoint({ 0.f, 0.5f });
     sortMenu->setID("cloud-sort-menu"_spr);
     m_sortLabel = CCLabelBMFont::create("Sort: Default", "goldFont.fnt");
-    m_sortLabel->setScale(0.28f);
+    m_sortLabel->setScale(tight ? 0.24f : 0.28f);
     m_sortLabel->setAnchorPoint({ 0.f, 0.5f });
     m_sortLabel->setOpacity(220);
     m_sortLabel->setID("cloud-sort-label"_spr);
@@ -283,7 +290,7 @@ bool CloudConfigPopup::init() {
             );
         }
         else {
-            spr->setScale(0.42f);
+            spr->setScale(tight ? 0.34f : 0.42f);
             spr->setColor({ 170, 170, 170 });
             m_rateStarSpr[i] = spr;
             m_rateBtns[i] = CCMenuItemSpriteExtra::create(
@@ -296,16 +303,16 @@ bool CloudConfigPopup::init() {
     }
     m_rateMenu->updateLayout();
     m_detailRoot->addChildAtPosition(
-        m_rateMenu, Anchor::BottomLeft, ccp(38.f, 34.f)
+        m_rateMenu, Anchor::BottomLeft, ccp(tight ? 32.f : 38.f, tight ? 30.f : 34.f)
     );
 
     m_detailFoot = CCLabelBMFont::create(" ", "chatFont.fnt");
-    m_detailFoot->setScale(0.34f);
+    m_detailFoot->setScale(tight ? 0.30f : 0.34f);
     m_detailFoot->setAnchorPoint({ 0.f, 0.f });
     m_detailFoot->setOpacity(200);
     m_detailFoot->setID("cloud-detail-foot"_spr);
     m_detailRoot->addChildAtPosition(
-        m_detailFoot, Anchor::BottomLeft, ccp(6.f, 4.f)
+        m_detailFoot, Anchor::BottomLeft, ccp(6.f, 3.f)
     );
 
     if (tight) {
@@ -414,7 +421,9 @@ bool CloudConfigPopup::packMatchesSearch(CloudConfigIndex::PackEntry const& e) c
 
 void CloudConfigPopup::setStatus(std::string const& text, bool isError) {
     if (!m_statusLabel) return;
-    m_statusLabel->setString(truncate(text, 48).c_str());
+    // Leave room for the nudged Refresh control.
+    size_t const maxChars = PlatformLimits::isConstrainedDevice() ? 26 : 36;
+    m_statusLabel->setString(truncate(text, maxChars).c_str());
     m_statusLabel->setColor(isError ? ccColor3B{ 255, 90, 90 } : ccColor3B{ 255, 255, 255 });
 }
 
@@ -537,13 +546,14 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
 }
 
 char const* CloudConfigPopup::sortModeLabel() const {
+    bool const tight = PlatformLimits::isConstrainedDevice();
     switch (m_sortMode) {
-    case SortMode::Downloads: return "Downloads";
-    case SortMode::Rating: return "Rating";
-    case SortMode::Popular: return "Popular";
+    case SortMode::Downloads: return tight ? "DLs" : "Downloads";
+    case SortMode::Rating: return tight ? "Rate" : "Rating";
+    case SortMode::Popular: return tight ? "Pop" : "Popular";
     case SortMode::Name: return "Name";
     case SortMode::Default:
-    default: return "Default";
+    default: return tight ? "Def" : "Default";
     }
 }
 
@@ -774,12 +784,13 @@ void CloudConfigPopup::updateDetail() {
     }
     if (tags.empty()) tags = "—";
 
+    bool const tight = PlatformLimits::isConstrainedDevice();
     if (m_detailMeta) {
         m_detailMeta->setString(truncate(fmt::format(
             "by {} · {}",
             e->author.empty() ? "?" : e->author,
             tags
-        ), 42).c_str());
+        ), tight ? 32 : 42).c_str());
     }
 
     bool const verOk = CloudConfigIndex::meetsMinModVersion(*e, this->liveModVersion());
@@ -793,30 +804,40 @@ void CloudConfigPopup::updateDetail() {
         std::string statsBit;
         if (s.downloads > 0 || s.ratingCount > 0) {
             if (s.ratingCount > 0) {
-                statsBit = fmt::format(
-                    " · {}dl · {:.1f}* ({} rating{})",
-                    formatDownloads(s.downloads),
-                    CloudConfigStats::averageRating(s),
-                    s.ratingCount,
-                    s.ratingCount == 1 ? "" : "s"
-                );
+                statsBit = tight
+                    ? fmt::format(
+                        " · {}dl · {:.1f}*",
+                        formatDownloads(s.downloads),
+                        CloudConfigStats::averageRating(s)
+                    )
+                    : fmt::format(
+                        " · {}dl · {:.1f}* ({}r)",
+                        formatDownloads(s.downloads),
+                        CloudConfigStats::averageRating(s),
+                        s.ratingCount
+                    );
             }
             else {
-                statsBit = fmt::format(
-                    " · {} dl",
-                    formatDownloads(s.downloads)
-                );
+                statsBit = fmt::format(" · {}dl", formatDownloads(s.downloads));
             }
         }
-        m_detailFoot->setString(fmt::format(
-            "{}{} · min {}\n{}",
+        std::string const line1 = fmt::format(
+            "{}{} · min {}",
             formatBytes(e->size),
             statsBit,
-            e->minModVersion.empty() ? "any" : e->minModVersion,
-            verOk
-                ? (this->isCached(e->id) ? "Ready to install." : "Downloads on Install.")
-                : "Needs newer EarlyBuffer."
-        ).c_str());
+            e->minModVersion.empty() ? "any" : e->minModVersion
+        );
+        std::string const line2 = verOk
+            ? (this->isCached(e->id) ? "Ready to install." : "Downloads on Install.")
+            : "Needs newer EarlyBuffer.";
+        m_detailFoot->setString(fmt::format("{}\n{}", truncate(line1, tight ? 36 : 48), line2).c_str());
+        float const footMax = m_detailWidth - 12.f;
+        float const baseScale = tight ? 0.30f : 0.34f;
+        m_detailFoot->setScale(baseScale);
+        if (m_detailFoot->getContentSize().width > 0.f
+            && m_detailFoot->getScaledContentSize().width > footMax) {
+            m_detailFoot->setScale(footMax / m_detailFoot->getContentSize().width);
+        }
     }
     if (m_installBtn) m_installBtn->setEnabled(verOk && !m_busyUi);
     this->updateRateUi();

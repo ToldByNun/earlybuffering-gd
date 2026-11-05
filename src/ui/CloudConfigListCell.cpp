@@ -63,10 +63,11 @@ bool CloudConfigListCell::init(
 
     m_id = entry.id;
     m_onSelect = std::move(onSelect);
-    // Lock size before children so ColumnLayout never measures overflow.
     this->setContentSize({ width, kHeight });
     this->ignoreAnchorPointForPosition(false);
     this->setAnchorPoint({ 0.5f, 0.5f });
+
+    bool const narrow = width < 170.f;
 
     GLubyte const a = selected ? 255 : 210;
     ccColor4B stripe = (index % 2 == 0)
@@ -83,7 +84,6 @@ bool CloudConfigListCell::init(
     this->addChildAtPosition(bg, Anchor::Center);
 
     if (selected) {
-        // Thin left accent — no Scale9 (that was bleeding into the neighbor row).
         auto* accent = CCLayerColor::create({ 255, 255, 255, 220 }, 3.f, kHeight - 4.f);
         accent->setAnchorPoint({ 0.f, 0.5f });
         accent->ignoreAnchorPointForPosition(false);
@@ -108,28 +108,27 @@ bool CloudConfigListCell::init(
     hit->setID("cloud-cell-hit"_spr);
     menu->addChildAtPosition(hit, Anchor::Center);
 
-    // Right-side status: one badge only (ACTIVE wins).
-    float badgeX = -8.f;
+    // Right badges first so title can shrink to leftover width.
+    float badgeX = -6.f;
     auto addBadge = [&](char const* text, ccColor3B color) {
         auto* lab = CCLabelBMFont::create(text, "bigFont.fnt");
-        lab->setScale(0.22f);
+        lab->setScale(narrow ? 0.18f : 0.20f);
         lab->setColor(color);
         lab->setAnchorPoint({ 1.f, 0.5f });
         this->addChildAtPosition(lab, Anchor::Right, ccp(badgeX, 8.f));
-        badgeX -= lab->getScaledContentSize().width + 6.f;
+        badgeX -= lab->getScaledContentSize().width + 5.f;
     };
 
     if (active) {
-        addBadge("ACTIVE", { 100, 255, 140 });
+        addBadge(narrow ? "ON" : "ACTIVE", { 100, 255, 140 });
     }
     else if (updateAvailable) {
-        addBadge("UPDATE", { 255, 200, 80 });
+        addBadge(narrow ? "UP" : "UPDATE", { 255, 200, 80 });
     }
     else if (cached) {
-        addBadge("SAVED", { 180, 210, 255 });
+        addBadge(narrow ? "OK" : "SAVED", { 180, 210, 255 });
     }
 
-    // ASCII counters — BMFonts often lack ↓/★.
     if (stats.show && (stats.downloads > 0 || stats.ratingCount > 0)) {
         std::string bits;
         if (stats.downloads > 0) {
@@ -140,39 +139,39 @@ bool CloudConfigListCell::init(
             if (!bits.empty()) bits += " ";
             bits += fmt::format("{:.1f}*", stats.ratingAvg);
         }
+        if (bits.size() > 12) bits = bits.substr(0, 12);
         auto* lab = CCLabelBMFont::create(bits.c_str(), "goldFont.fnt");
-        lab->setScale(0.26f);
+        lab->setScale(narrow ? 0.22f : 0.24f);
         lab->setColor({ 220, 235, 255 });
         lab->setAnchorPoint({ 1.f, 0.5f });
         lab->setID("cloud-cell-stats"_spr);
-        this->addChildAtPosition(lab, Anchor::Right, ccp(-8.f, -8.f));
-        badgeX = std::min(badgeX, -8.f - lab->getScaledContentSize().width - 4.f);
+        this->addChildAtPosition(lab, Anchor::Right, ccp(-6.f, -8.f));
+        badgeX = std::min(badgeX, -6.f - lab->getScaledContentSize().width - 4.f);
     }
 
-    float const nameMax = std::max(48.f, width + badgeX - 16.f);
+    float const nameMax = std::max(40.f, width + badgeX - 14.f);
 
     auto* name = CCLabelBMFont::create(entry.name.c_str(), "bigFont.fnt");
-    name->setScale(0.36f);
+    name->setScale(narrow ? 0.32f : 0.36f);
     name->setAnchorPoint({ 0.f, 0.5f });
     name->setID("cloud-cell-name"_spr);
     if (name->getScaledContentSize().width > nameMax && name->getContentSize().width > 0.f) {
         name->setScale(nameMax / name->getContentSize().width);
     }
-    this->addChildAtPosition(name, Anchor::Left, ccp(10.f, 7.f));
+    this->addChildAtPosition(name, Anchor::Left, ccp(8.f, 7.f));
 
     std::string sub = entry.author.empty() ? entry.id : (entry.author + " · " + entry.id);
     auto* author = CCLabelBMFont::create(sub.c_str(), "goldFont.fnt");
-    author->setScale(0.28f);
+    author->setScale(narrow ? 0.24f : 0.28f);
     author->setAnchorPoint({ 0.f, 0.5f });
     author->setOpacity(200);
     author->setID("cloud-cell-author"_spr);
-    float const subMax = std::max(48.f, nameMax);
+    float const subMax = std::max(40.f, nameMax);
     if (author->getScaledContentSize().width > subMax && author->getContentSize().width > 0.f) {
         author->setScale(subMax / author->getContentSize().width);
     }
-    this->addChildAtPosition(author, Anchor::Left, ccp(10.f, -8.f));
+    this->addChildAtPosition(author, Anchor::Left, ccp(8.f, -8.f));
 
-    // Re-lock after children (some nodes nudge measured size).
     this->setContentSize({ width, kHeight });
     return true;
 }
