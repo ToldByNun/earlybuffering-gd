@@ -239,6 +239,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         for (size_t i = 1; i < samples.size(); ++i) {
             auto const& a = samples[i - 1];
             auto const& b = samples[i];
+            if (b.gapBefore) continue;
             if (b.x < px - kLodMarginX || a.x > px + kLodMarginX) continue;
             CCPoint top[3] = {{a.x, a.yHi}, {b.x, b.yHi}, {b.x, b.yLo}};
             CCPoint bottom[3] = {{a.x, a.yHi}, {b.x, b.yLo}, {a.x, a.yLo}};

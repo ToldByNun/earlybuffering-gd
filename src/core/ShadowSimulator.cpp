@@ -4283,7 +4283,8 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     bool traceFrames,
     bool parkReals,
     int substeps,
-    std::function<bool(int frame)> onFrame
+    std::function<bool(int frame)> onFrame,
+    BakePlayback playback
 ) {
     BakeRunResult out;
     auto* snap = this->snapshotSlot(slot);
@@ -4375,6 +4376,12 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
 
         for (int frame = 0; frame <= untilFrame; ++frame) {
             this->m_simAbsTick = frame;
+            if (playback == BakePlayback::FollowReplay) {
+                m_dead = false;
+                m_deathObject = nullptr;
+                m_unknown = false;
+                s->m_isDead = false;
+            }
 
             // Clickbots often put press+release on the SAME frame. Apply downs
             // BEFORE physics so the tick is held; releases AFTER the step.
@@ -4406,6 +4413,11 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
             }
             for (auto const* ev : ups) applyEv(*ev);
 
+            // Invalid coordinates cannot be passed into the next collision sweep.
+            if (playback == BakePlayback::FollowReplay &&
+                (!std::isfinite(s->getPositionX()) || !std::isfinite(s->getPositionY()) ||
+                 !std::isfinite(static_cast<float>(s->m_yVelocity)))) break;
+
             // Hard death only — Unknown must not wipe a working replay bake
             // (toggle-group solids used to abort every click via m_unknown).
             if (m_unknown) {
@@ -4435,10 +4447,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 tr.mode = static_cast<int>(StageConfig::kindOf(s));
                 tr.dashing = s->m_isDashing;
                 tr.upsideDown = s->m_isUpsideDown;
-                // The 2.2081 PlayerObject binding does not expose mini state;
-                // preserve the schema field as false until a binding-backed
-                // source is available rather than guessing from sprite scale.
-                tr.mini = false;
+                tr.mini = s->m_vehicleSize < 1.f;
                 tr.dual = layer->m_gameState.m_isDualMode;
                 if (m_dead && m_deathObject) {
                     tr.deathObjId = m_deathObject->m_uniqueID;
@@ -4449,7 +4458,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 out.frames.push_back(tr);
             }
 
-            if (m_dead) {
+            if (m_dead && !out.died) {
                 out.died = true;
                 out.deathFrame = frame;
                 out.deathX = s->getPositionX();
@@ -4459,8 +4468,8 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                     out.deathObjType = static_cast<int>(m_deathObject->m_objectType);
                     out.deathObjGameId = m_deathObject->m_objectID;
                 }
-                break;
             }
+            if (m_dead && playback == BakePlayback::StopOnDeath) break;
         }
     }
 

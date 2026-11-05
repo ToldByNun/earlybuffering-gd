@@ -37,6 +37,7 @@ matjson::Value ClickBakeStore::clicksToJson(BakeMapData const& data) {
         j["x"] = c.x;
         j["mode"] = StageConfig::kindName(c.mode);
         if (c.holdAssist) j["holdAssist"] = true;
+        if (c.replayTiming && data.method == "replay") j["replayTiming"] = true;
         arr.push_back(std::move(j));
     }
     root["clicks"] = arr;
@@ -68,6 +69,7 @@ geode::Result<> ClickBakeStore::parseClicksJson(
         c.earliest = static_cast<int>(j["earliest"].asInt().unwrapOr(c.nominalFrame));
         c.latest = static_cast<int>(j["latest"].asInt().unwrapOr(c.nominalFrame));
         c.down = j["down"].asBool().unwrapOr(true);
+        c.replayTiming = out.method == "replay" && j["replayTiming"].asBool().unwrapOr(false);
         c.player2 = j["player2"].asBool().unwrapOr(false);
         c.x = static_cast<float>(j["x"].asDouble().unwrapOr(0.0));
         c.holdAssist = j.contains("holdAssist")

@@ -23,6 +23,7 @@ struct BakedClick {
     GameModeKind mode = GameModeKind::Cube;
     // Release after dash/hold-orb (or tagged hold). Viz/gate: purple on discrete modes.
     bool holdAssist = false;
+    bool replayTiming = false; // Recorded input time, including after ghost contacts.
 };
 
 struct BakeMapData {
@@ -108,6 +109,8 @@ public:
         float playerX, int approxFrame, bool down, bool player2,
         std::optional<GameModeKind> preferMode = std::nullopt
     ) const;
+
+    BakedClick const* recordedInputAt(int frame, bool down, bool player2) const;
 
     // Next bake/self-bake clicks after playerX (same down/player2; prefer mode).
     // Sorted by ascending x. Used by smart bake-chain (planSequence).

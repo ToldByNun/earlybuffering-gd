@@ -496,7 +496,8 @@ public:
     // traceFrames: record BakeFrameTrace each step (diag dumps).
     // parkReals: move live P1/P2 off-map during bake so spawn overlap cannot kill ghost.
     // substeps: optional micro-steps per bake tick (usually 1; bypass macros bake 1:1).
-    // onFrame: optional progress hook; return false to cancel (bake validate).
+    enum class BakePlayback { StopOnDeath, FollowReplay };
+    // FollowReplay records contact frames and keeps stepping the same ghost.
     BakeRunResult runBakeTimeline(
         PlayLayer* layer,
         int snapshotSlot,
@@ -508,7 +509,8 @@ public:
         bool traceFrames = false,
         bool parkReals = true,
         int substeps = 1,
-        std::function<bool(int frame)> onFrame = {}
+        std::function<bool(int frame)> onFrame = {},
+        BakePlayback playback = BakePlayback::StopOnDeath
 );
 
     struct PathSample {

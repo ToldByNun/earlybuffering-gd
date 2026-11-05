@@ -25,6 +25,8 @@ bool RoutePath::lookupX(float x, RouteSample& out) const {
         return true;
     }
     auto const& b = *it;
+    if (x == b.x) { out = b; return true; }
+    if (b.gapBefore) return false;
     auto const& a = *(it - 1);
     float const dx = b.x - a.x;
     float const t = std::fabs(dx) > 0.001f ? std::clamp((x - a.x) / dx, 0.f, 1.f) : 0.f;
@@ -58,6 +60,7 @@ matjson::Value RoutePath::toJson() const {
         j["vx"] = s.vx; j["vy"] = s.vy; j["mode"] = StageConfig::kindName(s.mode);
         j["grav"] = s.grav; j["mini"] = s.mini; j["dual"] = s.dual;
         j["p2"] = s.p2; j["tick"] = s.tick;
+        if (s.gapBefore) j["gapBefore"] = true;
         points.push_back(std::move(j));
     }
     root["samples"] = points;
@@ -91,6 +94,7 @@ geode::Result<RoutePath> RoutePath::fromJson(matjson::Value const& root) {
         s.mode = parseMode(j["mode"]); s.grav = static_cast<int>(j["grav"].asInt().unwrapOr(1));
         s.mini = j["mini"].asBool().unwrapOr(false); s.dual = j["dual"].asBool().unwrapOr(false);
         s.p2 = j["p2"].asBool().unwrapOr(false); s.tick = static_cast<int>(j["tick"].asInt().unwrapOr(0));
+        s.gapBefore = j["gapBefore"].asBool().unwrapOr(false);
         out.samples.push_back(s);
     }
     if (out.samples.empty() || out.samples.size() > kMaxSamples) return geode::Err("route sample count invalid");

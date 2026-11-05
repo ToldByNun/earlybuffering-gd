@@ -1,4 +1,5 @@
 #include "AssistController.hpp"
+#include "LiveRouteCapture.hpp"
 #include "AssistClock.hpp"
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
@@ -2392,6 +2393,19 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     }
     if (!playLayer) return;
 
+    auto* p1 = playLayer->m_player1;
+    if (p1 && !m_startSnapshotTaken && m_attemptTick <= 2) {
+        PerfTrace::Scope const scope("captureStartSnapshot");
+        m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(p1);
+        m_startSnapshotTaken = m_startSnapshotSlot >= 0;
+        if (m_startSnapshotTaken) {
+            BakeMap::get().setStartXq(LevelFingerprint::startXq(p1->getPositionX()));
+        }
+    }
+    if (LiveRouteCapture::recording(playLayer)) {
+        LiveRouteCapture::sample(playLayer);
+        return;
+    }
     {
         PerfTrace::Scope const scope("pollOutcome");
         this->pollOutcome(playLayer);
@@ -2418,7 +2432,6 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
             TriggerWorldBaker::get().tickSlice();
         }
 
-    auto* p1 = playLayer->m_player1;
     if (p1) {
         {
             PerfTrace::Scope const scope("ghostParity");
@@ -2436,20 +2449,6 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         }
         this->m_lastPlayerX = p1->getPositionX();
         this->m_lastMode = StageConfig::kindOf(p1);
-        if (!this->m_startSnapshotTaken && this->m_attemptTick <= 2) {
-            PerfTrace::Scope const scope("captureStartSnapshot");
-            this->m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(p1);
-            this->m_startSnapshotTaken = this->m_startSnapshotSlot >= 0;
-            if (this->m_startSnapshotTaken) {
-                float startX = 0.f;
-                if (auto* snap = ShadowSimulator::get().snapshotSlot(
-                        this->m_startSnapshotSlot
-                    )) {
-                    startX = snap->getPositionX();
-                }
-                BakeMap::get().setStartXq(LevelFingerprint::startXq(startX));
-            }
-        }
 
         bool const modeChanged = this->m_modeKnown && (
             this->m_modeShip != p1->m_isShip ||

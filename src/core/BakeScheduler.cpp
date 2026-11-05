@@ -58,7 +58,8 @@ bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMetho
                 // validated pose trace and therefore no route.json.
                 msg = "EarlyBuffer's offline ghost died during playback.\n\n"
                     "Only the preceding click windows were saved for Replay/Hybrid. "
-                    "Route needs a complete simulated path.\n\n(";
+                    "Use Record Route, restart and play the replay in your bot "
+                    "to save a route from the completed run.\n\n(";
                 msg += status;
                 msg += ")";
             }

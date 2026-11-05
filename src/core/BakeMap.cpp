@@ -24,22 +24,6 @@
 
 using namespace geode::prelude;
 
-int nextJumpFrame(std::vector<ReplayEvent> const& ev, int fromIndex, bool player2) {
-    for (int i = fromIndex + 1; i < static_cast<int>(ev.size()); ++i) {
-        if (ev[i].button != 1) continue;
-        if (ev[i].player2 != player2) continue;
-        if (ev[i].down) return ev[i].frame;
-    }
-    return -1;
-}
-
-struct JumpJob {
-    int eventIndex = 0;
-    int frame = 0;
-    bool down = true;
-    bool player2 = false;
-    int until = 0;
-};
 
 int resolveRadius(int bakeRadius, BakeMethod method) {
     if (bakeRadius > 0) return bakeRadius;
@@ -568,6 +552,18 @@ BakedClick const* BakeMap::findNear(
     return pick(false);
 }
 
+BakedClick const* BakeMap::recordedInputAt(int frame, bool down, bool player2) const {
+    BakedClick const* nearest = nullptr;
+    for (auto const& c : m_data.clicks) {
+        if (!c.replayTiming || c.down != down || c.player2 != player2) continue;
+        if (frame < c.earliest || frame > c.latest) continue;
+        if (!nearest || std::abs(frame - c.nominalFrame) < std::abs(frame - nearest->nominalFrame)) {
+            nearest = &c;
+        }
+    }
+    return nearest;
+}
+
 bool BakeMap::testShiftedClick(
     PlayLayer* layer,
     int startSnapshotSlot,
@@ -620,7 +616,7 @@ Result<int> BakeMap::bake(
     auto finish = [&](Result<int> r) -> Result<int> {
         m_progress.running = false;
         if (r.isErr()) m_progress.setStatus(fmt::format("failed: {}", r.unwrapErr()));
-        else if (!m_progress.getStatus().starts_with("partial ")) {
+        else if (method == BakeMethod::BruteForce) {
             m_progress.setStatus(fmt::format("done: {} clicks", r.unwrap()));
         }
         return r;
@@ -752,38 +748,25 @@ Result<int> BakeMap::bakeReplay(
 
     bool const doRelease = StageConfig::assistRelease();
 
-    std::vector<JumpJob> jobs;
-    for (int i = 0; i < static_cast<int>(ev.size()); ++i) {
-        auto const& e = ev[static_cast<size_t>(i)];
-        if (e.button != 1) continue;
-        if (!e.down && !doRelease) continue;
-        int F = e.frame;
-        int next = nextJumpFrame(ev, i, e.player2);
-        int horizon = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll()).cap;
-        if (horizon <= 0) horizon = std::max(16, StageConfig::ticksAll() * 4);
-        horizon = scaleBakeTicks(horizon, tps);
-        int until = next > 0 ? std::min(next, F + horizon) : F + horizon;
-        until = std::max(until, F + 1);
-        jobs.push_back(JumpJob{ i, F, e.down, e.player2, until });
+    auto const countedInput = [doRelease](ReplayEvent const& e) {
+        return e.button == 1 && (e.down || doRelease);
+    };
+    int const numInputs = static_cast<int>(std::count_if(ev.begin(), ev.end(), countedInput));
+    if (numInputs == 0) return Err("Replay has no enabled jump inputs to bake");
+    if (ev.front().frame < 0 || ev.back().frame >= std::numeric_limits<int>::max() - std::max(numInputs, bakeRadius)) {
+        return Err("Replay frame range exceeds the supported clock");
     }
-    if (jobs.empty()) {
-        return Err("Replay has no Jump events to bake (import a macro with clicks)");
-    }
-
-    int lastFrame = 0;
-    for (auto const& e : ev) {
-        if (e.frame > lastFrame) lastFrame = e.frame;
-    }
+    int const lastFrame = ev.back().frame;
     // Progress: validate frames + per-click expand.
     int const validateWeight = std::max(1, lastFrame);
-    m_progress.total = validateWeight + static_cast<int>(jobs.size());
+    m_progress.total = validateWeight + numInputs;
     m_progress.done = 0;
     m_progress.setStatus(fmt::format(
         "validate macro 1:1 · {}f @ {:.0f} tps", lastFrame, tps
 ));
     AssistLog::info(fmt::format(
         "BAKE replay: validate 0..{} then expand {} clicks, radius {} @ {:.0f} tps",
-        lastFrame, jobs.size(), bakeRadius, tps
+        lastFrame, numInputs, bakeRadius, tps
 ));
 
     // Parity Gate: Soft portals Include + freeze ε before validate
@@ -823,9 +806,7 @@ Result<int> BakeMap::bakeReplay(
         TriggerWorldStore::get().trackCount()
     ));
 
-    // ── Validate 1:1 from start snapshot. Death ≠ hard fail: keep the
-    // surviving prefix (Hybrid often only needs a StartPos part, not the
-    // whole macro). Only frame-0 (no prefix) still errors.
+    // One continuous playback supplies positions for every recorded edge.
     ShadowSimulator::BakeRunResult validate;
     {
         std::lock_guard lock(m_simMutex);
@@ -843,274 +824,73 @@ Result<int> BakeMap::bakeReplay(
 ));
                 }
                 return true;
-            }
-);
+            }, ShadowSimulator::BakePlayback::FollowReplay
+        );
     }
     if (m_progress.cancel.load()) return Err("Bake cancelled");
 
-    int partialCut = -1; // frames >= cut are dropped; -1 = full macro OK
-    if (validate.died) {
-        // Route is valid only for a complete, surviving replay validation.
-        // Do not leave an older route around after a failed re-bake.
-        std::string routeRemoveErr;
-        if (!RoutePathStore::removeFile(m_data.levelKey, m_startXq, routeRemoveErr)) {
-            AssistLog::debug(fmt::format("ROUTE: failed to remove stale route: {}", routeRemoveErr));
-        }
-        // P2 drop stats for err / log (same policy as prepareBakeTimeline).
-        int droppedP2 = 0;
-        {
-            int p1 = 0;
-            int p2 = 0;
-            for (auto const& e : m_replay.events) {
-                if (e.player2) ++p2;
-                else ++p1;
-            }
-            if (p2 < p1) droppedP2 = p2;
-        }
-        auto const top3 = DevDiagDump::formatUnknownTop3(validate.unknownHist);
-        int const twTracks = TriggerWorldStore::get().trackCount();
-        auto const residual = Tg2BakeFixture::formatResidual(
-            twTracks,
-            validate.deathFrame,
-            validate.deathObjId,
-            validate.deathObjType
-);
-        AssistLog::info(fmt::format(
-            "BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
-            "objId={} objType={} gameId={} twTracks={} droppedP2={} "
-            "unknownTop3=[{}] soft={} hard={} residual={} startPos={} startX={:.1f}",
-            validate.deathFrame, validate.deathX, validate.deathY,
-            validate.deathObjId, validate.deathObjType, validate.deathObjGameId,
-            twTracks, droppedP2, top3,
-            validate.unknownSoftHits, validate.unknownHardHits,
-            residual.empty() ? "-" : residual,
-            startPosAttempt ? 1 : 0,
-            startX
-));
-        {
-            std::filesystem::path diagDir;
-            std::string diagErr;
-            if (DevDiagDump::dumpReplayDivergence(validate, m_replay, diagDir, diagErr)) {
-                AssistLog::info(fmt::format(
-                    "BAKE: validate death — wrote diag {}", diagDir.string()
-));
-            }
-        }
-
-        int const cut = validate.deathFrame;
-        if (cut <= 0) {
-            // No surviving prefix — cannot expand any click from this pose.
-            auto const spawnFail = BakeSpawnProbe::probe(layer, startSnapshotSlot);
-            std::string killerDetail;
-            if (validate.deathObjId >= 0) {
-                killerDetail = fmt::format(
-                    " deathObjId={} type={} gameId={}",
-                    validate.deathObjId, validate.deathObjType, validate.deathObjGameId
-);
-            }
-            if (!spawnFail.overlaps.empty()) {
-                auto const& h = spawnFail.overlaps.front();
-                killerDetail += fmt::format(
-                    " spawnHazard uid={} objId={} @({:.0f},{:.0f}) twTracked={}/{}",
-                    h.uniqueId, h.objectId, h.x, h.y,
-                    spawnFail.trackedOverlapCount, spawnFail.overlapCount
-);
-            }
-            int firstJump = -1;
-            bool firstJumpDown = false;
-            for (auto const& e : m_replay.events) {
-                if (e.button != 1) continue;
-                firstJump = e.frame;
-                firstJumpDown = e.down;
-                break;
-            }
-            std::string err = fmt::format(
-                "Macro dies in sim at frame {} (x={:.0f}) twTracks={} "
-                "unknownTop3=[{}] droppedP2={} startPos={} startX={:.0f} "
-                "snapDart={} jumpHeld={} events={} firstJump={}{}",
-                validate.deathFrame, validate.deathX,
-                twTracks, top3, droppedP2,
-                startPosAttempt ? 1 : 0, startX,
-                spawnFail.snapIsDart ? 1 : 0,
-                spawnFail.jumpHeld ? 1 : 0,
-                static_cast<int>(m_replay.events.size()),
-                firstJump,
-                killerDetail
-);
-            if (!residual.empty()) {
-                err += " — ";
-                err += residual;
-            }
-            if (static_cast<int>(m_replay.events.size()) <= 2
-                && firstJump > 16
-                && (spawnFail.snapIsDart
-                    || spawnFail.snapMode == static_cast<int>(GameModeKind::Ship)
-                    || spawnFail.snapMode == static_cast<int>(GameModeKind::Swing))
-                && !spawnFail.jumpHeld
-                && firstJumpDown) {
-                err += " — wave/ship/swing start needs hold from frame 0; this macro's "
-                       "first click is late (sparse/stub export — grief20 was 1 input / "
-                       "58 bytes). Re-export a full macro from attempt start.";
-            }
-            else if (twTracks <= 0 && spawnFail.overlapCount > 0) {
-                err += " — spawn hazard with Trigger World empty; "
-                       "enable Trigger World or reset→pause→Bake after TW builds.";
-            }
-            else if (startPosAttempt) {
-                err += " — StartPos bake: reset on the StartPos, pause, bake; "
-                       "macro frames must be from the same StartPos attempt.";
-            }
-            else {
-                err += " — ghost path ≠ bot at frame 0. Reset→pause→Bake.";
-            }
-            err += " Diag: /diag/bakefail_*";
-            return Err(err);
-        }
-
-        // Keep only the physically validated prefix. Re-simulating every
-        // post-death click by ignoring earlier deaths is both dishonest (the
-        // macro no longer has a matching state) and quadratic for full runs.
-        // Replay/Hybrid still receive useful prefix windows; Route never gets
-        // a path from this branch.
-        partialCut = cut;
-        for (auto& j : jobs) {
-            if (j.frame < cut && j.until > cut) j.until = cut;
-        }
-        AssistLog::info(fmt::format(
-            "BAKE: validate died @{} x={:.0f} — retaining only clicks before it "
-            "({} jobs total)",
-            cut, validate.deathX, jobs.size()
-));
+    // The replay supplies the timing. The ghost supplies a position for each
+    // input and can report several consecutive contacts with the same obstacle.
+    int issueSections = 0;
+    bool inIssue = false;
+    for (auto const& pose : validate.frames) {
+        bool const issue = pose.dead || pose.unknown;
+        if (issue && !inIssue) ++issueSections;
+        inIssue = issue;
     }
+    bool const incomplete = validate.frames.size() <= static_cast<size_t>(lastFrame);
+    if (incomplete && !inIssue) ++issueSections;
 
     m_progress.done = validateWeight;
-    m_progress.setStatus(fmt::format(
-        "expand windows · {} clicks · radius {}", jobs.size(), bakeRadius
-));
-    if (partialCut >= 0) {
-        AssistLog::info(fmt::format(
-            "BAKE: expanding {} click windows (validateDeath @{})",
-            jobs.size(), partialCut
-));
-    }
-    else {
-        AssistLog::info(fmt::format(
-            "BAKE: validate OK through frame {} — expanding {} click windows",
-            lastFrame, jobs.size()
-));
-    }
-
-    // ── Expand: fixed ±radius windows around every reachable click ────
-    // Bake Radius is the window half-width (same length for every click), not a
-    // dynamic binary-search shrink. 1:1 may die mid-macro — ghost through
-    // pre-click deaths so later events still get a window; assist uses earliest.
-    // Validation has the exact pose for every frame that it actually reached.
-    // Never replay from frame zero per click: that makes long replays quadratic
-    // and blocks the game for minutes. A partial bake is intentionally limited
-    // to its validated prefix instead of manufacturing post-death windows.
-    auto traceAtFrame = [&](int frame) -> ShadowSimulator::BakeFrameTrace const* {
-        if (frame < 0 || frame >= static_cast<int>(validate.frames.size())) return nullptr;
-        auto const& tr = validate.frames[static_cast<size_t>(frame)];
-        return tr.frame == frame ? &tr : nullptr;
-    };
-
-    int skippedUnreachable = 0;
-    for (auto const& job : jobs) {
+    for (auto const& e : ev) {
         if (m_progress.cancel.load()) return Err("Bake cancelled");
-
-        if (partialCut >= 0 && job.frame >= partialCut) {
-            ++skippedUnreachable;
-            m_progress.done.fetch_add(1);
-            continue;
-        }
-
-        int const earliest = std::max(0, job.frame - bakeRadius);
-        int const latest = job.frame + bakeRadius;
-
+        if (!countedInput(e)) continue;
+        ++m_progress.done;
+        if (static_cast<size_t>(e.frame) >= validate.frames.size()) continue;
+        auto const& pose = validate.frames[e.frame];
         BakedClick c;
-        c.nominalFrame = job.frame;
-        c.earliest = earliest;
-        c.latest = latest;
-        c.down = job.down;
-        c.player2 = job.player2;
-        if (auto const* tr = traceAtFrame(job.frame)) {
-            c.x = tr->x;
-            c.mode = static_cast<GameModeKind>(tr->mode);
-            // Release while dashing → dash/hold-orb; purple viz + later release gate.
-            c.holdAssist = !job.down && tr->dashing;
-        }
-        else {
-            ++skippedUnreachable;
-            AssistLog::debug(fmt::format("BAKE: trace missing click @{}", job.frame));
-            m_progress.done.fetch_add(1);
-            continue;
-        }
+        c.nominalFrame = e.frame;
+        c.earliest = std::max(0, e.frame - bakeRadius);
+        c.latest = e.frame + bakeRadius;
+        c.down = e.down;
+        c.player2 = e.player2;
+        c.x = pose.x;
+        c.mode = static_cast<GameModeKind>(pose.mode);
+        c.holdAssist = !e.down && pose.dashing;
+        c.replayTiming = true;
         out.clicks.push_back(c);
-
-        m_progress.done.fetch_add(1);
-        m_progress.setStatus(fmt::format(
-            "window {}/{} · @{} ±{} → [{},{}]",
-            static_cast<int>(out.clicks.size()), jobs.size(),
-            job.frame, bakeRadius, earliest, latest
-));
     }
-
     int const nClicks = static_cast<int>(out.clicks.size());
-    AssistLog::info(fmt::format(
-        "BAKE done clicks={} jobs={} skippedUnreachable={} radius={} "
-        "lastFrame={} tps={:.0f} source={} validateDeath={} startPos={} (replay)",
-        nClicks, jobs.size(), skippedUnreachable, bakeRadius,
-        lastFrame, tps, out.sourceReplay,
-        partialCut, startPosAttempt ? 1 : 0
-));
+    auto summary = fmt::format("{} of {} inputs saved. {} skipped. Ghost issue sections: {}.",
+        nClicks, numInputs, numInputs - nClicks, issueSections);
+    if (nClicks == 0) return Err(summary);
 
-    if (nClicks <= 0) {
-        if (!validate.died) {
-            std::filesystem::path diagDir;
-            std::string diagErr;
-            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
-                AssistLog::info(fmt::format(
-                    "BAKE: 0 windows after validate — diag {}", diagDir.string()
-));
-            }
-        }
-        return Err(fmt::format(
-            "Replay bake produced 0 windows — expand failed "
-            "(jobs={} validateDeath={}). Diag: /diag/bakefail_*",
-            jobs.size(), partialCut
-));
-    }
-
-    if (partialCut >= 0) {
-        // Surface partial in progress status (scheduler success alert stays click count).
-        m_progress.setStatus(fmt::format(
-            "partial {} windows (cut @{})", nClicks, partialCut
-));
-    }
-
+    // Publish the replay windows only after all clicks have been considered.
+    auto write = ClickBakeStore::saveMethod(out, m_startXq);
+    if (write.isErr()) return Err(fmt::format("Could not save replay windows: {}", write.unwrapErr()));
     m_data = std::move(out);
     m_loaded = true;
-    this->m_dirty = true;
-    save();
-    // Build only from this exact full 1:1 ghost trace; partial replay bakes
-    // may still yield useful click windows but can never publish a route.
-    if (partialCut < 0) {
-        auto route = RoutePathBuilder::buildFromTraces(validate.frames, !validate.unknown);
-        if (!route.empty() && route.parityOk) {
-            auto saved = RoutePathStore::get().save(m_data.levelKey, route, m_startXq);
-            if (saved.isErr()) {
-                AssistLog::debug(fmt::format("ROUTE: save failed: {}", saved.unwrapErr()));
-            }
-            else {
-                AssistLog::info(fmt::format("ROUTE: saved {} samples (stride {})", route.sampleCount(), route.sampleStrideTicks));
-            }
-        }
-        else {
-            std::string routeRemoveErr;
-            (void)RoutePathStore::removeFile(m_data.levelKey, m_startXq, routeRemoveErr);
-            AssistLog::debug("ROUTE: validation trace unsuitable; route omitted");
-        }
+    m_dirty = false;
+
+    auto route = RoutePathBuilder::buildFromTraces(validate.frames);
+    if (issueSections > 0) {
+        route.source = RoutePath::kReplayPattern;
+        route.parityOk = false;
     }
+    if (!route.empty()) {
+        auto saved = RoutePathStore::get().save(m_data.levelKey, route, m_startXq);
+        if (saved.isErr()) return Err(fmt::format("{} Route write failed: {}", summary, saved.unwrapErr()));
+    }
+    else {
+        std::string err;
+        if (!RoutePathStore::removeFile(m_data.levelKey, m_startXq, err)) {
+            return Err(fmt::format("{} Could not clear previous route: {}", summary, err));
+        }
+        summary += " Timing only.";
+    }
+    m_progress.setStatus(summary);
+    AssistLog::info(fmt::format("BAKE replay {}: {} First ghost contact: {}. Route samples: {}.",
+        m_data.sourceReplay, summary, validate.deathFrame, route.sampleCount()));
     return Ok(nClicks);
 }
 

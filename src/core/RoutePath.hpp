@@ -21,6 +21,7 @@ struct RouteSample {
     int tick = 0;
     float yLo = 0.f;
     float yHi = 0.f;
+    bool gapBefore = false;
 };
 
 struct RouteSegment {
@@ -34,6 +35,7 @@ struct RouteSegment {
 struct RoutePath {
     static constexpr int kSchema = 1;
     static constexpr int kMaxSamples = 4096;
+    static constexpr char kReplayPattern[] = "replay-pattern";
 
     int schema = kSchema;
     std::string source = "replay-validated";
@@ -43,6 +45,7 @@ struct RoutePath {
     std::vector<RouteSample> samples;
 
     bool empty() const { return samples.empty(); }
+    bool usable() const { return !empty() && (parityOk || source == kReplayPattern); }
     int sampleCount() const { return static_cast<int>(samples.size()); }
 
     // Binary search by x; interpolate y/yLo/yHi. false if empty / x outside span.

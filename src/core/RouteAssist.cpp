@@ -9,7 +9,7 @@
 AssistReason RouteAssist::gate(PlayerObject* player, bool player1) {
     if (!player || !player1) return AssistReason::PassRouteOff;
     auto const& store = RoutePathStore::get();
-    if (!store.loaded() || store.path().empty() || !store.path().parityOk) {
+    if (!store.loaded() || !store.path().usable()) {
         return AssistReason::PassRouteMissing;
     }
     RouteSample hit;

@@ -1,4 +1,5 @@
 #include "../core/AssistController.hpp"
+#include "../core/LiveRouteCapture.hpp"
 #include "../core/BakeScheduler.hpp"
 #include "../core/OrbStackResolver.hpp"
 #include "../core/SectionObjectWalk.hpp"
@@ -38,7 +39,8 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
 
     void handleButton(bool down, int button, bool isPlayer1) {
         if (simulating()) return; // never let anything poke the real input path mid-sim
-        if (AssistController::get().onHandleButton(this, down, button, isPlayer1)) {
+        if (LiveRouteCapture::recording(this)
+            || AssistController::get().onHandleButton(this, down, button, isPlayer1)) {
             GJBaseGameLayer::handleButton(down, button, isPlayer1);
         }
     }
@@ -277,7 +279,8 @@ class $modify(EbPlayerObject, PlayerObject) {
     }
 
     bool pushButton(PlayerButton button) {
-        if (!simulating() && !AssistController::get().allowPushButton(this, button)) {
+        if (!simulating() && !LiveRouteCapture::recording(PlayLayer::get())
+            && !AssistController::get().allowPushButton(this, button)) {
             return false;
         }
         return PlayerObject::pushButton(button);
@@ -504,6 +507,7 @@ class $modify(EbPlayLayer, PlayLayer) {
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer) {
         if (!PlayLayer::init(level, useReplay, dontCreatePlayer)) return false;
+        LiveRouteCapture::cancel();
         AssistController::get().onLevelInit(this);
         return true;
     }
@@ -527,10 +531,12 @@ class $modify(EbPlayLayer, PlayLayer) {
             LagProbe::Scope const s("vanilla.PlayLayer::resetLevel");
             PlayLayer::resetLevel();
         }
+        LiveRouteCapture::resetAttempt(this);
         LagProbe::get().endEpisode();
     }
 
     void onQuit() {
+        LiveRouteCapture::cancel();
         AssistController::get().onLevelQuit();
         PlayLayer::onQuit();
     }
@@ -613,6 +619,7 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void levelComplete() {
+        if (!simulating()) LiveRouteCapture::complete(this);
         // Safe Mode OFF → never force test mode (progress like vanilla).
         // Safe Mode ON → enabled or assist-touched runs count as test clears.
         bool const block = StageConfig::blocksProgressSaves(
@@ -655,6 +662,7 @@ class $modify(EbPlayLayer, PlayLayer) {
             LagProbe::Scope const s("vanilla.loadFromCheckpoint");
             PlayLayer::loadFromCheckpoint(checkpoint);
         }
+        LiveRouteCapture::resetAttempt(this);
         LagProbe::get().endEpisode();
     }
 };

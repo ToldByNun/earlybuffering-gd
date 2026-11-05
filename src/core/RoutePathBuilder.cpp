@@ -21,14 +21,21 @@ RoutePath RoutePathBuilder::buildFromTraces(std::vector<ShadowSimulator::BakeFra
     for (auto const& f : frames) stride = std::min(stride, defaultStride(modeFromTrace(f.mode)));
     while ((frames.size() / static_cast<size_t>(stride) + 2) > RoutePath::kMaxSamples) stride *= 2;
     out.sampleStrideTicks = stride;
+    bool gap = false;
     for (size_t i = 0; i < frames.size(); ++i) {
         auto const& f = frames[i];
-        if (f.dead || (i % static_cast<size_t>(stride) != 0 && i + 1 != frames.size())) continue;
+        if (f.dead || f.unknown) {
+            gap = true;
+            continue;
+        }
+        if (i % static_cast<size_t>(stride) != 0 && i + 1 != frames.size()) continue;
         RouteSample s;
         s.x = f.x; s.y = f.y; s.vy = f.yVel; s.mode = modeFromTrace(f.mode); s.tick = f.frame;
         s.grav = f.upsideDown ? -1 : 1; s.mini = f.mini; s.dual = f.dual;
         float const half = corridorHalf(s.mode); s.yLo = s.y - half; s.yHi = s.y + half;
-        if (!out.samples.empty()) {
+        s.gapBefore = gap && !out.samples.empty();
+        gap = false;
+        if (!out.samples.empty() && !s.gapBefore) {
             auto const& prior = out.samples.back();
             int const dt = std::max(1, s.tick - prior.tick);
             s.vx = (s.x - prior.x) / static_cast<float>(dt);
@@ -38,7 +45,8 @@ RoutePath RoutePathBuilder::buildFromTraces(std::vector<ShadowSimulator::BakeFra
     if (out.samples.size() < 2) { out.samples.clear(); return out; }
     int start = 0;
     for (int i = 1; i <= static_cast<int>(out.samples.size()); ++i) {
-        if (i == static_cast<int>(out.samples.size()) || out.samples[i].mode != out.samples[start].mode) {
+        if (i == static_cast<int>(out.samples.size()) || out.samples[i].gapBefore ||
+            out.samples[i].mode != out.samples[start].mode) {
             out.segments.push_back({start, i - 1, out.samples[start].mode, {}}); start = i;
         }
     }

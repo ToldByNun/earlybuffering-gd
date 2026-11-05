@@ -16,7 +16,7 @@ geode::Result<> RoutePathStore::load(std::string const& key, int startXq) {
     m_path = std::move(parsed.unwrap()); m_loaded = true; return geode::Ok();
 }
 geode::Result<> RoutePathStore::save(std::string const& key, RoutePath const& path, int startXq) {
-    if (path.empty() || !path.parityOk) return geode::Err("refusing empty or unvalidated route");
+    if (!path.usable()) return geode::Err("route has no usable samples");
     auto write = LevelCacheAtomicIo::writeJson(filePath(key, startXq), path.toJson());
     if (write.isErr()) return write;
     m_path = path; m_loaded = true; m_fullKey = key; m_startXq = startXq; return geode::Ok();

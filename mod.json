@@ -571,6 +571,12 @@
 			"description": "Builds click-timing windows from the imported replay (import a replay first). Safe to cancel mid-bake.",
 			"button-text": "bake"
 		},
+		"record-route-action": {
+			"type": "custom:eb-action",
+			"name": "Record Route",
+			"description": "Record the next attempt from its start and save its path for Route assist when the level completes. Play the replay in your bot. Press again to cancel.",
+			"button-text": "record"
+		},
 		"brute-bake-action": {
 			"type": "custom:eb-action",
 			"name": "Brute Bake",
