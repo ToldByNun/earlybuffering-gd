@@ -5,7 +5,7 @@
 
 #include <string>
 
-// Commit 15 — unified plan / score / traj draw horizons.
+// Unified plan / score / traj draw horizons.
 // Short ≈ today's modelFor autos; long only when SimTrust is OK (plan rule).
 // Draw length = trust cap (trajDraw tracks scoreHorizon when trusted).
 class AssistHorizon {
@@ -25,7 +25,7 @@ public:
         float capMul,
         int settingsCap = 0,
         int lookAheadSetting = 0
-    );
+);
 
     // Min survive ticks before an alive cand counts as Delay-success under trust-long.
     // Short trust keeps today's low bar (bin0 can still clear via threat).
@@ -38,7 +38,7 @@ public:
         bool died,
         bool survivalSafeForDelay,
         int minSurvive
-    );
+);
 
     static bool selfCheck(std::string& report);
 

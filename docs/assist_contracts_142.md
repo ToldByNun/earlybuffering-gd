@@ -39,7 +39,7 @@ If samples are below mins → **INCONCLUSIVE** (not green). While `kUnfrozen`, R
 | **R7** | P95 press plan µs | ≤ `sim-budget-us` (+slack placeholder) |
 | **R8** | Cache load P95 | hitch budget (chunk like TW) |
 
-R4–R8 stay report-only stubs until Route / cache / perf commits wire counters.
+R4–R8 stay report-only stubs until Route / cache / perf counters are wired.
 
 ## Corpus checklist (fill after sessions)
 

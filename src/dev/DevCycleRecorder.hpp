@@ -15,7 +15,7 @@ class PlayerObject;
 #include <unordered_map>
 
 // Live press-cycle writer for DevTraceStore.
-// Commit 4: through DelayArm. Commit 5: recheck / HUS / fire / outcome + attempt seal.
+// Through DelayArm, then recheck / HUS / fire / outcome + attempt seal.
 class DevCycleRecorder {
 public:
     static DevCycleRecorder& get();
@@ -29,7 +29,7 @@ public:
         int effectTick,
         int pressTick,
         DevEventSource source = DevEventSource::Live
-    );
+);
 
     int64_t activePressId() const { return this->m_activePressId; }
 
@@ -41,14 +41,14 @@ public:
         DevClockContract::Stamp const& clock,
         PlayLayer* layer,
         PlayerObject* player
-    );
+);
     // After learning/verify adjusts the armed delay relative to plan.delay.
     void noteLearningOnPlan(
         int plannedDelay,
         int finalDelay,
         bool floored,
         bool verifyRefused
-    );
+);
     void notePassThrough(AssistReason reason, char const* where);
 
     // Optional arm diagnostics (verify / budget / hold-extend).
@@ -73,20 +73,20 @@ public:
         int planId,
         DevEventSource source = DevEventSource::Live,
         DelayArmMeta meta = DelayArmMeta()
-    );
+);
 
     void noteRecheck(
         int64_t pressId,
         int oldFireTick,
         int newFireTick,
         char const* where
-    );
+);
     void noteHus(
         int64_t pressId,
         AssistReason reason,
         char const* where,
         int fireTick
-    );
+);
     void noteFire(int64_t pressId, int actualFireTick);
     void noteHoldExtend(int64_t pressId, int holdExtendMax);
     void noteCheckpoint(int attemptTick);
@@ -96,7 +96,7 @@ public:
     // attemptTick used for deathAfterFire / ticksToDeath when lived=false.
     bool sealAttemptWithOutcomes(
         std::string endReason, bool lived, int attemptTick = -1
-    );
+);
     // New attempt under an open session (no-op if none / already open).
     bool beginNewAttempt(int startTick);
     // Death→reset path: seal open attempt if any, then begin the next.
@@ -143,10 +143,10 @@ private:
         int64_t planId,
         AssistReason reason,
         char const* where
-    );
+);
     void writeOutcomesForOpenCycles(
         std::string const& endReason, bool lived, int attemptTick
-    );
+);
     bool shouldCountAttempt() const;
 
     int64_t m_activePressId = 0;

@@ -78,7 +78,7 @@ bool PlanGoldCorpus::run(std::string& report) {
     auto expect = [&](bool ok, char const* name) {
         if (!ok) { ++fails; report += std::string("FAIL ") + name + "; "; }
     };
-    // Commit 2 LOCK: freeze ε before any probe / contract selfCheck.
+    // v1.4.0 LOCK: freeze ε before any probe / contract selfCheck.
     AssistContracts140::applyLockedEps();
     std::string shadowReport;
     expect(ShadowSimulator::regressionSelfCheck(shadowReport), "shadow-self");

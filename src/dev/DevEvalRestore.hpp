@@ -9,7 +9,7 @@
 #include <vector>
 
 // What evaluation actually wrote into the ghost / world before the first sim tick.
-// Commit 8: record + bookkeeping. Ghost writes land in Commit 9.
+// Record + bookkeeping. Ghost writes land in permanent eval slots.
 class DevEvalRestore {
 public:
     bool valid = false;
@@ -32,21 +32,21 @@ public:
 
     static DevWitnessStatus categoryStatus(
         DevEvalRestore const& r, DevWitnessCategory c
-    );
+);
 
     // Bind clock stamp from witness (always required for a valid restore attempt).
     // Does not claim player/orbs/movers restored — caller marks those after writes.
     static DevEvalRestore beginFromWitness(
         DevLiveWitness const& witness,
         DevSimPathId evalPath
-    );
+);
 
     static void setCategory(
         DevEvalRestore& r,
         DevWitnessCategory c,
         DevWitnessStatus status,
         uint64_t digest = 0
-    );
+);
 
     // Record that the player (and optional dual) blob was written to the ghost.
     static void notePlayerWritten(DevEvalRestore& r, DevPlayerBlob const& blob);
@@ -57,14 +57,14 @@ public:
         std::string const& storeKey,
         int storeVersion,
         int applyTick
-    );
+);
     // Movers: hashes stay DigestOnly forever; poses can upgrade to Restored.
     static void noteMoversDigestOnly(DevEvalRestore& r, uint64_t digest);
     static void noteMoversPosesWritten(
         DevEvalRestore& r,
         std::vector<DevObjectPose> const& poses,
         uint64_t digest = 0
-    );
+);
     static void noteCollisionFlagsPartial(DevEvalRestore& r);
 
     static bool selfCheck(std::string& report);

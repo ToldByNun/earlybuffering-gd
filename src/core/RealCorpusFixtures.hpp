@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <string>
 
-// Commit 15 — minimal real-corpus traces for PlanGold (no live PlayLayer).
+// Minimal real-corpus traces for PlanGold (no live PlayLayer).
 // GRIEF + bakefail/tg2 pose crumbs so horizon / death contracts stay pinned.
 class RealCorpusFixtures {
 public:
@@ -47,7 +47,7 @@ public:
         int coastLen,
         int trajDrawCap,
         std::string& detail
-    );
+);
 
     static bool selfCheck(std::string& report);
 

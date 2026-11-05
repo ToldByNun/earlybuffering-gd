@@ -24,7 +24,7 @@ enum class TriggerKind {
     DynamicOther
 };
 
-// Heuristic classifier for trigger bake (Commit 2).
+// Heuristic classifier for trigger bake.
 class TriggerClassify {
 public:
     // Flat flag bundle so selfCheck / tests need no live PlayLayer objects.

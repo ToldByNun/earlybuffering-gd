@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <string>
 
-// Dev Lab session controller (Commit 13).
+// Dev Lab session controller.
 class DevSession {
 public:
     enum class State { Idle = 0, Recording };

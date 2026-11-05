@@ -12,7 +12,7 @@ enum class SimObjectAction {
     Skip
 };
 
-// Soft = Commit-5 Include (vehicle/mirror/teleport/modifier…). Hard = must
+// Soft = Include (vehicle/mirror/teleport/modifier…). Hard = must
 // truncate / Pass (toggle pre-model, player-follow, dual). No Soft-Continue.
 enum class SimUnknownClass {
     Soft = 0,
@@ -29,7 +29,7 @@ public:
     static SimObjectAction classifyObjectType(int objectType, int objectId = 0);
     static SimUnknownClass unknownClassForType(int objectType);
 
-    // Soft vehicle/mirror/teleport/enter (Commit 5) — Include only for bakeOffline.
+    // Soft vehicle/mirror/teleport/enter — Include only for bakeOffline.
     // Live assist sims truncate: stacked portal activatedByPlayer mutates shared
     // layer/sections and was an AV source (read @ 0xFFF…).
     static bool softPortalLiveTruncate(int objectType);

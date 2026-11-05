@@ -79,7 +79,7 @@ public:
 
     // Replace in-memory data (baker). Softcap logs; hard-only truncate.
     void setData(TriggerWorldData data);
-    // Commit 4: empty incomplete collect must not poison the on-disk cache.
+    // Empty incomplete collect must not poison the on-disk cache.
     void clearDirty() { this->m_dirty = false; }
     // Delete triggers/<key>.json if present (empty / stale cache).
     void discardCacheFile() const;

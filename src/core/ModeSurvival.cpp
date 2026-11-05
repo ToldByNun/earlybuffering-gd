@@ -41,10 +41,10 @@ float ModeSurvival::clearMarginPx(float obstacleX, float endX) {
 }
 
 bool ModeSurvival::waveSmallestClearOk(float clearPx, float marginPx) {
-    // Commit 11: same +1px margin rule as PerfectAssistPolicy wave helper.
+    // Same +1px margin rule as PerfectAssistPolicy wave helper.
     return PerfectAssistPolicy::preferSmallerWaveClear(
         clearPx, clearPx, marginPx
-    );
+);
 }
 
 bool ModeSurvival::waveFlipProbeClears(
@@ -57,7 +57,7 @@ bool ModeSurvival::waveFlipProbeClears(
         if (ModeSurvival::waveSmallestClearOk(
                 ModeSurvival::clearMarginPx(obstacleX, sampleEndX[i]),
                 marginPx
-            )) {
+)) {
             return true;
         }
     }
@@ -224,7 +224,7 @@ bool ModeSurvival::selfCheck(std::string& report) {
         expect(
             ascentAloneNotLanding(true, false, false, true),
             "ascent-alone-not-landing"
-        );
+);
     }
 
     // Ship-like recover after past-zone death.
@@ -260,7 +260,7 @@ bool ModeSurvival::selfCheck(std::string& report) {
 
     expect(
         std::strcmp(classId(Class::Landing), "landing") == 0, "id-landing"
-    );
+);
 
     if (fails == 0) {
         report = "ModeSurvival selfCheck OK";

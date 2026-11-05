@@ -14,7 +14,7 @@ class GameObject;
 class EffectGameObject;
 
 // Builds static TriggerWorldStore tracks from spawn-timed Move/Rotate/Scale/Toggle.
-// Commit 7: budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
+// Budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
 class TriggerWorldBaker {
 public:
     static constexpr size_t kCollectPerSlice = 256;
@@ -54,14 +54,14 @@ public:
     // forceForBake: build/load even when Trigger World setting is off (spawn movers).
     bool waitUntilReady(
         PlayLayer* layer, int wallMs, std::string& err, bool forceForBake = false
-    );
+);
     // Cache load + start when setting is off (bake-only movers). No-op if tracks exist.
     bool beginForceBuild(PlayLayer* layer);
 
 private:
     enum class Phase {
         Idle = 0,
-        WaitObjects, // Commit 4: objectLayer may be empty at onLevelInit
+        WaitObjects, // objectLayer may be empty at onLevelInit
         Collect,
         CollectSections, // secondary: section lists may hold objects children miss
         Bake,
@@ -102,7 +102,7 @@ private:
         int groupId,
         std::vector<GameObject*> const& objects,
         std::unordered_map<int, LivePose> const& live
-    );
+);
 
     bool startInternal(PlayLayer* layer, bool forceForBake);
 

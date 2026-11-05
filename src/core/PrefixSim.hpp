@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-// Commit 10 — PrefixSim + two-pass / same-crash cut (ideas reimplemented; no upstream).
+// PrefixSim + two-pass / same-crash cut (ideas reimplemented; no upstream).
 // Pure search policy: shared-prefix early-death skip, same-deathTick stop,
 // mode-gated theories, two-pass full-score selection, jitter Top-2 only.
 class PrefixSim {
@@ -39,7 +39,7 @@ public:
         int currDeathTick,
         bool currDied,
         bool diedBeforeAction
-    );
+);
     static bool sameCrashShouldStop(int streak);
 
     // Mode gates for extra theories (WaveTurn only on Wave, etc.).
@@ -53,7 +53,7 @@ public:
         QuickSample const* samples,
         int sampleCount,
         int maxFull = kFullScoreTopK
-    );
+);
 
     // Jitter (±3% firstDt) only on the first k ranked picks — never the whole pool.
     static bool jitterAttemptAllowed(int attemptIndex, int topK = kJitterTopK);

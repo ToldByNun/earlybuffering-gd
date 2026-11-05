@@ -5,7 +5,7 @@
 
 #include <string>
 
-// Commit 11 — PerfectAssistPolicy (ideas reimplemented; no upstream).
+// PerfectAssistPolicy (ideas reimplemented; no upstream).
 // Opportunity + Trust → MUST Delay-search. Named Pass for Untrust / Drift /
 // HardUnknown / TwEmpty / budget-no-survivor. Never soft-trust budgetHit Delay;
 // never invent auto-click / auto-release. InterveneGate = help-don't-hurt.
@@ -49,7 +49,7 @@ public:
         bool trustOkFlag,
         bool opportunity,
         bool budgetRemainsForProbe
-    );
+);
 
     // Soft-trust ban: never invent Delay from incomplete budget-partial search.
     // A fully evaluated viable cand may arm even if later delays hit the budget.
@@ -64,7 +64,7 @@ public:
         bool d0Viable,
         bool delayViable,
         bool delayClearsBetter
-    );
+);
 
     // Wave: among two clears, prefer smallest clear that still has +1px margin.
     static bool preferSmallerWaveClear(float clearA, float clearB, float marginPx = 1.f);

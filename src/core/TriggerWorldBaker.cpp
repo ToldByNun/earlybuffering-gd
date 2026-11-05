@@ -53,7 +53,7 @@ void TriggerWorldBaker::pushKey(TriggerTrack& track, int tick, LivePose const& l
     if (track.keys.size() >= TriggerWorldStore::kSoftMaxKeysPerTrack) {
         TriggerWorldStore::decimateKeys(
             track.keys, TriggerWorldStore::kSoftMaxKeysPerTrack * 3 / 4
-        );
+);
         TriggerWorldStore::get().noteSoftcap("bake-keys");
     }
     if (track.keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack) {
@@ -184,7 +184,7 @@ void TriggerWorldBaker::finishOk() {
         this->m_status = "trigger-world: empty (collect incomplete — will retry)";
         AssistLog::info(
             "TRIGGER-WORLD: 0 tracks after incomplete collect — not caching; kickIfStaleEmpty will retry"
-        );
+);
         this->clearJob();
         return;
     }
@@ -204,7 +204,7 @@ void TriggerWorldBaker::finishOk() {
             this->m_lastSkippedTouch,
             this->m_lastEffectCount,
             this->m_lastChildCount
-        );
+);
         AssistLog::info(fmt::format(
             "TRIGGER-WORLD: EMPTY after full collect — baked={} startTimed={} "
             "staticSeen={} missed={} ignore={} spawnTrig={} "
@@ -221,7 +221,7 @@ void TriggerWorldBaker::finishOk() {
             this->m_lastChildCount,
             this->m_lastEffectCount,
             this->m_lastSectionExtras
-        ));
+));
         this->clearJob();
         return;
     }
@@ -243,7 +243,7 @@ void TriggerWorldBaker::finishOk() {
         this->m_lastEffectCount,
         this->m_sectionExtras,
         store.softcapHit() ? 1 : 0
-    ));
+));
     this->clearJob();
 }
 
@@ -252,7 +252,7 @@ std::string TriggerWorldBaker::statusLine() const {
         return fmt::format(
             "trigger-world: building {:.0f}%",
             this->m_progress * 100.f
-        );
+);
     }
     if (!this->m_status.empty()) return this->m_status;
     return TriggerWorldStore::get().statusLine();
@@ -280,7 +280,7 @@ void TriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: cache hit ({})",
             this->m_status
-        ));
+));
         return;
     }
 
@@ -311,7 +311,7 @@ void TriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: stale empty with {} objectLayer children — rebuild",
         children
-    ));
+));
     this->start(layer);
 }
 
@@ -344,7 +344,7 @@ bool TriggerWorldBaker::waitUntilReady(
     if (!StageConfig::triggerBake() && !forceForBake) return true;
 
     if (forceForBake && !StageConfig::triggerBake()) {
-        (void)this->beginForceBuild(layer);
+ (void)this->beginForceBuild(layer);
     }
     else {
         this->kickIfStaleEmpty(layer);
@@ -359,12 +359,12 @@ bool TriggerWorldBaker::waitUntilReady(
         this->tickSlice();
         auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - t0
-        ).count();
+).count();
         if (ms >= wallMs) {
             err = fmt::format(
                 "Trigger World still building after {}ms ({:.0f}%) — cancel bake or wait",
                 wallMs, this->m_progress * 100.f
-            );
+);
             return false;
         }
         if (this->m_cancel) {
@@ -398,7 +398,7 @@ bool TriggerWorldBaker::waitUntilReady(
             this->m_lastSkippedFollow,
             this->m_lastSkippedDynamic,
             this->m_lastSkippedTouch
-        );
+);
         return false;
     }
     // Pulse/spawn/camera / dynamic-only — allow bake with TW empty
@@ -413,7 +413,7 @@ bool TriggerWorldBaker::waitUntilReady(
             this->m_lastSkippedDynamic,
             this->m_lastSkippedFollow,
             this->m_lastSkippedTouch
-        ));
+));
     }
     return true;
 }
@@ -457,7 +457,7 @@ bool TriggerWorldBaker::startInternal(PlayLayer* layer, bool forceForBake) {
         }
     }
 
-    // Commit 4: wait for objects if init raced ahead of objectLayer populate.
+    // Wait for objects if init raced ahead of objectLayer populate.
     if (this->m_childCount == 0) {
         this->m_phase = Phase::WaitObjects;
         this->m_waitSlices = 0;
@@ -468,7 +468,7 @@ bool TriggerWorldBaker::startInternal(PlayLayer* layer, bool forceForBake) {
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: bake queued ({} children)",
             this->m_childCount
-        ));
+));
     }
     return true;
 }
@@ -480,7 +480,7 @@ void TriggerWorldBaker::publishPartial() {
     data.version = TriggerWorldStore::kFileVersion;
     data.tracks.reserve(this->m_tracks.size());
     for (auto& [id, track] : this->m_tracks) {
-        (void)id;
+ (void)id;
         if (track.keys.empty()) continue;
         TriggerTrack copy = track;
         std::sort(
@@ -489,7 +489,7 @@ void TriggerWorldBaker::publishPartial() {
             [](TriggerPose const& a, TriggerPose const& b) {
                 return a.tick < b.tick;
             }
-        );
+);
         data.tracks.push_back(std::move(copy));
     }
     TriggerWorldStore::get().setData(std::move(data));
@@ -527,7 +527,7 @@ TriggerTrack* TriggerWorldBaker::ensureTrack(GameObject* obj, TriggerKind kind) 
     track.ready = false;
     TriggerWorldBaker::pushKey(track, 0, pose);
     auto [ins, ok] = this->m_tracks.emplace(id, std::move(track));
-    (void)ok;
+ (void)ok;
     return &ins->second;
 }
 
@@ -584,7 +584,7 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
         return;
     }
 
-    // Spawn-triggered: use spawn delay. Non-spawn (Commit 4): start-of-level t=0
+    // Spawn-triggered: use spawn delay. Non-spawn: start-of-level t=0
     // — previously skipped all non-spawn → empty TW on many levels (e.g. id_80045794).
     bool const spawn = effect->m_isSpawnTriggered;
     int const startTick = spawn
@@ -626,15 +626,15 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
         if (centerId > 0) {
             center = TriggerWorldBaker::groupCenter(
                 centerId, this->m_objects, this->m_live
-            );
+);
         }
         else {
             for (auto* obj : targets) {
-                (void)this->ensureTrack(obj, kind);
+ (void)this->ensureTrack(obj, kind);
             }
             center = TriggerWorldBaker::groupCenter(
                 groupId, this->m_objects, this->m_live
-            );
+);
         }
     }
 
@@ -769,7 +769,7 @@ void TriggerWorldBaker::tickSlice() {
     auto budgetHit = [&]() -> bool {
         auto const us = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - wall0
-        ).count();
+).count();
         return us >= kBudgetUs;
     };
 
@@ -793,7 +793,7 @@ void TriggerWorldBaker::tickSlice() {
                 1.f,
                 static_cast<float>(this->m_waitSlices)
                     / static_cast<float>(kMaxWaitObjectSlices)
-            );
+);
             if (children > 0 || hasSections) {
                 this->m_childCount = children;
                 this->m_childIndex = 0;
@@ -808,7 +808,7 @@ void TriggerWorldBaker::tickSlice() {
                 AssistLog::debug(fmt::format(
                     "TRIGGER-WORLD: objects ready ({} children) after {} wait slices",
                     children, this->m_waitSlices
-                ));
+));
                 continue;
             }
             if (this->m_waitSlices >= kMaxWaitObjectSlices) {
@@ -816,7 +816,7 @@ void TriggerWorldBaker::tickSlice() {
                 this->m_phase = Phase::Commit;
                 AssistLog::info(
                     "TRIGGER-WORLD: WaitObjects timed out — committing incomplete empty"
-                );
+);
                 continue;
             }
             break; // yield slice; try next physics tick
@@ -847,7 +847,7 @@ void TriggerWorldBaker::tickSlice() {
                 && !budgetHit()) {
                 auto* obj = typeinfo_cast<GameObject*>(
                     children->objectAtIndex(static_cast<unsigned>(this->m_childIndex))
-                );
+);
                 ++this->m_childIndex;
                 ++n;
                 this->considerCollectedObject(obj);
@@ -888,7 +888,7 @@ void TriggerWorldBaker::tickSlice() {
                             this->m_sectionExtras,
                             this->m_objects.size(),
                             this->m_effects.size()
-                        ));
+));
                     }
                     break;
                 }
@@ -914,7 +914,7 @@ void TriggerWorldBaker::tickSlice() {
                 // Never typeinfo_cast poison section slots (AV read @ -1).
                 this->considerCollectedObject(
                     SectionObjectWalk::asGameObject(raw)
-                );
+);
                 if (this->m_seenIds.size() > before) {
                     ++this->m_sectionExtras;
                 }
@@ -927,8 +927,8 @@ void TriggerWorldBaker::tickSlice() {
                         1.f,
                         static_cast<float>(this->m_secOuter)
                             / static_cast<float>(sections.size())
-                    )
-            );
+)
+);
             continue;
         }
 

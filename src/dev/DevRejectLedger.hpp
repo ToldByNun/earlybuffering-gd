@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-// Per-delay reject ledger + attribution (Commit 12 / Vertrag D).
+// Per-delay reject ledger + attribution (Vertrag D).
 class DevRejectLedger {
 public:
     static constexpr int kMaxCandNotes = 64;
@@ -160,7 +160,7 @@ private:
         CandSnap const* chosen,
         BuildInput const& in,
         int delay
-    );
+);
     static RejectCode skipCode(EarlyExit early);
 };
 

@@ -127,7 +127,7 @@ public:
         PlayerObject* player,
         bool player1,
         int effectTick
-    ) const;
+) const;
     static bool releaseGateSelfCheck(std::string& report);
     static int resolveEffectTick(int attemptTick, bool midStep, bool continuous);
     static bool effectTickSelfCheck(std::string& report);
@@ -137,10 +137,10 @@ public:
     // Clamps to [effectTick+delay floor via caller window] — see armFireTicks.
     static int resolveFireTick(
         int effectTick, int delay, int jumpTick, bool requireOrb
-    );
+);
     static bool shouldFireBuffered(
         int attemptTick, int fireTick, int pressTick, int planDelay, int limit
-    );
+);
     static bool fireTickSelfCheck(std::string& report);
 
     // Queued hold after inject when user already released (releaseSeen).
@@ -152,11 +152,11 @@ public:
         int releaseEarliest,
         int releaseLatest,
         int extendCap
-    );
+);
     static bool queuedHoldSelfCheck(std::string& report);
 
     // Soft Hold-Until-Safe (press or release): PassBudget / hopeless / foresight —
-    // never past limit. Commit 13: only when trustOk (sonst Pass).
+    // never past limit; only when trustOk (sonst Pass).
     // Release: swallow UP, keep Jump held, inject release when Delay confirms.
     static bool shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk = true);
     static int holdUntilSafeEtaTicks(SimPlan const& plan, int limit);
@@ -171,10 +171,10 @@ public:
         bool foresightNow,
         bool foresightLast,
         int remainingTicks
-    );
+);
     static bool holdUntilSafeSelfCheck(std::string& report);
 
-    // Recheck slide (Commit 13): never earlier; late ≤+1 (OrbAlign::kRecheckMaxSlide).
+    // Recheck slide: never earlier; late ≤+1 (OrbAlign::kRecheckMaxSlide).
     // requireOrb kept for API; slide cap is shared. Returns -1 = reject.
     static constexpr int kRecheckMaxSlide = OrbAlign::kRecheckMaxSlide;
     static int acceptRecheckSlide(
@@ -186,7 +186,7 @@ public:
         int deadline,
         bool requireOrb,
         bool planOk
-    );
+);
     static int estimateRobustK(PlayerObject* player, float dtVariance);
     static bool recheckSlideSelfCheck(std::string& report);
 
@@ -205,7 +205,7 @@ private:
         int effectTick,
         float firstDt,
         DevClockContract::Stamp const& clock
-    );
+);
     bool planRelease(
         PlayLayer* playLayer,
         PlayerObject* player,
@@ -213,7 +213,7 @@ private:
         int effectTick,
         float firstDt,
         DevClockContract::Stamp const& clock
-    );
+);
     // Returns true if bake handled the input (caller should return that bool).
     // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
     // sharedBudget: Hybrid press envelope (verify spends first; Live uses remainder).
@@ -226,7 +226,7 @@ private:
         PressSimBudget* sharedBudget = nullptr,
         bool* verifyAttempted = nullptr,
         HybridPressReuse* reuse = nullptr
-    );
+);
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
@@ -248,14 +248,14 @@ private:
         int limit,
         SimPlan const& plan,
         bool down = true
-    );
+);
     // Cadenced replan while holdUntilSafe buffer is armed (not every tick).
     void tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player);
 
     void recordDecision(
         PlayLayer* playLayer, PlayerObject* player, bool down,
         SimPlan const& plan, int effectTick, int appliedDelay, int limit
-    );
+);
     void tickLearning(PlayLayer* playLayer, PlayerObject* player);
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object, DecisionEntry& dec);
 

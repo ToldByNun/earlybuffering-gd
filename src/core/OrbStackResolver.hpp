@@ -11,7 +11,7 @@ class PlayLayer;
 class PlayerObject;
 class RingObject;
 
-// Commit 7 — Toggle+normal orb stack = BOTH must fire (vanilla clicks both).
+// Toggle+normal orb stack = BOTH must fire (vanilla clicks both).
 // Sim early-return on 1594 used to drop the stacked jump orb; flip also used to
 // hide jump rings in the toggle group. Rule: stacked partners always dual-fire.
 // Same ring is never boosted twice (claim / touchedRings guards).
@@ -63,7 +63,7 @@ public:
         RingObject* ring,
         bool appliedJump,
         int simTick
-    );
+);
 
     // After either partner is touched: fire the other stacked partner(s).
     // Toggle hit → applyRingJump on co-located normal orbs (Jump held).
@@ -72,7 +72,7 @@ public:
         PlayLayer* layer,
         PlayerObject* shadow,
         GameObject* hit
-    );
+);
 
     static bool selfCheck(std::string& report);
 
@@ -83,12 +83,12 @@ private:
         PlayLayer* layer,
         PlayerObject* shadow,
         GameObject* toggleHit
-    );
+);
     int fireTogglesAt(
         PlayLayer* layer,
         PlayerObject* shadow,
         GameObject* jumpHit
-    );
+);
 
     Stats m_stats;
     std::vector<TouchEvent> m_log;

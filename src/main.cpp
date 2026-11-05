@@ -60,7 +60,7 @@ $on_mod(Loaded) {
         }
     }
     AssistLog::printBanner();
-    // Commit 2 LOCK: freeze GhostParityProbe ε before any runtime / PlanGold probe.
+    // v1.4.0 LOCK: freeze GhostParityProbe ε before any runtime / PlanGold probe.
     AssistContracts140::applyLockedEps();
     AssistLog::info(fmt::format(
         "AssistContracts140 LOCK schema={} corpus={} eps=({:.0f},{:.0f})",
@@ -68,7 +68,7 @@ $on_mod(Loaded) {
         AssistContracts140::kCorpusLabel,
         AssistContracts140::kLockedEpsX,
         AssistContracts140::kLockedEpsY
-    ));
+));
     if (StageConfig::perfTrace()) {
         AssistLog::info(fmt::format("PerfTrace logging to {}", PerfTrace::logPath()));
     }
@@ -136,7 +136,7 @@ $on_mod(Loaded) {
             "ASSIST MODE: {} — {}",
             StageConfig::assistModeName(mode),
             StageConfig::assistModeHint(mode)
-        ));
+));
         AssistController::get().updateOverlay();
     });
 
@@ -238,7 +238,7 @@ $on_mod(Loaded) {
         onAnySetting();
     });
 
-    // Dev Lab (Commit 2 cache; session/eval still stubbed).
+    // Dev Lab (TW cache; session/eval still stubbed).
     watchBool("dev-record-enable");
     watchInt("dev-record-count");
     watchBool("dev-count-empty-attempts");

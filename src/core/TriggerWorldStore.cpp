@@ -93,7 +93,7 @@ void TriggerWorldStore::noteSoftcap(char const* where) {
         where ? where : "?",
         kSoftMaxTracks,
         kSoftMaxKeysPerTrack
-    ));
+));
 }
 
 void TriggerWorldStore::clear() {
@@ -118,12 +118,12 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
 
     auto res = this->readFile();
     if (res.isOk()) {
-        // Commit 4: empty on-disk cache is a miss (init raced → poisoned file).
+        // Empty on-disk cache is a miss (init raced → poisoned file).
         if (this->m_data.tracks.empty()) {
             AssistLog::info(fmt::format(
                 "TRIGGER-WORLD: empty cache for {} — treat as miss (rebuild)",
                 this->m_data.levelKey
-            ));
+));
             this->discardCacheFile();
             this->m_dirty = false;
             return;
@@ -133,14 +133,14 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
             this->m_data.levelKey,
             this->m_data.tracks.size(),
             this->readyTrackCount()
-        ));
+));
         return;
     }
     AssistLog::debug(fmt::format(
         "TRIGGER-WORLD: no cache for {} ({})",
         this->m_data.levelKey,
         res.unwrapErr()
-    ));
+));
 }
 
 void TriggerWorldStore::save() const {
@@ -154,13 +154,13 @@ void TriggerWorldStore::save() const {
             "TRIGGER-WORLD: saved {} ({} tracks)",
             this->m_data.levelKey,
             this->m_data.tracks.size()
-        ));
+));
         return;
     }
     AssistLog::debug(fmt::format(
         "TRIGGER-WORLD: save failed: {}",
         res.unwrapErr()
-    ));
+));
 }
 
 void TriggerWorldStore::setData(TriggerWorldData data) {
@@ -175,7 +175,7 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
             clamp.hardKeys ? 1 : 0,
             kHardMaxTracks,
             kHardMaxKeysPerTrack
-        ));
+));
     }
     if (data.version <= 0) data.version = kFileVersion;
     if (data.tps <= 0.0) data.tps = 240.0;
@@ -193,12 +193,12 @@ void TriggerWorldStore::discardCacheFile() const {
     if (ec) {
         AssistLog::debug(fmt::format(
             "TRIGGER-WORLD: discard cache failed: {}", ec.message()
-        ));
+));
         return;
     }
     AssistLog::info(fmt::format(
         "TRIGGER-WORLD: discarded empty/stale cache {}", path.filename().string()
-    ));
+));
 }
 
 TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {
@@ -261,14 +261,14 @@ bool TriggerWorldStore::samplePose(
 bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const {
     return this->samplePose(
         uniqueId, liveAbsTick, AssistController::get().simDt(), out
-    );
+);
 }
 
 void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
     if (!obj) return;
     auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
     // Inactive: disable collision participation, not visibility alone
-    // (invisible solids still killed through Include — Commit 4).
+    // (invisible solids still killed through Include).
     if (!pose.active) {
         if (ego) {
             ego->m_poweredOn = false;
@@ -334,14 +334,14 @@ std::string TriggerWorldStore::statusLine() const {
             this->readyTrackCount(),
             this->m_data.tracks.size(),
             this->m_data.tps
-        );
+);
     }
     return fmt::format(
         "trigger-world: {}/{} ready @ {:.0f} tps",
         this->readyTrackCount(),
         this->m_data.tracks.size(),
         this->m_data.tps
-    );
+);
 }
 
 bool TriggerWorldStore::selfCheck(std::string& report) {
@@ -401,12 +401,12 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
     expect(
         store.samplePoseAtStoreTick(42, 10, out) && out.x == 100.f && out.y == 200.f,
         "at-first"
-    );
+);
     expect(store.samplePoseAtStoreTick(42, 15, out) && out.x == 100.f, "hold-mid");
     expect(
         store.samplePoseAtStoreTick(42, 20, out) && out.x == 150.f && out.rotation == 45.f,
         "at-last"
-    );
+);
     expect(store.samplePoseAtStoreTick(42, 99, out) && out.x == 150.f, "past-last-hold");
     expect(!store.samplePoseAtStoreTick(999, 10, out), "missing-id");
     expect(!store.samplePoseAtStoreTick(99, 0, out), "not-ready");
@@ -419,20 +419,20 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
         store.samplePoseAtStoreTick(42, store.remapLiveTick(10, 1.f / 120.f), out)
             && out.x == 150.f,
         "remap-then-sample"
-    );
+);
     // live 10 @ nominal → store 10 → first key.
     expect(
         store.samplePoseAtStoreTick(42, store.remapLiveTick(10, 1.f / 240.f), out)
             && out.x == 100.f,
         "remap-id-sample"
-    );
+);
 
     expect(store.readyTrackCount() == 1, "ready-count");
     expect(TriggerClassify::isStatic(TriggerKind::StaticToggle), "static-toggle");
     expect(
         std::string(TriggerClassify::kindName(TriggerKind::StaticToggle)) == "StaticToggle",
         "kind-name-toggle"
-    );
+);
 
     // Soft ≥100k; legacy 2048 must not silently drop.
     expect(kSoftMaxTracks >= 100000, "soft-ge-100k");
@@ -516,7 +516,7 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
 }
 
 Result<> TriggerWorldStore::writeFile() const {
-    (void)file::createDirectoryAll(TriggerWorldStore::triggersDir());
+ (void)file::createDirectoryAll(TriggerWorldStore::triggersDir());
 
     matjson::Value root = matjson::Value::object();
     root["version"] = kFileVersion;
@@ -553,7 +553,7 @@ Result<> TriggerWorldStore::writeFile() const {
     return file::writeToJson(
         TriggerWorldStore::triggerPath(this->m_data.levelKey),
         root
-    );
+);
 }
 
 Result<> TriggerWorldStore::readFile() {
@@ -592,7 +592,7 @@ Result<> TriggerWorldStore::readFile() {
         track.objectId = static_cast<int>(tj["objectId"].asInt().unwrapOr(0));
         track.kind = TriggerWorldStore::kindFromString(
             tj.contains("kind") ? tj["kind"].asString().unwrapOr("Ignore") : "Ignore"
-        );
+);
         track.ready = tj["ready"].asBool().unwrapOr(false);
 
         if (track.uniqueId == 0) continue;
@@ -626,7 +626,7 @@ Result<> TriggerWorldStore::readFile() {
             [](TriggerPose const& a, TriggerPose const& b) {
                 return a.tick < b.tick;
             }
-        );
+);
         this->m_data.tracks.push_back(std::move(track));
     }
 

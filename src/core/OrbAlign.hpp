@@ -3,7 +3,7 @@
 
 #include <string>
 
-// Commit 13 — Orb align / recheck / robust-arm helpers (pure; no PlayLayer).
+// Orb align / recheck / robust-arm helpers (pure; no PlayLayer).
 // Early press waits inside orb window; wrong-orb reject; robust ±1 before arm;
 // recheck late slide ≤+1 (never earlier).
 class OrbAlign {
@@ -19,7 +19,7 @@ public:
         int dMin,
         int dMax,
         int limit
-    );
+);
 
     // Early press: fire must not precede orb window start.
     static int waitUntilInsideRing(int fireTick, int pressTick, int dMin);
@@ -35,9 +35,9 @@ public:
         bool loOk,
         bool hasHi,
         bool hiOk
-    );
+);
 
-    // Recheck late-slide cap (Commit 13: ≤+1). Never earlier than oldFire.
+    // Recheck late-slide cap (≤+1). Never earlier than oldFire.
     // Returns accepted fire or -1. Orb dMin wait is a separate path (caller).
     static int acceptRecheckSlide(
         int oldFire,
@@ -47,7 +47,7 @@ public:
         int robustK,
         int deadline,
         bool planOk
-    );
+);
 
     static bool selfCheck(std::string& report);
 
