@@ -5,6 +5,9 @@
 #include "../core/AssistContracts140.hpp"
 #include "../core/AssistContracts142.hpp"
 #include "../core/AssistRealMetrics.hpp"
+#include "../core/ClickBakeStore.hpp"
+#include "../core/LevelCacheAtomicIo.hpp"
+#include "../core/LevelCacheIndex.hpp"
 #include "../core/AssistSimEstimate.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
@@ -170,6 +173,12 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistContracts142::selfCheck(contracts142Report), "assist-contracts-142");
     std::string realMetricsReport;
     expect(AssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
+    std::string levelCacheAtomicReport;
+    expect(LevelCacheAtomicIo::selfCheck(levelCacheAtomicReport), "level-cache-atomic-io");
+    std::string levelCacheIndexReport;
+    expect(LevelCacheIndex::selfCheck(levelCacheIndexReport), "level-cache-index");
+    std::string clickBakeStoreReport;
+    expect(ClickBakeStore::selfCheck(clickBakeStoreReport), "click-bake-store");
     std::string simEstimateReport;
     expect(AssistSimEstimate::selfCheck(simEstimateReport), "assist-sim-estimate");
     std::string collisionPolicyReport;

@@ -3,6 +3,7 @@
 #include "AssistContracts140.hpp"
 #include "AssistController.hpp"
 #include "BakeSpawnProbe.hpp"
+#include "ClickBakeStore.hpp"
 #include "ShadowSimulator.hpp"
 #include "Tg2BakeFixture.hpp"
 #include "TriggerWorldBaker.hpp"
@@ -18,16 +19,6 @@
 #include <limits>
 
 using namespace geode::prelude;
-
-
-
-std::filesystem::path bakesDir() {
-    return Mod::get()->getSaveDir() / "bakes";
-}
-
-std::filesystem::path bakePath(std::string const& key) {
-    return bakesDir() / (key + ".json");
-}
 
 int nextJumpFrame(std::vector<ReplayEvent> const& ev, int fromIndex, bool player2) {
     for (int i = fromIndex + 1; i < static_cast<int>(ev.size()); ++i) {
@@ -190,20 +181,37 @@ void BakeMap::loadForLevel(GJGameLevel* level) {
     if (!level) return;
     m_data.levelKey = LevelProfile::makeKey(level);
     auto res = readFile();
-    if (res.isOk() && !m_data.clicks.empty()) {
+    if (res.isOk()) {
+        // Empty click stores count as loaded so self-bake can merge from a cold start.
         m_loaded = true;
-        AssistLog::debug(fmt::format(
-            "BAKE: loaded map {} ({} clicks, {}, {})",
-            m_data.levelKey, m_data.clicks.size(), m_data.sourceReplay, m_data.method
-        ));
+        if (!m_data.clicks.empty()) {
+            AssistLog::debug(fmt::format(
+                "BAKE: loaded map {} ({} clicks, {}, {})",
+                m_data.levelKey,
+                m_data.clicks.size(),
+                m_data.sourceReplay,
+                m_data.method
+            ));
+        }
+        else {
+            m_data.sourceReplay.clear();
+            m_data.method.clear();
+            m_data.tps = AssistClock::kNominalTps;
+            AssistLog::debug(fmt::format(
+                "BAKE: empty store ready {}", m_data.levelKey
+            ));
+        }
         return;
     }
-    // Empty / missing bake file — keep levelKey for next save, not a loaded map.
+    // Read error — keep levelKey; still mark loaded empty so self-bake works.
+    AssistLog::debug(fmt::format(
+        "BAKE: load miss {}: {}", m_data.levelKey, res.unwrapErr()
+    ));
     m_data.sourceReplay.clear();
     m_data.method.clear();
     m_data.tps = AssistClock::kNominalTps;
     m_data.clicks.clear();
-    m_loaded = false;
+    m_loaded = true;
 }
 
 void BakeMap::save() const {
@@ -1352,63 +1360,13 @@ Result<int> BakeMap::bakeBrute(
 }
 
 Result<> BakeMap::writeFile() const {
-    (void)file::createDirectoryAll(bakesDir());
-    matjson::Value root = matjson::Value::object();
-    root["version"] = 1;
-    root["key"] = m_data.levelKey;
-    root["source"] = m_data.sourceReplay;
-    root["tps"] = m_data.tps;
-    root["method"] = m_data.method;
-
-    std::vector<matjson::Value> arr;
-    arr.reserve(m_data.clicks.size());
-    for (auto const& c : m_data.clicks) {
-        matjson::Value j = matjson::Value::object();
-        j["nominal"] = c.nominalFrame;
-        j["earliest"] = c.earliest;
-        j["latest"] = c.latest;
-        j["down"] = c.down;
-        j["player2"] = c.player2;
-        j["x"] = c.x;
-        j["mode"] = StageConfig::kindName(c.mode);
-        if (c.holdAssist) j["holdAssist"] = true;
-        arr.push_back(std::move(j));
-    }
-    root["clicks"] = arr;
-    return file::writeToJson(bakePath(m_data.levelKey), root);
+    return ClickBakeStore::saveMethod(m_data);
 }
 
 Result<> BakeMap::readFile() {
-    auto res = file::readJson(bakePath(m_data.levelKey));
-    if (res.isErr()) return Err(res.unwrapErr());
-    auto root = res.unwrap();
-
-    if (root.contains("source")) m_data.sourceReplay = root["source"].asString().unwrapOr("");
-    if (root.contains("tps")) m_data.tps = root["tps"].asDouble().unwrapOr(240.0);
-    if (root.contains("method")) m_data.method = root["method"].asString().unwrapOr("replay");
-    m_data.clicks.clear();
-    if (!root.contains("clicks") || !root["clicks"].isArray()) return Ok();
-
-    for (auto const& j : root["clicks"]) {
-        BakedClick c;
-        c.nominalFrame = static_cast<int>(j["nominal"].asInt().unwrapOr(0));
-        c.earliest = static_cast<int>(j["earliest"].asInt().unwrapOr(c.nominalFrame));
-        c.latest = static_cast<int>(j["latest"].asInt().unwrapOr(c.nominalFrame));
-        c.down = j["down"].asBool().unwrapOr(true);
-        c.player2 = j["player2"].asBool().unwrapOr(false);
-        c.x = static_cast<float>(j["x"].asDouble().unwrapOr(0.0));
-        c.holdAssist = j.contains("holdAssist")
-            ? j["holdAssist"].asBool().unwrapOr(false)
-            : false;
-        auto modeName = j.contains("mode") ? j["mode"].asString().unwrapOr("cube") : "cube";
-        c.mode = GameModeKind::Cube;
-        for (int i = 0; i < StageConfig::MODE_COUNT; ++i) {
-            if (modeName == StageConfig::kindName(static_cast<GameModeKind>(i))) {
-                c.mode = static_cast<GameModeKind>(i);
-                break;
-            }
-        }
-        m_data.clicks.push_back(c);
-    }
+    std::string const key = m_data.levelKey;
+    auto res = ClickBakeStore::loadMerged(key, m_data);
+    if (res.isErr()) return res;
+    m_data.levelKey = key;
     return Ok();
 }

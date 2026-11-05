@@ -115,6 +115,7 @@ public:
 
     // Merge self-bake point-windows: dedup by down/player2/near x+frame → union
     // earliest/latest. Sets method="self" when the map was empty or already self.
+    // Empty level store is still loaded so self-bake can start from a cold cache.
     // Returns number of clicks added or widened. Cap kMaxMapClicks.
     static constexpr float MERGE_X_TOL = 40.f;
     static constexpr int MERGE_FRAME_TOL = 30;
