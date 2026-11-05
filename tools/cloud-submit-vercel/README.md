@@ -1,12 +1,14 @@
 # eb-cloud-submit (Vercel)
 
-Public endpoints for EarlyBuffer cloud configs. The GitHub token stays in Vercel Environment Variables — never in the mod package.
+Public endpoints for EarlyBuffer cloud configs (Share submit + download/rating stats). The GitHub token stays in Vercel Environment Variables — **never** in the mod package or player settings.
+
+In-game wiring: [`docs/cloud_configs.md`](../../docs/cloud_configs.md).
 
 ## Endpoints
 
 | Path | Method | Role |
 | --- | --- | --- |
-| `/api/submit` (alias `/submit`) | POST | Publish pack + update `index.json` |
+| `/api/submit` (alias `/submit`) | POST | Publish pack + update `index.json` (name, author, description, tags) |
 | `/api/stats` (alias `/stats`) | GET | Public counters only (`downloads`, `ratingSum`, `ratingCount`) |
 | `/api/track` (alias `/track`) | POST | Record one download or one rating per `clientId` |
 

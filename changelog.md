@@ -4,11 +4,12 @@
 
 **Cloud Configs browser** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
 
-- **Cloud Configs UI** — Assist → Cloud Configs opens catalog browser (search / detail / Install); Share… collects name / author / description → outbox + clipboard; settings `cloud-catalog-url`, `cloud-auto-refresh`.
-- **Public Share submit** — Share… POSTs to built-in `earlybuffer-config.vercel.app` (GitHub token **only** on Vercel; see `tools/cloud-submit-vercel/`). No cloud URL/token settings in the mod UI.
+- **Cloud Configs UI** — Assist → Cloud Configs: search, detail, Install; **Sort** (Default / Downloads / Rating / Popular / Name); **Refresh** inset from top-right; Share… collects name|author, description, and tags → outbox + clipboard. No player-facing cloud URL/token settings.
+- **Downloads + ratings** — list/detail badges from `/api/stats`; Install tracks one download per anonymous `clientId`; 1–5 star rate with re-rate (count unchanged). Counters in repo `stats.json` via Vercel `/api/track`.
+- **Public Share submit** — Share… POSTs to built-in `earlybuffer-config.vercel.app` (GitHub token **only** on Vercel; see `tools/cloud-submit-vercel/`).
 - **Catalog pipeline** — fixed `ToldByNun/earlybuffer-configs` (jsDelivr + GitHub raw), disk cache + seed, cache-busting Refresh; `CloudConfigApply` skips keybinds + `dev-*`.
 - **ConfigBundle** — portable key count **124**; Assist category map **166** (Cloud Configs action only).
-- **Docs** — `docs/cloud_configs.md`.
+- **Docs** — `docs/cloud_configs.md`, Vercel README (stats/track/submit).
 
 ## Hotfix on v1.4.0
 

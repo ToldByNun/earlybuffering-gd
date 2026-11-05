@@ -4,6 +4,6 @@
 - **Bugs / crashes:** open a [GitHub issue](https://github.com/ToldByNun/earlybuffering-gd/issues) with GD version (**2.2081**), Geode version, platform, and steps. Attach Geode crashlogs when possible. For death/reset hitch reports, enable **Lag Probe** and attach `earlybuffer-lagprobe.log` from the mod save folder.
 - **Settings questions:** see the in-mod setting descriptions and [`docs/assist_reference.md`](https://github.com/ToldByNun/earlybuffering-gd/blob/main/docs/assist_reference.md).
 - **Fair play:** use **Safe Mode**; do not expect assisted runs to be valid for leaderboards or community standards.
-- **Version:** **v1.4.0** is the current EarlyBuffer package line for **GD 2.2081** (escape honesty, portal-stack harden, Soft Hold default off, traj until-death draw, assist cost attribution). Issues on other GD builds are out of scope for this line. See [`changelog.md`](changelog.md).
+- **Version:** **v1.4.1** is the current EarlyBuffer package line for **GD 2.2081** (Cloud Configs browser + share/stats, escape honesty, Soft Hold default off). Issues on other GD builds are out of scope for this line. See [`changelog.md`](changelog.md).
 
 Maintainer: **Audesign**. Prefer reproducible reports (steps, logs, settings) over vague “it lags” notes.

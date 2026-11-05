@@ -83,7 +83,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
 - **Changelog:** see [`changelog.md`](changelog.md) — **v1.4.1** Cloud Configs; **v1.4.0** escape honesty / portal-stack / Soft Hold default off; **v1.3.2** bake / presets-removed / iOS harden (still GD **2.2081** only).
-- **Cloud packs:** [`docs/cloud_configs.md`](docs/cloud_configs.md) — catalog layout, seed, Share outbox.
+- **Cloud packs:** [`docs/cloud_configs.md`](docs/cloud_configs.md) — catalog, stats/sort/Share tags, seed, smoke checklist.
 
 ## Credits
 
