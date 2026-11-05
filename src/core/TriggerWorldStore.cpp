@@ -266,6 +266,13 @@ bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& o
 
 void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
     if (!obj) return;
+    // Offscreen objects can be hidden while their collision geometry moves.
+    obj->setPosition({ pose.x, pose.y });
+    obj->m_positionX = pose.x;
+    obj->m_positionY = pose.y;
+    obj->setRotation(pose.rotation);
+    obj->setScaleX(pose.scaleX);
+    obj->setScaleY(pose.scaleY);
     auto* ego = typeinfo_cast<EnhancedGameObject*>(obj);
     // Inactive: disable collision participation, not visibility alone
     // (invisible solids still killed through Include).
@@ -282,12 +289,6 @@ void TriggerWorldStore::writePose(GameObject* obj, TriggerPose const& pose) {
         ego->m_visible = true;
     }
     obj->setVisible(true);
-    obj->setPosition({ pose.x, pose.y });
-    obj->m_positionX = pose.x;
-    obj->m_positionY = pose.y;
-    obj->setRotation(pose.rotation);
-    obj->setScaleX(pose.scaleX);
-    obj->setScaleY(pose.scaleY);
 }
 
 int TriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {

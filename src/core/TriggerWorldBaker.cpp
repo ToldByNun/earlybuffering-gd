@@ -3,6 +3,7 @@
 #include "AssistSpikeWatch.hpp"
 #include "LevelProfile.hpp"
 #include "SectionObjectWalk.hpp"
+#include "SimCollisionPolicy.hpp"
 #include "TriggerClassify.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
@@ -117,6 +118,8 @@ void TriggerWorldBaker::clearJob() {
     this->m_childIndex = 0;
     this->m_childCount = 0;
     this->m_effectIndex = 0;
+    this->m_triggerSource = 0;
+    this->m_triggerSlot = 0;
     this->m_secOuter = 0;
     this->m_secInner = 0;
     this->m_secSlot = 0;
@@ -539,6 +542,25 @@ TriggerTrack* TriggerWorldBaker::ensureTrack(GameObject* obj, TriggerKind kind) 
 std::vector<GameObject*> TriggerWorldBaker::objectsInGroup(int groupId) const {
     std::vector<GameObject*> out;
     if (groupId <= 0) return out;
+
+    // m_objectLayer and m_sections are visibility/collision collections. They
+    // omit dormant objects, including the group-30 spike which kills the
+    // offline Slaughterhouse replay. GD's group index is authoritative for a
+    // trigger target set and includes these offscreen objects.
+    if (this->m_layer) {
+        if (auto* group = this->m_layer->getGroup(groupId)) {
+            out.reserve(static_cast<size_t>(group->count()));
+            for (unsigned i = 0; i < group->count(); ++i) {
+                auto* obj = typeinfo_cast<GameObject*>(group->objectAtIndex(i));
+                if (!obj || typeinfo_cast<PlayerObject*>(obj)) continue;
+                out.push_back(obj);
+            }
+            if (!out.empty()) return out;
+        }
+    }
+
+    // Fallback for transient layer initialization, where the group index can
+    // legitimately still be empty.
     for (auto* obj : this->m_objects) {
         if (!obj) continue;
         if (!obj->belongsToGroup(groupId)) continue;
@@ -686,6 +708,8 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
 
     for (auto* obj : targets) {
         if (obj == effect && targets.size() > 1) continue;
+        if (SimCollisionPolicy::classifyObjectType(static_cast<int>(obj->m_objectType),
+                obj->m_objectID) == SimObjectAction::Skip) continue;
         auto* track = this->ensureTrack(obj, kind);
         if (!track) break;
         TargetBake tb;
@@ -750,8 +774,10 @@ void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
 
         for (int t = startTick + step; t < endTick; t += step) {
             if (track->keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack) break;
-            float const u = static_cast<float>(t - startTick)
+            float const fraction = static_cast<float>(t - startTick)
                 / static_cast<float>(dur);
+            float const u = GameToolbox::getEasedValue(fraction,
+                static_cast<int>(effect->m_easingType), effect->m_easingRate);
             LivePose mid = tb.start;
             mid.x = tb.start.x + (tb.end.x - tb.start.x) * u;
             mid.y = tb.start.y + (tb.end.y - tb.start.y) * u;
@@ -899,7 +925,7 @@ void TriggerWorldBaker::tickSlice() {
             size_t n = 0;
             while (n < kCollectPerSlice && !budgetHit()) {
                 if (this->m_secOuter >= sections.size()) {
-                    this->m_phase = Phase::Bake;
+                    this->m_phase = Phase::CollectLevelTriggers;
                     this->m_effectIndex = 0;
                     if (this->m_sectionExtras > 0) {
                         AssistLog::debug(fmt::format(
@@ -954,6 +980,33 @@ void TriggerWorldBaker::tickSlice() {
             continue;
         }
 
+        if (this->m_phase == Phase::CollectLevelTriggers) {
+            // Position-triggered effects can be absent from both the draw tree
+            // and collision sections. Inspect the level-owned arrays in slices.
+            auto* layer = this->m_layer;
+            cocos2d::CCArray* sources[] = {layer->m_objects, layer->m_spawnObjectsArray};
+            while (this->m_triggerSource < 2 && !budgetHit()) {
+                auto* source = sources[this->m_triggerSource];
+                if (!source || this->m_triggerSlot >= source->count()) {
+                    ++this->m_triggerSource;
+                    this->m_triggerSlot = 0;
+                    continue;
+                }
+                auto* raw = source->objectAtIndex(static_cast<unsigned>(this->m_triggerSlot++));
+                auto* effect = typeinfo_cast<EffectGameObject*>(raw);
+                if (effect && TriggerClassify::isLethalMotionCandidateId(effect->m_objectID)) {
+                    this->considerCollectedObject(effect);
+                }
+            }
+            if (this->m_triggerSource == 2) {
+                std::stable_sort(m_effects.begin(), m_effects.end(), [](auto* a, auto* b) {
+                    return a->getPositionX() < b->getPositionX();
+                });
+                this->m_phase = Phase::Bake;
+            }
+            continue;
+        }
+
         if (this->m_phase == Phase::Bake) {
             size_t n = 0;
             while (this->m_effectIndex < this->m_effects.size()
@@ -969,10 +1022,6 @@ void TriggerWorldBaker::tickSlice() {
                 : static_cast<float>(this->m_effectIndex)
                     / static_cast<float>(this->m_effects.size());
             this->m_progress = 0.15f + 0.80f * bakeFrac;
-
-            if (n > 0) {
-                this->publishPartial();
-            }
 
             if (this->m_effectIndex >= this->m_effects.size()) {
                 this->m_phase = Phase::Commit;

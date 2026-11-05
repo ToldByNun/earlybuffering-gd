@@ -64,6 +64,7 @@ private:
         WaitObjects, // objectLayer may be empty at onLevelInit
         Collect,
         CollectSections, // secondary: section lists may hold objects children miss
+        CollectLevelTriggers,
         Bake,
         Commit
     };
@@ -118,6 +119,8 @@ private:
     size_t m_childIndex = 0;
     size_t m_childCount = 0;
     size_t m_effectIndex = 0;
+    size_t m_triggerSource = 0;
+    size_t m_triggerSlot = 0;
     size_t m_secOuter = 0;
     size_t m_secInner = 0;
     size_t m_secSlot = 0;
