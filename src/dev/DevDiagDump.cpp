@@ -3,6 +3,8 @@
 #include "../config/StageConfig.hpp"
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
+#include "../core/AssistRealMetrics.hpp"
+#include "../core/AssistSimEstimate.hpp"
 #include "../core/BakeMap.hpp"
 #include "../core/BakeSpawnProbe.hpp"
 #include "../core/ConfigBundleKeys.hpp"
@@ -1058,6 +1060,8 @@ std::string DevDiagDump::buildOverlay() {
     AssistController::get().updateOverlay();
     o << "attemptTick=" << AssistController::get().attemptTick() << "\n";
     o << "assistTouched=" << boolStr(AssistController::get().assistTouchedRun()) << "\n";
+    o << "realMetrics=" << AssistRealMetrics::get().reportLine() << "\n";
+    o << "simEstimate=" << AssistSimEstimate::get().reportLine() << "\n";
     o << "(see Geode console / overlay HUD for live line)\n";
     return o.str();
 }

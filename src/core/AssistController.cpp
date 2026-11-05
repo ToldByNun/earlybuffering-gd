@@ -316,6 +316,7 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_outcomePlanDelay = false;
     m_untrustPassHint = false;
     m_dafWatch = false;
+    m_dafWatchMode = GameModeKind::Cube;
     {
         LagProbe::Scope const s("eb.saveFeedbackReset");
         SaveFeedback::get().reset();
@@ -404,7 +405,20 @@ void AssistController::onLevelQuit() {
     GhostParityProbe::get().onLevelQuit();
     TravelForesightCache::get().clear();
     this->m_dafWatch = false;
+    this->m_dafWatchMode = GameModeKind::Cube;
     // Keep AssistRealMetrics session across levels (corpus report); do not resetSession.
+    {
+        auto& metrics = AssistRealMetrics::get();
+        if (metrics.nOpp() > 0 || metrics.arms() > 0 || metrics.parityProbes() > 0) {
+            AssistLog::info(fmt::format(
+                "REAL-METRICS {}", metrics.reportLine()
+            ));
+            auto const sim = AssistSimEstimate::get().reportLine();
+            if (!sim.empty()) {
+                AssistLog::info(fmt::format("SIM-ESTIMATE {}", sim));
+            }
+        }
+    }
 
     // Quiet reset — overlay already detached
     this->clearBuffer();
@@ -1070,7 +1084,9 @@ bool AssistController::armHoldUntilSafe(
         );
     }
     this->noteVerdict(AssistReason::HoldPending, "hus-arm");
-    if (eta > 0) AssistRealMetrics::get().noteArm();
+    if (eta > 0) {
+        AssistRealMetrics::get().noteArm(StageConfig::kindOf(player));
+    }
     AssistLog::debug(fmt::format(
         "HOLD-UNTIL-SAFE arm {} eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
         down ? "press" : "release",
@@ -1846,8 +1862,9 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     // Drop in-flight trigger-world slices (no flush); partial store may remain.
     TriggerWorldBaker::get().cancel();
     if (this->m_dafWatch) {
-        AssistRealMetrics::get().noteDeathAfterFire();
+        AssistRealMetrics::get().noteDeathAfterFire(this->m_dafWatchMode);
         this->m_dafWatch = false;
+        this->m_dafWatchMode = GameModeKind::Cube;
     }
     if (this->m_outcomePending) {
         LagProbe::Scope const s("eb.outcomeNote");
@@ -2122,9 +2139,12 @@ void AssistController::fireBuffered(
     DevCycleRecorder::get().noteFire(devPressId, this->m_attemptTick);
 
     this->inject(playLayer, this->m_buffer.down);
-    // Real-harm watch: death after a fired Delay inject (Commit 2 DAF).
+    // Real-harm watch: death after a fired Delay inject (DAF).
     if (delayed > 0 && wasPress) {
         this->m_dafWatch = true;
+        this->m_dafWatchMode = player
+            ? StageConfig::kindOf(player)
+            : this->m_buffer.mode;
     }
     AssistLog::printSavedPress(
         delayed, this->m_buffer.pressTick, this->m_attemptTick,
@@ -2817,7 +2837,7 @@ bool AssistController::tryBakeAssist(
         );
     }
     this->noteVerdict(AssistReason::DelayPrefer, armWhere);
-    AssistRealMetrics::get().noteArm();
+    AssistRealMetrics::get().noteArm(kind);
     this->updateOverlay();
     return false;
 }
@@ -2838,11 +2858,13 @@ bool AssistController::planPress(
         return true;
     }
 
-    // Opportunity (Commit 2): every press that reaches assist decisioning.
+    // Opportunity: every press that reaches assist decisioning.
     {
         float const xOpp = player->getPositionX();
         bool const trusted = SimTrust::get().okAt(xOpp);
-        AssistRealMetrics::get().noteOpportunity(trusted);
+        AssistRealMetrics::get().noteOpportunity(
+            trusted, StageConfig::kindOf(player)
+        );
     }
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
@@ -3432,7 +3454,9 @@ bool AssistController::planPress(
         );
     }
     this->noteVerdict(delayReason, "press-delay");
-    if (delay > 0) AssistRealMetrics::get().noteArm();
+    if (delay > 0) {
+        AssistRealMetrics::get().noteArm(StageConfig::kindOf(player));
+    }
     this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     this->updateOverlay();
     return false;
@@ -3830,7 +3854,9 @@ bool AssistController::planRelease(
         );
     }
     this->noteVerdict(delayReason, "release-delay");
-    if (delay > 0) AssistRealMetrics::get().noteArm();
+    if (delay > 0) {
+        AssistRealMetrics::get().noteArm(StageConfig::kindOf(player));
+    }
     this->recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     this->updateOverlay();
     return false;

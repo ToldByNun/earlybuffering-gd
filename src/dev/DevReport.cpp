@@ -3,6 +3,7 @@
 #include "DevSession.hpp"
 #include "DevTraceStore.hpp"
 #include "../debug/LagProbe.hpp"
+#include "../core/AssistRealMetrics.hpp"
 #include "../core/AssistSimEstimate.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
@@ -224,6 +225,8 @@ DevReport DevReport::fromGrid(
     j["simCaused"] = r.simCaused;
     j["simNet"] = r.simNet;
     j["simHarmRate"] = r.simHarmRate;
+    // Real primary gates (session snapshot; includes per-mode + contracts142 status).
+    j["realMetrics"] = AssistRealMetrics::get().reportLine();
     j["overlay"] = r.overlayLine;
     if (r.liveVsEvalMismatch) {
         j["liveVsEvalMismatch"] = true;
