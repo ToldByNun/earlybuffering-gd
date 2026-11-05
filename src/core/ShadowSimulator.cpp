@@ -2623,7 +2623,7 @@ SimPlan ShadowSimulator::plan(
         return c;
     };
 
-    bool const trustLong = real && SimTrust::get().okAt(real->getPositionX());
+    bool const trustLong = real && !options.forceShortHorizon && SimTrust::get().okAt(real->getPositionX());
     auto const horizonCaps = AssistHorizon::resolve(
         real ? StageConfig::kindOf(real) : GameModeKind::Cube,
         trustLong,
@@ -4039,7 +4039,7 @@ SimPlan ShadowSimulator::planSequence(
     // ScoreHorizon from AssistHorizon (long only when trusted).
     int horizon = options.smartHorizon;
     if (horizon <= 0) {
-        bool const trustOk = SimTrust::get().okAt(real->getPositionX());
+        bool const trustOk = !options.forceShortHorizon && SimTrust::get().okAt(real->getPositionX());
         horizon = AssistHorizon::resolve(
             StageConfig::kindOf(real),
             trustOk,

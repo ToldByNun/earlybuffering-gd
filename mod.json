@@ -56,7 +56,8 @@
 				"Live",
 				"Replay",
 				"Hybrid",
-				"BruteForce"
+				"BruteForce",
+				"Route"
 			],
 			"default": "Live"
 		},
@@ -370,6 +371,24 @@
 			"default": 0,
 			"min": 0,
 			"max": 240
+		},
+		"route-corridor": {
+			"type": "string",
+			"name": "Route Corridor",
+			"one-of": ["Strict", "Normal", "Loose"],
+			"default": "Normal"
+		},
+		"route-off-route": {
+			"type": "float",
+			"name": "Route Off-Route",
+			"default": 28.0,
+			"min": 8.0,
+			"max": 160.0
+		},
+		"route-live-fallback": {
+			"type": "bool",
+			"name": "Route Live Fallback",
+			"default": false
 		},
 		"cps-limit": {
 			"type": "int",

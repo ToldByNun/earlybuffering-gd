@@ -96,6 +96,9 @@ bool g_cachedSaveFeedbackCounter = false;
 StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
+float g_cachedRouteCorridor = 1.f;
+float g_cachedRouteOffRoute = 28.f;
+bool g_cachedRouteLiveFallback = false;
 bool g_cachedWindowUnitFrames = false;
 bool g_cacheInitialized = false;
 bool g_applying = false;
@@ -233,11 +236,15 @@ void StageConfig::refreshCache() {
     }
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
+    try { auto v = mod->getSettingValue<std::string>("route-corridor"); g_cachedRouteCorridor = v == "Strict" ? .75f : v == "Loose" ? 1.35f : 1.f; } catch (...) {}
+    g_cachedRouteOffRoute = std::clamp(readFloat(mod, "route-off-route", 28.f), 8.f, 160.f);
+    g_cachedRouteLiveFallback = readBool(mod, "route-live-fallback", false);
     try {
         auto modeStr = mod->getSettingValue<std::string>("assist-mode");
         if (modeStr == "Live") g_cachedAssistMode = AssistMode::Live;
         else if (modeStr == "Replay") g_cachedAssistMode = AssistMode::Replay;
         else if (modeStr == "BruteForce") g_cachedAssistMode = AssistMode::BruteForce;
+        else if (modeStr == "Route") g_cachedAssistMode = AssistMode::Route;
         else g_cachedAssistMode = AssistMode::Hybrid;
     }
     catch (...) {
@@ -303,6 +310,7 @@ char const* StageConfig::assistModeName(AssistMode mode) {
         case AssistMode::Replay: return "Replay";
         case AssistMode::Hybrid: return "Hybrid";
         case AssistMode::BruteForce: return "BruteForce";
+        case AssistMode::Route: return "Route";
     }
     return "Hybrid";
 }
@@ -313,6 +321,7 @@ char const* StageConfig::assistModeHint(AssistMode mode) {
         case AssistMode::Replay: return "bake windows only";
         case AssistMode::Hybrid: return "bake if near, else live";
         case AssistMode::BruteForce: return "pre-baked safe clicks (no replay)";
+        case AssistMode::Route: return "validated replay route, short-horizon only";
     }
     return "";
 }
@@ -325,7 +334,7 @@ void StageConfig::setAssistMode(AssistMode mode) {
 
 void StageConfig::cycleAssistMode() {
     ensureCache();
-    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 4;
+    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 5;
     setAssistMode(static_cast<AssistMode>(next));
 }
 
@@ -545,6 +554,9 @@ int StageConfig::ticksWave() {
 }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
 int StageConfig::lookAheadCap() { ensureCache(); return g_cachedLookAhead; }
+float StageConfig::routeCorridorMultiplier() { ensureCache(); return g_cachedRouteCorridor; }
+float StageConfig::routeOffRouteThreshold() { ensureCache(); return g_cachedRouteOffRoute; }
+bool StageConfig::routeLiveFallback() { ensureCache(); return g_cachedRouteLiveFallback; }
 GameModeKind StageConfig::kindOf(PlayerObject* player) {
     if (!player) return GameModeKind::Cube;
     if (player->m_isDart) return GameModeKind::Wave;

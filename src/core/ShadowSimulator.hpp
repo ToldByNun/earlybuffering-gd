@@ -65,6 +65,7 @@ struct PlanOptions {
     // Live Delay-arm: only Class::Alive ghosts (soft Landing/Recoverable/LateCrash
     // stay not-false-lethal for bake verify when this is false).
     bool requireAliveForDelay = false;
+    bool forceShortHorizon = false;
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     ThreatZone seedThreatZone{};

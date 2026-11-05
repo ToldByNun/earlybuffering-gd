@@ -41,7 +41,8 @@ public:
         Live = 0,
         Replay,
         Hybrid,
-        BruteForce
+        BruteForce,
+        Route
     };
 
     // Physics backend for Live plan. Only ShadowPlayer ships (Trajectory removed).
@@ -153,6 +154,9 @@ public:
     static int husReplanTickBudget();
     static int deathSlack();
     static int lookAheadCap();
+    static float routeCorridorMultiplier();
+    static float routeOffRouteThreshold();
+    static bool routeLiveFallback();
 
     // --- Smart Prediction (Live / Hybrid) ---
     // Live/Hybrid multi-jump: 1 = single-click only

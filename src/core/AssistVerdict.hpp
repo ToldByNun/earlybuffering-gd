@@ -61,6 +61,8 @@ enum class AssistReason {
 
     // ShiftedInputQueue at Cap 8 — named Pass (no silent drop)
     PassQueueOverflow,
+    PassRouteMissing,
+    PassRouteOff,
 
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown

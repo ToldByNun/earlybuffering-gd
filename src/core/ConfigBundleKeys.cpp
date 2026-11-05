@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[124];
-    static constexpr int kEntryCount = 124;
+    static ConfigBundleKeys::Entry const kEntries[127];
+    static constexpr int kEntryCount = 127;
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[124] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[127] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
     { "show-overlay", ConfigBundleKeys::Kind::Bool },
@@ -51,6 +51,9 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[124] = {
     { "death-slack", ConfigBundleKeys::Kind::Int },
     { "look-ahead-cap", ConfigBundleKeys::Kind::Int },
     { "assist-mode", ConfigBundleKeys::Kind::String },
+    { "route-corridor", ConfigBundleKeys::Kind::String },
+    { "route-off-route", ConfigBundleKeys::Kind::Float },
+    { "route-live-fallback", ConfigBundleKeys::Kind::Bool },
     { "bake-radius", ConfigBundleKeys::Kind::Int },
     { "cps-limit", ConfigBundleKeys::Kind::Int },
     { "min-click-interval-ms", ConfigBundleKeys::Kind::Int },

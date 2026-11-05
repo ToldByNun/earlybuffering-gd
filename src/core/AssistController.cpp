@@ -25,6 +25,7 @@
 #include "OrbAlign.hpp"
 #include "SpotTrustMap.hpp"
 #include "LevelProfile.hpp"
+#include "RouteAssist.hpp"
 #include "ShadowSimulator.hpp"
 #include "TravelForesight.hpp"
 #include "TriggerWorldBaker.hpp"
@@ -2537,6 +2538,14 @@ bool AssistController::tryBakeAssist(
     if (reuse) *reuse = {};
     auto mode = StageConfig::assistMode();
     if (mode == AssistMode::Live) return true;
+    if (mode == AssistMode::Route) {
+        AssistReason const why = RouteAssist::gate(player, player1);
+        if (why == AssistReason::None || StageConfig::routeLiveFallback()) return true;
+        handled = true;
+        DevCycleRecorder::get().noteGatePass(why, "route-gate");
+        this->noteVerdict(why, "route-gate");
+        return true;
+    }
 
     bool const bakeOnly =
         mode == AssistMode::Replay || mode == AssistMode::BruteForce;
@@ -3209,6 +3218,10 @@ bool AssistController::planPress(
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
+    if (StageConfig::assistMode() == AssistMode::Route) {
+        opts.smartDepth = 1;
+        opts.forceShortHorizon = true;
+    }
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
@@ -3809,6 +3822,10 @@ bool AssistController::planRelease(
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
+    if (StageConfig::assistMode() == AssistMode::Route) {
+        opts.smartDepth = 1;
+        opts.forceShortHorizon = true;
+    }
     bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind
 );
