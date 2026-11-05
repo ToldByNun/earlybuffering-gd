@@ -11,6 +11,8 @@
 #include "TriggerWorldBaker.hpp"
 #include "TriggerWorldStore.hpp"
 #include "LevelProfile.hpp"
+#include "RoutePathBuilder.hpp"
+#include "RoutePathStore.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../debug/AssistLog.hpp"
@@ -161,6 +163,7 @@ void BakeMap::clear() {
     m_loaded = false;
     this->m_startXq = 0;
     this->m_dirty = false;
+    RoutePathStore::get().clear();
 }
 
 void BakeMap::clearPendingReplay() {
@@ -184,6 +187,9 @@ void BakeMap::loadForLevel(GJGameLevel* level, int startXq) {
     this->m_startXq = startXq;
     if (!level) return;
     m_data.levelKey = LevelProfile::makeKey(level);
+    // A route is an optional sibling of replay clicks. A missing/corrupt route
+    // is deliberately a miss, never a reason to reject the click cache.
+    (void)RoutePathStore::get().load(m_data.levelKey, startXq);
     auto res = readFile();
     if (res.isOk()) {
         // Empty click stores count as loaded so self-bake can merge from a cold start.
@@ -242,6 +248,7 @@ void BakeMap::setStartXq(int startXq) {
     this->m_startXq = startXq;
     this->m_dirty = false;
     this->m_loaded = false;
+    (void)RoutePathStore::get().load(key, startXq);
     auto res = this->readFile();
     this->m_loaded = true;
     if (res.isErr()) {
@@ -824,7 +831,7 @@ Result<int> BakeMap::bakeReplay(
         int lastLogged = -1;
         validate = ShadowSimulator::get().runBakeTimeline(
             layer, startSnapshotSlot, ev, dt, lastFrame, -1,
-            true, false, true, 1,
+            true, true, true, 1,
             [&](int frame) -> bool {
                 if (m_progress.cancel.load()) return false;
                 if (frame - lastLogged >= 64 || frame == lastFrame) {
@@ -842,6 +849,12 @@ Result<int> BakeMap::bakeReplay(
 
     int partialCut = -1; // frames >= cut are dropped; -1 = full macro OK
     if (validate.died) {
+        // Route is valid only for a complete, surviving replay validation.
+        // Do not leave an older route around after a failed re-bake.
+        std::string routeRemoveErr;
+        if (!RoutePathStore::removeFile(m_data.levelKey, m_startXq, routeRemoveErr)) {
+            AssistLog::debug(fmt::format("ROUTE: failed to remove stale route: {}", routeRemoveErr));
+        }
         // P2 drop stats for err / log (same policy as prepareBakeTimeline).
         int droppedP2 = 0;
         {
@@ -1070,6 +1083,25 @@ Result<int> BakeMap::bakeReplay(
     m_loaded = true;
     this->m_dirty = true;
     save();
+    // Build only from this exact full 1:1 ghost trace; partial replay bakes
+    // may still yield useful click windows but can never publish a route.
+    if (partialCut < 0) {
+        auto route = RoutePathBuilder::buildFromTraces(validate.frames, !validate.unknown);
+        if (!route.empty() && route.parityOk) {
+            auto saved = RoutePathStore::get().save(m_data.levelKey, route, m_startXq);
+            if (saved.isErr()) {
+                AssistLog::debug(fmt::format("ROUTE: save failed: {}", saved.unwrapErr()));
+            }
+            else {
+                AssistLog::info(fmt::format("ROUTE: saved {} samples (stride {})", route.sampleCount(), route.sampleStrideTicks));
+            }
+        }
+        else {
+            std::string routeRemoveErr;
+            (void)RoutePathStore::removeFile(m_data.levelKey, m_startXq, routeRemoveErr);
+            AssistLog::debug("ROUTE: validation trace unsuitable; route omitted");
+        }
+    }
     return Ok(nClicks);
 }
 

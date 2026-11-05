@@ -463,6 +463,9 @@ public:
         bool twApplied = false;
         int eventsApplied = 0; // count this frame
         int mode = 0;
+        bool upsideDown = false;
+        bool mini = false;
+        bool dual = false;
         int deathObjId = -1;
         int deathObjType = -1;
         float deathObjX = 0.f;

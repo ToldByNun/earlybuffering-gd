@@ -4430,6 +4430,12 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 tr.twApplied = this->m_triggerWorldAppliedThisTick;
                 tr.eventsApplied = evThis;
                 tr.mode = static_cast<int>(StageConfig::kindOf(s));
+                tr.upsideDown = s->m_isUpsideDown;
+                // The 2.2081 PlayerObject binding does not expose mini state;
+                // preserve the schema field as false until a binding-backed
+                // source is available rather than guessing from sprite scale.
+                tr.mini = false;
+                tr.dual = layer->m_gameState.m_isDualMode;
                 if (m_dead && m_deathObject) {
                     tr.deathObjId = m_deathObject->m_uniqueID;
                     tr.deathObjType = static_cast<int>(m_deathObject->m_objectType);

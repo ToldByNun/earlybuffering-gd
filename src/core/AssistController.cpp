@@ -225,7 +225,13 @@ double AssistController::wallTps() const {
 
 std::string AssistController::overlayText() const { return m_overlayText; }
 
-void AssistController::clearBuffer() { m_buffer = {}; }
+void AssistController::clearBuffer(bool keepShiftQueue) {
+    this->m_buffer = {};
+    if (!keepShiftQueue) {
+        this->m_shiftQueue.clear();
+        this->m_shiftDrainPass = false;
+    }
+}
 
 void AssistController::beginShiftQueue(int shiftTicks) {
     this->m_shiftDrainPass = false;
@@ -2233,7 +2239,11 @@ void AssistController::fireBuffered(
     this->m_outcomePlanDelay = delayed > 0;
     this->m_outcomeStartX = player ? player->getPositionX() : 0.f;
 
-    this->clearBuffer();
+    // Keep same-shift follow-ups; drop the queue if nothing was enqueued.
+    this->clearBuffer(/*keepShiftQueue=*/true);
+    if (this->m_shiftQueue.empty() && !this->m_shiftDrainPass) {
+        this->m_shiftQueue.clear();
+    }
 
     // After assisted press:
     // - While user holds: never force-release.
@@ -4184,14 +4194,14 @@ bool AssistController::onHandleButton(
     }
 
     if (ours && this->m_buffer.state == BufferState::Buffered && this->m_buffer.down) {
-        // Follow-up DOWN while A armed: same-shift enqueue (SpamAssist).
-        // Classic fire-A-then-plan-B only when shift-queue is unavailable.
-        if (this->m_shiftQueue.active()) {
+        // Follow-up DOWN while A armed:
+        //  - releaseSeen (classic re-click): fire A, then plan B (Live Delay path)
+        //  - else: same-shift enqueue (multi-key / held spam rhythm)
+        if (this->m_shiftQueue.active() && !this->m_buffer.releaseSeen) {
             SpamAssistContext spamCtx;
             spamCtx.kind = StageConfig::kindOf(player);
             spamCtx.bufferActive = true;
             spamCtx.shiftQueueActive = true;
-            // Enqueue even after releaseSeen — keep primary Delay + rhythm.
             spamCtx.releaseSeen = false;
             spamCtx.queueSize = this->m_shiftQueue.size();
             auto const act = SpamAssistPolicy::decide(spamCtx);
@@ -4219,7 +4229,7 @@ bool AssistController::onHandleButton(
             }
         }
         AssistLog::debug(fmt::format(
-            "buffer: 2nd DOWN fallback fire A then plan B (releaseSeen={})",
+            "buffer: 2nd DOWN → fire A then plan B (releaseSeen={})",
             this->m_buffer.releaseSeen ? 1 : 0
 ));
         this->fireBuffered(playLayer, player);

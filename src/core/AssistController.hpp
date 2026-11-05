@@ -196,7 +196,8 @@ private:
 
     int activeLimit(PlayerObject* player) const;
     bool shouldAssistPlayer(PlayerObject* player) const;
-    void clearBuffer();
+    // keepShiftQueue: true only after a successful primary fire (follow-ups remain).
+    void clearBuffer(bool keepShiftQueue = false);
     // Arm shared shift for follow-up spam inputs (clears prior queue entries).
     void beginShiftQueue(int shiftTicks);
     // Inject at most one due / drain-mode queued input per physics tick.

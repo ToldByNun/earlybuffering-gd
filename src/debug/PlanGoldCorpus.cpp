@@ -27,6 +27,9 @@
 #include "../core/OrbAlign.hpp"
 #include "../core/AssistHorizon.hpp"
 #include "../core/ModeAssist.hpp"
+#include "../core/RoutePath.hpp"
+#include "../core/RoutePathBuilder.hpp"
+#include "../core/RoutePathStore.hpp"
 #include "../core/ShiftedInputQueue.hpp"
 #include "../core/SpamAssistPolicy.hpp"
 #include "../core/AssistSpikeWatch.hpp"
@@ -205,6 +208,13 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
     std::string modeAssistReport;
     expect(ModeAssist::selfCheck(modeAssistReport), "mode-assist");
+
+    std::string routePathReport;
+    expect(RoutePath::selfCheck(routePathReport), "route-path");
+    std::string routeBuilderReport;
+    expect(RoutePathBuilder::selfCheck(routeBuilderReport), "route-path-builder");
+    std::string routeStoreReport;
+    expect(RoutePathStore::selfCheck(routeStoreReport), "route-path-store");
     std::string shiftedQueueReport;
     expect(ShiftedInputQueue::selfCheck(shiftedQueueReport), "shifted-input-queue");
     std::string spamAssistReport;
