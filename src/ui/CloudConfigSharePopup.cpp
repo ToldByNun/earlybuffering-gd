@@ -27,59 +27,98 @@ void CloudConfigSharePopup::open(ClosedCallback onClosed) {
 bool CloudConfigSharePopup::init(ClosedCallback onClosed) {
     m_onClosed = std::move(onClosed);
 
-    if (!Popup::init(300.f, 228.f, "GJ_square01.png")) {
+    // Compact height — fields stacked tightly, no big empty band.
+    if (!Popup::init(300.f, 236.f, "GJ_square01.png")) {
         return false;
     }
 
-    // Cancel/Share already cover dismiss — hide the stacked corner X over parent popups.
     if (m_closeBtn) {
         m_closeBtn->setVisible(false);
         m_closeBtn->setEnabled(false);
     }
 
-    this->setTitle("Share Config", "goldFont.fnt", 0.65f, 14.f);
+    this->setTitle("Share Config", "goldFont.fnt", 0.60f, 10.f);
 
-    auto addLabeledInput = [&](
-        char const* label,
-        char const* placeholder,
-        float y,
-        size_t maxChars,
-        TextInput*& out
-    ) {
-        auto* lab = CCLabelBMFont::create(label, "goldFont.fnt");
-        lab->setScale(0.38f);
+    // One left edge for labels + inputs. No setScale on TextInput (that
+    // shrinks the visual box while position still uses full width → staircase).
+    float const padX = 24.f;
+    float const innerW = 252.f;
+    float const gapX = 8.f;
+    float const halfW = (innerW - gapX) * 0.5f;
+
+    auto placeLabel = [&](char const* text, float left, float y) {
+        auto* lab = CCLabelBMFont::create(text, "goldFont.fnt");
+        lab->setScale(0.32f);
         lab->setAnchorPoint({ 0.f, 0.5f });
-        lab->setOpacity(220);
-        m_mainLayer->addChildAtPosition(lab, Anchor::TopLeft, ccp(24.f, y + 13.f));
-
-        out = TextInput::create(252.f, placeholder, "bigFont.fnt");
-        out->setCommonFilter(CommonFilter::Any);
-        out->setTextAlign(TextInputAlign::Left);
-        out->setMaxCharCount(maxChars);
-        out->setScale(0.92f);
-        m_mainLayer->addChildAtPosition(out, Anchor::Top, ccp(0.f, y));
+        lab->setOpacity(210);
+        m_mainLayer->addChildAtPosition(lab, Anchor::TopLeft, ccp(left, y));
     };
 
-    addLabeledInput("Name", "My pack name", -52.f, 48, m_nameInput);
-    addLabeledInput("Author", "Your name", -90.f, 32, m_authorInput);
-    addLabeledInput("Description", "What does this pack do?", -136.f, 160, m_descInput);
+    auto placeInput = [&](TextInput* input, float left, float width, float y) {
+        // TopLeft + center-x of the box → left edge == `left` when anchor is 0.5.
+        m_mainLayer->addChildAtPosition(
+            input, Anchor::TopLeft, ccp(left + width * 0.5f, y)
+        );
+    };
+
+    auto makeInput = [&](float width, char const* placeholder, size_t maxChars) {
+        auto* input = TextInput::create(width, placeholder, "bigFont.fnt");
+        input->setCommonFilter(CommonFilter::Any);
+        input->setTextAlign(TextInputAlign::Left);
+        input->setMaxCharCount(maxChars);
+        return input;
+    };
+
+    // Vertical rhythm (from title): label → input → gap → …
+    float const nameLabY = -36.f;
+    float const nameInY = -50.f;
+    float const descLabY = -72.f;
+    float const descInY = -86.f;
+    float const tagsLabY = -108.f;
+    float const tagsInY = -122.f;
+    float const idY = -144.f;
+
+    // Name | Author
+    placeLabel("Name", padX, nameLabY);
+    placeLabel("Author", padX + halfW + gapX, nameLabY);
+
+    m_nameInput = makeInput(halfW, "My pack", 48);
+    m_nameInput->setID("cloud-share-name"_spr);
+    placeInput(m_nameInput, padX, halfW, nameInY);
+
+    m_authorInput = makeInput(halfW, "Your name", 32);
+    m_authorInput->setID("cloud-share-author"_spr);
+    placeInput(m_authorInput, padX + halfW + gapX, halfW, nameInY);
+
+    // Description
+    placeLabel("Description", padX, descLabY);
+    m_descInput = makeInput(innerW, "What does this pack do?", 160);
+    m_descInput->setID("cloud-share-desc"_spr);
+    placeInput(m_descInput, padX, innerW, descInY);
+
+    // Tags
+    placeLabel("Tags", padX, tagsLabY);
+    m_tagsInput = makeInput(innerW, "safe, live, beginner", 96);
+    m_tagsInput->setID("cloud-share-tags"_spr);
+    placeInput(m_tagsInput, padX, innerW, tagsInY);
 
     m_nameInput->setString("Shared Config");
     m_nameInput->setCallback([this](std::string const&) {
         this->syncIdPreview();
     });
 
-    m_idPreview = CCLabelBMFont::create("suggested id: shared-config", "chatFont.fnt");
-    m_idPreview->setScale(0.48f);
-    m_idPreview->setOpacity(210);
+    m_idPreview = CCLabelBMFont::create("id: shared-config", "chatFont.fnt");
+    m_idPreview->setScale(0.42f);
+    m_idPreview->setOpacity(200);
+    m_idPreview->setAnchorPoint({ 0.5f, 0.5f });
     m_idPreview->setID("cloud-share-id"_spr);
-    m_mainLayer->addChildAtPosition(m_idPreview, Anchor::Bottom, ccp(0.f, 48.f));
+    m_mainLayer->addChildAtPosition(m_idPreview, Anchor::Top, ccp(0.f, idY));
     this->syncIdPreview();
 
     auto* menu = CCMenu::create();
-    menu->setContentSize({ 260.f, 30.f });
+    menu->setContentSize({ 260.f, 28.f });
     menu->setID("cloud-share-menu"_spr);
-    m_mainLayer->addChildAtPosition(menu, Anchor::Bottom, ccp(0.f, 22.f));
+    m_mainLayer->addChildAtPosition(menu, Anchor::Bottom, ccp(0.f, 20.f));
     menu->setLayout(
         RowLayout::create()
             ->setGap(12.f)
@@ -89,20 +128,18 @@ bool CloudConfigSharePopup::init(ClosedCallback onClosed) {
     auto* cancelSpr = ButtonSprite::create(
         "Cancel", "bigFont.fnt", "GJ_button_06.png", 0.8f
     );
-    cancelSpr->setScale(0.48f);
-    auto* cancelBtn = CCMenuItemSpriteExtra::create(
+    cancelSpr->setScale(0.44f);
+    menu->addChild(CCMenuItemSpriteExtra::create(
         cancelSpr, this, menu_selector(CloudConfigSharePopup::onClose)
-    );
-    menu->addChild(cancelBtn);
+    ));
 
     auto* okSpr = ButtonSprite::create(
         "Share", "bigFont.fnt", "GJ_button_01.png", 0.8f
     );
-    okSpr->setScale(0.48f);
-    auto* okBtn = CCMenuItemSpriteExtra::create(
+    okSpr->setScale(0.44f);
+    menu->addChild(CCMenuItemSpriteExtra::create(
         okSpr, this, menu_selector(CloudConfigSharePopup::onConfirm)
-    );
-    menu->addChild(okBtn);
+    ));
     menu->updateLayout();
 
     return true;
@@ -122,20 +159,22 @@ void CloudConfigSharePopup::onClose(CCObject* sender) {
 void CloudConfigSharePopup::syncIdPreview() {
     if (!m_idPreview || !m_nameInput) return;
     auto const id = CloudConfigShare::suggestId(m_nameInput->getString());
-    m_idPreview->setString(fmt::format("suggested id: {}", id).c_str());
+    m_idPreview->setString(fmt::format("id: {}", id).c_str());
 }
 
 void CloudConfigSharePopup::onConfirm(CCObject*) {
     std::string const name = m_nameInput ? m_nameInput->getString() : "";
     std::string const author = m_authorInput ? m_authorInput->getString() : "";
     std::string const desc = m_descInput ? m_descInput->getString() : "";
+    std::string const tagsRaw = m_tagsInput ? m_tagsInput->getString() : "";
 
     if (name.empty()) {
         FLAlertLayer::create("Share", "Please enter a name for the pack.", "OK")->show();
         return;
     }
 
-    auto const shared = CloudConfigShare::shareCurrent(name, author, desc);
+    auto const tags = CloudConfigShare::parseTags(tagsRaw);
+    auto const shared = CloudConfigShare::shareCurrent(name, author, desc, tags);
     if (!shared.ok) {
         FLAlertLayer::create(
             "Share",
@@ -158,23 +197,34 @@ void CloudConfigSharePopup::onConfirm(CCObject*) {
     else if (shared.publishAttempted) {
         publishLine = fmt::format(
             "Online submit failed:\n{}\n"
-            "Outbox still saved. If you are the maintainer, check the submit Worker / PAT.\n\n",
+            "Outbox still saved.\n\n",
             shared.publishError.empty() ? "(unknown)" : shared.publishError
         );
     }
     else {
-        publishLine =
-            "Online submit off — outbox/clipboard only.\n\n";
+        publishLine = "Online submit off — outbox/clipboard only.\n\n";
+    }
+
+    std::string tagsLine;
+    if (!shared.tags.empty()) {
+        tagsLine = "Tags: ";
+        for (size_t i = 0; i < shared.tags.size(); ++i) {
+            if (i) tagsLine += ", ";
+            tagsLine += shared.tags[i];
+        }
+        tagsLine += "\n\n";
     }
 
     auto const msg = fmt::format(
         "Shared \"{}\" (id: {}).\n\n"
+        "{}"
         "{}"
         "Outbox:\n{}\n\n"
         "{}\n\n"
         "{}",
         name,
         shared.suggestedId,
+        tagsLine,
         publishLine,
         shared.outboxPath.string(),
         shared.clipboardOk

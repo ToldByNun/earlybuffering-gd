@@ -7,7 +7,7 @@
 #include <functional>
 #include <string>
 
-// Collect name / author / description before writing outbox + clipboard.
+// Collect name / author / description / tags before outbox + submit.
 class CloudConfigSharePopup : public geode::Popup {
 public:
     using ClosedCallback = std::function<void()>;
@@ -26,6 +26,7 @@ protected:
     geode::TextInput* m_nameInput = nullptr;
     geode::TextInput* m_authorInput = nullptr;
     geode::TextInput* m_descInput = nullptr;
+    geode::TextInput* m_tagsInput = nullptr;
     cocos2d::CCLabelBMFont* m_idPreview = nullptr;
     ClosedCallback m_onClosed;
     bool m_closedNotified = false;
