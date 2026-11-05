@@ -33,9 +33,12 @@ public:
     static geode::Result<> exportToString(std::string& outJson);
 
     static geode::Result<> importFrom(std::filesystem::path const& path);
+    // Overload without options — Clang rejects default args that need nested
+    // default member initializers (`opt = {}`) inside the enclosing class.
+    static geode::Result<> importFromString(std::string const& json);
     static geode::Result<> importFromString(
         std::string const& json,
-        ApplyOptions const& opt = {}
+        ApplyOptions const& opt
     );
 
     // Filled by the last successful import / export (zeros if never run).

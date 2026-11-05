@@ -266,6 +266,10 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     return Ok();
 }
 
+geode::Result<> ConfigBundle::importFromString(std::string const& json) {
+    return ConfigBundle::importFromString(json, ApplyOptions{});
+}
+
 geode::Result<> ConfigBundle::importFromString(
     std::string const& json,
     ApplyOptions const& opt
