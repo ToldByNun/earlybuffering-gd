@@ -20,6 +20,10 @@ Assist behavior is **unchanged** while this stub is UNFROZEN — instrumentation
 
 Per-`GameModeKind` policy lives in `ModeAssist` / `ModeAssistSnapshot` (DiscreteJump / FeatherContinuous / TapContinuous / Robot / Wave leaves). `AssistHorizon`, `ClickIntentGuard` spam tables, `AssistController` continuous/release + Wave spam-λ, `ShadowSimulator::modelFor` continuous/tapRelease, and `PrefixSim` kind gates thin-wrap it. Hot path: fill `PlanOptions.modeSnap` once per press. PlanGold: `mode-assist`. Tune numbers later — this step is structure + parity only.
 
+## SpamAssist (ShiftedInputQueue)
+
+Follow-up presses/releases during an armed Delay share one `shift` (`ShiftedInputQueue`, Cap 8). `SpamAssistPolicy` uses ModeAssist gaps + `featheringIsControl` (Ship/Swing density ≠ PassSpam). Trust+opportunity / orb / bake still AllowAssist. PassSpam with a non-empty queue drains 1/tick (no drop). Overflow → `pass-queue-overflow`. `min-click-interval` does not block enqueue while shift is live. Overlay: `queue=N shift=K`. PlanGold: `shifted-input-queue`, `spam-assist-policy`. No auto-click/release.
+
 ## Sample sizes (placeholders)
 
 | Symbol | Solo | Multi |

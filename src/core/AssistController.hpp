@@ -5,6 +5,7 @@
 #include "DecisionLog.hpp"
 #include "OrbAlign.hpp"
 #include "ShadowSimulator.hpp"
+#include "ShiftedInputQueue.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevClockContract.hpp"
 
@@ -196,6 +197,10 @@ private:
     int activeLimit(PlayerObject* player) const;
     bool shouldAssistPlayer(PlayerObject* player) const;
     void clearBuffer();
+    // Arm shared shift for follow-up spam inputs (clears prior queue entries).
+    void beginShiftQueue(int shiftTicks);
+    // Inject at most one due / drain-mode queued input per physics tick.
+    void tickShiftQueue(PlayLayer* playLayer);
     void inject(GJBaseGameLayer* layer, bool down);
     void syncButtonState(PlayLayer* playLayer);
     bool planPress(
@@ -260,6 +265,9 @@ private:
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object, DecisionEntry& dec);
 
     BufferedInput m_buffer{};
+    ShiftedInputQueue m_shiftQueue{};
+    // PassSpam while queue non-empty: drain 1/tick (ordered), not drop.
+    bool m_shiftDrainPass = false;
     DecisionLog m_log{};
     bool m_injecting = false;
     int m_attemptTick = 0;

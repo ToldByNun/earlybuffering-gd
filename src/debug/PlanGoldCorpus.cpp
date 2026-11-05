@@ -27,6 +27,8 @@
 #include "../core/OrbAlign.hpp"
 #include "../core/AssistHorizon.hpp"
 #include "../core/ModeAssist.hpp"
+#include "../core/ShiftedInputQueue.hpp"
+#include "../core/SpamAssistPolicy.hpp"
 #include "../core/AssistSpikeWatch.hpp"
 #include "../core/TrajDrawHorizon.hpp"
 #include "../core/RealCorpusFixtures.hpp"
@@ -203,6 +205,10 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
     std::string modeAssistReport;
     expect(ModeAssist::selfCheck(modeAssistReport), "mode-assist");
+    std::string shiftedQueueReport;
+    expect(ShiftedInputQueue::selfCheck(shiftedQueueReport), "shifted-input-queue");
+    std::string spamAssistReport;
+    expect(SpamAssistPolicy::selfCheck(spamAssistReport), "spam-assist-policy");
     std::string trajDrawHorizonReport;
     expect(TrajDrawHorizon::selfCheck(trajDrawHorizonReport), "traj-draw-horizon");
     std::string spikeWatchReport;

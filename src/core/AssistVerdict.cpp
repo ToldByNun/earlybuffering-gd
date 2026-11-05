@@ -35,6 +35,7 @@ char const* AssistVerdict::name(AssistReason reason) {
         case AssistReason::PassHardUnknown: return "pass-hard-unknown";
         case AssistReason::PassTwEmpty: return "pass-tw-empty";
         case AssistReason::PassReleaseDiscrete: return "pass-release-discrete";
+        case AssistReason::PassQueueOverflow: return "pass-queue-overflow";
         case AssistReason::PassUnknown: return "pass-unknown";
     }
     return "pass-unknown";
@@ -75,6 +76,7 @@ char const* AssistVerdict::overlayBit(AssistReason reason) {
         case AssistReason::PassHardUnknown: return "PASS hard-unk";
         case AssistReason::PassTwEmpty: return "PASS tw-empty";
         case AssistReason::PassReleaseDiscrete: return "PASS rel-skip";
+        case AssistReason::PassQueueOverflow: return "PASS queue-full";
         case AssistReason::PassUnknown: return "PASS unknown";
     }
     return "PASS unknown";

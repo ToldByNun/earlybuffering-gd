@@ -303,7 +303,9 @@ Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean �
 
 **Do not Pass** (allow assist) when spatial orb/pad ahead **or** a BakeMap window is nearby. Portal/teleport corridor spam looks rhythmic → Pass unless orb/pad. Gate Pass sets overlay `PASS spam` / `VERDICT pass-spam`.
 
-Continuous modes also Pass release assist during spam **unless** PerfectAssist `MustDelaySearch` (trust + orb/bake opportunity). Release Soft Hold (HUS) mirrors press on trusted PassBudget / PassHopeless. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
+**SpamAssist:** `SpamAssistPolicy` + `ShiftedInputQueue` — Ship/Swing `featheringIsControl` never PassSpam on density alone; follow-ups during Delay share one `shift` (Cap 8 → `pass-queue-overflow`); PassSpam with queued inputs drains 1/tick; `min-click-interval` does not block enqueue while shift is live. Overlay `queue=N shift=K`. PlanGold: `shifted-input-queue`, `spam-assist-policy`.
+
+Continuous modes also Pass release assist during spam **unless** PerfectAssist `MustDelaySearch` (trust + orb/bake opportunity) or SpamAssist AllowAssist. Release Soft Hold (HUS) mirrors press on trusted PassBudget / PassHopeless. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
 ## Release assist gate (= Bake Visualizer purple)
 
@@ -515,6 +517,7 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 | `pass-parity-drift` | GhostParityProbe: shadow replay of recent path drifted vs live (attempt-wide hard Pass; clears buffer) |
 | `pass-spot-untrusted` | SpotTrustMap: X marked after prior parity drift (hard Pass until good-parity streak clears) |
 | `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / LevelProfile trust gates (`pass-untrust` softens near orb; parity/spot never soften) |
+| `pass-queue-overflow` | `ShiftedInputQueue` Cap 8 — named Pass (no silent drop) |
 | `pass-limit-zero` / `pass-debounce` / `pass-cps` / `pass-scope` / `pass-assist-off` / `pass-early-attempt` | Hard off / debounce / CPS / scope |
 | `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake miss paths (Hybrid: template arm or `MISS-BAKE-WIN` → live). In-window success arms Delay (`bake-wait-*` / `bake-now`), not silent in-window Pass. |
 | `delay-orb` / `delay-threat` / `delay-prefer` / `delay-generic` | Buffered Delay |
@@ -554,6 +557,8 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Toggle+Jump orb stack (co-located) | Both fire (toggle flip + jump boost) | Same | `OrbStackResolver::fireStackedPartners` — vanilla clicks both |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
+| Ship feathering density, no orb | AllowAssist (not PassSpam) | Same | ModeAssist `featheringIsControl` |
+| Follow-up taps during Delay | Same-shift queue; overlay `queue=N shift=K` | Same | Cap 8 → `pass-queue-overflow` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
 | Ship/Wave: idle lives, press-now dies, later Alive delay clears | Delay (`idleSafer`+`ascent`); HUS only if enabled + escape | Same | PLAN log `idleSafer=1 ascent=1`; soft-dead later → no force |
 | Hybrid: bake hit (verify ok, in window) | Overlay `hy bake [lo,hi]`; LagProbe `eb.hybrid.verify` short / `cache=1` on repeat | Same | No Live plan this press |

@@ -59,6 +59,9 @@ enum class AssistReason {
     // Cube/ball/ufo/spider UP without dash/holdAssist — no false release assist
     PassReleaseDiscrete,
 
+    // ShiftedInputQueue at Cap 8 — named Pass (no silent drop)
+    PassQueueOverflow,
+
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown
 };

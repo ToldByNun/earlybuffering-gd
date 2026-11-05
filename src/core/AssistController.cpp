@@ -9,6 +9,8 @@
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
 #include "ModeAssist.hpp"
+#include "ShiftedInputQueue.hpp"
+#include "SpamAssistPolicy.hpp"
 #include "HybridVerifyCache.hpp"
 #include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
@@ -225,11 +227,57 @@ std::string AssistController::overlayText() const { return m_overlayText; }
 
 void AssistController::clearBuffer() { m_buffer = {}; }
 
+void AssistController::beginShiftQueue(int shiftTicks) {
+    this->m_shiftDrainPass = false;
+    this->m_shiftQueue.beginShift(shiftTicks);
+}
+
+void AssistController::tickShiftQueue(PlayLayer* playLayer) {
+    if (!playLayer) return;
+    ShiftedInput next{};
+    bool popped = false;
+    if (this->m_shiftDrainPass) {
+        popped = this->m_shiftQueue.tryDrainOne(next);
+        if (this->m_shiftQueue.empty()) {
+            this->m_shiftDrainPass = false;
+        }
+    }
+    else {
+        popped = this->m_shiftQueue.tryPopDue(this->m_attemptTick, next);
+    }
+    if (!popped) return;
+
+    auto* player = next.player1 ? playLayer->m_player1 : playLayer->m_player2;
+    if (!player || player->m_isDead) {
+        this->m_shiftQueue.clear();
+        this->m_shiftDrainPass = false;
+        return;
+    }
+    AssistLog::debug(fmt::format(
+        "shift-queue: inject {} p{} press={} fire={} left={}",
+        next.down ? "DOWN" : "UP",
+        next.player1 ? 1 : 2,
+        next.pressTick,
+        next.fireTick,
+        this->m_shiftQueue.size()
+));
+    this->m_assistTouchedRun = true;
+    if (next.down) {
+        ++this->m_savesAttempt;
+        ++this->m_savesLevel;
+    }
+    this->m_injecting = true;
+    playLayer->handleButton(next.down, JUMP_BUTTON, next.player1);
+    this->m_injecting = false;
+}
+
 void AssistController::onCheckpointLoad() {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
     // Trigger world: keep store + in-flight baker; only reset abs attempt tick.
     SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint", false);
     clearBuffer();
+    this->m_shiftQueue.clear();
+    this->m_shiftDrainPass = false;
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
@@ -295,6 +343,8 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     // If death already sealed the attempt, open the next; else seal as reset.
     DevCycleRecorder::get().onAttemptReset(0);
     clearBuffer();
+    this->m_shiftQueue.clear();
+    this->m_shiftDrainPass = false;
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
@@ -432,6 +482,8 @@ void AssistController::onLevelQuit() {
 
     // Quiet reset — overlay already detached
     this->clearBuffer();
+    this->m_shiftQueue.clear();
+    this->m_shiftDrainPass = false;
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
@@ -1059,6 +1111,7 @@ bool AssistController::armHoldUntilSafe(
     this->m_buffer.fireTick = std::min(
         this->m_buffer.fireTick, effectTick + limit
 );
+    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
 
     this->m_outcomePlanDelay = eta > 0;
     this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
@@ -1509,6 +1562,18 @@ void AssistController::updateOverlay() {
         if (m_buffer.state == BufferState::Buffered && m_buffer.fromBake) {
             bakeBit = fmt::format("{} · tpl{}", bakeBit, m_buffer.down ? "↓" : "↑");
         }
+        std::string queueBit;
+        if (this->m_shiftQueue.active()
+            && (this->m_shiftQueue.size() > 0
+                || this->m_buffer.state == BufferState::Buffered
+                || this->m_shiftDrainPass)) {
+            queueBit = fmt::format(
+                "queue={} shift={}",
+                this->m_shiftQueue.size(),
+                this->m_shiftQueue.shift()
+            );
+            if (this->m_shiftDrainPass) queueBit += " drain";
+        }
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
         std::string bakeVizBit = BakePathVisualizer::get().statusHint();
         int const smartDepth = StageConfig::smartDepth();
@@ -1535,6 +1600,7 @@ void AssistController::updateOverlay() {
             bakeBit
 );
         if (!smartBit.empty()) m_overlayText += " | " + smartBit;
+        if (!queueBit.empty()) m_overlayText += " | " + queueBit;
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
         if (!bakeVizBit.empty()) m_overlayText += " | " + bakeVizBit;
@@ -2307,6 +2373,10 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         this->flushPendingRelease(playLayer);
     }
     {
+        PerfTrace::Scope const scope("shiftQueue");
+        this->tickShiftQueue(playLayer);
+    }
+    {
         PerfTrace::Scope const scope("saveFeedbackTick");
         SaveFeedback::get().onPhysicsTick();
     }
@@ -2822,6 +2892,7 @@ bool AssistController::tryBakeAssist(
     this->m_buffer.fireTick = std::min(
         this->m_buffer.fireTick, this->m_buffer.pressTick + this->m_buffer.limit
 );
+    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
 
     AssistLog::info(fmt::format(
         "bake ASSIST {} +{} ticks (window [{},{}] nomF={} "
@@ -3016,25 +3087,47 @@ bool AssistController::planPress(
         }
     }
 
-    // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
-    // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
-    if (!mustDelaySearch
-        && ClickIntentGuard::get().shouldPassThrough(
-            slot, effectTick, kind, nearOrb, nearBake
-)) {
-        AssistLog::debug(fmt::format(
-            "intent: spam Pass (mode={}, tick={})", StageConfig::kindName(kind), effectTick
+    // Dense / rhythmic spam: ModeAssist + SpamAssistPolicy (feather ≠ PassSpam;
+    // trust+opportunity / orb / bake → AllowAssist; mid-queue → drain).
+    {
+        SpamAssistContext spamCtx;
+        spamCtx.kind = kind;
+        spamCtx.densityPass = ClickIntentGuard::get().shouldPassThrough(
+            slot, effectTick, kind, false, false
+        );
+        spamCtx.nearOrbOrPad = nearOrb;
+        spamCtx.nearBake = nearBake;
+        spamCtx.mustDelaySearch = mustDelaySearch;
+        spamCtx.bufferActive = false;
+        spamCtx.releaseSeen = false;
+        spamCtx.shiftQueueActive = this->m_shiftQueue.active();
+        spamCtx.queueSize = this->m_shiftQueue.size();
+        auto const spamAct = SpamAssistPolicy::decide(spamCtx);
+        if (spamAct == SpamAssistAction::DrainSpamPass) {
+            this->m_shiftDrainPass = true;
+        }
+        if (spamAct == SpamAssistAction::PassSpam
+            || spamAct == SpamAssistAction::DrainSpamPass
+            || spamAct == SpamAssistAction::OverflowPass) {
+            AssistReason const why = SpamAssistPolicy::passReason(spamAct);
+            AssistLog::debug(fmt::format(
+                "intent: {} (mode={}, tick={}, q={})",
+                AssistVerdict::name(why),
+                StageConfig::kindName(kind),
+                effectTick,
+                this->m_shiftQueue.size()
 ));
-        SimPlan dummy;
-        dummy.action = PlanAction::Pass;
-        dummy.reason = AssistReason::PassSpam;
-        dummy.firstDeathTick = -1;
-        dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "press-spam");
-        this->noteVerdict(AssistReason::PassSpam, "press-spam");
-        this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
-        this->updateOverlay();
-        return true;
+            SimPlan dummy;
+            dummy.action = PlanAction::Pass;
+            dummy.reason = why;
+            dummy.firstDeathTick = -1;
+            dummy.continuous = ModeAssist::forKind(kind).continuous();
+            DevCycleRecorder::get().noteGatePass(why, "press-spam");
+            this->noteVerdict(why, "press-spam");
+            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+            this->updateOverlay();
+            return true;
+        }
     }
 
     // Low trust at this spot → pass through (unless explore roll or orb ahead).
@@ -3431,6 +3524,7 @@ bool AssistController::planPress(
             this->m_buffer.fireTick, effectTick + limit
 );
     }
+    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
 
     AssistLog::debug(fmt::format(
         "ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} win=[{},{}] fire={} jump={} orb={}",
@@ -3619,19 +3713,35 @@ bool AssistController::planRelease(
     }
 
     // Continuous spam: do not delay releases (would steal hold rhythm) unless
-    // PerfectAssist demands a Delay-search (orb/bake opportunity).
-    bool const continuous =
-        player->m_isDart || player->m_isShip || player->m_isSwing;
-    if (continuous && !mustDelaySearch) {
-        if (ClickIntentGuard::get().shouldPassThrough(
-                slot, effectTick, kind, nearOrb, nearBake
-)) {
+    // PerfectAssist / feather / orb demands assist (SpamAssistPolicy).
+    if (ModeAssist::forKind(kind).continuous()) {
+        SpamAssistContext spamCtx;
+        spamCtx.kind = kind;
+        spamCtx.densityPass = ClickIntentGuard::get().shouldPassThrough(
+            slot, effectTick, kind, false, false
+        );
+        spamCtx.nearOrbOrPad = nearOrb;
+        spamCtx.nearBake = nearBake;
+        spamCtx.mustDelaySearch = mustDelaySearch;
+        spamCtx.shiftQueueActive = this->m_shiftQueue.active();
+        spamCtx.queueSize = this->m_shiftQueue.size();
+        auto const spamAct = SpamAssistPolicy::decide(spamCtx);
+        if (spamAct == SpamAssistAction::DrainSpamPass) {
+            this->m_shiftDrainPass = true;
+        }
+        if (spamAct == SpamAssistAction::PassSpam
+            || spamAct == SpamAssistAction::DrainSpamPass
+            || spamAct == SpamAssistAction::OverflowPass) {
+            AssistReason const why = SpamAssistPolicy::passReason(spamAct);
             AssistLog::debug(fmt::format(
-                "intent: spam Pass release (mode={}, tick={})",
-                StageConfig::kindName(kind), effectTick
+                "intent: {} release (mode={}, tick={}, q={})",
+                AssistVerdict::name(why),
+                StageConfig::kindName(kind),
+                effectTick,
+                this->m_shiftQueue.size()
 ));
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
-            this->noteVerdict(AssistReason::PassSpam, "release-spam");
+            DevCycleRecorder::get().noteGatePass(why, "release-spam");
+            this->noteVerdict(why, "release-spam");
             this->updateOverlay();
             return true;
         }
@@ -3835,6 +3945,7 @@ bool AssistController::planRelease(
     this->m_buffer.decisionX = x;
     this->m_buffer.mode = kind;
     this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + limit);
+    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
 
     AssistLog::debug(fmt::format(
         "ASSIST release +{} ticks (now dies @+{}, limit {}, tick={} fire={})",
@@ -3922,9 +4033,15 @@ bool AssistController::onHandleButton(
     };
 
     // Min click interval: skip assist only — never block the vanilla click.
+    // While shift-queue / Delay buffer is live, interval must not block enqueue.
+    bool const shiftLive =
+        this->m_shiftQueue.active()
+        || this->m_buffer.state == BufferState::Buffered;
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
-        if (minMs > 0 && !this->m_clickTimes.empty()) {
+        if (minMs > 0
+            && !this->m_clickTimes.empty()
+            && SpamAssistPolicy::debounceBlocksAssist(shiftLive)) {
             auto const elapsed = std::chrono::steady_clock::now() - this->m_clickTimes.back();
             if (elapsed < std::chrono::milliseconds(minMs)) {
                 AssistLog::debug(fmt::format(
@@ -3992,16 +4109,31 @@ bool AssistController::onHandleButton(
             if (!this->m_buffer.down) {
                 return false;
             }
+            // Hold length under Delay: only pair UP into the queue when a
+            // follow-up DOWN was already enqueued (primary uses releaseSeen).
+            if (this->m_shiftQueue.active() && this->m_shiftQueue.size() > 0) {
+                if (!this->m_shiftQueue.enqueue(false, player1, effectTick)) {
+                    beginDevPress();
+                    DevCycleRecorder::get().noteGatePass(
+                        AssistReason::PassQueueOverflow, "queue-overflow-up"
+                    );
+                    this->noteVerdict(AssistReason::PassQueueOverflow, "queue-overflow-up");
+                    this->updateOverlay();
+                    return finish(true);
+                }
+            }
             this->m_buffer.releaseSeen = true;
             this->m_buffer.releaseTick = effectTick;
             this->m_log.noteInput(effectTick, false);
             // Early UP does not cancel Delay: stay Buffered, fire still due.
             AssistLog::debug(fmt::format(
-                "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} p{}",
+                "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} q={} p{}",
                 this->m_buffer.fireTick,
                 this->m_attemptTick,
+                this->m_shiftQueue.size(),
                 player1 ? 1 : 2
 ));
+            this->updateOverlay();
             return false;
         }
 
@@ -4052,12 +4184,42 @@ bool AssistController::onHandleButton(
     }
 
     if (ours && this->m_buffer.state == BufferState::Buffered && this->m_buffer.down) {
-        // Second DOWN while A is still armed:
-        //  - after early UP (releaseSeen): classic re-click → fire A, plan B
-        //  - still holding (multi-key double-click): never swallow — GD must see
-        //    both clicks. Deliver A now, then fall through to plan B.
+        // Follow-up DOWN while A armed: same-shift enqueue (SpamAssist).
+        // Classic fire-A-then-plan-B only when shift-queue is unavailable.
+        if (this->m_shiftQueue.active()) {
+            SpamAssistContext spamCtx;
+            spamCtx.kind = StageConfig::kindOf(player);
+            spamCtx.bufferActive = true;
+            spamCtx.shiftQueueActive = true;
+            // Enqueue even after releaseSeen — keep primary Delay + rhythm.
+            spamCtx.releaseSeen = false;
+            spamCtx.queueSize = this->m_shiftQueue.size();
+            auto const act = SpamAssistPolicy::decide(spamCtx);
+            if (act == SpamAssistAction::EnqueueShifted
+                && this->m_shiftQueue.enqueue(true, player1, effectTick)) {
+                AssistLog::debug(fmt::format(
+                    "shift-queue: enqueue DOWN tick={} fire={} q={} shift={}",
+                    effectTick,
+                    effectTick + this->m_shiftQueue.shift(),
+                    this->m_shiftQueue.size(),
+                    this->m_shiftQueue.shift()
+));
+                this->updateOverlay();
+                return false;
+            }
+            if (act == SpamAssistAction::OverflowPass
+                || this->m_shiftQueue.size() >= ShiftedInputQueue::kCap) {
+                beginDevPress();
+                DevCycleRecorder::get().noteGatePass(
+                    AssistReason::PassQueueOverflow, "queue-overflow"
+                );
+                this->noteVerdict(AssistReason::PassQueueOverflow, "queue-overflow");
+                this->updateOverlay();
+                return finish(true);
+            }
+        }
         AssistLog::debug(fmt::format(
-            "buffer: 2nd DOWN while armed (releaseSeen={}) → fire A then plan B",
+            "buffer: 2nd DOWN fallback fire A then plan B (releaseSeen={})",
             this->m_buffer.releaseSeen ? 1 : 0
 ));
         this->fireBuffered(playLayer, player);
