@@ -2,6 +2,7 @@
 #define EARLYBUFFER_CORE_BAKEMAP_HPP
 
 #include "ReplayImport.hpp"
+#include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
 
 #include <Geode/Geode.hpp>
@@ -100,6 +101,13 @@ public:
         int startSnapshotSlot,
         int bakeRadius,
         BakeMethod method = BakeMethod::Replay
+    );
+
+    // Dev-only dry run. Uses the same imported-replay preparation and ghost
+    // playback as Bake Map, without writing any click or route cache.
+    geode::Result<ShadowSimulator::BakeRunResult> visualizeReplay(
+        PlayLayer* layer,
+        int startSnapshotSlot
     );
 
     // Prefer clicks whose mode matches preferMode within LOOKUP_X_TOL.

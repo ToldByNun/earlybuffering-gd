@@ -24,7 +24,7 @@ public:
     };
 
     // Keep in sync with kEntries below (assist-pick / assist-engine removed).
-    static constexpr int kCount = 169;
+    static constexpr int kCount = 170;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -211,6 +211,7 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "dev-export-session-action", SettingsCategory::Dev },
     { "dev-clear-traces-action", SettingsCategory::Dev },
     { "dev-copy-report-action", SettingsCategory::Dev },
+    { "dev-visualize-bake-action", SettingsCategory::Dev },
     { "title-dev-diag", SettingsCategory::Dev },
     { "dev-dump-diag-action", SettingsCategory::Dev },
 };

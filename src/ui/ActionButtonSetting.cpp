@@ -143,6 +143,10 @@ void fireSettingAction(std::string const& key) {
         PauseActionBridge::devDumpDiag();
         return;
     }
+    if (key == "dev-visualize-bake-action") {
+        PauseActionBridge::devVisualizeBake();
+        return;
+    }
 }
 
 } // namespace

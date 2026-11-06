@@ -1270,6 +1270,12 @@
 			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
 			"button-text": "copy"
 		},
+		"dev-visualize-bake-action": {
+			"type": "custom:eb-action",
+			"name": "Visualize Bake",
+			"description": "Runs the imported replay with EarlyBuffer's own bake ghost and opens a trace preview. The marker moves through the same simulated poses. A red marker names the first ghost contact.",
+			"button-text": "visualize"
+		},
 		"title-dev-diag": {
 			"type": "title",
 			"name": "Diagnostics",

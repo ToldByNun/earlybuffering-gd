@@ -46,6 +46,7 @@
 #include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
 #include "../ui/BakePathVisualizer.hpp"
+#include "../ui/BakeReplayVisualizer.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <algorithm>
@@ -451,6 +452,7 @@ void AssistController::onLevelQuit() {
     SaveFrameCounter::get().detach(!layerAlive);
     TrajectoryVisualizer::get().detach(!layerAlive);
     BakePathVisualizer::get().detach(!layerAlive);
+    BakeReplayVisualizer::get().detach(!layerAlive);
     StatusOverlay::detach(!layerAlive);
 
     if (playLayer) {
@@ -2392,6 +2394,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         }
     }
     if (!playLayer) return;
+    BakeReplayVisualizer::get().onPhysicsTick(playLayer, secDt);
 
     auto* p1 = playLayer->m_player1;
     if (p1 && !m_startSnapshotTaken && m_attemptTick <= 2) {

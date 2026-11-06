@@ -43,6 +43,9 @@ public:
     static void devCopyReport();
     // Writes settings/clock/replay/TW/bake-probe logs under saveDir/diag/.
     static void devDumpDiag();
+    // Runs the imported replay through the offline bake timeline and opens
+    // a trace preview with the first ghost contact highlighted.
+    static void devVisualizeBake();
 
     // Geode ModSettingsPopup with Main/Scope/Assist/Bake/Modes/Visual/Keys/Dev switcher.
     static void openModSettings();

@@ -20,6 +20,7 @@
 #include "../ui/DevOverlay.hpp"
 #include "../ui/StatusOverlay.hpp"
 #include "../ui/BakePathVisualizer.hpp"
+#include "../ui/BakeReplayVisualizer.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -769,6 +770,53 @@ void PauseActionBridge::devDumpDiag() {
         clipOk ? "Path copied to clipboard." : "Clipboard copy failed."
     );
     FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
+}
+
+void PauseActionBridge::devVisualizeBake() {
+    auto* layer = PlayLayer::get();
+    if (!layer) {
+        FLAlertLayer::create("EarlyBuffer Dev", "Open a level first.", "OK")->show();
+        return;
+    }
+    auto snapshot = AssistController::get().ensureStartSnapshot(layer);
+    if (snapshot.isErr()) {
+        FLAlertLayer::create(
+            "EarlyBuffer Dev",
+            "Reset the level once, then pause and visualize.",
+            "OK"
+        )->show();
+        return;
+    }
+    auto trace = BakeMap::get().visualizeReplay(
+        layer,
+        AssistController::get().startSnapshotSlot()
+    );
+    if (trace.isErr()) {
+        FLAlertLayer::create("EarlyBuffer Dev", trace.unwrapErr().c_str(), "OK")->show();
+        return;
+    }
+    auto result = std::move(trace.unwrap());
+    auto const firstContact = result.deathFrame;
+    auto const frames = static_cast<int>(result.frames.size());
+    auto const lastFrame = frames > 0 ? result.frames.back().frame : -1;
+    double const tps = BakeMap::get().pendingReplay()
+        ? BakeMap::get().pendingReplay()->tps
+        : 240.0;
+    BakeReplayVisualizer::get().start(
+        layer,
+        std::move(result.frames),
+        tps,
+        firstContact
+    );
+    auto const message = fmt::format(
+        "Bake trace ready. Resume the level to play it.\n\n"
+        "Yellow dot = current ghost frame\n"
+        "Red dot = first ghost contact\n\n"
+        "frames: 0..{}  contact: {}",
+        lastFrame,
+        firstContact < 0 ? "none" : fmt::format("frame {}", firstContact)
+    );
+    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devCopyReport() {

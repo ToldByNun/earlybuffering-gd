@@ -894,6 +894,69 @@ Result<int> BakeMap::bakeReplay(
     return Ok(nClicks);
 }
 
+Result<ShadowSimulator::BakeRunResult> BakeMap::visualizeReplay(
+    PlayLayer* layer,
+    int startSnapshotSlot
+) {
+    if (!layer) return Err("Open a level first.");
+    if (!m_hasReplay || m_replay.events.empty()) return Err("Import a replay first.");
+    if (startSnapshotSlot < 0) return Err("Reset the level once, then visualize.");
+
+    // Match Bake Map's Trigger World prerequisite so a mover cannot make the
+    // preview disagree with the normal offline ghost.
+    auto const probe = BakeSpawnProbe::probe(layer, startSnapshotSlot);
+    bool const forceTriggerWorld =
+        probe.recommendsTriggerWorld && !StageConfig::triggerBake();
+    if (StageConfig::triggerBake() || forceTriggerWorld) {
+        std::string triggerError;
+        if (!TriggerWorldBaker::get().waitUntilReady(
+                layer, 45000, triggerError, forceTriggerWorld
+            )) {
+            return Err(
+                triggerError.empty()
+                    ? "Trigger World is not ready for visualization."
+                    : triggerError
+            );
+        }
+        if (TriggerWorldStore::get().hasTracks() || probe.trackedOverlapCount > 0) {
+            ShadowSimulator::get().setBakeForceTriggerWorld(true);
+        }
+    }
+    struct ForceGuard {
+        ~ForceGuard() { ShadowSimulator::get().setBakeForceTriggerWorld(false); }
+    } forceGuard;
+
+    double const sourceTps = m_replay.tps > 0.0
+        ? m_replay.tps
+        : AssistClock::kNominalTps;
+    double const tps = resolveBakeTps(sourceTps, AssistController::get().estimatedTps());
+    auto events = prepareBakeTimeline(m_replay.events, sourceTps, tps, true);
+    if (events.empty()) return Err("Replay has no usable inputs.");
+    int const lastFrame = events.back().frame;
+    if (lastFrame < 0) return Err("Replay has an invalid frame range.");
+
+    ShadowSimulator::BakeRunResult trace;
+    {
+        std::lock_guard lock(m_simMutex);
+        trace = ShadowSimulator::get().runBakeTimeline(
+            layer,
+            startSnapshotSlot,
+            events,
+            static_cast<float>(1.0 / tps),
+            lastFrame,
+            -1,
+            true,
+            true,
+            true,
+            1,
+            {},
+            ShadowSimulator::BakePlayback::FollowReplay
+        );
+    }
+    if (trace.frames.empty()) return Err("Bake ghost produced no trace.");
+    return Ok(std::move(trace));
+}
+
 Result<int> BakeMap::bakeBrute(
     PlayLayer* layer, int startSnapshotSlot, int bakeRadius
 ) {
