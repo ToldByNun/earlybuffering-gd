@@ -45,6 +45,7 @@ struct RoutePath {
     std::vector<RouteSample> samples;
 
     bool empty() const { return samples.empty(); }
+    bool isReplayPattern() const { return source == kReplayPattern; }
     bool usable() const { return !empty() && (parityOk || source == kReplayPattern); }
     int sampleCount() const { return static_cast<int>(samples.size()); }
 

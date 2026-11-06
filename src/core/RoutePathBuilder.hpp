@@ -13,11 +13,13 @@ public:
     // Default stride: wave/ship/swing → 2; else → 4. Cap 4096 with stride×2.
     static int defaultStride(GameModeKind kind);
 
-    // From BakeFrameTrace list (validate 1:1, full survival). Drops dead frames.
-    // Empty / all-dead → empty path (caller must not write route.json).
+    // A normal route skips ghost fault frames. Pattern routes retain them, which
+    // keeps an imported macro usable as a soft live-assist guide after a
+    // simulator-only contact.
     static RoutePath buildFromTraces(
         std::vector<ShadowSimulator::BakeFrameTrace> const& frames,
-        bool parityOk = true
+        bool parityOk = true,
+        bool keepFaultFrames = false
     );
 
     static bool selfCheck(std::string& report);

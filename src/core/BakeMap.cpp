@@ -872,7 +872,11 @@ Result<int> BakeMap::bakeReplay(
     m_loaded = true;
     m_dirty = false;
 
-    auto route = RoutePathBuilder::buildFromTraces(validate.frames);
+    auto route = RoutePathBuilder::buildFromTraces(
+        validate.frames,
+        issueSections == 0,
+        issueSections > 0
+    );
     if (issueSections > 0) {
         route.source = RoutePath::kReplayPattern;
         route.parityOk = false;

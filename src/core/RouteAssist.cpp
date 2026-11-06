@@ -14,6 +14,10 @@ AssistReason RouteAssist::gate(PlayerObject* player, bool player1) {
     }
     RouteSample hit;
     if (!store.path().lookupX(player->getPositionX(), hit)) return AssistReason::PassRouteOff;
+    // An imported macro is still a valid timing pattern if EarlyBuffer's
+    // collision model reports contact. Keep Route mode in its short live-plan
+    // path instead of letting one ghost collision disable the entire attempt.
+    if (store.path().isReplayPattern()) return AssistReason::None;
     auto const kind = StageConfig::kindOf(player);
     auto* playLayer = PlayLayer::get();
     if (!playLayer || hit.mode != kind || hit.dual != playLayer->m_gameState.m_isDualMode) {

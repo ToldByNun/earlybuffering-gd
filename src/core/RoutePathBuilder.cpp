@@ -14,9 +14,13 @@ GameModeKind RoutePathBuilder::modeFromTrace(int value) {
     return static_cast<GameModeKind>(value);
 }
 
-RoutePath RoutePathBuilder::buildFromTraces(std::vector<ShadowSimulator::BakeFrameTrace> const& frames, bool parityOk) {
+RoutePath RoutePathBuilder::buildFromTraces(
+    std::vector<ShadowSimulator::BakeFrameTrace> const& frames,
+    bool parityOk,
+    bool keepFaultFrames
+) {
     RoutePath out; out.parityOk = parityOk;
-    if (!parityOk || frames.empty()) return out;
+    if ((!parityOk && !keepFaultFrames) || frames.empty()) return out;
     int stride = 4;
     for (auto const& f : frames) stride = std::min(stride, defaultStride(modeFromTrace(f.mode)));
     while ((frames.size() / static_cast<size_t>(stride) + 2) > RoutePath::kMaxSamples) stride *= 2;
@@ -24,13 +28,26 @@ RoutePath RoutePathBuilder::buildFromTraces(std::vector<ShadowSimulator::BakeFra
     bool gap = false;
     for (size_t i = 0; i < frames.size(); ++i) {
         auto const& f = frames[i];
-        if (f.dead || f.unknown) {
+        if (!keepFaultFrames && (f.dead || f.unknown)) {
             gap = true;
             continue;
         }
         if (i % static_cast<size_t>(stride) != 0 && i + 1 != frames.size()) continue;
         RouteSample s;
         s.x = f.x; s.y = f.y; s.vy = f.yVel; s.mode = modeFromTrace(f.mode); s.tick = f.frame;
+        if (!std::isfinite(s.x) || !std::isfinite(s.y) || !std::isfinite(s.vy)) {
+            gap = true;
+            continue;
+        }
+        // A collision callback can briefly report a stale backwards position.
+        // Route lookup is by X, so preserve the last valid forward sample.
+        if (!out.samples.empty() && s.x < out.samples.back().x) {
+            if (keepFaultFrames) s.x = out.samples.back().x;
+            else {
+                gap = true;
+                continue;
+            }
+        }
         s.grav = f.upsideDown ? -1 : 1; s.mini = f.mini; s.dual = f.dual;
         float const half = corridorHalf(s.mode); s.yLo = s.y - half; s.yHi = s.y + half;
         s.gapBefore = gap && !out.samples.empty();
@@ -56,8 +73,12 @@ RoutePath RoutePathBuilder::buildFromTraces(std::vector<ShadowSimulator::BakeFra
 bool RoutePathBuilder::selfCheck(std::string& report) {
     ShadowSimulator::BakeFrameTrace a; a.frame = 0; a.x = 1; a.y = 2;
     ShadowSimulator::BakeFrameTrace b; b.frame = 4; b.x = 5; b.y = 6;
+    ShadowSimulator::BakeFrameTrace contact; contact.frame = 2; contact.x = 3; contact.y = 4; contact.dead = true;
     auto p = buildFromTraces({a, b});
-    bool const ok = p.sampleCount() == 2 && p.samples[0].yLo < p.samples[0].y && !p.segments.empty();
+    auto const pattern = buildFromTraces({a, contact, b}, false, true);
+    bool const ok = p.sampleCount() == 2 && p.samples[0].yLo < p.samples[0].y
+        && !p.segments.empty() && pattern.sampleCount() == 3
+        && !pattern.samples[1].gapBefore;
     report = ok ? "RoutePathBuilder selfCheck OK" : "RoutePathBuilder failed";
     return ok;
 }
