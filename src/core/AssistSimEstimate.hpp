@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-// Counterfactual Net as simEstimate only (G10).
+// Commit 12 — Counterfactual Net as simEstimate only (G10).
 // Never a ship Pass/Fail by itself. Real gates stay on AssistRealMetrics.
 class AssistSimEstimate {
 public:
@@ -34,13 +34,13 @@ public:
         bool delaySurvivedPrimary,
         bool delayInconclusive,
         int plannedDelay
-);
+    );
 
     // Find d0 + plannedDelay in a grid; classify. plannedDelay<=0 → Neutral.
     static NetClass classifyFromSamples(
         std::vector<SampleView> const& samples,
         int plannedDelay
-);
+    );
 
     static char const* netClassId(NetClass c);
 

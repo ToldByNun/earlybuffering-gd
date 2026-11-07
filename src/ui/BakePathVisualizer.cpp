@@ -2,7 +2,6 @@
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
 #include "../core/BakeMap.hpp"
-#include "../core/RoutePathStore.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../debug/PerfTrace.hpp"
 
@@ -33,9 +32,6 @@ static ccColor4F bakeGone(float a = 0.18f) {
     return { 0.45f, 0.45f, 0.48f, a };
 }
 
-static ccColor4F routeCyan(float a = 0.8f) { return { 0.12f, 0.76f, 0.98f, a }; }
-static ccColor4F routeCyanFill(float a = 0.11f) { return { 0.08f, 0.60f, 0.90f, a }; }
-
 bool BakePathVisualizer::releaseWindowMode(GameModeKind kind) {
     // Single source of truth: AssistController release gate (WU3).
     return AssistController::releaseAssistModeKind(kind);
@@ -57,11 +53,9 @@ void BakePathVisualizer::setEnabled(bool on) {
 std::string BakePathVisualizer::statusHint() const {
     if (!this->m_enabled) return {};
     auto& bake = BakeMap::get();
-    if (!bake.loaded() || bake.data().clicks.empty()) {
-        return this->m_drawnRoute > 0 ? fmt::format("route-viz={}", this->m_drawnRoute) : "bake-viz empty";
-    }
+    if (!bake.loaded() || bake.data().clicks.empty()) return "bake-viz empty";
     return fmt::format(
-        "bake-viz P={} R={} route={}", this->m_drawnPress, this->m_drawnRelease, this->m_drawnRoute
+        "bake-viz P={} R={}", this->m_drawnPress, this->m_drawnRelease
     );
 }
 
@@ -78,7 +72,6 @@ void BakePathVisualizer::detach(bool layerDying) {
     this->m_ticksSinceRebuild = 0;
     this->m_drawnPress = 0;
     this->m_drawnRelease = 0;
-    this->m_drawnRoute = 0;
     if (!this->m_node) return;
     if (layerDying) {
         this->m_node->release();
@@ -96,7 +89,6 @@ void BakePathVisualizer::clear() {
     if (this->m_node && this->m_node->getParent()) this->m_node->clear();
     this->m_drawnPress = 0;
     this->m_drawnRelease = 0;
-    this->m_drawnRoute = 0;
 }
 
 void BakePathVisualizer::ensureNode(PlayLayer* layer) {
@@ -150,10 +142,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     }
 
     auto& bake = BakeMap::get();
-    auto const& routeStore = RoutePathStore::get();
-    bool const haveBake = bake.loaded() && !bake.data().clicks.empty();
-    bool const haveRoute = routeStore.loaded() && !routeStore.path().empty();
-    if (!haveBake && !haveRoute) {
+    if (!bake.loaded() || bake.data().clicks.empty()) {
         this->m_node->clear();
         this->m_drawnPress = 0;
         this->m_drawnRelease = 0;
@@ -164,9 +153,9 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     float const py = player->getPositionY();
     auto const liveMode = StageConfig::kindOf(player);
     bool const showAllReleases = releaseWindowMode(liveMode);
-    int const nClicks = haveBake ? static_cast<int>(bake.data().clicks.size()) : 0;
+    int const nClicks = static_cast<int>(bake.data().clicks.size());
 
-    double const tps = haveBake && bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    double const tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
     float simDt = AssistController::get().estimatedTps() > 1.0
         ? static_cast<float>(1.0 / AssistController::get().estimatedTps())
         : AssistClock::kNominalSimDt;
@@ -230,25 +219,6 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
     this->m_node->clear();
     this->m_drawnPress = 0;
     this->m_drawnRelease = 0;
-    this->m_drawnRoute = 0;
-
-    // Cyan filled corridor is intentionally drawn before click windows. It is
-    // stored pose data, not a prediction; RouteAssist consumes it next.
-    if (haveRoute) {
-        auto const& samples = routeStore.path().samples;
-        for (size_t i = 1; i < samples.size(); ++i) {
-            auto const& a = samples[i - 1];
-            auto const& b = samples[i];
-            if (b.gapBefore) continue;
-            if (b.x < px - kLodMarginX || a.x > px + kLodMarginX) continue;
-            CCPoint top[3] = {{a.x, a.yHi}, {b.x, b.yHi}, {b.x, b.yLo}};
-            CCPoint bottom[3] = {{a.x, a.yHi}, {b.x, b.yLo}, {a.x, a.yLo}};
-            this->m_node->drawPolygon(top, 3, routeCyanFill(), 0.f, routeCyanFill());
-            this->m_node->drawPolygon(bottom, 3, routeCyanFill(), 0.f, routeCyanFill());
-            this->m_node->drawSegment({a.x, a.y}, {b.x, b.y}, 1.2f, routeCyan());
-            ++this->m_drawnRoute;
-        }
-    }
     if (marks.empty()) return;
 
     // ~px per bake frame (same scale as ShadowSimulator travel foresight).

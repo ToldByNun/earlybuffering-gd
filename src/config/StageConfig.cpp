@@ -96,9 +96,6 @@ bool g_cachedSaveFeedbackCounter = false;
 StageConfig::ColorRgb g_cachedSaveIconColor{};
 int g_cachedSlack = 2;
 int g_cachedLookAhead = 0;
-float g_cachedRouteCorridor = 1.f;
-float g_cachedRouteOffRoute = 28.f;
-bool g_cachedRouteLiveFallback = false;
 bool g_cachedWindowUnitFrames = false;
 bool g_cacheInitialized = false;
 bool g_applying = false;
@@ -236,23 +233,67 @@ void StageConfig::refreshCache() {
     }
     g_cachedSlack = clampInt(readInt(mod, "death-slack", 2), 0, 16);
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
-    try { auto v = mod->getSettingValue<std::string>("route-corridor"); g_cachedRouteCorridor = v == "Strict" ? .75f : v == "Loose" ? 1.35f : 1.f; } catch (...) {}
-    g_cachedRouteOffRoute = std::clamp(readFloat(mod, "route-off-route", 28.f), 8.f, 160.f);
-    g_cachedRouteLiveFallback = readBool(mod, "route-live-fallback", false);
     try {
         auto modeStr = mod->getSettingValue<std::string>("assist-mode");
-        if (modeStr == "Live") g_cachedAssistMode = AssistMode::Live;
+        if (modeStr == "Live" || modeStr == "Route") g_cachedAssistMode = AssistMode::Live;
         else if (modeStr == "Replay") g_cachedAssistMode = AssistMode::Replay;
         else if (modeStr == "BruteForce") g_cachedAssistMode = AssistMode::BruteForce;
-        else if (modeStr == "Route") g_cachedAssistMode = AssistMode::Route;
         else g_cachedAssistMode = AssistMode::Hybrid;
     }
     catch (...) {
         g_cachedAssistMode = AssistMode::Hybrid;
     }
-    // Single assist type: v1 pick + ShadowPlayer only (v2 / Trajectory removed).
-    g_cachedAssistPickLegacy = true;
-    g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+    try {
+        auto pickStr = mod->getSettingValue<std::string>("assist-pick");
+        char const* canon = canonicalizeAssistPick(pickStr);
+        if (!canon) {
+            // Unknown → v1 default.
+            g_cachedAssistPickLegacy = true;
+            canon = "v1";
+        }
+        else {
+            g_cachedAssistPickLegacy = (std::strcmp(canon, "v1") == 0);
+        }
+        // Migrate store Legacy/New → v1/v2 so Geode one-of stays valid.
+        if (pickStr != canon) {
+            bool const nested = g_applying;
+            if (!nested) g_applying = true;
+            try {
+                mod->setSettingValue<std::string>("assist-pick", std::string(canon));
+            }
+            catch (...) {
+            }
+            if (!nested) g_applying = false;
+        }
+    }
+    catch (...) {
+        // mod.json default is v1.
+        g_cachedAssistPickLegacy = true;
+    }
+    try {
+        auto engStr = mod->getSettingValue<std::string>("assist-engine");
+        if (engStr == "Trajectory") {
+            g_cachedAssistEngine = AssistEngineKind::Trajectory;
+        }
+        else {
+            g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+            if (engStr != "ShadowPlayer") {
+                bool const nested = g_applying;
+                if (!nested) g_applying = true;
+                try {
+                    mod->setSettingValue<std::string>(
+                        "assist-engine", std::string("ShadowPlayer")
+                    );
+                }
+                catch (...) {
+                }
+                if (!nested) g_applying = false;
+            }
+        }
+    }
+    catch (...) {
+        g_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+    }
 
     for (int i = 0; i < MODE_COUNT; ++i) {
         auto const& ids = MODE_IDS[i];
@@ -310,7 +351,6 @@ char const* StageConfig::assistModeName(AssistMode mode) {
         case AssistMode::Replay: return "Replay";
         case AssistMode::Hybrid: return "Hybrid";
         case AssistMode::BruteForce: return "BruteForce";
-        case AssistMode::Route: return "Route";
     }
     return "Hybrid";
 }
@@ -321,7 +361,6 @@ char const* StageConfig::assistModeHint(AssistMode mode) {
         case AssistMode::Replay: return "bake windows only";
         case AssistMode::Hybrid: return "bake if near, else live";
         case AssistMode::BruteForce: return "pre-baked safe clicks (no replay)";
-        case AssistMode::Route: return "validated replay route, short-horizon only";
     }
     return "";
 }
@@ -334,7 +373,7 @@ void StageConfig::setAssistMode(AssistMode mode) {
 
 void StageConfig::cycleAssistMode() {
     ensureCache();
-    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 5;
+    int next = (static_cast<int>(g_cachedAssistMode) + 1) % 4;
     setAssistMode(static_cast<AssistMode>(next));
 }
 
@@ -424,7 +463,7 @@ AssistMode StageConfig::assistMode() { ensureCache(); return g_cachedAssistMode;
 
 bool StageConfig::assistPickLegacy() {
     ensureCache();
-    return true; // locked: v1 only
+    return g_cachedAssistPickLegacy;
 }
 
 bool StageConfig::assistPickV1() {
@@ -432,24 +471,26 @@ bool StageConfig::assistPickV1() {
 }
 
 char const* StageConfig::assistPickName() {
-    return "v1";
+    ensureCache();
+    return g_cachedAssistPickLegacy ? "v1" : "v2";
 }
 
 char const* StageConfig::canonicalizeAssistPick(std::string const& raw) {
-    // Only v1 ships; map old aliases so imports stay quiet.
-    if (raw == "v1" || raw == "Legacy" || raw == "v2" || raw == "New" || raw.empty()) {
-        return "v1";
-    }
+    if (raw == "v1" || raw == "Legacy") return "v1";
+    if (raw == "v2" || raw == "New") return "v2";
     return nullptr;
 }
 
 StageConfig::AssistEngineKind StageConfig::assistEngine() {
     ensureCache();
-    return AssistEngineKind::ShadowPlayer;
+    return g_cachedAssistEngine;
 }
 
 StageConfig::AssistEngineKind StageConfig::effectiveAssistEngine() {
-    return AssistEngineKind::ShadowPlayer;
+    ensureCache();
+    // V1 choose is frozen on full ghost runOne — never Trajectory.
+    if (g_cachedAssistPickLegacy) return AssistEngineKind::ShadowPlayer;
+    return g_cachedAssistEngine;
 }
 
 char const* StageConfig::assistEngineName(AssistEngineKind engine) {
@@ -554,9 +595,6 @@ int StageConfig::ticksWave() {
 }
 int StageConfig::deathSlack() { ensureCache(); return g_cachedSlack; }
 int StageConfig::lookAheadCap() { ensureCache(); return g_cachedLookAhead; }
-float StageConfig::routeCorridorMultiplier() { ensureCache(); return g_cachedRouteCorridor; }
-float StageConfig::routeOffRouteThreshold() { ensureCache(); return g_cachedRouteOffRoute; }
-bool StageConfig::routeLiveFallback() { ensureCache(); return g_cachedRouteLiveFallback; }
 GameModeKind StageConfig::kindOf(PlayerObject* player) {
     if (!player) return GameModeKind::Cube;
     if (player->m_isDart) return GameModeKind::Wave;

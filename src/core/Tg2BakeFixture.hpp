@@ -3,7 +3,7 @@
 
 #include <string>
 
-// Frozen bakefail corpus for The Golden 2 startpos / tg2.gdr2.
+// Frozen bakefail corpus for The Golden 2 startpos / tg2.gdr2 (Commit 6).
 // Live PlayLayer not required — contracts + residual diag format + portal Include.
 class Tg2BakeFixture {
 public:
@@ -24,7 +24,7 @@ public:
         int deathFrame,
         int deathObjId,
         int deathObjType
-);
+    );
 
     // Bake validate err fragment: residual + parity gate token.
     static std::string enrichValidateFail(
@@ -33,7 +33,7 @@ public:
         int deathObjId,
         int deathObjType,
         float deathX
-);
+    );
 
     // All Gravity/Size/Vehicle/Teleport portals Include under bakeOffline type table.
     static bool bakeOfflinePortalsIncludeOk(std::string& detail);

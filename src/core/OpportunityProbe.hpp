@@ -24,10 +24,6 @@ public:
     // Delay for the mid probe (limit/2), clamped to [1, limit].
     static int midDelay(int limit);
 
-    // Near probe delay for small first-jump windows: mid of min(limit, 16).
-    // Catches helpful short Delays when mid/limit only die-before-action (coast).
-    static int nearDelay(int limit);
-
     // Orb-window coast scan length: max(limit+slack+4, limit+1).
     static int orbScanTicks(int limit, int slack);
 
@@ -39,8 +35,6 @@ public:
 
     // True → do NOT Pass no-threat; continue full cand search.
     // foresightOrbPad / orbWindowFound / d0Activated already force search.
-    // Probe diedBeforeAction while baseline lived = hazard in wait window → search
-    // (PassNoThreat must not skip when coasting into death before a late jump).
     static bool shouldSearchFurther(
         bool foresightOrbPad,
         bool orbWindowFound,

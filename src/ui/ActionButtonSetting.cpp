@@ -3,7 +3,6 @@
 
 #include "../core/BakeMap.hpp"
 #include "../core/BakeScheduler.hpp"
-#include "../core/LiveRouteCapture.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 
@@ -25,7 +24,6 @@ std::string truncateLabel(std::string s, size_t maxChars) {
 }
 
 std::string dynamicButtonLabel(std::string const& key, std::string const& fallback) {
-    if (key == "record-route-action" && LiveRouteCapture::armed()) return "cancel";
     if (key == "import-bake-replay") {
         if (auto const* r = BakeMap::get().pendingReplay()) {
             return truncateLabel(r->sourceName, 14);
@@ -40,9 +38,8 @@ std::string dynamicButtonLabel(std::string const& key, std::string const& fallba
 bool actionShouldEnable(std::string const& key) {
     bool const busy = BakeMap::get().isBaking() || BakeScheduler::get().running();
     if (key == "bake-map-action" || key == "brute-bake-action" || key == "import-bake-replay") {
-        return !busy && !LiveRouteCapture::armed();
+        return !busy;
     }
-    if (key == "record-route-action") return !busy;
     if (key == "cancel-bake-action") {
         return busy;
     }
@@ -50,23 +47,6 @@ bool actionShouldEnable(std::string const& key) {
 }
 
 void fireSettingAction(std::string const& key) {
-    if (key == "record-route-action") {
-        if (LiveRouteCapture::armed()) {
-            LiveRouteCapture::cancel();
-            return;
-        }
-        auto* layer = PlayLayer::get();
-        if (!layer || !layer->m_level) {
-            FLAlertLayer::create("Record Route", "Open a level first.", "OK")->show();
-            return;
-        }
-        LiveRouteCapture::arm(layer);
-        FLAlertLayer::create("Record Route",
-            "Restart the attempt, then play your replay in Mega Hack. "
-            "EarlyBuffer will save the player's path when you finish the level. "
-            "Each restart begins a new recording.", "OK")->show();
-        return;
-    }
     if (key == "import-bake-replay") {
         PauseActionBridge::importReplay();
         return;
@@ -89,14 +69,6 @@ void fireSettingAction(std::string const& key) {
     }
     if (key == "reset-learn-action") {
         PauseActionBridge::resetLearning();
-        return;
-    }
-    if (key == "clear-level-cache-action") {
-        PauseActionBridge::clearLevelCache();
-        return;
-    }
-    if (key == "clear-all-level-caches-action") {
-        PauseActionBridge::clearAllLevelCaches();
         return;
     }
     if (key == "export-config-action") {
@@ -141,10 +113,6 @@ void fireSettingAction(std::string const& key) {
     }
     if (key == "dev-dump-diag-action") {
         PauseActionBridge::devDumpDiag();
-        return;
-    }
-    if (key == "dev-visualize-bake-action") {
-        PauseActionBridge::devVisualizeBake();
         return;
     }
 }

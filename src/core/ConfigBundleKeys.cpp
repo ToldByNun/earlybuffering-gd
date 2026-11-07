@@ -7,14 +7,14 @@
 // File-local table storage (class, not a project namespace).
 class ConfigBundleKeysTable {
 public:
-    static ConfigBundleKeys::Entry const kEntries[127];
-    static constexpr int kEntryCount = 127;
+    static constexpr int kEntryCount = 126;
+    static ConfigBundleKeys::Entry const kEntries[kEntryCount];
 
 private:
     ConfigBundleKeysTable() = default;
 };
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[127] = {
+ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[kEntryCount] = {
     { "enabled", ConfigBundleKeys::Kind::Bool },
     { "safe-mode", ConfigBundleKeys::Kind::Bool },
     { "show-overlay", ConfigBundleKeys::Kind::Bool },
@@ -51,9 +51,8 @@ ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[127] = {
     { "death-slack", ConfigBundleKeys::Kind::Int },
     { "look-ahead-cap", ConfigBundleKeys::Kind::Int },
     { "assist-mode", ConfigBundleKeys::Kind::String },
-    { "route-corridor", ConfigBundleKeys::Kind::String },
-    { "route-off-route", ConfigBundleKeys::Kind::Float },
-    { "route-live-fallback", ConfigBundleKeys::Kind::Bool },
+    { "assist-pick", ConfigBundleKeys::Kind::String },
+    { "assist-engine", ConfigBundleKeys::Kind::String },
     { "bake-radius", ConfigBundleKeys::Kind::Int },
     { "cps-limit", ConfigBundleKeys::Kind::Int },
     { "min-click-interval-ms", ConfigBundleKeys::Kind::Int },
@@ -180,7 +179,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 124, "count-124");
+    expect(ConfigBundleKeysTable::kEntryCount == 126, "portable-count");
     expect(
         ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount,
         "count-api"
@@ -232,10 +231,10 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         static_cast<int>(seen.size()) == ConfigBundleKeysTable::kEntryCount,
         "unique-count"
     );
-    expect(kindBool == 49, "kind-bool-49");
+    expect(kindBool == 50, "kind-bool");
     expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 4, "kind-string-4");
+    expect(kindString == 7, "kind-string");
     expect(kindColor == 1, "kind-color-1");
     expect(kindKeybind == 5, "kind-keybind-5");
 

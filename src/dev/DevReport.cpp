@@ -3,7 +3,6 @@
 #include "DevSession.hpp"
 #include "DevTraceStore.hpp"
 #include "../debug/LagProbe.hpp"
-#include "../core/AssistRealMetrics.hpp"
 #include "../core/AssistSimEstimate.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
@@ -24,7 +23,7 @@ char const* fidShort(DevFidelity f, bool approx) {
         case DevFidelity::PlayerOnlyApproximated: return "approx";
         case DevFidelity::NotReproducible: break;
     }
- (void)approx;
+    (void)approx;
     return "norepro";
 }
 
@@ -118,7 +117,7 @@ bool runEvalOnPlanEvent(
         opts,
         latencyWeight,
         &tickBudget
-);
+    );
 
     std::string rec;
     if (DevSession::get().isRecording()) {
@@ -168,7 +167,7 @@ DevReport DevReport::fromGrid(
         r.idealBlockedReason = grid.objective.idealBlockedReason;
     }
 
-    // Prev/Caused from d0 vs planned Delay (simEstimate / G10).
+    // Commit 12: Prev/Caused from d0 vs planned Delay (simEstimate / G10).
     r.plannedDelay = plannedDelay;
     {
         std::vector<AssistSimEstimate::SampleView> views;
@@ -225,8 +224,6 @@ DevReport DevReport::fromGrid(
     j["simCaused"] = r.simCaused;
     j["simNet"] = r.simNet;
     j["simHarmRate"] = r.simHarmRate;
-    // Real primary gates (session snapshot; includes per-mode + contracts142 status).
-    j["realMetrics"] = AssistRealMetrics::get().reportLine();
     j["overlay"] = r.overlayLine;
     if (r.liveVsEvalMismatch) {
         j["liveVsEvalMismatch"] = true;
@@ -276,12 +273,12 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
         if (!r.hasBestSurviving) {
             append(fmt::format(
                 "bestEval={}(died) obj={}", r.bestEvaluatedDelay, r.objectiveId
-));
+            ));
         }
         else {
             append(fmt::format(
                 "bestEval={} obj={}", r.bestEvaluatedDelay, r.objectiveId
-));
+            ));
         }
     }
     else {
@@ -292,7 +289,7 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
         append(fmt::format("ideal={}", r.idealDelay));
     }
 
-    // simEstimate Net secondary (never ship gate).
+    // Commit 12: simEstimate Net secondary (never ship gate).
     if (r.plannedDelay > 0) {
         append(fmt::format(
             "simEst {} net=+{}/-{} harm={:.0f}%",
@@ -300,7 +297,7 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
             r.simPrev,
             r.simCaused,
             r.simHarmRate * 100.f
-));
+        ));
     }
     return line;
 }
@@ -488,7 +485,7 @@ bool DevReport::selfCheck(std::string& report) {
         expect(r.jsonLine.find("simEstimate") != std::string::npos, "sim-tag");
     }
 
-    // Prev class from d0 die / delay survive → simEst overlay.
+    // Commit 12: Prev class from d0 die / delay survive → simEst overlay.
     {
         AssistSimEstimate::get().resetSession();
         DevEvalEngine::GridReport gr;

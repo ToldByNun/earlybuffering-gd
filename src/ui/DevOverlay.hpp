@@ -3,7 +3,7 @@
 
 #include <string>
 
-// Dev Lab HUD fragment for StatusOverlay.
+// Dev Lab HUD fragment for StatusOverlay (Commit 14).
 // Appended when DevConfig::overlay() and (recording or last report).
 class DevOverlay {
 public:

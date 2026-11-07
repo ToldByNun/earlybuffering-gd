@@ -74,7 +74,7 @@ int OrbAlign::acceptRecheckSlide(
 
     // Never earlier than armed fire.
     if (proposedFire < oldFire) return -1;
-    // Late slide ≤+1 (orb/toggle and non-orb).
+    // Commit 13: late slide ≤+1 (orb/toggle and non-orb).
     if (proposedFire > oldFire + kRecheckMaxSlide) {
         proposedFire = oldFire + kRecheckMaxSlide;
     }
@@ -97,19 +97,19 @@ bool OrbAlign::selfCheck(std::string& report) {
 
     expect(
         clampFireIntoOrbWindow(10, 0, 4, 8, 16) == 10, "clamp-in"
-);
+    );
     expect(
         clampFireIntoOrbWindow(2, 0, 4, 8, 16) == 4, "clamp-lo"
-);
+    );
     expect(
         clampFireIntoOrbWindow(12, 0, 4, 8, 16) == 8, "clamp-hi"
-);
+    );
     expect(
         waitUntilInsideRing(3, 0, 5) == 5, "wait-ring"
-);
+    );
     expect(
         waitUntilInsideRing(7, 0, 5) == 7, "already-in"
-);
+    );
 
     expect(!wrongOrbReject(5, 4, 8), "ok-in-win");
     expect(wrongOrbReject(2, 4, 8), "early-wrong");

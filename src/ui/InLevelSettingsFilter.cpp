@@ -23,8 +23,7 @@ public:
         SettingsCategory cat;
     };
 
-    // Keep in sync with kEntries below (assist-pick / assist-engine removed).
-    static constexpr int kCount = 170;
+    static constexpr int kCount = 168;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -82,6 +81,8 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "import-config-action", SettingsCategory::Assist },
     { "browse-cloud-configs-action", SettingsCategory::Assist },
     { "title-algorithm", SettingsCategory::Assist },
+    { "assist-pick", SettingsCategory::Assist },
+    { "assist-engine", SettingsCategory::Assist },
     { "death-slack", SettingsCategory::Assist },
     { "look-ahead-cap", SettingsCategory::Assist },
     { "cps-limit", SettingsCategory::Assist },
@@ -111,11 +112,8 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "import-bake-replay", SettingsCategory::Bake },
     { "cycle-assist-mode", SettingsCategory::Bake },
     { "bake-map-action", SettingsCategory::Bake },
-    { "record-route-action", SettingsCategory::Bake },
     { "brute-bake-action", SettingsCategory::Bake },
     { "cancel-bake-action", SettingsCategory::Bake },
-    { "clear-level-cache-action", SettingsCategory::Bake },
-    { "clear-all-level-caches-action", SettingsCategory::Bake },
     { "bake-radius", SettingsCategory::Bake },
     { "title-cube", SettingsCategory::Modes },
     { "cube-enable", SettingsCategory::Modes },
@@ -211,7 +209,6 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "dev-export-session-action", SettingsCategory::Dev },
     { "dev-clear-traces-action", SettingsCategory::Dev },
     { "dev-copy-report-action", SettingsCategory::Dev },
-    { "dev-visualize-bake-action", SettingsCategory::Dev },
     { "title-dev-diag", SettingsCategory::Dev },
     { "dev-dump-diag-action", SettingsCategory::Dev },
 };
@@ -622,11 +619,8 @@ public:
         return match("import-bake-replay")
             || match("cycle-assist-mode")
             || match("bake-map-action")
-            || match("record-route-action")
             || match("brute-bake-action")
             || match("cancel-bake-action")
-            || match("clear-level-cache-action")
-            || match("clear-all-level-caches-action")
             || match("reset-learn-action")
             || match("export-config-action")
             || match("import-config-action")
@@ -847,7 +841,7 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
         expect(c != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-entry-count");
+    expect(mapped == SettingsCategoryMap::kCount, "map-count");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {

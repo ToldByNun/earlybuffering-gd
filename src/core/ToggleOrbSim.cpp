@@ -23,7 +23,7 @@ void ToggleOrbSim::applyCollisionActive(GameObject* obj, bool active) {
         obj->setVisible(true);
     }
     else {
-        // Inactive must not collide: visibility alone left solids deadly.
+        // Inactive must not collide: visibility alone left solids deadly (Commit 4).
         if (ego) {
             ego->m_poweredOn = false;
             ego->m_visible = false;
@@ -145,7 +145,7 @@ bool ToggleOrbSim::onToggleHit(
         if (obj == hit) continue;
         if (!obj->belongsToGroup(groupId)) continue;
 
-        // Never flip jump/dash rings (or ε-near rings) — stack keeps boost.
+        // Commit 7 (a): never flip jump/dash rings (or ε-near rings) — stack keeps boost.
         if (OrbStackResolver::shouldSkipToggleFlip(obj, hit)) {
             OrbStackResolver::get().noteFlipSkipped();
             continue;
@@ -201,7 +201,7 @@ bool ToggleOrbSim::onToggleHit(
             toggleOrb ? 1 : 0,
             touchToggle ? 1 : 0,
             effectId
-));
+        ));
     }
     return flipped > 0;
 }

@@ -1,5 +1,4 @@
 #include "AssistController.hpp"
-#include "LiveRouteCapture.hpp"
 #include "AssistClock.hpp"
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
@@ -9,24 +8,18 @@
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
 #include "ClickIntentGuard.hpp"
-#include "ModeAssist.hpp"
-#include "ShiftedInputQueue.hpp"
-#include "SpamAssistPolicy.hpp"
 #include "HybridVerifyCache.hpp"
 #include "MissAssistContracts.hpp"
 #include "SelfBakeRecorder.hpp"
 #include "DivergenceTracker.hpp"
 #include "AssistRealMetrics.hpp"
 #include "AssistSimEstimate.hpp"
-#include "LevelCacheIndex.hpp"
-#include "LevelFingerprint.hpp"
 #include "GhostParityProbe.hpp"
 #include "SimTrust.hpp"
 #include "PerfectAssistPolicy.hpp"
 #include "OrbAlign.hpp"
 #include "SpotTrustMap.hpp"
 #include "LevelProfile.hpp"
-#include "RouteAssist.hpp"
 #include "ShadowSimulator.hpp"
 #include "TravelForesight.hpp"
 #include "TriggerWorldBaker.hpp"
@@ -46,7 +39,6 @@
 #include "../ui/SaveFrameCounter.hpp"
 #include "../ui/StatusOverlay.hpp"
 #include "../ui/BakePathVisualizer.hpp"
-#include "../ui/BakeReplayVisualizer.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <algorithm>
@@ -74,18 +66,12 @@ static void fillPlanRobustLatency(
     opts.dtVariance = dtVariance;
     opts.spamDense = spamDense;
     if (player) {
-        auto const kind = StageConfig::kindOf(player);
-        auto const params = StageConfig::paramsFor(player);
-        opts.latencyWeight = params.latencyWeight;
-        // Wave λ prefers earliest hard — spam+orb assists phase-shift into spikes.
-        // Soften only on spam-dense assists (Pass-excluded paths). Parity: ModeAssist.
-        if (spamDense
-            && ModeAssist::forKind(kind).kind() == GameModeKind::Wave
-            && opts.latencyWeight > 0.5f) {
+        opts.latencyWeight = StageConfig::paramsFor(player).latencyWeight;
+        // Wave λ=1.0 prefers earliest hard — in spam+orb assists that phase-shifts
+        // into spikes. Soften only on spam-dense assists (Pass-excluded paths).
+        if (spamDense && player->m_isDart && opts.latencyWeight > 0.5f) {
             opts.latencyWeight *= 0.65f;
         }
-        opts.modeSnap = ModeAssist::snapshotFor(kind, params.ticks, true);
-        opts.modeSnapValid = true;
     }
 }
 
@@ -144,7 +130,7 @@ static void fillBakePreferBand(
     auto const* win = bake.findNear(
         player->getPositionX(), approxFrame, down, !player1,
         StageConfig::kindOf(player)
-);
+    );
     if (!win) return;
 
     HybridPressReuse tmp;
@@ -176,7 +162,7 @@ static bool nearBakeWindowHint(
     return bake.findNear(
         player->getPositionX(), approxFrame, down, !player1,
         StageConfig::kindOf(player)
-) != nullptr;
+    ) != nullptr;
 }
 
 // Hybrid Live fallthrough: never HUS-inject before bake nominal (press or release).
@@ -194,7 +180,7 @@ static bool husBlockedBeforeBakeNominal(
         : AssistClock::kNominalTps;
     outNomTick = AssistClock::get().unmapTick(
         bakeTps, reuse.nominalFrame, simDt
-);
+    );
     return effectTick < outNomTick;
 }
 
@@ -228,65 +214,13 @@ double AssistController::wallTps() const {
 
 std::string AssistController::overlayText() const { return m_overlayText; }
 
-void AssistController::clearBuffer(bool keepShiftQueue) {
-    this->m_buffer = {};
-    if (!keepShiftQueue) {
-        this->m_shiftQueue.clear();
-        this->m_shiftDrainPass = false;
-    }
-}
-
-void AssistController::beginShiftQueue(int shiftTicks) {
-    this->m_shiftDrainPass = false;
-    this->m_shiftQueue.beginShift(shiftTicks);
-}
-
-void AssistController::tickShiftQueue(PlayLayer* playLayer) {
-    if (!playLayer) return;
-    ShiftedInput next{};
-    bool popped = false;
-    if (this->m_shiftDrainPass) {
-        popped = this->m_shiftQueue.tryDrainOne(next);
-        if (this->m_shiftQueue.empty()) {
-            this->m_shiftDrainPass = false;
-        }
-    }
-    else {
-        popped = this->m_shiftQueue.tryPopDue(this->m_attemptTick, next);
-    }
-    if (!popped) return;
-
-    auto* player = next.player1 ? playLayer->m_player1 : playLayer->m_player2;
-    if (!player || player->m_isDead) {
-        this->m_shiftQueue.clear();
-        this->m_shiftDrainPass = false;
-        return;
-    }
-    AssistLog::debug(fmt::format(
-        "shift-queue: inject {} p{} press={} fire={} left={}",
-        next.down ? "DOWN" : "UP",
-        next.player1 ? 1 : 2,
-        next.pressTick,
-        next.fireTick,
-        this->m_shiftQueue.size()
-));
-    this->m_assistTouchedRun = true;
-    if (next.down) {
-        ++this->m_savesAttempt;
-        ++this->m_savesLevel;
-    }
-    this->m_injecting = true;
-    playLayer->handleButton(next.down, JUMP_BUTTON, next.player1);
-    this->m_injecting = false;
-}
+void AssistController::clearBuffer() { m_buffer = {}; }
 
 void AssistController::onCheckpointLoad() {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
     // Trigger world: keep store + in-flight baker; only reset abs attempt tick.
     SelfBakeRecorder::get().flushSegment(PlayLayer::get(), "checkpoint", false);
     clearBuffer();
-    this->m_shiftQueue.clear();
-    this->m_shiftDrainPass = false;
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
@@ -303,13 +237,13 @@ void AssistController::onCheckpointLoad() {
     LagProbe::get().mark(
         "triggerWorld.checkpoint",
         "keep store / no rebuild / attemptTick=0"
-);
+    );
 }
 
 void AssistController::onLevelComplete(PlayLayer* playLayer) {
     DevCycleRecorder::get().sealAttemptWithOutcomes(
         "complete", true, this->m_attemptTick
-);
+    );
     SelfBakeRecorder::get().flushMergeOnly(playLayer, "complete");
     LevelProfile::get().save();
     BakeMap::get().save();
@@ -352,8 +286,6 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     // If death already sealed the attempt, open the next; else seal as reset.
     DevCycleRecorder::get().onAttemptReset(0);
     clearBuffer();
-    this->m_shiftQueue.clear();
-    this->m_shiftDrainPass = false;
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
@@ -384,7 +316,6 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     m_outcomePlanDelay = false;
     m_untrustPassHint = false;
     m_dafWatch = false;
-    m_dafWatchMode = GameModeKind::Cube;
     {
         LagProbe::Scope const s("eb.saveFeedbackReset");
         SaveFeedback::get().reset();
@@ -422,14 +353,13 @@ void AssistController::onLevelInit(PlayLayer* playLayer) {
     BakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
         LevelProfile::get().loadForLevel(playLayer->m_level);
-        BakeMap::get().loadForLevel(playLayer->m_level, 0);
-        (void)LevelCacheIndex::evictLruIfOverCap();
+        BakeMap::get().loadForLevel(playLayer->m_level);
         TriggerWorldBaker::get().loadOrBuild(playLayer);
         // Movers / TW tracks → dynamic-labelled TrustRate floor (G7b).
         bool const dynamicLabelled = TriggerWorldStore::get().hasTracks();
         AssistRealMetrics::get().setLevelKey(
             LevelProfile::get().key(), dynamicLabelled
-);
+        );
     }
     updateOverlay();
 }
@@ -452,7 +382,6 @@ void AssistController::onLevelQuit() {
     SaveFrameCounter::get().detach(!layerAlive);
     TrajectoryVisualizer::get().detach(!layerAlive);
     BakePathVisualizer::get().detach(!layerAlive);
-    BakeReplayVisualizer::get().detach(!layerAlive);
     StatusOverlay::detach(!layerAlive);
 
     if (playLayer) {
@@ -475,25 +404,10 @@ void AssistController::onLevelQuit() {
     GhostParityProbe::get().onLevelQuit();
     TravelForesightCache::get().clear();
     this->m_dafWatch = false;
-    this->m_dafWatchMode = GameModeKind::Cube;
     // Keep AssistRealMetrics session across levels (corpus report); do not resetSession.
-    {
-        auto& metrics = AssistRealMetrics::get();
-        if (metrics.nOpp() > 0 || metrics.arms() > 0 || metrics.parityProbes() > 0) {
-            AssistLog::info(fmt::format(
-                "REAL-METRICS {}", metrics.reportLine()
-));
-            auto const sim = AssistSimEstimate::get().reportLine();
-            if (!sim.empty()) {
-                AssistLog::info(fmt::format("SIM-ESTIMATE {}", sim));
-            }
-        }
-    }
 
     // Quiet reset — overlay already detached
     this->clearBuffer();
-    this->m_shiftQueue.clear();
-    this->m_shiftDrainPass = false;
     this->m_pendingRelease = false;
     this->m_pendingReleaseHold = false;
     this->m_pendingReleaseContinuous = false;
@@ -539,7 +453,7 @@ geode::Result<int> AssistController::runBakeMap(PlayLayer* layer, bool bruteForc
     auto method = bruteForce ? BakeMethod::BruteForce : BakeMethod::Replay;
     return BakeMap::get().bake(
         layer, m_startSnapshotSlot, StageConfig::bakeRadius(), method
-);
+    );
 }
 
 void AssistController::resetLevelProfile() {
@@ -566,7 +480,16 @@ void AssistController::onSubStep(PlayerObject* player, float dt) {
 }
 
 bool AssistController::continuousModeKind(GameModeKind kind) {
-    return ModeAssist::forKind(kind).continuous();
+    switch (kind) {
+        case GameModeKind::Wave:
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+        case GameModeKind::Ufo:
+        case GameModeKind::Spider:
+            return true;
+        default:
+            return false;
+    }
 }
 
 bool AssistController::continuousModePlayer(PlayerObject* player) {
@@ -576,7 +499,15 @@ bool AssistController::continuousModePlayer(PlayerObject* player) {
 
 bool AssistController::releaseAssistModeKind(GameModeKind kind) {
     // Same set as BakePathVisualizer purple windows (not ufo/spider).
-    return ModeAssist::forKind(kind).releaseAssistAlways();
+    switch (kind) {
+        case GameModeKind::Wave:
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+        case GameModeKind::Robot:
+            return true;
+        default:
+            return false;
+    }
 }
 
 bool AssistController::releaseAssistModePlayer(PlayerObject* player) {
@@ -607,11 +538,11 @@ bool AssistController::shouldPlanRelease(
         : static_cast<float>(1.0 / AssistClock::kNominalTps);
     int const approxFrame = AssistClock::get().remapTick(
         tps, this->m_attemptTick > 0 ? this->m_attemptTick : effectTick, simDt
-);
+    );
     auto const kind = StageConfig::kindOf(player);
     auto const* win = bake.findNear(
         player->getPositionX(), approxFrame, false, !player1, kind
-);
+    );
     return win && win->holdAssist;
 }
 
@@ -638,17 +569,17 @@ bool AssistController::releaseGateSelfCheck(std::string& report) {
         BakePathVisualizer::releaseWindowMode(GameModeKind::Wave)
             == releaseAssistModeKind(GameModeKind::Wave),
         "viz-wave"
-);
+    );
     expect(
         BakePathVisualizer::releaseWindowMode(GameModeKind::Cube)
             == releaseAssistModeKind(GameModeKind::Cube),
         "viz-cube"
-);
+    );
     expect(
         BakePathVisualizer::releaseWindowMode(GameModeKind::Robot)
             == releaseAssistModeKind(GameModeKind::Robot),
         "viz-robot"
-);
+    );
 
     if (fails == 0) {
         report = "releaseGateSelfCheck OK";
@@ -697,19 +628,19 @@ bool AssistController::effectTickSelfCheck(std::string& report) {
     expect(
         resolveEffectTick(42, true, true) == resolveEffectTick(42, true, false),
         "mid-no-double-advance"
-);
+    );
 
     // Delegation parity with DevClockContract.
     expect(
         resolveEffectTick(10, false, false)
             == DevClockContract::get().effectTick(10, false, false),
         "delegate-discrete"
-);
+    );
     expect(
         resolveEffectTick(10, false, true)
             == DevClockContract::get().effectTick(10, false, true),
         "delegate-cont"
-);
+    );
 
     if (fails == 0) {
         report = "effectTickSelfCheck OK";
@@ -847,51 +778,51 @@ bool AssistController::queuedHoldSelfCheck(std::string& report) {
     expect(
         resolveQueuedHoldTicks(false, false, -1, -1, -1, 8) == 0,
         "plain-asap"
-);
+    );
     expect(
         resolveQueuedHoldTicks(false, false, 0, -1, -1, 8) == 0,
         "rel0-asap"
-);
+    );
 
     // Planner releaseAfter honored (discrete).
     expect(
         resolveQueuedHoldTicks(false, false, 5, 2, 10, 8) == 5,
         "rel-after"
-);
+    );
     expect(
         resolveQueuedHoldTicks(true, false, 5, 2, 10, 8) == 5,
         "hold-rel-after"
-);
+    );
 
     // requireHold without release fields → clamp to extendCap (dash/robot).
     expect(
         resolveQueuedHoldTicks(true, false, -1, -1, -1, 8) == 8,
         "hold-fallback-cap"
-);
+    );
 
     // Continuous: earliest-safe only; no blind +limit.
     expect(
         resolveQueuedHoldTicks(true, true, 10, 2, 14, 16) == 2,
         "cont-earliest"
-);
+    );
     expect(
         resolveQueuedHoldTicks(true, true, 6, -1, 14, 16) == 6,
         "cont-rel-after"
-);
+    );
     expect(
         resolveQueuedHoldTicks(true, true, -1, -1, -1, 16) == 0,
         "cont-no-blind-cap"
-);
+    );
 
     // Clamp to latest and extendCap.
     expect(
         resolveQueuedHoldTicks(false, false, 12, 2, 4, 16) == 4,
         "clamp-latest"
-);
+    );
     expect(
         resolveQueuedHoldTicks(false, false, 12, 2, 20, 8) == 8,
         "clamp-cap"
-);
+    );
 
     if (fails == 0) {
         report = "queuedHoldSelfCheck OK";
@@ -1025,31 +956,31 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     expect(
         shouldReplanHoldUntilSafe(10, -1, 0.f, 0.f, false, false, 8),
         "replan-first"
-);
+    );
     expect(
         !shouldReplanHoldUntilSafe(11, 10, 100.f, 100.f, false, false, 8),
         "replan-skip-1"
-);
+    );
     expect(
         !shouldReplanHoldUntilSafe(12, 10, 100.f, 100.f, false, false, 8),
         "replan-skip-2"
-);
+    );
     expect(
         shouldReplanHoldUntilSafe(13, 10, 100.f, 100.f, false, false, 8),
         "replan-every-3"
-);
+    );
     expect(
         shouldReplanHoldUntilSafe(11, 10, 110.f, 100.f, false, false, 8),
         "replan-delta-x"
-);
+    );
     expect(
         shouldReplanHoldUntilSafe(11, 10, 100.f, 100.f, true, false, 8),
         "replan-foresight-edge"
-);
+    );
     expect(
         shouldReplanHoldUntilSafe(11, 10, 100.f, 100.f, false, false, 2),
         "replan-near-deadline"
-);
+    );
     expect(kHusReplanEveryTicks == 3, "hus-every-const");
     expect(kHusReplanDeltaX == 8.f, "hus-dx-const");
 
@@ -1087,10 +1018,9 @@ bool AssistController::armHoldUntilSafe(
     SimPlan const& plan,
     bool down
 ) {
- (void)playLayer;
+    (void)playLayer;
     if (!player || limit <= 0) return true; // fall through vanilla
     if (!StageConfig::husSoftHoldEnabled()) return true; // disable-hus
-    if (StageConfig::assistMode() == AssistMode::Route) return true;
     // HUS nur Trust.
     if (!SimTrust::get().okAt(player->getPositionX())) return true;
 
@@ -1121,8 +1051,7 @@ bool AssistController::armHoldUntilSafe(
     this->m_buffer.husLastForesight = plan.foresightOrbPad || plan.usedOrbWindow;
     this->m_buffer.fireTick = std::min(
         this->m_buffer.fireTick, effectTick + limit
-);
-    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
+    );
 
     this->m_outcomePlanDelay = eta > 0;
     this->m_outcomeExpectOrb = this->m_buffer.requireOrb;
@@ -1138,12 +1067,10 @@ bool AssistController::armHoldUntilSafe(
             plan.planId,
             DevEventSource::Live,
             meta
-);
+        );
     }
     this->noteVerdict(AssistReason::HoldPending, "hus-arm");
-    if (eta > 0) {
-        AssistRealMetrics::get().noteArm(StageConfig::kindOf(player));
-    }
+    if (eta > 0) AssistRealMetrics::get().noteArm();
     AssistLog::debug(fmt::format(
         "HOLD-UNTIL-SAFE arm {} eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
         down ? "press" : "release",
@@ -1152,7 +1079,7 @@ bool AssistController::armHoldUntilSafe(
         plan.usedOrbWindow ? 1 : 0,
         plan.budgetHit ? 1 : 0,
         plan.planId
-));
+    ));
     this->recordDecision(playLayer, player, down, plan, effectTick, eta, limit);
     this->updateOverlay();
     return false; // swallow
@@ -1164,23 +1091,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     if (!this->m_buffer.holdUntilSafe) return;
     if (this->m_simDt <= 0.f) return;
 
-    // Route is intentionally Delay-or-Pass only. A soft hold would turn a
-    // corridor-gated miss into an injected input beyond the recorded route.
-    if (StageConfig::assistMode() == AssistMode::Route) {
-        AssistLog::debug("HOLD-UNTIL-SAFE abort (Route mode) -> Pass");
-        DevCycleRecorder::get().noteHus(
-            this->m_buffer.devPressId,
-            AssistReason::PassHopeless,
-            "hus-route-disabled",
-            this->m_attemptTick
-        );
-        this->noteVerdict(AssistReason::PassHopeless, "hus-route-disabled");
-        this->clearBuffer();
-        this->updateOverlay();
-        return;
-    }
-
-    // Trust lost mid-HUS → Pass (drop soft hold, no inject).
+    // Commit 13: trust lost mid-HUS → Pass (drop soft hold, no inject).
     if (!SimTrust::get().okAt(player->getPositionX())) {
         AssistLog::debug("HOLD-UNTIL-SAFE abort (trust lost) → Pass");
         DevCycleRecorder::get().noteHus(
@@ -1188,7 +1099,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             AssistReason::PassUntrust,
             "hus-trust-lost",
             this->m_attemptTick
-);
+        );
         this->noteVerdict(AssistReason::PassUntrust, "hus-trust-lost");
         this->clearBuffer();
         return;
@@ -1208,7 +1119,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             this->m_simDt,
             slack,
             this->m_attemptTick
-);
+        );
 
     // Window end: inject only with orb escape still ahead — else drop (no inject).
     if (remaining <= 0 || this->m_attemptTick >= deadline) {
@@ -1218,13 +1129,13 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
                 "HOLD-UNTIL-SAFE drop (no escape at deadline) @{} "
                 "(press={} limit={})",
                 this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit
-));
+            ));
             DevCycleRecorder::get().noteHus(
                 this->m_buffer.devPressId,
                 AssistReason::PassHopeless,
                 "hus-drop",
                 this->m_attemptTick
-);
+            );
             this->noteVerdict(AssistReason::PassHopeless, "hus-drop");
             this->m_lastBakeHint = "HUS drop";
             this->clearBuffer();
@@ -1235,13 +1146,13 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             "HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={} orb={})",
             this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit,
             foresightNow ? 1 : 0
-));
+        ));
         DevCycleRecorder::get().noteHus(
             this->m_buffer.devPressId,
             AssistReason::HoldPending,
             "hus-deadline",
             this->m_attemptTick
-);
+        );
         this->m_buffer.holdUntilSafe = false;
         this->m_buffer.fireTick = this->m_attemptTick;
         this->fireBuffered(playLayer, player, false);
@@ -1256,19 +1167,19 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             foresightNow,
             this->m_buffer.husLastForesight,
             remaining
-)) {
+        )) {
         this->m_buffer.fireTick = deadline;
         DevCycleRecorder::get().noteHus(
             this->m_buffer.devPressId,
             AssistReason::HoldPending,
             "hus-skip",
             this->m_buffer.fireTick
-);
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-skip");
         LagProbe::get().mark(
             "hus.replan.skip",
             fmt::format("t={} rem={}", this->m_attemptTick, remaining)
-);
+        );
         return;
     }
 
@@ -1282,18 +1193,18 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             AssistReason::HoldPending,
             "hus-defer-mid-update",
             this->m_buffer.fireTick
-);
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-defer-mid-update");
         LagProbe::get().mark(
             "hus.replan.defer",
             fmt::format("t={} rem={}", this->m_attemptTick, remaining)
-);
+        );
         return;
     }
 
     LagProbe::Scope const husScope("eb.hus.replan", fmt::format(
         "rem={} foresight={}", remaining, foresightNow ? 1 : 0
-));
+    ));
 
     PlanOptions opts;
     opts.budgetUs = StageConfig::husReplanBudgetUs();
@@ -1314,10 +1225,10 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     auto const husT0 = std::chrono::steady_clock::now();
     auto re = ShadowSimulator::get().plan(
         playLayer, player, husDown, remLimit, this->m_simDt, this->m_simDt, opts
-);
+    );
     int const husUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - husT0
-).count());
+    ).count());
     AssistSpikeWatch::get().endSearch(husUs, re.budgetHit);
     AssistPerfStats::get().notePlan(husUs, re.budgetHit);
 
@@ -1332,7 +1243,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         int const jumpRel = re.jumpTick > 0 ? re.jumpTick : delay;
         int proposed = resolveFireTick(
             this->m_attemptTick, delay, jumpRel, re.requireOrb || this->m_buffer.requireOrb
-);
+        );
         proposed = std::min(proposed, deadline);
         if (proposed < this->m_attemptTick) proposed = this->m_attemptTick;
 
@@ -1347,7 +1258,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         this->m_buffer.planDelay = MissAssistContracts::clampDelayToWindow(
             this->m_attemptTick - this->m_buffer.pressTick + delay,
             this->m_buffer.limit
-);
+        );
         this->m_buffer.expectedJumpTick = this->m_attemptTick + jumpRel;
         this->m_buffer.requireOrb = this->m_buffer.requireOrb || re.requireOrb;
         this->m_buffer.requireHold = re.requireHold;
@@ -1361,19 +1272,19 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         if (!AssistVerdict::isDelay(delayReason)) {
             delayReason = AssistVerdict::inferDelayReason(
                 re.activatedRing, re.requireOrb, false
-);
+            );
         }
         DevCycleRecorder::get().noteHus(
             this->m_buffer.devPressId,
             delayReason,
             "hus-confirm",
             this->m_buffer.fireTick
-);
+        );
         this->noteVerdict(delayReason, "hus-confirm");
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE confirm Delay +{} fire={} deadline={}",
             delay, this->m_buffer.fireTick, deadline
-));
+        ));
         return;
     }
 
@@ -1386,7 +1297,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE flush Pass now @{} reason={}",
             this->m_attemptTick, AssistVerdict::name(re.reason)
-));
+        ));
         this->m_buffer.holdUntilSafe = false;
         this->m_buffer.fireTick = this->m_attemptTick;
         this->fireBuffered(playLayer, player, false);
@@ -1400,18 +1311,18 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         LagProbe::get().mark(
             "hus.replan.budget",
             fmt::format("t={} rem={}", this->m_attemptTick, remaining)
-);
+        );
         DevCycleRecorder::get().noteHus(
             this->m_buffer.devPressId,
             AssistReason::HoldPending,
             "hus-budget",
             this->m_buffer.fireTick
-);
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-budget");
         AssistLog::debug(fmt::format(
             "HOLD-UNTIL-SAFE budget exhaust → deadline={} (never hang)",
             deadline
-));
+        ));
     }
     else {
         DevCycleRecorder::get().noteHus(
@@ -1419,7 +1330,7 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
             AssistReason::HoldPending,
             "hus-wait",
             this->m_buffer.fireTick
-);
+        );
         this->noteVerdict(AssistReason::HoldPending, "hus-wait");
     }
 }
@@ -1434,7 +1345,7 @@ int AssistController::estimateRobustK(PlayerObject* player, float dtVariance) {
         int const slot = (pl && player == pl->m_player2) ? 1 : 0;
         spamDense = ClickIntentGuard::get().shouldPassThrough(
             slot, AssistController::get().attemptTick(), StageConfig::kindOf(player)
-);
+        );
     }
     return ShadowSimulator::autoRobustK(player, dtVariance, spamDense);
 }
@@ -1449,10 +1360,10 @@ int AssistController::acceptRecheckSlide(
     bool requireOrb,
     bool planOk
 ) {
- (void)requireOrb; // same ≤+1 / never-earlier for orb + non-orb
+    (void)requireOrb; // Commit 13: same ≤+1 / never-earlier for orb + non-orb
     return OrbAlign::acceptRecheckSlide(
         oldFire, attemptTick, proposedFire, absMax, robustK, deadline, planOk
-);
+    );
 }
 
 bool AssistController::recheckSlideSelfCheck(std::string& report) {
@@ -1466,7 +1377,7 @@ bool AssistController::recheckSlideSelfCheck(std::string& report) {
     };
 
     expect(acceptRecheckSlide(10, 8, 12, 20, 1, 20, false, false) < 0, "reject-bad-plan");
-    // Late slide capped at +1.
+    // Commit 13: late slide capped at +1
     expect(acceptRecheckSlide(10, 8, 20, 30, 0, 30, false, true) == 11, "cap-slide-plus1");
     expect(acceptRecheckSlide(15, 8, 11, 30, 0, 30, false, true) < 0, "early-slide-reject");
     // robustK: absMax 20, k=2 → safeMax 18, then +1 cap from oldFire=10 → 11
@@ -1518,7 +1429,7 @@ void AssistController::noteUserClick() {
             AssistLog::info(fmt::format(
                 "CPS: limit hit ({} >= {}) — assist paused",
                 m_clickTimes.size(), lim
-));
+            ));
         }
     }
 }
@@ -1589,18 +1500,6 @@ void AssistController::updateOverlay() {
         if (m_buffer.state == BufferState::Buffered && m_buffer.fromBake) {
             bakeBit = fmt::format("{} · tpl{}", bakeBit, m_buffer.down ? "↓" : "↑");
         }
-        std::string queueBit;
-        if (this->m_shiftQueue.active()
-            && (this->m_shiftQueue.size() > 0
-                || this->m_buffer.state == BufferState::Buffered
-                || this->m_shiftDrainPass)) {
-            queueBit = fmt::format(
-                "queue={} shift={}",
-                this->m_shiftQueue.size(),
-                this->m_shiftQueue.shift()
-            );
-            if (this->m_shiftDrainPass) queueBit += " drain";
-        }
         std::string trajBit = TrajectoryVisualizer::get().statusHint();
         std::string bakeVizBit = BakePathVisualizer::get().statusHint();
         int const smartDepth = StageConfig::smartDepth();
@@ -1625,9 +1524,8 @@ void AssistController::updateOverlay() {
             left,
             learnBit,
             bakeBit
-);
+        );
         if (!smartBit.empty()) m_overlayText += " | " + smartBit;
-        if (!queueBit.empty()) m_overlayText += " | " + queueBit;
         if (!cpsBit.empty()) m_overlayText += " | " + cpsBit;
         if (!trajBit.empty()) m_overlayText += " | " + trajBit;
         if (!bakeVizBit.empty()) m_overlayText += " | " + bakeVizBit;
@@ -1636,7 +1534,7 @@ void AssistController::updateOverlay() {
                 this->m_overlayText += fmt::format(
                     " | tw building {:.0f}%",
                     TriggerWorldBaker::get().progress() * 100.f
-);
+                );
             }
             else {
                 auto& tw = TriggerWorldStore::get();
@@ -1651,14 +1549,14 @@ void AssistController::updateOverlay() {
                         " | tw {}/{} softcap",
                         tw.readyTrackCount(),
                         tw.trackCount()
-);
+                    );
                 }
                 else {
                     this->m_overlayText += fmt::format(
                         " | tw {}/{}",
                         tw.readyTrackCount(),
                         tw.trackCount()
-);
+                    );
                 }
             }
         }
@@ -1667,7 +1565,7 @@ void AssistController::updateOverlay() {
         this->m_overlayText += fmt::format(
             " | eng={}",
             StageConfig::assistEngineName()
-);
+        );
         if (StageConfig::assistVerifyAb()) m_overlayText += " | VERIFY AB ON";
         if (!StageConfig::safeMode() && StageConfig::isEnabled()) m_overlayText += " | UNSAFE";
         if (auto* pl = PlayLayer::get()) {
@@ -1704,7 +1602,7 @@ void AssistController::updateOverlay() {
             }
         }
         {
-            // Real metrics primary; simEstimate secondary (G10).
+            // Commit 12: real metrics primary; simEstimate secondary (G10).
             auto const metricsBit = AssistRealMetrics::get().overlayBit();
             if (!metricsBit.empty()) {
                 this->m_overlayText += " | " + metricsBit;
@@ -1712,12 +1610,6 @@ void AssistController::updateOverlay() {
             auto const simBit = AssistSimEstimate::get().overlayBit();
             if (!simBit.empty()) {
                 this->m_overlayText += " | " + simBit;
-            }
-        }
-        {
-            auto const cacheBit = LevelCacheIndex::overlayBit();
-            if (!cacheBit.empty()) {
-                this->m_overlayText += " | " + cacheBit;
             }
         }
         if (m_savesAttempt > 0) {
@@ -1837,7 +1729,7 @@ void AssistController::runPostmortem(
 
     auto rep = sim.replay(
         playLayer, dec.snapshotSlot, dec.tick, dec.timeline, this->m_simDt, maxTicks, false, 0
-);
+    );
 
     bool const tickMatch = rep.died && std::abs(rep.deathTick - age) <= 1;
     bool const objMatch = !object || !rep.deathObject || object == rep.deathObject;
@@ -1874,10 +1766,10 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
         AssistLog::debug(fmt::format(
             "OUTCOME id={} death x={:.1f} orbExpect={} delay={}",
             m_outcomePlanId, p->getPositionX(), m_outcomeExpectOrb, m_outcomePlanDelay
-));
+        ));
         DivergenceTracker::get().note(
             m_outcomePlanDelay, true, m_outcomeExpectOrb, false
-);
+        );
         m_outcomePending = false;
         return;
     }
@@ -1887,10 +1779,10 @@ void AssistController::pollOutcome(PlayLayer* playLayer) {
             "OUTCOME id={} alive dx={:.1f} orb={} expect={} delay={}",
             m_outcomePlanId, p->getPositionX() - m_outcomeStartX,
             orbHit, m_outcomeExpectOrb, m_outcomePlanDelay
-));
+        ));
         DivergenceTracker::get().note(
             m_outcomePlanDelay, false, m_outcomeExpectOrb, orbHit
-);
+        );
         m_outcomePending = false;
     }
 }
@@ -1907,7 +1799,7 @@ void AssistController::logPlan(SimPlan const& plan, char const* kind) {
         plan.foresightOrbPad ? 1 : 0,
         plan.trajectoryEngine ? "Trajectory" : "ShadowPlayer",
         plan.requireOrb, plan.requireHold, plan.dMin, plan.dMax, plan.budgetHit
-));
+    ));
 }
 
 void AssistController::noteVerdict(AssistReason reason, char const* where) {
@@ -1917,7 +1809,7 @@ void AssistController::noteVerdict(AssistReason reason, char const* where) {
         AssistVerdict::name(reason),
         where ? where : "?",
         AssistVerdict::overlayBit(reason)
-));
+    ));
 }
 
 void AssistController::noteNoEscapeHonesty(SimPlan const& plan, char const* where) {
@@ -1936,14 +1828,14 @@ void AssistController::noteNoEscapeHonesty(SimPlan const& plan, char const* wher
         plan.longForesightBothDead ? 1 : 0,
         plan.idleSafer ? 1 : 0,
         plan.ascentUseful ? 1 : 0
-));
+    ));
 }
 
 void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, GameObject* object) {
     if (!playLayer || !player) return;
     if (ShadowSimulator::get().isSimulating()) return;
     if (ShadowSimulator::get().isOwnedGhost(player)) return;
- (void)object;
+    (void)object;
 
     LagProbe::Scope const deathScope("eb.onRealDeath");
     HybridVerifyCache::get().clearAttempt();
@@ -1954,15 +1846,14 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
     // Drop in-flight trigger-world slices (no flush); partial store may remain.
     TriggerWorldBaker::get().cancel();
     if (this->m_dafWatch) {
-        AssistRealMetrics::get().noteDeathAfterFire(this->m_dafWatchMode);
+        AssistRealMetrics::get().noteDeathAfterFire();
         this->m_dafWatch = false;
-        this->m_dafWatchMode = GameModeKind::Cube;
     }
     if (this->m_outcomePending) {
         LagProbe::Scope const s("eb.outcomeNote");
         DivergenceTracker::get().note(
             this->m_outcomePlanDelay, true, this->m_outcomeExpectOrb, false
-);
+        );
         this->m_outcomePending = false;
     }
 
@@ -1971,7 +1862,7 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
         LagProbe::Scope const s("eb.devSealDeath");
         DevCycleRecorder::get().sealAttemptWithOutcomes(
             "death", false, this->m_attemptTick
-);
+        );
     }
     if (DevConfig::evalOnDeath() && DevCycleRecorder::get().isRecording()) {
         std::string evalErr;
@@ -1988,7 +1879,7 @@ void AssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, G
             LagProbe::Scope const s("eb.learnDeath", fmt::format(
                 "assisted={} delay={} x={:.1f}",
                 dec->assisted, dec->delay, dec->x
-));
+            ));
             // Bookkeeping only — no ShadowSimulator::replay (was hitching deaths).
             LevelProfile::get().noteDiedAfterAssist(dec->mode, dec->x);
             if (!dec->assisted) {
@@ -2042,7 +1933,7 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
             this->m_pendingReleaseUserUpTick,
             this->m_pendingReleaseMaxExtend,
             this->m_pendingReleaseTick
-));
+        ));
     }
 
     bool gameDown = false;
@@ -2075,7 +1966,7 @@ void AssistController::flushPendingRelease(PlayLayer* playLayer) {
     AssistLog::debug(fmt::format(
         "hold-assist: injected release @{} (p{}) [extend done]",
         this->m_attemptTick, p1 ? 1 : 2
-));
+    ));
 }
 
 void AssistController::fireBuffered(
@@ -2092,7 +1983,7 @@ void AssistController::fireBuffered(
         AssistLog::debug(fmt::format(
             "fireBuffered: not due yet attempt={} fire={} — wait",
             this->m_attemptTick, this->m_buffer.fireTick
-));
+        ));
         return;
     }
 
@@ -2119,12 +2010,12 @@ void AssistController::fireBuffered(
             ++this->m_buffer.rechecks;
             DevCycleRecorder::get().noteRecheck(
                 this->m_buffer.devPressId, oldFire, absMin, "orb-dmin"
-);
+            );
             if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
                 auto const detail = fmt::format(
                     "recheck: oldFire={}→newFire={} (orb-dMin wait tick={})",
                     oldFire, absMin, this->m_attemptTick
-);
+                );
                 AssistLog::debug(detail);
                 PerfTrace::get().note("recheck", detail);
             }
@@ -2150,7 +2041,7 @@ void AssistController::fireBuffered(
             auto re = ShadowSimulator::get().plan(
                 playLayer, player, this->m_buffer.down, remaining,
                 this->m_simDt, this->m_simDt, opts
-);
+            );
 
             // Surviving Delay only — never slide into a lethal / hopeless replan.
             bool const planOk =
@@ -2164,7 +2055,7 @@ void AssistController::fireBuffered(
                 int const jumpRel = re.jumpTick > 0 ? re.jumpTick : re.delay;
                 int proposed = resolveFireTick(
                     this->m_attemptTick, re.delay, jumpRel, this->m_buffer.requireOrb
-);
+                );
                 if (this->m_buffer.dMin >= 0) {
                     proposed = std::max(proposed, absMin);
                 }
@@ -2183,7 +2074,7 @@ void AssistController::fireBuffered(
                     deadline,
                     this->m_buffer.requireOrb,
                     true
-);
+                );
                 if (accepted > 0) {
                     ++this->m_buffer.rechecks;
                     this->m_buffer.fireTick = accepted;
@@ -2191,7 +2082,7 @@ void AssistController::fireBuffered(
                     this->m_buffer.planDelay = re.delay;
                     DevCycleRecorder::get().noteRecheck(
                         this->m_buffer.devPressId, oldFire, accepted, "slide"
-);
+                    );
                     if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
                         auto const detail = fmt::format(
                             "recheck: oldFire={}→newFire={} jump={} Δ={} (tick={})",
@@ -2200,7 +2091,7 @@ void AssistController::fireBuffered(
                             this->m_buffer.expectedJumpTick,
                             accepted - oldFire,
                             this->m_attemptTick
-);
+                        );
                         AssistLog::debug(detail);
                         PerfTrace::get().note("recheck", detail);
                     }
@@ -2226,22 +2117,19 @@ void AssistController::fireBuffered(
     int const extendCap = std::max(0, this->m_buffer.limit);
     int const queuedHold = resolveQueuedHoldTicks(
         requireHold, continuous, releaseAfter, releaseEarliest, releaseLatest, extendCap
-);
+    );
 
     DevCycleRecorder::get().noteFire(devPressId, this->m_attemptTick);
 
     this->inject(playLayer, this->m_buffer.down);
-    // Real-harm watch: death after a fired Delay inject (DAF).
+    // Real-harm watch: death after a fired Delay inject (Commit 2 DAF).
     if (delayed > 0 && wasPress) {
         this->m_dafWatch = true;
-        this->m_dafWatchMode = player
-            ? StageConfig::kindOf(player)
-            : this->m_buffer.mode;
     }
     AssistLog::printSavedPress(
         delayed, this->m_buffer.pressTick, this->m_attemptTick,
         this->m_buffer.limit, this->estimatedTps()
-);
+    );
     if (delayed > 0
         && (StageConfig::saveFeedbackSound()
             || StageConfig::saveFeedbackIcon()
@@ -2260,11 +2148,7 @@ void AssistController::fireBuffered(
     this->m_outcomePlanDelay = delayed > 0;
     this->m_outcomeStartX = player ? player->getPositionX() : 0.f;
 
-    // Keep same-shift follow-ups; drop the queue if nothing was enqueued.
-    this->clearBuffer(/*keepShiftQueue=*/true);
-    if (this->m_shiftQueue.empty() && !this->m_shiftDrainPass) {
-        this->m_shiftQueue.clear();
-    }
+    this->clearBuffer();
 
     // After assisted press:
     // - While user holds: never force-release.
@@ -2292,7 +2176,7 @@ void AssistController::fireBuffered(
                     releaseEarliest,
                     releaseLatest,
                     releaseAfter
-));
+                ));
                 DevCycleRecorder::get().noteHoldExtend(devPressId, queuedHold);
             }
             else {
@@ -2303,7 +2187,7 @@ void AssistController::fireBuffered(
                 AssistLog::debug(fmt::format(
                     "hold-assist: arm release ASAP (user already up) @fire={}",
                     this->m_attemptTick
-));
+                ));
             }
         }
         else if (requireHold) {
@@ -2325,7 +2209,7 @@ void AssistController::fireBuffered(
                 this->m_attemptTick,
                 requireHold ? 1 : 0,
                 continuous ? 1 : 0
-));
+            ));
             DevCycleRecorder::get().noteHoldExtend(devPressId, extend);
         }
         // else: plain Delay tap — user owns hold+release fully (no pending).
@@ -2386,29 +2270,15 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
                 tw,
                 this->m_simDt,
                 this->m_lastDt
-));
+            ));
             LagProbe::get().mark(
                 "eb.speed.scale",
                 fmt::format("tps={:.1f} tw={:.3f}", simTps, tw)
-);
+            );
         }
     }
     if (!playLayer) return;
-    BakeReplayVisualizer::get().onPhysicsTick(playLayer, secDt);
 
-    auto* p1 = playLayer->m_player1;
-    if (p1 && !m_startSnapshotTaken && m_attemptTick <= 2) {
-        PerfTrace::Scope const scope("captureStartSnapshot");
-        m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(p1);
-        m_startSnapshotTaken = m_startSnapshotSlot >= 0;
-        if (m_startSnapshotTaken) {
-            BakeMap::get().setStartXq(LevelFingerprint::startXq(p1->getPositionX()));
-        }
-    }
-    if (LiveRouteCapture::recording(playLayer)) {
-        LiveRouteCapture::sample(playLayer);
-        return;
-    }
     {
         PerfTrace::Scope const scope("pollOutcome");
         this->pollOutcome(playLayer);
@@ -2416,10 +2286,6 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
     {
         PerfTrace::Scope const scope("flushPendingRelease");
         this->flushPendingRelease(playLayer);
-    }
-    {
-        PerfTrace::Scope const scope("shiftQueue");
-        this->tickShiftQueue(playLayer);
     }
     {
         PerfTrace::Scope const scope("saveFeedbackTick");
@@ -2435,12 +2301,13 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
             TriggerWorldBaker::get().tickSlice();
         }
 
+    auto* p1 = playLayer->m_player1;
     if (p1) {
         {
             PerfTrace::Scope const scope("ghostParity");
             GhostParityProbe::get().onPhysicsTick(
                 playLayer, p1, this->m_simDt, this->m_attemptTick
-);
+            );
         }
         // Drift mid-buffer → drop Delay; never fire a plan made under bad trust.
         if (SimTrust::get().parityDrift()
@@ -2452,6 +2319,11 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
         }
         this->m_lastPlayerX = p1->getPositionX();
         this->m_lastMode = StageConfig::kindOf(p1);
+        if (!this->m_startSnapshotTaken && this->m_attemptTick <= 2) {
+            PerfTrace::Scope const scope("captureStartSnapshot");
+            this->m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(p1);
+            this->m_startSnapshotTaken = this->m_startSnapshotSlot >= 0;
+        }
 
         bool const modeChanged = this->m_modeKnown && (
             this->m_modeShip != p1->m_isShip ||
@@ -2461,7 +2333,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
             this->m_modeRobot != p1->m_isRobot ||
             this->m_modeSpider != p1->m_isSpider ||
             this->m_modeSwing != p1->m_isSwing
-);
+        );
         this->m_modeShip = p1->m_isShip;
         this->m_modeBall = p1->m_isBall;
         this->m_modeBird = p1->m_isBird;
@@ -2532,7 +2404,7 @@ void AssistController::onPhysicsTick(PlayLayer* playLayer, float dt) {
                 this->m_buffer.pressTick,
                 this->m_buffer.planDelay,
                 this->m_buffer.limit
-);
+            );
             if (due) {
                 PerfTrace::Scope const scope("fireBuffered");
                 this->fireBuffered(playLayer, player);
@@ -2557,14 +2429,6 @@ bool AssistController::tryBakeAssist(
     if (reuse) *reuse = {};
     auto mode = StageConfig::assistMode();
     if (mode == AssistMode::Live) return true;
-    if (mode == AssistMode::Route) {
-        AssistReason const why = RouteAssist::gate(player, player1);
-        if (why == AssistReason::None || StageConfig::routeLiveFallback()) return true;
-        handled = true;
-        DevCycleRecorder::get().noteGatePass(why, "route-gate");
-        this->noteVerdict(why, "route-gate");
-        return true;
-    }
 
     bool const bakeOnly =
         mode == AssistMode::Replay || mode == AssistMode::BruteForce;
@@ -2580,7 +2444,7 @@ bool AssistController::tryBakeAssist(
         int latestTick,
         int delay,
         int approxFrame
-) {
+    ) {
         float const clickX = w ? w->x : -1.f;
         float const dx = w ? std::fabs(clickX - playerX) : -1.f;
         AssistLog::info(fmt::format(
@@ -2602,7 +2466,7 @@ bool AssistController::tryBakeAssist(
             delay,
             StageConfig::kindName(StageConfig::kindOf(player)),
             hybrid ? 1 : 0
-));
+        ));
         this->m_lastBakeHint = fmt::format("MISS {}", branch);
     };
 
@@ -2620,7 +2484,7 @@ bool AssistController::tryBakeAssist(
             AssistLog::debug(fmt::format(
                 "bake hybrid: {} — fall through to live (foresight/miss-assist)",
                 reason
-));
+            ));
             this->updateOverlay();
             return true;
         }
@@ -2667,7 +2531,7 @@ bool AssistController::tryBakeAssist(
         if (spatialNear) {
             logMissBakeWin(
                 "no-window", spatialNear, -1, -1, -1, approxFrame
-);
+            );
         }
         if (bakeOnly) {
             handled = true;
@@ -2720,13 +2584,13 @@ bool AssistController::tryBakeAssist(
                 down ? "press" : "release",
                 playerX, win->x, std::fabs(playerX - win->x), halfW,
                 effectTick, latestTick, lateBy, win->earliest, win->latest
-));
+            ));
         }
         else {
             logMissBakeWin(
                 lateBy > kPastLatestSalvageSlop ? "past-latest-deep" : "past-latest",
                 win, earliestTick, latestTick, -1, approxFrame
-);
+            );
             return fallThroughOrPass("past latest", AssistReason::PassBakePastLatest);
         }
     }
@@ -2744,15 +2608,15 @@ bool AssistController::tryBakeAssist(
                 logMissBakeWin(
                     "limit-before-earliest", win, earliestTick, latestTick,
                     delay, approxFrame
-);
+                );
                 AssistLog::info(fmt::format(
                     "MISS-BAKE-WIN limit-before-earliest need={} lim={} "
                     "effectT={} eT={} — refuse early fire",
                     delay, limit, effectTick, earliestTick
-));
+                ));
                 return fallThroughOrPass(
                     "limit before earliest", AssistReason::PassBakeNoWindow
-);
+                );
             }
         }
         else if (effectTick < nominalTick) {
@@ -2788,30 +2652,30 @@ bool AssistController::tryBakeAssist(
         if (hybrid) {
             cacheHit = HybridVerifyCache::get().tryGet(
                 cacheKey, playerX, outVr
-);
+            );
         }
         if (cacheHit) {
             LagProbe::Scope const hyVerify(
                 hybrid ? "eb.hybrid.verify" : nullptr,
                 fmt::format(
                     "d={} lim={} cache=1 ok={}", d, limit, outVr.ok ? 1 : 0
-)
-);
- (void)hyVerify;
+                )
+            );
+            (void)hyVerify;
             return;
         }
         LagProbe::Scope const hyVerify(
             hybrid ? "eb.hybrid.verify" : nullptr,
             fmt::format("d={} lim={} cache=0", d, limit)
-);
+        );
         outVr = BakeVerifier::verify(
             playLayer, player, down, d, limit, this->m_simDt, fd,
             hybrid ? sharedBudget : nullptr
-);
+        );
         if (hybrid) {
             HybridVerifyCache::get().put(cacheKey, playerX, outVr);
         }
- (void)hyVerify;
+        (void)hyVerify;
     };
 
     // Live re-verify. Never soft-trust budgetHit.
@@ -2834,7 +2698,7 @@ bool AssistController::tryBakeAssist(
                     "pX={:.1f} clickX={:.1f} eF={} lF={}",
                     down ? "press" : "release", delay,
                     playerX, win->x, win->earliest, win->latest
-));
+                ));
                 delay = 0;
                 vr = vr0;
                 if (reuse) reuse->verifyThreat = vr.threatZone;
@@ -2853,18 +2717,18 @@ bool AssistController::tryBakeAssist(
                 handled = true;
                 this->m_lastBakeHint = fmt::format(
                     "MISS {} → pass (before-nom)", why
-);
+                );
                 AssistLog::info(fmt::format(
                     "MISS-BAKE-WIN {} before-nominal → Pass (no Live/HUS) "
                     "effectT={} nT={} eF={} lF={}",
                     why, effectTick, nominalTick, win->earliest, win->latest
-));
+                ));
                 DevCycleRecorder::get().noteGatePass(
                     AssistReason::PassBakeVerifyFail, "verify-before-nominal"
-);
+                );
                 this->noteVerdict(
                     AssistReason::PassBakeVerifyFail, "verify-before-nominal"
-);
+                );
                 this->updateOverlay();
                 return true;
             }
@@ -2893,7 +2757,7 @@ bool AssistController::tryBakeAssist(
         win->earliest,
         win->latest,
         delay
-);
+    );
 
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
@@ -2914,7 +2778,7 @@ bool AssistController::tryBakeAssist(
         int const dMax = std::max(dMin, latestTick - effectTick);
         bool const nearOrb = ShadowSimulator::spatialOrbHint(
             playLayer, player, std::max(limit, dMax + 2), this->m_simDt
-);
+        );
         if (nearOrb) {
             this->m_buffer.requireOrb = true;
             this->m_buffer.dMin = dMin;
@@ -2924,13 +2788,12 @@ bool AssistController::tryBakeAssist(
             this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + dMax);
             AssistLog::debug(fmt::format(
                 "bake orb-heuristic win=[{},{}] ticks", dMin, dMax
-));
+            ));
         }
     }
     this->m_buffer.fireTick = std::min(
         this->m_buffer.fireTick, this->m_buffer.pressTick + this->m_buffer.limit
-);
-    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
+    );
 
     AssistLog::info(fmt::format(
         "bake ASSIST {} +{} ticks (window [{},{}] nomF={} "
@@ -2938,7 +2801,7 @@ bool AssistController::tryBakeAssist(
         down ? "press" : "release", delay, win->earliest, win->latest,
         win->nominalFrame, earliestTick, nominalTick, latestTick, effectTick,
         this->m_buffer.fireTick, armWhere, spatialIn ? 1 : 0, approxFrame
-));
+    ));
     {
         DevCycleRecorder::DelayArmMeta meta{};
         meta.armVerifyOk = true;
@@ -2951,10 +2814,10 @@ bool AssistController::tryBakeAssist(
             0,
             DevEventSource::Bake,
             meta
-);
+        );
     }
     this->noteVerdict(AssistReason::DelayPrefer, armWhere);
-    AssistRealMetrics::get().noteArm(kind);
+    AssistRealMetrics::get().noteArm();
     this->updateOverlay();
     return false;
 }
@@ -2975,24 +2838,22 @@ bool AssistController::planPress(
         return true;
     }
 
-    // Opportunity: every press that reaches assist decisioning.
+    // Opportunity (Commit 2): every press that reaches assist decisioning.
     {
         float const xOpp = player->getPositionX();
         bool const trusted = SimTrust::get().okAt(xOpp);
-        AssistRealMetrics::get().noteOpportunity(
-            trusted, StageConfig::kindOf(player)
-);
+        AssistRealMetrics::get().noteOpportunity(trusted);
     }
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
-    // Reasons via PerfectAssistPolicy / SimTrust (same tokens).
+    // Commit 11: reasons via PerfectAssistPolicy / SimTrust (same tokens).
     {
         float const xGate = player->getPositionX();
         AssistReason parityReason = AssistReason::None;
         if (SimTrust::get().forcePassReason(xGate, parityReason)) {
             AssistLog::debug(fmt::format(
                 "SIMTRUST pass press ({})", AssistVerdict::name(parityReason)
-));
+            ));
             this->m_untrustPassHint = true;
             SimPlan dummy;
             dummy.action = PlanAction::Pass;
@@ -3028,7 +2889,7 @@ bool AssistController::planPress(
         shareHybrid ? &pressBudget : nullptr,
         shareHybrid ? &hybridVerifyAttempted : nullptr,
         shareHybrid ? &hybridReuse : nullptr
-);
+    );
     if (bakeHandled) return bakeRet;
 
     // Times Live fallthrough (verify already paid / skipped). Standalone LagProbe.
@@ -3039,11 +2900,10 @@ bool AssistController::planPress(
             hybridVerifyAttempted ? 1 : 0,
             pressBudget.tickLeft,
             pressBudget.usUnlimited ? -1 : pressBudget.usLeft
-)
-);
+        )
+    );
 
     auto const kind = StageConfig::kindOf(player);
-    bool const routeMode = StageConfig::assistMode() == AssistMode::Route;
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
@@ -3054,8 +2914,8 @@ bool AssistController::planPress(
     bool nearBake = nearBakeWindowHint(
         player, player1, true, effectTick, this->m_simDt,
         shareHybrid ? &hybridReuse : nullptr
-);
-    if (hybridVerifyAttempted || routeMode) nearBake = false;
+    );
+    if (hybridVerifyAttempted) nearBake = false;
 
     // Live/Hybrid-live: sim mismatch → hard Pass, unless orb/pad ahead
     // (allow Delay / Soft Hold — solitary early orb miss must still assist).
@@ -3081,7 +2941,7 @@ bool AssistController::planPress(
         this->m_untrustPassHint = false;
     }
 
-    // Opportunity + Trust → MUST Delay-search (AssistCov).
+    // Commit 11: Opportunity + Trust → MUST Delay-search (AssistCov).
     // Named Pass for TW-empty-when-expected (effects baked, 0 tracks).
     bool mustDelaySearch = false;
     {
@@ -3126,51 +2986,29 @@ bool AssistController::planPress(
         }
     }
 
-    // Dense / rhythmic spam: ModeAssist + SpamAssistPolicy (feather ≠ PassSpam;
-    // trust+opportunity / orb / bake → AllowAssist; mid-queue → drain).
-    {
-        SpamAssistContext spamCtx;
-        spamCtx.kind = kind;
-        spamCtx.densityPass = ClickIntentGuard::get().shouldPassThrough(
-            slot, effectTick, kind, false, false
-        );
-        spamCtx.nearOrbOrPad = nearOrb;
-        spamCtx.nearBake = nearBake;
-        spamCtx.mustDelaySearch = mustDelaySearch;
-        spamCtx.bufferActive = false;
-        spamCtx.releaseSeen = false;
-        spamCtx.shiftQueueActive = this->m_shiftQueue.active();
-        spamCtx.queueSize = this->m_shiftQueue.size();
-        auto const spamAct = SpamAssistPolicy::decide(spamCtx);
-        if (spamAct == SpamAssistAction::DrainSpamPass) {
-            this->m_shiftDrainPass = true;
-        }
-        if (spamAct == SpamAssistAction::PassSpam
-            || spamAct == SpamAssistAction::DrainSpamPass
-            || spamAct == SpamAssistAction::OverflowPass) {
-            AssistReason const why = SpamAssistPolicy::passReason(spamAct);
-            AssistLog::debug(fmt::format(
-                "intent: {} (mode={}, tick={}, q={})",
-                AssistVerdict::name(why),
-                StageConfig::kindName(kind),
-                effectTick,
-                this->m_shiftQueue.size()
-));
-            SimPlan dummy;
-            dummy.action = PlanAction::Pass;
-            dummy.reason = why;
-            dummy.firstDeathTick = -1;
-            dummy.continuous = ModeAssist::forKind(kind).continuous();
-            DevCycleRecorder::get().noteGatePass(why, "press-spam");
-            this->noteVerdict(why, "press-spam");
-            this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
-            this->updateOverlay();
-            return true;
-        }
+    // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
+    // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
+    if (!mustDelaySearch
+        && ClickIntentGuard::get().shouldPassThrough(
+            slot, effectTick, kind, nearOrb, nearBake
+        )) {
+        AssistLog::debug(fmt::format(
+            "intent: spam Pass (mode={}, tick={})", StageConfig::kindName(kind), effectTick
+        ));
+        SimPlan dummy;
+        dummy.action = PlanAction::Pass;
+        dummy.reason = AssistReason::PassSpam;
+        dummy.firstDeathTick = -1;
+        dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "press-spam");
+        this->noteVerdict(AssistReason::PassSpam, "press-spam");
+        this->recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
+        this->updateOverlay();
+        return true;
     }
 
     // Low trust at this spot → pass through (unless explore roll or orb ahead).
-    // Trusted opportunity MustDelaySearch overrides learned low-trust Pass.
+    // Commit 11: trusted opportunity MustDelaySearch overrides learned low-trust Pass.
     if (!mustDelaySearch
         && StageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
@@ -3180,7 +3018,7 @@ bool AssistController::planPress(
                 AssistLog::debug(fmt::format(
                     "learned: low trust @{} (trust {:.2f}, n={})",
                     LevelProfile::spotBucket(x), spot->trust, spot->n
-));
+                ));
                 AssistLearning::decaySpot(kind, x);
                 SimPlan dummy;
                 dummy.action = PlanAction::Pass;
@@ -3238,23 +3076,19 @@ bool AssistController::planPress(
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
-    if (StageConfig::assistMode() == AssistMode::Route) {
-        opts.smartDepth = 1;
-        opts.forceShortHorizon = true;
-    }
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind
-);
+    );
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDense);
     // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
     // Otherwise reuse findNear window fields from tryBakeAssist.
-    if (!hybridVerifyAttempted && !routeMode) {
+    if (!hybridVerifyAttempted) {
         fillBakePreferBand(
             opts, player, player1, true, effectTick, limit, this->m_attemptTick, this->m_simDt,
             shareHybrid ? &hybridReuse : nullptr
-);
+        );
     }
     // Verify-fail: seed threat zone so plan() skips buildThreatZone.
     if (hybridVerifyAttempted && hybridReuse.verifyThreat.valid) {
@@ -3274,7 +3108,7 @@ bool AssistController::planPress(
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
     int const planUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0
-).count());
+    ).count());
     AssistSpikeWatch::get().endSearch(planUs, plan.budgetHit);
     AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
 
@@ -3287,14 +3121,14 @@ bool AssistController::planPress(
     clock.effectTick = effectTick;
     DevCycleRecorder::get().notePlanFinished(
         plan, effectTick, limit, clock, playLayer, player
-);
+    );
 
     // Belt: never arm Delay when sim marked unknown / toggle-target uncertainty.
     if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
         AssistLog::debug(fmt::format(
             "press: refuse Delay (toggle/unknown) → Pass id={}",
             plan.planId
-));
+        ));
         plan.action = PlanAction::Pass;
         plan.delay = 0;
         plan.reason = AssistReason::PassToggleUnknown;
@@ -3302,7 +3136,7 @@ bool AssistController::planPress(
         plan.toggleUnknown = true;
     }
 
-    // Do not invent Delay without a viable cand (plan already gated).
+    // Commit 11: do not invent Delay without a viable cand (plan already gated).
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
     if (plan.action != PlanAction::Delay) {
@@ -3314,33 +3148,33 @@ bool AssistController::planPress(
             if (shareHybrid
                 && husBlockedBeforeBakeNominal(
                     hybridReuse, effectTick, this->m_simDt, nomTick
-)) {
+                )) {
                 AssistLog::info(fmt::format(
                     "MISS-BAKE-WIN hus-suppressed-before-nominal press "
                     "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
                     effectTick, nomTick,
                     hybridReuse.earliest, hybridReuse.latest
-));
+                ));
                 this->m_lastBakeHint = "MISS hus→before-nom → pass";
                 DevCycleRecorder::get().noteGatePass(
                     AssistReason::PassHopeless, "hus-before-bake-nominal"
-);
+                );
                 this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
                 this->recordDecision(
                     playLayer, player, true, plan, effectTick, 0, false
-);
+                );
                 this->updateOverlay();
                 return true;
             }
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, plan
-);
+            );
         }
         if (plan.longForesightBothDead) {
             AssistLog::info(fmt::format(
                 "ASSIST press LF both-dead id={} — Pass (no escape force)",
                 plan.planId
-));
+            ));
         }
         this->noteNoEscapeHonesty(plan, "press-plan");
         AssistReason passReason = plan.reason;
@@ -3371,14 +3205,14 @@ bool AssistController::planPress(
             // Density for explore gate even when orb forced us past spam Pass.
             bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
                 slot, effectTick, kind
-);
+            );
             if (AssistLearning::allowHistogramExplore(
                     kind,
                     spot->histN,
                     spamDense,
                     bakePrefer,
                     spot->diedAfterAssist
-)) {
+                )) {
                 // Dev recording + disable-random: keep live/eval deterministic.
                 bool const freezeRand = DevConfig::recordEnable()
                     && DevConfig::disableRandom()
@@ -3389,7 +3223,7 @@ bool AssistController::planPress(
                 AssistLog::debug(fmt::format(
                     "learn: hist explore ±1 @{} histN={}",
                     LevelProfile::spotBucket(x), spot->histN
-));
+                ));
             }
             // After assist deaths at this spot, nudge later — never pull earlier.
             if (spot->diedAfterAssist > 0 && off < 1) {
@@ -3402,7 +3236,7 @@ bool AssistController::planPress(
             AssistLog::debug(fmt::format(
                 "learn: floor delay {}→{} (never earlier than plan)",
                 delay, plannedDelay
-));
+            ));
             delay = plannedDelay;
             learningFloored = true;
         }
@@ -3421,7 +3255,7 @@ bool AssistController::planPress(
         if (learningNudged || learningFloored) {
             DevCycleRecorder::get().noteLearningOnPlan(
                 plannedDelay, delay, learningFloored, false
-);
+            );
         }
     }
 
@@ -3437,24 +3271,24 @@ bool AssistController::planPress(
         vopts.smartDepth = 1;
         auto const vr = ShadowSimulator::get().verifyDelay(
             playLayer, player, true, delay, limit, this->m_simDt, fd, vopts
-);
+        );
         if (!vr.ok) {
             AssistLog::debug(fmt::format(
                 "ASSIST learning shift {}→{} verify-fail → keep plannedDelay={}",
                 plannedDelay, delay, plannedDelay
-));
+            ));
             delay = plannedDelay;
         }
         armVerifyOk = vr.ok;
     }
 
-    // Wrong-orb reject — activation outside intended window.
+    // Commit 13: wrong-orb reject — activation outside intended window.
     if (plan.requireOrb
         && OrbAlign::wrongOrbReject(delay, plan.dMin, plan.dMax)) {
         AssistLog::debug(fmt::format(
             "ASSIST wrong-orb reject delay={} win=[{},{}] → Pass",
             delay, plan.dMin, plan.dMax
-));
+        ));
         SimPlan pass = plan;
         pass.action = PlanAction::Pass;
         pass.delay = 0;
@@ -3464,7 +3298,7 @@ bool AssistController::planPress(
             && shouldArmHoldUntilSafe(pass, trustOk)) {
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, pass
-);
+            );
         }
         DevCycleRecorder::get().notePassThrough(pass.reason, "press-wrong-orb");
         this->noteVerdict(pass.reason, "press-wrong-orb");
@@ -3485,7 +3319,7 @@ bool AssistController::planPress(
             if (d < 1 || d > limit) return true;
             return ShadowSimulator::get().verifyDelay(
                 playLayer, player, true, d, limit, this->m_simDt, fd, vopts
-).ok;
+            ).ok;
         };
         bool const centerOk = verifyOne(delay);
         bool const hasLo = delay - 1 >= 1;
@@ -3496,7 +3330,7 @@ bool AssistController::planPress(
             AssistLog::debug(fmt::format(
                 "ASSIST robust±1 fail delay={} c={} lo={} hi={} → Pass/HUS",
                 delay, centerOk ? 1 : 0, loOk ? 1 : 0, hiOk ? 1 : 0
-));
+            ));
             armVerifyOk = false;
             SimPlan pass = plan;
             pass.action = PlanAction::Pass;
@@ -3508,7 +3342,7 @@ bool AssistController::planPress(
                 && shouldArmHoldUntilSafe(pass, trustOk)) {
                 return this->armHoldUntilSafe(
                     playLayer, player, player1, effectTick, limit, pass
-);
+                );
             }
             this->noteNoEscapeHonesty(pass, "press-robust-fail");
             DevCycleRecorder::get().notePassThrough(pass.reason, "press-robust-fail");
@@ -3530,7 +3364,7 @@ bool AssistController::planPress(
     this->m_buffer.expectedJumpTick = effectTick + jumpRel;
     this->m_buffer.fireTick = resolveFireTick(
         effectTick, delay, jumpRel, plan.requireOrb
-);
+    );
     this->m_buffer.continuous = plan.continuous;
     this->m_buffer.decisionX = x;
     this->m_buffer.mode = kind;
@@ -3539,7 +3373,7 @@ bool AssistController::planPress(
     this->m_buffer.releaseAfter = plan.releaseAfter;
     this->m_buffer.releaseEarliest = plan.releaseEarliest;
     this->m_buffer.releaseLatest = plan.releaseLatest;
-    // Orb align: early press waits inside ring window.
+    // Commit 13 orb align: early press waits inside ring window.
     if (plan.requireOrb) {
         this->m_buffer.dMin = plan.dMin;
         this->m_buffer.dMax = plan.dMax;
@@ -3549,10 +3383,10 @@ bool AssistController::planPress(
             plan.dMin,
             plan.dMax,
             limit
-);
+        );
         this->m_buffer.fireTick = OrbAlign::waitUntilInsideRing(
             this->m_buffer.fireTick, effectTick, plan.dMin
-);
+        );
     }
     else {
         this->m_buffer.dMin = -1;
@@ -3565,9 +3399,8 @@ bool AssistController::planPress(
         this->m_buffer.fireTick = effectTick + delay;
         this->m_buffer.fireTick = std::min(
             this->m_buffer.fireTick, effectTick + limit
-);
+        );
     }
-    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
 
     AssistLog::debug(fmt::format(
         "ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} win=[{},{}] fire={} jump={} orb={}",
@@ -3576,13 +3409,13 @@ bool AssistController::planPress(
         this->m_buffer.dMin, this->m_buffer.dMax,
         this->m_buffer.fireTick, this->m_buffer.expectedJumpTick,
         plan.requireOrb ? 1 : 0
-));
+    ));
     AssistReason delayReason = plan.reason;
     if (!AssistVerdict::isDelay(delayReason)) {
         delayReason = AssistVerdict::inferDelayReason(
             plan.activatedRing, plan.requireOrb,
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
-);
+        );
     }
     {
         DevCycleRecorder::DelayArmMeta meta{};
@@ -3596,12 +3429,10 @@ bool AssistController::planPress(
             plan.planId,
             DevEventSource::Live,
             meta
-);
+        );
     }
     this->noteVerdict(delayReason, "press-delay");
-    if (delay > 0) {
-        AssistRealMetrics::get().noteArm(StageConfig::kindOf(player));
-    }
+    if (delay > 0) AssistRealMetrics::get().noteArm();
     this->recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     this->updateOverlay();
     return false;
@@ -3624,10 +3455,10 @@ bool AssistController::planRelease(
             "release: discrete-skip mode={} dashing={} holdAssistBake=0",
             StageConfig::kindName(StageConfig::kindOf(player)),
             player && player->m_isDashing ? 1 : 0
-));
+        ));
         DevCycleRecorder::get().noteGatePass(
             AssistReason::PassReleaseDiscrete, "release-discrete-skip"
-);
+        );
         this->noteVerdict(AssistReason::PassReleaseDiscrete, "release-discrete-skip");
         this->updateOverlay();
         return true;
@@ -3647,7 +3478,7 @@ bool AssistController::planRelease(
         if (SimTrust::get().forcePassReason(xGate, parityReason)) {
             AssistLog::debug(fmt::format(
                 "SIMTRUST pass release ({})", AssistVerdict::name(parityReason)
-));
+            ));
             this->m_untrustPassHint = true;
             char const* where = parityReason == AssistReason::PassParityDrift
                 ? "release-parity-drift"
@@ -3676,7 +3507,7 @@ bool AssistController::planRelease(
         shareHybrid ? &pressBudget : nullptr,
         shareHybrid ? &hybridVerifyAttempted : nullptr,
         shareHybrid ? &hybridReuse : nullptr
-);
+    );
     if (bakeHandled) return bakeRet;
 
     LagProbe::Scope hyLive(
@@ -3686,11 +3517,10 @@ bool AssistController::planRelease(
             hybridVerifyAttempted ? 1 : 0,
             pressBudget.tickLeft,
             pressBudget.usUnlimited ? -1 : pressBudget.usLeft
-)
-);
+        )
+    );
 
     auto const kind = StageConfig::kindOf(player);
-    bool const routeMode = StageConfig::assistMode() == AssistMode::Route;
     float const x = player->getPositionX();
     auto& profile = LevelProfile::get();
     int const slot = player1 ? 0 : 1;
@@ -3698,8 +3528,8 @@ bool AssistController::planRelease(
     bool nearBake = nearBakeWindowHint(
         player, player1, false, effectTick, this->m_simDt,
         shareHybrid ? &hybridReuse : nullptr
-);
-    if (hybridVerifyAttempted || routeMode) nearBake = false;
+    );
+    if (hybridVerifyAttempted) nearBake = false;
 
     if (DivergenceTracker::get().simUntrusted()) {
         if (!nearOrb) {
@@ -3717,7 +3547,7 @@ bool AssistController::planRelease(
         this->m_untrustPassHint = false;
     }
 
-    // Same PerfectAssist as press — trust+opportunity must Delay-search
+    // Commit 11/13: same PerfectAssist as press — trust+opportunity must Delay-search
     // (wave hold-longer saves must not lose to spam / PassNoThreat).
     bool mustDelaySearch = false;
     {
@@ -3757,35 +3587,19 @@ bool AssistController::planRelease(
     }
 
     // Continuous spam: do not delay releases (would steal hold rhythm) unless
-    // PerfectAssist / feather / orb demands assist (SpamAssistPolicy).
-    if (ModeAssist::forKind(kind).continuous()) {
-        SpamAssistContext spamCtx;
-        spamCtx.kind = kind;
-        spamCtx.densityPass = ClickIntentGuard::get().shouldPassThrough(
-            slot, effectTick, kind, false, false
-        );
-        spamCtx.nearOrbOrPad = nearOrb;
-        spamCtx.nearBake = nearBake;
-        spamCtx.mustDelaySearch = mustDelaySearch;
-        spamCtx.shiftQueueActive = this->m_shiftQueue.active();
-        spamCtx.queueSize = this->m_shiftQueue.size();
-        auto const spamAct = SpamAssistPolicy::decide(spamCtx);
-        if (spamAct == SpamAssistAction::DrainSpamPass) {
-            this->m_shiftDrainPass = true;
-        }
-        if (spamAct == SpamAssistAction::PassSpam
-            || spamAct == SpamAssistAction::DrainSpamPass
-            || spamAct == SpamAssistAction::OverflowPass) {
-            AssistReason const why = SpamAssistPolicy::passReason(spamAct);
+    // PerfectAssist demands a Delay-search (orb/bake opportunity).
+    bool const continuous =
+        player->m_isDart || player->m_isShip || player->m_isSwing;
+    if (continuous && !mustDelaySearch) {
+        if (ClickIntentGuard::get().shouldPassThrough(
+                slot, effectTick, kind, nearOrb, nearBake
+            )) {
             AssistLog::debug(fmt::format(
-                "intent: {} release (mode={}, tick={}, q={})",
-                AssistVerdict::name(why),
-                StageConfig::kindName(kind),
-                effectTick,
-                this->m_shiftQueue.size()
-));
-            DevCycleRecorder::get().noteGatePass(why, "release-spam");
-            this->noteVerdict(why, "release-spam");
+                "intent: spam Pass release (mode={}, tick={})",
+                StageConfig::kindName(kind), effectTick
+            ));
+            DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
+            this->noteVerdict(AssistReason::PassSpam, "release-spam");
             this->updateOverlay();
             return true;
         }
@@ -3799,7 +3613,7 @@ bool AssistController::planRelease(
                 && !AssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
                 AssistLog::debug(fmt::format(
                     "learned: low trust @{} (release)", LevelProfile::spotBucket(x)
-));
+                ));
                 AssistLearning::decaySpot(kind, x);
                 DevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust, "release-low-trust");
                 this->noteVerdict(AssistReason::PassLowTrust, "release-low-trust");
@@ -3843,19 +3657,15 @@ bool AssistController::planRelease(
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
-    if (StageConfig::assistMode() == AssistMode::Route) {
-        opts.smartDepth = 1;
-        opts.forceShortHorizon = true;
-    }
     bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(
         slot, effectTick, kind
-);
+    );
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, spamDenseRel);
-    if (!hybridVerifyAttempted && !routeMode) {
+    if (!hybridVerifyAttempted) {
         fillBakePreferBand(
             opts, player, player1, false, effectTick, limit, this->m_attemptTick, this->m_simDt,
             shareHybrid ? &hybridReuse : nullptr
-);
+        );
     }
     if (hybridVerifyAttempted && hybridReuse.verifyThreat.valid) {
         opts.seedThreatZone = hybridReuse.verifyThreat;
@@ -3866,21 +3676,21 @@ bool AssistController::planRelease(
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
     int const relUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - relT0
-).count());
+    ).count());
     AssistSpikeWatch::get().endSearch(relUs, plan.budgetHit);
     AssistPerfStats::get().notePlan(relUs, plan.budgetHit);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     DevCycleRecorder::get().notePlanFinished(
         plan, effectTick, limit, clock, playLayer, player
-);
+    );
 
     // Belt: never arm Delay when sim marked unknown / toggle-target uncertainty.
     if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
         AssistLog::debug(fmt::format(
             "release: refuse Delay (toggle/unknown) → Pass id={}",
             plan.planId
-));
+        ));
         plan.action = PlanAction::Pass;
         plan.delay = 0;
         plan.reason = AssistReason::PassToggleUnknown;
@@ -3898,33 +3708,33 @@ bool AssistController::planRelease(
             if (shareHybrid
                 && husBlockedBeforeBakeNominal(
                     hybridReuse, effectTick, this->m_simDt, nomTick
-)) {
+                )) {
                 AssistLog::info(fmt::format(
                     "MISS-BAKE-WIN hus-suppressed-before-nominal release "
                     "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
                     effectTick, nomTick,
                     hybridReuse.earliest, hybridReuse.latest
-));
+                ));
                 this->m_lastBakeHint = "MISS hus→before-nom → pass";
                 DevCycleRecorder::get().noteGatePass(
                     AssistReason::PassHopeless, "hus-before-bake-nominal"
-);
+                );
                 this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
                 this->recordDecision(
                     playLayer, player, false, plan, effectTick, 0, false
-);
+                );
                 this->updateOverlay();
                 return true;
             }
             return this->armHoldUntilSafe(
                 playLayer, player, player1, effectTick, limit, plan, false
-);
+            );
         }
         if (plan.longForesightBothDead) {
             AssistLog::info(fmt::format(
                 "ASSIST release LF both-dead id={} — Pass (no escape force)",
                 plan.planId
-));
+            ));
         }
         this->noteNoEscapeHonesty(plan, "release-plan");
         AssistReason passReason = plan.reason;
@@ -3948,14 +3758,14 @@ bool AssistController::planRelease(
                 && opts.preferDelayMax >= opts.preferDelayMin;
             bool const spamDense = ClickIntentGuard::get().shouldPassThrough(
                 slot, effectTick, kind
-);
+            );
             if (AssistLearning::allowHistogramExplore(
                     kind,
                     spot->histN,
                     spamDense,
                     bakePrefer,
                     spot->diedAfterAssist
-)) {
+                )) {
                 bool const freezeRand = DevConfig::recordEnable()
                     && DevConfig::disableRandom()
                     && DevCycleRecorder::get().isRecording();
@@ -3965,7 +3775,7 @@ bool AssistController::planRelease(
                 AssistLog::debug(fmt::format(
                     "learn: hist explore ±1 release @{} histN={}",
                     LevelProfile::spotBucket(x), spot->histN
-));
+                ));
             }
             if (spot->diedAfterAssist > 0 && off < 1) {
                 off = 1;
@@ -3993,18 +3803,17 @@ bool AssistController::planRelease(
     this->m_buffer.decisionX = x;
     this->m_buffer.mode = kind;
     this->m_buffer.fireTick = std::min(this->m_buffer.fireTick, effectTick + limit);
-    this->beginShiftQueue(this->m_buffer.fireTick - effectTick);
 
     AssistLog::debug(fmt::format(
         "ASSIST release +{} ticks (now dies @+{}, limit {}, tick={} fire={})",
         delay, plan.firstDeathTick, limit, effectTick, this->m_buffer.fireTick
-));
+    ));
     AssistReason delayReason = plan.reason;
     if (!AssistVerdict::isDelay(delayReason)) {
         delayReason = AssistVerdict::inferDelayReason(
             plan.activatedRing, plan.requireOrb,
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin
-);
+        );
     }
     {
         DevCycleRecorder::DelayArmMeta meta{};
@@ -4018,12 +3827,10 @@ bool AssistController::planRelease(
             plan.planId,
             DevEventSource::Live,
             meta
-);
+        );
     }
     this->noteVerdict(delayReason, "release-delay");
-    if (delay > 0) {
-        AssistRealMetrics::get().noteArm(StageConfig::kindOf(player));
-    }
+    if (delay > 0) AssistRealMetrics::get().noteArm();
     this->recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     this->updateOverlay();
     return false;
@@ -4068,7 +3875,7 @@ bool AssistController::onHandleButton(
         if (passThrough) {
             SelfBakeRecorder::get().noteVanillaInput(
                 playLayer, player, player1, down, effectTick, this->m_simDt
-);
+            );
         }
         return passThrough;
     };
@@ -4077,26 +3884,20 @@ bool AssistController::onHandleButton(
     auto beginDevPress = [&]() {
         DevCycleRecorder::get().beginPress(
             playerIndex, down, effectTick, this->m_attemptTick, DevEventSource::Live
-);
+        );
     };
 
     // Min click interval: skip assist only — never block the vanilla click.
-    // While shift-queue / Delay buffer is live, interval must not block enqueue.
-    bool const shiftLive =
-        this->m_shiftQueue.active()
-        || this->m_buffer.state == BufferState::Buffered;
     if (down) {
         int const minMs = StageConfig::minClickIntervalMs();
-        if (minMs > 0
-            && !this->m_clickTimes.empty()
-            && SpamAssistPolicy::debounceBlocksAssist(shiftLive)) {
+        if (minMs > 0 && !this->m_clickTimes.empty()) {
             auto const elapsed = std::chrono::steady_clock::now() - this->m_clickTimes.back();
             if (elapsed < std::chrono::milliseconds(minMs)) {
                 AssistLog::debug(fmt::format(
                     "click debounce: no assist ({}ms < {}ms), pass through",
                     std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(),
                     minMs
-));
+                ));
                 beginDevPress();
                 DevCycleRecorder::get().noteGatePass(AssistReason::PassDebounce, "debounce");
                 this->noteVerdict(AssistReason::PassDebounce, "debounce");
@@ -4106,7 +3907,7 @@ bool AssistController::onHandleButton(
         this->noteUserClick();
         ClickIntentGuard::get().notePress(
             playerIndex, effectTick, StageConfig::kindOf(player)
-);
+        );
     }
 
     // firstDt: full sim dt between frames; CBF remainder / timeWarp when mid-step.
@@ -4131,7 +3932,7 @@ bool AssistController::onHandleButton(
         this->m_lastDt,
         tw,
         DevSimPathId::None
-);
+    );
 
     // Attribution log only under debug-logging (not every press into perf file).
     if (down && StageConfig::debugLogging()) {
@@ -4144,7 +3945,7 @@ bool AssistController::onHandleButton(
             firstDt,
             this->m_simDt,
             player1 ? 1 : 2
-));
+        ));
     }
 
     // Track real (non-swallowed) inputs for learning timelines.
@@ -4157,31 +3958,16 @@ bool AssistController::onHandleButton(
             if (!this->m_buffer.down) {
                 return false;
             }
-            // Hold length under Delay: only pair UP into the queue when a
-            // follow-up DOWN was already enqueued (primary uses releaseSeen).
-            if (this->m_shiftQueue.active() && this->m_shiftQueue.size() > 0) {
-                if (!this->m_shiftQueue.enqueue(false, player1, effectTick)) {
-                    beginDevPress();
-                    DevCycleRecorder::get().noteGatePass(
-                        AssistReason::PassQueueOverflow, "queue-overflow-up"
-                    );
-                    this->noteVerdict(AssistReason::PassQueueOverflow, "queue-overflow-up");
-                    this->updateOverlay();
-                    return finish(true);
-                }
-            }
             this->m_buffer.releaseSeen = true;
             this->m_buffer.releaseTick = effectTick;
             this->m_log.noteInput(effectTick, false);
             // Early UP does not cancel Delay: stay Buffered, fire still due.
             AssistLog::debug(fmt::format(
-                "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} q={} p{}",
+                "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} p{}",
                 this->m_buffer.fireTick,
                 this->m_attemptTick,
-                this->m_shiftQueue.size(),
                 player1 ? 1 : 2
-));
-            this->updateOverlay();
+            ));
             return false;
         }
 
@@ -4197,7 +3983,7 @@ bool AssistController::onHandleButton(
                 this->m_attemptTick,
                 this->m_pendingReleaseMaxExtend,
                 this->m_pendingReleaseTick
-));
+            ));
             return false;
         }
 
@@ -4226,50 +4012,20 @@ bool AssistController::onHandleButton(
         beginDevPress();
         bool const pass = this->planRelease(
             playLayer, player, player1, effectTick, firstDt, clockStamp
-);
+        );
         if (pass) this->m_log.noteInput(effectTick, false);
         return finish(pass);
     }
 
     if (ours && this->m_buffer.state == BufferState::Buffered && this->m_buffer.down) {
-        // Follow-up DOWN while A armed:
-        //  - releaseSeen (classic re-click): fire A, then plan B (Live Delay path)
-        //  - else: same-shift enqueue (multi-key / held spam rhythm)
-        if (this->m_shiftQueue.active() && !this->m_buffer.releaseSeen) {
-            SpamAssistContext spamCtx;
-            spamCtx.kind = StageConfig::kindOf(player);
-            spamCtx.bufferActive = true;
-            spamCtx.shiftQueueActive = true;
-            spamCtx.releaseSeen = false;
-            spamCtx.queueSize = this->m_shiftQueue.size();
-            auto const act = SpamAssistPolicy::decide(spamCtx);
-            if (act == SpamAssistAction::EnqueueShifted
-                && this->m_shiftQueue.enqueue(true, player1, effectTick)) {
-                AssistLog::debug(fmt::format(
-                    "shift-queue: enqueue DOWN tick={} fire={} q={} shift={}",
-                    effectTick,
-                    effectTick + this->m_shiftQueue.shift(),
-                    this->m_shiftQueue.size(),
-                    this->m_shiftQueue.shift()
-));
-                this->updateOverlay();
-                return false;
-            }
-            if (act == SpamAssistAction::OverflowPass
-                || this->m_shiftQueue.size() >= ShiftedInputQueue::kCap) {
-                beginDevPress();
-                DevCycleRecorder::get().noteGatePass(
-                    AssistReason::PassQueueOverflow, "queue-overflow"
-                );
-                this->noteVerdict(AssistReason::PassQueueOverflow, "queue-overflow");
-                this->updateOverlay();
-                return finish(true);
-            }
-        }
+        // Second DOWN while A is still armed:
+        //  - after early UP (releaseSeen): classic re-click → fire A, plan B
+        //  - still holding (multi-key double-click): never swallow — GD must see
+        //    both clicks. Deliver A now, then fall through to plan B.
         AssistLog::debug(fmt::format(
-            "buffer: 2nd DOWN → fire A then plan B (releaseSeen={})",
+            "buffer: 2nd DOWN while armed (releaseSeen={}) → fire A then plan B",
             this->m_buffer.releaseSeen ? 1 : 0
-));
+        ));
         this->fireBuffered(playLayer, player);
     }
     if (ours && this->m_buffer.state == BufferState::Buffered && !this->m_buffer.down) {
@@ -4301,7 +4057,7 @@ bool AssistController::onHandleButton(
     beginDevPress();
     bool const pass = this->planPress(
         playLayer, player, player1, effectTick, firstDt, clockStamp
-);
+    );
     if (pass) this->m_log.noteInput(effectTick, true);
     return finish(pass);
 }

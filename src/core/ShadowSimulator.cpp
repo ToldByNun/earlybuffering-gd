@@ -1,7 +1,6 @@
 #include "ShadowSimulator.hpp"
 #include "AssistClock.hpp"
 #include "AssistHorizon.hpp"
-#include "ModeAssist.hpp"
 #include "AssistPickV1.hpp"
 #include "AssistPickV2.hpp"
 #include "LongForesight.hpp"
@@ -81,17 +80,22 @@ void ShadowSimulator::attach(PlayLayer* layer) {
     m_evalAbort = false;
     m_nextSnapshot = SNAPSHOT_RING_BEGIN;
     m_hostLayer = layer;
+    if (auto* objects = layer->m_objects) {
+        for (unsigned i = 0; i < objects->count(); ++i) {
+            if (auto* obj = typeinfo_cast<GameObject*>(objects->objectAtIndex(i))) {
+                m_levelObjectSlots.emplace(obj->m_uniqueID, i);
+            }
+        }
+    }
 }
 
 void ShadowSimulator::detach(bool layerDying) {
+    m_levelObjectSlots.clear();
+    m_liveTransformSlots.clear();
+    m_fromLiveWorld = false;
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
     this->m_simulating = false;
     this->m_bakeOffline = false;
-    this->m_bakeForceTriggerWorld = false;
-    this->m_bakeNoDeathBeforeFrame = -1;
-    this->m_bakeSpawnOverlapIds.clear();
-    this->m_bakeSpawnGraceUntilTick = -1;
-    this->m_bakeSpawnGraceHardCap = -1;
     this->m_applyingRing = false;
     this->m_orbScanning = false;
     this->m_orbOverlapTick = false;
@@ -155,10 +159,6 @@ void ShadowSimulator::detach(bool layerDying) {
 }
 
 bool ShadowSimulator::isOwnedGhost(PlayerObject* p) const {
-    return this->isOwnedGhostPtr(p);
-}
-
-bool ShadowSimulator::isOwnedGhostPtr(void const* p) const {
     if (!p) return false;
     if (p == m_shadow) return true;
     for (auto* s : m_snapshots) {
@@ -327,13 +327,18 @@ void ShadowSimulator::parkGhosts() {
     }
 }
 
-void ShadowSimulator::beginSession(PlayLayer* layer) {
+void ShadowSimulator::beginSession(PlayLayer* layer, bool fromLiveWorld) {
+    m_fromLiveWorld = fromLiveWorld;
+    m_lastStoreTick = -1;
+    m_liveTransformSlots.clear();
     this->m_simulating = true;
     this->m_applyingRing = false;
     this->beginCapture(layer);
 }
 
 void ShadowSimulator::endSession(PlayLayer* layer) {
+    m_fromLiveWorld = false;
+    m_liveTransformSlots.clear();
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = -1.f;
     this->m_bakeOffline = false;
@@ -475,43 +480,13 @@ void ShadowSimulator::evacuateGhosts(GJBaseGameLayer* layer) {
     this->m_evalAbort = true;
 }
 
-bool ShadowSimulator::bakeSpawnDeathIgnored(
-    int absTick, int untilTick, int hardCap, bool stillIntersects
-) {
-    if (absTick < 0) return false;
-    if (untilTick >= 0 && absTick <= untilTick) return true;
-    if (hardCap >= 0 && absTick <= hardCap && stillIntersects) return true;
-    return false;
-}
-
 void ShadowSimulator::markDead(PlayerObject* p, GameObject* object) {
     // Active sim body (live shadow or eval ghost) drives m_dead.
-    if (p != m_shadow && !(m_evalActive && p == m_evalActive)) return;
-    if (this->m_bakeOffline && this->m_simAbsTick >= 0) {
-        // Per-click expand: ghost through pre-click deaths so later macro
-        // events still get windows when 1:1 diverged mid-level.
-        if (this->m_bakeNoDeathBeforeFrame >= 0
-            && this->m_simAbsTick < this->m_bakeNoDeathBeforeFrame) {
-            return;
-        }
-        if (object
-            && this->m_bakeSpawnOverlapIds.count(object->m_uniqueID) > 0) {
-            bool const still =
-                p && p->getObjectRect().intersectsRect(object->getObjectRect());
-            if (ShadowSimulator::bakeSpawnDeathIgnored(
-                    this->m_simAbsTick,
-                    this->m_bakeSpawnGraceUntilTick,
-                    this->m_bakeSpawnGraceHardCap,
-                    still
-)) {
-                return;
-            }
-        }
+    if (p == m_shadow || (m_evalActive && p == m_evalActive)) {
+        m_dead = true;
+        m_deathObject = object;
     }
-    m_dead = true;
-    m_deathObject = object;
 }
-
 
 void ShadowSimulator::noteJump() {
     m_jumped = true;
@@ -620,9 +595,19 @@ void ShadowSimulator::applyRingJump(PlayerObject* shadow, RingObject* ring) {
     shadow->m_hasEverHitRing = true;
 }
 
+ShadowSimulator::SavedTransform::SavedTransform(GameObject* object)
+  : uniqueId(object->m_uniqueID), obj(object), x(object->getPositionX()), y(object->getPositionY()),
+    rotation(object->getRotation()), scaleX(object->getScaleX()), scaleY(object->getScaleY()),
+    nodeVisible(object->isVisible()), enhanced(typeinfo_cast<EnhancedGameObject*>(object)) {
+    if (enhanced) {
+        poweredOn = enhanced->m_poweredOn;
+        egoVisible = enhanced->m_visible;
+    }
+}
+
 void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
     this->m_savedTransforms.clear();
-    if (!layer || !this->triggerWorldWanted()) return;
+    if (!layer || !StageConfig::triggerBake()) return;
 
     auto& store = TriggerWorldStore::get();
     LagProbe::Scope const scope("eb.trigger.capture");
@@ -649,17 +634,7 @@ void ShadowSimulator::captureTriggerTransforms(PlayLayer* layer) {
         if (wanted.find(uid) == wanted.end()) return;
         if (!seen.insert(uid).second) return;
 
-        SavedTransform st;
-        st.uniqueId = uid;
-        st.obj = obj;
-        st.x = obj->getPositionX();
-        st.y = obj->getPositionY();
-        st.rotation = obj->getRotation();
-        st.scaleX = obj->getScaleX();
-        st.scaleY = obj->getScaleY();
-        st.nodeVisible = obj->isVisible();
-        st.dirty = false;
-        this->m_savedTransforms.push_back(st);
+        this->m_savedTransforms.emplace_back(obj);
     };
 
     // Primary: objectLayer children.
@@ -744,7 +719,7 @@ void ShadowSimulator::captureToggleUnknownTargets(PlayLayer* layer) {
             if (typeinfo_cast<PlayerObject*>(obj)) continue;
             if (obj == effect) continue;
             if (!obj->belongsToGroup(groupId)) continue;
-            // Jump/dash rings keep orb path — not Hard toggle-Unknown.
+            // Commit 7: jump/dash rings keep orb path — not Hard toggle-Unknown.
             if (OrbStackResolver::shouldSkipToggleFlip(obj, effect)) continue;
             this->m_toggleTargetIds.insert(obj->m_uniqueID);
         }
@@ -755,7 +730,7 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
     this->m_dynamicTargetIds.clear();
     this->m_dynamicFollowJobs.clear();
     this->m_liveDynamicAppliedIds.clear();
-    if (!layer || !this->triggerWorldWanted()) return;
+    if (!layer || !StageConfig::triggerBake()) return;
 
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children) return;
@@ -825,16 +800,7 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
             if (!wantJobs || !probeable) continue;
             if (job.targets.size() >= kMaxDynamicTargetsPerJob) break;
 
-            SavedTransform st;
-            st.uniqueId = obj->m_uniqueID;
-            st.obj = obj;
-            st.x = obj->getPositionX();
-            st.y = obj->getPositionY();
-            st.rotation = obj->getRotation();
-            st.scaleX = obj->getScaleX();
-            st.scaleY = obj->getScaleY();
-            st.nodeVisible = obj->isVisible();
-            st.dirty = false;
+            SavedTransform st(obj);
             job.targets.push_back(st);
 
             if (savedTransformIds.insert(st.uniqueId).second) {
@@ -851,7 +817,7 @@ void ShadowSimulator::captureDynamicFollows(PlayLayer* layer) {
 void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost) {
     this->m_liveDynamicAppliedIds.clear();
     if (!layer || !ghost) return;
-    if (!this->triggerWorldWanted()) return;
+    if (!StageConfig::triggerBake()) return;
     if (StageConfig::triggerBakeSkipDynamic()) return;
     // Dual follow is ambiguous (P1 vs P2) — leave Unknown.
     if (layer->m_gameState.m_isDualMode && layer->m_player2) return;
@@ -871,7 +837,7 @@ void ShadowSimulator::applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost
             if (applied >= kMaxApplyPerTick) break;
             auto const us = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - wall0
-).count();
+            ).count();
             if (us >= kApplyBudgetUs) break;
 
             auto* obj = t.obj;
@@ -925,11 +891,15 @@ void ShadowSimulator::resetTriggerTransforms() {
         obj->setScaleX(st.scaleX);
         obj->setScaleY(st.scaleY);
         obj->setVisible(st.nodeVisible);
+        if (st.enhanced) {
+            st.enhanced->m_poweredOn = st.poweredOn;
+            st.enhanced->m_visible = st.egoVisible;
+        }
     }
 }
 
 void ShadowSimulator::restoreTriggerTransforms(GJBaseGameLayer* layer) {
- (void)layer;
+    (void)layer;
     this->resetTriggerTransforms();
     this->m_savedTransforms.clear();
 }
@@ -945,12 +915,17 @@ void ShadowSimulator::beginCapture(PlayLayer* layer) {
     this->m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
     ToggleOrbSim::get().restore();
     OrbStackResolver::get().begin();
-    this->captureTriggerTransforms(layer);
+    if (!m_fromLiveWorld) this->captureTriggerTransforms(layer);
     this->captureDynamicFollows(layer);
+    if (m_fromLiveWorld) {
+        for (size_t i = 0; i < m_savedTransforms.size(); ++i)
+            m_liveTransformSlots.emplace(m_savedTransforms[i].uniqueId, i);
+    }
     this->captureToggleUnknownTargets(layer);
 }
 
 void ShadowSimulator::resetCaptureForNextRun(PlayLayer* layer) {
+    m_lastStoreTick = -1;
     ToggleOrbSim::get().restore();
     this->resetTriggerTransforms();
     this->m_triggerWorldAppliedThisTick = false;
@@ -1052,11 +1027,45 @@ void ShadowSimulator::applyTriggerWorldAtTick(
 ) {
     this->m_triggerWorldAppliedThisTick = false;
     if (!layer || absTick < 0) return;
-    if (!this->triggerWorldWanted()) return;
-    if (this->m_savedTransforms.empty()) return;
-
+    if (!StageConfig::triggerBake()) return;
     auto& store = TriggerWorldStore::get();
     if (!store.loaded() || !store.hasTracks()) return;
+    if (m_fromLiveWorld) {
+        // The real player already saw all prior toggle/move keys. Start from
+        // the current world, then apply only transitions crossed by this run.
+        int const tick = store.remapLiveTick(absTick);
+        int const prev = m_lastStoreTick < 0
+            ? store.remapLiveTick(std::max(0, m_simTickBase - 1)) : m_lastStoreTick;
+        m_lastStoreTick = tick;
+        m_triggerWorldAppliedThisTick = true;
+        auto changes = store.changesBetween(prev, tick);
+        if (changes.size() > kMaxApplyPerTick) {
+            m_unknown = true; // Unmodelled mass transition: pass the player's input.
+            return;
+        }
+        for (auto const& change : changes) {
+            auto slot = m_levelObjectSlots.find(change.uniqueId);
+            auto* objects = layer->m_objects;
+            if (slot == m_levelObjectSlots.end() || !objects || slot->second >= objects->count()) {
+                m_unknown = true;
+                return;
+            }
+            auto* obj = typeinfo_cast<GameObject*>(objects->objectAtIndex(slot->second));
+            if (!obj || obj->m_uniqueID != change.uniqueId) {
+                m_unknown = true;
+                return;
+            }
+            auto [it, added] = m_liveTransformSlots.emplace(change.uniqueId, m_savedTransforms.size());
+            if (added) m_savedTransforms.emplace_back(obj);
+            TriggerPose pose{};
+            if (store.samplePoseAtStoreTick(change.uniqueId, tick, pose)) {
+                TriggerWorldStore::writePose(obj, pose);
+                m_savedTransforms[it->second].dirty = true;
+            }
+        }
+        return;
+    }
+    if (this->m_savedTransforms.empty()) return;
 
     LagProbe::Scope const lagScope("eb.trigger.apply");
     auto const twApply0 = std::chrono::steady_clock::now();
@@ -1096,7 +1105,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
         if (applied >= kMaxApplyPerTick) break;
         auto const us = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - wall0
-).count();
+        ).count();
         if (us >= kApplyBudgetUs) break;
 
         auto* obj = c.st->obj;
@@ -1105,7 +1114,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
         if (this->m_poseRemapDt > 0.f) {
             ok = store.samplePose(
                 c.st->uniqueId, absTick, this->m_poseRemapDt, pose
-);
+            );
         }
         else {
             ok = store.samplePose(c.st->uniqueId, absTick, pose);
@@ -1120,7 +1129,7 @@ void ShadowSimulator::applyTriggerWorldAtTick(
     if (AssistSpikeWatch::get().recording()) {
         auto const twUs = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - twApply0
-).count();
+        ).count();
         AssistSpikeWatch::get().addSectionUs("plan.twApply", twUs);
     }
 }
@@ -1360,13 +1369,18 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
         get().copyWaveTrail(dst, src);
     }
 
-    // Ghost starts as icon cube. Non-cube flags alone leave a cube collide rect
-    // → false deaths on tight wave/ship. Rebuild body for vehicles; cube skips
-    // switchedToMode so ground/jump buffer from EB_COPY stay intact.
+    // Ghost is created as icon cube (create 1,1). Mode flags alone leave a
+    // cube-sized collide rect → false deaths on tight wave. Rebuild body, then
+    // re-apply pose/holds switchedToMode may clobber.
     {
-        bool const nonCube = src->m_isDart || src->m_isShip || src->m_isBall
-            || src->m_isBird || src->m_isRobot || src->m_isSpider
-            || src->m_isSwing;
+        GameObjectType portal = GameObjectType::CubePortal;
+        if (src->m_isDart) portal = GameObjectType::WavePortal;
+        else if (src->m_isShip) portal = GameObjectType::ShipPortal;
+        else if (src->m_isBall) portal = GameObjectType::BallPortal;
+        else if (src->m_isBird) portal = GameObjectType::UfoPortal;
+        else if (src->m_isRobot) portal = GameObjectType::RobotPortal;
+        else if (src->m_isSpider) portal = GameObjectType::SpiderPortal;
+        else if (src->m_isSwing) portal = GameObjectType::SwingPortal;
 
         auto const pos = src->getPosition();
         auto const rot = src->getRotation();
@@ -1378,21 +1392,9 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
             src->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
 
         dst->setContentSize(src->getContentSize());
-
-        if (nonCube) {
-            GameObjectType portal = GameObjectType::CubePortal;
-            if (src->m_isDart) portal = GameObjectType::WavePortal;
-            else if (src->m_isShip) portal = GameObjectType::ShipPortal;
-            else if (src->m_isBall) portal = GameObjectType::BallPortal;
-            else if (src->m_isBird) portal = GameObjectType::UfoPortal;
-            else if (src->m_isRobot) portal = GameObjectType::RobotPortal;
-            else if (src->m_isSpider) portal = GameObjectType::SpiderPortal;
-            else if (src->m_isSwing) portal = GameObjectType::SwingPortal;
-
-            dst->switchedToMode(portal);
-            dst->updatePlayerScale();
-            dst->updatePlayerArt();
-        }
+        dst->switchedToMode(portal);
+        dst->updatePlayerScale();
+        dst->updatePlayerArt();
 
         dst->setPosition(pos);
         dst->m_position = src->m_position;
@@ -1411,64 +1413,6 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
             dst->releaseButton(PlayerButton::Jump);
             dst->m_holdingButtons[jumpIdx] = false;
         }
-
-        // Vehicle rebuild clears ground/slope/jump/dash/robot/spider/ship state —
-        // without re-seat, pushButton/hold is a no-op or wrong vehicle feel
-        // (PassHopeless under Alive-only). Cube skip above already kept copies;
-        // still re-seat when nonCube (and harmless if cube).
-        EB_COPY(m_isOnGround);
-        EB_COPY(m_isOnGround2);
-        EB_COPY(m_isOnGround3);
-        EB_COPY(m_isOnGround4);
-        EB_COPY(m_lastGroundObject);
-        EB_COPY(m_maybeLastGroundObject);
-        EB_COPY(m_preLastGroundObject);
-        EB_COPY(m_lastGroundedPos);
-        EB_COPY(m_groundYVelocity);
-        EB_COPY(m_groundObjectMaterial);
-        EB_COPY(m_lastLandTime);
-        EB_COPY(m_lastJumpTime);
-        EB_COPY(m_lastFlipTime);
-        EB_COPY(m_lastSpiderFlipTime);
-        EB_COPY(m_isOnSlope);
-        EB_COPY(m_wasOnSlope);
-        EB_COPY(m_slopeVelocity);
-        EB_COPY(m_slopeAngle);
-        EB_COPY(m_slopeAngleRadians);
-        EB_COPY(m_currentSlope);
-        EB_COPY(m_currentSlope2);
-        EB_COPY(m_currentPotentialSlope);
-        EB_COPY(m_isCollidingWithSlope);
-        EB_COPY(m_collidingWithSlopeId);
-        EB_COPY(m_wasJumpBuffered);
-        EB_COPY(m_wasRobotJump);
-        EB_COPY(m_fixRobotJump);
-        EB_COPY(m_stateJumpBuffered);
-        EB_COPY(m_jumpBuffered);
-        EB_COPY(m_stateOnGround);
-        EB_COPY(m_stateRingJump);
-        EB_COPY(m_stateRingJump2);
-        EB_COPY(m_touchedRing);
-        EB_COPY(m_touchedPad);
-        EB_COPY(m_padRingRelated);
-        EB_COPY(m_ringJumpRelated);
-        EB_COPY(m_hasEverJumped);
-        EB_COPY(m_isLocked);
-        EB_COPY(m_controlsDisabled);
-        EB_COPY(m_inputsLocked);
-        EB_COPY(m_maybeIsFalling);
-        EB_COPY(m_maybeIsBoosted);
-        EB_COPY(m_decreaseBoostSlide);
-        EB_COPY(m_shipRotation);
-        EB_COPY(m_accelerationOrSpeed);
-        EB_COPY(m_isAccelerating);
-        EB_COPY(m_stateDartSlide);
-        EB_COPY(m_isDashing);
-        EB_COPY(m_dashX);
-        EB_COPY(m_dashY);
-        EB_COPY(m_dashAngle);
-        EB_COPY(m_dashStartTime);
-        EB_COPY(m_dashRing);
     }
 
     hideGhost(dst);
@@ -1525,7 +1469,7 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
     auto const params = StageConfig::paramsFor(p);
     m.slack = std::max(0, params.slack);
 
-    // planCap from AssistHorizon — long only when SimTrust OK.
+    // Commit 15: planCap from AssistHorizon — long only when SimTrust OK.
     bool const trustOk = SimTrust::get().okAt(p->getPositionX());
     auto const kind = StageConfig::kindOf(p);
     auto const caps = AssistHorizon::resolve(
@@ -1535,12 +1479,29 @@ ShadowSimulator::Model ShadowSimulator::modelFor(PlayerObject* p, int limit, flo
         capMul,
         params.cap,
         StageConfig::lookAheadCap()
-);
+    );
     m.cap = caps.planCap;
 
-    ModeAssist const& ma = ModeAssist::forKind(kind);
-    m.continuous = ma.continuous();
-    m.tapRelease = ma.tapRelease();
+    if (p->m_isDart) {
+        m.continuous = true;
+    }
+    else if (p->m_isShip || p->m_isSwing) {
+        m.continuous = true;
+    }
+    else if (p->m_isBird) {
+        m.continuous = true;
+        m.tapRelease = true;
+    }
+    else if (p->m_isSpider) {
+        m.continuous = true;
+        m.tapRelease = true;
+    }
+    else if (p->m_isRobot) {
+        m.tapRelease = false;
+    }
+    else {
+        m.tapRelease = true;
+    }
     return m;
 }
 
@@ -1620,7 +1581,7 @@ bool ShadowSimulator::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int l
     int const tick = AssistController::get().attemptTick();
     return TravelForesightCache::get().hasOrbOrPadAhead(
         layer, real, limit, dt, slack, tick
-);
+    );
 }
 
 bool ShadowSimulator::spatialHazardProximity(
@@ -1630,7 +1591,7 @@ bool ShadowSimulator::spatialHazardProximity(
 
     float const px = real->getPositionX();
     float const py = real->getPositionY();
-    float const yReach = ModeAssist::forKind(StageConfig::kindOf(real)).hazardYReach();
+    float const yReach = real->m_isShip || real->m_isDart || real->m_isSwing ? 100.f : 70.f;
 
     auto* children = layer->m_objectLayer->getChildren();
     if (!children) return false;
@@ -1789,7 +1750,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     ThreatZone const* zone, int* tickBudgetLeft
 ) {
     RunResult r;
- (void)limit;
+    (void)limit;
     copyPlayerState(m_shadow, real);
     m_dead = false;
     m_jumped = false;
@@ -1851,7 +1812,7 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     }
 
     for (int t = 0; t < maxTicks; ++t) {
-        if (spend()) break;
+        if (model.expired(t) || spend()) { r.budgetStopped = true; break; }
         float const stepDt = (t == 0) ? firstDt : dt;
         r.ticksRan = t + 1;
         this->m_orbOverlapTick = false;
@@ -1948,7 +1909,7 @@ ShadowSimulator::RunResult ShadowSimulator::runTrajectoryOne(
 ) {
     // Lighter Live V2 path: same button timing as runOne, no delay-0 orb pre-scan.
     RunResult r;
- (void)limit;
+    (void)limit;
     if (!layer || !real || !m_shadow) return r;
     copyPlayerState(m_shadow, real);
     m_dead = false;
@@ -1989,7 +1950,7 @@ ShadowSimulator::RunResult ShadowSimulator::runTrajectoryOne(
     };
 
     for (int t = 0; t < maxTicks; ++t) {
-        if (spend()) break;
+        if (model.expired(t) || spend()) { r.budgetStopped = true; break; }
         float const stepDt = (t == 0) ? firstDt : dt;
         r.ticksRan = t + 1;
         this->m_simAbsTick = this->m_simTickBase + t;
@@ -2083,6 +2044,7 @@ ShadowSimulator::RunResult ShadowSimulator::runBaseline(
 
     int const maxTicks = std::max(1, model.cap);
     for (int t = 0; t < maxTicks; ++t) {
+        if (model.expired(t)) { r.budgetStopped = true; break; }
         if (tickBudgetLeft) {
             if (*tickBudgetLeft <= 0) break;
             --(*tickBudgetLeft);
@@ -2292,9 +2254,10 @@ static bool runResultDelaySafe(
     PlayerObject* real,
     bool requireAliveForDelay = false
 ) {
+    if (r.ticksRan == 0 || r.budgetStopped) return false;
     auto const cls = ModeSurvival::classify(
         survivalInputFrom(r, zone, model, real)
-);
+    );
     return delayViableHonest(
         r.diedBeforeAction,
         r.died,
@@ -2305,7 +2268,7 @@ static bool runResultDelaySafe(
         zone.valid,
         cls,
         requireAliveForDelay
-);
+    );
 }
 
 // planSequence exit: unknown truncation is NOT survival.
@@ -2337,18 +2300,19 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     int tickBudget = options.tickBudget > 0 ? options.tickBudget : kDefaultTickBudget;
     int const tickBudgetStart = tickBudget;
     auto const wall0 = std::chrono::steady_clock::now();
+    if (options.budgetUs > 0) model.deadline = wall0 + std::chrono::microseconds(options.budgetUs);
     auto wallExceeded = [&]() -> bool {
         if (options.budgetUs <= 0) return false;
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - wall0
-).count();
+        ).count();
         return us >= options.budgetUs;
     };
     auto fillSpent = [&]() {
         out.ticksSpent = std::max(0, tickBudgetStart - tickBudget);
         out.usSpent = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - wall0
-).count());
+        ).count());
     };
 
     auto linkedDual = [&]() -> bool {
@@ -2362,7 +2326,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
 
     this->m_simTickBase = std::max(0, options.attemptStartTick);
     this->m_simAbsTick = -1;
-    SimSessionGuard session(*this, layer);
+    SimSessionGuard session(*this, layer, true);
 
     ThreatZone zone{};
     // Probe d0 to build the same threat zone Live uses. When delay==0 the
@@ -2370,7 +2334,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
     auto c0 = this->runOne(
         layer, real, down, 0, limit, dt, firstDt, model, -1,
         nullptr, &tickBudget
-);
+    );
     this->resetCaptureForNextRun(layer);
     if (c0.died) {
         zone = buildThreatZone(layer, c0.deathX, c0.deathObject);
@@ -2390,7 +2354,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
         r = this->runOne(
             layer, real, down, delay, limit, dt, firstDt, model, -1,
             zone.valid ? &zone : nullptr, &tickBudget
-);
+        );
         this->resetCaptureForNextRun(layer);
     }
 
@@ -2408,7 +2372,7 @@ ShadowSimulator::VerifyDelayResult ShadowSimulator::verifyDelay(
             auto r2 = this->runOne(
                 layer, other, down, delay, limit, dt, firstDt, model, -1,
                 zone.valid ? &zone : nullptr, &tickBudget
-);
+            );
             this->resetCaptureForNextRun(layer);
             if (!runResultDelaySafe(r2, zone, model, other, requireAlive)) {
                 viable = false;
@@ -2461,11 +2425,12 @@ SimPlan ShadowSimulator::plan(
     // A/B compare runs both arms' semantics over the same cand set; allow 2× ticks.
     if (StageConfig::assistVerifyAb()) tickBudget *= 2;
     auto const wall0 = std::chrono::steady_clock::now();
+    if (options.budgetUs > 0) model.deadline = wall0 + std::chrono::microseconds(options.budgetUs);
     auto wallExceeded = [&]() -> bool {
         if (options.budgetUs <= 0) return false;
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - wall0
-).count();
+        ).count();
         return us >= options.budgetUs;
     };
 
@@ -2488,55 +2453,57 @@ SimPlan ShadowSimulator::plan(
         int delay,
         int releaseAfter,
         ThreatZone const* z
-) -> RunResult {
+    ) -> RunResult {
         if (useTrajEngine) {
             return runTrajectoryOne(
                 layer, who, down, delay, limit, dt, firstDt, model,
                 releaseAfter, z, &tickBudget
-);
+            );
         }
         return runOne(
             layer, who, down, delay, limit, dt, firstDt, model,
             releaseAfter, z, &tickBudget
-);
+        );
     };
 
     this->m_simTickBase = std::max(0, options.attemptStartTick);
     this->m_simAbsTick = -1;
-    SimSessionGuard session(*this, layer);
+    SimSessionGuard session(*this, layer, true);
     bool sawToggleUnknown = false;
     bool const hadToggleTargets = !this->m_toggleTargetIds.empty();
 
     RunResult baselineRaw{};
     bool haveBaselineRaw = false;
-    {
+    auto probeBaseline = [&] {
+        if ((options.legacyPick && !model.continuous) || wallExceeded() || tickBudget <= 0) return;
         baselineRaw = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
-        haveBaselineRaw = true;
+        haveBaselineRaw = baselineRaw.ticksRan > 0 && !baselineRaw.budgetStopped;
         this->resetCaptureForNextRun(layer);
         if (baselineRaw.died) {
             plan.baselineDeathTick = baselineRaw.deathTick;
             plan.baselineDeathObject = baselineRaw.deathObject;
             plan.baselineDeathX = baselineRaw.deathX;
         }
-    }
+    };
 
     bool const orbAssist = StageConfig::assistOrbs() && down;
     OrbWindow orbHint{};
     bool spatialHint = false;
-    if (orbAssist) {
+    auto probeOrbs = [&] {
+        if (!orbAssist || wallExceeded() || tickBudget <= 0) return;
         int const scanTicks = OpportunityProbe::orbScanTicks(limit, model.slack);
         orbHint = this->scanOrbWindow(
             layer, real, down, scanTicks, dt, firstDt, &tickBudget, false
-);
+        );
         this->resetCaptureForNextRun(layer);
         // Press-to-reach: second scan with Jump held if coast missed (budget-capped).
-        if (!orbHint.found && tickBudget >= OpportunityProbe::kMinBudgetForProbe) {
+        if (!orbHint.found && !wallExceeded() && tickBudget >= OpportunityProbe::kMinBudgetForProbe) {
             int const reachTicks = OpportunityProbe::pressReachScanTicks(
                 limit, model.slack
-);
+            );
             auto held = this->scanOrbWindow(
                 layer, real, down, reachTicks, dt, firstDt, &tickBudget, true
-);
+            );
             this->resetCaptureForNextRun(layer);
             if (held.found) {
                 orbHint = held;
@@ -2545,7 +2512,7 @@ SimPlan ShadowSimulator::plan(
         if (orbHint.found) plan.usedOrbWindow = true;
         spatialHint = this->spatialOrbHint(layer, real, limit, dt);
         plan.foresightOrbPad = spatialHint;
-    }
+    };
 
     ThreatZone zone{};
     std::vector<Cand> cands(static_cast<size_t>(limit) + 1);
@@ -2560,7 +2527,7 @@ SimPlan ShadowSimulator::plan(
         int chosenDelay,
         bool doPassFlag,
         DevRejectLedger::EarlyExit early
-) {
+    ) {
         DevRejectLedger::BuildInput in;
         in.limit = limit;
         in.chosenDelay = chosenDelay;
@@ -2577,7 +2544,7 @@ SimPlan ShadowSimulator::plan(
             if (!candReady[static_cast<size_t>(d)]) continue;
             auto const& c = cands[static_cast<size_t>(d)];
             auto& s = in.snaps[static_cast<size_t>(d)];
-            s.evaluated = true;
+            s.evaluated = !c.raw.budgetStopped && (c.raw.ticksRan > 0 || c.diedBeforeAction);
             s.viable = c.viable;
             s.diedBeforeAction = c.diedBeforeAction;
             s.dualFailed = c.dualFailed;
@@ -2603,10 +2570,11 @@ SimPlan ShadowSimulator::plan(
         }
         auto r = runEngine(
             real, d, releaseAfter, zone.valid ? &zone : nullptr
-);
+        );
         this->resetCaptureForNextRun(layer);
         ++plan.candidatesTried;
         c.raw = r;
+        if (r.budgetStopped) plan.budgetHit = true;
         c.diedBeforeAction = r.diedBeforeAction;
         c.activatedRing = r.activatedRing;
         c.unknownTrunc = r.unknownTrunc;
@@ -2623,7 +2591,7 @@ SimPlan ShadowSimulator::plan(
         return c;
     };
 
-    bool const trustLong = real && !options.forceShortHorizon && SimTrust::get().okAt(real->getPositionX());
+    bool const trustLong = real && SimTrust::get().okAt(real->getPositionX());
     auto const horizonCaps = AssistHorizon::resolve(
         real ? StageConfig::kindOf(real) : GameModeKind::Cube,
         trustLong,
@@ -2631,10 +2599,10 @@ SimPlan ShadowSimulator::plan(
         options.capMul,
         0,
         StageConfig::lookAheadCap()
-);
+    );
     int const minSurviveLong = AssistHorizon::minSurviveTicksForSuccess(
         horizonCaps.scoreHorizon, trustLong
-);
+    );
 
     bool const requireAlive = options.requireAliveForDelay;
     auto finalizeViable = [&](Cand& c, int releaseAfter) {
@@ -2650,7 +2618,7 @@ SimPlan ShadowSimulator::plan(
             if (!truncated) {
                 auto const cls = ModeSurvival::classify(
                     survivalInputFrom(c.raw, zone, model, real)
-);
+                );
                 bool const longSafe = requireAlive
                     ? ModeSurvival::countsAsDelayWorthy(cls)
                     : ModeSurvival::countsAsSafeForDelay(cls);
@@ -2659,7 +2627,7 @@ SimPlan ShadowSimulator::plan(
                         c.raw.died,
                         longSafe,
                         minSurviveLong
-)) {
+                    )) {
                     c.viable = false;
                 }
             }
@@ -2671,7 +2639,7 @@ SimPlan ShadowSimulator::plan(
             if (other && !other->m_isDead && tickBudget > 0) {
                 auto r2 = runEngine(
                     other, c.delay, releaseAfter, zone.valid ? &zone : nullptr
-);
+                );
                 this->resetCaptureForNextRun(layer);
                 if (!runResultDelaySafe(r2, zone, model, other, requireAlive)) {
                     c.viable = false;
@@ -2684,6 +2652,12 @@ SimPlan ShadowSimulator::plan(
 
     {
         auto c0 = evalDelay(0, -1);
+        if (c0.raw.ticksRan == 0 || c0.raw.budgetStopped) {
+            plan.reason = AssistReason::PassBudget;
+            plan.budgetHit = true;
+            publishLedger(-1, true, DevRejectLedger::EarlyExit::Budget);
+            return plan;
+        }
         plan.firstDeathTick = c0.raw.died ? c0.raw.deathTick : -1;
         plan.firstDeathObject = c0.raw.deathObject;
         if (c0.raw.died) {
@@ -2699,10 +2673,12 @@ SimPlan ShadowSimulator::plan(
         finalizeViable(c0, -1);
         cands[0] = c0;
         candReady[0] = 1;
+        probeOrbs();
+        probeBaseline();
 
         // Continuous: idle (baseline coast) safer than d0 action → miss-assist may Delay.
         // For release, baseline = keep holding, d0 = UP now — same compare (enable always).
-        plan.idleSafer = classifyIdleSafer(
+        plan.idleSafer = haveBaselineRaw && classifyIdleSafer(
             model.continuous,
             true,
             plan.baselineDeathTick >= 0,
@@ -2711,14 +2687,14 @@ SimPlan ShadowSimulator::plan(
             c0.raw.died,
             c0.raw.died ? c0.raw.deathTick : -1,
             c0.raw.died ? c0.raw.deathX : c0.endX
-);
+        );
 
         // Live V2: LongForesight press-vs-idle over AssistHorizon (extend if press dies).
         if (!options.legacyPick) {
             AssistSpikeWatch::Scope const lfScope("plan.lf");
             int const h0 = std::max(
                 LongForesight::kMinHorizon, horizonCaps.scoreHorizon
-);
+            );
             int const lookCap = StageConfig::lookAheadCap();
             int const hMax = lookCap > 0
                 ? std::max(h0, lookCap)
@@ -2749,7 +2725,7 @@ SimPlan ShadowSimulator::plan(
                 auto* sh = m_shadow;
                 sh->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = holdJump;
                 for (int t = 0; t < horizon; ++t) {
-                    if (tickBudget <= 0) {
+                    if (tickBudget <= 0 || model.expired(t)) {
                         plan.budgetHit = true;
                         break;
                     }
@@ -2813,14 +2789,14 @@ SimPlan ShadowSimulator::plan(
                     auto pressR = runOne(
                         layer, real, down, 0, limit, dt, firstDt, longModel, -1,
                         zone.valid ? &zone : nullptr, &tickBudget
-);
+                    );
                     this->resetCaptureForNextRun(layer);
                     pressOut = pathFromRun(pressR);
                 }
                 if (!tryReuseIdle()) {
                     auto idleR = runBaseline(
                         layer, real, down, dt, firstDt, longModel, &tickBudget
-);
+                    );
                     this->resetCaptureForNextRun(layer);
                     idleOut = pathFromRun(idleR);
                 }
@@ -2833,7 +2809,7 @@ SimPlan ShadowSimulator::plan(
 
                 int const h1 = LongForesight::extendHorizon(
                     h0, lfIn.press.died ? lfIn.press.deathTick : -1, hMax
-);
+                );
                 if (h1 > h0 && tickBudget >= h1 * 2
                     && !wallExceeded()) {
                     lfIn.hasExtended = true;
@@ -2859,31 +2835,24 @@ SimPlan ShadowSimulator::plan(
                     lf.needDelaySearch ? 1 : 0,
                     lf.bothDead ? 1 : 0,
                     tickBudget
-));
+                ));
                 if (lf.bothDead) {
                     AssistLog::info(fmt::format(
                         "PLAN id={} LF both-dead — no Delay-search force",
                         plan.planId
-));
+                    ));
                 }
             }
         }
 
         // No threat target: baseline survives and no orb/pad ahead.
-        // G2: OpportunityProbe (foresight / near+mid+limit) may still force full search.
+        // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
         bool const noThreat = !c0.raw.died && !zone.valid;
         bool const noOrbTarget = !(orbAssist && (orbHint.found || spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
-            // Live requireAlive: idleSafer / baseline death / mid-dash-orb also
-            // force search so PassNoThreat cannot skip a wait-window or dash coast.
-            bool const dashOrRingCoast = requireAlive && real
-                && (real->m_isDashing || real->m_stateRingJump
-                    || real->m_stateRingJump2);
+            // Already must search → skip mid/limit probes (equal outcome: full search).
             bool const alreadyMustSearch = options.mustDelaySearch
-                || plan.longForesightNeedSearch
-                || (requireAlive && plan.idleSafer)
-                || (requireAlive && haveBaselineRaw && baselineRaw.died)
-                || dashOrRingCoast;
+                || plan.longForesightNeedSearch;
 
             OpportunityProbe::Sample baseSample{};
             baseSample.activatedRing = c0.activatedRing;
@@ -2891,11 +2860,9 @@ SimPlan ShadowSimulator::plan(
             baseSample.surviveBin = c0.surviveBin;
             baseSample.endX = c0.endX;
 
-            OpportunityProbe::Sample probeSamples[3];
+            OpportunityProbe::Sample probeSamples[2];
             int probeCount = 0;
-            // Avoid identifier `near` — Windows headers may macro it.
-            int const nearDelay = OpportunityProbe::nearDelay(limit);
-            int const midDelay = OpportunityProbe::midDelay(limit);
+            int const mid = OpportunityProbe::midDelay(limit);
             auto runProbeDelay = [&](int d) {
                 if (d <= 0 || d > limit) return;
                 if (candReady[static_cast<size_t>(d)]) return;
@@ -2904,12 +2871,13 @@ SimPlan ShadowSimulator::plan(
                     return;
                 }
                 auto c = evalDelay(d, -1);
+                if (!c.raw.ticksRan || c.raw.budgetStopped) return;
                 if (c.diedBeforeAction) {
-                    // Still record — wait-death forces searchFurther below.
+                    // Still record — probe may show nothing useful.
                     finalizeViable(c, -1);
                     cands[static_cast<size_t>(d)] = c;
                     candReady[static_cast<size_t>(d)] = 1;
-                    if (probeCount < 3) {
+                    if (probeCount < 2) {
                         auto& ps = probeSamples[probeCount++];
                         ps.activatedRing = c.activatedRing;
                         ps.diedBeforeAction = c.diedBeforeAction;
@@ -2921,7 +2889,7 @@ SimPlan ShadowSimulator::plan(
                 finalizeViable(c, c.releaseAfter >= 0 ? c.releaseAfter : -1);
                 cands[static_cast<size_t>(d)] = c;
                 candReady[static_cast<size_t>(d)] = 1;
-                if (probeCount < 3) {
+                if (probeCount < 2) {
                     auto& ps = probeSamples[probeCount++];
                     ps.activatedRing = c.activatedRing;
                     ps.diedBeforeAction = c.diedBeforeAction;
@@ -2931,11 +2899,8 @@ SimPlan ShadowSimulator::plan(
             };
 
             if (!alreadyMustSearch && limit >= 1) {
-                runProbeDelay(nearDelay);
-                if (midDelay != nearDelay) {
-                    runProbeDelay(midDelay);
-                }
-                if (limit != midDelay && limit != nearDelay) {
+                runProbeDelay(mid);
+                if (limit != mid) {
                     runProbeDelay(limit);
                 }
             }
@@ -2948,16 +2913,16 @@ SimPlan ShadowSimulator::plan(
                     baseSample,
                     probeSamples,
                     probeCount
-);
+                );
 
             if (!searchFurther) {
                 plan.action = PlanAction::Pass;
                 // Wanted probes but could not afford any → PassBudget (C6 may Hold).
-                // PassBudget only when probe budget is exhausted (allowPassBudget).
+                // Commit 11: PassBudget only when probe budget is exhausted (allowPassBudget).
                 if (plan.budgetHit && limit >= 1 && probeCount == 0
                     && PerfectAssistPolicy::allowPassBudget(
                         true, options.mustDelaySearch, false
-)) {
+                    )) {
                     plan.reason = AssistReason::PassBudget;
                 }
                 else {
@@ -2974,20 +2939,20 @@ SimPlan ShadowSimulator::plan(
                     plan.planId, AssistVerdict::name(plan.reason),
                     plan.foresightOrbPad ? 1 : 0, probeCount, plan.budgetHit,
                     options.mustDelaySearch ? 1 : 0, limit
-));
+                ));
                 publishLedger(
                     0,
                     true,
                     plan.budgetHit
                         ? DevRejectLedger::EarlyExit::Budget
                         : DevRejectLedger::EarlyExit::NoThreat
-);
+                );
                 return plan;
             }
             AssistLog::debug(fmt::format(
                 "PLAN id={} opportunity-probe search-further foresight={} probes={} orbWin={}",
                 plan.planId, plan.foresightOrbPad ? 1 : 0, probeCount, orbHint.found ? 1 : 0
-));
+            ));
         }
 
         // Wave zigzag (press only): hazards in proximity ahead + no orb → Pass
@@ -2999,13 +2964,13 @@ SimPlan ShadowSimulator::plan(
             static_cast<float>(limit + 4) * 5.5f,
             kHazardProximityXMin,
             kHazardProximityXMax
-);
+        );
         bool const nearHazard = isWave && spatialHazardProximity(layer, real, proxX);
         // Only suppress when d0 died (need to search for a living save).
         // idleSafer alone must not skip this Pass — Alive later is checked later.
         if (!c0.raw.died && shouldWaveHazardProximityPass(
                 isWave, nearHazard, noOrbTarget, plan.foresightOrbPad, down
-)) {
+            )) {
             plan.action = PlanAction::Pass;
             plan.reason = AssistReason::PassWaveProximity;
             plan.delay = 0;
@@ -3017,7 +2982,7 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} Pass wave-hazard-proximity verdict={} prox={:.0f} zone={} budgetHit={}",
                 plan.planId, AssistVerdict::name(plan.reason), proxX, zone.valid, plan.budgetHit
-));
+            ));
             publishLedger(0, true, DevRejectLedger::EarlyExit::WaveProximity);
             return plan;
         }
@@ -3082,11 +3047,16 @@ SimPlan ShadowSimulator::plan(
         return false;
     };
 
-    // PrefixSim: shared-prefix early-death + same-crash cut.
+    // Commit 10 PrefixSim: shared-prefix early-death + same-crash cut.
     int prefixDeathTick = -1;
     int sameCrashStreak = 0;
     int sameCrashPrevTick = -1;
     bool sameCrashStopped = false;
+
+    bool const isWaveMode = real && real->m_isDart;
+    bool const isShipLike = real && (real->m_isShip || real->m_isBird
+        || real->m_isSpider || real->m_isSwing);
+    bool const isRobot = real && real->m_isRobot;
 
     {
     AssistSpikeWatch::Scope const candsScope("plan.cands");
@@ -3116,10 +3086,11 @@ SimPlan ShadowSimulator::plan(
         }
 
         auto c = evalDelay(d, -1);
+        if (!c.raw.ticksRan || c.raw.budgetStopped) break;
         if (c.diedBeforeAction) {
             prefixDeathTick = PrefixSim::mergePrefixDeathTick(
                 prefixDeathTick, c.raw.deathTick, true
-);
+            );
             finalizeViable(c, -1);
             cands[static_cast<size_t>(d)] = c;
             if (d >= 0 && d <= limit) {
@@ -3159,7 +3130,7 @@ SimPlan ShadowSimulator::plan(
             c.raw.deathTick,
             c.raw.died,
             c.diedBeforeAction
-);
+        );
         if (c.raw.died && !c.diedBeforeAction && c.raw.deathTick >= 0) {
             sameCrashPrevTick = c.raw.deathTick;
         }
@@ -3168,7 +3139,7 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} same-crash stop deathTick={} after delay={}",
                 plan.planId, c.raw.deathTick, d
-));
+            ));
             break;
         }
 
@@ -3177,13 +3148,13 @@ SimPlan ShadowSimulator::plan(
         // outside prefer stay searchable.
         bool const preferExitOk = MissAssistContracts::preferBandEarlyExitAllowed(
             orbAssist, orbHint.found, spatialHint, plan.foresightOrbPad
-);
+        );
         if (hasPrefer && preferExitOk && !plan.budgetHit
             && d == preferLastInOrder && preferBandRobust()) {
             AssistLog::debug(fmt::format(
                 "PLAN id={} prefer-band early-exit [{},{}] after {} cands",
                 plan.planId, preferLo, preferHi, plan.candidatesTried
-));
+            ));
             ledgerPreferEarlyExit = true;
             break;
         }
@@ -3192,11 +3163,11 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} prefer-band early-exit suppressed (orb foresight) [{},{}]",
                 plan.planId, preferLo, preferHi
-));
+            ));
         }
     }
 
-    // Two-pass: expensive hold-branch / release theories only on full-score set.
+    // Commit 10 two-pass: expensive hold-branch / release theories only on full-score set.
     {
         std::vector<PrefixSim::QuickSample> quick;
         quick.reserve(static_cast<size_t>(limit) + 1);
@@ -3216,10 +3187,10 @@ SimPlan ShadowSimulator::plan(
         }
         auto const fullDelays = PrefixSim::delaysForFullScore(
             quick.data(), static_cast<int>(quick.size()), PrefixSim::kFullScoreTopK
-);
+        );
         bool const holdTheoryOk = PrefixSim::allowHoldBranchTheory(
-            StageConfig::kindOf(real)
-);
+            model.continuous, isRobot, isWaveMode, isShipLike
+        );
 
         for (int d : fullDelays) {
             if (d < 0 || d > limit) continue;
@@ -3239,7 +3210,7 @@ SimPlan ShadowSimulator::plan(
                     ++tried;
                     auto br = runEngine(
                         real, d, k, zone.valid ? &zone : nullptr
-);
+                    );
                     this->resetCaptureForNextRun(layer);
                     if (!br.died || br.unknownTrunc) {
                         c.raw = br;
@@ -3266,7 +3237,7 @@ SimPlan ShadowSimulator::plan(
                 && tickBudget > 0) {
                 auto hold = runEngine(
                     real, c.delay, 40, zone.valid ? &zone : nullptr
-);
+                );
                 this->resetCaptureForNextRun(layer);
                 Cand h = c;
                 h.raw = hold;
@@ -3293,7 +3264,7 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} prefixSim sameCrash={} prefixDeathTick={}",
                 plan.planId, 1, prefixDeathTick
-));
+            ));
         }
     }
     } // plan.cands
@@ -3321,7 +3292,7 @@ SimPlan ShadowSimulator::plan(
                     c.surviveBin,
                     c.endX,
                     !c.raw.died
-)) {
+                )) {
                 plan.ascentUseful = true;
                 break;
             }
@@ -3354,7 +3325,7 @@ SimPlan ShadowSimulator::plan(
         bool const idleHoldsEscape = plan.idleSafer && anyAliveLater;
         if (!anySavesFromD0Death && !idleHoldsEscape && shouldWaveFutileDelayPass(
                 isWave, orbIntent, bestBin, bestGain, plan.foresightOrbPad, down
-)) {
+            )) {
             plan.action = PlanAction::Pass;
             plan.reason = AssistReason::PassWaveFutile;
             plan.delay = 0;
@@ -3366,7 +3337,7 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} Pass wave-futile-delay verdict={} bin={} gain={:.1f} budgetHit={}",
                 plan.planId, AssistVerdict::name(plan.reason), bestBin, bestGain, plan.budgetHit
-));
+            ));
             publishLedger(0, true, DevRejectLedger::EarlyExit::WaveFutile);
             return plan;
         }
@@ -3389,10 +3360,10 @@ SimPlan ShadowSimulator::plan(
     }
 
     // Optional: cand must also clear threat under firstDt ±3%.
-    // Jitter only Top-2 ranked picks (never walk the whole pool).
+    // Commit 10: jitter only Top-2 ranked picks (never walk the whole pool).
     auto jitterOk = [&](int d, int releaseAfter) -> bool {
         if (!options.robustJitter || d < 0) return true;
-        if (tickBudget <= 0 || wallExceeded()) return true; // soft accept
+        if (tickBudget <= 0 || wallExceeded()) return false;
         static float const kScales[] = { 0.97f, 1.03f };
         for (float s : kScales) {
             float jd = firstDt * s;
@@ -3402,16 +3373,16 @@ SimPlan ShadowSimulator::plan(
                 r = runTrajectoryOne(
                     layer, real, down, d, limit, dt, jd, model, releaseAfter,
                     zone.valid ? &zone : nullptr, &tickBudget
-);
+                );
             }
             else {
                 r = runOne(
                     layer, real, down, d, limit, dt, jd, model, releaseAfter,
                     zone.valid ? &zone : nullptr, &tickBudget
-);
+                );
             }
             this->resetCaptureForNextRun(layer);
-            if (!clearsThreatOf(r, zone) || r.diedBeforeAction) return false;
+            if (r.budgetStopped || !r.ticksRan || !clearsThreatOf(r, zone) || r.diedBeforeAction) return false;
         }
         return true;
     };
@@ -3455,10 +3426,10 @@ SimPlan ShadowSimulator::plan(
     bool const usePickV2 = !options.legacyPick;
     std::vector<AssistPickV1::CandView> pickViewsV1(
         static_cast<size_t>(std::max(0, limit)) + 1u
-);
+    );
     std::vector<AssistPickV2::CandView> pickViewsV2(
         static_cast<size_t>(std::max(0, limit)) + 1u
-);
+    );
     auto syncPickViews = [&]() {
         for (int d = 0; d <= limit; ++d) {
             auto const& c = cands[static_cast<size_t>(d)];
@@ -3484,22 +3455,22 @@ SimPlan ShadowSimulator::plan(
         if (usePickV2) {
             return AssistPickV2::pickEarliestRobust(
                 pickViewsV2.data(), limit, robustK, pool, needActivation
-);
+            );
         }
         return AssistPickV1::pickEarliestRobust(
             pickViewsV1.data(), limit, robustK, pool, needActivation
-);
+        );
     };
     auto pickLatestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         syncPickViews();
         if (usePickV2) {
             return AssistPickV2::pickLatestRobust(
                 pickViewsV2.data(), limit, robustK, pool, needActivation
-);
+            );
         }
         return AssistPickV1::pickLatestRobust(
             pickViewsV1.data(), limit, robustK, pool, needActivation
-);
+        );
     };
     auto applyChosenMeta = [&](int pick) {
         if (pick < 0 || pick > limit) return;
@@ -3552,7 +3523,7 @@ SimPlan ShadowSimulator::plan(
                 -1,
                 -1,
                 ctx
-);
+            );
         };
 
         // Jitter top-2 around foresight pick; then re-choose on surviving cands.
@@ -3587,7 +3558,7 @@ SimPlan ShadowSimulator::plan(
             plan.idleSafer ? 1 : 0,
             plan.longForesightNeedSearch ? 1 : 0,
             plan.ascentUseful ? 1 : 0
-));
+        ));
     }
     else {
         // v1: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
@@ -3621,7 +3592,7 @@ SimPlan ShadowSimulator::plan(
 
     // G1 window-cap assert.
     if (chosen > limit) chosen = limit;
-    // Hard gate: never arm a non-viable Delay (Landing/Recoverable may
+    // Hard gate: never arm a non-viable Delay (Commit 9: Landing/Recoverable may
     // have raw.died but still be Delay-safe via ModeSurvival).
     if (chosen > 0 && chosen <= limit) {
         auto const& ch = cands[static_cast<size_t>(chosen)];
@@ -3633,19 +3604,19 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} reject lethal/unknown Delay +{} → Pass toggleUnk={}",
                 plan.planId, chosen, sawToggleUnknown ? 1 : 0
-));
+            ));
             chosen = -1;
             doPass = false;
             plan.requireOrb = false;
         }
     }
     if (chosen < 0) {
-        // Never soft-trust budgetHit into Delay via partial actMin.
+        // Commit 11: never soft-trust budgetHit into Delay via partial actMin.
         if (plan.budgetHit && actMin >= 0 && actMin <= limit
             && cands[static_cast<size_t>(actMin)].viable
             && PerfectAssistPolicy::allowArmDelay(
                 true, plan.budgetHit, /*softTrustPartial=*/true
-)) {
+            )) {
             chosen = actMin;
             doPass = false;
             applyChosenMeta(chosen);
@@ -3653,7 +3624,7 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} budget-partial actMin={} pick={}",
                 plan.planId, actMin, chosen
-));
+            ));
         }
     }
 
@@ -3677,14 +3648,14 @@ SimPlan ShadowSimulator::plan(
                 }
                 if (PerfectAssistPolicy::interveneOk(
                         d0Ok, true, improves
-)) {
+                    )) {
                     chosen = forced;
                     doPass = false;
                     applyChosenMeta(chosen);
                     AssistLog::debug(fmt::format(
                         "PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
                         plan.planId, chosen
-));
+                    ));
                 }
             }
             else {
@@ -3695,7 +3666,7 @@ SimPlan ShadowSimulator::plan(
                     forced,
                     fc.viable ? 1 : 0,
                     fc.raw.died ? 1 : 0
-));
+                ));
             }
         }
     }
@@ -3712,8 +3683,8 @@ SimPlan ShadowSimulator::plan(
                 ch.viable ? 1 : 0,
                 ch.raw.died ? 1 : 0,
                 ch.diedBeforeAction ? 1 : 0,
- (ch.unknownTrunc || ch.toggleUnknown) ? 1 : 0
-));
+                (ch.unknownTrunc || ch.toggleUnknown) ? 1 : 0
+            ));
             if (ch.toggleUnknown || (ch.unknownTrunc && hadToggleTargets)) {
                 sawToggleUnknown = true;
             }
@@ -3728,7 +3699,7 @@ SimPlan ShadowSimulator::plan(
         AssistLog::debug(fmt::format(
             "VERIFY id={} ab-noop pick={} chosen={} doPass={}",
             plan.planId, usePickV2 ? "v2" : "v1", chosen, doPass ? 1 : 0
-));
+        ));
     }
 
     // Hold/release window for the chosen Delay: how long can they hold, when
@@ -3756,7 +3727,7 @@ SimPlan ShadowSimulator::plan(
             ++tried;
             auto r = runEngine(
                 real, chosen, rel, zone.valid ? &zone : nullptr
-);
+            );
             this->resetCaptureForNextRun(layer);
             ++plan.candidatesTried;
 
@@ -3785,7 +3756,7 @@ SimPlan ShadowSimulator::plan(
             if (bestRel < 0) {
                 bestRel = pickPreferredRelease(
                     plan.releaseEarliest, plan.releaseLatest, model.continuous
-);
+                );
             }
             plan.releaseAfter = bestRel;
             if (plan.releaseAfter >= 40 || base.requireHold) {
@@ -3813,7 +3784,7 @@ SimPlan ShadowSimulator::plan(
             "PLAN id={} Pass verdict={} limit={} budgetHit={} toggleUnk={} orbIntent={}",
             plan.planId, AssistVerdict::name(plan.reason), limit, plan.budgetHit,
             sawToggleUnknown ? 1 : 0, orbIntent
-));
+        ));
         DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
         if (plan.budgetHit) early = DevRejectLedger::EarlyExit::Budget;
         else if (ledgerPreferEarlyExit) early = DevRejectLedger::EarlyExit::PreferBand;
@@ -3838,7 +3809,7 @@ SimPlan ShadowSimulator::plan(
                 plan.unknown = true;
             }
             else if (cands[0].unknownTrunc) {
-                // Hard Unknown leftover → named Pass (never Delay).
+                // Commit 11: Hard Unknown leftover → named Pass (never Delay).
                 plan.reason = AssistReason::PassHardUnknown;
                 plan.unknown = true;
             }
@@ -3857,7 +3828,7 @@ SimPlan ShadowSimulator::plan(
                 plan.toggleUnknown = true;
             }
             else {
-                // Hard Unknown → pass-hard-unknown.
+                // Commit 11: Hard Unknown → pass-hard-unknown.
                 plan.reason = AssistReason::PassHardUnknown;
                 plan.toggleUnknown = false;
             }
@@ -3868,7 +3839,7 @@ SimPlan ShadowSimulator::plan(
                 "PLAN id={} refuse Delay +{} — not Delay-worthy at publish "
                 "(viable={} died={})",
                 plan.planId, chosen, winCand.viable ? 1 : 0, winCand.raw.died ? 1 : 0
-));
+            ));
             plan.action = PlanAction::Pass;
             plan.delay = 0;
             plan.nowIsSafe = false;
@@ -3884,7 +3855,7 @@ SimPlan ShadowSimulator::plan(
                 plan.activatedRing || winCand.activatedRing,
                 plan.requireOrb,
                 hasPrefer
-);
+            );
             plan.delay = chosen;
             plan.jumpTick = winCand.jumpTick;
             plan.nowIsSafe = false;
@@ -3904,7 +3875,7 @@ SimPlan ShadowSimulator::plan(
                 int sHi = -1;
                 for (int d = 0; d <= limit; ++d) {
                     auto const& c = cands[static_cast<size_t>(d)];
-                    if (!c.viable) continue; // Landing may set raw.died
+                    if (!c.viable) continue; // Commit 9: Landing may set raw.died
                     if (sLo < 0) sLo = d;
                     sHi = d;
                 }
@@ -3955,25 +3926,25 @@ SimPlan ShadowSimulator::plan(
             AssistLog::debug(fmt::format(
                 "PLAN id={} refuse Delay → pass-toggle-unknown",
                 plan.planId
-));
+            ));
         }
         else {
-            // Hard Unknown → named Pass.
+            // Commit 11: Hard Unknown → named Pass.
             plan.reason = AssistReason::PassHardUnknown;
             AssistLog::debug(fmt::format(
                 "PLAN id={} refuse Delay → pass-hard-unknown",
                 plan.planId
-));
+            ));
         }
     }
 
-    // Fully evaluated Delay stays armed even if later search hit budget.
+    // Commit 11: fully evaluated Delay stays armed even if later search hit budget.
     // Soft-trust partial pick is blocked above (budget-partial + softTrustPartial).
 
     if (plan.action == PlanAction::Delay && plan.reason == AssistReason::None) {
         plan.reason = AssistVerdict::inferDelayReason(
             plan.activatedRing, plan.requireOrb, hasPrefer
-);
+        );
     }
     if (plan.action == PlanAction::Pass && plan.reason == AssistReason::None) {
         plan.reason = AssistReason::PassUnknown;
@@ -3994,7 +3965,7 @@ SimPlan ShadowSimulator::plan(
         plan.activatedRing, plan.orbUseful, plan.requireHold,
         plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter, plan.holdScanTried,
         plan.dMin, plan.dMax, plan.candidatesTried, tickBudget
-));
+    ));
     {
         DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
         if (plan.budgetHit) early = DevRejectLedger::EarlyExit::Budget;
@@ -4039,7 +4010,7 @@ SimPlan ShadowSimulator::planSequence(
     // ScoreHorizon from AssistHorizon (long only when trusted).
     int horizon = options.smartHorizon;
     if (horizon <= 0) {
-        bool const trustOk = !options.forceShortHorizon && SimTrust::get().okAt(real->getPositionX());
+        bool const trustOk = SimTrust::get().okAt(real->getPositionX());
         horizon = AssistHorizon::resolve(
             StageConfig::kindOf(real),
             trustOk,
@@ -4047,7 +4018,7 @@ SimPlan ShadowSimulator::planSequence(
             options.capMul,
             0,
             StageConfig::lookAheadCap()
-).scoreHorizon;
+        ).scoreHorizon;
         horizon = std::max(horizon, model.cap);
     }
     horizon = std::clamp(horizon, 32, 320);
@@ -4079,7 +4050,7 @@ SimPlan ShadowSimulator::planSequence(
     auto followUps = (BakeMap::get().loaded() && chainDepth > 0)
         ? BakeMap::get().nextClicksAfter(
             real->getPositionX(), true, player2, kind, std::min(chainDepth, 2)
-)
+          )
         : std::vector<BakedClick const*>{};
 
     float const speed = std::max(0.5f, real->m_playerSpeed * 311.2f * std::max(dt, 1.f / 240.f));
@@ -4171,7 +4142,7 @@ SimPlan ShadowSimulator::planSequence(
         AssistLog::debug(fmt::format(
             "planSequence id={} no surviving exit — keep plan delay={}",
             single.planId, single.delay
-));
+        ));
         return single;
     }
     if (std::find(allowed.begin(), allowed.end(), best.d0) == allowed.end()) return single;
@@ -4189,14 +4160,14 @@ SimPlan ShadowSimulator::planSequence(
         if (!AssistVerdict::isDelay(single.reason)) {
             single.reason = AssistVerdict::inferDelayReason(
                 single.activatedRing, single.requireOrb, false
-);
+            );
         }
     }
     AssistLog::debug(fmt::format(
         "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={}",
         single.planId, depth, best.d0, AssistVerdict::name(single.reason),
         allowed.size(), combos, useBakeChain
-));
+    ));
     return single;
 }
 
@@ -4283,8 +4254,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     bool traceFrames,
     bool parkReals,
     int substeps,
-    std::function<bool(int frame)> onFrame,
-    BakePlayback playback
+    std::function<bool(int frame)> onFrame
 ) {
     BakeRunResult out;
     auto* snap = this->snapshotSlot(slot);
@@ -4320,17 +4290,11 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     m_deathObject = nullptr;
     this->m_unknownHistMap.clear();
     this->m_collectUnknownHist = true;
-    this->m_bakeSpawnOverlapIds.clear();
-    this->m_bakeSpawnGraceUntilTick = -1;
-    this->m_bakeSpawnGraceHardCap = -1;
 
     auto* s = m_shadow;
     size_t nextEv = 0;
     if (traceFrames) {
-        // Route/full-replay bakes reuse this trace for every click window.
-        // Reserve the bounded full run so long macros do not repeatedly grow
-        // the vector while the main thread is simulating.
-        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 65536)) + 2);
+        out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 2048)) + 2);
     }
 
     auto applyEv = [&](ReplayEvent const& ev) {
@@ -4346,42 +4310,11 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
     this->m_simAbsTick = -1;
     this->m_poseRemapDt = dt; // TW remap must match bake physics, not live hitch dt
     this->m_bakeOffline = true;
-
-    // Collect hazards already overlapping the start pose (same as live at pause).
-    // Ignore deaths from those ids for a few ticks so TW can move them off spawn.
-    {
-        auto const pref = s->getObjectRect();
-        auto consider = [&](GameObject* obj) {
-            if (!obj || !isHazardLike(obj)) return;
-            if (typeinfo_cast<PlayerObject*>(obj)) return;
-            if (this->isOwnedGhostPtr(obj)) return;
-            if (!pref.intersectsRect(obj->getObjectRect())) return;
-            this->m_bakeSpawnOverlapIds.insert(obj->m_uniqueID);
-        };
-        if (auto* children = layer->m_objectLayer
-                ? layer->m_objectLayer->getChildren() : nullptr) {
-            for (unsigned i = 0; i < children->count(); ++i) {
-                consider(SectionObjectWalk::asGameObject(children->objectAtIndex(i)));
-            }
-        }
-        SectionObjectWalk::forEachInSections(layer, consider);
-        if (!this->m_bakeSpawnOverlapIds.empty()) {
-            this->m_bakeSpawnGraceUntilTick = kBakeSpawnGraceFloor;
-            this->m_bakeSpawnGraceHardCap = kBakeSpawnGraceHardCap;
-        }
-    }
-
     {
         SimSessionGuard session(*this, layer);
 
         for (int frame = 0; frame <= untilFrame; ++frame) {
             this->m_simAbsTick = frame;
-            if (playback == BakePlayback::FollowReplay) {
-                m_dead = false;
-                m_deathObject = nullptr;
-                m_unknown = false;
-                s->m_isDead = false;
-            }
 
             // Clickbots often put press+release on the SAME frame. Apply downs
             // BEFORE physics so the tick is held; releases AFTER the step.
@@ -4413,11 +4346,6 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
             }
             for (auto const* ev : ups) applyEv(*ev);
 
-            // Invalid coordinates cannot be passed into the next collision sweep.
-            if (playback == BakePlayback::FollowReplay &&
-                (!std::isfinite(s->getPositionX()) || !std::isfinite(s->getPositionY()) ||
-                 !std::isfinite(static_cast<float>(s->m_yVelocity)))) break;
-
             // Hard death only — Unknown must not wipe a working replay bake
             // (toggle-group solids used to abort every click via m_unknown).
             if (m_unknown) {
@@ -4445,10 +4373,6 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 tr.twApplied = this->m_triggerWorldAppliedThisTick;
                 tr.eventsApplied = evThis;
                 tr.mode = static_cast<int>(StageConfig::kindOf(s));
-                tr.dashing = s->m_isDashing;
-                tr.upsideDown = s->m_isUpsideDown;
-                tr.mini = s->m_vehicleSize < 1.f;
-                tr.dual = layer->m_gameState.m_isDualMode;
                 if (m_dead && m_deathObject) {
                     tr.deathObjId = m_deathObject->m_uniqueID;
                     tr.deathObjType = static_cast<int>(m_deathObject->m_objectType);
@@ -4458,7 +4382,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                 out.frames.push_back(tr);
             }
 
-            if (m_dead && !out.died) {
+            if (m_dead) {
                 out.died = true;
                 out.deathFrame = frame;
                 out.deathX = s->getPositionX();
@@ -4468,17 +4392,13 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
                     out.deathObjType = static_cast<int>(m_deathObject->m_objectType);
                     out.deathObjGameId = m_deathObject->m_objectID;
                 }
+                break;
             }
-            if (m_dead && playback == BakePlayback::StopOnDeath) break;
         }
     }
 
     this->m_collectUnknownHist = false;
     this->m_bakeOffline = false;
-    this->m_bakeNoDeathBeforeFrame = -1;
-    this->m_bakeSpawnOverlapIds.clear();
-    this->m_bakeSpawnGraceUntilTick = -1;
-    this->m_bakeSpawnGraceHardCap = -1;
     // Seal Soft/Hard unknown histogram (count desc).
     out.unknownHist.clear();
     out.unknownHist.reserve(this->m_unknownHistMap.size());
@@ -4496,7 +4416,7 @@ ShadowSimulator::BakeRunResult ShadowSimulator::runBakeTimeline(
             if (a.count != b.count) return a.count > b.count;
             return a.objectId < b.objectId;
         }
-);
+    );
     this->m_unknownHistMap.clear();
 
     if (parkedP1 && layer->m_player1) {
@@ -4592,48 +4512,6 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(PARITY_SLOT_B == SNAPSHOT_SLOTS - 1, "parity-b-last");
     expect(SNAPSHOT_RING_END < SNAPSHOT_SLOTS, "ring-end-lt-slots");
 
-    // jacheronbe.gdr2 bakefail: spawn spike uid=8962 kills at frame 5 (x≈7.8)
-    // after floor 0..4; player still intersects until ~x>18 (~14 ticks @ 1.3u).
-    // Floor alone must NOT suffice; still-intersects must cover deathF=5.
-    {
-        int const floor = kBakeSpawnGraceFloor;
-        int const cap = kBakeSpawnGraceHardCap;
-        expect(floor == 4, "spawn-grace-floor-4");
-        expect(cap == 64, "spawn-grace-cap-64");
-        expect(bakeSpawnDeathIgnored(0, floor, cap, true), "spawn-grace-f0");
-        expect(bakeSpawnDeathIgnored(4, floor, cap, true), "spawn-grace-f4-floor");
-        expect(
-            bakeSpawnDeathIgnored(5, floor, cap, true),
-            "spawn-grace-f5-still-intersect"
-);
-        expect(
-            !bakeSpawnDeathIgnored(5, floor, cap, false),
-            "spawn-grace-f5-cleared-counts"
-);
-        expect(
-            bakeSpawnDeathIgnored(14, floor, cap, true),
-            "spawn-grace-f14-still"
-);
-        expect(
-            !bakeSpawnDeathIgnored(14, floor, cap, false),
-            "spawn-grace-f14-cleared"
-);
-        expect(
-            !bakeSpawnDeathIgnored(65, floor, cap, true),
-            "spawn-grace-past-hardcap"
-);
-        // Clearance math from bakefail_20261104_105847 (halfW=15, spikeR=3).
-        float const needX = 3.f + 15.f + 0.01f;
-        float const step = 1.30f;
-        int const clearTicks = static_cast<int>(std::ceil(needX / step));
-        expect(clearTicks > floor, "jacheronbe-needs-past-floor");
-        expect(clearTicks <= cap, "jacheronbe-within-hardcap");
-        expect(
-            bakeSpawnDeathIgnored(clearTicks, floor, cap, true),
-            "jacheronbe-clear-tick-still-ok"
-);
-    }
-
     // Fixed survive bins [0,24), [24,48), [48,96), [96,∞)
     expect(binOf(0) == 0, "bin0");
     expect(binOf(23) == 0, "bin23");
@@ -4683,106 +4561,106 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(
         shouldWaveHazardProximityPass(true, true, true, false, true),
         "wave-prox-pass"
-);
+    );
     expect(
         !shouldWaveHazardProximityPass(true, true, true, false, false),
         "wave-prox-release-never"
-);
+    );
     expect(
         !shouldWaveHazardProximityPass(true, true, false, false, true),
         "wave-prox-orb-target-blocks"
-);
+    );
     expect(
         !shouldWaveHazardProximityPass(true, true, true, true, true),
         "wave-prox-foresight-blocks"
-);
+    );
     expect(
         !shouldWaveHazardProximityPass(false, true, true, false, true),
         "wave-prox-not-cube"
-);
+    );
     expect(
         !shouldWaveHazardProximityPass(true, false, true, false, true),
         "wave-prox-no-hazard"
-);
+    );
     expect(
         shouldWaveFutileDelayPass(true, false, 0, 3.f, false, true),
         "wave-futile-pass"
-);
+    );
     expect(
         !shouldWaveFutileDelayPass(true, false, 0, 3.f, false, false),
         "wave-futile-release-never"
-);
+    );
     expect(
         !shouldWaveFutileDelayPass(true, true, 0, 3.f, false, true),
         "wave-futile-orb-intent"
-);
+    );
     expect(
         !shouldWaveFutileDelayPass(true, false, 0, 3.f, true, true),
         "wave-futile-foresight"
-);
+    );
     expect(
         !shouldWaveFutileDelayPass(true, false, 1, 3.f, false, true),
         "wave-futile-bin"
-);
+    );
     expect(
         !shouldWaveFutileDelayPass(true, false, 0, 12.f, false, true),
         "wave-futile-gain"
-);
+    );
 
     // Continuous idleSafer / ascentUseful
     expect(
         classifyIdleSafer(true, true, false, -1, 0.f, true, 4, 100.f),
         "idle-safer-alive"
-);
+    );
     expect(
         !classifyIdleSafer(false, true, false, -1, 0.f, true, 4, 100.f),
         "idle-safer-not-cube"
-);
+    );
     expect(
         !classifyIdleSafer(true, true, false, -1, 0.f, false, -1, 0.f),
         "idle-safer-d0-safe"
-);
+    );
     expect(
         classifyIdleSafer(true, true, true, 10, 200.f, true, 3, 100.f),
         "idle-safer-later-death"
-);
+    );
     expect(
         deathLooksLikeAscent(100.f, 140.f, false),
         "ascent-death-above"
-);
+    );
     expect(
         !deathLooksLikeAscent(100.f, 105.f, false),
         "ascent-death-near"
-);
+    );
     expect(
         deathLooksLikeAscent(100.f, 60.f, true),
         "ascent-death-flipped"
-);
+    );
     expect(
         classifyAscentUseful(true, true, false, 0, 50.f, true, 0, 50.f, true),
         "ascent-later-viable"
-);
+    );
     expect(
         classifyAscentUseful(true, true, true, 0, 50.f, true, 2, 50.f, true),
         "ascent-better-bin"
-);
+    );
     expect(
         !classifyAscentUseful(true, true, true, 1, 50.f, true, 1, 52.f, true),
         "ascent-no-gain"
-);
+    );
     // Dead soft / high bin without Alive later must not invent ascentUseful.
     expect(
         !classifyAscentUseful(true, true, false, 0, 50.f, false, 3, 90.f, false),
         "ascent-dead-not-useful"
-);
+    );
     expect(
         !classifyAscentUseful(true, true, false, 0, 50.f, true, 3, 90.f, false),
         "ascent-soft-died-not-useful"
-);
+    );
     expect(
         !classifyAscentUseful(true, true, true, 0, 50.f, true, 2, 50.f, false),
         "ascent-alive-flag-required"
-);
+    );
 
     expect(pickPreferredRelease(2, 10, true) == 2, "pref-rel-cont");
     expect(pickPreferredRelease(2, 10, false) == 6, "pref-rel-tap");
@@ -4817,89 +4695,85 @@ bool ShadowSimulator::regressionSelfCheck(std::string& report) {
     expect(
         !delayViableHonest(false, false, false, false, false, false, true),
         "soft-viable-no-clear"
-);
+    );
     expect(
         delayViableHonest(false, false, false, false, true, false, true),
         "viable-clears-threat"
-);
+    );
     expect(
         delayViableHonest(false, false, false, false, false, true, true),
         "viable-zone-cleared"
-);
+    );
     expect(
         delayViableHonest(false, false, false, false, false, false, false),
         "viable-no-zone"
-);
+    );
     // Soft bake: raw death + Landing/LateCrash can be not-false-lethal; Lethal cannot.
     expect(
         !delayViableHonest(
             false, true, false, false, true, false, true,
             ModeSurvival::Class::Lethal
-),
+        ),
         "lethal-died-not-viable"
-);
+    );
     expect(
         delayViableHonest(
             false, true, false, false, true, true, true,
             ModeSurvival::Class::Landing
-),
+        ),
         "landing-died-soft-viable"
-);
+    );
     expect(
         delayViableHonest(
             false, true, false, false, true, true, true,
             ModeSurvival::Class::LateCrashAfterClear
-),
+        ),
         "late-crash-soft-viable"
-);
+    );
     // Live Delay-worthy: Alive only; Landing/LateCrash never invent Delay.
     expect(
         delayViableHonest(
             false, false, false, false, true, false, true,
             ModeSurvival::Class::Alive, true
-),
+        ),
         "alive-require-worthy"
-);
+    );
     expect(
         !delayViableHonest(
             false, true, false, false, true, true, true,
             ModeSurvival::Class::Landing, true
-),
+        ),
         "landing-not-delay-worthy"
-);
+    );
     expect(
         !delayViableHonest(
             false, true, false, false, true, true, true,
             ModeSurvival::Class::LateCrashAfterClear, true
-),
+        ),
         "late-crash-not-delay-worthy"
-);
+    );
     expect(
         !delayViableHonest(
             false, true, false, false, true, true, true,
             ModeSurvival::Class::Recoverable, true
-),
+        ),
         "recoverable-not-delay-worthy"
-);
+    );
     expect(
         !delayViableHonest(false, false, true, false, true, false, true),
         "unknown-not-viable"
-);
+    );
     expect(
         !delayViableHonest(false, false, false, true, true, false, true),
         "toggle-unk-not-viable"
-);
+    );
     expect(exitSurvivedHonest(false, false), "exit-alive");
     expect(!exitSurvivedHonest(true, false), "exit-died");
     expect(!exitSurvivedHonest(false, true), "exit-unknown-not-survive");
     expect(!exitSurvivedHonest(true, true), "exit-died-unk");
 
-    if (fails == 0) {
-        report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty+spawn-grace)";
-    }
-    else {
-        report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
-    }
+    if (fails == 0) report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty)";
+    else report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
     return fails == 0;
 }
 
@@ -4970,7 +4844,7 @@ void ShadowSimulator::applyEvalWorldRestore(
     {
         bool const wantOrbs = DevLiveWitness::hasWorldDep(
             witness, DevWitnessCategory::Orbs
-);
+        );
         if (wantOrbs || !witness.orbIds.empty()) {
             layer->m_gameState.m_activatedObjectIDs.clear();
             auto* children = layer->m_objectLayer
@@ -4984,7 +4858,7 @@ void ShadowSimulator::applyEvalWorldRestore(
                 for (unsigned i = 0; i < children->count(); ++i) {
                     auto* obj = typeinfo_cast<EnhancedGameObject*>(
                         children->objectAtIndex(i)
-);
+                    );
                     if (!obj || obj->m_uniqueID != uid) continue;
                     this->noteActivated(obj);
                     obj->m_activated = true;
@@ -5005,13 +4879,19 @@ void ShadowSimulator::applyEvalWorldRestore(
         int const tick = witness.triggerApplyTick >= 0
             ? witness.triggerApplyTick
             : witness.clock.effectTick;
-        TriggerWorldStore::get().applyAtTick(layer, tick);
+        for (auto& saved : m_savedTransforms) {
+            TriggerPose pose{};
+            if (TriggerWorldStore::get().samplePose(saved.uniqueId, tick, pose)) {
+                TriggerWorldStore::writePose(saved.obj, pose);
+                saved.dirty = true;
+            }
+        }
         DevEvalRestore::noteTriggersSpooled(
             restore,
             witness.triggerStoreKey,
             witness.triggerStoreVersion,
             tick
-);
+        );
     }
 
     // --- Movers: freeze-world poses, else digest-only ---
@@ -5025,7 +4905,7 @@ void ShadowSimulator::applyEvalWorldRestore(
                 for (unsigned i = 0; i < children->count(); ++i) {
                     auto* candidate = typeinfo_cast<GameObject*>(
                         children->objectAtIndex(i)
-);
+                    );
                     if (!candidate) continue;
                     if (candidate->m_uniqueID != pose.uniqueId) continue;
                     obj = candidate;
@@ -5033,25 +4913,10 @@ void ShadowSimulator::applyEvalWorldRestore(
                 }
                 if (!obj) continue;
 
-                bool already = false;
-                for (auto const& st : this->m_savedTransforms) {
-                    if (st.uniqueId == pose.uniqueId) {
-                        already = true;
-                        break;
-                    }
-                }
-                if (!already) {
-                    SavedTransform st;
-                    st.uniqueId = obj->m_uniqueID;
-                    st.obj = obj;
-                    st.x = obj->getPositionX();
-                    st.y = obj->getPositionY();
-                    st.rotation = obj->getRotation();
-                    st.scaleX = obj->getScaleX();
-                    st.scaleY = obj->getScaleY();
-                    st.nodeVisible = obj->isVisible();
-                    this->m_savedTransforms.push_back(st);
-                }
+                auto it = std::find_if(m_savedTransforms.begin(), m_savedTransforms.end(),
+                    [&](auto const& saved) { return saved.uniqueId == pose.uniqueId; });
+                if (it == m_savedTransforms.end()) m_savedTransforms.emplace_back(obj).dirty = true;
+                else it->dirty = true;
 
                 TriggerPose tp;
                 tp.tick = 0;
@@ -5068,7 +4933,7 @@ void ShadowSimulator::applyEvalWorldRestore(
             restore,
             witness.moverPoses,
             witness.hasHazardDigest ? witness.hazardDigest : 0
-);
+        );
     }
     else if (witness.hasHazardDigest) {
         DevEvalRestore::noteMoversDigestOnly(restore, witness.hazardDigest);
@@ -5139,7 +5004,7 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::evalDelayFromFreeze(
 
     out.restore = DevEvalRestore::beginFromWitness(
         witness, DevSimPathId::EvalDelayFromFreeze
-);
+    );
 
     PlayerObject* ghost = this->m_evalGhosts[0];
     applyPlayerBlob(ghost, witness.player);
@@ -5291,7 +5156,7 @@ ShadowSimulator::EvalFromFreezeResult ShadowSimulator::replayActualFire(
     // Reuse the schedule path but retag evalSimPathId / restore path id.
     out = this->evalDelayFromFreeze(
         layer, witness, delay, horizonTicks, down, tickBudgetLeft
-);
+    );
     out.evalSimPathId = DevSimPathId::ReplayActualFire;
     if (out.restore.valid) {
         out.restore.evalSimPathId = DevSimPathId::ReplayActualFire;

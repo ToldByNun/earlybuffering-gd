@@ -11,13 +11,6 @@ int OpportunityProbe::midDelay(int limit) {
     return mid;
 }
 
-int OpportunityProbe::nearDelay(int limit) {
-    if (limit <= 0) return 0;
-    // Prefer a short probe so first-jump floor spikes are not only sampled at
-    // mid/limit (often died-before-action while a small Delay still helps).
-    return OpportunityProbe::midDelay(std::min(limit, 16));
-}
-
 int OpportunityProbe::orbScanTicks(int limit, int slack) {
     int const lim = std::max(0, limit);
     int const sl = std::max(0, slack);
@@ -53,11 +46,6 @@ bool OpportunityProbe::shouldSearchFurther(
     if (d0ActivatedRing) return true;
     if (!probes || probeCount <= 0) return false;
     for (int i = 0; i < probeCount; ++i) {
-        // Coast death before the delayed click = hazard in the wait window.
-        // Not a "better delay" sample, but must block PassNoThreat early exit.
-        if (probes[i].diedBeforeAction && !baseline.diedBeforeAction) {
-            return true;
-        }
         if (OpportunityProbe::sampleShowsOpportunity(baseline, probes[i])) {
             return true;
         }
@@ -97,9 +85,6 @@ bool OpportunityProbe::selfCheck(std::string& report) {
     expect(OpportunityProbe::midDelay(1) == 1, "mid-1");
     expect(OpportunityProbe::midDelay(0) == 0, "mid-0");
     expect(OpportunityProbe::midDelay(5) == 2, "mid-5");
-    expect(OpportunityProbe::nearDelay(64) == 8, "near-64");
-    expect(OpportunityProbe::nearDelay(8) == 4, "near-8");
-    expect(OpportunityProbe::nearDelay(0) == 0, "near-0");
 
     expect(OpportunityProbe::orbScanTicks(16, 2) == 22, "scan-16-2");
     expect(OpportunityProbe::orbScanTicks(2, 0) == 6, "scan-2-0");
@@ -210,32 +195,6 @@ bool OpportunityProbe::selfCheck(std::string& report) {
             false, false, false, base, nullptr, 0
         ),
         "g2-no-probes-allow-pass"
-    );
-
-    // Wait-window hazard: probe dies before action while baseline lived → search.
-    Sample waitDie = base;
-    waitDie.diedBeforeAction = true;
-    probes[0] = waitDie;
-    expect(
-        OpportunityProbe::shouldSearchFurther(
-            false, false, false, base, probes, 1
-        ),
-        "g2-wait-death-search"
-    );
-    expect(
-        !OpportunityProbe::allowPassNoThreat(
-            false, false, false, base, probes, 1
-        ),
-        "g2-wait-death-no-pass"
-    );
-    // Baseline already dying before action → wait-death alone does not force.
-    Sample baseDie = base;
-    baseDie.diedBeforeAction = true;
-    expect(
-        !OpportunityProbe::shouldSearchFurther(
-            false, false, false, baseDie, probes, 1
-        ),
-        "g2-both-wait-death-no-search"
     );
 
     if (fails == 0) {

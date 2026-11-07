@@ -41,14 +41,13 @@ public:
         Live = 0,
         Replay,
         Hybrid,
-        BruteForce,
-        Route
+        BruteForce
     };
 
-    // Physics backend for Live plan. Only ShadowPlayer ships (Trajectory removed).
+    // Live V2 sim backend (WU8). V1 effective engine is always ShadowPlayer.
     enum class AssistEngineKind {
         ShadowPlayer = 0,
-        Trajectory // retained enum value; never selected
+        Trajectory
     };
 
     static constexpr int MODE_COUNT = static_cast<int>(GameModeKind::Count);
@@ -132,17 +131,19 @@ public:
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
     static char const* assistModeHint(AssistMode mode);
-    // Assist pick: locked to v1 (name kept for call sites / PlanGold).
+    // Assist pick inside the tick window: v1 (default, ex-Legacy) vs v2 (ex-New).
+    // assistPickLegacy() == v1 (kept name until Live choose extract).
     static bool assistPickLegacy();
     static bool assistPickV1();
-    static char const* assistPickName(); // always "v1"
-    // Map store/export aliases → v1. Empty if unknown.
+    static char const* assistPickName(); // "v1" / "v2"
+    // Map store/export aliases: v1|Legacy → v1, v2|New → v2. Empty if unknown.
     static char const* canonicalizeAssistPick(std::string const& raw);
-    // Always ShadowPlayer (Trajectory setting removed).
+    // Raw assist-engine setting (ShadowPlayer / Trajectory).
     static AssistEngineKind assistEngine();
+    // V1 → always ShadowPlayer; V2 → honors assist-engine.
     static AssistEngineKind effectiveAssistEngine();
     static char const* assistEngineName(AssistEngineKind engine);
-    static char const* assistEngineName();
+    static char const* assistEngineName(); // effective
     static int simBudgetUs();
     static int bakeRadius();
     static int cpsLimit(); // 0 = off; assist pauses while CPS >= this
@@ -154,9 +155,6 @@ public:
     static int husReplanTickBudget();
     static int deathSlack();
     static int lookAheadCap();
-    static float routeCorridorMultiplier();
-    static float routeOffRouteThreshold();
-    static bool routeLiveFallback();
 
     // --- Smart Prediction (Live / Hybrid) ---
     // Live/Hybrid multi-jump: 1 = single-click only

@@ -41,7 +41,7 @@ enum class AssistReason {
     DelayPrefer,
     DelayGeneric,
 
-    // Soft hold (reserved; may be set by HUS path)
+    // Soft hold (later commits may set; reserved)
     HoldPending,
 
     // Toggle orb / touch-toggle target overlapped in sim — never Delay
@@ -52,17 +52,12 @@ enum class AssistReason {
     // SpotTrustMap: this X was marked after prior drift (Pass until cleared)
     PassSpotUntrusted,
 
-    // PerfectAssistPolicy named Passes
+    // Commit 11 PerfectAssistPolicy named Passes
     PassHardUnknown, // Hard Unknown overlap (dual/follow/pre-toggle) — never Delay
     PassTwEmpty,     // Trigger World expected movers but 0 tracks
 
     // Cube/ball/ufo/spider UP without dash/holdAssist — no false release assist
     PassReleaseDiscrete,
-
-    // ShiftedInputQueue at Cap 8 — named Pass (no silent drop)
-    PassQueueOverflow,
-    PassRouteMissing,
-    PassRouteOff,
 
     // Must stay last — selfCheck walks None..PassUnknown-1 then Unknown
     PassUnknown
@@ -86,7 +81,7 @@ public:
     // Classify a finished SimPlan-like pair into Delay* when reason still None.
     static AssistReason inferDelayReason(
         bool activatedRing, bool requireOrb, bool usedPreferBand
-);
+    );
 
     static bool selfCheck(std::string& report);
 

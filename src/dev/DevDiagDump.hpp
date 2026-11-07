@@ -17,14 +17,12 @@ public:
 
     // Compact bake-fail dump (auto from BakeMap on 0 windows).
     static bool dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg);
-    static bool dumpReplayDivergence(ShadowSimulator::BakeRunResult const& run,
-        ImportedReplay const& replay, std::filesystem::path& outDir, std::string& errMsg);
 
     // Pure helpers (PlanGold + BakeMap validate Err).
     static int deathTraceUntil(int deathFrame, int lastEventFrame);
     static std::string formatUnknownTop3(
         std::vector<ShadowSimulator::UnknownHistBin> const& hist
-);
+    );
     static bool selfCheck(std::string& report);
 
 private:
@@ -36,7 +34,7 @@ private:
         char const* name,
         std::string const& body,
         std::string& errMsg
-);
+    );
 
     static std::string buildIndex(std::filesystem::path const& dir, bool bakeFailOnly);
     static std::string buildSettings();
@@ -47,7 +45,7 @@ private:
     static std::string buildBakeMap();
     static std::string buildTriggerWorld();
     static std::string buildBakeProbe(int maxJobs);
-    // Frame-by-frame through deathFrame+8 (no hard 128 cap).
+    // Frame-by-frame through deathFrame+8 (Commit 3 — no hard 128 cap).
     static std::string buildBakeFrameTrace();
     // Soft/Hard unknown overlap histogram from a death+8 bake timeline.
     static std::string buildUnknownHistogram();
@@ -74,7 +72,7 @@ private:
         std::string& outErr,
         int* outSubsteps = nullptr,
         BakePrepStats* outStats = nullptr
-);
+    );
 };
 
 #endif

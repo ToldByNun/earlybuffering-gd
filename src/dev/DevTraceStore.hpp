@@ -30,8 +30,8 @@ enum class DevEventSource {
     Bake
 };
 
-// One traced decision step. Identity + chain fields;
-// clock/witness/eval payloads fill on the same struct.
+// One traced decision step. Commit 3 covers identity + chain fields;
+// later commits fill clock/witness/eval payloads on the same struct.
 struct DevDecisionEvent {
     int64_t eventId = 0;
     int64_t attemptId = 0;
@@ -62,15 +62,15 @@ struct DevDecisionEvent {
     int ticksToDeath = -1;
     bool liveVsEvalMismatch = false;
 
-    // Clock stamp on planFinished (eval binds the same stamp).
+    // Commit 6: clock stamp on planFinished (eval binds the same stamp).
     bool hasClockStamp = false;
     DevClockContract::Stamp clockStamp{};
 
-    // Live witness at plan time (no restore yet).
+    // Commit 7: live witness at plan time (no restore yet).
     bool hasWitness = false;
     DevLiveWitness witness{};
 
-    // Fidelity / claims (witness-gate at plan; full classify post-restore).
+    // Commit 8: fidelity / claims (witness-gate at plan; full classify post-restore).
     bool hasFidelity = false;
     DevFidelity fidelity = DevFidelity::NotReproducible;
     bool claimsAllowed = false;
@@ -78,7 +78,7 @@ struct DevDecisionEvent {
     std::string evalSuppressedReason;
     std::vector<DevDiffEntry> diffs;
 
-    // Reject ledger + attribution on planFinished (gate-pass: empty notes).
+    // Commit 12: reject ledger + attribution on planFinished (gate-pass: empty notes).
     std::vector<DevRejectLedger::CandNote> candNotes;
     bool candNotesTruncated = false;
     std::vector<DevRejectLedger::AttributionNote> attribution;
@@ -126,13 +126,13 @@ public:
         std::vector<DevDecisionEvent> const& events,
         int64_t pressId,
         std::string& err
-);
+    );
 
     // Serialize / parse without touching disk (selfCheck + later export).
     static std::string sessionToJsonString(DevSessionFile const& session);
     static bool sessionFromJsonString(
         std::string const& body, DevSessionFile& out, std::string& err
-);
+    );
 
     static bool selfCheck(std::string& report);
 
@@ -150,7 +150,7 @@ public:
         bool startPos,
         bool practice,
         std::string settingsFingerprint
-);
+    );
     void setModVersion(std::string modVersion);
 
     // Compact portable settings summary for session JSON (never empty when called).

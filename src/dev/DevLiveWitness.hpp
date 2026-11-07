@@ -14,7 +14,7 @@ struct SimPlan;
 
 // Observation quality per category (Vertrag B).
 // At capture time: Restored = complete restorable snapshot held in the witness.
-// Restore/diff may confirm or demote this.
+// Commit 8's restore/diff may confirm or demote this.
 enum class DevWitnessStatus {
     Absent = 0,
     DigestOnly,
@@ -32,7 +32,7 @@ enum class DevWitnessCategory {
     CollisionFlags
 };
 
-// Nearby object pose for freeze-world restore.
+// Nearby object pose for freeze-world restore (Commit 11).
 // Hashes stay DigestOnly; these poses can upgrade Movers to Restored.
 struct DevObjectPose {
     int uniqueId = 0;
@@ -108,7 +108,7 @@ struct DevWitnessCategoryEntry {
     bool digestMismatch = false; // reserved for later drift checks
 };
 
-// Live observation at plan time (no restore yet).
+// Live observation at plan time. No restore in Commit 7.
 class DevLiveWitness {
 public:
     // Bump when the serializable field list of DevPlayerBlob changes.
@@ -125,7 +125,7 @@ public:
     int triggerStoreVersion = 0;
     int triggerApplyTick = -1;
     bool triggerCanSpool = false;
-    // Trigger-World bake / store snapshot for Dev Lab.
+    // Trigger-World bake / store snapshot for Dev Lab (Commit 1 / 1.3.1).
     int triggerReadyTracks = 0;
     int triggerTrackCount = 0;
     int triggerBakeEffects = 0;
@@ -151,7 +151,7 @@ public:
 
     static DevWitnessStatus categoryStatus(
         DevLiveWitness const& w, DevWitnessCategory c
-);
+    );
     static bool hasWorldDep(DevLiveWitness const& w, DevWitnessCategory c);
 
     // Capture from live play. player required for a useful witness.
@@ -163,14 +163,14 @@ public:
         DevClockContract::Stamp const& clock,
         int effectTick,
         bool freezeWorld
-);
+    );
 
     // worldDeps from SimPlan flags + dual presence (not post-death heuristics).
     static void fillWorldDeps(
         DevLiveWitness& w,
         SimPlan const& plan,
         bool dualActive
-);
+    );
 
     static bool selfCheck(std::string& report);
 
@@ -183,10 +183,10 @@ private:
         DevWitnessCategory c,
         DevWitnessStatus status,
         uint64_t digest = 0
-);
+    );
     static uint64_t hashHazardNeighborhood(
         PlayLayer* layer, PlayerObject* player, float radiusX
-);
+    );
 };
 
 #endif // DEV_LIVE_WITNESS_HPP

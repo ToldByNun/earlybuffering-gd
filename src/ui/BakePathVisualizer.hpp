@@ -49,7 +49,6 @@ private:
     GameModeKind m_lastMode = GameModeKind::Cube;
     int m_drawnPress = 0;
     int m_drawnRelease = 0;
-    int m_drawnRoute = 0;
 };
 
 #endif

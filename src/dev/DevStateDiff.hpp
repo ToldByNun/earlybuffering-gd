@@ -54,21 +54,21 @@ public:
         DevPlayerBlob const& restored,
         DevWitnessCategory category,
         std::vector<DevDiffEntry>* outDiffs
-);
+    );
 
-    // Full classify after a restore attempt (post-write).
+    // Full classify after a restore attempt (Commit 9+ calls this post-write).
     static DevClassifyResult classify(
         DevLiveWitness const& witness,
         DevEvalRestore const& restore,
         DevClassifyOptions const& opts
-);
+    );
 
     // Pre-sim gate: suppress when the witness alone already forces notReproducible
     // (missing player / bad clock / schema). No restore object required.
     static DevClassifyResult classifyWitnessGate(
         DevLiveWitness const& witness,
         DevClassifyOptions const& opts
-);
+    );
 
     static bool selfCheck(std::string& report);
 
@@ -77,7 +77,7 @@ private:
 
     static bool isHardFailDep(
         DevWitnessCategory c, DevClassifyOptions const& opts
-);
+    );
     static void pushDiff(
         std::vector<DevDiffEntry>& diffs,
         DevWitnessCategory category,
@@ -85,7 +85,7 @@ private:
         std::string liveValue,
         std::string restoredValue,
         DevDiffKind kind
-);
+    );
 };
 
 #endif // DEV_STATE_DIFF_HPP

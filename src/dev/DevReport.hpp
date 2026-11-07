@@ -7,7 +7,7 @@
 
 #include <string>
 
-// Overlay line + last-report store. Field names are literal contract A.
+// Overlay line + last-report store (Commit 14). Field names are literal contract A.
 class DevReport {
 public:
     std::string recLine; // e.g. REC 3/10 or empty
@@ -36,7 +36,7 @@ public:
     bool liveVsEvalMismatch = false;
     int livePlannedDelay = -1;
 
-    // Counterfactual Prev/Caused class for this eval (simEstimate / G10).
+    // Commit 12: counterfactual Prev/Caused class for this eval (simEstimate / G10).
     int plannedDelay = -1;
     char const* simNetClass = "neutral"; // prev|caused|neutral|inconclusive
     int simPrev = 0;
@@ -50,7 +50,7 @@ public:
         DevEvalEngine::GridReport const& grid,
         std::string recLine,
         int plannedDelay = -1
-);
+    );
 
     // Pure formatter used by fromGrid and selfCheck.
     static std::string formatOverlayLine(DevReport const& r);

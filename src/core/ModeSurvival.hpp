@@ -3,7 +3,7 @@
 
 #include <string>
 
-// Lethal vs recoverable vs landing (ideas reimplemented; no upstream code).
+// Commit 9 — Lethal vs recoverable vs landing (ideas reimplemented; no upstream code).
 // Pure classifiers: cube/ball landing, wave recoverable / flip probes, ship-like recover,
 // narrow overlap-ignore, late-crash-after-clear. ParityGate: ascent alone ≠ Landing.
 class ModeSurvival {
@@ -66,7 +66,7 @@ public:
         float obstacleX,
         float const sampleEndX[kWaveFlipProbes],
         float marginPx = kWaveClearMarginPx
-);
+    );
     static float clearMarginPx(float obstacleX, float endX);
     static bool waveSmallestClearOk(float clearPx, float marginPx = kWaveClearMarginPx);
 
@@ -76,7 +76,7 @@ public:
         bool zoneCleared,
         bool groundedSettled,
         bool deathLooksLikeAscent
-);
+    );
 
     static bool selfCheck(std::string& report);
 

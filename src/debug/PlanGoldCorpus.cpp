@@ -3,12 +3,7 @@
 #include "../core/AssistController.hpp"
 #include "../core/AssistLearning.hpp"
 #include "../core/AssistContracts140.hpp"
-#include "../core/AssistContracts142.hpp"
 #include "../core/AssistRealMetrics.hpp"
-#include "../core/ClickBakeStore.hpp"
-#include "../core/LevelCacheAtomicIo.hpp"
-#include "../core/LevelCacheIndex.hpp"
-#include "../core/LevelFingerprint.hpp"
 #include "../core/AssistSimEstimate.hpp"
 #include "../core/AssistVerdict.hpp"
 #include "../core/GhostParityProbe.hpp"
@@ -26,12 +21,6 @@
 #include "../core/PerfectAssistPolicy.hpp"
 #include "../core/OrbAlign.hpp"
 #include "../core/AssistHorizon.hpp"
-#include "../core/ModeAssist.hpp"
-#include "../core/RoutePath.hpp"
-#include "../core/RoutePathBuilder.hpp"
-#include "../core/RoutePathStore.hpp"
-#include "../core/ShiftedInputQueue.hpp"
-#include "../core/SpamAssistPolicy.hpp"
 #include "../core/AssistSpikeWatch.hpp"
 #include "../core/TrajDrawHorizon.hpp"
 #include "../core/RealCorpusFixtures.hpp"
@@ -47,18 +36,6 @@
 #include "../core/ConfigBundleKeys.hpp"
 #include "../core/PlatformLimits.hpp"
 #include "../core/SaveDropPaths.hpp"
-#include "../cloud/CloudConfigStore.hpp"
-#include "../cloud/CloudConfigSha256.hpp"
-#include "../cloud/CloudConfigHostPolicy.hpp"
-#include "../cloud/CloudConfigIndex.hpp"
-#include "../cloud/CloudConfigSeed.hpp"
-#include "../cloud/CloudConfigClient.hpp"
-#include "../cloud/CloudConfigService.hpp"
-#include "../cloud/CloudConfigApply.hpp"
-#include "../cloud/CloudConfigShare.hpp"
-#include "../cloud/CloudConfigPublish.hpp"
-#include "../cloud/CloudConfigSubmit.hpp"
-#include "../cloud/CloudConfigStats.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/BufferEventMachine.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -85,7 +62,7 @@ bool PlanGoldCorpus::run(std::string& report) {
     auto expect = [&](bool ok, char const* name) {
         if (!ok) { ++fails; report += std::string("FAIL ") + name + "; "; }
     };
-    // v1.4.0 LOCK: freeze ε before any probe / contract selfCheck.
+    // Commit 2 LOCK: freeze ε before any probe / contract selfCheck.
     AssistContracts140::applyLockedEps();
     std::string shadowReport;
     expect(ShadowSimulator::regressionSelfCheck(shadowReport), "shadow-self");
@@ -108,30 +85,6 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(ClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
     std::string saveDropReport;
     expect(SaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
-    std::string cloudStoreReport;
-    expect(CloudConfigStore::selfCheck(cloudStoreReport), "cloud-config-store");
-    std::string cloudShaReport;
-    expect(CloudConfigSha256::selfCheck(cloudShaReport), "cloud-config-sha256");
-    std::string cloudHostReport;
-    expect(CloudConfigHostPolicy::selfCheck(cloudHostReport), "cloud-config-host");
-    std::string cloudIndexReport;
-    expect(CloudConfigIndex::selfCheck(cloudIndexReport), "cloud-config-index");
-    std::string cloudSeedReport;
-    expect(CloudConfigSeed::selfCheck(cloudSeedReport), "cloud-config-seed");
-    std::string cloudClientReport;
-    expect(CloudConfigClient::selfCheck(cloudClientReport), "cloud-config-client");
-    std::string cloudServiceReport;
-    expect(CloudConfigService::selfCheck(cloudServiceReport), "cloud-config-service");
-    std::string cloudApplyReport;
-    expect(CloudConfigApply::selfCheck(cloudApplyReport), "cloud-config-apply");
-    std::string cloudShareReport;
-    expect(CloudConfigShare::selfCheck(cloudShareReport), "cloud-config-share");
-    std::string cloudPublishReport;
-    expect(CloudConfigPublish::selfCheck(cloudPublishReport), "cloud-config-publish");
-    std::string cloudSubmitReport;
-    expect(CloudConfigSubmit::selfCheck(cloudSubmitReport), "cloud-config-submit");
-    std::string cloudStatsReport;
-    expect(CloudConfigStats::selfCheck(cloudStatsReport), "cloud-config-stats");
     std::string configKeysReport;
     expect(ConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string configCodecReport;
@@ -176,18 +129,8 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(GhostParityProbe::selfCheck(ghostParityReport), "ghost-parity-probe");
     std::string contracts140Report;
     expect(AssistContracts140::selfCheck(contracts140Report), "assist-contracts-140");
-    std::string contracts142Report;
-    expect(AssistContracts142::selfCheck(contracts142Report), "assist-contracts-142");
     std::string realMetricsReport;
     expect(AssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
-    std::string levelCacheAtomicReport;
-    expect(LevelCacheAtomicIo::selfCheck(levelCacheAtomicReport), "level-cache-atomic-io");
-    std::string levelCacheIndexReport;
-    expect(LevelCacheIndex::selfCheck(levelCacheIndexReport), "level-cache-index");
-    std::string levelFingerprintReport;
-    expect(LevelFingerprint::selfCheck(levelFingerprintReport), "level-fingerprint");
-    std::string clickBakeStoreReport;
-    expect(ClickBakeStore::selfCheck(clickBakeStoreReport), "click-bake-store");
     std::string simEstimateReport;
     expect(AssistSimEstimate::selfCheck(simEstimateReport), "assist-sim-estimate");
     std::string collisionPolicyReport;
@@ -206,19 +149,6 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(OrbAlign::selfCheck(orbAlignReport), "orb-align");
     std::string assistHorizonReport;
     expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
-    std::string modeAssistReport;
-    expect(ModeAssist::selfCheck(modeAssistReport), "mode-assist");
-
-    std::string routePathReport;
-    expect(RoutePath::selfCheck(routePathReport), "route-path");
-    std::string routeBuilderReport;
-    expect(RoutePathBuilder::selfCheck(routeBuilderReport), "route-path-builder");
-    std::string routeStoreReport;
-    expect(RoutePathStore::selfCheck(routeStoreReport), "route-path-store");
-    std::string shiftedQueueReport;
-    expect(ShiftedInputQueue::selfCheck(shiftedQueueReport), "shifted-input-queue");
-    std::string spamAssistReport;
-    expect(SpamAssistPolicy::selfCheck(spamAssistReport), "spam-assist-policy");
     std::string trajDrawHorizonReport;
     expect(TrajDrawHorizon::selfCheck(trajDrawHorizonReport), "traj-draw-horizon");
     std::string spikeWatchReport;

@@ -10,7 +10,7 @@ class ShadowSimulator;
 // ring/activated state — especially important on iOS with multi-mod update hooks.
 class SimSessionGuard {
 public:
-    SimSessionGuard(ShadowSimulator& sim, PlayLayer* layer);
+    SimSessionGuard(ShadowSimulator& sim, PlayLayer* layer, bool fromLiveWorld = false);
     ~SimSessionGuard();
 
     SimSessionGuard(SimSessionGuard const&) = delete;

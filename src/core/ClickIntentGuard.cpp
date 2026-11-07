@@ -1,5 +1,4 @@
 #include "ClickIntentGuard.hpp"
-#include "ModeAssist.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,15 +15,35 @@ void ClickIntentGuard::reset() {
 }
 
 int ClickIntentGuard::spamWindowTicks(GameModeKind mode) {
-    return ModeAssist::forKind(mode).spamWindowTicks();
+    // Physics ticks (~240/s). Wave/ship spam is denser than cube taps.
+    switch (mode) {
+        case GameModeKind::Wave:  return 10;
+        case GameModeKind::Ship:  return 12;
+        case GameModeKind::Swing: return 12;
+        case GameModeKind::Ufo:   return 14;
+        case GameModeKind::Spider:return 14;
+        default:                  return 16;
+    }
 }
 
 int ClickIntentGuard::spamMinCount(GameModeKind mode) {
-    return ModeAssist::forKind(mode).spamMinCount();
+    switch (mode) {
+        case GameModeKind::Wave:  return 3;
+        case GameModeKind::Ship:  return 3;
+        case GameModeKind::Swing: return 3;
+        default:                  return 4;
+    }
 }
 
 float ClickIntentGuard::spamMaxMeanGap(GameModeKind mode) {
-    return ModeAssist::forKind(mode).spamMaxMeanGap();
+    switch (mode) {
+        case GameModeKind::Wave:  return 4.f;
+        case GameModeKind::Ship:  return 5.f;
+        case GameModeKind::Swing: return 5.f;
+        case GameModeKind::Ufo:   return 6.f;
+        case GameModeKind::Spider:return 6.f;
+        default:                  return 7.f;
+    }
 }
 
 void ClickIntentGuard::notePress(int playerSlot, int attemptTick, GameModeKind mode) {

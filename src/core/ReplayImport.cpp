@@ -122,7 +122,6 @@ Result<ImportedReplay> ReplayImport::loadGdr(std::filesystem::path const& path) 
     out.tps = r.framerate > 0.0 ? r.framerate : 240.0;
     out.sourceName = fileStemName(path);
     out.format = "gdr2";
-    out.recordedLevelId = r.levelInfo.id;
     out.events.reserve(r.inputs.size());
     for (auto const& in : r.inputs) {
         ReplayEvent e;

@@ -3,14 +3,14 @@
 
 #include <string>
 
-// Frozen v1.4.0 assist contracts (v1.4.0 LOCK).
+// Frozen v1.4.0 assist contracts (Commit 2 LOCK).
 // DO NOT RETUNE thresholds without a new mod version + new contracts doc.
 class AssistContracts140 {
 public:
     static constexpr int kSchema = 1;
     static constexpr char const* kCorpusLabel = "solo"; // solo until multi opt-in lands
 
-    // --- Locked ε from baseline probe placeholder (p99 pending multi-corpus) ---
+    // --- Locked ε from Commit-1 baseline placeholder (p99 pending multi-corpus) ---
     // Changing these requires a new version; GhostParityProbe reads these at init.
     static constexpr float kLockedEpsX = 12.f;
     static constexpr float kLockedEpsY = 12.f;
@@ -60,7 +60,7 @@ public:
     // G7b: TrustRate ≥ min for level class when N_opp ≥ Opp_min; else INCONCLUSIVE.
     static GateStatus gateG7bTrustRate(
         int trustOpp, int opp, bool dynamicLabelled
-);
+    );
 
     static char const* statusId(GateStatus s);
 

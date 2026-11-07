@@ -84,7 +84,7 @@ SimObjectAction SimCollisionPolicy::classifyObjectType(int objectType, int objec
         case GameObjectType::AnimatedHazard:
             return SimObjectAction::Include;
 
-        // Soft Unknown → Include (histogram Soft class; vanilla handles).
+        // Commit 5 — Soft Unknown → Include (histogram Soft class; vanilla handles).
         // Evidence: Soft bins = vehicle/mirror/teleport/modifier/collision/enter.
         // Hard Dual/Solo stay UnknownOnOverlap (no Soft-Continue).
         case GameObjectType::CollisionObject:
@@ -182,7 +182,7 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* obj) {
     return SimCollisionPolicy::classifyObjectType(
         static_cast<int>(obj->m_objectType),
         obj->m_objectID
-);
+    );
 }
 
 SimUnknownClass SimCollisionPolicy::unknownClass(GameObject* obj) {
@@ -193,7 +193,7 @@ SimUnknownClass SimCollisionPolicy::unknownClass(GameObject* obj) {
     if (sim.isDynamicTriggerTarget(obj->m_uniqueID)) return SimUnknownClass::Hard;
     return SimCollisionPolicy::unknownClassForType(
         static_cast<int>(obj->m_objectType)
-);
+    );
 }
 
 char const* SimCollisionPolicy::unknownClassId(SimUnknownClass c) {
@@ -208,7 +208,7 @@ bool SimCollisionPolicy::noteLimitedSimOnce() {
         "sim: limited (Hard Unknown: toggle pre-model / follow-dynamic / dual; "
         "Soft vehicle·mirror·teleport → Include bakeOffline only, live truncate; "
         "ready static bake → include when active)"
-);
+    );
     return true;
 }
 
@@ -224,15 +224,15 @@ bool SimCollisionPolicy::selfCheck(std::string& report) {
     expect(
         std::strcmp(unknownClassId(SimUnknownClass::Soft), "soft") == 0,
         "id-soft"
-);
+    );
     expect(
         std::strcmp(unknownClassId(SimUnknownClass::Hard), "hard") == 0,
         "id-hard"
-);
+    );
     expect(isSpeedPortalId(200), "speed-200");
     expect(!isSpeedPortalId(1), "not-speed-1");
 
-    // Fixtures: Soft histogram types → Include; Hard Dual/Solo → Unknown.
+    // Commit 5 fixtures: Soft histogram types → Include; Hard Dual/Solo → Unknown.
     auto const wave = static_cast<int>(GameObjectType::WavePortal);
     auto const ship = static_cast<int>(GameObjectType::ShipPortal);
     auto const cube = static_cast<int>(GameObjectType::CubePortal);
@@ -270,7 +270,7 @@ bool SimCollisionPolicy::selfCheck(std::string& report) {
     expect(
         classifyObjectType(wave) != SimObjectAction::UnknownOnOverlap,
         "no-soft-continue-wave"
-);
+    );
 
     expect(softPortalLiveTruncate(wave), "live-trunc-wave");
     expect(softPortalLiveTruncate(tele), "live-trunc-tele");

@@ -6,8 +6,6 @@
 #include "../core/BakeMap.hpp"
 #include "../core/BakeScheduler.hpp"
 #include "../core/ConfigBundle.hpp"
-#include "../core/LevelCacheIndex.hpp"
-#include "../core/LevelProfile.hpp"
 #include "../core/ReplayImport.hpp"
 #include "../core/SaveDropPaths.hpp"
 #include "../debug/AssistLog.hpp"
@@ -20,7 +18,6 @@
 #include "../ui/DevOverlay.hpp"
 #include "../ui/StatusOverlay.hpp"
 #include "../ui/BakePathVisualizer.hpp"
-#include "../ui/BakeReplayVisualizer.hpp"
 #include "../ui/TrajectoryVisualizer.hpp"
 
 #include <Geode/Geode.hpp>
@@ -279,22 +276,13 @@ void PauseActionBridge::handleImportedPath(std::filesystem::path const& path) {
     BakeMap::get().setPendingReplay(loaded.unwrap());
     AssistController::get().updateOverlay();
     auto const* r = BakeMap::get().pendingReplay();
-    std::string levelNote;
-    auto* layer = PlayLayer::get();
-    if (r->recordedLevelId && layer && layer->m_level) {
-        int const currentId = layer->m_level->m_levelID;
-        if (currentId > 0 && r->recordedLevelId != static_cast<uint32_t>(currentId)) {
-            levelNote = fmt::format("\nRecorded on level {}. Current level: {}. "
-                "Baking uses the current layout.\n", r->recordedLevelId, currentId);
-        }
-    }
     FLAlertLayer::create(
         "EarlyBuffer",
         fmt::format(
-            "Imported {}\n{} events @ {:.0f} tps ({})\n{}\n"
+            "Imported {}\n{} events @ {:.0f} tps ({})\n\n"
             "Press Bake Map for replay windows.\n"
             "Brute Bake ignores this and searches the level itself.",
-            r->sourceName, r->events.size(), r->tps, r->format, levelNote
+            r->sourceName, r->events.size(), r->tps, r->format
         ).c_str(),
         "OK"
     )->show();
@@ -392,58 +380,6 @@ void PauseActionBridge::toggleDebug() {
 void PauseActionBridge::resetLearning() {
     AssistController::get().resetLevelProfile();
     AssistLog::info("LEARN: level profile reset");
-}
-
-void PauseActionBridge::clearLevelCache() {
-    std::string key = LevelProfile::get().key();
-    if (key.empty()) {
-        key = BakeMap::get().data().levelKey;
-    }
-    if (key.empty()) {
-        FLAlertLayer::create(
-            "EarlyBuffer",
-            "No level key loaded — enter a level first.",
-            "OK"
-        )->show();
-        return;
-    }
-    std::string err;
-    if (!LevelCacheIndex::clearLevel(key, err)) {
-        FLAlertLayer::create(
-            "EarlyBuffer",
-            err.empty() ? "Could not clear this level cache." : err.c_str(),
-            "OK"
-        )->show();
-        return;
-    }
-    BakeMap::get().clear();
-    AssistLog::info(fmt::format("LEVEL-CACHE cleared {}", key));
-    FLAlertLayer::create(
-        "EarlyBuffer",
-        fmt::format("Cleared level cache for\n{}", key).c_str(),
-        "OK"
-    )->show();
-    AssistController::get().updateOverlay();
-}
-
-void PauseActionBridge::clearAllLevelCaches() {
-    std::string err;
-    if (!LevelCacheIndex::clearAll(err)) {
-        FLAlertLayer::create(
-            "EarlyBuffer",
-            err.empty() ? "Could not clear all level caches." : err.c_str(),
-            "OK"
-        )->show();
-        return;
-    }
-    BakeMap::get().clear();
-    AssistLog::info("LEVEL-CACHE cleared all");
-    FLAlertLayer::create(
-        "EarlyBuffer",
-        "Cleared all level caches.",
-        "OK"
-    )->show();
-    AssistController::get().updateOverlay();
 }
 
 void PauseActionBridge::toggleAutoTune() {
@@ -770,53 +706,6 @@ void PauseActionBridge::devDumpDiag() {
         clipOk ? "Path copied to clipboard." : "Clipboard copy failed."
     );
     FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
-}
-
-void PauseActionBridge::devVisualizeBake() {
-    auto* layer = PlayLayer::get();
-    if (!layer) {
-        FLAlertLayer::create("EarlyBuffer Dev", "Open a level first.", "OK")->show();
-        return;
-    }
-    auto snapshot = AssistController::get().ensureStartSnapshot(layer);
-    if (snapshot.isErr()) {
-        FLAlertLayer::create(
-            "EarlyBuffer Dev",
-            "Reset the level once, then pause and visualize.",
-            "OK"
-        )->show();
-        return;
-    }
-    auto trace = BakeMap::get().visualizeReplay(
-        layer,
-        AssistController::get().startSnapshotSlot()
-    );
-    if (trace.isErr()) {
-        FLAlertLayer::create("EarlyBuffer Dev", trace.unwrapErr().c_str(), "OK")->show();
-        return;
-    }
-    auto result = std::move(trace.unwrap());
-    auto const firstContact = result.deathFrame;
-    auto const frames = static_cast<int>(result.frames.size());
-    auto const lastFrame = frames > 0 ? result.frames.back().frame : -1;
-    double const tps = BakeMap::get().pendingReplay()
-        ? BakeMap::get().pendingReplay()->tps
-        : 240.0;
-    BakeReplayVisualizer::get().start(
-        layer,
-        std::move(result.frames),
-        tps,
-        firstContact
-    );
-    auto const message = fmt::format(
-        "Bake trace ready. Resume the level to play it.\n\n"
-        "Yellow dot = current ghost frame\n"
-        "Red dot = first ghost contact\n\n"
-        "frames: 0..{}  contact: {}",
-        lastFrame,
-        firstContact < 0 ? "none" : fmt::format("frame {}", firstContact)
-    );
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
 }
 
 void PauseActionBridge::devCopyReport() {

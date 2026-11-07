@@ -2,7 +2,6 @@
 #define EARLYBUFFER_CORE_SHADOWSIMULATOR_HPP
 
 #include "AssistVerdict.hpp"
-#include "ModeAssist.hpp"
 #include "ReplayImport.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevClockContract.hpp"
@@ -11,6 +10,7 @@
 #include "../dev/DevRejectLedger.hpp"
 
 #include <Geode/Geode.hpp>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -52,20 +52,16 @@ struct PlanOptions {
     // ClickIntentGuard density (assist still running, e.g. orb) → wider auto k,
     // slightly softer Wave λ so earliest-delay bias does not phase-shift spam.
     bool spamDense = false;
-    // Once-per-press ModeAssist POD (filled by AssistController); hot path reads this.
-    ModeAssistSnapshot modeSnap{};
-    bool modeSnapValid = false;
     // true = assist-pick v1; false = v2 slot (AssistPickV2 TBD — currently v1 choose).
     bool legacyPick = false;
     // Live V2 sim backend (WU8). V1 effective = ShadowPlayer always.
     StageConfig::AssistEngineKind assistEngine =
         StageConfig::AssistEngineKind::ShadowPlayer;
-    // PerfectAssistPolicy MustDelaySearch — skip PassNoThreat early exit.
+    // Commit 11: PerfectAssistPolicy MustDelaySearch — skip PassNoThreat early exit.
     bool mustDelaySearch = false;
     // Live Delay-arm: only Class::Alive ghosts (soft Landing/Recoverable/LateCrash
     // stay not-false-lethal for bake verify when this is false).
     bool requireAliveForDelay = false;
-    bool forceShortHorizon = false;
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     ThreatZone seedThreatZone{};
@@ -91,7 +87,7 @@ struct SimPlan {
     GameObject* baselineDeathObject = nullptr;
     float baselineDeathX = 0.f;
     bool unknown = false;
-    // True when sim overlapped a toggle-orb / touch-toggle target.
+    // True when sim overlapped a toggle-orb / touch-toggle target (Commit 3).
     bool toggleUnknown = false;
     bool budgetHit = false;
     bool activatedRing = false;
@@ -113,7 +109,7 @@ struct SimPlan {
     bool requireHold = false;
     int dMin = -1;
     int dMax = -1;
-    // Exact Delay-viable set for planSequence exit-predict (not a filled band).
+    // Commit 8: exact Delay-viable set for planSequence exit-predict (not a filled band).
     std::vector<int> viableDelays;
     // Hold/release after assisted press (ticks after the press action).
     // earliest..latest = safe hold durations; preferred = best release timing.
@@ -126,7 +122,7 @@ struct SimPlan {
     int smartDepthUsed = 1;
     int smartCombosUsed = 0;
     ThreatZone threatZone{};
-    // One note per delay 0..limit after plan/planSequence entry.
+    // Commit 12: one note per delay 0..limit after plan/planSequence entry.
     std::vector<DevRejectLedger::CandNote> candNotes;
     bool candNotesTruncated = false;
 };
@@ -148,7 +144,7 @@ public:
     static constexpr int SNAPSHOT_RING_END = 14; // exclusive upper bound for plan ring
     static constexpr int PARITY_SLOT_A = 14;
     static constexpr int PARITY_SLOT_B = 15;
-    // Permanent eval ghosts — not the 16 live snapshot slots.
+    // Permanent eval ghosts (Commit 9) — not the 16 live snapshot slots.
     static constexpr int DEV_EVAL_SLOTS = 2;
     static constexpr float kClusterGapX = 50.f;
     static constexpr int kWindowMarginK = 1;
@@ -174,18 +170,6 @@ public:
     // Offline bake timeline: trust current toggle pose (Include/Skip) instead of
     // UnknownOnOverlap — otherwise every toggle-group solid aborts the macro.
     bool bakeOffline() const { return this->m_bakeOffline; }
-    // Bake validate may apply TW tracks even when the Trigger World setting is off
-    // (spawn hazards that are movers). Cleared when bakeOffline ends.
-    void setBakeForceTriggerWorld(bool on) { this->m_bakeForceTriggerWorld = on; }
-    bool bakeForceTriggerWorld() const { return this->m_bakeForceTriggerWorld; }
-    // Expand post-validate-death clicks: ignore markDead while absTick < frame
-    // so the ghost can reach that click (1:1 may have diverged earlier).
-    void setBakeNoDeathBeforeFrame(int frame) { this->m_bakeNoDeathBeforeFrame = frame; }
-    int bakeNoDeathBeforeFrame() const { return this->m_bakeNoDeathBeforeFrame; }
-    bool triggerWorldWanted() const {
-        return StageConfig::triggerBake()
-            || (this->m_bakeOffline && this->m_bakeForceTriggerWorld);
-    }
     // True after applyTriggerWorldAtTick ran for the current sim step.
     bool triggerWorldAppliedThisTick() const {
         return this->m_triggerWorldAppliedThisTick;
@@ -199,7 +183,6 @@ public:
     }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* p) const;
-    bool isOwnedGhostPtr(void const* p) const;
     PlayerObject* shadow() const { return m_shadow; }
     bool isShadowTrail(HardStreak* trail) const {
         if (!trail) return false;
@@ -217,7 +200,7 @@ public:
     // section vectors (sim checkCollisions inserts them; vanilla sortSectionVector AVs).
     void evacuateGhosts(GJBaseGameLayer* layer);
     // RAII entry/exit used by SimSessionGuard (restore + park always unwind).
-    void beginSession(PlayLayer* layer);
+    void beginSession(PlayLayer* layer, bool fromLiveWorld);
     void endSession(PlayLayer* layer);
     // Persistent scratch for collisionCheckObjects filtering — never a stack
     // gd::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
@@ -229,7 +212,7 @@ public:
     void noteUnknown(GameObject* obj = nullptr);
     bool isToggleTriggerTarget(int uniqueId) const;
 
-    // Soft/Hard unknown overlap histogram (bakefail forensics).
+    // Soft/Hard unknown overlap histogram (Commit 3 bakefail forensics).
     struct UnknownHistBin {
         int objectId = 0;   // m_objectID
         int objectType = 0; // GameObjectType
@@ -263,12 +246,12 @@ public:
     SimPlan plan(
         PlayLayer* layer, PlayerObject* real, bool down, int limit,
         float dt, float firstDt, PlanOptions const& options = {}
-);
+    );
 
     SimPlan planSequence(
         PlayLayer* layer, PlayerObject* real, bool down, int limit,
         float dt, float firstDt, PlanOptions const& options = {}
-);
+    );
 
     // Single-candidate bake check: runOne(delay) must clear the threat zone
     // and not die before the action. Used by Hybrid bake verify (O(1) sim).
@@ -286,9 +269,9 @@ public:
     VerifyDelayResult verifyDelay(
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
         float dt, float firstDt, PlanOptions const& options = {}
-);
+    );
 
-    // --- Dev Lab eval: clock-bound stepSchedule, own ghosts ---
+    // --- Dev Lab eval (Commit 9): clock-bound stepSchedule, own ghosts ---
     struct EvalFromFreezeResult {
         bool ran = false;
         bool clockMismatch = false;
@@ -308,14 +291,14 @@ public:
     // Overlay serializable blob fields onto a ghost (eval restore path).
     static void applyPlayerBlob(PlayerObject* dst, DevPlayerBlob const& blob);
 
-    // Write dual/orbs/triggers/mover poses from witness into the
+    // Commit 11: write dual/orbs/triggers/mover poses from witness into the
     // layer/ghosts, bookkeeping on restore. Snapshots prior world state for
     // finishEvalWorldRestore. Does not run physics.
     void applyEvalWorldRestore(
         PlayLayer* layer,
         DevLiveWitness const& witness,
         DevEvalRestore& restore
-);
+    );
     // Undo layer mutations from applyEvalWorldRestore (transforms + orb flags).
     void finishEvalWorldRestore(PlayLayer* layer);
 
@@ -327,7 +310,7 @@ public:
         int horizonTicks,
         bool down,
         int* tickBudgetLeft = nullptr
-);
+    );
 
     // Replay actualFireTick (absolute) on the same stamp — not a delay search.
     EvalFromFreezeResult replayActualFire(
@@ -337,7 +320,7 @@ public:
         int horizonTicks,
         bool down,
         int* tickBudgetLeft = nullptr
-);
+    );
 
     // Quit / reset: abort an in-flight eval loop.
     void abortEval();
@@ -353,7 +336,7 @@ public:
     // Hazard AABB within proximityX ahead of player (wave corridor spikes).
     static bool spatialHazardProximity(
         PlayLayer* layer, PlayerObject* real, float proximityX
-);
+    );
 
     // Pure wave anti-phase gates for plan() / selfCheck (no layer).
     // Press only — release Delay = hold longer (often the save near spikes).
@@ -364,7 +347,7 @@ public:
         bool noOrbTarget,
         bool foresightOrbPad,
         bool pressDown = true
-);
+    );
     static bool shouldWaveFutileDelayPass(
         bool isWave,
         bool orbIntent,
@@ -372,7 +355,7 @@ public:
         float bestEndXGain,
         bool foresightOrbPad,
         bool pressDown = true
-);
+    );
 
     // Continuous idleSafer / ascentUseful (pure; PlanGold / regressionSelfCheck).
     // Baseline idle safer than d0 press (dies later / further / not at all).
@@ -385,7 +368,7 @@ public:
         bool d0Died,
         int d0DeathTick,
         float d0DeathX
-);
+    );
     // Some delay > 0 improves on d0 — later must be Delay-worthy Alive
     // (viable + !died). Bare bin/endX gains on dead soft cands never count.
     static bool classifyAscentUseful(
@@ -398,11 +381,11 @@ public:
         int laterSurviveBin,
         float laterEndX,
         bool laterAlive
-);
+    );
     // Overhead / ceiling-style death relative to player Y.
     static bool deathLooksLikeAscent(
         float playerY, float deathY, bool upsideDown, float marginY = 20.f
-);
+    );
 
     // Prefer short release for continuous; mid-window for tap modes.
     static int pickPreferredRelease(int earliest, int latest, bool continuous);
@@ -410,7 +393,7 @@ public:
     // Auto robustK (no setting override). Wave spam → ≥2, often 3 with speed.
     static int autoRobustK(
         PlayerObject* real, float dtVariance, bool spamDense = false
-);
+    );
     // Pure hints for selfCheck (no PlayerObject).
     static int autoRobustKHints(
         bool waveLike,
@@ -418,16 +401,7 @@ public:
         float playerSpeed,
         float dtVariance,
         bool spamDense
-);
-
-    // Bake spawn-overlap death gate (pure). Floor ticks always ignore; after that
-    // ignore only while still intersecting, up to hardCap. jacheronbe: deathF=5
-    // on spawn spike needs still-intersects path (floor alone dies at frame 5).
-    static constexpr int kBakeSpawnGraceFloor = 4;
-    static constexpr int kBakeSpawnGraceHardCap = 64;
-    static bool bakeSpawnDeathIgnored(
-        int absTick, int untilTick, int hardCap, bool stillIntersects
-);
+    );
 
     // Headless regression checks (threat bins / zone clear math). Returns false on fail.
     static bool regressionSelfCheck(std::string& report);
@@ -450,7 +424,7 @@ public:
         int maxTicks,
         bool shiftActionBy = false,
         int actionShift = 0
-);
+    );
 
     // Optional per-frame bake/diag trace (filled when traceFrames=true).
     struct BakeFrameTrace {
@@ -464,10 +438,6 @@ public:
         bool twApplied = false;
         int eventsApplied = 0; // count this frame
         int mode = 0;
-        bool dashing = false;
-        bool upsideDown = false;
-        bool mini = false;
-        bool dual = false;
         int deathObjId = -1;
         int deathObjType = -1;
         float deathObjX = 0.f;
@@ -487,7 +457,7 @@ public:
         int deathObjType = -1;
         int deathObjGameId = -1; // m_objectID of killer
         std::vector<BakeFrameTrace> frames;
-        // Sorted by count desc. Filled whenever hist collection runs.
+        // Sorted by count desc (Commit 3). Filled whenever hist collection runs.
         std::vector<UnknownHistBin> unknownHist;
         int unknownSoftHits = 0;
         int unknownHardHits = 0;
@@ -496,8 +466,7 @@ public:
     // traceFrames: record BakeFrameTrace each step (diag dumps).
     // parkReals: move live P1/P2 off-map during bake so spawn overlap cannot kill ghost.
     // substeps: optional micro-steps per bake tick (usually 1; bypass macros bake 1:1).
-    enum class BakePlayback { StopOnDeath, FollowReplay };
-    // FollowReplay records contact frames and keeps stepping the same ghost.
+    // onFrame: optional progress hook; return false to cancel (bake validate).
     BakeRunResult runBakeTimeline(
         PlayLayer* layer,
         int snapshotSlot,
@@ -509,9 +478,8 @@ public:
         bool traceFrames = false,
         bool parkReals = true,
         int substeps = 1,
-        std::function<bool(int frame)> onFrame = {},
-        BakePlayback playback = BakePlayback::StopOnDeath
-);
+        std::function<bool(int frame)> onFrame = {}
+    );
 
     struct PathSample {
         std::vector<cocos2d::CCPoint> points;
@@ -524,9 +492,14 @@ public:
         std::vector<ReplayEvent> const& events,
         float dt,
         int untilFrame
-);
+    );
 
     struct Model {
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
+        bool expired(int tick) const {
+            return (tick % 4 == 0) && deadline != std::chrono::steady_clock::time_point::max()
+                && std::chrono::steady_clock::now() >= deadline;
+        }
         bool continuous = false;
         bool tapRelease = false;
         int cap = 48;
@@ -544,6 +517,7 @@ public:
     };
 
     struct RunResult {
+        bool budgetStopped = false;
         bool died = false;
         bool diedBeforeAction = false;
         bool jumped = false;
@@ -582,6 +556,8 @@ private:
 
     // Transform snapshot for Trigger World Bake apply (restored before flags).
     struct SavedTransform {
+        SavedTransform() = default;
+        explicit SavedTransform(GameObject* object);
         int uniqueId = 0;
         GameObject* obj = nullptr;
         float x = 0.f;
@@ -590,6 +566,9 @@ private:
         float scaleX = 1.f;
         float scaleY = 1.f;
         bool nodeVisible = true;
+        EnhancedGameObject* enhanced = nullptr;
+        bool poweredOn = false;
+        bool egoVisible = false;
         mutable bool dirty = false;
     };
 
@@ -613,18 +592,18 @@ private:
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
         float dt, float firstDt, Model const& model, int releaseAfter,
         ThreatZone const* zone, int* tickBudgetLeft
-);
+    );
     // Live V2 Trajectory engine: hold/coast button path (no orb pre-scan).
     // Same delay / releaseAfter / zone-settle contract as runOne for cand eval.
     RunResult runTrajectoryOne(
         PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
         float dt, float firstDt, Model const& model, int releaseAfter,
         ThreatZone const* zone, int* tickBudgetLeft
-);
+    );
     RunResult runBaseline(
         PlayLayer* layer, PlayerObject* real, bool down,
         float dt, float firstDt, Model const& model, int* tickBudgetLeft
-);
+    );
 
     // holdJump=true: keep Jump held while coasting (press-to-reach orbs).
     // holdJump=false: Jump = !down (legacy coast / release scan).
@@ -632,7 +611,7 @@ private:
         PlayLayer* layer, PlayerObject* real, bool down,
         int scanTicks, float dt, float firstDt, int* tickBudgetLeft,
         bool holdJump = false
-);
+    );
 
     static bool isHazardLike(GameObject* obj);
 
@@ -666,16 +645,6 @@ private:
     int m_nextSnapshot = 0;
     bool m_simulating = false;
     bool m_bakeOffline = false;
-    bool m_bakeForceTriggerWorld = false;
-    int m_bakeNoDeathBeforeFrame = -1;
-    // Bake: uniqueIds that already overlapped the start-snap ghost before physics.
-    // Deaths from those ids are ignored through m_bakeSpawnGraceUntilTick, and
-    // further while the ghost AABB still intersects them (up to HardCap) so a
-    // spawn-centered spike is cleared by walking (~15 ticks) and TW movers can
-    // leave — fixed 0..4 alone still dies at frame 5 (jacheronbe objId=8).
-    std::unordered_set<int> m_bakeSpawnOverlapIds;
-    int m_bakeSpawnGraceUntilTick = -1;
-    int m_bakeSpawnGraceHardCap = -1;
     bool m_applyingRing = false;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;
@@ -691,6 +660,11 @@ private:
     std::unordered_map<int, UnknownHistBin> m_unknownHistMap;
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;
+    // Slots are resolved through the owning CCArray and checked by UID before use.
+    std::unordered_map<int, unsigned> m_levelObjectSlots;
+    std::unordered_map<int, size_t> m_liveTransformSlots;
+    bool m_fromLiveWorld = false;
+    int m_lastStoreTick = -1;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
     // Absolute attempt tick for the current sim step (−1 = do not apply bake).
     int m_simAbsTick = -1;

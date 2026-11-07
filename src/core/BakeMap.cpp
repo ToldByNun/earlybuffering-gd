@@ -2,17 +2,11 @@
 #include "AssistClock.hpp"
 #include "AssistContracts140.hpp"
 #include "AssistController.hpp"
-#include "BakeSpawnProbe.hpp"
-#include "ClickBakeStore.hpp"
-#include "LevelFingerprint.hpp"
-#include "LevelCacheIndex.hpp"
 #include "ShadowSimulator.hpp"
 #include "Tg2BakeFixture.hpp"
 #include "TriggerWorldBaker.hpp"
 #include "TriggerWorldStore.hpp"
 #include "LevelProfile.hpp"
-#include "RoutePathBuilder.hpp"
-#include "RoutePathStore.hpp"
 #include "../config/StageConfig.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../debug/AssistLog.hpp"
@@ -24,6 +18,32 @@
 
 using namespace geode::prelude;
 
+
+
+std::filesystem::path bakesDir() {
+    return Mod::get()->getSaveDir() / "bakes";
+}
+
+std::filesystem::path bakePath(std::string const& key) {
+    return bakesDir() / (key + ".json");
+}
+
+int nextJumpFrame(std::vector<ReplayEvent> const& ev, int fromIndex, bool player2) {
+    for (int i = fromIndex + 1; i < static_cast<int>(ev.size()); ++i) {
+        if (ev[i].button != 1) continue;
+        if (ev[i].player2 != player2) continue;
+        if (ev[i].down) return ev[i].frame;
+    }
+    return -1;
+}
+
+struct JumpJob {
+    int eventIndex = 0;
+    int frame = 0;
+    bool down = true;
+    bool player2 = false;
+    int until = 0;
+};
 
 int resolveRadius(int bakeRadius, BakeMethod method) {
     if (bakeRadius > 0) return bakeRadius;
@@ -75,7 +95,7 @@ int scaleBakeTicks(int ticks, double bakeTps) {
     if (bakeTps <= AssistClock::kPlanSnapTpsHi) return ticks;
     long long scaled = std::llround(
         static_cast<double>(ticks) * (bakeTps / AssistClock::kNominalTps)
-);
+    );
     if (scaled < ticks) scaled = ticks;
     if (scaled > 2000) scaled = 2000;
     return static_cast<int>(scaled);
@@ -107,7 +127,7 @@ std::vector<ReplayEvent> prepareBakeTimeline(
                     return e.player2;
                 }),
                 ev.end()
-);
+            );
         }
     }
     if (srcTps > 0.0 && bakeTps > 0.0 && std::fabs(srcTps - bakeTps) >= 0.5) {
@@ -145,9 +165,7 @@ BakeMap& BakeMap::get() {
 void BakeMap::clear() {
     m_data = {};
     m_loaded = false;
-    this->m_startXq = 0;
     this->m_dirty = false;
-    RoutePathStore::get().clear();
 }
 
 void BakeMap::clearPendingReplay() {
@@ -161,95 +179,30 @@ void BakeMap::setPendingReplay(ImportedReplay replay) {
     AssistLog::info(fmt::format(
         "BAKE: loaded replay {} ({} events, {:.0f} tps, {})",
         m_replay.sourceName, m_replay.events.size(), m_replay.tps, m_replay.format
-));
+    ));
 }
 
-void BakeMap::loadForLevel(GJGameLevel* level, int startXq) {
+void BakeMap::loadForLevel(GJGameLevel* level) {
     m_data = {};
     m_loaded = false;
     this->m_dirty = false;
-    this->m_startXq = startXq;
     if (!level) return;
     m_data.levelKey = LevelProfile::makeKey(level);
-    // A route is an optional sibling of replay clicks. A missing/corrupt route
-    // is deliberately a miss, never a reason to reject the click cache.
-    (void)RoutePathStore::get().load(m_data.levelKey, startXq);
     auto res = readFile();
-    if (res.isOk()) {
-        // Empty click stores count as loaded so self-bake can merge from a cold start.
+    if (res.isOk() && !m_data.clicks.empty()) {
         m_loaded = true;
-        if (!m_data.clicks.empty()) {
-            AssistLog::debug(fmt::format(
-                "BAKE: loaded map {} sp={} ({} clicks, {}, {})",
-                m_data.levelKey,
-                this->m_startXq,
-                m_data.clicks.size(),
-                m_data.sourceReplay,
-                m_data.method
-            ));
-        }
-        else {
-            m_data.sourceReplay.clear();
-            m_data.method.clear();
-            m_data.tps = AssistClock::kNominalTps;
-            AssistLog::debug(fmt::format(
-                "BAKE: empty store ready {} sp={}",
-                m_data.levelKey,
-                this->m_startXq
-            ));
-        }
+        AssistLog::debug(fmt::format(
+            "BAKE: loaded map {} ({} clicks, {}, {})",
+            m_data.levelKey, m_data.clicks.size(), m_data.sourceReplay, m_data.method
+        ));
         return;
     }
-    // Read error — keep levelKey; still mark loaded empty so self-bake works.
-    AssistLog::debug(fmt::format(
-        "BAKE: load miss {} sp={}: {}",
-        m_data.levelKey,
-        this->m_startXq,
-        res.unwrapErr()
-    ));
+    // Empty / missing bake file — keep levelKey for next save, not a loaded map.
     m_data.sourceReplay.clear();
     m_data.method.clear();
     m_data.tps = AssistClock::kNominalTps;
     m_data.clicks.clear();
-    m_loaded = true;
-}
-
-void BakeMap::setStartXq(int startXq) {
-    if (this->m_startXq == startXq && this->m_loaded) return;
-    if (this->m_data.levelKey.empty()) {
-        this->m_startXq = startXq;
-        return;
-    }
-    // Persist dirty clicks into the previous shard before switching.
-    if (this->m_dirty && this->m_loaded) {
-        this->save();
-    }
-    std::string const key = this->m_data.levelKey;
-    bool const hadReplay = this->m_hasReplay;
-    ImportedReplay replay = this->m_replay;
-    this->m_data = {};
-    this->m_data.levelKey = key;
-    this->m_startXq = startXq;
-    this->m_dirty = false;
-    this->m_loaded = false;
-    (void)RoutePathStore::get().load(key, startXq);
-    auto res = this->readFile();
-    this->m_loaded = true;
-    if (res.isErr()) {
-        this->m_data.sourceReplay.clear();
-        this->m_data.method.clear();
-        this->m_data.tps = AssistClock::kNominalTps;
-        this->m_data.clicks.clear();
-    }
-    if (hadReplay) {
-        this->m_replay = std::move(replay);
-        this->m_hasReplay = true;
-    }
-    AssistLog::debug(fmt::format(
-        "BAKE: startpos shard sp={} clicks={}",
-        this->m_startXq,
-        this->m_data.clicks.size()
-    ));
+    m_loaded = false;
 }
 
 void BakeMap::save() const {
@@ -261,7 +214,7 @@ void BakeMap::save() const {
         AssistLog::debug(fmt::format(
             "BAKE: saved {} ({} clicks, {})",
             m_data.levelKey, m_data.clicks.size(), m_data.method
-));
+        ));
     }
     else {
         AssistLog::debug(fmt::format("BAKE: save failed: {}", res.unwrapErr()));
@@ -275,20 +228,20 @@ std::string BakeMap::statusLine() const {
             m_progress.done.load(),
             m_progress.total.load(),
             m_progress.fraction() * 100.f
-);
+        );
     }
     if (m_hasReplay && !m_data.clicks.empty()) {
         return fmt::format(
             "{} | {} {} clicks",
             m_replay.sourceName, m_data.method, m_data.clicks.size()
-);
+        );
     }
     if (m_hasReplay) return fmt::format("{} | no bake", m_replay.sourceName);
     if (!m_data.clicks.empty()) {
         return fmt::format(
             "{} {} clicks ({})",
             m_data.method, m_data.clicks.size(), m_data.sourceReplay
-);
+        );
     }
     return "no bake";
 }
@@ -299,13 +252,13 @@ std::string BakeMap::pauseStatusLine() const {
         line = fmt::format(
             "Replay: {} ({} ev @ {:.0f} tps)\n{}",
             m_replay.sourceName, m_replay.events.size(), m_replay.tps, line
-);
+        );
     }
     else {
         line = fmt::format(
             "Replay: (none) — Brute Bake needs none\n{}",
             line
-);
+        );
     }
     return line;
 }
@@ -327,7 +280,7 @@ int BakeMap::refineSelfWindows(
     int const horizon = ShadowSimulator::modelFor(
         layer->m_player1 ? layer->m_player1 : layer->m_player2,
         StageConfig::ticksAll()
-).cap;
+    ).cap;
 
     std::stable_sort(clicks.begin(), clicks.end(), [](auto const& a, auto const& b) {
         if (a.nominalFrame != b.nominalFrame) return a.nominalFrame < b.nominalFrame;
@@ -417,7 +370,7 @@ int BakeMap::refineSelfWindows(
     AssistLog::debug(fmt::format(
         "self-bake refine: {}/{} expanded, sims left {}",
         expanded, clicks.size(), simsLeft
-));
+    ));
     return expanded;
 }
 
@@ -552,18 +505,6 @@ BakedClick const* BakeMap::findNear(
     return pick(false);
 }
 
-BakedClick const* BakeMap::recordedInputAt(int frame, bool down, bool player2) const {
-    BakedClick const* nearest = nullptr;
-    for (auto const& c : m_data.clicks) {
-        if (!c.replayTiming || c.down != down || c.player2 != player2) continue;
-        if (frame < c.earliest || frame > c.latest) continue;
-        if (!nearest || std::abs(frame - c.nominalFrame) < std::abs(frame - nearest->nominalFrame)) {
-            nearest = &c;
-        }
-    }
-    return nearest;
-}
-
 bool BakeMap::testShiftedClick(
     PlayLayer* layer,
     int startSnapshotSlot,
@@ -572,34 +513,18 @@ bool BakeMap::testShiftedClick(
     int testFrame,
     int untilFrame,
     float dt,
-    int substeps,
-    int minSurviveFrame,
-    int noDeathBeforeFrame
+    int substeps
 ) const {
     if (eventIndex < 0 || eventIndex >= static_cast<int>(timeline.size())) return false;
     timeline[static_cast<size_t>(eventIndex)].frame = testFrame;
     std::stable_sort(timeline.begin(), timeline.end(), [](auto const& a, auto const& b) {
         return a.frame < b.frame;
     });
-    // Need to reach the 1:1 death frame to compare; otherwise a short until
-    // can false-pass a shift that would have died earlier than validate.
-    int runUntil = untilFrame;
-    if (minSurviveFrame >= 0) {
-        runUntil = std::max(runUntil, minSurviveFrame);
-    }
-    auto& sim = ShadowSimulator::get();
-    // Reach clicks after a mid-macro 1:1 divergence by ignoring pre-click deaths.
-    int const gate = noDeathBeforeFrame >= 0 ? noDeathBeforeFrame : testFrame;
-    sim.setBakeNoDeathBeforeFrame(gate);
-    auto r = sim.runBakeTimeline(
-        layer, startSnapshotSlot, timeline, dt, runUntil, -1,
+    auto r = ShadowSimulator::get().runBakeTimeline(
+        layer, startSnapshotSlot, timeline, dt, untilFrame, -1,
         true, false, true, substeps
-);
-    sim.setBakeNoDeathBeforeFrame(-1);
-    if (!r.died) return true;
-    // Prefix clicks: dying at/after the validate death matches 1:1.
-    if (minSurviveFrame >= 0 && r.deathFrame >= minSurviveFrame) return true;
-    return false;
+    );
+    return !r.died;
 }
 
 Result<int> BakeMap::bake(
@@ -615,10 +540,9 @@ Result<int> BakeMap::bake(
 
     auto finish = [&](Result<int> r) -> Result<int> {
         m_progress.running = false;
-        if (r.isErr()) m_progress.setStatus(fmt::format("failed: {}", r.unwrapErr()));
-        else if (method == BakeMethod::BruteForce) {
-            m_progress.setStatus(fmt::format("done: {} clicks", r.unwrap()));
-        }
+        m_progress.setStatus(r.isOk()
+            ? fmt::format("done: {} clicks", r.unwrap())
+            : fmt::format("failed: {}", r.unwrapErr()));
         return r;
     };
 
@@ -644,83 +568,30 @@ Result<int> BakeMap::bakeReplay(
         AssistLog::info(fmt::format(
             "BAKE warn: attemptTick={} — prefer reset→pause→bake (mid-run world pollutes orbs/toggles)",
             attemptTick
-));
+        ));
     }
-    // Spawn probe: hazards/solids already overlapping the start-snap ghost.
-    auto const spawnProbe = BakeSpawnProbe::probe(layer, startSnapshotSlot);
-    AssistLog::info(fmt::format(
-        "BAKE: spawnProbe overlaps={} tracked={} recommendsTW={} snap=({:.1f},{:.1f}) dart={}",
-        spawnProbe.overlapCount,
-        spawnProbe.trackedOverlapCount,
-        spawnProbe.recommendsTriggerWorld ? 1 : 0,
-        spawnProbe.snapX,
-        spawnProbe.snapY,
-        spawnProbe.snapIsDart ? 1 : 0
-));
-    if (!spawnProbe.overlaps.empty()) {
-        auto const& h0 = spawnProbe.overlaps.front();
-        AssistLog::info(fmt::format(
-            "BAKE: spawnHit0 uid={} objId={} type={} @({:.1f},{:.1f}) tw={} keys={}",
-            h0.uniqueId, h0.objectId, h0.objectType, h0.x, h0.y,
-            h0.inTriggerWorld ? 1 : 0, h0.twKeyCount
-));
-    }
-
-    // Never validate while TW is still building / stale-empty when setting on.
-    // Also force TW for this bake when spawn already overlaps a lethal object
-    // (movers parked on spawn with Trigger World setting off — e.g. Grief).
-    bool const forceTwForSpawn =
-        spawnProbe.recommendsTriggerWorld && !StageConfig::triggerBake();
-    if (StageConfig::triggerBake() || forceTwForSpawn) {
-        m_progress.setStatus(
-            forceTwForSpawn ? "Trigger World (spawn movers)…" : "waiting Trigger World…"
-);
+    // Commit 4: never validate while TW is still building / stale-empty.
+    if (StageConfig::triggerBake()) {
+        m_progress.setStatus("waiting Trigger World…");
         std::string twErr;
-        if (!TriggerWorldBaker::get().waitUntilReady(
-                layer, 45000, twErr, forceTwForSpawn
-)) {
+        if (!TriggerWorldBaker::get().waitUntilReady(layer, 45000, twErr)) {
             return Err(twErr.empty() ? "Trigger World not ready for bake" : twErr);
         }
         auto& tw = TriggerWorldStore::get();
         AssistLog::info(fmt::format(
-            "BAKE: TW ready tracks={} ready={} softcap={} forceSpawn={} ({})",
+            "BAKE: TW ready tracks={} ready={} softcap={} ({})",
             tw.trackCount(),
             tw.readyTrackCount(),
             tw.softcapHit() ? 1 : 0,
-            forceTwForSpawn ? 1 : 0,
             TriggerWorldBaker::get().statusLine()
-));
+        ));
         if (tw.softcapHit()) {
             AssistLog::info(fmt::format(
                 "BAKE warn: Trigger World softcap ({} tracks) — movers may be incomplete",
                 tw.trackCount()
-));
-        }
-        // Re-probe TW membership after build.
-        auto const spawnAfter = BakeSpawnProbe::probe(layer, startSnapshotSlot);
-        if (spawnAfter.trackedOverlapCount > 0 || tw.hasTracks()) {
-            ShadowSimulator::get().setBakeForceTriggerWorld(true);
-            AssistLog::info(fmt::format(
-                "BAKE: bakeForceTriggerWorld=1 (trackedOverlaps={} tracks={})",
-                spawnAfter.trackedOverlapCount,
-                tw.trackCount()
-));
-        }
-        else if (forceTwForSpawn) {
-            AssistLog::info(
-                "BAKE warn: spawn overlap but no TW tracks for those uids — "
-                "frame-0 death may remain (static spike or unmodeled mover)"
-);
+            ));
         }
     }
-
-    class BakeTwForceGuard {
-    public:
-        ~BakeTwForceGuard() {
-            ShadowSimulator::get().setBakeForceTriggerWorld(false);
-        }
-    };
-    BakeTwForceGuard twForceGuard;
 
     // Mild FPS (60/360) → resample onto live ~240. Physics-bypass (1000–3000)
     // stays 1:1 at author TPS so the ghost matches the bot quantum exactly.
@@ -735,7 +606,7 @@ Result<int> BakeMap::bakeReplay(
         "BAKE replay: timeline {} events @ {:.0f}←{:.0f} tps radius={} "
         "(validate 1:1 then expand windows)",
         ev.size(), tps, srcTps, bakeRadius
-));
+    ));
 
     BakeMapData out;
     out.levelKey = m_data.levelKey.empty() && layer->m_level
@@ -748,28 +619,41 @@ Result<int> BakeMap::bakeReplay(
 
     bool const doRelease = StageConfig::assistRelease();
 
-    auto const countedInput = [doRelease](ReplayEvent const& e) {
-        return e.button == 1 && (e.down || doRelease);
-    };
-    int const numInputs = static_cast<int>(std::count_if(ev.begin(), ev.end(), countedInput));
-    if (numInputs == 0) return Err("Replay has no enabled jump inputs to bake");
-    if (ev.front().frame < 0 || ev.back().frame >= std::numeric_limits<int>::max() - std::max(numInputs, bakeRadius)) {
-        return Err("Replay frame range exceeds the supported clock");
+    std::vector<JumpJob> jobs;
+    for (int i = 0; i < static_cast<int>(ev.size()); ++i) {
+        auto const& e = ev[static_cast<size_t>(i)];
+        if (e.button != 1) continue;
+        if (!e.down && !doRelease) continue;
+        int F = e.frame;
+        int next = nextJumpFrame(ev, i, e.player2);
+        int horizon = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll()).cap;
+        if (horizon <= 0) horizon = std::max(16, StageConfig::ticksAll() * 4);
+        horizon = scaleBakeTicks(horizon, tps);
+        int until = next > 0 ? std::min(next, F + horizon) : F + horizon;
+        until = std::max(until, F + 1);
+        jobs.push_back(JumpJob{ i, F, e.down, e.player2, until });
     }
-    int const lastFrame = ev.back().frame;
+    if (jobs.empty()) {
+        return Err("Replay has no Jump events to bake (import a macro with clicks)");
+    }
+
+    int lastFrame = 0;
+    for (auto const& e : ev) {
+        if (e.frame > lastFrame) lastFrame = e.frame;
+    }
     // Progress: validate frames + per-click expand.
     int const validateWeight = std::max(1, lastFrame);
-    m_progress.total = validateWeight + numInputs;
+    m_progress.total = validateWeight + static_cast<int>(jobs.size());
     m_progress.done = 0;
     m_progress.setStatus(fmt::format(
         "validate macro 1:1 · {}f @ {:.0f} tps", lastFrame, tps
-));
+    ));
     AssistLog::info(fmt::format(
         "BAKE replay: validate 0..{} then expand {} clicks, radius {} @ {:.0f} tps",
-        lastFrame, numInputs, bakeRadius, tps
-));
+        lastFrame, jobs.size(), bakeRadius, tps
+    ));
 
-    // Parity Gate: Soft portals Include + freeze ε before validate
+    // Commit 6 Parity Gate: Soft portals Include + freeze ε before validate
     // (portal Include must not retune noise).
     {
         std::string portalDetail;
@@ -777,7 +661,7 @@ Result<int> BakeMap::bakeReplay(
             return Err(fmt::format(
                 "Bake portal policy failed ({}) — Soft portals must Include",
                 portalDetail.empty() ? "?" : portalDetail
-));
+            ));
         }
         std::string parityDetail;
         AssistContracts140::applyLockedEps();
@@ -785,7 +669,7 @@ Result<int> BakeMap::bakeReplay(
             return Err(fmt::format(
                 "Bake parity gate failed ({}) — ε LOCK required before validate",
                 parityDetail.empty() ? "?" : parityDetail
-));
+            ));
         }
         AssistLog::debug("BAKE: parity gate OK (eps locked; Soft portals Include)");
     }
@@ -796,24 +680,24 @@ Result<int> BakeMap::bakeReplay(
     if (auto* snap = ShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
         startX = snap->getPositionX();
     }
-    this->setStartXq(LevelFingerprint::startXq(startX));
     AssistLog::info(fmt::format(
-        "BAKE: startPose startPos={} startX={:.1f} sp={} attemptTick={} twTracks={}",
+        "BAKE: startPose startPos={} startX={:.1f} attemptTick={} twTracks={}",
         startPosAttempt ? 1 : 0,
         startX,
-        this->m_startXq,
         attemptTick,
         TriggerWorldStore::get().trackCount()
     ));
 
-    // One continuous playback supplies positions for every recorded edge.
+    // ── Validate 1:1 from start snapshot. Death ≠ hard fail: keep the
+    // surviving prefix (Hybrid often only needs a StartPos part, not the
+    // whole macro). Only frame-0 (no prefix) still errors.
     ShadowSimulator::BakeRunResult validate;
     {
         std::lock_guard lock(m_simMutex);
         int lastLogged = -1;
         validate = ShadowSimulator::get().runBakeTimeline(
             layer, startSnapshotSlot, ev, dt, lastFrame, -1,
-            true, true, true, 1,
+            true, false, true, 1,
             [&](int frame) -> bool {
                 if (m_progress.cancel.load()) return false;
                 if (frame - lastLogged >= 64 || frame == lastFrame) {
@@ -821,144 +705,237 @@ Result<int> BakeMap::bakeReplay(
                     m_progress.done = frame;
                     m_progress.setStatus(fmt::format(
                         "validate {}/{}", frame, lastFrame
-));
+                    ));
                 }
                 return true;
-            }, ShadowSimulator::BakePlayback::FollowReplay
+            }
         );
     }
     if (m_progress.cancel.load()) return Err("Bake cancelled");
 
-    // The replay supplies the timing. The ghost supplies a position for each
-    // input and can report several consecutive contacts with the same obstacle.
-    int issueSections = 0;
-    bool inIssue = false;
-    for (auto const& pose : validate.frames) {
-        bool const issue = pose.dead || pose.unknown;
-        if (issue && !inIssue) ++issueSections;
-        inIssue = issue;
+    int partialCut = -1; // frames >= cut are dropped; -1 = full macro OK
+    if (validate.died) {
+        // P2 drop stats for err / log (same policy as prepareBakeTimeline).
+        int droppedP2 = 0;
+        {
+            int p1 = 0;
+            int p2 = 0;
+            for (auto const& e : m_replay.events) {
+                if (e.player2) ++p2;
+                else ++p1;
+            }
+            if (p2 < p1) droppedP2 = p2;
+        }
+        auto const top3 = DevDiagDump::formatUnknownTop3(validate.unknownHist);
+        int const twTracks = TriggerWorldStore::get().trackCount();
+        auto const residual = Tg2BakeFixture::formatResidual(
+            twTracks,
+            validate.deathFrame,
+            validate.deathObjId,
+            validate.deathObjType
+        );
+        AssistLog::info(fmt::format(
+            "BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
+            "objId={} objType={} gameId={} twTracks={} droppedP2={} "
+            "unknownTop3=[{}] soft={} hard={} residual={} startPos={} startX={:.1f}",
+            validate.deathFrame, validate.deathX, validate.deathY,
+            validate.deathObjId, validate.deathObjType, validate.deathObjGameId,
+            twTracks, droppedP2, top3,
+            validate.unknownSoftHits, validate.unknownHardHits,
+            residual.empty() ? "-" : residual,
+            startPosAttempt ? 1 : 0,
+            startX
+        ));
+        {
+            std::filesystem::path diagDir;
+            std::string diagErr;
+            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                AssistLog::info(fmt::format(
+                    "BAKE: validate death — wrote diag {}", diagDir.string()
+                ));
+            }
+        }
+
+        int const cut = validate.deathFrame;
+        if (cut <= 0) {
+            // No surviving prefix — cannot expand any click from this pose.
+            std::string err = fmt::format(
+                "Macro dies in sim at frame {} (x={:.0f}) deathObjId={} "
+                "twTracks={} unknownTop3=[{}] droppedP2={} startPos={} startX={:.0f}",
+                validate.deathFrame, validate.deathX, validate.deathObjId,
+                twTracks, top3, droppedP2,
+                startPosAttempt ? 1 : 0, startX
+            );
+            if (!residual.empty()) {
+                err += " — ";
+                err += residual;
+            }
+            if (startPosAttempt) {
+                err += " — StartPos bake: reset on the StartPos, pause, bake; "
+                       "macro frames must be from the same StartPos attempt; "
+                       "TW empty often kills frame 0 (wait Trigger World).";
+            }
+            else {
+                err += " — ghost path ≠ bot. Reset→pause→Bake.";
+            }
+            err += " Diag: /diag/bakefail_* parityGate=eps-locked";
+            return Err(err);
+        }
+
+        // Partial prefix: keep clicks strictly before death; Hybrid parts OK.
+        partialCut = cut;
+        int const before = static_cast<int>(jobs.size());
+        jobs.erase(
+            std::remove_if(
+                jobs.begin(),
+                jobs.end(),
+                [cut](JumpJob const& j) { return j.frame >= cut; }
+            ),
+            jobs.end()
+        );
+        for (auto& j : jobs) {
+            if (j.until > cut) j.until = cut;
+        }
+        AssistLog::info(fmt::format(
+            "BAKE: partial prefix — died @{} keeping {}/{} clicks before cut "
+            "(Hybrid parts; not whole-macro)",
+            cut, jobs.size(), before
+        ));
+        if (jobs.empty()) {
+            return Err(fmt::format(
+                "Macro dies at frame {} before any bake click "
+                "(x={:.0f}, startPos={}, startX={:.0f}, twTracks={}). "
+                "Diag: /diag/bakefail_*",
+                cut, validate.deathX, startPosAttempt ? 1 : 0, startX, twTracks
+            ));
+        }
     }
-    bool const incomplete = validate.frames.size() <= static_cast<size_t>(lastFrame);
-    if (incomplete && !inIssue) ++issueSections;
 
     m_progress.done = validateWeight;
-    for (auto const& e : ev) {
-        if (m_progress.cancel.load()) return Err("Bake cancelled");
-        if (!countedInput(e)) continue;
-        ++m_progress.done;
-        if (static_cast<size_t>(e.frame) >= validate.frames.size()) continue;
-        auto const& pose = validate.frames[e.frame];
-        BakedClick c;
-        c.nominalFrame = e.frame;
-        c.earliest = std::max(0, e.frame - bakeRadius);
-        c.latest = e.frame + bakeRadius;
-        c.down = e.down;
-        c.player2 = e.player2;
-        c.x = pose.x;
-        c.mode = static_cast<GameModeKind>(pose.mode);
-        c.holdAssist = !e.down && pose.dashing;
-        c.replayTiming = true;
-        out.clicks.push_back(c);
-    }
-    int const nClicks = static_cast<int>(out.clicks.size());
-    auto summary = fmt::format("{} of {} inputs saved. {} skipped. Ghost issue sections: {}.",
-        nClicks, numInputs, numInputs - nClicks, issueSections);
-    if (nClicks == 0) return Err(summary);
-
-    // Publish the replay windows only after all clicks have been considered.
-    auto write = ClickBakeStore::saveMethod(out, m_startXq);
-    if (write.isErr()) return Err(fmt::format("Could not save replay windows: {}", write.unwrapErr()));
-    m_data = std::move(out);
-    m_loaded = true;
-    m_dirty = false;
-
-    auto route = RoutePathBuilder::buildFromTraces(
-        validate.frames,
-        issueSections == 0,
-        issueSections > 0
-    );
-    if (issueSections > 0) {
-        route.source = RoutePath::kReplayPattern;
-        route.parityOk = false;
-    }
-    if (!route.empty()) {
-        auto saved = RoutePathStore::get().save(m_data.levelKey, route, m_startXq);
-        if (saved.isErr()) return Err(fmt::format("{} Route write failed: {}", summary, saved.unwrapErr()));
+    m_progress.setStatus(fmt::format(
+        "expand windows · {} clicks · radius {}", jobs.size(), bakeRadius
+    ));
+    if (partialCut >= 0) {
+        AssistLog::info(fmt::format(
+            "BAKE: expanding {} click windows (partial cut @{})",
+            jobs.size(), partialCut
+        ));
     }
     else {
-        std::string err;
-        if (!RoutePathStore::removeFile(m_data.levelKey, m_startXq, err)) {
-            return Err(fmt::format("{} Could not clear previous route: {}", summary, err));
-        }
-        summary += " Timing only.";
+        AssistLog::info(fmt::format(
+            "BAKE: validate OK through frame {} — expanding {} click windows",
+            lastFrame, jobs.size()
+        ));
     }
-    m_progress.setStatus(summary);
-    AssistLog::info(fmt::format("BAKE replay {}: {} First ghost contact: {}. Route samples: {}.",
-        m_data.sourceReplay, summary, validate.deathFrame, route.sampleCount()));
-    return Ok(nClicks);
-}
 
-Result<ShadowSimulator::BakeRunResult> BakeMap::visualizeReplay(
-    PlayLayer* layer,
-    int startSnapshotSlot
-) {
-    if (!layer) return Err("Open a level first.");
-    if (!m_hasReplay || m_replay.events.empty()) return Err("Import a replay first.");
-    if (startSnapshotSlot < 0) return Err("Reset the level once, then visualize.");
+    // ── Phase 2: binary-search earliest/latest around each click ───────
+    for (auto const& job : jobs) {
+        if (m_progress.cancel.load()) return Err("Bake cancelled");
 
-    // Match Bake Map's Trigger World prerequisite so a mover cannot make the
-    // preview disagree with the normal offline ghost.
-    auto const probe = BakeSpawnProbe::probe(layer, startSnapshotSlot);
-    bool const forceTriggerWorld =
-        probe.recommendsTriggerWorld && !StageConfig::triggerBake();
-    if (StageConfig::triggerBake() || forceTriggerWorld) {
-        std::string triggerError;
-        if (!TriggerWorldBaker::get().waitUntilReady(
-                layer, 45000, triggerError, forceTriggerWorld
-            )) {
-            return Err(
-                triggerError.empty()
-                    ? "Trigger World is not ready for visualization."
-                    : triggerError
-            );
-        }
-        if (TriggerWorldStore::get().hasTracks() || probe.trackedOverlapCount > 0) {
-            ShadowSimulator::get().setBakeForceTriggerWorld(true);
-        }
-    }
-    struct ForceGuard {
-        ~ForceGuard() { ShadowSimulator::get().setBakeForceTriggerWorld(false); }
-    } forceGuard;
-
-    double const sourceTps = m_replay.tps > 0.0
-        ? m_replay.tps
-        : AssistClock::kNominalTps;
-    double const tps = resolveBakeTps(sourceTps, AssistController::get().estimatedTps());
-    auto events = prepareBakeTimeline(m_replay.events, sourceTps, tps, true);
-    if (events.empty()) return Err("Replay has no usable inputs.");
-    int const lastFrame = events.back().frame;
-    if (lastFrame < 0) return Err("Replay has an invalid frame range.");
-
-    ShadowSimulator::BakeRunResult trace;
-    {
         std::lock_guard lock(m_simMutex);
-        trace = ShadowSimulator::get().runBakeTimeline(
-            layer,
-            startSnapshotSlot,
-            events,
-            static_cast<float>(1.0 / tps),
-            lastFrame,
-            -1,
-            true,
-            true,
-            true,
-            1,
-            {},
-            ShadowSimulator::BakePlayback::FollowReplay
+        auto sample = ShadowSimulator::get().runBakeTimeline(
+            layer, startSnapshotSlot, ev, dt, job.frame, job.frame
+        );
+        float x = sample.sampled ? sample.xAtSample : 0.f;
+        auto mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
+
+        // Nominal already survived full validate — still re-check shift window.
+        if (!testShiftedClick(
+                layer, startSnapshotSlot, ev, job.eventIndex, job.frame, job.until, dt
+            )) {
+            AssistLog::debug(fmt::format(
+                "BAKE: skip click @{} (shift re-check died)", job.frame
+            ));
+            m_progress.done.fetch_add(1);
+            continue;
+        }
+
+        int lo = std::max(0, job.frame - bakeRadius);
+        int hi = job.frame;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            if (testShiftedClick(
+                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt
+                )) {
+                hi = mid;
+            }
+            else {
+                lo = mid + 1;
+            }
+        }
+        int earliest = lo;
+
+        lo = job.frame;
+        hi = job.frame + bakeRadius;
+        while (lo < hi) {
+            int mid = lo + (hi - lo + 1) / 2;
+            if (testShiftedClick(
+                    layer, startSnapshotSlot, ev, job.eventIndex, mid, job.until, dt
+                )) {
+                lo = mid;
+            }
+            else {
+                hi = mid - 1;
+            }
+        }
+        int latest = lo;
+
+        BakedClick c;
+        c.nominalFrame = job.frame;
+        c.earliest = earliest;
+        c.latest = latest;
+        c.down = job.down;
+        c.player2 = job.player2;
+        c.x = x;
+        c.mode = mode;
+        // Release while dashing → dash/hold-orb; purple viz + later release gate.
+        c.holdAssist = !job.down && sample.sampled && sample.dashingAtSample;
+        out.clicks.push_back(c);
+
+        m_progress.done.fetch_add(1);
+        m_progress.setStatus(fmt::format(
+            "expand {}/{} · @{} → [{},{}]",
+            static_cast<int>(out.clicks.size()), jobs.size(),
+            job.frame, earliest, latest
+        ));
+    }
+
+    int const nClicks = static_cast<int>(out.clicks.size());
+    AssistLog::info(fmt::format(
+        "BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} "
+        "partialCut={} startPos={} (replay)",
+        nClicks, jobs.size(), lastFrame, tps, out.sourceReplay,
+        partialCut, startPosAttempt ? 1 : 0
+    ));
+
+    if (nClicks <= 0) {
+        {
+            std::filesystem::path diagDir;
+            std::string diagErr;
+            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                AssistLog::info(fmt::format(
+                    "BAKE: 0 windows after validate — diag {}", diagDir.string()
+                ));
+            }
+        }
+        return Err(
+            "Replay bake produced 0 windows — expand failed. "
+            "Diag: /diag/bakefail_*"
         );
     }
-    if (trace.frames.empty()) return Err("Bake ghost produced no trace.");
-    return Ok(std::move(trace));
+
+    if (partialCut >= 0) {
+        // Surface partial in progress status (scheduler success alert stays click count).
+        m_progress.setStatus(fmt::format(
+            "partial {} windows (cut @{})", nClicks, partialCut
+        ));
+    }
+
+    m_data = std::move(out);
+    m_loaded = true;
+    this->m_dirty = true;
+    save();
+    return Ok(nClicks);
 }
 
 Result<int> BakeMap::bakeBrute(
@@ -984,12 +961,6 @@ Result<int> BakeMap::bakeBrute(
     bool const doRelease = StageConfig::assistRelease();
     auto const model = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll());
 
-    float startX = 0.f;
-    if (auto* snap = ShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
-        startX = snap->getPositionX();
-    }
-    this->setStartXq(LevelFingerprint::startXq(startX));
-
     BakeMapData out;
     out.levelKey = m_data.levelKey.empty() && layer->m_level
         ? LevelProfile::makeKey(layer->m_level)
@@ -1003,11 +974,11 @@ Result<int> BakeMap::bakeBrute(
     m_progress.done = 0;
     m_progress.setStatus(fmt::format(
         "brute (no replay) · radius {} · serial @ {:.0f} tps", bakeRadius, tps
-));
+    ));
     AssistLog::info(fmt::format(
         "BAKE brute: death-driven search, radius {}, horizon {}, serial main-thread @ {:.0f} tps",
         bakeRadius, horizon, tps
-));
+    ));
 
     auto holdingAtEnd = [](std::vector<ReplayEvent> const& tl) {
         bool held = false;
@@ -1022,7 +993,7 @@ Result<int> BakeMap::bakeBrute(
         std::lock_guard lock(m_simMutex);
         return ShadowSimulator::get().runBakeTimeline(
             layer, startSnapshotSlot, tl, dt, until, sampleFrame
-);
+        );
     };
 
     struct Trial {
@@ -1047,11 +1018,11 @@ Result<int> BakeMap::bakeBrute(
             m_progress.setStatus(fmt::format(
                 "brute done — survived {}f with {} clicks",
                 maxFrames, out.clicks.size()
-));
+            ));
             AssistLog::info(fmt::format(
                 "BAKE brute: cleared horizon ({} frames) with {} clicks",
                 maxFrames, out.clicks.size()
-));
+            ));
             break;
         }
 
@@ -1062,7 +1033,7 @@ Result<int> BakeMap::bakeBrute(
                 AssistLog::info(fmt::format(
                     "BAKE brute: stuck at death frame {} — stopping ({} clicks so far)",
                     D, out.clicks.size()
-));
+                ));
                 break;
             }
         }
@@ -1112,7 +1083,7 @@ Result<int> BakeMap::bakeBrute(
         m_progress.setStatus(fmt::format(
             "brute death @{} · probing {} combos · clicks {}",
             D, specs.size(), out.clicks.size()
-));
+        ));
 
         std::vector<Trial> trials(specs.size());
 
@@ -1138,13 +1109,13 @@ Result<int> BakeMap::bakeBrute(
                 if (m_progress.cancel.load()) return;
                 auto sample = ShadowSimulator::get().runBakeTimeline(
                     layer, startSnapshotSlot, tl, dt, sp.frame, sp.frame
-);
+                );
                 tr.x = sample.sampled ? sample.xAtSample : 0.f;
                 tr.mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
 
                 auto r = ShadowSimulator::get().runBakeTimeline(
                     layer, startSnapshotSlot, tl, dt, untilProbe, -1
-);
+                );
                 if (r.died) {
                     tr.surviveUntil = r.deathFrame;
                     tr.survived = r.deathFrame > D;
@@ -1162,7 +1133,7 @@ Result<int> BakeMap::bakeBrute(
         m_progress.total = std::max(
             m_progress.total.load(),
             m_progress.done.load() + static_cast<int>(specs.size()) + (maxClicks - step)
-);
+        );
 
         // Serial main-thread only (Cocos/PlayLayer are not thread-safe).
         for (size_t idx = 0; idx < specs.size(); ++idx) {
@@ -1179,7 +1150,7 @@ Result<int> BakeMap::bakeBrute(
         if (bestUntil <= D) {
             AssistLog::info(fmt::format(
                 "BAKE brute: no combo survives past death {} — stopping", D
-));
+            ));
             break;
         }
 
@@ -1265,19 +1236,19 @@ Result<int> BakeMap::bakeBrute(
         AssistLog::debug(fmt::format(
             "BAKE brute: {} @{} window [{},{}] survives→{} (was death {})",
             pickDown ? "press" : "release", nominal, earliest, latest, bestUntil, D
-));
+        ));
         m_progress.setStatus(fmt::format(
             "brute click #{} · {} @{} [{},{}] · next death hunt",
             out.clicks.size(), pickDown ? "press" : "release",
             nominal, earliest, latest
-));
+        ));
     }
 
     int const nClicks = static_cast<int>(out.clicks.size());
     AssistLog::info(fmt::format(
         "BAKE done clicks={} frames_cap={} tps={:.0f} (brute)",
         nClicks, maxFrames, tps
-));
+    ));
 
     if (nClicks <= 0) {
         {
@@ -1286,13 +1257,13 @@ Result<int> BakeMap::bakeBrute(
             if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
                 AssistLog::info(fmt::format(
                     "BAKE brute: 0 windows — wrote diag bundle {}", diagDir.string()
-));
+                ));
             }
         }
         return Err(
             "Brute found no safe clicks (died immediately / unsolvable from start). "
             "Reset once, then Brute Bake. Diag under save dir /diag/bakefail_*."
-);
+        );
     }
 
     m_data = std::move(out);
@@ -1303,13 +1274,63 @@ Result<int> BakeMap::bakeBrute(
 }
 
 Result<> BakeMap::writeFile() const {
-    return ClickBakeStore::saveMethod(m_data, this->m_startXq);
+    (void)file::createDirectoryAll(bakesDir());
+    matjson::Value root = matjson::Value::object();
+    root["version"] = 1;
+    root["key"] = m_data.levelKey;
+    root["source"] = m_data.sourceReplay;
+    root["tps"] = m_data.tps;
+    root["method"] = m_data.method;
+
+    std::vector<matjson::Value> arr;
+    arr.reserve(m_data.clicks.size());
+    for (auto const& c : m_data.clicks) {
+        matjson::Value j = matjson::Value::object();
+        j["nominal"] = c.nominalFrame;
+        j["earliest"] = c.earliest;
+        j["latest"] = c.latest;
+        j["down"] = c.down;
+        j["player2"] = c.player2;
+        j["x"] = c.x;
+        j["mode"] = StageConfig::kindName(c.mode);
+        if (c.holdAssist) j["holdAssist"] = true;
+        arr.push_back(std::move(j));
+    }
+    root["clicks"] = arr;
+    return file::writeToJson(bakePath(m_data.levelKey), root);
 }
 
 Result<> BakeMap::readFile() {
-    std::string const key = m_data.levelKey;
-    auto res = ClickBakeStore::loadMerged(key, m_data, this->m_startXq);
-    if (res.isErr()) return res;
-    m_data.levelKey = key;
+    auto res = file::readJson(bakePath(m_data.levelKey));
+    if (res.isErr()) return Err(res.unwrapErr());
+    auto root = res.unwrap();
+
+    if (root.contains("source")) m_data.sourceReplay = root["source"].asString().unwrapOr("");
+    if (root.contains("tps")) m_data.tps = root["tps"].asDouble().unwrapOr(240.0);
+    if (root.contains("method")) m_data.method = root["method"].asString().unwrapOr("replay");
+    m_data.clicks.clear();
+    if (!root.contains("clicks") || !root["clicks"].isArray()) return Ok();
+
+    for (auto const& j : root["clicks"]) {
+        BakedClick c;
+        c.nominalFrame = static_cast<int>(j["nominal"].asInt().unwrapOr(0));
+        c.earliest = static_cast<int>(j["earliest"].asInt().unwrapOr(c.nominalFrame));
+        c.latest = static_cast<int>(j["latest"].asInt().unwrapOr(c.nominalFrame));
+        c.down = j["down"].asBool().unwrapOr(true);
+        c.player2 = j["player2"].asBool().unwrapOr(false);
+        c.x = static_cast<float>(j["x"].asDouble().unwrapOr(0.0));
+        c.holdAssist = j.contains("holdAssist")
+            ? j["holdAssist"].asBool().unwrapOr(false)
+            : false;
+        auto modeName = j.contains("mode") ? j["mode"].asString().unwrapOr("cube") : "cube";
+        c.mode = GameModeKind::Cube;
+        for (int i = 0; i < StageConfig::MODE_COUNT; ++i) {
+            if (modeName == StageConfig::kindName(static_cast<GameModeKind>(i))) {
+                c.mode = static_cast<GameModeKind>(i);
+                break;
+            }
+        }
+        m_data.clicks.push_back(c);
+    }
     return Ok();
 }

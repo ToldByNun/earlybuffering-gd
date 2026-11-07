@@ -3,10 +3,7 @@
 #include "../config/StageConfig.hpp"
 #include "../core/AssistClock.hpp"
 #include "../core/AssistController.hpp"
-#include "../core/AssistRealMetrics.hpp"
-#include "../core/AssistSimEstimate.hpp"
 #include "../core/BakeMap.hpp"
-#include "../core/BakeSpawnProbe.hpp"
 #include "../core/ConfigBundleKeys.hpp"
 #include "../core/SectionObjectWalk.hpp"
 #include "../core/ShadowSimulator.hpp"
@@ -64,24 +61,24 @@ std::string settingValueLine(ConfigBundleKeys::Entry const& e) {
             case ConfigBundleKeys::Kind::Bool:
                 return fmt::format(
                     "{}={} (bool)", e.key, boolStr(mod->getSettingValue<bool>(e.key))
-);
+                );
             case ConfigBundleKeys::Kind::Int:
                 return fmt::format(
                     "{}={} (int)", e.key, mod->getSettingValue<int64_t>(e.key)
-);
+                );
             case ConfigBundleKeys::Kind::Float:
                 return fmt::format(
                     "{}={} (float)", e.key, mod->getSettingValue<double>(e.key)
-);
+                );
             case ConfigBundleKeys::Kind::String:
                 return fmt::format(
                     "{}=\"{}\" (string)", e.key, mod->getSettingValue<std::string>(e.key)
-);
+                );
             case ConfigBundleKeys::Kind::Color: {
                 auto c = mod->getSettingValue<cocos2d::ccColor3B>(e.key);
                 return fmt::format(
                     "{}=#{:02X}{:02X}{:02X} (color)", e.key, c.r, c.g, c.b
-);
+                );
             }
             case ConfigBundleKeys::Kind::Keybind:
                 return fmt::format("{}=<keybind> (skipped detail)", e.key);
@@ -142,15 +139,15 @@ std::string DevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeF
     if (!bakeFailOnly) {
         o << "  01_settings.txt\n";
     }
-    o << "  02_clock_assist.txt — simDt/TPS/startSnap vehicle flags\n";
-    o << "  02b_ghost_hitbox.txt — P1 vs shadow rect + hazard overlaps\n";
-    o << "  03_replay.txt — raw import events\n";
-    o << "  03b_replay_remap.txt — AFTER prepareBakeTimeline (incl −1)\n";
+    o << "  02_clock_assist.txt     — simDt/TPS/startSnap vehicle flags\n";
+    o << "  02b_ghost_hitbox.txt    — P1 vs shadow rect + hazard overlaps\n";
+    o << "  03_replay.txt           — raw import events\n";
+    o << "  03b_replay_remap.txt    — AFTER prepareBakeTimeline (incl −1)\n";
     o << "  04_bakemap.txt\n";
     o << "  05_trigger_world.txt\n";
-    o << "  06_bake_probe.txt — per-click survive/death summary\n";
-    o << "  06b_bake_frames.txt — FRAME-BY-FRAME through death+8\n";
-    o << "  06c_unknown_hist.txt — Soft/Hard Unknown objectId histogram\n";
+    o << "  06_bake_probe.txt       — per-click survive/death summary\n";
+    o << "  06b_bake_frames.txt     — FRAME-BY-FRAME through death+8\n";
+    o << "  06c_unknown_hist.txt    — Soft/Hard Unknown objectId histogram\n";
     if (!bakeFailOnly) {
         o << "  07_selfchecks.txt\n";
     }
@@ -160,7 +157,7 @@ std::string DevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeF
 }
 
 int DevDiagDump::deathTraceUntil(int deathFrame, int lastEventFrame) {
-    // Always cover death+8; never hard-cap at 128.
+    // Commit 3: always cover death+8; never hard-cap at 128.
     int until = 0;
     if (deathFrame >= 0) {
         until = deathFrame + 8;
@@ -188,7 +185,7 @@ std::string DevDiagDump::formatUnknownTop3(
             b.hard ? "H" : "S",
             b.objectId,
             b.count
-);
+        );
         ++n;
     }
     return s.empty() ? "-" : s;
@@ -291,7 +288,7 @@ std::string DevDiagDump::buildClockAssist() {
     dumpVehicleFlags(
         o, "startSnap",
         ShadowSimulator::get().snapshotSlot(ShadowSimulator::START_SNAPSHOT_SLOT)
-);
+    );
     auto* pl = PlayLayer::get();
     dumpVehicleFlags(o, "liveP1", pl ? pl->m_player1 : nullptr);
     dumpVehicleFlags(o, "liveP2", pl ? pl->m_player2 : nullptr);
@@ -325,7 +322,7 @@ void dumpRectLine(std::ostringstream& o, char const* name, PlayerObject* p) {
         r.size.width * r.size.height,
         boolStr(p->m_holdingButtons[static_cast<int>(PlayerButton::Jump)]),
         boolStr(p->m_isDart)
-);
+    );
 }
 
 int countHazardOverlaps(
@@ -335,9 +332,6 @@ int countHazardOverlaps(
     auto const pref = p->getObjectRect();
     int n = 0;
     auto consider = [&](GameObject* obj) {
-        // Belt: section walk already filters, but children / stale casts can
-        // still hand a GameObject* whose vtable went poison mid-bake.
-        if (!SectionObjectWalk::pointerAndVtableLive(obj)) return;
         if (!isHazardType(obj)) return;
         auto const hr = obj->getObjectRect();
         if (!pref.intersectsRect(hr)) return;
@@ -348,7 +342,7 @@ int countHazardOverlaps(
                 obj->m_uniqueID, static_cast<int>(obj->m_objectType),
                 obj->getPositionX(), obj->getPositionY(),
                 hr.origin.x, hr.origin.y, hr.size.width, hr.size.height
-);
+            );
         }
     };
     if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
@@ -383,7 +377,7 @@ std::string DevDiagDump::buildGhostHitbox() {
     }
 
     // Ensure start snap exists for this attempt.
- (void)AssistController::get().ensureStartSnapshot(layer);
+    (void)AssistController::get().ensureStartSnapshot(layer);
     snap = sim.snapshotSlot(ShadowSimulator::START_SNAPSHOT_SLOT);
 
     dumpRectLine(o, "liveP1(before)", layer->m_player1);
@@ -399,8 +393,8 @@ std::string DevDiagDump::buildGhostHitbox() {
         "rectDelta: dw={:.2f} dh={:.2f} dArea={:.1f}\n",
         shr.size.width - p1r.size.width,
         shr.size.height - p1r.size.height,
- (shr.size.width * shr.size.height) - (p1r.size.width * p1r.size.height)
-);
+        (shr.size.width * shr.size.height) - (p1r.size.width * p1r.size.height)
+    );
 
     std::ostringstream p1Haz;
     std::ostringstream shHaz;
@@ -416,20 +410,12 @@ std::string DevDiagDump::buildGhostHitbox() {
     o << fmt::format(
         "exclusiveShadowHazards={}\n",
         shHits > p1Hits ? "LIKELY (ghost hitbox/world mismatch)" : "none-or-equal"
-);
-
-    {
-        int const slot = AssistController::get().startSnapshotSlot();
-        auto const spawn = BakeSpawnProbe::probe(
-            layer, slot >= 0 ? slot : ShadowSimulator::START_SNAPSHOT_SLOT
-);
-        o << "\n" << BakeSpawnProbe::formatText(spawn);
-    }
+    );
 
     // TW capture size + bake gdStep for current pending replay dt.
     o << fmt::format(
         "twCapturedTransforms={}\n", sim.diagCaptureTransformCount(layer)
-);
+    );
 
     float dt = AssistController::get().simDt();
     if (!(dt > 0.f)) dt = AssistClock::kNominalSimDt;
@@ -440,7 +426,7 @@ std::string DevDiagDump::buildGhostHitbox() {
     o << fmt::format(
         "probeDt={} gdStep={}\n",
         dt, AssistClock::secondsToGdStep(dt)
-);
+    );
     return o.str();
 }
 
@@ -482,7 +468,7 @@ std::string DevDiagDump::buildReplay() {
         o << fmt::format(
             "  [{}] f={} btn={} down={} p2={}\n",
             n, e.frame, e.button, boolStr(e.down), boolStr(e.player2)
-);
+        );
         ++n;
     }
     return o.str();
@@ -508,7 +494,7 @@ std::string DevDiagDump::buildBakeMap() {
             "  click[{}] f={} [{}..{}] x={:.1f} down={} p2={} mode={}\n",
             i, c.nominalFrame, c.earliest, c.latest, c.x,
             boolStr(c.down), boolStr(c.player2), static_cast<int>(c.mode)
-);
+        );
     }
     return o.str();
 }
@@ -538,7 +524,7 @@ std::string DevDiagDump::buildTriggerWorld() {
         baker.lastEffectCount(),
         baker.lastSectionExtras(),
         boolStr(baker.lastCollectIncomplete())
-);
+    );
     o << "softMaxTracks=" << TriggerWorldStore::kSoftMaxTracks << "\n";
     // Kind histogram
     int kinds[16]{};
@@ -617,7 +603,7 @@ bool DevDiagDump::prepareBakeEvents(
                     return e.player2;
                 }),
                 outEv.end()
-);
+            );
         }
     }
     if (std::fabs(outSrcTps - outBakeTps) >= 0.5) {
@@ -674,13 +660,13 @@ std::string DevDiagDump::buildReplayRemap() {
         return o.str();
     }
     auto const* rep = BakeMap::get().pendingReplay();
-    o << "# Frames AFTER prepareBakeTimeline (TPS remap + P2 policy + optional −1)\n";
+    o << "# Commit 3: frames AFTER prepareBakeTimeline (TPS remap + P2 policy + optional −1)\n";
     o << fmt::format(
         "srcTps={:.0f} bakeTps={:.0f} shiftedMinus1={} minFrameBeforeShift={} "
         "droppedP2={} forcedP2toP1={} postEvents={}\n",
         srcTps, bakeTps, boolStr(stats.shiftedMinus1), stats.minFrameBeforeShift,
         stats.droppedP2, boolStr(stats.forcedP2toP1), ev.size()
-);
+    );
     o << "columns: i srcFrame(raw) postBakeFrame btn down p2raw kept\n";
 
     // Pair raw src → post timeline by index when sizes match after P2 drop is hard;
@@ -699,7 +685,7 @@ std::string DevDiagDump::buildReplayRemap() {
         o << fmt::format(
             "  [{:4}] src={:6} post={:6} btn={} down={} p2={}\n",
             i, srcFrame, e.frame, e.button, boolStr(e.down), boolStr(e.player2)
-);
+        );
     }
     if (nPost > show) {
         o << fmt::format("  ... ({} more post-prep events)\n", nPost - show);
@@ -711,12 +697,12 @@ std::string DevDiagDump::buildReplayRemap() {
     }
     auto probe = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, deathTraceUntil(-1, lastEv), -1, true, false, true, 1
-);
+    );
     if (probe.died && probe.deathFrame >= 0) {
         o << fmt::format(
             "\n# events with postBakeFrame in [death-8, death+8] deathF={}\n",
             probe.deathFrame
-);
+        );
         int const lo = std::max(0, probe.deathFrame - 8);
         int const hi = probe.deathFrame + 8;
         for (int i = 0; i < nPost; ++i) {
@@ -725,7 +711,7 @@ std::string DevDiagDump::buildReplayRemap() {
             o << fmt::format(
                 "  [{:4}] post={:6} btn={} down={}\n",
                 i, e.frame, e.button, boolStr(e.down)
-);
+            );
         }
     }
     return o.str();
@@ -753,7 +739,7 @@ std::string DevDiagDump::buildBakeProbe(int maxJobs) {
     o << fmt::format(
         "srcTps={:.0f} bakeTps={:.0f} dt={} substeps={} events={}\n",
         srcTps, bakeTps, dt, substeps, ev.size()
-);
+    );
 
     bool const doRelease = StageConfig::assistRelease();
     struct Job {
@@ -790,10 +776,10 @@ std::string DevDiagDump::buildBakeProbe(int maxJobs) {
         if (probed >= maxJobs) break;
         auto sample = ShadowSimulator::get().runBakeTimeline(
             layer, slot, ev, dt, job.frame, job.frame, true, false, true, substeps
-);
+        );
         auto full = ShadowSimulator::get().runBakeTimeline(
             layer, slot, ev, dt, job.until, -1, true, false, true, substeps
-);
+        );
         bool const ok = !full.died;
         if (ok) ++survived;
         else ++died;
@@ -817,19 +803,19 @@ std::string DevDiagDump::buildBakeProbe(int maxJobs) {
             full.deathObjId,
             full.deathObjType,
             boolStr(full.unknown)
-);
+        );
         ++probed;
     }
     o << fmt::format(
         "\nsummary probed={} survived={} died={} unknownWhileAlive={}\n",
         probed, survived, died, unknownOnly
-);
+    );
     return o.str();
 }
 
 std::string DevDiagDump::buildBakeFrameTrace() {
     std::ostringstream o;
-    o << "# Frame-by-frame bake timeline (parkReals=on) — death+8\n";
+    o << "# Frame-by-frame bake timeline (parkReals=on) — Commit 3 death+8\n";
     o << "# columns: frame x y yVel jumpHeld mode evs tw dead unk | deathObj...\n\n";
 
     PlayLayer* layer = nullptr;
@@ -853,24 +839,24 @@ std::string DevDiagDump::buildBakeFrameTrace() {
         "prep shiftedMinus1={} droppedP2={} forcedP2toP1={} lastEv={} twTracks={}\n",
         boolStr(stats.shiftedMinus1), stats.droppedP2, boolStr(stats.forcedP2toP1),
         lastEv, TriggerWorldStore::get().trackCount()
-);
+    );
 
     // Probe without frame log to find death, then re-run through death+8 with frames.
     int const probeUntil = deathTraceUntil(-1, lastEv);
     auto probe = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, probeUntil, -1, true, false, true, substeps
-);
+    );
     int const until = deathTraceUntil(
         probe.died ? probe.deathFrame : -1,
         probe.died ? -1 : std::min(lastEv, 56)
-);
+    );
     o << fmt::format(
         "=== TRACE A: frames 0..{} (deathF={} → death+8) parkReals=ON substeps={} ===\n",
         until, probe.deathFrame, substeps
-);
+    );
     auto a = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, until, -1, true, true, true, substeps
-);
+    );
     o << fmt::format(
         "result died={} deathF={} deathX={:.2f} deathY={:.2f} deathObjId={} "
         "deathObjType={} deathObjGameId={} unknown={} softHits={} hardHits={} "
@@ -879,26 +865,26 @@ std::string DevDiagDump::buildBakeFrameTrace() {
         a.deathObjId, a.deathObjType, a.deathObjGameId, boolStr(a.unknown),
         a.unknownSoftHits, a.unknownHardHits,
         formatUnknownTop3(a.unknownHist), a.frames.size()
-);
+    );
     for (auto const& tr : a.frames) {
         o << fmt::format(
             "  f={:4} x={:8.2f} y={:8.2f} yv={:8.3f} jmp={} mode={} evs={} tw={} "
             "dead={} unk={}",
             tr.frame, tr.x, tr.y, tr.yVel, boolStr(tr.jumpHeld), tr.mode,
             tr.eventsApplied, boolStr(tr.twApplied), boolStr(tr.dead), boolStr(tr.unknown)
-);
+        );
         if (tr.dead && tr.deathObjId >= 0) {
             o << fmt::format(
                 " | killer id={} type={} @({:.1f},{:.1f})",
                 tr.deathObjId, tr.deathObjType, tr.deathObjX, tr.deathObjY
-);
+            );
         }
         o << "\n";
         for (auto const& e : ev) {
             if (e.frame != tr.frame) continue;
             o << fmt::format(
                 "       +event btn={} down={}\n", e.button, boolStr(e.down)
-);
+            );
         }
     }
 
@@ -906,16 +892,16 @@ std::string DevDiagDump::buildBakeFrameTrace() {
     o << fmt::format(
         "\n=== TRACE B: frames 0..{} parkReals=OFF (legacy spawn-overlap check) ===\n",
         until
-);
+    );
     auto b = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, until, -1, true, true, false, substeps
-);
+    );
     o << fmt::format(
         "result died={} deathF={} deathX={:.2f} deathY={:.2f} deathObjId={} "
         "deathObjType={} unknown={} framesLogged={}\n",
         boolStr(b.died), b.deathFrame, b.deathX, b.deathY,
         b.deathObjId, b.deathObjType, boolStr(b.unknown), b.frames.size()
-);
+    );
     for (auto const& tr : b.frames) {
         bool const nearDeath = b.died && tr.frame + 8 >= b.deathFrame;
         if (!tr.dead && tr.frame > 16 && !nearDeath) continue;
@@ -924,12 +910,12 @@ std::string DevDiagDump::buildBakeFrameTrace() {
             "dead={} unk={}",
             tr.frame, tr.x, tr.y, tr.yVel, boolStr(tr.jumpHeld), tr.mode,
             tr.eventsApplied, boolStr(tr.twApplied), boolStr(tr.dead), boolStr(tr.unknown)
-);
+        );
         if (tr.dead && tr.deathObjId >= 0) {
             o << fmt::format(
                 " | killer id={} type={} @({:.1f},{:.1f})",
                 tr.deathObjId, tr.deathObjType, tr.deathObjX, tr.deathObjY
-);
+            );
         }
         o << "\n";
     }
@@ -947,15 +933,15 @@ std::string DevDiagDump::buildBakeFrameTrace() {
             o << fmt::format(
                 "\n=== TRACE C: through first click f={} (+8) parkReals=ON ===\n",
                 firstClick
-);
+            );
             auto c = ShadowSimulator::get().runBakeTimeline(
                 layer, slot, ev, dt, untilClick, firstClick, true, true, true, substeps
-);
+            );
             o << fmt::format(
                 "result died={} deathF={} sampleX={:.2f} sampled={} deathObjId={}\n",
                 boolStr(c.died), c.deathFrame, c.xAtSample, boolStr(c.sampled),
                 c.deathObjId
-);
+            );
             for (auto const& tr : c.frames) {
                 o << fmt::format(
                     "  f={:4} x={:8.2f} y={:8.2f} yv={:8.3f} jmp={} mode={} evs={} "
@@ -963,7 +949,7 @@ std::string DevDiagDump::buildBakeFrameTrace() {
                     tr.frame, tr.x, tr.y, tr.yVel, boolStr(tr.jumpHeld), tr.mode,
                     tr.eventsApplied, boolStr(tr.twApplied), boolStr(tr.dead),
                     boolStr(tr.unknown)
-);
+                );
             }
         }
     }
@@ -972,7 +958,7 @@ std::string DevDiagDump::buildBakeFrameTrace() {
 
 std::string DevDiagDump::buildUnknownHistogram() {
     std::ostringstream o;
-    o << "# Soft/Hard Unknown overlap histogram\n";
+    o << "# Soft/Hard Unknown overlap histogram (Commit 3)\n";
     o << "# Soft = Include-candidate later; Hard = toggle/dynamic/dual honesty truncate\n\n";
 
     PlayLayer* layer = nullptr;
@@ -994,23 +980,23 @@ std::string DevDiagDump::buildUnknownHistogram() {
     }
     auto probe = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, deathTraceUntil(-1, lastEv), -1, true, false, true, substeps
-);
+    );
     int const until = deathTraceUntil(probe.died ? probe.deathFrame : -1, lastEv);
     auto run = ShadowSimulator::get().runBakeTimeline(
         layer, slot, ev, dt, until, -1, true, false, true, substeps
-);
+    );
     o << fmt::format(
         "until={} died={} deathF={} deathObjId={} deathObjGameId={} "
         "twTracks={} droppedP2={} shiftedMinus1={}\n",
         until, boolStr(run.died), run.deathFrame, run.deathObjId, run.deathObjGameId,
         TriggerWorldStore::get().trackCount(), stats.droppedP2,
         boolStr(stats.shiftedMinus1)
-);
+    );
     o << fmt::format(
         "softHits={} hardHits={} bins={} unknownTop3=[{}]\n\n",
         run.unknownSoftHits, run.unknownHardHits, run.unknownHist.size(),
         formatUnknownTop3(run.unknownHist)
-);
+    );
     o << "columns: rank class objectId objectType uniqueId count\n";
     int rank = 0;
     for (auto const& b : run.unknownHist) {
@@ -1022,7 +1008,7 @@ std::string DevDiagDump::buildUnknownHistogram() {
             b.objectType,
             b.uniqueId,
             b.count
-);
+        );
         ++rank;
         if (rank >= 64) {
             o << fmt::format("  ... ({} more bins)\n", run.unknownHist.size() - 64);
@@ -1030,7 +1016,7 @@ std::string DevDiagDump::buildUnknownHistogram() {
         }
     }
     if (run.unknownHist.empty()) {
-        o << " (no UnknownOnOverlap hits in this timeline)\n";
+        o << "  (no UnknownOnOverlap hits in this timeline)\n";
     }
     return o.str();
 }
@@ -1044,13 +1030,6 @@ std::string DevDiagDump::buildSelfChecks() {
     else {
         o << "PlanGoldCorpus: FAIL\n" << report << "\n";
     }
-    report.clear();
-    if (BakeSpawnProbe::selfCheck(report)) {
-        o << "BakeSpawnProbe: OK\n" << report << "\n";
-    }
-    else {
-        o << "BakeSpawnProbe: FAIL\n" << report << "\n";
-    }
     return o.str();
 }
 
@@ -1060,8 +1039,6 @@ std::string DevDiagDump::buildOverlay() {
     AssistController::get().updateOverlay();
     o << "attemptTick=" << AssistController::get().attemptTick() << "\n";
     o << "assistTouched=" << boolStr(AssistController::get().assistTouchedRun()) << "\n";
-    o << "realMetrics=" << AssistRealMetrics::get().reportLine() << "\n";
-    o << "simEstimate=" << AssistSimEstimate::get().reportLine() << "\n";
     o << "(see Geode console / overlay HUD for live line)\n";
     return o.str();
 }
@@ -1090,24 +1067,6 @@ bool DevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
 
     AssistLog::info(fmt::format("DIAG: full dump → {}", outDir.string()));
     return true;
-}
-
-bool DevDiagDump::dumpReplayDivergence(ShadowSimulator::BakeRunResult const& run,
-    ImportedReplay const& replay, std::filesystem::path& outDir, std::string& errMsg) {
-    outDir = makeStampDir("bakefail", errMsg);
-    if (outDir.empty()) return false;
-    auto* layer = PlayLayer::get();
-    int const currentId = layer && layer->m_level ? static_cast<int>(layer->m_level->m_levelID) : 0;
-    std::ostringstream body;
-    body << fmt::format("replay={} recordedLevel={} currentLevel={} events={} ghostDeathFrame={} killerUid={} objectId={}\n",
-        replay.sourceName, replay.recordedLevelId, currentId, replay.events.size(),
-        run.deathFrame, run.deathObjId, run.deathObjGameId);
-    for (auto const& f : run.frames) {
-        if (f.frame >= run.deathFrame - 32)
-            body << fmt::format("frame={} x={} y={} vy={} held={} mode={} events={} dead={}\n",
-                f.frame, f.x, f.y, f.yVel, f.jumpHeld, f.mode, f.eventsApplied, f.dead);
-    }
-    return writeFile(outDir, "ghost-divergence.txt", body.str(), errMsg);
 }
 
 bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg) {
@@ -1139,6 +1098,6 @@ bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMs
 
     AssistLog::info(fmt::format(
         "DIAG: bake-fail dump → {} (files={})", outDir.string(), wrote
-));
+    ));
     return wrote > 0;
 }

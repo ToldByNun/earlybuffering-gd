@@ -1,5 +1,4 @@
 #include "AssistHorizon.hpp"
-#include "ModeAssist.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -12,14 +11,77 @@ int AssistHorizon::applyMul(int base, float capMul) {
 }
 
 AssistHorizon::Caps AssistHorizon::shortCaps(GameModeKind mode, int limit) {
+    int const x = limit > 0 ? limit : 1;
     Caps c;
-    ModeAssist::forKind(mode).fillShortCaps(limit, c.planCap, c.scoreHorizon, c.trajDraw);
+    switch (mode) {
+        case GameModeKind::Wave:
+            c.planCap = std::max(32, x + 16);
+            c.scoreHorizon = c.planCap;
+            c.trajDraw = std::clamp(c.planCap + 24, 32, 56);
+            break;
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+            c.planCap = std::max(64, x * 3);
+            c.scoreHorizon = c.planCap;
+            c.trajDraw = std::clamp(c.planCap + 16, 40, 72);
+            break;
+        case GameModeKind::Ufo:
+            c.planCap = std::max(40, x + 20);
+            c.scoreHorizon = c.planCap;
+            c.trajDraw = std::clamp(c.planCap + 20, 36, 64);
+            break;
+        case GameModeKind::Spider:
+            c.planCap = std::max(36, x + 16);
+            c.scoreHorizon = c.planCap;
+            c.trajDraw = std::clamp(c.planCap + 20, 36, 64);
+            break;
+        case GameModeKind::Robot:
+            c.planCap = 150;
+            c.scoreHorizon = 150;
+            c.trajDraw = std::clamp(96, 64, 120);
+            break;
+        default: // Cube / Ball
+            c.planCap = 150;
+            c.scoreHorizon = 150;
+            c.trajDraw = std::clamp(96, 64, 120);
+            break;
+    }
     return c;
 }
 
 AssistHorizon::Caps AssistHorizon::longCaps(GameModeKind mode, int limit) {
+    int const x = limit > 0 ? limit : 1;
     Caps c;
-    ModeAssist::forKind(mode).fillLongCaps(limit, c.planCap, c.scoreHorizon, c.trajDraw);
+    switch (mode) {
+        case GameModeKind::Wave:
+            // Plan: short≈heute; long nur Trust — Wave ≥96 / score ≥160.
+            c.planCap = std::max(96, x + 64);
+            c.scoreHorizon = std::max(160, c.planCap);
+            c.trajDraw = c.scoreHorizon;
+            break;
+        case GameModeKind::Ship:
+        case GameModeKind::Swing:
+            c.planCap = std::max(120, x * 4);
+            c.scoreHorizon = std::max(200, c.planCap);
+            c.trajDraw = c.scoreHorizon;
+            break;
+        case GameModeKind::Ufo:
+        case GameModeKind::Spider:
+            c.planCap = std::max(96, x + 48);
+            c.scoreHorizon = std::max(160, c.planCap);
+            c.trajDraw = c.scoreHorizon;
+            break;
+        case GameModeKind::Robot:
+            c.planCap = std::max(180, x + 80);
+            c.scoreHorizon = std::max(280, c.planCap);
+            c.trajDraw = c.scoreHorizon;
+            break;
+        default:
+            c.planCap = std::max(180, x + 80);
+            c.scoreHorizon = std::max(240, c.planCap);
+            c.trajDraw = c.scoreHorizon;
+            break;
+    }
     return c;
 }
 
@@ -59,9 +121,8 @@ AssistHorizon::Caps AssistHorizon::resolve(
 int AssistHorizon::minSurviveTicksForSuccess(int scoreHorizon, bool trustOk) {
     if (!trustOk) return 0; // short mode: threat-clear honesty alone
     int const h = std::max(8, scoreHorizon);
-    // Floor 48 when the horizon is long enough; never demand more ticks than we score.
-    // look-ahead-cap=14 used to force minSurvive=48 while planCap≤14 → Alive Delay impossible.
-    return std::min(h, std::max(48, h / 2));
+    // Need a long ghost run — platform-after-jump must appear in-horizon.
+    return std::max(48, h / 2);
 }
 
 bool AssistHorizon::longPathSuccessOk(
@@ -112,8 +173,6 @@ bool AssistHorizon::selfCheck(std::string& report) {
     expect(minSurviveTicksForSuccess(160, false) == 0, "min-short-zero");
     expect(minSurviveTicksForSuccess(160, true) == 80, "min-long-half");
     expect(minSurviveTicksForSuccess(64, true) == 48, "min-long-floor48");
-    expect(minSurviveTicksForSuccess(14, true) == 14, "min-long-cap-horizon");
-    expect(minSurviveTicksForSuccess(80, true) == 48, "min-long-floor-vs-half");
 
     expect(longPathSuccessOk(100, false, false, 80), "alive-long-ok");
     expect(!longPathSuccessOk(40, false, false, 80), "alive-short-fail");

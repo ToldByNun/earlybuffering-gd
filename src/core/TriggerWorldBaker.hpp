@@ -14,7 +14,7 @@ class GameObject;
 class EffectGameObject;
 
 // Builds static TriggerWorldStore tracks from spawn-timed Move/Rotate/Scale/Toggle.
-// Budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
+// Commit 7: budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
 class TriggerWorldBaker {
 public:
     static constexpr size_t kCollectPerSlice = 256;
@@ -51,20 +51,14 @@ public:
     // Physics tick: objects appeared after init race → rebuild empty TW.
     void kickIfStaleEmpty(PlayLayer* layer);
     // Bake validate: drain slices until idle or wallMs. err on cancel / incomplete.
-    // forceForBake: build/load even when Trigger World setting is off (spawn movers).
-    bool waitUntilReady(
-        PlayLayer* layer, int wallMs, std::string& err, bool forceForBake = false
-);
-    // Cache load + start when setting is off (bake-only movers). No-op if tracks exist.
-    bool beginForceBuild(PlayLayer* layer);
+    bool waitUntilReady(PlayLayer* layer, int wallMs, std::string& err);
 
 private:
     enum class Phase {
         Idle = 0,
-        WaitObjects, // objectLayer may be empty at onLevelInit
+        WaitObjects, // Commit 4: objectLayer may be empty at onLevelInit
         Collect,
         CollectSections, // secondary: section lists may hold objects children miss
-        CollectLevelTriggers,
         Bake,
         Commit
     };
@@ -103,9 +97,7 @@ private:
         int groupId,
         std::vector<GameObject*> const& objects,
         std::unordered_map<int, LivePose> const& live
-);
-
-    bool startInternal(PlayLayer* layer, bool forceForBake);
+    );
 
     bool m_running = false;
     bool m_cancel = false;
@@ -119,8 +111,6 @@ private:
     size_t m_childIndex = 0;
     size_t m_childCount = 0;
     size_t m_effectIndex = 0;
-    size_t m_triggerSource = 0;
-    size_t m_triggerSlot = 0;
     size_t m_secOuter = 0;
     size_t m_secInner = 0;
     size_t m_secSlot = 0;
@@ -129,9 +119,6 @@ private:
     std::vector<GameObject*> m_objects;
     std::vector<EffectGameObject*> m_effects;
     std::unordered_set<int> m_seenIds;
-    // Section cells can contain the same raw object pointer many times.
-    // De-duplicate before the defensive RTTI probe, not only by uniqueId after it.
-    std::unordered_set<void*> m_seenSectionRaw;
     std::unordered_map<int, LivePose> m_live;
     std::unordered_map<int, TriggerTrack> m_tracks;
 
@@ -141,10 +128,6 @@ private:
     size_t m_skippedDynamic = 0;
     size_t m_skippedNonSpawn = 0; // touch-triggered only (legacy name)
     size_t m_skippedTouch = 0;
-    size_t m_skippedIgnore = 0; // pulse/camera/etc — not static movers
-    size_t m_skippedSpawnTrig = 0; // Spawn trigger objects (not Move targets)
-    size_t m_staticMoverSeen = 0; // Move/Rotate/Scale/Toggle considered
-    size_t m_staticMoverMissed = 0; // no group / empty targets / bad scale
     int m_waitSlices = 0;
     bool m_collectIncomplete = false;
 
@@ -154,10 +137,6 @@ private:
     size_t m_lastSkippedDynamic = 0;
     size_t m_lastSkippedNonSpawn = 0;
     size_t m_lastSkippedTouch = 0;
-    size_t m_lastSkippedIgnore = 0;
-    size_t m_lastSkippedSpawnTrig = 0;
-    size_t m_lastStaticMoverSeen = 0;
-    size_t m_lastStaticMoverMissed = 0;
     size_t m_lastChildCount = 0;
     size_t m_lastEffectCount = 0;
     size_t m_lastSectionExtras = 0;

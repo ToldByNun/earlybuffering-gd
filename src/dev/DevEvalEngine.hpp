@@ -15,7 +15,7 @@
 
 class PlayLayer;
 
-// Clock-bound eval + grid/tail/objectives.
+// Clock-bound eval + grid/tail/objectives (Commits 9–10).
 class DevEvalEngine {
 public:
     struct Report {

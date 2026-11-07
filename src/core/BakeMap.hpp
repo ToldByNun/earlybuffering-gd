@@ -2,7 +2,6 @@
 #define EARLYBUFFER_CORE_BAKEMAP_HPP
 
 #include "ReplayImport.hpp"
-#include "ShadowSimulator.hpp"
 #include "../config/StageConfig.hpp"
 
 #include <Geode/Geode.hpp>
@@ -24,7 +23,6 @@ struct BakedClick {
     GameModeKind mode = GameModeKind::Cube;
     // Release after dash/hold-orb (or tagged hold). Viz/gate: purple on discrete modes.
     bool holdAssist = false;
-    bool replayTiming = false; // Recorded input time, including after ghost contacts.
 };
 
 struct BakeMapData {
@@ -74,11 +72,7 @@ public:
     static BakeMap& get();
 
     void clear();
-    // Loads clicks for the startpos shard (startXq==0 = level-root cache).
-    void loadForLevel(GJGameLevel* level, int startXq = 0);
-    // Switch shard without clearing levelKey; reloads clicks when xq changes.
-    void setStartXq(int startXq);
-    int startXq() const { return m_startXq; }
+    void loadForLevel(GJGameLevel* level);
     void save() const;
 
     bool loaded() const { return m_loaded; }
@@ -103,13 +97,6 @@ public:
         BakeMethod method = BakeMethod::Replay
     );
 
-    // Dev-only dry run. Uses the same imported-replay preparation and ghost
-    // playback as Bake Map, without writing any click or route cache.
-    geode::Result<ShadowSimulator::BakeRunResult> visualizeReplay(
-        PlayLayer* layer,
-        int startSnapshotSlot
-    );
-
     // Prefer clicks whose mode matches preferMode within LOOKUP_X_TOL.
     // If none match, fall back to any mode (legacy maps / missing mode).
     // Pass preferMode=nullopt to skip the mode preference pass entirely.
@@ -117,8 +104,6 @@ public:
         float playerX, int approxFrame, bool down, bool player2,
         std::optional<GameModeKind> preferMode = std::nullopt
     ) const;
-
-    BakedClick const* recordedInputAt(int frame, bool down, bool player2) const;
 
     // Next bake/self-bake clicks after playerX (same down/player2; prefer mode).
     // Sorted by ascending x. Used by smart bake-chain (planSequence).
@@ -130,7 +115,6 @@ public:
 
     // Merge self-bake point-windows: dedup by down/player2/near x+frame → union
     // earliest/latest. Sets method="self" when the map was empty or already self.
-    // Empty level store is still loaded so self-bake can start from a cold cache.
     // Returns number of clicks added or widened. Cap kMaxMapClicks.
     static constexpr float MERGE_X_TOL = 40.f;
     static constexpr int MERGE_FRAME_TOL = 30;
@@ -158,9 +142,6 @@ private:
     geode::Result<> writeFile() const;
     geode::Result<> readFile();
 
-    // Shift one click to testFrame; survive through untilFrame.
-    // minSurviveFrame>=0: OK if deathFrame >= that (1:1 validate death).
-    // noDeathBeforeFrame>=0: ignore deaths before that tick (reach late clicks).
     bool testShiftedClick(
         PlayLayer* layer,
         int startSnapshotSlot,
@@ -169,9 +150,7 @@ private:
         int testFrame,
         int untilFrame,
         float dt,
-        int substeps = 1,
-        int minSurviveFrame = -1,
-        int noDeathBeforeFrame = -1
+        int substeps = 1
     ) const;
 
     geode::Result<int> bakeReplay(
@@ -185,7 +164,6 @@ private:
     ImportedReplay m_replay;
     bool m_hasReplay = false;
     bool m_loaded = false;
-    int m_startXq = 0;
     // Set by mergeSelfClicks; cleared by save(). Avoids disk I/O on death flush.
     mutable bool m_dirty = false;
     BakeProgress m_progress;

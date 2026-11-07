@@ -1,5 +1,4 @@
 #include "PrefixSim.hpp"
-#include "ModeAssist.hpp"
 
 #include <algorithm>
 #include <fmt/format.h>
@@ -53,18 +52,6 @@ bool PrefixSim::allowHoldBranchTheory(
     if (isWave) return PrefixSim::allowWaveTurnTheory(true);
     if (isShipLike) return PrefixSim::allowShipRecoverTheory(true);
     return true;
-}
-
-bool PrefixSim::allowWaveTurnTheory(GameModeKind kind) {
-    return ModeAssist::forKind(kind).prefixWaveTurn();
-}
-
-bool PrefixSim::allowShipRecoverTheory(GameModeKind kind) {
-    return ModeAssist::forKind(kind).prefixShipRecover();
-}
-
-bool PrefixSim::allowHoldBranchTheory(GameModeKind kind) {
-    return ModeAssist::forKind(kind).prefixHoldBranch();
 }
 
 std::vector<int> PrefixSim::rankViableByOutcome(
@@ -171,17 +158,6 @@ bool PrefixSim::selfCheck(std::string& report) {
     expect(allowHoldBranchTheory(true, false, false, true), "hold-ship");
     expect(allowHoldBranchTheory(false, true, false, false), "hold-robot");
     expect(!allowHoldBranchTheory(false, false, false, false), "hold-cube-off");
-
-    expect(allowWaveTurnTheory(GameModeKind::Wave), "kind-wave-on");
-    expect(!allowWaveTurnTheory(GameModeKind::Cube), "kind-wave-off");
-    expect(allowShipRecoverTheory(GameModeKind::Ship), "kind-ship-on");
-    expect(allowShipRecoverTheory(GameModeKind::Swing), "kind-swing-on");
-    expect(!allowShipRecoverTheory(GameModeKind::Ufo), "kind-ufo-no-ship-recover");
-    expect(allowHoldBranchTheory(GameModeKind::Wave), "kind-hold-wave");
-    expect(allowHoldBranchTheory(GameModeKind::Ship), "kind-hold-ship");
-    expect(allowHoldBranchTheory(GameModeKind::Robot), "kind-hold-robot");
-    expect(allowHoldBranchTheory(GameModeKind::Ufo), "kind-hold-ufo");
-    expect(!allowHoldBranchTheory(GameModeKind::Cube), "kind-hold-cube-off");
 
     expect(jitterAttemptAllowed(0), "jitter-0");
     expect(jitterAttemptAllowed(1), "jitter-1");

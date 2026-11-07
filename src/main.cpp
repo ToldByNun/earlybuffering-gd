@@ -2,7 +2,6 @@
 #include "core/AssistContracts140.hpp"
 #include "core/AssistController.hpp"
 #include "core/BakeMap.hpp"
-#include "core/BakeSpawnProbe.hpp"
 #include "core/SaveDropPaths.hpp"
 #include "core/ShadowSimulator.hpp"
 #include "core/TriggerClassify.hpp"
@@ -52,7 +51,7 @@ $on_mod(Loaded) {
     DevConfig::refreshCache();
     syncPerfTrace();
     syncLagProbe();
-    // Drop folders (replay-drop / config / cloud-configs) — soft-fail if save dir is read-only.
+    // Mobile drop folders (replay-drop / config) — soft-fail if save dir is read-only.
     {
         std::string dropErr;
         if (!SaveDropPaths::get().ensureDirs(dropErr) && !dropErr.empty()) {
@@ -60,7 +59,7 @@ $on_mod(Loaded) {
         }
     }
     AssistLog::printBanner();
-    // v1.4.0 LOCK: freeze GhostParityProbe ε before any runtime / PlanGold probe.
+    // Commit 2 LOCK: freeze GhostParityProbe ε before any runtime / PlanGold probe.
     AssistContracts140::applyLockedEps();
     AssistLog::info(fmt::format(
         "AssistContracts140 LOCK schema={} corpus={} eps=({:.0f},{:.0f})",
@@ -68,7 +67,7 @@ $on_mod(Loaded) {
         AssistContracts140::kCorpusLabel,
         AssistContracts140::kLockedEpsX,
         AssistContracts140::kLockedEpsY
-));
+    ));
     if (StageConfig::perfTrace()) {
         AssistLog::info(fmt::format("PerfTrace logging to {}", PerfTrace::logPath()));
     }
@@ -91,12 +90,6 @@ $on_mod(Loaded) {
     {
         std::string report;
         bool const ok = TriggerWorldStore::selfCheck(report);
-        if (ok) AssistLog::info(report);
-        else AssistLog::info(fmt::format("WARN {}", report));
-    }
-    {
-        std::string report;
-        bool const ok = BakeSpawnProbe::selfCheck(report);
         if (ok) AssistLog::info(report);
         else AssistLog::info(fmt::format("WARN {}", report));
     }
@@ -136,7 +129,7 @@ $on_mod(Loaded) {
             "ASSIST MODE: {} — {}",
             StageConfig::assistModeName(mode),
             StageConfig::assistModeHint(mode)
-));
+        ));
         AssistController::get().updateOverlay();
     });
 
@@ -234,11 +227,17 @@ $on_mod(Loaded) {
     listenForSettingChanges<std::string>("assist-mode", [](std::string) {
         onAnySetting();
     });
+    listenForSettingChanges<std::string>("assist-pick", [](std::string) {
+        onAnySetting();
+    });
+    listenForSettingChanges<std::string>("assist-engine", [](std::string) {
+        onAnySetting();
+    });
     listenForSettingChanges<std::string>("assist-verify", [](std::string) {
         onAnySetting();
     });
 
-    // Dev Lab (TW cache; session/eval still stubbed).
+    // Dev Lab (Commit 2 cache; session/eval still stubbed).
     watchBool("dev-record-enable");
     watchInt("dev-record-count");
     watchBool("dev-count-empty-attempts");

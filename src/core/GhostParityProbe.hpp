@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-// Past-window ghost vs live pose check (baseline + v1.4.0 ε LOCK).
+// Past-window ghost vs live pose check (Commit 1 + Commit 2 ε LOCK).
 // Anchors live in reserved ShadowSimulator parity snapshot slots so plan()
 // captures cannot clobber them. ε is frozen in AssistContracts140 — remeasure
 // only in a new mod version (AssistRealMetrics tracks max|dxy| for that).
@@ -15,7 +15,7 @@ public:
     static constexpr int kHorizonTicks = 48;
     static constexpr int kAnchorEvery = 16;
     static constexpr int kProbeEvery = 16;
-    // Must match AssistContracts140::kLockedEps* (v1.4.0 freeze).
+    // Must match AssistContracts140::kLockedEps* (Commit 2 freeze).
     static constexpr float kDefaultEpsX = 12.f;
     static constexpr float kDefaultEpsY = 12.f;
     static constexpr int kMaxProbeUs = 900;
@@ -34,7 +34,7 @@ public:
 
     float epsX() const { return this->m_epsX; }
     float epsY() const { return this->m_epsY; }
-    // applyLockedEps freezes these once with corpus values.
+    // Commit 2 will call this once with frozen corpus values.
     void setEps(float epsX, float epsY);
 
     static bool selfCheck(std::string& report);

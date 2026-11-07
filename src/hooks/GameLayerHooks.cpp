@@ -1,5 +1,4 @@
 #include "../core/AssistController.hpp"
-#include "../core/LiveRouteCapture.hpp"
 #include "../core/BakeScheduler.hpp"
 #include "../core/OrbStackResolver.hpp"
 #include "../core/SectionObjectWalk.hpp"
@@ -34,13 +33,12 @@ inline bool simulating() { return ShadowSimulator::get().isSimulating(); }
 // ---------------------------------------------------------------------------
 class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     static void onModify(auto& self) {
- (void)self.setHookPriority("GJBaseGameLayer::handleButton", Priority::First);
+        (void)self.setHookPriority("GJBaseGameLayer::handleButton", Priority::First);
     }
 
     void handleButton(bool down, int button, bool isPlayer1) {
         if (simulating()) return; // never let anything poke the real input path mid-sim
-        if (LiveRouteCapture::recording(this)
-            || AssistController::get().onHandleButton(this, down, button, isPlayer1)) {
+        if (AssistController::get().onHandleButton(this, down, button, isPlayer1)) {
             GJBaseGameLayer::handleButton(down, button, isPlayer1);
         }
     }
@@ -72,7 +70,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     // Requires Jump held (applyRingJump) — wait-ticks must not claim early.
     // Orb-window scan records overlap only (no boost / claim).
     // Toggle orb 1594: reversible group flip via ToggleOrbSim (no triggerObject).
-    // Toggle+normal stack → BOTH fire (vanilla clicks both partners).
+    // Commit 7: Toggle+normal stack → BOTH fire (vanilla clicks both partners).
     void playerTouchedRing(PlayerObject* player, RingObject* ring) {
         if (simulating()) {
             auto& sim = ShadowSimulator::get();
@@ -85,12 +83,12 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                 auto* playLayer = typeinfo_cast<PlayLayer*>(this);
                 OrbStackResolver::get().noteTouch(
                     player, ring, false, sim.simAbsTick()
-);
+                );
                 ToggleOrbSim::get().onToggleHit(playLayer, player, ring);
                 // Stacked normal orb must also fire.
                 OrbStackResolver::get().fireStackedPartners(
                     playLayer, player, ring
-);
+                );
                 return;
             }
             bool const beforeClaim = ring
@@ -100,12 +98,12 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                 && (ring->m_claimTouch || ring->m_activated);
             OrbStackResolver::get().noteTouch(
                 player, ring, !beforeClaim && afterClaim, sim.simAbsTick()
-);
+            );
             // Stacked toggle must also fire (whichever partner collision hit first).
             auto* playLayer = typeinfo_cast<PlayLayer*>(this);
             OrbStackResolver::get().fireStackedPartners(
                 playLayer, player, ring
-);
+            );
             return;
         }
         // Live: null-reject only — never invent a call. Half-restored / poisoned
@@ -126,7 +124,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                 // Stacked normal orb must also fire (same rule as 1594).
                 OrbStackResolver::get().fireStackedPartners(
                     playLayer, player, object
-);
+                );
             }
             return;
         }
@@ -146,14 +144,14 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
 
     cocos2d::CCParticleSystemQuad* spawnParticle(
         char const* plist, int zOrder, cocos2d::tCCPositionType positionType, cocos2d::CCPoint position
-) {
+    ) {
         if (simulating()) return nullptr;
         return GJBaseGameLayer::spawnParticle(plist, zOrder, positionType, position);
     }
 
     cocos2d::CCParticleSystemQuad* createParticle(
         int objectType, char const* plistName, int tag, cocos2d::tCCPositionType positionType
-) {
+    ) {
         if (simulating()) return nullptr;
         return GJBaseGameLayer::createParticle(objectType, plistName, tag, positionType);
     }
@@ -165,7 +163,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
 
     cocos2d::CCParticleSystemQuad* createCustomParticle(
         gd::string const& key, cocos2d::ParticleStruct const& particleStruct, int minimum, bool dontAdd
-) {
+    ) {
         if (simulating()) return nullptr;
         return GJBaseGameLayer::createCustomParticle(key, particleStruct, minimum, dontAdd);
     }
@@ -173,7 +171,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
     cocos2d::CCParticleSystemQuad* claimCustomParticle(
         gd::string const& key, cocos2d::ParticleStruct const& particleStruct,
         int zLayer, int zOrder, int uiObject, bool dontAdd
-) {
+    ) {
         if (simulating()) return nullptr;
         return GJBaseGameLayer::claimCustomParticle(key, particleStruct, zLayer, zOrder, uiObject, dontAdd);
     }
@@ -228,7 +226,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
             }
             GJBaseGameLayer::collisionCheckObjects(
                 player, &extra, static_cast<int>(extra.size()), dt
-);
+            );
             return;
         }
 
@@ -262,7 +260,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
             }
             GJBaseGameLayer::collisionCheckObjects(
                 player, &extra, static_cast<int>(extra.size()), dt
-);
+            );
             return;
         }
         GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, dt);
@@ -274,13 +272,12 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
 // ---------------------------------------------------------------------------
 class $modify(EbPlayerObject, PlayerObject) {
     static void onModify(auto& self) {
- (void)self.setHookPriority("PlayerObject::pushButton", Priority::First);
- (void)self.setHookPriority("PlayerObject::update", Priority::First);
+        (void)self.setHookPriority("PlayerObject::pushButton", Priority::First);
+        (void)self.setHookPriority("PlayerObject::update", Priority::First);
     }
 
     bool pushButton(PlayerButton button) {
-        if (!simulating() && !LiveRouteCapture::recording(PlayLayer::get())
-            && !AssistController::get().allowPushButton(this, button)) {
+        if (!simulating() && !AssistController::get().allowPushButton(this, button)) {
             return false;
         }
         return PlayerObject::pushButton(button);
@@ -376,7 +373,7 @@ class $modify(EbPlayerObject, PlayerObject) {
 // step has already been simulated when a mid-step input arrives.
 class $modify(EbPlayerObjectLate, PlayerObject) {
     static void onModify(auto& self) {
- (void)self.setHookPriority("PlayerObject::update", Priority::Last);
+        (void)self.setHookPriority("PlayerObject::update", Priority::Last);
     }
 
     void update(float dt) {
@@ -407,7 +404,7 @@ class $modify(EbEnhancedGameObject, EnhancedGameObject) {
             if (!sim.bakeOffline()
                 && SimCollisionPolicy::softPortalLiveTruncate(
                     static_cast<int>(this->m_objectType)
-)) {
+                )) {
                 return;
             }
             EnhancedGameObject::activatedByPlayer(player);
@@ -502,12 +499,11 @@ class $modify(EbHardStreak, HardStreak) {
 // ---------------------------------------------------------------------------
 class $modify(EbPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
- (void)self.setHookPriority("PlayLayer::destroyPlayer", Priority::First);
+        (void)self.setHookPriority("PlayLayer::destroyPlayer", Priority::First);
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer) {
         if (!PlayLayer::init(level, useReplay, dontCreatePlayer)) return false;
-        LiveRouteCapture::cancel();
         AssistController::get().onLevelInit(this);
         return true;
     }
@@ -520,7 +516,7 @@ class $modify(EbPlayLayer, PlayLayer) {
             "attemptTickWas={} practice={}",
             AssistController::get().attemptTick(),
             this->m_isPracticeMode
-));
+        ));
         {
             LagProbe::Scope const s("eb.bakeCancel");
             BakeScheduler::get().cancel();
@@ -531,12 +527,10 @@ class $modify(EbPlayLayer, PlayLayer) {
             LagProbe::Scope const s("vanilla.PlayLayer::resetLevel");
             PlayLayer::resetLevel();
         }
-        LiveRouteCapture::resetAttempt(this);
         LagProbe::get().endEpisode();
     }
 
     void onQuit() {
-        LiveRouteCapture::cancel();
         AssistController::get().onLevelQuit();
         PlayLayer::onQuit();
     }
@@ -591,7 +585,7 @@ class $modify(EbPlayLayer, PlayLayer) {
                 mode ? mode : "?",
                 object ? object->m_objectID : -1,
                 this->m_isPracticeMode
-));
+            ));
             AssistController::get().onRealDeath(this, player, object);
             {
                 LagProbe::Scope const s("vanilla.destroyPlayer");
@@ -619,12 +613,11 @@ class $modify(EbPlayLayer, PlayLayer) {
     }
 
     void levelComplete() {
-        if (!simulating()) LiveRouteCapture::complete(this);
         // Safe Mode OFF → never force test mode (progress like vanilla).
         // Safe Mode ON → enabled or assist-touched runs count as test clears.
         bool const block = StageConfig::blocksProgressSaves(
             AssistController::get().assistTouchedRun()
-);
+        );
         if (block) {
             this->m_isTestMode = true;
             AssistLog::debug("Safe Mode ON: levelComplete → testMode (no normal progress)");
@@ -648,7 +641,7 @@ class $modify(EbPlayLayer, PlayLayer) {
         LagProbe::get().beginEpisode("loadFromCheckpoint", fmt::format(
             "attemptTickWas={}",
             AssistController::get().attemptTick()
-));
+        ));
         {
             LagProbe::Scope const s("eb.bakeCancel");
             BakeScheduler::get().cancel();
@@ -662,7 +655,6 @@ class $modify(EbPlayLayer, PlayLayer) {
             LagProbe::Scope const s("vanilla.loadFromCheckpoint");
             PlayLayer::loadFromCheckpoint(checkpoint);
         }
-        LiveRouteCapture::resetAttempt(this);
         LagProbe::get().endEpisode();
     }
 };

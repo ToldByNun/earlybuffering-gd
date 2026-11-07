@@ -91,15 +91,15 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 **Sim collision:** ready Static* track + apply this step → `Include` only while pose active (`writePose` clears visibility/`poweredOn` when inactive → `Skip`). **Toggle orb 1594 / touch-1049 targets:** pre-flip → `UnknownOnOverlap` (`pass-toggle-unknown`); after `ToggleOrbSim` models the hit → `Include`/`Skip` by post-flip active (no vanilla `triggerObject`). DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay **Hard** Unknown. **Follow-player never enters static JSON.**
 
-**Soft Unknown → Include:** Soft histogram types (vehicle / mirror / teleport / modifier / collision / enter-effect) → `Include` via `classifyObjectType` for **bakeOffline** — vanilla physics, **no Soft-Continue**. **Live assist sims** truncate those Soft portals (`softPortalLiveTruncate` → `UnknownOnOverlap`) so stacked portal `activatedByPlayer` cannot poison `m_sections`. Hard (toggle pre-model, dynamic follow, Dual/Solo) still `UnknownOnOverlap`. Section walks use `SectionObjectWalk` (never raw `typeinfo_cast` on poison slots). PlanGold: `sim-collision-policy` + `section-object-walk`.
+**Commit 5 (Soft Unknown → Include):** Soft histogram types (vehicle / mirror / teleport / modifier / collision / enter-effect) → `Include` via `classifyObjectType` for **bakeOffline** — vanilla physics, **no Soft-Continue**. **Live assist sims** truncate those Soft portals (`softPortalLiveTruncate` → `UnknownOnOverlap`) so stacked portal `activatedByPlayer` cannot poison `m_sections`. Hard (toggle pre-model, dynamic follow, Dual/Solo) still `UnknownOnOverlap`. Section walks use `SectionObjectWalk` (never raw `typeinfo_cast` on poison slots). PlanGold: `sim-collision-policy` + `section-object-walk`.
 
-**Bake portals + tg2 fixture:** Soft portals stay `Include` for bakeOffline (Parity Gate: `AssistContracts140::applyLockedEps` before validate — Soft Include must not retune ε). Frozen corpus `Tg2BakeFixture` (`id_80045794` / `tg2.gdr2` / f185 solid#42181): validate Fail adds `residual=TW-empty|TW-tracks-present` when that death matches (mover pose, not Soft portal Unknown) + `parityGate=eps-locked`. PlanGold: `tg2-bake-fixture`.
+**Commit 6 (Bake portals + tg2 fixture):** Soft portals stay `Include` for bakeOffline (Parity Gate: `AssistContracts140::applyLockedEps` before validate — Soft Include must not retune ε). Frozen corpus `Tg2BakeFixture` (`id_80045794` / `tg2.gdr2` / f185 solid#42181): validate Fail adds `residual=TW-empty|TW-tracks-present` when that death matches (mover pose, not Soft portal Unknown) + `parityGate=eps-locked`. PlanGold: `tg2-bake-fixture`.
 
-**Orb stack dual-fire:** Vanilla clicks **both** when a toggle orb (1594) is stacked with a normal orb — sim must too. `OrbStackResolver`: touch log (debug), toggle group flip **skips** jump/dash rings (ε 12px), and `fireStackedPartners` always fires the other partner (toggle↔jump) when one is hit. Same ring never double-boosts (claim/`touchedRings`). PlanGold: `orb-stack-resolver`.
+**Commit 7 (Orb stack dual-fire):** Vanilla clicks **both** when a toggle orb (1594) is stacked with a normal orb — sim must too. `OrbStackResolver`: touch log (debug), toggle group flip **skips** jump/dash rings (ε 12px), and `fireStackedPartners` always fires the other partner (toggle↔jump) when one is hit. Same ring never double-boosts (claim/`touchedRings`). PlanGold: `orb-stack-resolver`.
 
 JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys: [{ t, x, y, r, sx, sy, a }] }] }`. Softcap **100 000** tracks / 32 768 keys/track (AssistLog + overlay `tw softcap`); hard OOM valve 250 000 / 65 536 with loud truncate — **no silent 2048 drop**.
 
-**TW empty:** Init can race `objectLayer` → WaitObjects then Collect; empty on-disk cache is discarded as miss; `kickIfStaleEmpty` rebuilds when children appear; non-spawn StaticMove/Rotate/Scale/Toggle bake at **t=0** (touch still skipped); Bake Map **`waitUntilReady`** (≤45s) before validate — loud Fail only if real static movers were seen but 0 tracks (pulse/spawn/camera EffectGameObjects alone do **not** fail). Incomplete empty is **not** written to `triggers/*.json`.
+**Commit 4 (TW empty):** Init can race `objectLayer` → WaitObjects then Collect; empty on-disk cache is discarded as miss; `kickIfStaleEmpty` rebuilds when children appear; non-spawn StaticMove/Rotate/Scale/Toggle bake at **t=0** (touch still skipped); Bake Map **`waitUntilReady`** (≤45s) before validate — loud Fail if effects existed but 0 tracks. Incomplete empty is **not** written to `triggers/*.json`.
 
 `ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 
@@ -156,8 +156,6 @@ Overlay compact Trigger-World: `tw empty` / `tw N/M` / `tw building %`. LagProbe
 
 Assist → **Export Config** / **Import Config** (also Win32 file picker; non-Win uses `earlybuffer-config.json` under the Geode mod save dir via `SaveDropPaths`). Mobile alerts show the **full path**, copy it to the **clipboard** (best-effort), and use Files / Share / file manager / Finder-via-device wording (no ADB-only steps). Dev Copy Report dual-writes report text + path on the clipboard when the file save succeeds.
 
-Cloud cache folder (created with the other drop dirs): `{saveDir}/cloud-configs/` with `index-cache.json`, `meta.json`, `active.json`, `packs/<id>.json`, `outbox/`, anonymous `client-id.txt`, and `local-stats.json` (`CloudConfigStore` / `CloudConfigStats`). Catalog schema, host allowlist, stats/sort/Share tags, and maintainer smoke: [`docs/cloud_configs.md`](cloud_configs.md). Offline seed: packaged `cloud-seed/index.json` + `packs/safe-defaults.json`.
-
 ### v2 schema
 
 ```json
@@ -175,8 +173,7 @@ Cloud cache folder (created with the other drop dirs): `{saveDir}/cloud-configs/
 ```
 
 - **`version`**: `2` (current).
-- **`settings`**: all **123** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
-- **String I/O**: `exportToString` / `importFromString` share the same merge + applying-guard path as file import/export. `ApplyOptions` can skip Keybind keys and/or keys whose name starts with `dev-` (used by cloud apply; local Assist Import applies everything).
+- **`settings`**: all **124** portable Geode keys from `mod.json` (bool / int / float / string / color / keybind). Excludes `title-*` and `custom:eb-action` rows.
 - **Color**: `"#RRGGBB"` hex.
 - **Keybind**: human string (`"F6"`, `"Ctrl+Shift+D"`); multiple binds joined with `" | "`. JSON string arrays also accepted on import.
 - Alerts show `version` / `applied|keys` / `skipped` and the file path.
@@ -279,19 +276,19 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 8. `planSequence` only when `smart-depth` ≥ 2 (multi-jump / bake-chain over Delay-viable `viableDelays`). Depth 1 = AssistPickV1 only. Survived = `!died && !unknown`.
 9. budgetHit -> PassBudget (controller may Soft Hold-Until-Safe); linked dual both clear
 
-**Score honesty:** Delay-viable = `clearsThreat` / `zoneCleared` / no-zone — **no** soft-viable `surviveBin>=1` Escape. Continuous equivalent stays no-zone `!died` + `idleSafer`/`ascentUseful` search steer (does not invent viability).
+**Commit 8 (Score honesty):** Delay-viable = `clearsThreat` / `zoneCleared` / no-zone — **no** soft-viable `surviveBin>=1` Escape. Continuous equivalent stays no-zone `!died` + `idleSafer`/`ascentUseful` search steer (does not invent viability).
 
-**ModeSurvival — lethal vs recoverable vs landing:** Ideas reimplemented (no upstream code). `ModeSurvival` classifies cand outcomes: Cube/Ball **Landing** after settle past threat; Wave **Recoverable** after clear (3 flip-probe helpers + smallest clear +1px); Ship/UFO/Spider **Recoverable** after clear; **LateCrashAfterClear** when death is past the threat; **Lethal** inside the zone. Narrow overlap-ignore only for follow/spent hazards already overlapping at click. ParityGate: ascent-shaped death alone ≠ Landing. Soft classes (`countsAsSafeForDelay`) avoid false-lethal bake labeling; **Live Delay-arm** uses Delay-worthy (`countsAsDelayWorthy` = Alive only via `PlanOptions.requireAliveForDelay`, plus `shouldSkipFalseOpportunity` so Landing/LateCrash never invent Delay). Bake `verifyDelay` keeps soft. PlanGold: `mode-survival`.
+**Commit 9 (ModeSurvival — lethal vs recoverable vs landing):** Ideas reimplemented (no upstream code). `ModeSurvival` classifies cand outcomes: Cube/Ball **Landing** after settle past threat; Wave **Recoverable** after clear (3 flip-probe helpers + smallest clear +1px); Ship/UFO/Spider **Recoverable** after clear; **LateCrashAfterClear** when death is past the threat; **Lethal** inside the zone. Narrow overlap-ignore only for follow/spent hazards already overlapping at click. ParityGate: ascent-shaped death alone ≠ Landing. Soft classes (`countsAsSafeForDelay`) avoid false-lethal bake labeling; **Live Delay-arm** uses Delay-worthy (`countsAsDelayWorthy` = Alive only via `PlanOptions.requireAliveForDelay`, plus `shouldSkipFalseOpportunity` so Landing/LateCrash never invent Delay). Bake `verifyDelay` keeps soft. PlanGold: `mode-survival`.
 
-**PrefixSim + two-pass / same-crash:** Ideas reimplemented (no upstream). Shared-prefix: idle death at tick T marks all delays `d > T` without re-sim. Same `deathTick` after press across ≥2 delays → stop (next obstacle). Two-pass: quick cand fill, then hold/release theories only on `delaysForFullScore` (survivors + top died-acted). Mode-gated WaveTurn/ship recover. Jitter (±3% firstDt) only Top-2 picks. PlanGold: `prefix-sim`.
+**Commit 10 (PrefixSim + two-pass / same-crash):** Ideas reimplemented (no upstream). Shared-prefix: idle death at tick T marks all delays `d > T` without re-sim. Same `deathTick` after press across ≥2 delays → stop (next obstacle). Two-pass: quick cand fill, then hold/release theories only on `delaysForFullScore` (survivors + top died-acted). Mode-gated WaveTurn/ship recover. Jitter (±3% firstDt) only Top-2 picks. PlanGold: `prefix-sim`.
 
-**PerfectAssistPolicy:** Opportunity + Trust → `MustDelaySearch` (skip spam-Pass / PassNoThreat early exit). Named Pass: `pass-parity-drift` / `pass-spot-untrusted` / `pass-untrust` / `pass-hard-unknown` / `pass-tw-empty` / `pass-budget`. Never soft-trust `budgetHit` into Delay; never invent auto-click/release. InterveneGate help-don't-hurt + Wave smallest-clear helpers. PlanGold: `perfect-assist-policy`.
+**Commit 11 (PerfectAssistPolicy):** Opportunity + Trust → `MustDelaySearch` (skip spam-Pass / PassNoThreat early exit). Named Pass: `pass-parity-drift` / `pass-spot-untrusted` / `pass-untrust` / `pass-hard-unknown` / `pass-tw-empty` / `pass-budget`. Never soft-trust `budgetHit` into Delay; never invent auto-click/release. InterveneGate help-don't-hurt + Wave smallest-clear helpers. PlanGold: `perfect-assist-policy`.
 
-**Real metrics primary + simEstimate secondary:** Ship gates stay on `AssistRealMetrics` (DAF / AssistCov / TrustRate / Parity / Wilson G5–G7b). Counterfactual `Prev` / `Caused` / `Net` / `HarmRate_sim` live in `AssistSimEstimate` — tagged `simEstimate`, **G10 diagnostic only** (never ship Pass/Fail). DevReport/eval notes d0 vs planned Delay; overlay `daf=… cov=… trust=…` then `simEst net=+P/-C harm=…%`. Freeze-world **forced on** while DevCycle records. PlanGold: `assist-sim-estimate`.
+**Commit 12 (Real metrics primary + simEstimate secondary):** Ship gates stay on `AssistRealMetrics` (DAF / AssistCov / TrustRate / Parity / Wilson G5–G7b). Counterfactual `Prev` / `Caused` / `Net` / `HarmRate_sim` live in `AssistSimEstimate` — tagged `simEstimate`, **G10 diagnostic only** (never ship Pass/Fail). DevReport/eval notes d0 vs planned Delay; overlay `daf=… cov=… trust=…` then `simEst net=+P/-C harm=…%`. Freeze-world **forced on** while DevCycle records. PlanGold: `assist-sim-estimate`.
 
-**Recheck / HUS / Orb align / Robust:** Recheck late slide ≤**+1** (never earlier; orb/toggle same cap — dMin wait is a separate path). Robust **±1** verify before Delay arm (fail → Pass/HUS). Orb align: clamp fire into `[dMin,dMax]`, wait until inside ring; wrong-orb (activation outside window) → Pass. **`disable-hus` default on**; when HUS on: only with `SimTrust.okAt` **and** orb/Alive escape — untrusted or bare hopeless → Pass; deadline without orb → `HUS drop`. PlanGold: `orb-align`, `hold-until-safe`.
+**Commit 13 (Recheck / HUS / Orb align / Robust):** Recheck late slide ≤**+1** (never earlier; orb/toggle same cap — dMin wait is a separate path). Robust **±1** verify before Delay arm (fail → Pass/HUS). Orb align: clamp fire into `[dMin,dMax]`, wait until inside ring; wrong-orb (activation outside window) → Pass. **`disable-hus` default on**; when HUS on: only with `SimTrust.okAt` **and** orb/Alive escape — untrusted or bare hopeless → Pass; deadline without orb → `HUS drop`. PlanGold: `orb-align`, `hold-until-safe`.
 
-**Traj + Real Fixtures:** `AssistHorizon` — short caps ≈ today; **long only when `SimTrust.okAt`** (Wave plan≥96 / score≥160; Ship≥120/200; Cube≥180/240). `modelFor` + `planSequence` scoreHorizon use it. Trust-long Delay success needs a **long ghost run** (`surviveTicks ≥ max(48, scoreHorizon/2)`) or ModeSurvival-safe death (landing / platform-after-jump). TrajectoryVisualizer: HOLD vs coast until death, hard max **960** (`TrajDrawHorizon`); v2 preds stay short scoreHorizon. PlanGold: `assist-horizon`, `traj-draw-horizon`, `real-corpus-fixtures` (GRIEF id_149992717 + tg2 bakefail minimal traces).
+**Commit 15 (Traj + Real Fixtures):** `AssistHorizon` — short caps ≈ today; **long only when `SimTrust.okAt`** (Wave plan≥96 / score≥160; Ship≥120/200; Cube≥180/240). `modelFor` + `planSequence` scoreHorizon use it. Trust-long Delay success needs a **long ghost run** (`surviveTicks ≥ max(48, scoreHorizon/2)`) or ModeSurvival-safe death (landing / platform-after-jump). TrajectoryVisualizer: HOLD vs coast until death, hard max **960** (`TrajDrawHorizon`); v2 preds stay short scoreHorizon. PlanGold: `assist-horizon`, `traj-draw-horizon`, `real-corpus-fixtures` (GRIEF id_149992717 + tg2 bakefail minimal traces).
 
 Lexico (v2): orbUseful > surviveBin > surviveTicks > endX−λ·delay. v1 non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
@@ -303,9 +300,7 @@ Pass when **density** (wave ≈ 3 / 10 ticks) **and** (**rhythmic** gaps: mean �
 
 **Do not Pass** (allow assist) when spatial orb/pad ahead **or** a BakeMap window is nearby. Portal/teleport corridor spam looks rhythmic → Pass unless orb/pad. Gate Pass sets overlay `PASS spam` / `VERDICT pass-spam`.
 
-**SpamAssist:** `SpamAssistPolicy` + `ShiftedInputQueue` — Ship/Swing `featheringIsControl` never PassSpam on density alone; follow-ups during Delay share one `shift` (Cap 8 → `pass-queue-overflow`); PassSpam with queued inputs drains 1/tick; `min-click-interval` does not block enqueue while shift is live. Overlay `queue=N shift=K`. PlanGold: `shifted-input-queue`, `spam-assist-policy`.
-
-Continuous modes also Pass release assist during spam **unless** PerfectAssist `MustDelaySearch` (trust + orb/bake opportunity) or SpamAssist AllowAssist. Release Soft Hold (HUS) mirrors press on trusted PassBudget / PassHopeless. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
+Continuous modes also Pass release assist during spam **unless** PerfectAssist `MustDelaySearch` (trust + orb/bake opportunity). Release Soft Hold (HUS) mirrors press on trusted PassBudget / PassHopeless. Reset on attempt / quit. Self-check: `ClickIntentGuard::selfCheck`.
 
 ## Release assist gate (= Bake Visualizer purple)
 
@@ -315,7 +310,7 @@ Continuous modes also Pass release assist during spam **unless** PerfectAssist `
 
 `GhostParityProbe` records live pose each physics tick, anchors every 16t into reserved shadow slots 14/15 (`PARITY_SLOT_A/B`, outside the plan capture ring 1..13), and every 16t replays the past ≤48t path via `samplePath`. Drift (ε **LOCKED** 12px via `AssistContracts140::kLockedEps*` / `applyLockedEps` at boot, or death mismatch) → `SimTrust::noteParityDrift` + `SpotTrustMap::markUntrusted(x)` + LagProbe `eb.parity.drift` + `AssistRealMetrics::noteParityProbe`. AssistController: mid-buffer drift clears the buffer (`pass-parity-drift`); `planPress`/`planRelease` hard-Pass on parity drift or spot-untrusted — **never** softened by orb foresight. Overlay: `trust=1` / `trust=0 parity` / `trust=spot`. PlanGold: `spot-trust-map`, `sim-trust`, `ghost-parity-probe`.
 
-### Assist contracts v1.4.0 LOCK
+### Assist contracts v1.4.0 LOCK (Commit 2)
 
 Frozen numbers live in `docs/assist_contracts_140.md` and `AssistContracts140` — **DO NOT RETUNE** without a new mod version. Real counters (primary): `AssistRealMetrics` (`N_opp` / `N_trust_opp` / `A` / `DAF` / ParityOK + Wilson G5 / G6 / G7a / G7b TrustRate). Overlay `daf=a/A cov=% trust=% par=ok/n`. Counterfactual Prev/Caused/Net/`HarmRate_sim` → `AssistSimEstimate` (`simEstimate`, G10 only). `dev-freeze-world` default **on**; record path forces freeze-world. PlanGold: `assist-contracts-140`, `assist-real-metrics`, `assist-sim-estimate`.
 
@@ -373,7 +368,7 @@ Helpers: `AssistController::resolveFireTick` / `shouldFireBuffered` / `fireTickS
 
 ## Recheck slide safety
 
-Before inject, live recheck may slide `fireTick`. Rules (`OrbAlign::acceptRecheckSlide`):
+Before inject, live recheck may slide `fireTick`. Rules (`OrbAlign::acceptRecheckSlide` / Commit 13):
 
 - Plan must be Delay, `delay > 0`, `!budgetHit`, and (`threatCleared` or orb).
 - Cap late slides to `oldFire + 1` (orb/toggle and non-orb). Orb **dMin wait** is a separate path (not a slide).
@@ -517,7 +512,6 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 | `pass-parity-drift` | GhostParityProbe: shadow replay of recent path drifted vs live (attempt-wide hard Pass; clears buffer) |
 | `pass-spot-untrusted` | SpotTrustMap: X marked after prior parity drift (hard Pass until good-parity streak clears) |
 | `pass-spam` / `pass-untrust` / `pass-low-trust` | Intent / divergence / LevelProfile trust gates (`pass-untrust` softens near orb; parity/spot never soften) |
-| `pass-queue-overflow` | `ShiftedInputQueue` Cap 8 — named Pass (no silent drop) |
 | `pass-limit-zero` / `pass-debounce` / `pass-cps` / `pass-scope` / `pass-assist-off` / `pass-early-attempt` | Hard off / debounce / CPS / scope |
 | `pass-bake-missing` / `pass-bake-no-window` / `pass-bake-past-latest` / `pass-bake-verify-fail` / `pass-bake-in-window` | Replay/Brute bake miss paths (Hybrid: template arm or `MISS-BAKE-WIN` → live). In-window success arms Delay (`bake-wait-*` / `bake-now`), not silent in-window Pass. |
 | `delay-orb` / `delay-threat` / `delay-prefer` / `delay-generic` | Buffered Delay |
@@ -557,8 +551,6 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Toggle+Jump orb stack (co-located) | Both fire (toggle flip + jump boost) | Same | `OrbStackResolver::fireStackedPartners` — vanilla clicks both |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
-| Ship feathering density, no orb | AllowAssist (not PassSpam) | Same | ModeAssist `featheringIsControl` |
-| Follow-up taps during Delay | Same-shift queue; overlay `queue=N shift=K` | Same | Cap 8 → `pass-queue-overflow` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
 | Ship/Wave: idle lives, press-now dies, later Alive delay clears | Delay (`idleSafer`+`ascent`); HUS only if enabled + escape | Same | PLAN log `idleSafer=1 ascent=1`; soft-dead later → no force |
 | Hybrid: bake hit (verify ok, in window) | Overlay `hy bake [lo,hi]`; LagProbe `eb.hybrid.verify` short / `cache=1` on repeat | Same | No Live plan this press |

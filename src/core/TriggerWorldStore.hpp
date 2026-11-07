@@ -5,6 +5,8 @@
 
 #include <Geode/Geode.hpp>
 #include <cstddef>
+#include <span>
+#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -44,9 +46,7 @@ struct TriggerWorldData {
 // Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
 class TriggerWorldStore {
 public:
-    // v2 keys normal Move triggers to their actual level time.  v1 assumed
-    // every non-spawn trigger fired at tick zero.
-    static constexpr int kFileVersion = 4;
+    static constexpr int kFileVersion = 1;
     // Soft ceiling: refuse NEW tracks/keys with AssistLog — never silent drop under soft.
     static constexpr size_t kSoftMaxTracks = 100000;
     static constexpr size_t kSoftMaxKeysPerTrack = 32768;
@@ -81,7 +81,7 @@ public:
 
     // Replace in-memory data (baker). Softcap logs; hard-only truncate.
     void setData(TriggerWorldData data);
-    // Empty incomplete collect must not poison the on-disk cache.
+    // Commit 4: empty incomplete collect must not poison the on-disk cache.
     void clearDirty() { this->m_dirty = false; }
     // Delete triggers/<key>.json if present (empty / stale cache).
     void discardCacheFile() const;
@@ -90,6 +90,8 @@ public:
     static void decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep);
 
     TriggerTrack const* findTrack(int uniqueId) const;
+    struct Change { int tick; int uniqueId; };
+    std::span<Change const> changesBetween(int after, int through) const;
     size_t trackCount() const { return this->m_data.tracks.size(); }
     size_t readyTrackCount() const;
 
@@ -116,7 +118,6 @@ public:
     std::string statusLine() const;
 
     // Headless: samplePose hold/before/after, writePose(null), kind round-trip.
-    // Leaves the singleton cleared (safe at mod load before any level).
     static bool selfCheck(std::string& report);
 
 private:
@@ -140,6 +141,9 @@ private:
     static ClampResult clampData(TriggerWorldData& data);
 
     TriggerWorldData m_data;
+    void indexTracks();
+    std::unordered_map<int, size_t> m_byId;
+    std::vector<Change> m_changes;
     bool m_loaded = false;
     mutable bool m_dirty = false;
     bool m_softcapHit = false;

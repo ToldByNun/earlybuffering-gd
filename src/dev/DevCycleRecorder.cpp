@@ -110,7 +110,7 @@ DevDecisionEvent* DevCycleRecorder::appendTo(
         if (where && where[0]) {
             ev.assistReason = fmt::format(
                 "{}@{}", AssistVerdict::name(reason), where
-);
+            );
         }
     }
     auto* written = DevTraceStore::get().appendEvent(ev);
@@ -126,7 +126,7 @@ void DevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
     if (cycle->hasPlan || cycle->hasArm || cycle->hasGate) return;
     auto* w = this->appendTo(
         *cycle, DevEventKind::GatePass, cycle->lastEventId, 0, reason, where
-);
+    );
     if (!w) return;
     // Gate-pass: empty candNotes; attribution is the full reason.
     DevRejectLedger::AttributionInput attrIn;
@@ -144,7 +144,7 @@ void DevCycleRecorder::notePlanFinished(
     PlayLayer* layer,
     PlayerObject* player
 ) {
- (void)limit;
+    (void)limit;
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive()) return;
     if (cycle->hasGate || cycle->hasPlan) return;
@@ -156,7 +156,7 @@ void DevCycleRecorder::notePlanFinished(
         plan.planId,
         plan.reason != AssistReason::None ? plan.reason : AssistReason::PassUnknown,
         "plan"
-);
+    );
     if (!w) return;
     w->effectTick = effectTick;
     w->plannedDelay = plan.delay;
@@ -170,8 +170,8 @@ void DevCycleRecorder::notePlanFinished(
     if (layer && layer->m_player2) {
         player2 = layer->m_player2;
     }
-    // Freeze-world ON while recording (honest counterfactual corpus).
-    bool const freezeOnRecord = true;
+    // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
+    bool const freezeOnRecord = DevConfig::freezeWorld();
     w->witness = DevLiveWitness::capture(
         layer,
         player,
@@ -180,10 +180,10 @@ void DevCycleRecorder::notePlanFinished(
         w->hasClockStamp ? w->clockStamp : clock,
         effectTick,
         freezeOnRecord
-);
+    );
     w->hasWitness = w->witness.valid;
 
-    // Suppress claims early when the witness alone is notReproducible.
+    // Commit 8: suppress claims early when the witness alone is notReproducible.
     if (w->hasWitness) {
         DevClassifyOptions opts;
         opts.requireDeps = DevConfig::evalRequireDeps();
@@ -191,7 +191,7 @@ void DevCycleRecorder::notePlanFinished(
         opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
         DevClassifyResult const gate = DevStateDiff::classifyWitnessGate(
             w->witness, opts
-);
+        );
         if (!gate.evalSuppressedReason.empty()) {
             w->hasFidelity = true;
             w->fidelity = gate.fidelity;
@@ -202,7 +202,7 @@ void DevCycleRecorder::notePlanFinished(
         }
     }
 
-    // Full per-delay ledger from plan(); attribution filled later with eval.
+    // Commit 12: full per-delay ledger from plan(); attribution filled later with eval.
     w->candNotes = plan.candNotes;
     w->candNotesTruncated = plan.candNotesTruncated;
     {
@@ -285,7 +285,7 @@ void DevCycleRecorder::noteLearningOnPlan(
                     note.rejectCode = DevRejectLedger::RejectCode::LearningDisplaced;
                     note.detail = DevRejectLedger::clampDetail(fmt::format(
                         "learn {}→{}", plannedDelay, finalDelay
-));
+                    ));
                 }
             }
         }
@@ -303,7 +303,7 @@ void DevCycleRecorder::notePassThrough(AssistReason reason, char const* where) {
         cycle->planId,
         reason,
         where
-);
+    );
     if (w) cycle->hasPassThrough = true;
 }
 
@@ -328,7 +328,7 @@ int64_t DevCycleRecorder::noteDelayArm(
             planId,
             reason,
             where ? where : "arm"
-);
+        );
         if (pw) {
             pw->plannedDelay = plannedDelay;
             pw->source = source;
@@ -350,7 +350,7 @@ int64_t DevCycleRecorder::noteDelayArm(
         planId > 0 ? planId : cycle->planId,
         reason,
         where
-);
+    );
     if (!w) return 0;
     w->plannedDelay = plannedDelay;
     w->plannedFireTick = plannedFireTick;
@@ -381,7 +381,7 @@ void DevCycleRecorder::noteRecheck(
         cycle->planId,
         AssistReason::None,
         where
-);
+    );
     if (!w) return;
     w->plannedFireTick = newFireTick;
     w->actualFireTick = -1;
@@ -397,7 +397,7 @@ void DevCycleRecorder::noteRecheck(
         oldFireTick,
         newFireTick,
         where ? where : "recheck"
-);
+    );
 }
 
 void DevCycleRecorder::noteHus(
@@ -418,7 +418,7 @@ void DevCycleRecorder::noteHus(
         cycle->planId,
         reason,
         where
-);
+    );
     if (!w) return;
     w->plannedFireTick = fireTick;
 }
@@ -436,7 +436,7 @@ void DevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
         cycle->planId,
         AssistReason::None,
         "fire"
-);
+    );
     if (!w) return;
     w->actualFireTick = actualFireTick;
     w->assistReason = fmt::format("fire@{}", actualFireTick);
@@ -466,7 +466,7 @@ void DevCycleRecorder::noteCheckpoint(int attemptTick) {
     ev.effectTick = attemptTick;
     ev.pressTick = attemptTick;
     ev.assistReason = "checkpoint";
- (void)DevTraceStore::get().appendEvent(ev);
+    (void)DevTraceStore::get().appendEvent(ev);
 }
 
 void DevCycleRecorder::writeOutcomesForOpenCycles(
@@ -488,7 +488,7 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(
                 cycle.planId,
                 AssistReason::None,
                 "cancelled"
-);
+            );
             if (fw) {
                 fw->actualFireTick = -1;
                 fw->assistReason = fmt::format("fire-cancelled@{}", endReason);
@@ -508,14 +508,14 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(
             cycle.planId,
             AssistReason::None,
             endReason.c_str()
-);
+        );
         if (!w) continue;
         w->endReason = endReason;
         w->assistReason = fmt::format(
             "outcome:{}:{}",
             endReason,
             lived ? "lived" : "died"
-);
+        );
         w->hasAssistDiag = true;
         w->armVerifyOk = cycle.armVerifyOk;
         w->budgetHitAtArm = cycle.budgetHitAtArm;
@@ -536,8 +536,8 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(
                     w->ticksToDeath,
                     cycle.recheckDelta,
                     cycle.holdExtendMax
-)
-);
+                )
+            );
         }
         cycle.hasOutcome = true;
     }
@@ -582,9 +582,9 @@ void DevCycleRecorder::onAttemptReset(int startTick) {
     auto& store = DevTraceStore::get();
     if (!store.isOpen()) return;
     if (store.hasOpenAttempt()) {
- (void)this->sealAttemptWithOutcomes("reset", false, startTick);
+        (void)this->sealAttemptWithOutcomes("reset", false, startTick);
     }
- (void)this->beginNewAttempt(startTick);
+    (void)this->beginNewAttempt(startTick);
 }
 
 bool DevCycleRecorder::flushQuit() {
@@ -596,7 +596,7 @@ bool DevCycleRecorder::flushQuit() {
         bool const count = this->shouldCountAttempt();
         this->m_cycles.clear();
         this->m_activePressId = 0;
- (void)store.sealAttempt("quit", count);
+        (void)store.sealAttempt("quit", count);
     }
     return store.flush();
 }

@@ -1,7 +1,5 @@
 #include "AssistRealMetrics.hpp"
 
-#include "AssistContracts142.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
@@ -9,20 +7,6 @@
 AssistRealMetrics& AssistRealMetrics::get() {
     static AssistRealMetrics inst;
     return inst;
-}
-
-int AssistRealMetrics::modeIndex(GameModeKind mode) {
-    int const i = static_cast<int>(mode);
-    if (i < 0 || i >= StageConfig::MODE_COUNT) return 0;
-    return i;
-}
-
-AssistRealMetrics::ModeAcc& AssistRealMetrics::modeAccMut(GameModeKind mode) {
-    return this->m_modes[static_cast<size_t>(modeIndex(mode))];
-}
-
-AssistRealMetrics::ModeAcc const& AssistRealMetrics::modeAcc(GameModeKind mode) const {
-    return this->m_modes[static_cast<size_t>(modeIndex(mode))];
 }
 
 void AssistRealMetrics::resetSession() {
@@ -37,7 +21,6 @@ void AssistRealMetrics::resetSession() {
     this->m_maxAbsDy = 0.f;
     this->m_levelKey.clear();
     this->m_levels.clear();
-    this->m_modes.fill(ModeAcc{});
 }
 
 void AssistRealMetrics::setLevelKey(std::string key, bool dynamicLabelled) {
@@ -47,12 +30,9 @@ void AssistRealMetrics::setLevelKey(std::string key, bool dynamicLabelled) {
     if (dynamicLabelled) acc.dynamicLabelled = true;
 }
 
-void AssistRealMetrics::noteOpportunity(bool trusted, GameModeKind mode) {
+void AssistRealMetrics::noteOpportunity(bool trusted) {
     ++this->m_nOpp;
     if (trusted) ++this->m_nTrustOpp;
-    auto& modeAcc = this->modeAccMut(mode);
-    ++modeAcc.nOpp;
-    if (trusted) ++modeAcc.nTrustOpp;
     if (!this->m_levelKey.empty()) {
         auto& acc = this->m_levels[this->m_levelKey];
         ++acc.nOpp;
@@ -60,14 +40,12 @@ void AssistRealMetrics::noteOpportunity(bool trusted, GameModeKind mode) {
     }
 }
 
-void AssistRealMetrics::noteArm(GameModeKind mode) {
+void AssistRealMetrics::noteArm() {
     ++this->m_arms;
-    ++this->modeAccMut(mode).arms;
 }
 
-void AssistRealMetrics::noteDeathAfterFire(GameModeKind mode) {
+void AssistRealMetrics::noteDeathAfterFire() {
     ++this->m_daf;
-    ++this->modeAccMut(mode).daf;
 }
 
 void AssistRealMetrics::noteParityProbe(bool drifted, float absDx, float absDy) {
@@ -100,24 +78,6 @@ float AssistRealMetrics::dafRate() const {
 float AssistRealMetrics::parityOkRate() const {
     int const d = std::max(1, this->m_parityProbes);
     return static_cast<float>(this->m_parityOk) / static_cast<float>(d);
-}
-
-float AssistRealMetrics::trustRateFor(GameModeKind mode) const {
-    auto const& a = this->modeAcc(mode);
-    int const d = std::max(1, a.nOpp);
-    return static_cast<float>(a.nTrustOpp) / static_cast<float>(d);
-}
-
-float AssistRealMetrics::assistCovFor(GameModeKind mode) const {
-    auto const& a = this->modeAcc(mode);
-    int const d = std::max(1, a.nTrustOpp);
-    return static_cast<float>(a.arms) / static_cast<float>(d);
-}
-
-float AssistRealMetrics::dafRateFor(GameModeKind mode) const {
-    auto const& a = this->modeAcc(mode);
-    int const d = std::max(1, a.arms);
-    return static_cast<float>(a.daf) / static_cast<float>(d);
 }
 
 std::string AssistRealMetrics::reportLine(char const* corpusLabel) const {
@@ -159,42 +119,12 @@ std::string AssistRealMetrics::reportLine(char const* corpusLabel) const {
         );
     }
 
-    auto const r1 = AssistContracts142::gateR1AssistCov(
-        this->m_arms, this->m_nTrustOpp
-    );
-    auto const r2 = AssistContracts142::gateR2TrustRate(
-        this->m_nTrustOpp, this->m_nOpp, false
-    );
-    auto const r3 = AssistContracts142::gateR3Daf(
-        this->m_daf, this->m_arms, corpus
-    );
-
-    std::string modesBit;
-    for (int i = 0; i < StageConfig::MODE_COUNT; ++i) {
-        auto const kind = static_cast<GameModeKind>(i);
-        auto const& a = this->m_modes[static_cast<size_t>(i)];
-        if (a.nOpp <= 0 && a.arms <= 0) continue;
-        if (!modesBit.empty()) modesBit += ' ';
-        modesBit += fmt::format(
-            "{}:A={}/opp={}/trust={}/daf={} cov={:.2f} tr={:.2f}",
-            StageConfig::kindName(kind),
-            a.arms,
-            a.nOpp,
-            a.nTrustOpp,
-            a.daf,
-            this->assistCovFor(kind),
-            this->trustRateFor(kind)
-        );
-    }
-    if (modesBit.empty()) modesBit = "none";
-
     return fmt::format(
-        "corpus={} contracts142={} A={} DAF={} DAFRate={:.4f} CI95=[{:.4f},{:.4f}] "
+        "corpus={} A={} DAF={} DAFRate={:.4f} CI95=[{:.4f},{:.4f}] "
         "ParityOK={}/{}={:.4f} AssistCov={:.4f} TrustRate={:.4f} "
         "N_opp={} N_trust={} max|dxy|=({:.1f},{:.1f}) "
-        "G5={} G6={} G7a={} G7b={} R1={} R2={} R3={} sample={} modes=[{}]",
+        "G5={} G6={} G7a={} G7b={} sample={}",
         corpus,
-        AssistContracts142::freezeStatus(),
         this->m_arms,
         this->m_daf,
         this->dafRate(),
@@ -213,11 +143,7 @@ std::string AssistRealMetrics::reportLine(char const* corpusLabel) const {
         AssistContracts140::statusId(g6),
         AssistContracts140::statusId(g7a),
         AssistContracts140::statusId(worst),
-        AssistContracts140::statusId(r1),
-        AssistContracts140::statusId(r2),
-        AssistContracts140::statusId(r3),
-        AssistContracts140::isSoloCorpus(corpus) ? "solo" : "multi",
-        modesBit
+        AssistContracts140::isSoloCorpus(corpus) ? "solo" : "multi"
     );
 }
 
@@ -225,7 +151,7 @@ std::string AssistRealMetrics::overlayBit() const {
     if (this->m_arms <= 0 && this->m_parityProbes <= 0 && this->m_nOpp <= 0) {
         return {};
     }
-    // Real metrics primary (DAF / AssistCov / TrustRate / Parity).
+    // Commit 12: real metrics primary (DAF / AssistCov / TrustRate / Parity).
     return fmt::format(
         "daf={}/{} cov={:.0f}% trust={:.0f}% par={}/{}",
         this->m_daf,
@@ -250,25 +176,17 @@ bool AssistRealMetrics::selfCheck(std::string& report) {
     AssistRealMetrics& m = AssistRealMetrics::get();
     m.resetSession();
     expect(m.nOpp() == 0 && m.arms() == 0, "fresh");
-    expect(m.modeAcc(GameModeKind::Ship).arms == 0, "mode-fresh");
 
     m.setLevelKey("static-demo", false);
-    m.noteOpportunity(true, GameModeKind::Cube);
-    m.noteOpportunity(true, GameModeKind::Ship);
-    m.noteOpportunity(false, GameModeKind::Ship);
+    m.noteOpportunity(true);
+    m.noteOpportunity(true);
+    m.noteOpportunity(false);
     expect(m.nOpp() == 3 && m.nTrustOpp() == 2, "opp-count");
-    expect(m.modeAcc(GameModeKind::Cube).nOpp == 1, "cube-opp");
-    expect(m.modeAcc(GameModeKind::Ship).nOpp == 2, "ship-opp");
-    expect(m.modeAcc(GameModeKind::Ship).nTrustOpp == 1, "ship-trust");
-
-    m.noteArm(GameModeKind::Cube);
-    m.noteArm(GameModeKind::Ship);
+    m.noteArm();
+    m.noteArm();
     expect(m.arms() == 2, "arm-count");
-    expect(m.modeAcc(GameModeKind::Cube).arms == 1, "cube-arm");
-    expect(m.modeAcc(GameModeKind::Ship).arms == 1, "ship-arm");
     expect(std::fabs(m.assistCov() - 1.f) < 1e-4f, "cov-1");
     expect(std::fabs(m.trustRate() - (2.f / 3.f)) < 1e-4f, "trust-rate");
-    expect(std::fabs(m.assistCovFor(GameModeKind::Cube) - 1.f) < 1e-4f, "cube-cov");
 
     m.noteParityProbe(false, 1.f, 2.f);
     m.noteParityProbe(true, 20.f, 3.f);
@@ -276,29 +194,16 @@ bool AssistRealMetrics::selfCheck(std::string& report) {
     expect(m.driftEvents() == 1, "drift");
     expect(m.maxAbsDx() >= 20.f && m.maxAbsDy() >= 3.f, "noise-max");
 
-    m.noteDeathAfterFire(GameModeKind::Ship);
+    m.noteDeathAfterFire();
     expect(m.daf() == 1, "daf");
-    expect(m.modeAcc(GameModeKind::Ship).daf == 1, "ship-daf");
-    expect(m.modeAcc(GameModeKind::Cube).daf == 0, "cube-no-daf");
 
     auto const line = m.reportLine("solo");
     expect(line.find("corpus=solo") != std::string::npos, "line-corpus");
     expect(line.find("sample=solo") != std::string::npos, "line-sample");
-    expect(line.find("contracts142=UNFROZEN") != std::string::npos, "line-142");
-    expect(line.find("modes=[") != std::string::npos, "line-modes");
-    expect(line.find("ship:") != std::string::npos, "line-ship");
     expect(line.find("simEstimate") == std::string::npos, "no-sim-estimate");
-
-    // Default args keep Cube for call sites that omit mode.
-    m.resetSession();
-    m.noteOpportunity(true);
-    m.noteArm();
-    expect(m.modeAcc(GameModeKind::Cube).nOpp == 1, "default-mode-opp");
-    expect(m.modeAcc(GameModeKind::Cube).arms == 1, "default-mode-arm");
 
     m.resetSession();
     expect(m.nOpp() == 0 && m.daf() == 0, "reset");
-    expect(m.modeAcc(GameModeKind::Ship).arms == 0, "mode-reset");
 
     if (fails == 0) {
         report = "AssistRealMetrics selfCheck OK";

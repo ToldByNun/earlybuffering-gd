@@ -1,5 +1,4 @@
 #include "BakeScheduler.hpp"
-#include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
 #include <Geode/Geode.hpp>
 using namespace geode::prelude;
@@ -52,22 +51,9 @@ bool BakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMetho
         ));
         std::string msg = fmt::format("Bake done — {} windows.", n);
         if (status.find("partial") != std::string::npos) {
-            if (StageConfig::assistMode() == AssistMode::Route) {
-                // A partial replay still has useful click windows, but must
-                // never be presented as a usable Route: it has no complete
-                // validated pose trace and therefore no route.json.
-                msg = "EarlyBuffer's offline ghost died during playback.\n\n"
-                    "Only the preceding click windows were saved for Replay/Hybrid. "
-                    "Use Record Route, restart and play the replay in your bot "
-                    "to save a route from the completed run.\n\n(";
-                msg += status;
-                msg += ")";
-            }
-            else {
-                msg += "\n(";
-                msg += status;
-                msg += " — Hybrid part OK)";
-            }
+            msg += "\n(";
+            msg += status;
+            msg += " — Hybrid part OK)";
         }
         FLAlertLayer::create("EarlyBuffer", msg.c_str(), "OK")->show();
     });
