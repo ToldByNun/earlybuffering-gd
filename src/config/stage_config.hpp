@@ -181,6 +181,7 @@ public:
     static std::string stageLabel(StageInfo const& info);
 
 private:
+    friend class StageSettingsCache;
 };
 
 using GameModeKind = StageConfig::GameModeKind;
@@ -222,6 +223,8 @@ public:
     static void ensureCache();
 
 private:
+    friend class StageSettingsCache;
+
     friend class StageInfo;
     friend class ModeParams;
     friend class StageConfig;

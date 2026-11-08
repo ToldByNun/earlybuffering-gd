@@ -176,6 +176,10 @@ public:
     DevAttempt const* currentAttempt() const;
 
 private:
+    friend class DevTraceValidation;
+
+    friend class DevSessionCodec;
+
     DevTraceStore() = default;
 
     int64_t nextEventId();
@@ -214,6 +218,14 @@ public:
                                    int64_t pressId, int64_t parent, int64_t planId);
 
 private:
+    friend class DevTraceValidation;
+
+    friend class DevSessionCodec;
+
+    friend class DevEventCodec;
+
+    friend class DevSnapshotCodec;
+
     DevTraceStoreImplementation() = delete;
 };
 

@@ -77,6 +77,10 @@ public:
     bool waitUntilReady(PlayLayer* layer, int wallMs, std::string& err);
 
 private:
+    friend class TriggerBakeJob;
+
+    friend class TriggerEffectBaker;
+
     enum class Phase {
         Idle = 0,
         WaitObjects, // Commit 4: objectLayer may be empty at onLevelInit

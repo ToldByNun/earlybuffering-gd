@@ -82,6 +82,10 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
+    friend class CloudStatsTracking;
+
+    friend class CloudStatsStorage;
+
     CloudConfigStats();
     ~CloudConfigStats();
 

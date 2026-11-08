@@ -144,6 +144,12 @@ public:
     std::string pauseStatusLine() const;
 
 private:
+    friend class BakeWindowIndex;
+
+    friend class BakeBruteGenerator;
+
+    friend class BakeReplayGenerator;
+
     BakeMap() = default;
 
     geode::Result<> writeFile() const;

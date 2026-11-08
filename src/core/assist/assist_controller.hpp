@@ -172,6 +172,30 @@ public:
     static bool recheckSlideSelfCheck(std::string& report);
 
 private:
+    friend class AssistReleasePlanner;
+
+    friend class AssistPressPlanner;
+
+    friend class AssistBakeReuse;
+
+    friend class AssistOutcomes;
+
+    friend class AssistOverlay;
+
+    friend class AssistInputRuntime;
+
+    friend class AssistBufferRuntime;
+
+    friend class AssistHoldRuntime;
+
+    friend class HoldUntilSafePolicy;
+
+    friend class AssistInputGate;
+
+    friend class AssistTimingRules;
+
+    friend class AssistLifecycle;
+
     AssistController() = default;
 
     int activeLimit(PlayerObject* player) const;
@@ -291,6 +315,18 @@ public:
                                  float simDt);
 
 private:
+    friend class AssistReleasePlanner;
+
+    friend class AssistPressPlanner;
+
+    friend class AssistOverlay;
+
+    friend class AssistInputRuntime;
+
+    friend class AssistBufferRuntime;
+
+    friend class AssistHoldRuntime;
+
     friend class BufferedInput;
     friend class AssistController;
 

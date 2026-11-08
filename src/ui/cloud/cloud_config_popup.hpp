@@ -93,6 +93,11 @@ protected:
     uint64_t m_rateGen = 0;
 
 private:
+    friend class CloudBrowserList;
+
+    friend class CloudBrowserDetails;
+
+    friend class CloudBrowserLayout;
 };
 
 #include "../../cloud/cloud_config_apply.hpp"

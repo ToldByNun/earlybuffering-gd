@@ -50,6 +50,10 @@ public:
     static void refreshOpenSettings();
 
 private:
+    friend class PauseConfigActions;
+
+    friend class PauseDevActions;
+
     PauseActionBridge() = delete;
 
     static void handleImportedPath(std::filesystem::path const& path);

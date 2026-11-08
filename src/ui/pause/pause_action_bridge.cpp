@@ -4,20 +4,13 @@
 #include "../../core/bake/bake_map.hpp"
 #include "../../core/bake/bake_scheduler.hpp"
 #include "../../core/bundle/config_bundle.hpp"
-#include "../../core/platform/save_drop_paths.hpp"
 #include "../../core/replay/replay_import.hpp"
 #include "../../debug/assist_log.hpp"
-#include "../../dev/capture/dev_trace_store.hpp"
-#include "../../dev/dev_config.hpp"
 #include "../../dev/dev_session.hpp"
-#include "../../dev/reporting/dev_diag_dump.hpp"
-#include "../../dev/reporting/dev_report.hpp"
-#include "../cloud/cloud_config_popup.hpp"
-#include "../overlays/dev_overlay.hpp"
-#include "../overlays/status_overlay.hpp"
-#include "../settings/in_level_settings_filter.hpp"
-#include "../visualizers/bake_path_visualizer.hpp"
+#include "../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../visualizers/trajectory_visualizer.hpp"
+#include "actions/pause_config_actions.hpp"
+#include "actions/pause_dev_actions.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/utils/file.hpp>
@@ -193,326 +186,55 @@ void PauseActionBridge::toggleTrajectory() {
 }
 
 void PauseActionBridge::exportConfig() {
-    std::optional<std::filesystem::path> path;
-#ifdef GEODE_IS_WINDOWS
-    path = PauseActionBridgeDetail::pickSaveJsonWin32(true);
-    if (!path)
-        return;
-#else
-    auto& drops = SaveDropPaths::get();
-    std::string dirErr;
-    if (!drops.ensureDirs(dirErr)) {
-        FLAlertLayer::create("EarlyBuffer",
-                             dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
-                             "OK")
-            ->show();
-        return;
-    }
-    path = drops.configPath();
-#endif
-    auto result = ConfigBundle::exportTo(*path);
-    if (result.isErr()) {
-        auto errorMessage = result.unwrapErr();
-        if (errorMessage.empty())
-            errorMessage = "Config export failed.";
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
-#ifndef GEODE_IS_WINDOWS
-        errorMessage = fmt::format("{}\n\n{}\n{}\n\n{}", errorMessage, path->string(),
-                                   PauseActionBridgeDetail::pathClipboardNote(clipOk),
-                                   PauseActionBridgeDetail::mobileTransferHint());
-#else
-        errorMessage = fmt::format("{}\n\n{}\n{}", errorMessage, path->string(),
-                                   PauseActionBridgeDetail::pathClipboardNote(clipOk));
-#endif
-        FLAlertLayer::create("EarlyBuffer", errorMessage.c_str(), "OK")->show();
-        return;
-    }
-    FLAlertLayer::create("EarlyBuffer", PauseActionBridgeDetail::formatExportSuccess(*path).c_str(),
-                         "OK")
-        ->show();
+    return PauseConfigActions::exportConfig();
 }
 
 void PauseActionBridge::importConfig() {
-    std::optional<std::filesystem::path> path;
-#ifdef GEODE_IS_WINDOWS
-    path = PauseActionBridgeDetail::pickSaveJsonWin32(false);
-    if (!path)
-        return;
-#else
-    auto& drops = SaveDropPaths::get();
-    std::string dirErr;
-    if (!drops.ensureDirs(dirErr)) {
-        FLAlertLayer::create("EarlyBuffer",
-                             dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
-                             "OK")
-            ->show();
-        return;
-    }
-    path = drops.configPath();
-    std::error_code ec;
-    bool const exists = std::filesystem::is_regular_file(*path, ec) && !ec;
-    if (!exists) {
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
-        auto const message =
-            fmt::format("No config file found.\n\n"
-                        "Place earlybuffer-config.json (full settings export) at:\n"
-                        "{}\n"
-                        "{}\n\n"
-                        "{}\n\n"
-                        "Export Config writes that path. Then Import again.",
-                        path->string(), PauseActionBridgeDetail::pathClipboardNote(clipOk),
-                        PauseActionBridgeDetail::mobileTransferHint());
-        FLAlertLayer::create("EarlyBuffer", message.c_str(), "OK")->show();
-        return;
-    }
-    auto const size = std::filesystem::file_size(*path, ec);
-    if (ec || size == 0) {
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
-        auto const emptyMsg =
-            fmt::format("Config file is empty or unreadable:\n"
-                        "{}\n"
-                        "{}",
-                        path->string(), PauseActionBridgeDetail::pathClipboardNote(clipOk));
-        FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
-        return;
-    }
-#endif
-    auto result = ConfigBundle::importFrom(*path);
-    if (result.isErr()) {
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
-        auto const badMsg = fmt::format("{}\n\nFile:\n{}\n{}", result.unwrapErr(), path->string(),
-                                        PauseActionBridgeDetail::pathClipboardNote(clipOk));
-        FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
-        return;
-    }
-
-    PauseActionBridge::afterConfigApplied(PauseActionBridgeDetail::formatImportSuccess(path));
+    return PauseConfigActions::importConfig();
 }
 
 void PauseActionBridge::openCloudConfigs() {
-    CloudConfigPopup::open();
+    return PauseConfigActions::openCloudConfigs();
 }
 
 void PauseActionBridge::afterConfigApplied(std::string const& successMsg) {
-    // Import runs under applying-guard — sync UI that listeners would have skipped.
-    StatusOverlay::setVisible(StageConfig::showOverlay());
-    {
-        bool const traj = StageConfig::showTrajectory();
-        TrajectoryVisualizer::get().setEnabled(traj);
-        if (traj) {
-            if (auto* pl = PlayLayer::get()) {
-                TrajectoryVisualizer::get().attach(pl);
-            }
-        } else {
-            TrajectoryVisualizer::get().clear();
-        }
-        bool const bakePath = StageConfig::showBakePath();
-        BakePathVisualizer::get().setEnabled(bakePath);
-        if (bakePath) {
-            if (auto* pl = PlayLayer::get()) {
-                BakePathVisualizer::get().attach(pl);
-            }
-        } else {
-            BakePathVisualizer::get().clear();
-        }
-    }
-    AssistController::get().updateOverlay();
-    // Open ModSettingsPopup rows keep stale uncommitted values after setSettingValue
-    // → green labels / Apply would overwrite the import. Sync + rebuild UI.
-    InLevelSettingsFilterKeeper::reloadAfterImport();
-    // Show success after the settings rebuild so it stays on top.
-    geode::prelude::Loader::get()->queueInMainThread(
-        [successMsg] { FLAlertLayer::create("EarlyBuffer", successMsg.c_str(), "OK")->show(); });
+    return PauseConfigActions::afterConfigApplied(successMsg);
 }
 
 void PauseActionBridge::stubDevAction(char const* name) {
-    AssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
-                                name ? name : "?"));
+    return PauseDevActions::stubDevAction(name);
 }
 
 void PauseActionBridge::devStartRecord() {
-    if (!DevConfig::recordEnable()) {
-        AssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
-        FLAlertLayer::create("EarlyBuffer Dev",
-                             "Turn on Dev Record Enable first, then Start Recording.", "OK")
-            ->show();
-        return;
-    }
-    if (!DevSession::get().start()) {
-        FLAlertLayer::create("EarlyBuffer Dev", "Could not start Dev Lab recording session.", "OK")
-            ->show();
-        return;
-    }
-    auto const& s = DevTraceStore::get().session();
-    auto const startMsg =
-        fmt::format("Recording started (rolling last {}).\nSession {}\nDoes not auto-stop.",
-                    s.recordingsTarget, s.sessionId);
-    FLAlertLayer::create("EarlyBuffer Dev", startMsg.c_str(), "OK")->show();
+    return PauseDevActions::devStartRecord();
 }
 
 void PauseActionBridge::devStopRecord() {
-    if (!DevSession::get().isRecording() && !DevTraceStore::get().isOpen()) {
-        AssistLog::info("Dev Lab: no open session to stop");
-        FLAlertLayer::create("EarlyBuffer Dev", "No session is recording.", "OK")->show();
-        return;
-    }
-    auto const path = DevSession::get().sessionPath();
-    DevSession::get().stop();
-    auto const stopMsg = path.empty() ? std::string("Recording stopped.")
-                                      : fmt::format("Recording stopped.\n{}", path.string());
-    FLAlertLayer::create("EarlyBuffer Dev", stopMsg.c_str(), "OK")->show();
+    return PauseDevActions::devStopRecord();
 }
 
 void PauseActionBridge::devEvalLast() {
-    std::string err;
-    if (!DevReport::evalLastAttempt(err)) {
-        AssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
-        FLAlertLayer::create("EarlyBuffer Dev",
-                             err.empty() ? "Eval Last Attempt failed." : err.c_str(), "OK")
-            ->show();
-        return;
-    }
-    AssistController::get().updateOverlay();
-    auto const& r = DevReport::last();
-    AssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
-    FLAlertLayer::create("EarlyBuffer Dev",
-                         r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str(), "OK")
-        ->show();
+    return PauseDevActions::devEvalLast();
 }
 
 void PauseActionBridge::devEvalSession() {
-    std::string err;
-    int count = 0;
-    if (!DevReport::evalSession(err, &count)) {
-        AssistLog::info(fmt::format("Dev Lab: Eval Session failed: {}", err));
-        FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Eval Session failed." : err.c_str(),
-                             "OK")
-            ->show();
-        return;
-    }
-    AssistController::get().updateOverlay();
-    auto const& r = DevReport::last();
-    auto const message = fmt::format("Evaluated {} attempt(s).\n{}", count, r.overlayLine);
-    AssistLog::info(fmt::format("Dev Lab: Eval Session → {}", message));
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    return PauseDevActions::devEvalSession();
 }
 
 void PauseActionBridge::devExportSession() {
-    auto& store = DevTraceStore::get();
-    if (!store.isOpen()) {
-        AssistLog::info("Dev Lab: no open session to export");
-        FLAlertLayer::create("EarlyBuffer Dev", "No open Dev session. Start Recording first.", "OK")
-            ->show();
-        return;
-    }
-    (void)store.flush();
-    auto const path = store.sessionPath();
-    AssistLog::info(fmt::format("Dev Lab: session export path {}", path.string()));
-    bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(path);
-    auto const message =
-        fmt::format("Session JSON:\n"
-                    "{}\n"
-                    "{}\n\n"
-                    "Attempts kept: {}/{} (rolling)",
-                    path.string(), PauseActionBridgeDetail::pathClipboardNote(clipOk),
-                    store.session().recordingsDone, store.session().recordingsTarget);
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    return PauseDevActions::devExportSession();
 }
 
 void PauseActionBridge::devClearTraces() {
-    int const count = DevSession::get().clearTraces();
-    auto const message = fmt::format("Cleared {} session file(s) under devtraces/.", count);
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    return PauseDevActions::devClearTraces();
 }
 
 void PauseActionBridge::devDumpDiag() {
-    std::filesystem::path dir;
-    std::string err;
-    if (!DevDiagDump::dumpAll(dir, err)) {
-        AssistLog::info(fmt::format("DIAG dump failed: {}", err));
-        FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Diag dump failed." : err.c_str(),
-                             "OK")
-            ->show();
-        return;
-    }
-    bool const clipOk = geode::utils::clipboard::write(dir.string());
-    auto const message =
-        fmt::format("Wrote diagnostic bundle:\n{}\n\n"
-                    "Includes settings, clock, replay, BakeMap, Trigger World,\n"
-                    "bake probe (first clicks vs sim death), self-checks.\n\n"
-                    "{}",
-                    dir.string(), clipOk ? "Path copied to clipboard." : "Clipboard copy failed.");
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    return PauseDevActions::devDumpDiag();
 }
 
 void PauseActionBridge::devCopyReport() {
-    if (!DevReport::hasLast()) {
-        FLAlertLayer::create("EarlyBuffer Dev",
-                             "No Dev report yet. Run Eval Last / Eval Session first.", "OK")
-            ->show();
-        return;
-    }
-    auto const& r = DevReport::last();
-    // Clipboard / file = same overlay field string (contract A names only).
-    std::string const text =
-        r.overlayLine.empty() ? DevReport::formatOverlayLine(r) : r.overlayLine;
-
-    auto& drops = SaveDropPaths::get();
-    std::string dirErr;
-    bool fileOk = false;
-    std::string fileErr;
-    auto const path = drops.reportPath();
-    if (!drops.ensureDirs(dirErr)) {
-        fileErr = dirErr.empty() ? "could not create save folder" : dirErr;
-    } else {
-        auto const written = geode::utils::file::writeString(path, text);
-        if (written.isOk()) {
-            fileOk = true;
-        } else {
-            fileErr = written.unwrapErr();
-            if (fileErr.empty())
-                fileErr = "write failed";
-        }
-    }
-
-    // Clipboard: report text + full path (do not overwrite report with path-only).
-    std::string clipPayload = text;
-    if (fileOk) {
-        clipPayload += fmt::format("\n\n---\nSaved path:\n{}", path.string());
-    }
-    bool const clipOk = geode::utils::clipboard::write(clipPayload);
-
-    AssistLog::info(fmt::format("Dev Lab: copy report clip={} file={} → {}", clipOk ? "ok" : "fail",
-                                fileOk ? path.string() : fileErr, text));
-
-    std::string msg;
-    if (clipOk && fileOk) {
-        msg = fmt::format("Report (+ path) copied to clipboard and saved to:\n"
-                          "{}\n"
-                          "{}\n\n"
-                          "{}",
-                          path.string(), PauseActionBridgeDetail::pathClipboardNote(true), text);
-#ifndef GEODE_IS_WINDOWS
-        msg += fmt::format("\n\n{}", PauseActionBridgeDetail::mobileTransferHint());
-#endif
-    } else if (fileOk && !clipOk) {
-        msg = fmt::format("Clipboard failed; saved to:\n"
-                          "{}\n"
-                          "{}\n\n"
-                          "{}",
-                          path.string(), PauseActionBridgeDetail::pathClipboardNote(false), text);
-#ifndef GEODE_IS_WINDOWS
-        msg += fmt::format("\n\n{}", PauseActionBridgeDetail::mobileTransferHint());
-#endif
-    } else if (clipOk && !fileOk) {
-        msg = fmt::format("Report copied to clipboard.\nFile save failed: {}\n\n{}", fileErr, text);
-    } else {
-        msg = fmt::format("Copy failed (clipboard and file).\n"
-                          "File: {}\n\n"
-                          "{}",
-                          fileErr, text);
-    }
-    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
+    return PauseDevActions::devCopyReport();
 }
 
 void PauseActionBridge::openModSettings() {

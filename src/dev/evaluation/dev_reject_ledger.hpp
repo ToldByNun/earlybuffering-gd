@@ -159,6 +159,10 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
+    friend class DevAttribution;
+
+    friend class DevRejectChecks;
+
     DevRejectLedger() = delete;
 
     static RejectCode classifyRejected(CandSnap const& snap, CandSnap const* chosen,

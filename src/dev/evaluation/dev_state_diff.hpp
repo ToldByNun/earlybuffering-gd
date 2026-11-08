@@ -64,6 +64,8 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
+    friend class DevFidelityChecks;
+
     DevStateDiff() = delete;
 
     static bool isHardFailDep(DevWitnessCategory candidate, DevClassifyOptions const& opts);

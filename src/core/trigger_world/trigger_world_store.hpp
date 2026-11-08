@@ -142,6 +142,10 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
+    friend class TriggerWorldChecks;
+
+    friend class TriggerWorldCodec;
+
     TriggerWorldStore() = default;
 
     geode::Result<> writeFile() const;

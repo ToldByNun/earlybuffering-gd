@@ -23,6 +23,12 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
+    friend class DevStateDiagnostics;
+
+    friend class DevBakeDiagnostics;
+
+    friend class DevGhostDiagnostics;
+
     DevDiagDump() = default;
 
     static std::filesystem::path makeStampDir(char const* prefix, std::string& errMsg);
@@ -86,6 +92,8 @@ public:
                                    std::ostringstream& detail, int maxDetail);
 
 private:
+    friend class DevGhostDiagnostics;
+
     DevDiagDumpImplementation() = delete;
 };
 
