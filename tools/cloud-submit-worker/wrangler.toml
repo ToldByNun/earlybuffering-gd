@@ -1,0 +1,17 @@
+name = "eb-cloud-submit"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# Secrets (set via `wrangler secret put`, never commit):
+#   GITHUB_TOKEN  — fine-grained PAT, Contents R/W on ToldByNun/earlybuffer-configs only
+#
+# Optional vars:
+#   [vars]
+#   REPO = "ToldByNun/earlybuffer-configs"
+#   BRANCH = "main"
+#   MAX_PER_HOUR = "5"
+
+[vars]
+REPO = "ToldByNun/earlybuffer-configs"
+BRANCH = "main"
+MAX_PER_HOUR = "5"

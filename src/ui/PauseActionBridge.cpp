@@ -1,4 +1,5 @@
 #include "PauseActionBridge.hpp"
+#include "CloudConfigPopup.hpp"
 #include "InLevelSettingsFilter.hpp"
 
 #include "../core/AssistController.hpp"
@@ -510,6 +511,16 @@ void PauseActionBridge::importConfig() {
         return;
     }
 
+    PauseActionBridge::afterConfigApplied(
+        PauseActionBridgeDetail::formatImportSuccess(path)
+    );
+}
+
+void PauseActionBridge::openCloudConfigs() {
+    CloudConfigPopup::open();
+}
+
+void PauseActionBridge::afterConfigApplied(std::string const& successMsg) {
     // Import runs under applying-guard — sync UI that listeners would have skipped.
     StatusOverlay::setVisible(StageConfig::showOverlay());
     {
@@ -538,7 +549,6 @@ void PauseActionBridge::importConfig() {
     // Open ModSettingsPopup rows keep stale uncommitted values after setSettingValue
     // → green labels / Apply would overwrite the import. Sync + rebuild UI.
     InLevelSettingsFilterKeeper::reloadAfterImport();
-    auto const successMsg = PauseActionBridgeDetail::formatImportSuccess(path);
     // Show success after the settings rebuild so it stays on top.
     Loader::get()->queueInMainThread([successMsg] {
         FLAlertLayer::create("EarlyBuffer", successMsg.c_str(), "OK")->show();

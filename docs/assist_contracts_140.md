@@ -1,5 +1,7 @@
 # Assist contracts v1.4.0 (LOCKED — Commit 2)
 
+This document records the historical 1.4.0 assist contracts. The v1.4.3 release adds Cloud Configs to the current working assist baseline. See [Cloud Configs](cloud_configs.md) and the release changelog for the current user workflow.
+
 **DO NOT RETUNE** these thresholds without a new mod version and a new contracts document.
 
 Corpus label for this freeze: `corpus=solo` (solo play + PlanGold). Multi-player opt-in reports may use `corpus=multi` with higher `A_min`.

@@ -75,6 +75,10 @@ void fireSettingAction(std::string const& key) {
         PauseActionBridge::exportConfig();
         return;
     }
+    if (key == "browse-cloud-configs-action") {
+        PauseActionBridge::openCloudConfigs();
+        return;
+    }
     if (key == "import-config-action") {
         PauseActionBridge::importConfig();
         return;

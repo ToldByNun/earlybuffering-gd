@@ -18,8 +18,10 @@ public:
     std::filesystem::path configPath() const;
     // Dev Lab copy-report dual-write target.
     std::filesystem::path reportPath() const;
+    // Cloud config cache / packs / outbox root (see CloudConfigStore).
+    std::filesystem::path cloudConfigsDir() const;
 
-    // Creates root + replay-drop. false + err on failure.
+    // Creates root + replay-drop + cloud-configs(+packs/outbox). false + err on failure.
     bool ensureDirs(std::string& err) const;
 
     // Replay candidates in replay-drop, newest mtime first. Missing dir → empty.

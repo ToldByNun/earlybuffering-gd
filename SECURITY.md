@@ -1,6 +1,8 @@
 # Security
 
-EarlyBuffer is a local Geometry Dash client mod. It does not intentionally open network sockets or exfiltrate save data.
+EarlyBuffer v1.4.3 includes optional Cloud Configs. Opening the browser fetches the public catalog and statistics over HTTPS. Installing downloads a settings pack. Sharing submits exported settings and the pack name, author, description and tags you enter. Download tracking and ratings use a persistent anonymous client ID. The service also receives connection metadata such as your IP address.
+
+Cloud imports skip keybinds and developer settings. Service URLs are built into the mod. GitHub publishing credentials belong on the submission server. See [Cloud Configs](docs/cloud_configs.md) for endpoints, caching and server setup.
 
 ## Reporting
 

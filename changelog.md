@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.3
+
+- Adds Cloud Configs below Import Config in Settings → Assist → Assist Actions.
+- Catalog search, sorting, installation, sharing, download counts and star ratings.
+- Preserves keybinds and developer settings during cloud installation.
+- Includes cached packs and bundled offline defaults.
+- Retains the working assist implementation from the current development baseline.
+- Updates release, installation and network/privacy documentation.
+- Local Windows build uses `geode build`. Other platform packages require their platform builds and checks.
+
+
 ## v1.3.2
 
 **Assist honesty + bake fidelity + Main Window IA + iOS harden** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

@@ -23,7 +23,7 @@ public:
         SettingsCategory cat;
     };
 
-    static constexpr int kCount = 166;
+    static constexpr int kCount = 167;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
@@ -78,6 +78,7 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "reset-learn-action", SettingsCategory::Assist },
     { "export-config-action", SettingsCategory::Assist },
     { "import-config-action", SettingsCategory::Assist },
+    { "browse-cloud-configs-action", SettingsCategory::Assist },
     { "title-algorithm", SettingsCategory::Assist },
     { "death-slack", SettingsCategory::Assist },
     { "look-ahead-cap", SettingsCategory::Assist },
@@ -620,7 +621,8 @@ public:
             || match("cancel-bake-action")
             || match("reset-learn-action")
             || match("export-config-action")
-            || match("import-config-action");
+            || match("import-config-action")
+            || match("browse-cloud-configs-action");
     }
 
     void refilter(bool force) {

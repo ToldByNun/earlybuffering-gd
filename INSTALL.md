@@ -1,5 +1,7 @@
 # Build & install
 
+Release **v1.4.3** targets GD **2.2081**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Assist → Assist Actions → Cloud Configs**, directly below Import Config. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use.
+
 ## Requirements
 
 - Geometry Dash **2.2081** (this mod line does **not** support other GD versions)
