@@ -9,6 +9,12 @@
 // PlanGold + pick modes share these fixtures. Live v1 = AssistPickV1; v2 = AssistPickV2.
 class MissAssistContracts {
 public:
+    // Continuous inputs need another direction change after the local window.
+    // This is the lookahead added after the common delay window.
+    static int continuousLookAhead(int limit);
+    static bool survivesObservation(
+        bool died, bool unknown, int ticksRan, int requiredTicks, bool landedAfterAction
+    );
     enum class PickMode {
         Legacy,
         New

@@ -2,6 +2,17 @@
 
 #include <algorithm>
 
+int MissAssistContracts::continuousLookAhead(int limit) {
+    return std::max(1, limit);
+}
+
+bool MissAssistContracts::survivesObservation(
+    bool died, bool unknown, int ticksRan, int requiredTicks, bool landedAfterAction
+) {
+    return !died && !unknown && ticksRan > 0
+        && (landedAfterAction || ticksRan >= requiredTicks);
+}
+
 int MissAssistContracts::clampDelayToWindow(int delay, int limit) {
     if (limit <= 0) return 0;
     if (delay < 0) return 0;

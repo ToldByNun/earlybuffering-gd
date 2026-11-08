@@ -22,6 +22,7 @@ enum class BufferState {
 };
 
 struct BufferedInput {
+    bool fixedFireTick = false;
     BufferState state = BufferState::Idle;
     bool down = true;
     bool player1 = true;

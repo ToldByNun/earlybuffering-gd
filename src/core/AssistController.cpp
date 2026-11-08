@@ -1918,6 +1918,7 @@ void AssistController::fireBuffered(
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
     // Skipped for CPS / mode-change force-fire.
     if (allowRecheck
+        && !this->m_buffer.fixedFireTick
         && player
         && remaining > 0
         && this->m_buffer.rechecks < 2
@@ -3191,6 +3192,8 @@ bool AssistController::planPress(
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
     this->m_buffer.down = true;
+    this->m_buffer.fixedFireTick = plan.fixedFireTick;
+    this->m_buffer.planId = plan.planId;
     this->m_buffer.player1 = player1;
     this->m_buffer.pressTick = effectTick;
     this->m_buffer.planDelay = delay;
@@ -3581,6 +3584,8 @@ bool AssistController::planRelease(
     this->m_buffer = {};
     this->m_buffer.state = BufferState::Buffered;
     this->m_buffer.down = false;
+    this->m_buffer.fixedFireTick = plan.fixedFireTick;
+    this->m_buffer.planId = plan.planId;
     this->m_buffer.player1 = player1;
     this->m_buffer.pressTick = effectTick;
     this->m_buffer.planDelay = delay;
@@ -3815,10 +3820,10 @@ bool AssistController::onHandleButton(
             "buffer: 2nd DOWN while armed (releaseSeen={}) → fire A then plan B",
             this->m_buffer.releaseSeen ? 1 : 0
         ));
-        this->fireBuffered(playLayer, player);
+        this->fireBuffered(playLayer, player, false);
     }
     if (ours && this->m_buffer.state == BufferState::Buffered && !this->m_buffer.down) {
-        this->fireBuffered(playLayer, player);
+        this->fireBuffered(playLayer, player, false);
     }
 
     if (!this->shouldAssistPlayer(player) || !StageConfig::assistPress()) {

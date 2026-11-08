@@ -2450,13 +2450,21 @@ SimPlan ShadowSimulator::plan(
     bool sawToggleUnknown = false;
     bool const hadToggleTargets = !this->m_toggleTargetIds.empty();
 
-    bool const inputWindow = down && options.requireAliveForDelay;
+    bool const continuousControl = real->m_isDart || real->m_isShip || real->m_isSwing;
+    bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
     model.stopAtBallLanding = inputWindow && real->m_isBall && !useTrajEngine
         && !linkedDual();
-    // Keep the automatic live probe within the 96-tick diagnostic observation
-    // window. Explicit mode/global horizon overrides still take precedence.
-    if (inputWindow && StageConfig::paramsFor(real).cap == 0 && StageConfig::lookAheadCap() == 0)
-        model.cap = std::min(model.cap, std::max(1, 96 - limit));
+    // Continuous steering is local to the input window: a single held direction
+    // cannot cover the later turns of a corridor. Discrete modes retain the
+    // existing 96-tick maximum. Explicit horizon settings take precedence.
+    if (inputWindow && StageConfig::paramsFor(real).cap == 0 && StageConfig::lookAheadCap() == 0) {
+        if (continuousControl) {
+            model.cap = MissAssistContracts::continuousLookAhead(limit);
+        }
+        else {
+            model.cap = std::min(model.cap, std::max(1, 96 - limit));
+        }
+    }
     if (!inputWindow) {
         auto base = runBaseline(layer, real, down, dt, firstDt, model, &tickBudget);
         this->resetCaptureForNextRun(layer);
@@ -2579,9 +2587,11 @@ SimPlan ShadowSimulator::plan(
     };
 
     if (inputWindow) {
+        plan.fixedFireTick = true;
         auto const complete = [&](RunResult const& r) {
-            return !r.died && !r.unknown && !r.unknownTrunc && !r.toggleUnknown
-                && (r.landedAfterAction || r.ticksRan >= limit + model.cap);
+            return MissAssistContracts::survivesObservation(
+                r.died, r.unknown || r.unknownTrunc || r.toggleUnknown,
+                r.ticksRan, limit + model.cap, r.landedAfterAction);
         };
         bool const dual = linkedDual();
         plan.reason = AssistReason::PassHopeless;

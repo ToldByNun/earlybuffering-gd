@@ -73,6 +73,7 @@ struct ActWindow {
 };
 
 struct SimPlan {
+    bool fixedFireTick = false;
     PlanAction action = PlanAction::Pass;
     AssistReason reason = AssistReason::None;
     int delay = 0;
