@@ -1,5 +1,5 @@
 #include "cloud_config_store.hpp"
-#include "../core/save_drop_paths.hpp"
+#include "../core/platform/save_drop_paths.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
 #include <cctype>

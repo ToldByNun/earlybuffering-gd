@@ -14,10 +14,13 @@ Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) dev
 
 ## Project layout
 
+See [Source architecture](docs/source_architecture.md) for the full directory
+structure and placement rules, including subdivisions of cloud, dev and UI.
+
 | Path | Role |
 |------|------|
 | `src/config/` | `StageConfig` — settings cache / presets |
-| `src/core/` | Planner, bake, trigger world, scope gate, learning, buffer |
+| `src/core/` | Domain modules; see [Source architecture](docs/source_architecture.md) |
 | `src/hooks/` | `$modify` game hooks |
 | `src/ui/` | Overlay, pause hub, trajectory, save feedback |
 | `src/debug/` | Assist log, LagProbe, PerfTrace, PlanGoldCorpus |

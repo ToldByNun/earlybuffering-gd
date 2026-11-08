@@ -1,0 +1,120 @@
+#ifndef LEVEL_PROFILE_HPP
+#define LEVEL_PROFILE_HPP
+
+#include "../../config/stage_config.hpp"
+#include <Geode/Geode.hpp>
+#include <array>
+#include <cmath>
+#include <string>
+#include <unordered_map>
+
+class SpotStats {
+public:
+    static constexpr int HIST_RADIUS = 8;                 // bins cover [-8, +8]
+    static constexpr int HIST_BINS = HIST_RADIUS * 2 + 1; // 17
+
+    float bias = 0.f;  // [-2, +2], applied as round(bias) on Delay
+    float trust = 1.f; // [0, 1]
+    int pessimism = 0;
+    int n = 0;
+    int saved = 0;
+    int diedAfterAssist = 0;
+    // Click-earliness histogram (vanilla/Pass/postmortem only; never inject saves).
+    // Bin i stores weight for offset (i - HIST_RADIUS) ticks.
+    std::array<float, HIST_BINS> earlyHist{};
+    int histN = 0;
+
+private:
+};
+
+class ModeLearn {
+public:
+    float capMul = 1.f;                       // [0.5, 2.0]
+    std::unordered_map<int, SpotStats> spots; // key = x-bucket
+
+private:
+};
+
+// Per-level learned assist tuning. Window (ticks) is NEVER touched.
+class LevelProfile {
+public:
+    static constexpr float SPOT_SIZE = 90.f; // ~3 blocks
+    static constexpr float TRUST_PASS_THRESHOLD = 0.35f;
+    static constexpr int TRUST_PASS_MIN_N = 4;
+
+    static LevelProfile& get();
+
+    void loadForLevel(GJGameLevel* level);
+    void save();
+    void resetCurrent();
+    void clear();
+
+    bool loaded() const {
+        return m_loaded;
+    }
+    std::string const& key() const {
+        return m_key;
+    }
+    int spotCount() const;
+
+    static int spotBucket(float x);
+    static std::string makeKey(GJGameLevel* level);
+
+    SpotStats& spot(GameModeKind kind, float x);
+    SpotStats const* trySpot(GameModeKind kind, float x) const;
+    float capMul(GameModeKind kind) const;
+    void setCapMul(GameModeKind kind, float multiplier);
+
+    // Learning updates
+    void noteBias(GameModeKind kind, float x, float delta, char const* reason);
+    void noteTrust(GameModeKind kind, float x, float factor, char const* reason);
+    void noteTrustUp(GameModeKind kind, float x, float amount, char const* reason);
+    void notePessimism(GameModeKind kind, float x);
+    void noteSaved(GameModeKind kind, float x);
+    void noteDiedAfterAssist(GameModeKind kind, float x);
+
+    // Earliness offset in ticks (−HIST_RADIUS…+HIST_RADIUS). Laplace-smoothed modal
+    // used as delay bias when histN is large enough; empty hist → fall back to bias.
+    void noteEarliness(GameModeKind kind, float x, int offset, char const* reason);
+    int preferredDelayOffset(GameModeKind kind, float x) const;
+    void decayHistograms(); // exponential bin decay (autosave)
+
+    void maybeAutosave(); // every 5 deaths
+    void markDirty() {
+        m_dirty = true;
+    }
+
+    // Overlay helpers
+    SpotStats overlaySpot(GameModeKind kind, float x) const;
+
+private:
+    LevelProfile() = default;
+
+    ModeLearn& mode(GameModeKind kind);
+    ModeLearn const* tryMode(GameModeKind kind) const;
+    void recomputeCapMul(GameModeKind kind);
+    geode::Result<> writeFile() const;
+    geode::Result<> readFile();
+
+    std::string m_key;
+    bool m_loaded = false;
+    bool m_dirty = false;
+    int m_deathsSinceSave = 0;
+    ModeLearn m_modes[StageConfig::MODE_COUNT];
+};
+
+#include <Geode/utils/file.hpp>
+#include <algorithm>
+#include <fstream>
+
+class LevelProfileImplementation {
+public:
+    static float clamp01f(float value, float lo, float hi);
+    static std::filesystem::path levelsDir();
+    static std::filesystem::path profilePath(std::string const& key);
+
+private:
+    LevelProfileImplementation() = delete;
+};
+
+#endif

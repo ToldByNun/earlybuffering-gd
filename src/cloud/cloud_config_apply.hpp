@@ -1,7 +1,7 @@
 #ifndef CLOUD_CONFIG_APPLY_HPP
 #define CLOUD_CONFIG_APPLY_HPP
 
-#include "../core/config_bundle.hpp"
+#include "../core/bundle/config_bundle.hpp"
 #include <string>
 
 // Validate pack body (size/sha), filtered ConfigBundle import, write active.json.

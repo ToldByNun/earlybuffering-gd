@@ -1,6 +1,6 @@
 #include "cloud_config_apply.hpp"
-#include "cloud_config_sha256.hpp"
 #include "cloud_config_store.hpp"
+#include "transport/cloud_config_sha256.hpp"
 #include <Geode/Geode.hpp>
 #include <chrono>
 

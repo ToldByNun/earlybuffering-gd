@@ -1,5 +1,5 @@
 #include "test_wave_input_window.hpp"
-#include "../src/core/miss_assist_contracts.hpp"
+#include "../src/core/assist/contracts/miss_assist_contracts.hpp"
 #include <algorithm>
 #include <array>
 #include <iostream>

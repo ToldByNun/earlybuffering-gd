@@ -1,10 +1,10 @@
 #include "dev_session.hpp"
-#include "../core/assist_controller.hpp"
-#include "../core/level_profile.hpp"
+#include "../core/assist/assist_controller.hpp"
+#include "../core/learning/level_profile.hpp"
 #include "../debug/assist_log.hpp"
+#include "capture/dev_cycle_recorder.hpp"
+#include "capture/dev_trace_store.hpp"
 #include "dev_config.hpp"
-#include "dev_cycle_recorder.hpp"
-#include "dev_trace_store.hpp"
 #include <Geode/Geode.hpp>
 #include <cstring>
 #include <fmt/format.h>

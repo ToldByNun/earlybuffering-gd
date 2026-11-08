@@ -1,6 +1,6 @@
 #include "cloud_config_stats.hpp"
-#include "cloud_config_client.hpp"
 #include "cloud_config_store.hpp"
+#include "transport/cloud_config_client.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/web.hpp>
 #include <cctype>

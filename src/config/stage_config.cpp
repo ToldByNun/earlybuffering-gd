@@ -1,6 +1,6 @@
 #include "stage_config.hpp"
-#include "../core/assist_clock.hpp"
-#include "../core/platform_limits.hpp"
+#include "../core/assist/assist_clock.hpp"
+#include "../core/platform/platform_limits.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
 #include <algorithm>
