@@ -494,6 +494,7 @@ public:
     struct Model {
         bool continuous = false;
         bool tapRelease = false;
+        bool stopAtBallLanding = false;
         int cap = 48;
         int slack = 2;
         // Live Delay-worthy: after zone clear keep sim until death / cap
@@ -509,6 +510,7 @@ public:
     };
 
     struct RunResult {
+        bool landedAfterAction = false;
         bool died = false;
         bool diedBeforeAction = false;
         bool jumped = false;

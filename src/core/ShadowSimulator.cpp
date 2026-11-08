@@ -1364,6 +1364,27 @@ void ShadowSimulator::copyPlayerState(PlayerObject* dst, PlayerObject* src) {
         }
     }
 
+    // switchedToMode and releaseButton rebuild the ghost after the initial
+    // state copy. Restore contact/input state afterwards so a grounded ball
+    // can actually flip on the first simulated tick.
+    EB_COPY(m_isOnGround);
+    EB_COPY(m_isOnGround2);
+    EB_COPY(m_isOnGround3);
+    EB_COPY(m_isOnGround4);
+    EB_COPY(m_isOnSlope);
+    EB_COPY(m_wasOnSlope);
+    EB_COPY(m_currentSlope);
+    EB_COPY(m_currentSlope2);
+    EB_COPY(m_stateOnGround);
+    EB_COPY(m_jumpBuffered);
+    EB_COPY(m_wasJumpBuffered);
+    EB_COPY(m_stateJumpBuffered);
+    EB_COPY(m_stateRingJump);
+    EB_COPY(m_stateRingJump2);
+    EB_COPY(m_hasEverJumped);
+    EB_COPY(m_hasEverHitRing);
+    EB_COPY(m_holdingButtons);
+
     hideGhost(dst);
     clearCollisionLogs(dst);
 }
@@ -1714,6 +1735,10 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
+    bool const initialGravity = s->m_isUpsideDown;
+    bool ballFlipped = false;
+    bool ballAirborne = false;
+    int ballLandingTicks = 0;
     int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
 
     auto finish = [&](RunResult out) {
@@ -1806,6 +1831,17 @@ ShadowSimulator::RunResult ShadowSimulator::runOne(
             r.unknownTrunc = true;
             r.unknownTick = t;
             return finish(r);
+        }
+
+        if (model.stopAtBallLanding && acted && s->m_isBall) {
+            ballFlipped = ballFlipped || s->m_isUpsideDown != initialGravity;
+            bool const grounded = s->m_isOnGround || s->m_isOnGround2;
+            if (ballFlipped && !grounded) ballAirborne = true;
+            ballLandingTicks = ballAirborne && grounded ? ballLandingTicks + 1 : 0;
+            if (ballLandingTicks >= 2) {
+                r.landedAfterAction = true;
+                return finish(r);
+            }
         }
 
         if (m_jumped && !r.jumped) {
@@ -2415,6 +2451,8 @@ SimPlan ShadowSimulator::plan(
     bool const hadToggleTargets = !this->m_toggleTargetIds.empty();
 
     bool const inputWindow = down && options.requireAliveForDelay;
+    model.stopAtBallLanding = inputWindow && real->m_isBall && !useTrajEngine
+        && !linkedDual();
     // Keep the automatic live probe within the 96-tick diagnostic observation
     // window. Explicit mode/global horizon overrides still take precedence.
     if (inputWindow && StageConfig::paramsFor(real).cap == 0 && StageConfig::lookAheadCap() == 0)
@@ -2499,6 +2537,14 @@ SimPlan ShadowSimulator::plan(
             s.endX = c.endX;
         }
         auto led = DevRejectLedger::build(in);
+        for (auto& note : led.notes) {
+            if (note.delay < 0 || note.delay > limit || !candReady[note.delay]) continue;
+            auto const& run = cands[note.delay].raw;
+            note.detail += fmt::format(
+                " ticks={} died={} deathTick={} unknown={} ballLanding={}",
+                run.ticksRan, run.died, run.deathTick,
+                run.unknown || run.unknownTrunc, run.landedAfterAction);
+        }
         plan.candNotes = std::move(led.notes);
         plan.candNotesTruncated = led.truncated;
     };
@@ -2535,7 +2581,7 @@ SimPlan ShadowSimulator::plan(
     if (inputWindow) {
         auto const complete = [&](RunResult const& r) {
             return !r.died && !r.unknown && !r.unknownTrunc && !r.toggleUnknown
-                && r.ticksRan >= limit + model.cap;
+                && (r.landedAfterAction || r.ticksRan >= limit + model.cap);
         };
         bool const dual = linkedDual();
         plan.reason = AssistReason::PassHopeless;
@@ -2553,6 +2599,7 @@ SimPlan ShadowSimulator::plan(
                 safe = safe && complete(partner);
             }
             c.viable = safe;
+            c.clearsThreat = safe;
             cands[d] = c;
             candReady[d] = 1;
             if (d == 0) {
