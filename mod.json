@@ -8,7 +8,7 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.4.3",
+	"version": "v1.3.2",
 	"developer": "Audesign",
 	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -344,12 +344,6 @@
 			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
 			"button-text": "import"
 		},
-		"browse-cloud-configs-action": {
-			"type": "custom:eb-action",
-			"name": "Cloud Configs",
-			"description": "Browse, install and share community settings packs.",
-			"button-text": "cloud"
-		},
 		"title-algorithm": {
 			"type": "title",
 			"name": "Algorithm",
@@ -411,12 +405,6 @@
 			"type": "bool",
 			"name": "Orb Assist",
 			"description": "On = planner prefers delays that hit a needed orb when one matters. Off = only hazard/threat logic (orbs ignored for timing). On helps orb sections; off if orb logic feels wrong on a level.",
-			"default": true
-		},
-		"disable-hus": {
-			"type": "bool",
-			"name": "Disable Soft Hold (HUS)",
-			"description": "On (default) = Soft Hold-Until-Safe never arms. Off = HUS may soft-hold when orb foresight or an Alive delay escape exists — never deadline-injects without that escape.",
 			"default": true
 		},
 		"sim-budget-us": {
@@ -1268,9 +1256,6 @@
 	"resources": {
 		"files": [
 			"resources/cues/*.mp3"
-		],
-		"sprites": [
-			"resources/ui/eb_star.png"
 		]
 	}
 }

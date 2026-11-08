@@ -1,10 +1,10 @@
 #include "SimSessionGuard.hpp"
 #include "ShadowSimulator.hpp"
 
-SimSessionGuard::SimSessionGuard(ShadowSimulator& sim, PlayLayer* layer, bool fromLiveWorld)
+SimSessionGuard::SimSessionGuard(ShadowSimulator& sim, PlayLayer* layer)
     : m_sim(&sim)
     , m_layer(layer) {
-    this->m_sim->beginSession(this->m_layer, fromLiveWorld);
+    this->m_sim->beginSession(this->m_layer);
 }
 
 SimSessionGuard::~SimSessionGuard() {

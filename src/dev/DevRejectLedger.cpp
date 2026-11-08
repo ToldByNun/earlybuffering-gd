@@ -213,7 +213,7 @@ DevRejectLedger::Ledger DevRejectLedger::build(BuildInput const& in) {
         bool const isChosen = (in.chosenDelay == d)
             || (in.doPass && d == 0 && in.chosenDelay <= 0);
 
-        if (isChosen && snap.evaluated) {
+        if (isChosen && (snap.evaluated || d == 0 || in.doPass)) {
             note.status = Status::Chosen;
             note.rejectCode = RejectCode::Chosen;
             note.detail = clampDetail(fmt::format("d={}", d));
@@ -273,6 +273,30 @@ DevRejectLedger::Ledger DevRejectLedger::build(BuildInput const& in) {
         }
 
         out.notes.push_back(std::move(note));
+    }
+
+    // Ensure exactly one chosen when doPass / chosenDelay set.
+    if (in.chosenDelay >= 0 && in.chosenDelay <= in.limit) {
+        for (auto& note : out.notes) {
+            if (note.delay == in.chosenDelay) {
+                note.status = Status::Chosen;
+                note.rejectCode = RejectCode::Chosen;
+            }
+            else if (note.status == Status::Chosen) {
+                note.status = Status::Evaluated;
+            }
+        }
+    }
+    else if (in.doPass) {
+        for (auto& note : out.notes) {
+            if (note.delay == 0) {
+                note.status = Status::Chosen;
+                note.rejectCode = RejectCode::Chosen;
+            }
+            else if (note.status == Status::Chosen) {
+                note.status = Status::Evaluated;
+            }
+        }
     }
 
     return out;
@@ -479,17 +503,6 @@ bool DevRejectLedger::selfCheck(std::string& report) {
             }
         }
         expect(chosenCount == 1, "one-chosen");
-    }
-
-    {
-        BuildInput in;
-        in.limit = 4;
-        in.doPass = true;
-        in.earlyExit = EarlyExit::Budget;
-        auto ledger = build(in);
-        for (auto const& note : ledger.notes)
-            expect(note.status == Status::Skipped && note.rejectCode == RejectCode::BudgetNotReached,
-                "budget-before-d0");
     }
 
     // Skipped after wave proximity.

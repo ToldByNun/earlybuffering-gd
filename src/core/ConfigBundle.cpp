@@ -34,142 +34,6 @@ private:
     ConfigBundleExportState() = default;
 };
 
-class ConfigBundleApplyGuard {
-public:
-    ConfigBundleApplyGuard() {
-        StageConfig::beginApplying();
-        this->m_active = true;
-    }
-
-    ~ConfigBundleApplyGuard() {
-        this->release();
-    }
-
-    ConfigBundleApplyGuard(ConfigBundleApplyGuard const&) = delete;
-    ConfigBundleApplyGuard& operator=(ConfigBundleApplyGuard const&) = delete;
-
-    void release() {
-        if (this->m_active) {
-            StageConfig::endApplying();
-            this->m_active = false;
-        }
-    }
-
-private:
-    bool m_active = false;
-};
-
-class ConfigBundleApplyHelpers {
-public:
-    static bool isDevKey(char const* key) {
-        if (!key) return false;
-        return std::strncmp(key, "dev-", 4) == 0;
-    }
-
-    static bool shouldSkip(
-        ConfigBundleKeys::Entry const& entry,
-        ConfigBundle::ApplyOptions const& opt
-    ) {
-        if (opt.skipKeybinds && entry.kind == ConfigBundleKeys::Kind::Keybind) {
-            return true;
-        }
-        if (opt.skipDevKeys && isDevKey(entry.key)) {
-            return true;
-        }
-        return false;
-    }
-
-    static bool applyOneSetting(
-        Mod* mod,
-        ConfigBundleKeys::Entry const& entry,
-        matjson::Value const& value,
-        int& applied,
-        int& skipped
-    ) {
-        try {
-            switch (entry.kind) {
-                case ConfigBundleKeys::Kind::Bool: {
-                    auto const parsed = value.asBool();
-                    if (parsed.isErr()) {
-                        ++skipped;
-                        return false;
-                    }
-                    mod->setSettingValue<bool>(entry.key, parsed.unwrap());
-                    ++applied;
-                    return true;
-                }
-                case ConfigBundleKeys::Kind::Int: {
-                    auto const parsed = value.asInt();
-                    if (parsed.isErr()) {
-                        ++skipped;
-                        return false;
-                    }
-                    mod->setSettingValue<int64_t>(entry.key, parsed.unwrap());
-                    ++applied;
-                    return true;
-                }
-                case ConfigBundleKeys::Kind::Float: {
-                    auto const parsed = value.asDouble();
-                    if (parsed.isErr()) {
-                        ++skipped;
-                        return false;
-                    }
-                    mod->setSettingValue<double>(entry.key, parsed.unwrap());
-                    ++applied;
-                    return true;
-                }
-                case ConfigBundleKeys::Kind::String: {
-                    auto const parsed = value.asString();
-                    if (parsed.isErr()) {
-                        ++skipped;
-                        return false;
-                    }
-                    std::string s(parsed.unwrap());
-                    if (std::string_view(entry.key) == "assist-mode" && s == "Route") s = "Live";
-                    mod->setSettingValue<std::string>(entry.key, s);
-                    ++applied;
-                    return true;
-                }
-                case ConfigBundleKeys::Kind::Color: {
-                    auto const parsed = value.asString();
-                    if (parsed.isErr()) {
-                        ++skipped;
-                        return false;
-                    }
-                    cocos2d::ccColor3B color{};
-                    if (!ConfigBundleCodec::hexToColor(std::string(parsed.unwrap()), color)) {
-                        ++skipped;
-                        return false;
-                    }
-                    mod->setSettingValue<cocos2d::ccColor3B>(entry.key, color);
-                    ++applied;
-                    return true;
-                }
-                case ConfigBundleKeys::Kind::Keybind: {
-                    std::vector<geode::Keybind> binds;
-                    if (!ConfigBundleCodec::jsonToKeybinds(value, binds)) {
-                        ++skipped;
-                        return false;
-                    }
-                    mod->setSettingValue<std::vector<geode::Keybind>>(entry.key, binds);
-                    ++applied;
-                    return true;
-                }
-                default:
-                    ++skipped;
-                    return false;
-            }
-        }
-        catch (...) {
-            ++skipped;
-            return false;
-        }
-    }
-
-private:
-    ConfigBundleApplyHelpers() = default;
-};
-
 ConfigBundle::ImportStats ConfigBundle::lastImportStats() {
     return ConfigBundleImportState::stats();
 }
@@ -178,11 +42,10 @@ ConfigBundle::ExportStats ConfigBundle::lastExportStats() {
     return ConfigBundleExportState::stats();
 }
 
-geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
+geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     auto& stats = ConfigBundleExportState::stats();
     stats = {};
     stats.version = ConfigBundle::kFormatVersion;
-    outJson.clear();
 
     auto* mod = Mod::get();
     if (!mod) {
@@ -239,9 +102,14 @@ geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
     matjson::Value root;
     root["version"] = ConfigBundle::kFormatVersion;
     root["settings"] = settings;
-    outJson = root.dump();
-    if (outJson.empty()) {
-        return Err("export dump empty");
+
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return Err("export open failed");
+    }
+    out << root.dump();
+    if (!out) {
+        return Err("export write failed");
     }
 
     stats.written = written;
@@ -249,40 +117,137 @@ geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
     return Ok();
 }
 
-geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
-    std::string body;
-    auto const built = ConfigBundle::exportToString(body);
-    if (built.isErr()) {
-        return built;
+class ConfigBundleApplyGuard {
+public:
+    ConfigBundleApplyGuard() {
+        StageConfig::beginApplying();
+        this->m_active = true;
     }
 
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        return Err("export open failed");
+    ~ConfigBundleApplyGuard() {
+        this->release();
     }
-    out << body;
-    if (!out) {
-        return Err("export write failed");
+
+    ConfigBundleApplyGuard(ConfigBundleApplyGuard const&) = delete;
+    ConfigBundleApplyGuard& operator=(ConfigBundleApplyGuard const&) = delete;
+
+    void release() {
+        if (this->m_active) {
+            StageConfig::endApplying();
+            this->m_active = false;
+        }
     }
-    return Ok();
-}
 
-geode::Result<> ConfigBundle::importFromString(std::string const& json) {
-    return ConfigBundle::importFromString(json, ApplyOptions{});
-}
+private:
+    bool m_active = false;
+};
 
-geode::Result<> ConfigBundle::importFromString(
-    std::string const& json,
-    ApplyOptions const& opt
+static bool applyOneSetting(
+    Mod* mod,
+    ConfigBundleKeys::Entry const& entry,
+    matjson::Value const& value,
+    int& applied,
+    int& skipped
 ) {
+    try {
+        switch (entry.kind) {
+            case ConfigBundleKeys::Kind::Bool: {
+                auto const parsed = value.asBool();
+                if (parsed.isErr()) {
+                    ++skipped;
+                    return false;
+                }
+                mod->setSettingValue<bool>(entry.key, parsed.unwrap());
+                ++applied;
+                return true;
+            }
+            case ConfigBundleKeys::Kind::Int: {
+                auto const parsed = value.asInt();
+                if (parsed.isErr()) {
+                    ++skipped;
+                    return false;
+                }
+                mod->setSettingValue<int64_t>(entry.key, parsed.unwrap());
+                ++applied;
+                return true;
+            }
+            case ConfigBundleKeys::Kind::Float: {
+                auto const parsed = value.asDouble();
+                if (parsed.isErr()) {
+                    ++skipped;
+                    return false;
+                }
+                mod->setSettingValue<double>(entry.key, parsed.unwrap());
+                ++applied;
+                return true;
+            }
+            case ConfigBundleKeys::Kind::String: {
+                auto const parsed = value.asString();
+                if (parsed.isErr()) {
+                    ++skipped;
+                    return false;
+                }
+                std::string s(parsed.unwrap());
+                // assist-pick: accept Legacy/New aliases from old exports → v1/v2.
+                if (std::strcmp(entry.key, "assist-pick") == 0) {
+                    if (char const* canon = StageConfig::canonicalizeAssistPick(s)) {
+                        s = canon;
+                    }
+                }
+                mod->setSettingValue<std::string>(entry.key, s);
+                ++applied;
+                return true;
+            }
+            case ConfigBundleKeys::Kind::Color: {
+                auto const parsed = value.asString();
+                if (parsed.isErr()) {
+                    ++skipped;
+                    return false;
+                }
+                cocos2d::ccColor3B color{};
+                if (!ConfigBundleCodec::hexToColor(std::string(parsed.unwrap()), color)) {
+                    ++skipped;
+                    return false;
+                }
+                mod->setSettingValue<cocos2d::ccColor3B>(entry.key, color);
+                ++applied;
+                return true;
+            }
+            case ConfigBundleKeys::Kind::Keybind: {
+                std::vector<geode::Keybind> binds;
+                if (!ConfigBundleCodec::jsonToKeybinds(value, binds)) {
+                    ++skipped;
+                    return false;
+                }
+                mod->setSettingValue<std::vector<geode::Keybind>>(entry.key, binds);
+                ++applied;
+                return true;
+            }
+            default:
+                ++skipped;
+                return false;
+        }
+    }
+    catch (...) {
+        ++skipped;
+        return false;
+    }
+}
+
+geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
     auto& stats = ConfigBundleImportState::stats();
     stats = {};
 
-    if (json.empty()) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        return Err("import open failed");
+    }
+    std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (body.empty()) {
         return Err("import empty");
     }
 
-    auto parsed = matjson::parse(json);
+    auto parsed = matjson::parse(body);
     if (parsed.isErr()) {
         return Err("import json");
     }
@@ -333,13 +298,7 @@ geode::Result<> ConfigBundle::importFromString(
             if (!settings.contains(it->key)) {
                 continue; // merge: leave live value
             }
-            if (ConfigBundleApplyHelpers::shouldSkip(*it, opt)) {
-                ++skipped;
-                continue;
-            }
-            ConfigBundleApplyHelpers::applyOneSetting(
-                mod, *it, settings[it->key], applied, skipped
-            );
+            applyOneSetting(mod, *it, settings[it->key], applied, skipped);
         }
         // Legacy preset / stage-index keys in old exports are ignored (removed).
 
@@ -355,15 +314,6 @@ geode::Result<> ConfigBundle::importFromString(
     return Ok();
 }
 
-geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        return Err("import open failed");
-    }
-    std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return ConfigBundle::importFromString(body, ApplyOptions{});
-}
-
 bool ConfigBundle::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -375,26 +325,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
     };
 
     expect(ConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(ConfigBundleKeys::count() == 126, "portable-keys");
-    expect(ConfigBundleApplyHelpers::isDevKey("dev-overlay"), "dev-key-yes");
-    expect(!ConfigBundleApplyHelpers::isDevKey("look-ahead-cap"), "dev-key-no");
-    expect(!ConfigBundleApplyHelpers::isDevKey(nullptr), "dev-key-null");
-
-    {
-        ConfigBundleKeys::Entry kb{ "hotkey-debug", ConfigBundleKeys::Kind::Keybind };
-        ConfigBundleKeys::Entry dev{ "dev-overlay", ConfigBundleKeys::Kind::Bool };
-        ConfigBundleKeys::Entry ticks{ "ticks-all", ConfigBundleKeys::Kind::Int };
-        ApplyOptions skipKb{ true, false };
-        ApplyOptions skipDev{ false, true };
-        ApplyOptions skipBoth{ true, true };
-        expect(ConfigBundleApplyHelpers::shouldSkip(kb, skipKb), "skip-kb");
-        expect(!ConfigBundleApplyHelpers::shouldSkip(ticks, skipKb), "skip-kb-keep-ticks");
-        expect(ConfigBundleApplyHelpers::shouldSkip(dev, skipDev), "skip-dev");
-        expect(!ConfigBundleApplyHelpers::shouldSkip(ticks, skipDev), "skip-dev-keep-ticks");
-        expect(ConfigBundleApplyHelpers::shouldSkip(kb, skipBoth), "skip-both-kb");
-        expect(ConfigBundleApplyHelpers::shouldSkip(dev, skipBoth), "skip-both-dev");
-        expect(!ConfigBundleApplyHelpers::shouldSkip(ticks, skipBoth), "skip-both-keep");
-    }
+    expect(ConfigBundleKeys::count() == 124, "keys-124");
 
     auto* mod = Mod::get();
     if (!mod) {
@@ -419,11 +350,9 @@ bool ConfigBundle::selfCheck(std::string& report) {
     // Snapshot values we will mutate, then always restore.
     int64_t snapCap = 0;
     int64_t snapTicks = 0;
-    bool snapDevOverlay = false;
     try {
         snapCap = mod->getSettingValue<int64_t>("look-ahead-cap");
         snapTicks = mod->getSettingValue<int64_t>("ticks-all");
-        snapDevOverlay = mod->getSettingValue<bool>("dev-overlay");
     }
     catch (...) {
         expect(false, "snapshot");
@@ -436,18 +365,16 @@ bool ConfigBundle::selfCheck(std::string& report) {
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", snapCap);
             mod->setSettingValue<int64_t>("ticks-all", snapTicks);
-            mod->setSettingValue<bool>("dev-overlay", snapDevOverlay);
         }
         catch (...) {
         }
         guard.release();
         StageConfig::refreshCache();
-        DevConfig::refreshCache();
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
     };
 
-    // --- Export → mutate → import round-trip (file) ---
+    // --- Export → mutate → import round-trip ---
     {
         StageConfig::beginApplying();
         try {
@@ -494,83 +421,6 @@ bool ConfigBundle::selfCheck(std::string& report) {
             }
             catch (...) {
                 expect(false, "roundtrip-read");
-            }
-        }
-    }
-
-    // --- String export → import round-trip ---
-    {
-        StageConfig::beginApplying();
-        try {
-            mod->setSettingValue<int64_t>("look-ahead-cap", 33);
-            mod->setSettingValue<int64_t>("ticks-all", 5);
-        }
-        catch (...) {
-        }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
-
-        std::string dumped;
-        auto const exp = ConfigBundle::exportToString(dumped);
-        expect(exp.isOk(), "export-string-ok");
-        expect(!dumped.empty(), "export-string-body");
-
-        StageConfig::beginApplying();
-        try {
-            mod->setSettingValue<int64_t>("look-ahead-cap", 0);
-            mod->setSettingValue<int64_t>("ticks-all", 1);
-        }
-        catch (...) {
-        }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
-
-        auto const imp = ConfigBundle::importFromString(dumped);
-        expect(imp.isOk(), "import-string-ok");
-        if (imp.isOk()) {
-            try {
-                expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 33, "string-cap");
-                expect(mod->getSettingValue<int64_t>("ticks-all") == 5, "string-ticks");
-            }
-            catch (...) {
-                expect(false, "string-read");
-            }
-        }
-    }
-
-    // --- ApplyOptions: skipDevKeys leaves live Dev Lab bool unchanged ---
-    {
-        StageConfig::beginApplying();
-        try {
-            mod->setSettingValue<bool>("dev-overlay", false);
-            mod->setSettingValue<int64_t>("look-ahead-cap", 10);
-        }
-        catch (...) {
-        }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
-        DevConfig::refreshCache();
-
-        std::string const filtered = R"({
-  "version": 2,
-  "settings": {
-    "look-ahead-cap": 91,
-    "dev-overlay": true
-  }
-})";
-        ApplyOptions opt{};
-        opt.skipDevKeys = true;
-        auto const imp = ConfigBundle::importFromString(filtered, opt);
-        expect(imp.isOk(), "filter-dev-import");
-        if (imp.isOk()) {
-            auto const is = ConfigBundle::lastImportStats();
-            expect(is.skipped >= 1, "filter-dev-skipped");
-            try {
-                expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 91, "filter-dev-cap");
-                expect(mod->getSettingValue<bool>("dev-overlay") == false, "filter-dev-kept");
-            }
-            catch (...) {
-                expect(false, "filter-dev-read");
             }
         }
     }

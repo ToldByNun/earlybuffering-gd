@@ -10,7 +10,6 @@
 #include "../dev/DevRejectLedger.hpp"
 
 #include <Geode/Geode.hpp>
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -101,8 +100,6 @@ struct SimPlan {
     bool ascentUseful = false;
     // Live V2 LongForesight: press dies on long horizon → choose prefers Delay.
     bool longForesightNeedSearch = false;
-    // Live V2 LongForesight: press and idle both die on the horizon used.
-    bool longForesightBothDead = false;
     // Live V2: plan cand eval used Trajectory engine (else ShadowPlayer).
     bool trajectoryEngine = false;
     bool requireOrb = false;
@@ -200,7 +197,7 @@ public:
     // section vectors (sim checkCollisions inserts them; vanilla sortSectionVector AVs).
     void evacuateGhosts(GJBaseGameLayer* layer);
     // RAII entry/exit used by SimSessionGuard (restore + park always unwind).
-    void beginSession(PlayLayer* layer, bool fromLiveWorld);
+    void beginSession(PlayLayer* layer);
     void endSession(PlayLayer* layer);
     // Persistent scratch for collisionCheckObjects filtering — never a stack
     // gd::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
@@ -495,11 +492,6 @@ public:
     );
 
     struct Model {
-        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
-        bool expired(int tick) const {
-            return (tick % 4 == 0) && deadline != std::chrono::steady_clock::time_point::max()
-                && std::chrono::steady_clock::now() >= deadline;
-        }
         bool continuous = false;
         bool tapRelease = false;
         int cap = 48;
@@ -517,7 +509,6 @@ public:
     };
 
     struct RunResult {
-        bool budgetStopped = false;
         bool died = false;
         bool diedBeforeAction = false;
         bool jumped = false;
@@ -556,8 +547,6 @@ private:
 
     // Transform snapshot for Trigger World Bake apply (restored before flags).
     struct SavedTransform {
-        SavedTransform() = default;
-        explicit SavedTransform(GameObject* object);
         int uniqueId = 0;
         GameObject* obj = nullptr;
         float x = 0.f;
@@ -566,9 +555,6 @@ private:
         float scaleX = 1.f;
         float scaleY = 1.f;
         bool nodeVisible = true;
-        EnhancedGameObject* enhanced = nullptr;
-        bool poweredOn = false;
-        bool egoVisible = false;
         mutable bool dirty = false;
     };
 
@@ -660,11 +646,6 @@ private:
     std::unordered_map<int, UnknownHistBin> m_unknownHistMap;
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;
-    // Slots are resolved through the owning CCArray and checked by UID before use.
-    std::unordered_map<int, unsigned> m_levelObjectSlots;
-    std::unordered_map<int, size_t> m_liveTransformSlots;
-    bool m_fromLiveWorld = false;
-    int m_lastStoreTick = -1;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
     // Absolute attempt tick for the current sim step (−1 = do not apply bake).
     int m_simAbsTick = -1;

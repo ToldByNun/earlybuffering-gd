@@ -64,7 +64,6 @@ bool g_cachedShowPauseHub = true;
 bool g_cachedAssistPress = true;
 bool g_cachedAssistRelease = true;
 bool g_cachedAssistOrbs = true;
-bool g_cachedDisableHus = true; // Soft Hold off by default
 bool g_cachedAutoTune = false;
 bool g_cachedSelfBake = false;
 bool g_cachedSelfBakeNormal = false;
@@ -189,7 +188,6 @@ void StageConfig::refreshCache() {
     g_cachedAssistPress = readBool(mod, "assist-press", true);
     g_cachedAssistRelease = readBool(mod, "assist-release", true);
     g_cachedAssistOrbs = readBool(mod, "assist-orbs", true);
-    g_cachedDisableHus = readBool(mod, "disable-hus", true);
     g_cachedAutoTune = readBool(mod, "auto-tune", false);
     g_cachedSelfBake = readBool(mod, "self-bake", false);
     g_cachedSelfBakeNormal = readBool(mod, "self-bake-normal", false);
@@ -235,7 +233,7 @@ void StageConfig::refreshCache() {
     g_cachedLookAhead = clampInt(readInt(mod, "look-ahead-cap", 0), 0, 240);
     try {
         auto modeStr = mod->getSettingValue<std::string>("assist-mode");
-        if (modeStr == "Live" || modeStr == "Route") g_cachedAssistMode = AssistMode::Live;
+        if (modeStr == "Live") g_cachedAssistMode = AssistMode::Live;
         else if (modeStr == "Replay") g_cachedAssistMode = AssistMode::Replay;
         else if (modeStr == "BruteForce") g_cachedAssistMode = AssistMode::BruteForce;
         else g_cachedAssistMode = AssistMode::Hybrid;
@@ -451,8 +449,6 @@ bool StageConfig::showPauseHub() { ensureCache(); return g_cachedShowPauseHub; }
 bool StageConfig::assistPress() { ensureCache(); return g_cachedAssistPress; }
 bool StageConfig::assistRelease() { ensureCache(); return g_cachedAssistRelease; }
 bool StageConfig::assistOrbs() { ensureCache(); return g_cachedAssistOrbs; }
-bool StageConfig::disableHus() { ensureCache(); return g_cachedDisableHus; }
-bool StageConfig::husSoftHoldEnabled() { return !disableHus(); }
 bool StageConfig::autoTune() { ensureCache(); return g_cachedAutoTune; }
 bool StageConfig::selfBake() { ensureCache(); return g_cachedSelfBake; }
 bool StageConfig::selfBakeNormal() { ensureCache(); return g_cachedSelfBakeNormal; }

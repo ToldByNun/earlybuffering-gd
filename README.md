@@ -7,13 +7,13 @@ Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBu
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.4.1** |
+| Version | **1.3.2** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`; iOS needs `.ios.dylib`) |
 | License | [MIT](LICENSE) |
 | Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
 
-> **Last 2.2081 line.** **v1.4.1** still targets Geometry Dash **2.2081** only (Cloud Configs browser + share outbox, escape honesty, Soft Hold default off). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
+> **Last 2.2081 line.** **v1.3.2** still targets Geometry Dash **2.2081** only (queued hold / toggle-orb honesty, bake fidelity, Main Window IA without presets, iOS signed dylib). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
 
 ## What it does
 
@@ -30,7 +30,7 @@ Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_refe
 ## Install
 
 1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
-2. Install from the **Geode Index**, or download the **v1.4.1** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
+2. Install from the **Geode Index**, or download the **v1.3.2** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
 3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (Geode will prompt).
 
 **Mobile (Android + iOS):** same save-dir I/O (`replay-drop/`, `earlybuffer-config.json`) and constrained planner budgets — details and device smoke checklists in [`INSTALL.md`](INSTALL.md).
@@ -51,7 +51,7 @@ CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/wor
 Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
 
 - **Enabled / Assist Mode / Window** — master control, Live / Hybrid / Replay / BruteForce, and tick windows (unit + default + wave) on **Main** (no Preset packs)
-- **Pick Mode** (`assist-pick`) — **v1** (default, latest±k); **v2** foresight-first Delay-worthy Alive ranking + LongForesight
+- **Pick Mode** (`assist-pick`) — **v1** (default); **v2** reserved (currently same as v1)
 - **Assist Engine** (`assist-engine`) — **ShadowPlayer** (default) vs **Trajectory** for Live V2; v1 always ShadowPlayer
 - **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
 - **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
@@ -63,7 +63,7 @@ Hotkeys are configurable (defaults include Ctrl+Shift+M assist mode, Ctrl+Shift+
 
 ## Development status
 
-EarlyBuffer **1.4.1** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
+EarlyBuffer **1.3.2** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
 
 ## Authorship and AI use
 
@@ -82,8 +82,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.4.1** Cloud Configs; **v1.4.0** escape honesty / portal-stack / Soft Hold default off; **v1.3.2** bake / presets-removed / iOS harden (still GD **2.2081** only).
-- **Cloud packs:** [`docs/cloud_configs.md`](docs/cloud_configs.md) — catalog, stats/sort/Share tags, seed, smoke checklist.
+- **Changelog:** see [`changelog.md`](changelog.md) — **v1.3.2** assist honesty / bake / presets-removed / iOS harden; **v1.3.1** settings UI / import sync / assist clock; **v1.3.0** Config / Hybrid / iOS mobile (still GD **2.2081** only).
 
 ## Credits
 

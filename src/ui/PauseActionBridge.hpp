@@ -2,7 +2,6 @@
 #define EARLYBUFFER_UI_PAUSEACTIONBRIDGE_HPP
 
 #include <filesystem>
-#include <string>
 
 class PauseLayer;
 
@@ -22,14 +21,8 @@ public:
     static void toggleTrajectory();
     static void exportConfig();
     static void importConfig();
-    // Opens Cloud Configs browser (catalog / install / share).
-    static void openCloudConfigs();
 
-    // After ConfigBundle apply: sync overlay/visualizers, rebuild open settings UI,
-    // then show successMsg on the next main-thread tick (keeps alert on top).
-    static void afterConfigApplied(std::string const& successMsg);
-
-    // Dev Lab actions (log-only stubs until session/eval/trace land).
+    // Dev Lab actions (Commit 1 stubs — log only until session/eval/trace land).
     static void devStartRecord();
     static void devStopRecord();
     static void devEvalLast();

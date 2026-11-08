@@ -15,11 +15,7 @@ public:
     // Reject null, null-page, and classic poison (~0) without dereferencing.
     static bool pointerLooksLive(void const* p);
 
-    // pointerLooksLive(p) and pointerLooksLive(*vtable). Safe before any cast.
-    static bool pointerAndVtableLive(void const* p);
-
     // Live check then typeinfo_cast; nullptr if unsafe or wrong type.
-    // Prefer pointerAndVtableLive in hot sim collision loops (no RTTI).
     static GameObject* asGameObject(void* raw);
 
     // Visit every safely cast GameObject* in m_sections (outer→mid→inner).

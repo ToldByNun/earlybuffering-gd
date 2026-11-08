@@ -5,8 +5,6 @@
 
 #include <Geode/Geode.hpp>
 #include <cstddef>
-#include <span>
-#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -90,8 +88,6 @@ public:
     static void decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep);
 
     TriggerTrack const* findTrack(int uniqueId) const;
-    struct Change { int tick; int uniqueId; };
-    std::span<Change const> changesBetween(int after, int through) const;
     size_t trackCount() const { return this->m_data.tracks.size(); }
     size_t readyTrackCount() const;
 
@@ -118,6 +114,7 @@ public:
     std::string statusLine() const;
 
     // Headless: samplePose hold/before/after, writePose(null), kind round-trip.
+    // Leaves the singleton cleared (safe at mod load before any level).
     static bool selfCheck(std::string& report);
 
 private:
@@ -141,9 +138,6 @@ private:
     static ClampResult clampData(TriggerWorldData& data);
 
     TriggerWorldData m_data;
-    void indexTracks();
-    std::unordered_map<int, size_t> m_byId;
-    std::vector<Change> m_changes;
     bool m_loaded = false;
     mutable bool m_dirty = false;
     bool m_softcapHit = false;

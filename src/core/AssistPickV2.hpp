@@ -79,8 +79,6 @@ public:
     // Orb → earliest ±k-robust Delay-worthy in band.
     // Else foresight-rank; idleSafer / LF / ascent prefer a later Alive Delay
     // when one exists — otherwise hopeless (chosen=-1), never soft-dead Delay.
-    // No default Context{} here — nested-type default members are incomplete
-    // until AssistPickV2 closes (clang/MSVC reject `ctx = {}`).
     static Result choose(
         CandView const* cands,
         int limit,
@@ -88,7 +86,7 @@ public:
         bool orbIntent,
         int actMin,
         int actMax,
-        Context const& ctx
+        Context const& ctx = {}
     );
 
     static bool selfCheck(std::string& report);

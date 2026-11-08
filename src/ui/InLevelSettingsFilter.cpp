@@ -23,14 +23,13 @@ public:
         SettingsCategory cat;
     };
 
-    static constexpr int kCount = 168;
+    static constexpr int kCount = 166;
 
     static Entry const* begin() { return kEntries; }
     static Entry const* end() { return kEntries + kCount; }
 
     static SettingsCategory lookup(std::string const& key) {
         for (auto const* it = begin(); it != end(); ++it) {
-            if (!it->key) continue;
             if (std::strcmp(it->key, key.c_str()) == 0) return it->cat;
         }
         return SettingsCategory::Count;
@@ -79,16 +78,14 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     { "reset-learn-action", SettingsCategory::Assist },
     { "export-config-action", SettingsCategory::Assist },
     { "import-config-action", SettingsCategory::Assist },
-    { "browse-cloud-configs-action", SettingsCategory::Assist },
     { "title-algorithm", SettingsCategory::Assist },
-    { "assist-pick", SettingsCategory::Assist },
-    { "assist-engine", SettingsCategory::Assist },
     { "death-slack", SettingsCategory::Assist },
     { "look-ahead-cap", SettingsCategory::Assist },
+    { "assist-pick", SettingsCategory::Assist },
+    { "assist-engine", SettingsCategory::Assist },
     { "cps-limit", SettingsCategory::Assist },
     { "min-click-interval-ms", SettingsCategory::Assist },
     { "assist-orbs", SettingsCategory::Assist },
-    { "disable-hus", SettingsCategory::Assist },
     { "sim-budget-us", SettingsCategory::Assist },
     { "tick-budget", SettingsCategory::Assist },
     { "assist-press", SettingsCategory::Assist },
@@ -623,8 +620,7 @@ public:
             || match("cancel-bake-action")
             || match("reset-learn-action")
             || match("export-config-action")
-            || match("import-config-action")
-            || match("browse-cloud-configs-action");
+            || match("import-config-action");
     }
 
     void refilter(bool force) {
@@ -800,6 +796,8 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("import-bake-replay") == SettingsCategory::Bake, "cat-import-bake");
     expect(categoryForKey("bake-radius") == SettingsCategory::Bake, "cat-bake-radius");
     expect(categoryForKey("reset-learn-action") == SettingsCategory::Assist, "cat-reset-learn");
+    expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
+    expect(categoryForKey("assist-engine") == SettingsCategory::Assist, "cat-assist-engine");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
     expect(categoryForKey("show-bake-path") == SettingsCategory::Visual, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
@@ -821,27 +819,16 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
     expect(keepKey("title-scope"), "legacy-keep-scope");
     expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");
     expect(!keepKey("import-bake-replay", SettingsCategory::Main), "drop-import-on-main");
-    expect(keepKey("browse-cloud-configs-action", SettingsCategory::Assist), "keep-cloud-browse");
-    expect(keepKey("disable-hus", SettingsCategory::Assist), "keep-disable-hus");
-    expect(!keepKey("browse-cloud-configs-action", SettingsCategory::Main), "drop-cloud-on-main");
-    expect(!keepKey("cloud-catalog-url"), "legacy-drop-cloud-url");
-    expect(!keepKey("cloud-publish-token"), "legacy-drop-cloud-token");
-    expect(ConfigBundleKeys::find("cloud-catalog-url") == nullptr, "cloud-url-not-portable");
-    expect(ConfigBundleKeys::find("cloud-publish-token") == nullptr, "token-not-portable");
 
     // Every table entry maps to a real tab (not Count).
     int mapped = 0;
     for (auto const* it = SettingsCategoryMap::begin(); it != SettingsCategoryMap::end(); ++it) {
-        if (!it->key) {
-            expect(false, "null-map-key");
-            continue;
-        }
         auto const c = categoryForKey(it->key);
         expect(c == it->cat, it->key);
         expect(c != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-count");
+    expect(mapped == SettingsCategoryMap::kCount, "map-count-165");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {

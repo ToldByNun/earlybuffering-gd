@@ -51,9 +51,6 @@ public:
     // Idle looks safer than press (same idea as continuous classifyIdleSafer).
     static bool idleLooksSafer(PathStats const& press, PathStats const& idle);
 
-    // Already-run path covers `horizon` for LF: died inside window, or lived >= horizon.
-    static bool pathCoversHorizon(PathStats const& s, int horizon);
-
     static Result decide(Input const& in);
 
     static bool selfCheck(std::string& report);

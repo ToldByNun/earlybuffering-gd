@@ -1,18 +1,18 @@
-# Assist contracts v1.4.0 (LOCKED)
+# Assist contracts v1.4.0 (LOCKED — Commit 2)
 
 **DO NOT RETUNE** these thresholds without a new mod version and a new contracts document.
 
 Corpus label for this freeze: `corpus=solo` (solo play + PlanGold). Multi-player opt-in reports may use `corpus=multi` with higher `A_min`.
 
-Prev / Caused / Net / HarmRate_sim are **`simEstimate` only** (`AssistSimEstimate`) — never a ship Pass/Fail by themselves (G10). Primary ship gates stay on real counters (`AssistRealMetrics`).
+Prev / Caused / Net / HarmRate_sim are **`simEstimate` only** (Commit 12: `AssistSimEstimate`) — never a ship Pass/Fail by themselves (G10). Primary ship gates stay on real counters (`AssistRealMetrics`).
 
-**Baseline status:** ε and G5–G7b numbers below are the **frozen v1.4.0 LOCK** (baseline probe placeholder + contract table). Live corpus p99 remeasure is deferred to a **new version**; until then runtime only **records** `max|dxy|` via `AssistRealMetrics` and must not change ε. `dev-freeze-world` default = **true**.
+**Baseline status:** ε and G5–G7b numbers below are the **frozen Commit-2 LOCK** (Commit-1 probe placeholder + contract table). Live corpus p99 remeasure is deferred to a **new version**; until then runtime only **records** `max|dxy|` via `AssistRealMetrics` and must not change ε. `dev-freeze-world` default = **true**.
 
 ## Locked ε (GhostParityProbe)
 
 | Symbol | Value | Source |
 |--------|------:|--------|
-| `εx` | **12 px** | baseline probe placeholder frozen as v1.4.0 LOCK (`kLockedEpsX`) |
+| `εx` | **12 px** | Commit-1 baseline placeholder frozen as Commit-2 LOCK (`kLockedEpsX`) |
 | `εy` | **12 px** | same (`kLockedEpsY`) |
 
 Remeasure from corpus p99 of `|Δ|` on known-good static runs only in a **new version**. Runtime `AssistRealMetrics` tracks `max|dxy|` for that remeasure; it must not silently change ε.
@@ -45,13 +45,13 @@ If `A < A_min` or `N_opp < Opp_min` → gate status **`INCONCLUSIVE`** (not gree
 
 | Id | Rule (LOCKED) |
 |----|----------------|
-| **G4** | Long horizon only when trusted (bool policy; enforced in PerfectAssistPolicy) |
+| **G4** | Long horizon only when trusted (bool policy; enforced in later PerfectAssist commits) |
 | **G5 Real-Harm** | Wilson CI upper(`DAFRate`) **≤ 2%** when `A ≥ A_min` |
 | **G6 Parity** | `ParityOKRate` **≥ 99%** on static corpus probes |
 | **G7a AssistCov** | **≥ 95%** on `N_trust_opp` |
 | **G7b TrustRate** | **per level**: static ≥ **70%**, dynamic-labelled ≥ **10%**, with `N_opp ≥ Opp_min` |
 | **G8 Budget** | P95 plan ≤ budget; budgetHit ≤ baseline + **10%** rel (baseline recorded later) |
-| **G9 Spot** | Spot-untrusted after drift → hard Pass until clear |
+| **G9 Spot** | Spot-untrusted after drift → hard Pass until clear (Commit 1) |
 | **G10 Sim-Diag** | Prev/Caused report only (`simEstimate`); **no** ship Pass/Fail |
 
 ### Anti-gaming

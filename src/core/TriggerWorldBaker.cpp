@@ -1,8 +1,6 @@
 #include "TriggerWorldBaker.hpp"
 #include "AssistController.hpp"
-#include "AssistSpikeWatch.hpp"
 #include "LevelProfile.hpp"
-#include "SectionObjectWalk.hpp"
 #include "TriggerClassify.hpp"
 #include "../config/StageConfig.hpp"
 #include "../debug/AssistLog.hpp"
@@ -664,7 +662,6 @@ void TriggerWorldBaker::tickSlice() {
     }
 
     PerfTrace::Scope const scope("triggerBake.slice");
-    AssistSpikeWatch::Scope const twSliceScope("tw.slice");
     LagProbe::Scope const lagScope("eb.triggerBake.build");
 
     auto const wall0 = std::chrono::steady_clock::now();
@@ -795,16 +792,14 @@ void TriggerWorldBaker::tickSlice() {
                     break;
                 }
                 auto* mid = sections[this->m_secOuter];
-                if (!SectionObjectWalk::pointerLooksLive(mid)
-                    || this->m_secInner >= mid->size()) {
+                if (!mid || this->m_secInner >= mid->size()) {
                     ++this->m_secOuter;
                     this->m_secInner = 0;
                     this->m_secSlot = 0;
                     continue;
                 }
                 auto* inner = (*mid)[this->m_secInner];
-                if (!SectionObjectWalk::pointerLooksLive(inner)
-                    || this->m_secSlot >= inner->size()) {
+                if (!inner || this->m_secSlot >= inner->size()) {
                     ++this->m_secInner;
                     this->m_secSlot = 0;
                     continue;
@@ -813,10 +808,7 @@ void TriggerWorldBaker::tickSlice() {
                 ++this->m_secSlot;
                 ++n;
                 size_t const before = this->m_seenIds.size();
-                // Never typeinfo_cast poison section slots (AV read @ -1).
-                this->considerCollectedObject(
-                    SectionObjectWalk::asGameObject(raw)
-                );
+                this->considerCollectedObject(typeinfo_cast<GameObject*>(raw));
                 if (this->m_seenIds.size() > before) {
                     ++this->m_sectionExtras;
                 }
@@ -849,6 +841,10 @@ void TriggerWorldBaker::tickSlice() {
                 : static_cast<float>(this->m_effectIndex)
                     / static_cast<float>(this->m_effects.size());
             this->m_progress = 0.15f + 0.80f * bakeFrac;
+
+            if (n > 0) {
+                this->publishPartial();
+            }
 
             if (this->m_effectIndex >= this->m_effects.size()) {
                 this->m_phase = Phase::Commit;

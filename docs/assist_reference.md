@@ -1,6 +1,6 @@
 # EarlyBuffer Assist Reference
 
-Planner / settings contract for **EarlyBuffer v1.4.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.3.2** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -42,7 +42,7 @@ HYBRID eb.hybrid.live   = 1.10ms | vfy=1 remTick=2800 remUs=500
 
 **In-window template (Hybrid/Replay):** Bake frames map to **absolute** live ticks via `AssistClock::unmapTick` (not relative to the press). `findNear` also requires `approxFrame` near `[earliest, latest]` (not X-only — avoids ~100f-early matches from `LOOKUP_X_TOL`). Delay: before earliest → wait earliest (if `ticks-*` cannot reach earliest → miss, never clamp-fire early); inside but before nominal → wait **full nominal** (`buffer.limit` raised — not clamped to `ticks-all`); at/after nominal → fire-now; `past latest` + spatial band + ≤2 tick slop → salvage fire-now after verify (deeper late → miss / Live). Verify fail: **no delay-0 salvage before nominal**; before nominal → Hybrid **Pass** (no Live/HUS mid-window); at/after nominal → once retry delay 0, else `MISS-BAKE-WIN` → Live. Press and release share the same arm path (releases still gated by `shouldPlanRelease` / purple viz). Live fallthrough never HUS before bake nominal when a window was found.
 
-**Overlay ownership:** `hy` / `rp` / `br` + `bake↓|↑ now|wait-earliest|wait-nominal|salvage [lo,hi] +d`. While the bake buffer waits: `· tpl↓|↑`. Miss fallthrough: `hy MISS … → live`. Before-nominal verify/HUS block: `MISS … → pass (before-nom)` / `hus→before-nom → pass`. Honesty: `PASS no-escape` when PassHopeless/Budget with no Alive delay and no orb foresight; `HUS drop` when Soft Hold ends at deadline without orb still ahead (no inject).
+**Overlay ownership:** `hy` / `rp` / `br` + `bake↓|↑ now|wait-earliest|wait-nominal|salvage [lo,hi] +d`. While the bake buffer waits: `· tpl↓|↑`. Miss fallthrough: `hy MISS … → live`. Before-nominal verify/HUS block: `MISS … → pass (before-nom)` / `hus→before-nom → pass`.
 
 **Shared-budget Hybrid policy (not soft-trust):** a bake is used only when `BakeVerifier` returns ok (`clearsThreat`, not `budgetHit`). Exhausted verify never injects the bake window “on faith.” Live fallthrough always keeps a reserve / remainder under the same press envelope; `usLeft==0` is a tight exit, not unlimited wall. Hitch path after reject: no near-bake spam override, no prefer-band from that window, ≤½ press tick/wall, skip exit-predict if remUs &lt; 600.
 
@@ -91,7 +91,7 @@ When enabled, static move/rotate/scale/toggle motion is cached per level content
 
 **Sim collision:** ready Static* track + apply this step → `Include` only while pose active (`writePose` clears visibility/`poweredOn` when inactive → `Skip`). **Toggle orb 1594 / touch-1049 targets:** pre-flip → `UnknownOnOverlap` (`pass-toggle-unknown`); after `ToggleOrbSim` models the hit → `Include`/`Skip` by post-flip active (no vanilla `triggerObject`). DynamicFollow targets: skip-dynamic (default) → `UnknownOnOverlap`; skip off → cheap live probe then `Include`. Dual / rotate-follow stay **Hard** Unknown. **Follow-player never enters static JSON.**
 
-**Commit 5 (Soft Unknown → Include):** Soft histogram types (vehicle / mirror / teleport / modifier / collision / enter-effect) → `Include` via `classifyObjectType` for **bakeOffline** — vanilla physics, **no Soft-Continue**. **Live assist sims** truncate those Soft portals (`softPortalLiveTruncate` → `UnknownOnOverlap`) so stacked portal `activatedByPlayer` cannot poison `m_sections`. Hard (toggle pre-model, dynamic follow, Dual/Solo) still `UnknownOnOverlap`. Section walks use `SectionObjectWalk` (never raw `typeinfo_cast` on poison slots). PlanGold: `sim-collision-policy` + `section-object-walk`.
+**Commit 5 (Soft Unknown → Include):** Soft histogram types (vehicle / mirror / teleport / modifier / collision / enter-effect) → `Include` via `classifyObjectType` — vanilla physics, **no Soft-Continue**. Hard (toggle pre-model, dynamic follow, Dual/Solo) still `UnknownOnOverlap` + truncate. PlanGold: `sim-collision-policy` fixtures + `ghost-parity-probe` (ε LOCK unchanged).
 
 **Commit 6 (Bake portals + tg2 fixture):** Soft portals stay `Include` for bakeOffline (Parity Gate: `AssistContracts140::applyLockedEps` before validate — Soft Include must not retune ε). Frozen corpus `Tg2BakeFixture` (`id_80045794` / `tg2.gdr2` / f185 solid#42181): validate Fail adds `residual=TW-empty|TW-tracks-present` when that death matches (mover pose, not Soft portal Unknown) + `parityGate=eps-locked`. PlanGold: `tg2-bake-fixture`.
 
@@ -222,7 +222,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
 | show-overlay | bool | false | | | Main |
-| show-trajectory | bool | false | | | Visual — HOLD/coast until death (hard max 960); **v2** also short yellow delay preds + dark-green best Alive path |
+| show-trajectory | bool | false | | | Visual — HOLD/coast ghosts; **v2** also LongForesight horizon + yellow prediction windows + dark-green best path |
 | show-bake-path | bool | false | | | Visual — green BakeMap **press windows** near player (no connector line; release marks omitted) |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
 | show-pause-hub | bool | true | | | Main — EB button |
@@ -243,7 +243,6 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| disable-hus | bool | true | | | Algorithm — Soft Hold-Until-Safe off by default; when false, HUS needs orb/Alive escape and never deadline-injects without it |
 | sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
 | tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first + Live reserve). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp ≤2000 |
 | assist-press | bool | true | | | Algorithm |
@@ -286,9 +285,9 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 12 (Real metrics primary + simEstimate secondary):** Ship gates stay on `AssistRealMetrics` (DAF / AssistCov / TrustRate / Parity / Wilson G5–G7b). Counterfactual `Prev` / `Caused` / `Net` / `HarmRate_sim` live in `AssistSimEstimate` — tagged `simEstimate`, **G10 diagnostic only** (never ship Pass/Fail). DevReport/eval notes d0 vs planned Delay; overlay `daf=… cov=… trust=…` then `simEst net=+P/-C harm=…%`. Freeze-world **forced on** while DevCycle records. PlanGold: `assist-sim-estimate`.
 
-**Commit 13 (Recheck / HUS / Orb align / Robust):** Recheck late slide ≤**+1** (never earlier; orb/toggle same cap — dMin wait is a separate path). Robust **±1** verify before Delay arm (fail → Pass/HUS). Orb align: clamp fire into `[dMin,dMax]`, wait until inside ring; wrong-orb (activation outside window) → Pass. **`disable-hus` default on**; when HUS on: only with `SimTrust.okAt` **and** orb/Alive escape — untrusted or bare hopeless → Pass; deadline without orb → `HUS drop`. PlanGold: `orb-align`, `hold-until-safe`.
+**Commit 13 (Recheck / HUS / Orb align / Robust):** Recheck late slide ≤**+1** (never earlier; orb/toggle same cap — dMin wait is a separate path). Robust **±1** verify before Delay arm (fail → Pass/HUS). Orb align: clamp fire into `[dMin,dMax]`, wait until inside ring; wrong-orb (activation outside window) → Pass. **HUS only when `SimTrust.okAt`** — untrusted → Pass; trust lost mid-HUS aborts hold. PlanGold: `orb-align`.
 
-**Commit 15 (Traj + Real Fixtures):** `AssistHorizon` — short caps ≈ today; **long only when `SimTrust.okAt`** (Wave plan≥96 / score≥160; Ship≥120/200; Cube≥180/240). `modelFor` + `planSequence` scoreHorizon use it. Trust-long Delay success needs a **long ghost run** (`surviveTicks ≥ max(48, scoreHorizon/2)`) or ModeSurvival-safe death (landing / platform-after-jump). TrajectoryVisualizer: HOLD vs coast until death, hard max **960** (`TrajDrawHorizon`); v2 preds stay short scoreHorizon. PlanGold: `assist-horizon`, `traj-draw-horizon`, `real-corpus-fixtures` (GRIEF id_149992717 + tg2 bakefail minimal traces).
+**Commit 15 (Traj + Real Fixtures):** `AssistHorizon` — short caps ≈ today; **long only when `SimTrust.okAt`** (Wave plan≥96 / score≥160; Ship≥120/200; Cube≥180/240). `modelFor` + `planSequence` scoreHorizon use it. Trust-long Delay success needs a **long ghost run** (`surviveTicks ≥ max(48, scoreHorizon/2)`) or ModeSurvival-safe death (landing / platform-after-jump). TrajectoryVisualizer: fix `static` dx/dy bug; **HOLD vs NOT-HOLD** lines; **draw = trust cap** (`trajDraw`). PlanGold: `assist-horizon`, `real-corpus-fixtures` (GRIEF id_149992717 + tg2 bakefail minimal traces).
 
 Lexico (v2): orbUseful > surviveBin > surviveTicks > endX−λ·delay. v1 non-orb: latest ±k-robust. Bins 24/48/96. k from `robust-k` or auto.
 
@@ -471,32 +470,12 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 v2 | `AssistPickV2` foresight-first: among ±k-robust **Delay-worthy** delays (`viable && !died`) rank `orbUseful > surviveBin > surviveTicks > endX−λ·delay` (not latest). Orb band still earliest. `idleSafer` / `longForesightNeedSearch` / `ascentUseful` prefer a later **Alive** Delay when one exists; both-dead / soft-died → hopeless (`chosen=-1`), never invent Delay. Live only — Hybrid bake wins never hit this path. Plus **LongForesight**. `planSequence` only when `smart-depth` > 1. PlanGold `assist-pick-v2`. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
-| Soft Hold-Until-Safe | Setting **`disable-hus`** default **on** (HUS never arms). When off: trusted only (`SimTrust.okAt`); arm only with **escape** = orb foresight/`usedOrbWindow` **or** non-empty Alive `viableDelays`. Bare `PassHopeless` / budget / idleSafer+ascent without escape → Pass. Cadenced replan; at deadline **drop** (`HUS drop`) if no orb still ahead — never inject without escape. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |
-| No lethal assist | Learning never pulls earlier than the Live pick; recheck slides ≤+2 later (never earlier); only Delay-worthy Alive Delays arm; verify-fail → Pass (vanilla). |
-| Continuous ascent | Ship/Wave: idle safer than d0 press + later **Alive** delay → may Delay (or HUS when enabled + escape). Soft-dead later / bare bin gain never invents ascentUseful or force-Delay. |
+| Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |
+| No lethal assist | Learning never pulls earlier than the plan; recheck slides ≤+2 later (never earlier); only surviving Delays arm; verify-fail → Pass (vanilla). |
+| Continuous ascent | Ship/Wave: idle safer than d0 press + later delay helps → Delay/HUS, not Pass. Cube overhead not in this commit (narrow continuous-only). |
 | Bake / Hybrid | Hybrid uses bake only after verify ok; **never soft-trust `budgetHit`**. Missing / no-window / past-latest-deep → Live under the **shared press budget**. Verify-fail **before nominal** → Pass (no Live/HUS); at/after nominal → Live. Replay/Brute stamp `pass-bake-*`. Prefer-band early-exit suppressed under orb foresight (`preferBandEarlyExitAllowed`); final pick Orb before Prefer. |
 
-Executable pure fixtures (PlanGold on load): `mode-survival`, `shadow-self` (soft vs Delay-worthy), `long-foresight` (both-dead), `assist-pick-v2` (soft-died / both-dead → no Delay), `hold-until-safe` (bare hopeless/budget → no HUS), `traj-draw-horizon` (960 max / pred short / rebuild period), plus `MissAssistContracts`, `TravelForesight`, `OpportunityProbe`, etc.
-
-### Escape honesty (Live)
-
-**Soft vs Delay-worthy.** `ModeSurvival` soft classes (Landing / Recoverable / LateCrash) mean “not false-lethal” for bake verify (`countsAsSafeForDelay`). Live Delay-arm uses **Delay-worthy** = `Class::Alive` only (`countsAsDelayWorthy`, `PlanOptions.requireAliveForDelay`, `shouldSkipFalseOpportunity`). Soft-died ghosts never enter `viableDelays` or AssistPickV2 Delay.
-
-**Force flags.** `ascentUseful` needs a later Alive cand. LongForesight `needDelaySearch` / LF `idleSafer` only when idle still lives; both-dead → no search force. idleSafer+ascent post-pick force-Delay and AssistPickV2 force-search require an Alive later; otherwise hopeless / Pass.
-
-**HUS.** Off by default (`disable-hus`). When on: arm only with orb foresight or Alive `viableDelays`; deadline without orb → `HUS drop` (clear buffer, no inject). Overlay `PASS no-escape` when PassHopeless/Budget and no escape.
-
-**Trajectory draw.** HOLD/coast until death, hard max 960 (`TrajDrawHorizon`); v2 yellow preds stay on short scoreHorizon; dark-green only among Alive preds.
-
-| PlanGold id | Honesty cases (fixture names) |
-|-------------|--------------------------------|
-| `mode-survival` | `worthy-*`, `safe-*`, `skip-landing` / `skip-late`, cube Landing not Delay-worthy |
-| `shadow-self` | `landing-died-soft-viable` vs `landing-not-delay-worthy`; `ascent-soft-died-not-useful` / `ascent-alive-flag-required` |
-| `long-foresight` | `decide-both-dead` / `decide-both-dead-no-search` |
-| `assist-pick-v2` | `worthy-not-soft-died`, `both-dead-no-delay`, `soft-died-no-delay`, `ascent-alone-soft-no-delay`, `coast-die-alive-later` |
-| `hold-until-safe` | `no-arm-*-bare`, `arm-*-alive` / orb, `no-arm-idle-ascent-bare` |
-| `traj-draw-horizon` | `max-960`, `pred-floor-48`, `cap-alive-at-max` / `cap-not-on-death` |
-| `perfect-assist-policy` | ascentUseful alone must not count as delayClearsBetter when d0 Alive |
+Executable pure fixtures: `MissAssistContracts::selfCheck` (incl. prefer early-exit), `TravelForesight::selfCheck`, `AssistController::holdUntilSafeSelfCheck` (via PlanGold). Self-checks run on mod load (`PlanGoldCorpus`).
 
 ### Pass / Delay reasons (G3)
 
@@ -507,7 +486,7 @@ Stable `AssistVerdict::name` tokens (overlay bit in parentheses). `pass-unknown`
 | `pass-no-threat` | Empty corridor after foresight + OpportunityProbe |
 | `pass-wave-proximity` / `pass-wave-futile` | Wave spam / no useful delay (blocked by foresight orb) |
 | `pass-d0-safe` | Delay 0 already clears (v1 preference / v2 best=0) |
-| `pass-hopeless` / `pass-budget` | Nothing Delay-worthy Alive / tick wall; HUS only if enabled + orb/Alive escape (else overlay `PASS no-escape`) |
+| `pass-hopeless` / `pass-budget` | Nothing viable / tick wall; may arm HUS if foresight/ascent |
 | `pass-toggle-unknown` | Toggle-orb / touch-toggle target overlapped in sim — refuse Delay (honesty; ToggleOrbSim accuracy is separate) |
 | `pass-parity-drift` | GhostParityProbe: shadow replay of recent path drifted vs live (attempt-wide hard Pass; clears buffer) |
 | `pass-spot-untrusted` | SpotTrustMap: X marked after prior parity drift (hard Pass until good-parity streak clears) |
@@ -529,9 +508,9 @@ When `assist-pick` = **v2**, `plan()` compares action-now vs idle/coast over `As
 
 `planPress` / `planRelease` pass `effectiveAssistEngine()` into `PlanOptions`. On **v2 + Trajectory**, Live `plan()` cand eval / hold probes / jitter use `runTrajectoryOne` (hold/coast button path, no orb pre-scan). **ShadowPlayer** keeps full `runOne`. Hybrid bake `verifyDelay` always uses ShadowPlayer. Overlay `eng=` + PLAN `eng=Trajectory|ShadowPlayer`.
 
-### TrajectoryVisualizer (Live debug)
+### TrajectoryVisualizer (Live debug / 13b)
 
-`show-trajectory`: green HOLD + red coast, each sampled **until death** or hard max **960** ticks (`TrajDrawHorizon` — draw-only, not planner caps). Cap without death → small end tick (no false death X). Rebuild period 28 when draw max &gt; 96. On **assist-pick v2**, yellow delay preds stay on short `scoreHorizon` (min 48); dark-green = best **Delay-worthy Alive** among those short samples. Overlay hint `traj H/C untilDeath Nt [cap] pred=Mt P=k d=n`.
+`show-trajectory`: green HOLD + red coast. On **assist-pick v2**, horizon matches `LongForesight` (`scoreHorizon` min 48, one extend if hold dies). Yellow prediction windows + faint yellow paths for sparse delay samples (including deaths). Dark-green path = best foresight among those samples (`AssistPickV2::foresightBetter`). Overlay hint `traj v2 LF Nt [+] P=k d=n`.
 
 ### OpportunityProbe (G2)
 
@@ -541,18 +520,15 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 
 | Scene | Expect (v2) | Expect (v1) | Notes |
 |-------|--------------|-----------------|-------|
-| Cube orb, limit 16, press ~10 ticks early | Delay (or HUS if `disable-hus` off + orb), fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
-| Both HOLD and coast die (no Alive delay) | Pass + overlay `PASS no-escape`; no Delay/HUS | Same | PLAN `LF both-dead` / PickV2 hopeless |
-| Soft Landing/LateCrash “clear” then die | Not Delay-worthy; Pass (or bake soft verify only) | Same Live | ModeSurvival worthy ≠ soft-safe |
-| Budget starve mid-search + foresight orb | If HUS on: soft-hold → replan → Delay or deadline; no orb at deadline → `HUS drop` | Same when HUS on | `disable-hus` default on → Pass; LagProbe `eb.hus.replan` |
-| show-trajectory open corridor | Green/red to death or **960** cap tick | Same | Hint `traj H/C untilDeath … [cap]` |
+| Cube orb, limit 16, press ~10 ticks early | Delay/HOLD/HUS, fire in orb window, SaveFeedback `+N` | Pass if d0 clears without orb-activation path; Delay if orb window forces wait | Debug: `VERDICT delay-*` / `hold-pending` or `PASS d0-safe` |
+| Budget starve mid-search + foresight orb | `HUS` → cadenced replan → Delay or deadline fire | Same soft-hold if PassBudget / budget+foresight | Never silent Pass / never hang; LagProbe `eb.hus.replan` |
 | Cube spike jump early, d0 would die | Delay toward later ±k-robust ≤limit | Same (latest ±k-robust) | Not earliest-viable edge |
 | Toggle-orb corridor (solids flip on 1594) | Delay only after modeled flip; else `PASS toggle-unk` / HUS | Same | `ToggleOrbSim` restores on capture teardown |
 | Toggle+Jump orb stack (co-located) | Both fire (toggle flip + jump boost) | Same | `OrbStackResolver::fireStackedPartners` — vanilla clicks both |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
 | Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
-| Ship/Wave: idle lives, press-now dies, later Alive delay clears | Delay (`idleSafer`+`ascent`); HUS only if enabled + escape | Same | PLAN log `idleSafer=1 ascent=1`; soft-dead later → no force |
+| Ship/Wave: idle lives, press-now dies, later delay clears | Delay/HUS (`idleSafer`+`ascent`) | Same | PLAN log `idleSafer=1 ascent=1` |
 | Hybrid: bake hit (verify ok, in window) | Overlay `hy bake [lo,hi]`; LagProbe `eb.hybrid.verify` short / `cache=1` on repeat | Same | No Live plan this press |
 | Hybrid: bake miss (no window / missing) | Live plan; overlay map status or `hy … → live`; `eb.hybrid.live` only | Same | No verify scope |
 | Hybrid: bake verify fails near orb | Live foresight plan (Delay/HUS), overlay `hy verify … → live` | Same | No `pass-bake-verify-fail`; LagProbe `eb.hybrid.verify` then `eb.hybrid.live` |

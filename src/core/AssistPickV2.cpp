@@ -287,7 +287,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
             { true, false, false, 1, 30, 110.f, false },
             { true, false, false, 1, 30, 120.f, false }
         };
-        auto const r = choose(c, 2, 0, false, -1, -1, Context{});
+        auto const r = choose(c, 2, 0, false, -1, -1);
         expect(r.doPass && r.chosen == 0, "d0-pass");
     }
 
@@ -300,7 +300,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
         };
         std::vector<int> pool = { 0, 1, 2 };
         expect(pickBestForesight(c, 2, 0, pool, false, 0.f) == 1, "best-bin");
-        auto const r = choose(c, 2, 0, false, -1, -1, Context{});
+        auto const r = choose(c, 2, 0, false, -1, -1);
         expect(!r.doPass && r.chosen == 1, "choose-bin-not-latest");
     }
 
@@ -368,19 +368,6 @@ bool AssistPickV2::selfCheck(std::string& report) {
         expect(r.chosen < 0 && !r.doPass, "soft-died-no-delay");
     }
 
-    // ascentUseful alone + soft-died later → hopeless (no invent Delay)
-    {
-        CandView c[] = {
-            { false, false, false, 0, 5, 40.f, true },
-            { true, false, false, 3, 80, 160.f, true },
-            { true, false, false, 3, 90, 180.f, true }
-        };
-        Context ctx;
-        ctx.ascentUseful = true;
-        auto const r = choose(c, 2, 0, false, -1, -1, ctx);
-        expect(r.chosen < 0 && !r.doPass, "ascent-alone-soft-no-delay");
-    }
-
     // Coast/d0 dies, later Alive → may Delay
     {
         CandView c[] = {
@@ -403,7 +390,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
             { true, true, true, 2, 60, 200.f, false },
             { true, true, true, 2, 60, 210.f, false }
         };
-        auto const r = choose(c, 3, 0, true, 1, 3, Context{});
+        auto const r = choose(c, 3, 0, true, 1, 3);
         expect(!r.doPass && r.chosen == 1 && r.requireOrb, "orb-earliest");
     }
 
@@ -423,7 +410,7 @@ bool AssistPickV2::selfCheck(std::string& report) {
             { false, false, false, 0, 0, 0.f, true },
             { false, false, false, 0, 0, 0.f, true }
         };
-        auto const r = choose(c, 1, 0, false, -1, -1, Context{});
+        auto const r = choose(c, 1, 0, false, -1, -1);
         expect(r.chosen < 0 && !r.doPass, "hopeless");
     }
 

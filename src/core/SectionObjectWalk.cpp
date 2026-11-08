@@ -3,95 +3,25 @@
 #include <Geode/Geode.hpp>
 #include <fmt/format.h>
 
-#if defined(_WIN32)
-    #include <windows.h>
-#endif
-
 using namespace geode::prelude;
-
-bool readableRange(void const* p, size_t bytes) {
-    if (!p || bytes == 0) return false;
-#if defined(_WIN32)
-    struct ReadableRegion {
-        uintptr_t begin = 0;
-        uintptr_t end = 0;
-    };
-    // Section grids repeat the same object and vtable pages thousands of
-    // times. Cache a few VirtualQuery results so safety checks remain cheap
-    // during a trigger-world collection pass.
-    thread_local ReadableRegion regions[8]{};
-    thread_local size_t nextRegion = 0;
-    auto const start = reinterpret_cast<uintptr_t>(p);
-    for (auto const& region : regions) {
-        if (start >= region.begin && start <= region.end
-            && bytes <= region.end - start) {
-            return true;
-        }
-    }
-
-    MEMORY_BASIC_INFORMATION info{};
-    if (::VirtualQuery(p, &info, sizeof(info)) != sizeof(info)) return false;
-    if (info.State != MEM_COMMIT || (info.Protect & PAGE_GUARD)
-        || (info.Protect & 0xffu) == PAGE_NOACCESS) {
-        return false;
-    }
-    auto const regionEnd = reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize;
-    if (start > regionEnd || bytes > regionEnd - start) return false;
-    regions[nextRegion] = {
-        reinterpret_cast<uintptr_t>(info.BaseAddress),
-        regionEnd,
-    };
-    nextRegion = (nextRegion + 1) % 8;
-    return true;
-#else
-    (void)p;
-    (void)bytes;
-    return true;
-#endif
-}
 
 bool SectionObjectWalk::pointerLooksLive(void const* p) {
     if (!p) return false;
     auto const addr = reinterpret_cast<uintptr_t>(p);
     // Null-page and classic freelist / -1 poison — do not deref or cast.
     if (addr < 0x10000ull) return false;
-    if (addr >= ~uintptr_t{0} - 0xFFull) return false; // -1 .. -256
-    // High nibble all-ones is a common MSVC debug fill / section hole.
-    if ((addr & 0xFFFFFFFF00000000ull) == 0xFFFFFFFF00000000ull) return false;
-    return readableRange(p, sizeof(void*));
-}
-
-bool SectionObjectWalk::pointerAndVtableLive(void const* p) {
-    if (!pointerLooksLive(p)) return false;
-    // Freed slots often keep a user-looking address but vtable qword is -1.
-    // typeinfo_cast then AVs reading @ 0xFFFFFFFFFFFFFFFF (bakefail diag).
-    void* const vt = *reinterpret_cast<void* const*>(p);
-    if (!pointerLooksLive(vt)) return false;
-
-    auto const vtAddr = reinterpret_cast<uintptr_t>(vt);
-    if (vtAddr < sizeof(void*)
-        || !readableRange(reinterpret_cast<void const*>(vtAddr - sizeof(void*)),
-            sizeof(void*) * 2)) {
-        return false;
-    }
-    void* const rtti = *(reinterpret_cast<void* const*>(vt) - 1);
-    return pointerLooksLive(rtti);
+    if (addr == ~uintptr_t{0}) return false;
+    // Common low poison patterns (0xDEAD… left for platform; keep cheap).
+    if (addr == 0xFFFFFFFFFFFFFFFEull) return false;
+    return true;
 }
 
 GameObject* SectionObjectWalk::asGameObject(void* raw) {
-    if (!pointerAndVtableLive(raw)) return nullptr;
+    if (!pointerLooksLive(raw)) return nullptr;
     // void* is not polymorphic — cast through CCObject* then typeinfo_cast.
+    // Poison / null-page already rejected above so vtable read is safe enough.
     auto* asCc = reinterpret_cast<cocos2d::CCObject*>(raw);
-#if defined(_MSC_VER) && defined(_WIN32)
-    __try {
-        return typeinfo_cast<GameObject*>(asCc);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        return nullptr;
-    }
-#else
     return typeinfo_cast<GameObject*>(asCc);
-#endif
 }
 
 int SectionObjectWalk::forEachInSections(
@@ -139,25 +69,13 @@ bool SectionObjectWalk::selfCheck(std::string& report) {
     expect(!pointerLooksLive(reinterpret_cast<void*>(0x100ull)), "null-page");
     expect(!pointerLooksLive(reinterpret_cast<void*>(~uintptr_t{0})), "poison-ff");
     expect(!pointerLooksLive(reinterpret_cast<void*>(0xFFFFFFFFFFFFFFFEull)), "poison-fe");
-    expect(!pointerLooksLive(reinterpret_cast<void*>(0xFFFFFFFF00001234ull)), "poison-hi");
 
     // Stack / heap addresses used as “live-looking” for the filter only.
     int stackProbe = 0;
     expect(pointerLooksLive(&stackProbe), "stack-live");
-    // Positive vtable case: one-slot fake whose first qword is a live address.
-    // Do not call pointerAndVtableLive(&stackProbe) — that reads past the int.
-    void* fakeVtLive[2] = { &stackProbe, &stackProbe };
-    void* fakeObjLive[1] = { &fakeVtLive[1] };
-    expect(pointerAndVtableLive(fakeObjLive), "vt-live");
 
     expect(asGameObject(nullptr) == nullptr, "as-null");
     expect(asGameObject(reinterpret_cast<void*>(~uintptr_t{0})) == nullptr, "as-poison");
-    expect(!pointerAndVtableLive(nullptr), "vt-null");
-
-    // Fake object whose "vtable" qword is -1 must not enter typeinfo_cast.
-    void* fakeVtPoison[1] = { reinterpret_cast<void*>(~uintptr_t{0}) };
-    expect(asGameObject(fakeVtPoison) == nullptr, "as-vt-poison");
-    expect(!pointerAndVtableLive(fakeVtPoison), "vt-poison");
 
     // No layer → zero visits, no crash.
     expect(forEachInSections(nullptr, [](GameObject*) {}) == 0, "no-layer");

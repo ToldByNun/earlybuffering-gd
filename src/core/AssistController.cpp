@@ -2,8 +2,6 @@
 #include "AssistClock.hpp"
 #include "AssistLearning.hpp"
 #include "AssistPerfStats.hpp"
-#include "AssistSpikeWatch.hpp"
-#include "TravelForesightCache.hpp"
 #include "AssistScopeGate.hpp"
 #include "BakeMap.hpp"
 #include "BakeVerifier.hpp"
@@ -299,7 +297,6 @@ void AssistController::resetAttempt(PlayLayer* playLayer) {
     HybridVerifyCache::get().clearAttempt();
     SimTrust::get().resetAttempt();
     GhostParityProbe::get().resetAttempt();
-    TravelForesightCache::get().clear();
     m_attemptTick = 0;
     m_inRealUpdate = false;
     m_subDtSeen = 0.f;
@@ -402,7 +399,6 @@ void AssistController::onLevelQuit() {
     TriggerWorldStore::get().clear();
     SimTrust::get().onLevelQuit();
     GhostParityProbe::get().onLevelQuit();
-    TravelForesightCache::get().clear();
     this->m_dafWatch = false;
     // Keep AssistRealMetrics session across levels (corpus report); do not resetSession.
 
@@ -832,26 +828,19 @@ bool AssistController::queuedHoldSelfCheck(std::string& report) {
     return false;
 }
 
-// Orb foresight or published Alive Delay-worthy delays — never bare PassHopeless.
-static bool husHasEscape(SimPlan const& plan) {
-    if (plan.foresightOrbPad || plan.usedOrbWindow) return true;
-    return !plan.viableDelays.empty();
-}
-
-
 bool AssistController::shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk) {
-    // HUS only when trusted — sonst Pass. Escape required (orb or Alive delay).
+    // Commit 13: HUS only when trusted — sonst Pass.
     if (!trustOk) return false;
     if (plan.action == PlanAction::Delay) return false;
-    bool const escape = husHasEscape(plan);
+    if (plan.reason == AssistReason::PassBudget) return true;
     bool const opp = plan.foresightOrbPad || plan.usedOrbWindow;
-    if (plan.reason == AssistReason::PassBudget) return escape;
     if (plan.budgetHit && opp) return true;
     if (plan.unknown && opp) return true;
-    // Continuous idleSafer+ascent: Soft Hold only with Alive later / orb.
-    if (plan.continuous && plan.idleSafer && plan.ascentUseful) return escape;
-    // Hopeless after search: Soft Hold only with escape (no bare inject path).
-    if (plan.reason == AssistReason::PassHopeless) return escape;
+    // Continuous: idle safer + ascent helped in eval but pick starved → soft hold.
+    if (plan.continuous && plan.idleSafer && plan.ascentUseful) return true;
+    // Hopeless after a real search: Soft Hold + replan (trusted only).
+    if (plan.reason == AssistReason::PassHopeless) return true;
+    (void)opp;
     return false;
 }
 
@@ -885,9 +874,7 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     SimPlan budgetPass;
     budgetPass.action = PlanAction::Pass;
     budgetPass.reason = AssistReason::PassBudget;
-    expect(!shouldArmHoldUntilSafe(budgetPass, true), "no-arm-budget-bare");
-    budgetPass.viableDelays = { 2 };
-    expect(shouldArmHoldUntilSafe(budgetPass, true), "arm-budget-alive");
+    expect(shouldArmHoldUntilSafe(budgetPass, true), "arm-budget");
     expect(!shouldArmHoldUntilSafe(budgetPass, false), "no-hus-untrust");
 
     SimPlan delayOk;
@@ -911,9 +898,7 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     SimPlan hopelessBare;
     hopelessBare.action = PlanAction::Pass;
     hopelessBare.reason = AssistReason::PassHopeless;
-    expect(!shouldArmHoldUntilSafe(hopelessBare, true), "no-arm-hopeless-bare");
-    hopelessBare.foresightOrbPad = true;
-    expect(shouldArmHoldUntilSafe(hopelessBare, true), "arm-hopeless-orb");
+    expect(shouldArmHoldUntilSafe(hopelessBare, true), "arm-hopeless");
 
     SimPlan unknownOrb;
     unknownOrb.action = PlanAction::Pass;
@@ -938,9 +923,7 @@ bool AssistController::holdUntilSafeSelfCheck(std::string& report) {
     idleAscent.continuous = true;
     idleAscent.idleSafer = true;
     idleAscent.ascentUseful = true;
-    expect(!shouldArmHoldUntilSafe(idleAscent, true), "no-arm-idle-ascent-bare");
-    idleAscent.viableDelays = { 3 };
-    expect(shouldArmHoldUntilSafe(idleAscent, true), "arm-idle-ascent-alive");
+    expect(shouldArmHoldUntilSafe(idleAscent, true), "arm-idle-ascent");
     idleAscent.continuous = false;
     expect(!shouldArmHoldUntilSafe(idleAscent, true), "no-arm-idle-cube");
 
@@ -1020,8 +1003,7 @@ bool AssistController::armHoldUntilSafe(
 ) {
     (void)playLayer;
     if (!player || limit <= 0) return true; // fall through vanilla
-    if (!StageConfig::husSoftHoldEnabled()) return true; // disable-hus
-    // HUS nur Trust.
+    // Commit 13: HUS nur Trust.
     if (!SimTrust::get().okAt(player->getPositionX())) return true;
 
     int const eta = holdUntilSafeEtaTicks(plan, limit);
@@ -1107,45 +1089,12 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
 
     int const deadline = this->m_buffer.pressTick + this->m_buffer.limit;
     int const remaining = deadline - this->m_attemptTick;
-    int const remLimit = std::max(1, remaining > 0 ? remaining : 1);
-    float const x = player->getPositionX();
-    // Cheap foresight edge (no full plan) so cadence can wake on orb/pad enter/leave.
-    int const slack = StageConfig::deathSlack();
-    bool const foresightNow = StageConfig::assistOrbs()
-        && TravelForesightCache::get().hasOrbOrPadAhead(
-            playLayer,
-            player,
-            remLimit,
-            this->m_simDt,
-            slack,
-            this->m_attemptTick
-        );
 
-    // Window end: inject only with orb escape still ahead — else drop (no inject).
+    // Never wait past the window — fire at deadline.
     if (remaining <= 0 || this->m_attemptTick >= deadline) {
-        bool const mayInject = this->m_buffer.requireOrb || foresightNow;
-        if (!mayInject) {
-            AssistLog::info(fmt::format(
-                "HOLD-UNTIL-SAFE drop (no escape at deadline) @{} "
-                "(press={} limit={})",
-                this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit
-            ));
-            DevCycleRecorder::get().noteHus(
-                this->m_buffer.devPressId,
-                AssistReason::PassHopeless,
-                "hus-drop",
-                this->m_attemptTick
-            );
-            this->noteVerdict(AssistReason::PassHopeless, "hus-drop");
-            this->m_lastBakeHint = "HUS drop";
-            this->clearBuffer();
-            this->updateOverlay();
-            return;
-        }
         AssistLog::debug(fmt::format(
-            "HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={} orb={})",
-            this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit,
-            foresightNow ? 1 : 0
+            "HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={})",
+            this->m_attemptTick, this->m_buffer.pressTick, this->m_buffer.limit
         ));
         DevCycleRecorder::get().noteHus(
             this->m_buffer.devPressId,
@@ -1158,6 +1107,15 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
         this->fireBuffered(playLayer, player, false);
         return;
     }
+
+    int const remLimit = std::max(1, remaining);
+    float const x = player->getPositionX();
+    // Cheap foresight edge (no full plan) so cadence can wake on orb/pad enter/leave.
+    int const slack = StageConfig::deathSlack();
+    bool const foresightNow = StageConfig::assistOrbs()
+        && TravelForesight::hasOrbOrPadAhead(
+            playLayer, player, remLimit, this->m_simDt, slack
+        );
 
     if (!shouldReplanHoldUntilSafe(
             this->m_attemptTick,
@@ -1221,16 +1179,9 @@ void AssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* pla
     fillPlanRobustLatency(opts, player, this->m_dtVarEma, true);
 
     bool const husDown = this->m_buffer.down;
-    AssistSpikeWatch::get().beginSearch("hus");
-    auto const husT0 = std::chrono::steady_clock::now();
     auto re = ShadowSimulator::get().plan(
         playLayer, player, husDown, remLimit, this->m_simDt, this->m_simDt, opts
     );
-    int const husUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - husT0
-    ).count());
-    AssistSpikeWatch::get().endSearch(husUs, re.budgetHit);
-    AssistPerfStats::get().notePlan(husUs, re.budgetHit);
 
     this->m_buffer.husLastReplanTick = this->m_attemptTick;
     this->m_buffer.husLastReplanX = x;
@@ -1586,10 +1537,6 @@ void AssistController::updateOverlay() {
             if (!bit.empty()) m_overlayText += " | " + bit;
         }
         {
-            auto bit = AssistSpikeWatch::get().overlayBit();
-            if (!bit.empty()) m_overlayText += " | " + bit;
-        }
-        {
             auto bit = DivergenceTracker::get().overlayBit();
             if (!bit.empty()) m_overlayText += " | " + bit;
             if (m_untrustPassHint) m_overlayText += " | UNTRUST pass";
@@ -1809,25 +1756,6 @@ void AssistController::noteVerdict(AssistReason reason, char const* where) {
         AssistVerdict::name(reason),
         where ? where : "?",
         AssistVerdict::overlayBit(reason)
-    ));
-}
-
-void AssistController::noteNoEscapeHonesty(SimPlan const& plan, char const* where) {
-    if (husHasEscape(plan)) return;
-    if (plan.reason != AssistReason::PassHopeless
-        && plan.reason != AssistReason::PassBudget) {
-        return;
-    }
-    this->m_lastBakeHint = "PASS no-escape";
-    AssistLog::info(fmt::format(
-        "ASSIST {} PASS no-escape id={} reason={} lfBothDead={} "
-        "idleSafer={} ascent={}",
-        where ? where : "?",
-        plan.planId,
-        AssistVerdict::name(plan.reason),
-        plan.longForesightBothDead ? 1 : 0,
-        plan.idleSafer ? 1 : 0,
-        plan.ascentUseful ? 1 : 0
     ));
 }
 
@@ -3102,14 +3030,12 @@ bool AssistController::planPress(
     if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
         useSequence = false;
     }
-    AssistSpikeWatch::get().beginSearch("press");
     auto plan = useSequence
         ? ShadowSimulator::get().planSequence(playLayer, player, true, limit, m_simDt, firstDt, opts)
         : ShadowSimulator::get().plan(playLayer, player, true, limit, m_simDt, firstDt, opts);
     int const planUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - t0
     ).count());
-    AssistSpikeWatch::get().endSearch(planUs, plan.budgetHit);
     AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
 
     this->logPlan(plan, "press");
@@ -3140,43 +3066,6 @@ bool AssistController::planPress(
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
     if (plan.action != PlanAction::Delay) {
-        bool const trustOk = SimTrust::get().okAt(x);
-        if (StageConfig::husSoftHoldEnabled()
-            && shouldArmHoldUntilSafe(plan, trustOk)) {
-            // Hybrid: bake window still ahead of nominal → no HUS mid-window.
-            int nomTick = -1;
-            if (shareHybrid
-                && husBlockedBeforeBakeNominal(
-                    hybridReuse, effectTick, this->m_simDt, nomTick
-                )) {
-                AssistLog::info(fmt::format(
-                    "MISS-BAKE-WIN hus-suppressed-before-nominal press "
-                    "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
-                    effectTick, nomTick,
-                    hybridReuse.earliest, hybridReuse.latest
-                ));
-                this->m_lastBakeHint = "MISS hus→before-nom → pass";
-                DevCycleRecorder::get().noteGatePass(
-                    AssistReason::PassHopeless, "hus-before-bake-nominal"
-                );
-                this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
-                this->recordDecision(
-                    playLayer, player, true, plan, effectTick, 0, false
-                );
-                this->updateOverlay();
-                return true;
-            }
-            return this->armHoldUntilSafe(
-                playLayer, player, player1, effectTick, limit, plan
-            );
-        }
-        if (plan.longForesightBothDead) {
-            AssistLog::info(fmt::format(
-                "ASSIST press LF both-dead id={} — Pass (no escape force)",
-                plan.planId
-            ));
-        }
-        this->noteNoEscapeHonesty(plan, "press-plan");
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
@@ -3188,7 +3077,6 @@ bool AssistController::planPress(
         if (StageConfig::autoTune() && profile.loaded()) {
             profile.noteEarliness(kind, x, 0, "pass");
         }
-        this->updateOverlay();
         return true;
     }
 
@@ -3293,64 +3181,11 @@ bool AssistController::planPress(
         pass.action = PlanAction::Pass;
         pass.delay = 0;
         pass.reason = AssistReason::PassUnknown;
-        bool const trustOk = SimTrust::get().okAt(x);
-        if (StageConfig::husSoftHoldEnabled()
-            && shouldArmHoldUntilSafe(pass, trustOk)) {
-            return this->armHoldUntilSafe(
-                playLayer, player, player1, effectTick, limit, pass
-            );
-        }
         DevCycleRecorder::get().notePassThrough(pass.reason, "press-wrong-orb");
         this->noteVerdict(pass.reason, "press-wrong-orb");
         this->recordDecision(playLayer, player, true, pass, effectTick, 0, limit);
         this->updateOverlay();
         return true;
-    }
-
-    // Robust ±1 vor Arm — center + existing neighbors must clear.
-    if (delay > 0 && this->m_simDt > 0.f) {
-        float const fd = (firstDt > 0.f && firstDt <= this->m_simDt) ? firstDt : this->m_simDt;
-        PlanOptions vopts = opts;
-        vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
-        vopts.budgetUs = StageConfig::husReplanBudgetUs();
-        vopts.maxBranches = 0;
-        vopts.smartDepth = 1;
-        auto verifyOne = [&](int d) -> bool {
-            if (d < 1 || d > limit) return true;
-            return ShadowSimulator::get().verifyDelay(
-                playLayer, player, true, d, limit, this->m_simDt, fd, vopts
-            ).ok;
-        };
-        bool const centerOk = verifyOne(delay);
-        bool const hasLo = delay - 1 >= 1;
-        bool const hasHi = delay + 1 <= limit;
-        bool const loOk = !hasLo || verifyOne(delay - 1);
-        bool const hiOk = !hasHi || verifyOne(delay + 1);
-        if (!OrbAlign::robustNeighborsOk(centerOk, hasLo, loOk, hasHi, hiOk)) {
-            AssistLog::debug(fmt::format(
-                "ASSIST robust±1 fail delay={} c={} lo={} hi={} → Pass/HUS",
-                delay, centerOk ? 1 : 0, loOk ? 1 : 0, hiOk ? 1 : 0
-            ));
-            armVerifyOk = false;
-            SimPlan pass = plan;
-            pass.action = PlanAction::Pass;
-            pass.delay = 0;
-            pass.reason = AssistReason::PassHopeless;
-            bool const trustOk = SimTrust::get().okAt(x);
-            // Robust refuse: HUS only with orb/Alive escape (not bare hopeless).
-            if (StageConfig::husSoftHoldEnabled()
-                && shouldArmHoldUntilSafe(pass, trustOk)) {
-                return this->armHoldUntilSafe(
-                    playLayer, player, player1, effectTick, limit, pass
-                );
-            }
-            this->noteNoEscapeHonesty(pass, "press-robust-fail");
-            DevCycleRecorder::get().notePassThrough(pass.reason, "press-robust-fail");
-            this->noteVerdict(pass.reason, "press-robust-fail");
-            this->recordDecision(playLayer, player, true, pass, effectTick, 0, limit);
-            this->updateOverlay();
-            return true;
-        }
     }
 
     this->m_buffer = {};
@@ -3671,14 +3506,7 @@ bool AssistController::planRelease(
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
-    AssistSpikeWatch::get().beginSearch("release");
-    auto const relT0 = std::chrono::steady_clock::now();
     auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, m_simDt, firstDt, opts);
-    int const relUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - relT0
-    ).count());
-    AssistSpikeWatch::get().endSearch(relUs, plan.budgetHit);
-    AssistPerfStats::get().notePlan(relUs, plan.budgetHit);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     DevCycleRecorder::get().notePlanFinished(
@@ -3699,44 +3527,6 @@ bool AssistController::planRelease(
     }
 
     if (plan.action != PlanAction::Delay) {
-        bool const trustOk = SimTrust::get().okAt(x);
-        // Soft Hold on release: keep Jump held, replan until Delay UP or deadline.
-        // Same before-nominal HUS block as press (release template parity).
-        if (StageConfig::husSoftHoldEnabled()
-            && shouldArmHoldUntilSafe(plan, trustOk)) {
-            int nomTick = -1;
-            if (shareHybrid
-                && husBlockedBeforeBakeNominal(
-                    hybridReuse, effectTick, this->m_simDt, nomTick
-                )) {
-                AssistLog::info(fmt::format(
-                    "MISS-BAKE-WIN hus-suppressed-before-nominal release "
-                    "effectT={} nomT={} eF={} lF={} — Pass (no early HUS)",
-                    effectTick, nomTick,
-                    hybridReuse.earliest, hybridReuse.latest
-                ));
-                this->m_lastBakeHint = "MISS hus→before-nom → pass";
-                DevCycleRecorder::get().noteGatePass(
-                    AssistReason::PassHopeless, "hus-before-bake-nominal"
-                );
-                this->noteVerdict(AssistReason::PassHopeless, "hus-before-bake-nominal");
-                this->recordDecision(
-                    playLayer, player, false, plan, effectTick, 0, false
-                );
-                this->updateOverlay();
-                return true;
-            }
-            return this->armHoldUntilSafe(
-                playLayer, player, player1, effectTick, limit, plan, false
-            );
-        }
-        if (plan.longForesightBothDead) {
-            AssistLog::info(fmt::format(
-                "ASSIST release LF both-dead id={} — Pass (no escape force)",
-                plan.planId
-            ));
-        }
-        this->noteNoEscapeHonesty(plan, "release-plan");
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
@@ -3744,7 +3534,6 @@ bool AssistController::planRelease(
         DevCycleRecorder::get().notePassThrough(passReason, "release-plan");
         this->noteVerdict(passReason, "release-plan");
         this->recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
-        this->updateOverlay();
         return true;
     }
 

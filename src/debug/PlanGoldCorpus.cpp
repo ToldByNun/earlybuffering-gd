@@ -21,13 +21,10 @@
 #include "../core/PerfectAssistPolicy.hpp"
 #include "../core/OrbAlign.hpp"
 #include "../core/AssistHorizon.hpp"
-#include "../core/AssistSpikeWatch.hpp"
-#include "../core/TrajDrawHorizon.hpp"
 #include "../core/RealCorpusFixtures.hpp"
 #include "../core/SectionObjectWalk.hpp"
 #include "../dev/DevDiagDump.hpp"
 #include "../core/TravelForesight.hpp"
-#include "../core/TravelForesightCache.hpp"
 #include "../core/OpportunityProbe.hpp"
 #include "../core/DivergenceTracker.hpp"
 #include "../core/ClickIntentGuard.hpp"
@@ -149,10 +146,6 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(OrbAlign::selfCheck(orbAlignReport), "orb-align");
     std::string assistHorizonReport;
     expect(AssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
-    std::string trajDrawHorizonReport;
-    expect(TrajDrawHorizon::selfCheck(trajDrawHorizonReport), "traj-draw-horizon");
-    std::string spikeWatchReport;
-    expect(AssistSpikeWatch::selfCheck(spikeWatchReport), "assist-spike-watch");
     std::string realCorpusReport;
     expect(RealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures");
     std::string sectionWalkReport;
@@ -169,8 +162,6 @@ bool PlanGoldCorpus::run(std::string& report) {
     expect(LongForesight::selfCheck(longForesightReport), "long-foresight");
     std::string foresightReport;
     expect(TravelForesight::selfCheck(foresightReport), "travel-foresight");
-    std::string foresightCacheReport;
-    expect(TravelForesightCache::selfCheck(foresightCacheReport), "travel-foresight-cache");
     std::string probeReport;
     expect(OpportunityProbe::selfCheck(probeReport), "opportunity-probe");
     std::string husReport;

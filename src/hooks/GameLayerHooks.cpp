@@ -1,7 +1,6 @@
 #include "../core/AssistController.hpp"
 #include "../core/BakeScheduler.hpp"
 #include "../core/OrbStackResolver.hpp"
-#include "../core/SectionObjectWalk.hpp"
 #include "../core/ShadowSimulator.hpp"
 #include "../core/SimCollisionPolicy.hpp"
 #include "../core/ToggleOrbSim.hpp"
@@ -199,11 +198,8 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
                 extra.reserve(static_cast<size_t>(objectsCount));
             }
             for (int i = 0; i < objectsCount; i++) {
-                GameObject* raw = vec->at(i);
-                // Portal stacks can leave poison (-1) in candidate lists —
-                // typeinfo_cast on those AVs (read @ 0xFFF…).
-                if (!SectionObjectWalk::pointerLooksLive(raw)) continue;
-                GameObject* obj = raw;
+                GameObject* obj = vec->at(i);
+                if (!obj) continue;
                 // Never collide the shadow with real P1/P2 or other ghosts —
                 // same spawn pose → instant frame-0 "death" during bake/plan.
                 if (typeinfo_cast<PlayerObject*>(obj)) {
@@ -233,18 +229,14 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
         // Live: strip owned ghosts if they ever appear in the candidate list
         // (invisible PlayerObjects in objectLayer can otherwise kill wave/"to nothing").
         bool anyGhost = false;
-        bool anyPoison = false;
         for (int i = 0; i < objectsCount; i++) {
             GameObject* obj = vec->at(i);
-            if (!SectionObjectWalk::pointerLooksLive(obj)) {
-                anyPoison = true;
-                continue;
-            }
+            if (!obj) continue;
             if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
                 if (sim.isOwnedGhost(asPl)) { anyGhost = true; break; }
             }
         }
-        if (anyGhost || anyPoison) {
+        if (anyGhost) {
             auto& extra = sim.collisionFilterScratch();
             extra.clear();
             if (extra.capacity() < static_cast<size_t>(objectsCount)) {
@@ -252,7 +244,7 @@ class $modify(EbGJBaseGameLayer, GJBaseGameLayer) {
             }
             for (int i = 0; i < objectsCount; i++) {
                 GameObject* obj = vec->at(i);
-                if (!SectionObjectWalk::pointerLooksLive(obj)) continue;
+                if (!obj) continue;
                 if (auto* asPl = typeinfo_cast<PlayerObject*>(obj)) {
                     if (sim.isOwnedGhost(asPl)) continue;
                 }
@@ -395,18 +387,8 @@ class $modify(EbEnhancedGameObject, EnhancedGameObject) {
         if (simulating()) {
             // Save pre-touch state for restore. Rings: physics via applyRingJump only —
             // calling the original here re-triggers orb VFX/particles on the real object.
-            auto& sim = ShadowSimulator::get();
-            sim.noteActivated(this);
+            ShadowSimulator::get().noteActivated(this);
             if (typeinfo_cast<RingObject*>(this)) return;
-            // Live assist: Soft vehicle/mirror/teleport must not run vanilla
-            // activation on shared objects (stacked portals → section poison AV).
-            // bakeOffline still Includes them for parity.
-            if (!sim.bakeOffline()
-                && SimCollisionPolicy::softPortalLiveTruncate(
-                    static_cast<int>(this->m_objectType)
-                )) {
-                return;
-            }
             EnhancedGameObject::activatedByPlayer(player);
             return;
         }

@@ -97,8 +97,6 @@ void TriggerWorldStore::noteSoftcap(char const* where) {
 }
 
 void TriggerWorldStore::clear() {
-    m_byId.clear();
-    m_changes.clear();
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
@@ -107,7 +105,11 @@ void TriggerWorldStore::clear() {
 }
 
 void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
-    clear();
+    this->m_data = {};
+    this->m_loaded = false;
+    this->m_dirty = false;
+    this->m_softcapHit = false;
+    this->m_softcapLogged = false;
     if (!level) return;
 
     this->m_data.levelKey = LevelProfile::makeKey(level);
@@ -178,7 +180,6 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
     if (data.version <= 0) data.version = kFileVersion;
     if (data.tps <= 0.0) data.tps = 240.0;
     this->m_data = std::move(data);
-    indexTracks();
     this->m_loaded = !this->m_data.levelKey.empty();
     this->m_dirty = true;
 }
@@ -200,28 +201,11 @@ void TriggerWorldStore::discardCacheFile() const {
     ));
 }
 
-void TriggerWorldStore::indexTracks() {
-    m_byId.clear();
-    m_changes.clear();
-    for (size_t i = 0; i < m_data.tracks.size(); ++i) {
-        auto const& track = m_data.tracks[i];
-        if (!m_byId.emplace(track.uniqueId, i).second || !track.ready
-            || !TriggerClassify::isStatic(track.kind)) continue;
-        for (auto const& pose : track.keys) m_changes.push_back({pose.tick, track.uniqueId});
-    }
-    std::sort(m_changes.begin(), m_changes.end(), [](Change a, Change b) { return a.tick < b.tick; });
-}
-
-std::span<TriggerWorldStore::Change const> TriggerWorldStore::changesBetween(int after, int through) const {
-    if (through <= after) return {};
-    auto cmp = [](int tick, Change c) { return tick < c.tick; };
-    auto first = std::upper_bound(m_changes.begin(), m_changes.end(), after, cmp);
-    return {first, std::upper_bound(first, m_changes.end(), through, cmp)};
-}
-
 TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {
-    auto it = m_byId.find(uniqueId);
-    return it == m_byId.end() ? nullptr : &m_data.tracks[it->second];
+    for (auto const& track : this->m_data.tracks) {
+        if (track.uniqueId == uniqueId) return &track;
+    }
+    return nullptr;
 }
 
 size_t TriggerWorldStore::readyTrackCount() const {
@@ -258,9 +242,12 @@ bool TriggerWorldStore::samplePoseAtStoreTick(
     }
 
     // Last key with tick <= storeTick (hold). Linear lerp optional later.
-    auto next = std::upper_bound(keys.begin(), keys.end(), storeTick,
-        [](int tick, TriggerPose const& pose) { return tick < pose.tick; });
-    out = *(next - 1);
+    TriggerPose const* best = &keys.front();
+    for (auto const& key : keys) {
+        if (key.tick > storeTick) break;
+        best = &key;
+    }
+    out = *best;
     return true;
 }
 
@@ -380,7 +367,8 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
 
     expect(TriggerClassify::classify(nullptr) == TriggerKind::Ignore, "classify-null");
 
-    TriggerWorldStore store;
+    auto& store = TriggerWorldStore::get();
+    store.clear();
 
     TriggerWorldData data;
     data.levelKey = "__selfcheck__";
@@ -440,10 +428,6 @@ bool TriggerWorldStore::selfCheck(std::string& report) {
     );
 
     expect(store.readyTrackCount() == 1, "ready-count");
-    auto changes = store.changesBetween(10, 20);
-    expect(changes.size() == 1 && changes.front().uniqueId == 42 && changes.front().tick == 20,
-        "live-change-open-left-inclusive-right");
-    expect(store.changesBetween(20, 9999).empty(), "held-track-no-live-work");
     expect(TriggerClassify::isStatic(TriggerKind::StaticToggle), "static-toggle");
     expect(
         std::string(TriggerClassify::kindName(TriggerKind::StaticToggle)) == "StaticToggle",
@@ -645,7 +629,7 @@ Result<> TriggerWorldStore::readFile() {
         );
         this->m_data.tracks.push_back(std::move(track));
     }
-    indexTracks();
+
     this->m_dirty = false;
     return Ok();
 }

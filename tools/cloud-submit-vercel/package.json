@@ -1,7 +1,0 @@
-{
-  "name": "eb-cloud-submit-vercel",
-  "private": true,
-  "engines": {
-    "node": ">=18"
-  }
-}

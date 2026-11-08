@@ -171,7 +171,7 @@ void DevCycleRecorder::notePlanFinished(
         player2 = layer->m_player2;
     }
     // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
-    bool const freezeOnRecord = DevConfig::freezeWorld();
+    bool const freezeOnRecord = true;
     w->witness = DevLiveWitness::capture(
         layer,
         player,

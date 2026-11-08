@@ -125,9 +125,6 @@ public:
     static bool assistPress();
     static bool assistRelease();
     static bool assistOrbs(); // orb contact-window ranking (Live/Hybrid)
-    // Soft Hold-Until-Safe master switch. Default on → HUS never arms.
-    static bool disableHus();
-    static bool husSoftHoldEnabled(); // !disableHus()
     static AssistMode assistMode();
     static char const* assistModeName(AssistMode mode);
     static char const* assistModeHint(AssistMode mode);
