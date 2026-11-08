@@ -63,6 +63,8 @@ build-*/
 .idea/
 /cmake-build-*/
 # Local build logs / scratch
+__pycache__/
+*.pyc
 build_*.txt
 build_*.log
 *.log

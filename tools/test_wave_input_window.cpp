@@ -1,5 +1,5 @@
-#include "../src/core/MissAssistContracts.hpp"
-
+#include "test_wave_input_window.hpp"
+#include "../src/core/miss_assist_contracts.hpp"
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -7,26 +7,20 @@
 // Death ticks recorded in session-1794130733171, delays 0..12.
 // Replaying the recorded collision outcomes tests the live acceptance rule,
 // independently of Geode's rendering and the current level instance.
-struct RecordedInput {
-    int pressId;
-    std::array<int, 13> deathTicks;
-    int expectedDelay;
-};
-
-int chooseRecordedDelay(RecordedInput const& input, int horizon) {
+int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon) {
     for (int delay = 0; delay <= 12; ++delay) {
         int const deathTick = input.deathTicks[delay];
         bool const diedInWindow = deathTick < horizon;
         int const ticksRan = std::min(deathTick + 1, horizon);
-        if (MissAssistContracts::survivesObservation(
-                diedInWindow, false, ticksRan, horizon, false)) {
+        if (MissAssistContracts::survivesObservation(diedInWindow, false, ticksRan, horizon,
+                                                     false)) {
             return delay;
         }
     }
     return -1;
 }
 
-int main() {
+int WaveInputWindowRegressionTests::run() {
     RecordedInput const inputs[] = {
         {88, {23, 23, 24, 25, 27, 28, 30, 31, 33, 35, 37, 39, 41}, 2},
         {114, {14, 14, 16, 18, 26, 29, 31, 35, 37, 38, 39, 40, 42}, 4},
@@ -51,4 +45,8 @@ int main() {
     failures += MissAssistContracts::continuousLookAhead(0) != 1;
     std::cout << "Wave recorded-input regression: " << failures << " failures\n";
     return failures ? 1 : 0;
+}
+
+int main() {
+    return WaveInputWindowRegressionTests::run();
 }

@@ -28,7 +28,7 @@ Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) dev
 
 1. Add the entry under `settings` in `mod.json` (prefer `bool` / `int` / `float` / `string`+`one-of`).
 2. Cache it in `StageConfig::refreshCache()` and expose a getter.
-3. `listenForSettingChanges<…>` in `src/main.cpp`.
+3. `listenForSettingChanges<…>` in `src/early_buffer_module.cpp`.
 4. Document the key in `docs/assist_reference.md` and mention it in `changelog.md` if user-facing.
 5. Wire behavior in the smallest core/hook file that owns the concern.
 
@@ -51,7 +51,10 @@ Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) dev
 
 ## Code style
 
-- Match neighboring files (Geode prelude, class-only headers with `#ifndef` guards).
+- Follow [AGENTS.md](AGENTS.md) for class layout, early returns and variable naming.
+- Use paired `snake_case.hpp` / `snake_case.cpp` files with include guards.
+- Use explicit dependency qualification and class members for project helpers and state.
+- Format with `.clang-format` and run `python tools/check_cpp_style.py`.
 - Avoid committing `build/`, `build_*.txt`, or local save dumps.
 
 ## License

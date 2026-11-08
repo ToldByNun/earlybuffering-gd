@@ -1,0 +1,24 @@
+#ifndef BUFFER_EVENT_MACHINE_HPP
+#define BUFFER_EVENT_MACHINE_HPP
+
+enum class BufferSmState { Idle = 0, ArmedPress, ArmedRelease, PendingRelease };
+
+// Documents + validates buffer transition rules (runtime still uses BufferedInput).
+//
+// Hold / Delay press contract (must stay true in AssistController):
+//   Idle → ArmedPress on Delay planPress (swallow DOWN).
+//   Early UP while ArmedPress: set releaseSeen, stay ArmedPress — fire still due.
+//   At fireTick: inject; releaseSeen + plan hold → PendingRelease for N queued
+//   hold ticks; releaseSeen + plain Delay → PendingRelease ASAP.
+//   While userHolding: never force-release.
+//   Press B while ArmedPress + releaseSeen: fire A, then Idle, then maybe re-arm B.
+//   Cancel (death/reset/quit/checkpoint) → Idle. Force-fire (CPS/mode) still injects.
+class BufferEventMachine {
+public:
+    static bool selfCheck();
+    static char const* stateName(BufferSmState state);
+
+private:
+};
+
+#endif
