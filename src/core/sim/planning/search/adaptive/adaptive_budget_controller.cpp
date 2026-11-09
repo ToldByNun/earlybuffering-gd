@@ -1,0 +1,190 @@
+#include "adaptive_budget_controller.hpp"
+#include "../../../../diagnostics/sim_tick_cost_meter.hpp"
+#include "../../../../platform/platform_limits.hpp"
+#include <algorithm>
+#include <cmath>
+#include <fmt/format.h>
+
+int EbAdaptiveBudgetController::Envelope::totalLeft() const {
+    return screenLeft + verifyLeft + reserveLeft;
+}
+
+int EbAdaptiveBudgetController::Envelope::phaseLeft(Phase phase) const {
+    switch (phase) {
+    case Phase::Screen:
+        return screenLeft;
+    case Phase::Verify:
+        return verifyLeft;
+    case Phase::Reserve:
+        return reserveLeft;
+    }
+    return 0;
+}
+
+bool EbAdaptiveBudgetController::Envelope::spend(Phase phase, int ticks) {
+    if (ticks <= 0)
+        return true;
+    int* bucket = nullptr;
+    switch (phase) {
+    case Phase::Screen:
+        bucket = &screenLeft;
+        break;
+    case Phase::Verify:
+        bucket = &verifyLeft;
+        break;
+    case Phase::Reserve:
+        bucket = &reserveLeft;
+        break;
+    }
+    if (!bucket || *bucket <= 0)
+        return false;
+    int const take = std::min(ticks, *bucket);
+    *bucket -= take;
+    return take > 0;
+}
+
+int EbAdaptiveBudgetController::Envelope::takeQuantum(Phase phase) const {
+    int const left = phaseLeft(phase);
+    if (left <= 0)
+        return 0;
+    if (phase == Phase::Screen)
+        return std::min(left, std::max(1, screenQuantum));
+    if (phase == Phase::Verify)
+        return std::min(left, std::max(1, verifyQuantum));
+    return left;
+}
+
+EbAdaptiveBudgetController::Envelope EbAdaptiveBudgetController::plan(
+    int tickCeiling, int usCeiling, float emaUsPerTick, int screenQuantum, int verifyQuantum,
+    int reservePct) {
+    Envelope env;
+    env.screenQuantum = std::clamp(screenQuantum, 8, 64);
+    env.verifyQuantum = std::clamp(verifyQuantum, 8, 64);
+    env.emaUsPerTick = std::max(0.f, emaUsPerTick);
+    env.budgetUs = usCeiling;
+
+    // Clamp the ceiling once. Never call clampTickBudget(0) — on mobile that
+    // would raise a zero allowance to the platform max.
+    int const rawCeil = std::max(0, tickCeiling);
+    int const tickCeil =
+        rawCeil > 0 ? EbPlatformLimits::get().clampTickBudget(rawCeil) : 0;
+    int allowed = tickCeil;
+    if (usCeiling > 0 && env.emaUsPerTick >= kMinEmaUs && tickCeil > 0) {
+        int const fromWall =
+            static_cast<int>(std::floor(static_cast<double>(usCeiling) / env.emaUsPerTick));
+        allowed = std::min(tickCeil, std::max(0, fromWall));
+    }
+    env.allowedTicks = allowed;
+
+    int const reservePctClamped = std::clamp(reservePct, 0, 40);
+    int reserve = (allowed * reservePctClamped) / 100;
+    if (reserve > allowed)
+        reserve = allowed;
+    int const work = allowed - reserve;
+    int screen = (work * kScreenWorkSharePct) / 100;
+    if (screen > work)
+        screen = work;
+    int verify = work - screen;
+
+    env.screenTicks = std::max(kMinBucketTicks, screen);
+    env.verifyTicks = std::max(kMinBucketTicks, verify);
+    env.reserveTicks = std::max(kMinBucketTicks, reserve);
+    env.screenLeft = env.screenTicks;
+    env.verifyLeft = env.verifyTicks;
+    env.reserveLeft = env.reserveTicks;
+    return env;
+}
+
+EbAdaptiveBudgetController::Envelope
+EbAdaptiveBudgetController::planFromOptions(EbPlanOptions const& options) {
+    int tickCeiling = options.tickBudget;
+    if (tickCeiling <= 0)
+        tickCeiling = 4000;
+    tickCeiling = EbPlatformLimits::get().clampTickBudget(tickCeiling);
+
+    int usCeiling = options.budgetUs;
+    if (usCeiling > 0)
+        usCeiling = EbPlatformLimits::get().clampSimBudgetUs(usCeiling);
+
+    float ema = 0.f;
+    if (EbSimTickCostMeter::get().physicsSampleCount() > 0)
+        ema = EbSimTickCostMeter::get().emaUsPerTick();
+
+    return plan(tickCeiling, usCeiling, ema, options.adaptiveScreenTicks,
+                options.adaptiveVerifyQuantum, options.adaptiveReservePct);
+}
+
+bool EbAdaptiveBudgetController::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok)
+            return;
+        ++fails;
+        if (!report.empty())
+            report += "; ";
+        report += name;
+    };
+
+    // Full tick ceiling when no EMA / unlimited wall.
+    auto const full = plan(4000, 0, 0.f, 24, 16, 15);
+    expect(full.allowedTicks == EbPlatformLimits::get().clampTickBudget(4000), "full-ceil");
+    expect(full.allowedTicks == full.screenTicks + full.verifyTicks + full.reserveTicks,
+           "full-split-sum");
+    expect(full.reserveTicks == (full.allowedTicks * 15) / 100, "reserve-15");
+    expect(full.screenLeft == full.screenTicks && full.verifyLeft == full.verifyTicks, "left-init");
+
+    // Wall estimate must not exceed tick ceiling.
+    auto const wall = plan(4000, 1500, 1.f, 24, 16, 15); // 1500us / 1us = 1500 ticks
+    expect(wall.allowedTicks == 1500, "wall-cap");
+    expect(wall.allowedTicks <= 4000, "wall-le-ceil");
+    expect(wall.allowedTicks == wall.screenTicks + wall.verifyTicks + wall.reserveTicks,
+           "wall-split-sum");
+
+    // Never invent ticks above ceiling when EMA is tiny.
+    auto const tiny = plan(500, 10000, 0.01f, 24, 16, 10);
+    expect(tiny.allowedTicks == EbPlatformLimits::get().clampTickBudget(500), "tiny-ema-ignore");
+
+    // Reserve 0 → all work in screen+verify.
+    auto const noRes = plan(1000, 0, 0.f, 24, 16, 0);
+    expect(noRes.reserveTicks == 0, "reserve-0");
+    expect(noRes.screenTicks + noRes.verifyTicks == noRes.allowedTicks, "work-all");
+
+    // Spend helpers.
+    Envelope spendEnv = plan(100, 0, 0.f, 24, 16, 20);
+    int const screenBefore = spendEnv.screenLeft;
+    expect(spendEnv.spend(Phase::Screen, 10), "spend-screen");
+    expect(spendEnv.screenLeft == screenBefore - 10, "spend-screen-left");
+    expect(spendEnv.takeQuantum(Phase::Verify) <= spendEnv.verifyQuantum, "verify-quantum");
+    while (spendEnv.screenLeft > 0)
+        expect(spendEnv.spend(Phase::Screen, 1), "drain-screen");
+    expect(!spendEnv.spend(Phase::Screen, 1), "screen-empty");
+
+    // Options path respects opts ceilings and never grows them.
+    EbPlanOptions opts;
+    opts.tickBudget = 800;
+    opts.budgetUs = 0;
+    opts.adaptiveScreenTicks = 24;
+    opts.adaptiveVerifyQuantum = 16;
+    opts.adaptiveReservePct = 15;
+    auto const fromOpts = planFromOptions(opts);
+    expect(fromOpts.allowedTicks <= 800, "opts-le-tick");
+    expect(fromOpts.allowedTicks <= EbPlatformLimits::get().clampTickBudget(800), "opts-platform");
+
+    // Mobile clamp: if constrained, 4000 must become ≤2000.
+    auto const mobileish = plan(4000, 0, 0.f, 24, 16, 15);
+    if (EbPlatformLimits::isConstrainedDevice()) {
+        expect(mobileish.allowedTicks <= 2000, "mobile-tick-cap");
+    } else {
+        expect(mobileish.allowedTicks == 4000, "desktop-tick-passthrough");
+    }
+
+    // Three-limit invariant: plan() has no Max Assist / horizon parameters to raise.
+    expect(full.screenQuantum == 24 && full.verifyQuantum == 16, "quanta");
+
+    if (fails == 0)
+        report = "AdaptiveBudgetController OK";
+    else
+        report = fmt::format("AdaptiveBudgetController {} fails: {}", fails, report);
+    return fails == 0;
+}
