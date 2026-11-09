@@ -1,6 +1,6 @@
 # Contributing
 
-For v1.4.3 Cloud Config changes, verify the Settings → Assist entry, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md).
+For v1.5.0 Adaptive / Cloud Config changes, verify Adaptive Plan Live Delay vs classic fallthrough, the Settings → Assist Cloud Configs entry, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md) and Adaptive notes in `docs/assist_reference.md`.
 
 Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) development / authorship notes: direction and review are human-led; AI may assist drafting. Prefer small, testable PRs.
 

@@ -11,17 +11,17 @@ Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBu
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.4.3** |
+| Version | **1.5.0** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`; iOS needs `.ios.dylib`) |
 | License | [MIT](LICENSE) |
 | Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
 
-> **Last 2.2081 line.** **v1.4.3** still targets Geometry Dash **2.2081** only (queued hold / toggle-orb honesty, bake fidelity, Main Window IA without presets, iOS signed dylib). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
+> **Last 2.2081 line.** **v1.5.0** still targets Geometry Dash **2.2081** only (Adaptive Prediction Planner, Cloud Configs, queued hold / toggle-orb honesty, bake fidelity, iOS signed dylib). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
 
 ## What it does
 
-- **Live / Hybrid** — plan each click with a shadow physics sim (threat zones, optional orb windows). Hopeless clicks still pass through; your input is never blocked.
+- **Live / Hybrid** — plan each click with a shadow physics sim (threat zones, optional orb windows). Live can use the **Adaptive Prediction Planner** (`adaptive-plan`) with classic fallthrough. Hopeless clicks still pass through; your input is never blocked.
 - **Replay / BruteForce** — bake click *windows* from an imported macro or a serial main-thread search. These are timing maps, not a live multi-click bot queue.
 - **Trigger World Bake** — cache spawn-timed static mover / toggle poses so the shadow sim can collide them instead of treating every mover as unknown (see settings + [`docs/assist_reference.md`](docs/assist_reference.md)).
 - **Safe Mode** — when assist is on (or has touched a run), progress / bests / percentage are not saved as legit clears.
@@ -34,7 +34,7 @@ Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_refe
 ## Install
 
 1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
-2. Install from the **Geode Index**, or download the **v1.4.3** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
+2. Install from the **Geode Index**, or download the **v1.5.0** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
 3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (Geode will prompt).
 
 **Mobile (Android + iOS):** same save-dir I/O (`replay-drop/`, `earlybuffer-config.json`) and constrained planner budgets — details and device smoke checklists in [`INSTALL.md`](INSTALL.md).
@@ -60,14 +60,15 @@ Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
 - **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
 - **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
 - **Assist Off Ranges** — six From/To percent slots (`-1` = unused); assist forced off inside those ranges
-- **Orbs / CPS / budgets** — Assist algorithm limits (ticks ≠ 60fps frames)
+- **Orbs / CPS / budgets** — Assist algorithm limits (ticks ≠ 60fps frames); Adaptive knobs under Assist when Adaptive Plan is on
+- **Adaptive Plan** (`adaptive-plan`) — Live Prediction Planner (screen → verify → Gate); off = classic equal-walk
 - **Save Feedback** — separate Sound / Color / Counter toggles when a delayed click is injected
 
 Hotkeys are configurable (defaults include Ctrl+Shift+M assist mode, Ctrl+Shift+T trajectory, and more).
 
 ## Development status
 
-EarlyBuffer **1.4.3** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
+EarlyBuffer **1.5.0** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
 
 ## Authorship and AI use
 
@@ -86,7 +87,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.4.3** assist honesty / bake / presets-removed / iOS harden; **v1.3.1** settings UI / import sync / assist clock; **v1.3.0** Config / Hybrid / iOS mobile (still GD **2.2081** only).
+- **Changelog:** see [`changelog.md`](changelog.md) — **v1.5.0** Adaptive Prediction Planner; **v1.4.3** Cloud Configs; **v1.3.2** assist honesty / bake / iOS harden (still GD **2.2081** only).
 
 ## Credits
 

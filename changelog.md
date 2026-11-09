@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.5.0
+
+**Adaptive Prediction Planner (Live) + assist honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+### Adaptive Prediction Planner
+- Live presses can use Adaptive Plan Search (`adaptive-plan`): short screen → verify quanta → DecisionGate.
+- Three hard limits stay separate: Max Assist ticks, Prediction Horizon, Dynamic Plan Tick Budget (`tick-budget` / `sim-budget-us`).
+- Soft wall stays a runtime ceiling (does not shrink hard ticks via EMA).
+- Gate arms Delay only for Autonomous Alive + hazard progress (horizon / zone / past dying d0); screen-Alive alone is not `PassD0Safe`.
+- Unproven / Hopeless Adaptive Pass falls through to classic so Assist is not starved under tight or unlimited soft wall.
+- Default `sim-budget-us` **4000**; Adaptive Live floor raises lower positive budgets to 4000.
+- PlanGold + offline Adaptive parity smoke lock fallthrough / Gate regressions.
+
+### Packaging / CI
+- Clang nested-`Context` default-arg fix in Assist Pick v2 (Android / iOS / Windows / macOS CI).
+
+### Docs
+- Release notes: [`releases/v1.5.0.md`](releases/v1.5.0.md); Adaptive docs in `docs/assist_reference.md`.
+
 ## v1.4.3
 
 - Adds Cloud Configs below Import Config in Settings → Assist → Assist Actions.

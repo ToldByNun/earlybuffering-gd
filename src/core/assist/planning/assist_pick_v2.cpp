@@ -137,8 +137,14 @@ int EbAssistPickV2::pickBestForesight(CandView const* cands, int limit, int robu
 }
 
 EbAssistPickV2::Result EbAssistPickV2::choose(CandView const* cands, int limit, int robustK,
-                                          bool orbIntent, int actMin, int actMax,
-                                          Context const& ctx) {
+                                              bool orbIntent, int actMin, int actMax) {
+    Context ctx{};
+    return choose(cands, limit, robustK, orbIntent, actMin, actMax, ctx);
+}
+
+EbAssistPickV2::Result EbAssistPickV2::choose(CandView const* cands, int limit, int robustK,
+                                              bool orbIntent, int actMin, int actMax,
+                                              Context const& ctx) {
     Result output{};
     if (!cands || limit < 0)
         return output;

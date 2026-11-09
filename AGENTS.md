@@ -1,6 +1,6 @@
 # Project coding standards
 
-- Work on `earlybuffer-1.4.3-dev`.
+- Work on `earlybuffer-1.5.0-dev`.
 - Use early returns for invalid inputs and completed cases. Keep checks before the work they guard and preserve required initialization and cleanup.
 - Put C++ class declarations in `snake_case.hpp` and implementations in the matching `snake_case.cpp`.
 - Use `#ifndef FILE_NAME_HPP`, `#define FILE_NAME_HPP` and a closing `#endif` in every project header.

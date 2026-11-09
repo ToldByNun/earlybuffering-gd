@@ -68,8 +68,12 @@ public:
     // Orb → earliest ±k-robust Delay-worthy in band.
     // Else foresight-rank; idleSafer / LF / ascent prefer a later Alive Delay
     // when one exists — otherwise hopeless (chosen=-1), never soft-dead Delay.
+    // Overload without Context — Clang rejects default args that need nested
+    // default member initializers (`ctx = {}`) inside the enclosing class.
     static Result choose(CandView const* cands, int limit, int robustK, bool orbIntent, int actMin,
-                         int actMax, Context const& ctx = {});
+                         int actMax);
+    static Result choose(CandView const* cands, int limit, int robustK, bool orbIntent, int actMin,
+                         int actMax, Context const& ctx);
 
     static bool selfCheck(std::string& report);
 
