@@ -5,17 +5,17 @@
 #include "../../../shadow_simulator.hpp"
 #include <string>
 
-// Adaptive Prediction Planner entry (AP4 A/B + AP5 Phase C).
+// Adaptive Prediction Planner entry (AP4–AP6).
 // !adaptivePlan → classic ShadowPlanSearch.
-// Early Pass (hopeless / budget / d0-safe / unknown) returns immediately.
-// Otherwise fall through to classic with remaining Dynamic Budget (AP6 DecisionGate
-// will own Assist arming without classic fallthrough).
+// A/B screen → C verify → D DecisionGate (honesty).
+// Soft wall (budgetUs) does not abort Max Assist screen; incomplete screen /
+// Gate PassBudget with no survivors falls through to classic.
 class EbAdaptivePlanSearch {
 public:
     static EbSimPlan run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
                          int limit, float deltaTime, float firstDt, EbPlanOptions const& options);
 
-    // Last shell overlay bit (`adap screen=N surv=M ver=K [ft|pass]`), empty if unused.
+    // Last shell overlay bit (`adap screen=N surv=M ver=K [pass|dN]`), empty if unused.
     static std::string overlayBit();
 
     static bool selfCheck(std::string& report);
@@ -24,11 +24,12 @@ private:
     class ShellStats {
     public:
         bool used = false;
-        bool fellThrough = false;
         bool earlyPass = false;
+        bool gated = false;
         int screened = 0;
         int survivors = 0;
         int verifyGrants = 0;
+        int gatedDelay = -1; // ≥0 when Delay armed; 0 may also be PassD0Safe
 
     private:
     };

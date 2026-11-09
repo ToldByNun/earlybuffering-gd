@@ -68,11 +68,13 @@ EbAdaptiveBudgetController::Envelope EbAdaptiveBudgetController::plan(
     int const rawCeil = std::max(0, tickCeiling);
     int const tickCeil =
         rawCeil > 0 ? EbPlatformLimits::get().clampTickBudget(rawCeil) : 0;
+    // Hard ticks = Stage/Platform tick ceiling. Do NOT shrink by EMA×wall —
+    // expensive levels (~50–200µs/tick) made allowedTicks tiny and Adaptive
+    // returned PassBudget on every press. Soft wall stays budgetUs at runtime.
     int allowed = tickCeil;
     if (usCeiling > 0 && env.emaUsPerTick >= kMinEmaUs && tickCeil > 0) {
-        int const fromWall =
+        env.suggestedTicksFromWall =
             static_cast<int>(std::floor(static_cast<double>(usCeiling) / env.emaUsPerTick));
-        allowed = std::min(tickCeil, std::max(0, fromWall));
     }
     env.allowedTicks = allowed;
 
@@ -134,16 +136,18 @@ bool EbAdaptiveBudgetController::selfCheck(std::string& report) {
     expect(full.reserveTicks == (full.allowedTicks * 15) / 100, "reserve-15");
     expect(full.screenLeft == full.screenTicks && full.verifyLeft == full.verifyTicks, "left-init");
 
-    // Wall estimate must not exceed tick ceiling.
-    auto const wall = plan(4000, 1500, 1.f, 24, 16, 15); // 1500us / 1us = 1500 ticks
-    expect(wall.allowedTicks == 1500, "wall-cap");
-    expect(wall.allowedTicks <= 4000, "wall-le-ceil");
+    // Soft wall must NOT shrink hard tick allowance (Assist starvation bug).
+    auto const wall = plan(4000, 1500, 1.f, 24, 16, 15); // EMA suggests 1500, hard stays 4000
+    expect(wall.allowedTicks == EbPlatformLimits::get().clampTickBudget(4000), "wall-soft");
+    expect(wall.suggestedTicksFromWall == 1500, "wall-suggest");
+    expect(wall.budgetUs == 1500, "wall-us");
     expect(wall.allowedTicks == wall.screenTicks + wall.verifyTicks + wall.reserveTicks,
            "wall-split-sum");
 
-    // Never invent ticks above ceiling when EMA is tiny.
+    // Tiny EMA ignored for suggestion; hard ticks unchanged.
     auto const tiny = plan(500, 10000, 0.01f, 24, 16, 10);
     expect(tiny.allowedTicks == EbPlatformLimits::get().clampTickBudget(500), "tiny-ema-ignore");
+    expect(tiny.suggestedTicksFromWall == 0, "tiny-no-suggest");
 
     // Reserve 0 → all work in screen+verify.
     auto const noRes = plan(1000, 0, 0.f, 24, 16, 0);

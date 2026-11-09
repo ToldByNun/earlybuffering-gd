@@ -28,6 +28,9 @@ public:
         int screenQuantum = 24;
         int verifyQuantum = 16;
         float emaUsPerTick = 0.f;
+        // Diagnostic only: ticks the wall µs / EMA would suggest. Never shrinks
+        // allowedTicks — classic soft wall is runtime elapsed vs budgetUs.
+        int suggestedTicksFromWall = 0;
 
         int totalLeft() const;
         int phaseLeft(Phase phase) const;
@@ -40,7 +43,8 @@ public:
     };
 
     // Pure compute. tickCeiling / usCeiling are already platform-clamped by caller
-    // (StageConfig getters). emaUsPerTick ≤ 0 → ignore wall estimate (full tick ceiling).
+    // (StageConfig getters). Hard allowance = tick ceiling only (EMA wall is soft /
+    // diagnostic — shrinking ticks from µs/tick starved Live into PassBudget).
     // reservePctClamped in 0..40. Screen share of the non-reserve work pool = 30%.
     static Envelope plan(int tickCeiling, int usCeiling, float emaUsPerTick, int screenQuantum,
                          int verifyQuantum, int reservePct);

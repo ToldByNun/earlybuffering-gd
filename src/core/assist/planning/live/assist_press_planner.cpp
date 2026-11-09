@@ -256,7 +256,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.smartDepth = EbStageConfig::smartDepth();
     opts.smartCombos = EbStageConfig::smartCombos();
     opts.smartHorizon = EbStageConfig::smartHorizon();
-    // Adaptive contracts only (AP0). Search still classic until AdaptivePlanSearch.
+    // Adaptive Prediction Planner (AP0–AP6): plan() → AdaptivePlanSearch when on.
     opts.adaptivePlan = EbStageConfig::adaptivePlan();
     opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicks();
     opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantum();
