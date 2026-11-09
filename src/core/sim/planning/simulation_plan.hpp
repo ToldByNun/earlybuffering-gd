@@ -21,6 +21,14 @@ public:
 private:
 };
 
+// Three hard limits stay strictly separated (Adaptive Prediction Planner):
+//   1) Max Assist Ticks  — caller `limit` / ModeParams.ticks / fire deadline.
+//      PlanOptions must never raise that window or invent extra real clicks.
+//   2) Prediction Horizon — AssistHorizon / model.cap / scoreHorizon (capMul).
+//      Adaptive may stop early inside the horizon; never raise it via budget.
+//   3) Dynamic Plan Tick Budget — tickBudget + budgetUs (ceilings from settings).
+//      Adaptive may redistribute / early-stop inside these; never treat leftover
+//      CPU as permission to grow Max Assist or Prediction Horizon.
 class EbPlanOptions {
 public:
     float capMul = 1.f;
@@ -56,6 +64,13 @@ public:
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     EbThreatZone seedThreatZone{};
+    // Adaptive Prediction Planner (AP0 contracts; search path lands in later APs).
+    // When false, callers keep classic ShadowPlanSearch. Adaptive must not raise
+    // Max Assist or Prediction Horizon from these knobs — only subdivide tickBudget.
+    bool adaptivePlan = false;
+    int adaptiveScreenTicks = 24;   // Phase A/B short quantum per candidate
+    int adaptiveVerifyQuantum = 16; // Phase C extend grant size
+    int adaptiveReservePct = 15;    // Phase D / tie reserve of Dynamic Plan Tick Budget
 
 private:
 };

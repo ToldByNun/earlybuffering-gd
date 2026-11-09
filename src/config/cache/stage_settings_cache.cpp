@@ -74,6 +74,15 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readInt(mod, "robust-k", 0), 0, 3);
     EbStageConfigImplementation::s_cachedRobustJitter =
         EbStageConfigImplementation::readBool(mod, "robust-jitter", false);
+    EbStageConfigImplementation::s_cachedAdaptivePlan =
+        EbStageConfigImplementation::readBool(mod, "adaptive-plan", true);
+    EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = EbStageConfigImplementation::clampInt(
+        EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
+    EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum =
+        EbStageConfigImplementation::clampInt(
+            EbStageConfigImplementation::readInt(mod, "adaptive-verify-quantum", 16), 8, 64);
+    EbStageConfigImplementation::s_cachedAdaptiveReservePct = EbStageConfigImplementation::clampInt(
+        EbStageConfigImplementation::readInt(mod, "adaptive-reserve-pct", 15), 0, 40);
     EbStageConfigImplementation::s_cachedTickBudget = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "tick-budget", 4000), 500, 20000);
     EbStageConfigImplementation::s_cachedAssistOnlyPractice =

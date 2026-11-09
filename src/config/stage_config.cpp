@@ -60,6 +60,10 @@ int EbStageConfigImplementation::s_cachedSmartCombos = 48;
 int EbStageConfigImplementation::s_cachedSmartHorizon = 0;
 int EbStageConfigImplementation::s_cachedRobustK = 0;
 bool EbStageConfigImplementation::s_cachedRobustJitter = false;
+bool EbStageConfigImplementation::s_cachedAdaptivePlan = true;
+int EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = 24;
+int EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum = 16;
+int EbStageConfigImplementation::s_cachedAdaptiveReservePct = 15;
 std::string EbStageConfigImplementation::s_cachedAssistVerify = "off";
 int EbStageConfigImplementation::s_cachedTickBudget = 4000;
 bool EbStageConfigImplementation::s_cachedAssistOnlyPractice = false;
@@ -434,6 +438,22 @@ int EbStageConfig::robustK() {
 bool EbStageConfig::robustJitter() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedRobustJitter;
+}
+bool EbStageConfig::adaptivePlan() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAdaptivePlan;
+}
+int EbStageConfig::adaptiveScreenTicks() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAdaptiveScreenTicks;
+}
+int EbStageConfig::adaptiveVerifyQuantum() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum;
+}
+int EbStageConfig::adaptiveReservePct() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAdaptiveReservePct;
 }
 char const* EbStageConfig::assistVerifyMode() {
     EbStageConfigImplementation::ensureCache();
