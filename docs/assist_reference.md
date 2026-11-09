@@ -30,6 +30,8 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Adaptive budget (AP3):** `EbAdaptiveBudgetController::plan` maps `tick-budget` + optional `sim-budget-us / emaUsPerTick` into an `allowedTicks` ceiling (never above Stage/PlatformLimits), then splits into screen / verify / reserve (`adaptive-reserve-pct`, screen share 30% of the non-reserve pool). Quanta stay `adaptive-screen-ticks` / `adaptive-verify-quantum`. Does not raise Max Assist or look-ahead.
 
+**Adaptive shell (AP4):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on. Phase A screens d0; Phase B screens `1..limit` with screen quanta + PrefixSim skip/same-crash cuts. Early `PassHopeless` / `PassBudget` return immediately. Otherwise fall through to classic `ShadowPlanSearch` with the remaining Dynamic Budget (`adaptiveFellThrough`, overlay `adap … ft`). Phase C/D not yet deciding Assists.
+
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
 **Hybrid reuse:** `tryBakeAssist` copies findNear window fields into `HybridPressReuse` (no bake-vector pointers) and, on verify fail, the verify `threatZone`. Live uses the copy for near-bake / prefer-band (when verify did not reject) and seeds `PlanOptions.seedThreatZone` so `plan()` skips `buildThreatZone`. Missing / no-window → empty reuse.

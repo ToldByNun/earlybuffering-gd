@@ -21,6 +21,7 @@
 #include "../core/diagnostics/sim_tick_cost_meter.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_budget_controller.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_candidate_slot.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_resume_runner.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/fixtures/real_corpus_fixtures.hpp"
@@ -183,6 +184,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbAdaptiveResumeRunner::selfCheck(adaptiveResumeReport), "adaptive-resume-runner");
     std::string adaptiveBudgetReport;
     expect(EbAdaptiveBudgetController::selfCheck(adaptiveBudgetReport), "adaptive-budget-controller");
+    std::string adaptivePlanSearchReport;
+    expect(EbAdaptivePlanSearch::selfCheck(adaptivePlanSearchReport), "adaptive-plan-search");
     std::string devConfigReport;
     expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;

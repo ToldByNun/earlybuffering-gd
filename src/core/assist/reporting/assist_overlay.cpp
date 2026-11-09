@@ -7,6 +7,7 @@
 #include "../../bake/bake_map.hpp"
 #include "../../diagnostics/assist_perf_stats.hpp"
 #include "../../diagnostics/sim_tick_cost_meter.hpp"
+#include "../../sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../../diagnostics/assist_real_metrics.hpp"
 #include "../../diagnostics/assist_sim_estimate.hpp"
 #include "../../diagnostics/divergence_tracker.hpp"
@@ -148,6 +149,11 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         }
         {
             auto bit = EbSimTickCostMeter::get().overlayBit();
+            if (!bit.empty())
+                controller.m_overlayText += " | " + bit;
+        }
+        {
+            auto bit = EbAdaptivePlanSearch::overlayBit();
             if (!bit.empty())
                 controller.m_overlayText += " | " + bit;
         }

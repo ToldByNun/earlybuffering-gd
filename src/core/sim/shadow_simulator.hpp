@@ -420,6 +420,7 @@ private:
     friend class EbShadowPhysics;
     friend class EbShadowCandidateRunner;
     friend class EbAdaptiveResumeRunner;
+    friend class EbAdaptivePlanSearch;
     friend class EbShadowPlanPolicy;
     friend class EbShadowDelayVerifier;
     friend class EbShadowSequencePlanner;

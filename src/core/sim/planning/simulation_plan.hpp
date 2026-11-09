@@ -138,6 +138,11 @@ public:
     // Commit 12: one note per delay 0..limit after plan/planSequence entry.
     std::vector<EbDevRejectLedger::CandNote> candNotes;
     bool candNotesTruncated = false;
+    // Adaptive Prediction Planner shell (AP4+). Classic plans leave these false/0.
+    bool adaptiveShell = false;       // Phase A/B ran under adaptive-plan
+    bool adaptiveFellThrough = false; // A/B needed more work → classic decide (until AP5/AP6)
+    int adaptiveScreenedCount = 0;    // delays that received a screen quantum
+    int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
 
 private:
 };
