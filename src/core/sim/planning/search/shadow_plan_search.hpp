@@ -6,16 +6,16 @@
 
 #include "../../shadow_simulator.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanSearch {
+class EbShadowPlanSearch {
 public:
-    static SimPlan run(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
-                       int limit, float deltaTime, float firstDt, PlanOptions const& options);
+    static EbSimPlan run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
+                       int limit, float deltaTime, float firstDt, EbPlanOptions const& options);
 
 private:
-    static void prepare(ShadowPlanContext& context);
-    ShadowPlanSearch() = delete;
+    static void prepare(EbShadowPlanContext& context);
+    EbShadowPlanSearch() = delete;
 };
 
 #endif

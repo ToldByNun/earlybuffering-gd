@@ -3,103 +3,103 @@
 #include <fmt/format.h>
 #include <vector>
 
-std::vector<DevRejectLedger::AttributionNote>
-DevAttribution::buildAttribution(DevRejectLedger::AttributionInput const& in) {
-    std::vector<DevRejectLedger::AttributionNote> out;
+std::vector<EbDevRejectLedger::AttributionNote>
+EbDevAttribution::buildAttribution(EbDevRejectLedger::AttributionInput const& in) {
+    std::vector<EbDevRejectLedger::AttributionNote> out;
 
     if (in.gatePass && !in.hasPlanFinished) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::GatePass;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::GatePass;
         n.detail = "gate-pass";
         out.push_back(std::move(n));
         return out;
     }
 
     if (in.notReproducible) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::NotReproducible;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::NotReproducible;
         out.push_back(std::move(n));
     } else if (in.approx) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::ApproxOnly;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::ApproxOnly;
         out.push_back(std::move(n));
     }
 
     if (in.claimsAllowed && in.hasBestSurviving) {
         if (in.plannedDelay == in.bestSurvivingDelay) {
-            DevRejectLedger::AttributionNote n;
-            n.code = DevRejectLedger::Attribution::ChosenMatchesBestSurviving;
-            n.detail = DevRejectLedger::clampDetail(fmt::format("d={}", in.plannedDelay));
+            EbDevRejectLedger::AttributionNote n;
+            n.code = EbDevRejectLedger::Attribution::ChosenMatchesBestSurviving;
+            n.detail = EbDevRejectLedger::clampDetail(fmt::format("d={}", in.plannedDelay));
             out.push_back(std::move(n));
         } else {
-            DevRejectLedger::AttributionNote n;
-            n.code = DevRejectLedger::Attribution::ChosenDiffersBestSurviving;
+            EbDevRejectLedger::AttributionNote n;
+            n.code = EbDevRejectLedger::Attribution::ChosenDiffersBestSurviving;
             char const* rej = "";
             if (in.ledger) {
                 for (auto const& cn : in.ledger->notes) {
                     if (cn.delay == in.bestSurvivingDelay) {
-                        rej = DevRejectLedger::rejectCodeId(cn.rejectCode);
+                        rej = EbDevRejectLedger::rejectCodeId(cn.rejectCode);
                         break;
                     }
                 }
             }
-            n.detail = DevRejectLedger::clampDetail(
+            n.detail = EbDevRejectLedger::clampDetail(
                 fmt::format("planned={} bestSurv={} rej={} obj={}", in.plannedDelay,
                             in.bestSurvivingDelay, rej, in.objectiveId ? in.objectiveId : ""));
             out.push_back(std::move(n));
         }
     } else if (in.hasPlanFinished) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::BestSurvivingAbsent;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::BestSurvivingAbsent;
         out.push_back(std::move(n));
     }
 
     if (in.learningNudged) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::LearningNudged;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::LearningNudged;
         out.push_back(std::move(n));
     }
     if (in.learningFloored) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::LearningFloored;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::LearningFloored;
         out.push_back(std::move(n));
     }
     if (in.recheckSlide) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::RecheckSlide;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::RecheckSlide;
         out.push_back(std::move(n));
     }
     if (in.husDeadline) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::HusDeadline;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::HusDeadline;
         out.push_back(std::move(n));
     }
     if (in.verifyRefused) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::VerifyRefused;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::VerifyRefused;
         out.push_back(std::move(n));
     }
     if (in.limitExcluded) {
-        DevRejectLedger::AttributionNote n;
-        n.code = DevRejectLedger::Attribution::LimitExcluded;
+        EbDevRejectLedger::AttributionNote n;
+        n.code = EbDevRejectLedger::Attribution::LimitExcluded;
         out.push_back(std::move(n));
     }
 
     if (in.ledger) {
         for (auto const& cn : in.ledger->notes) {
-            if (cn.rejectCode == DevRejectLedger::RejectCode::DualFailed) {
-                DevRejectLedger::AttributionNote n;
-                n.code = DevRejectLedger::Attribution::DualFailed;
-                n.detail = DevRejectLedger::clampDetail(fmt::format("d={}", cn.delay));
+            if (cn.rejectCode == EbDevRejectLedger::RejectCode::DualFailed) {
+                EbDevRejectLedger::AttributionNote n;
+                n.code = EbDevRejectLedger::Attribution::DualFailed;
+                n.detail = EbDevRejectLedger::clampDetail(fmt::format("d={}", cn.delay));
                 out.push_back(std::move(n));
                 break;
             }
         }
         for (auto const& cn : in.ledger->notes) {
-            if (cn.rejectCode == DevRejectLedger::RejectCode::UnknownTrunc) {
-                DevRejectLedger::AttributionNote n;
-                n.code = DevRejectLedger::Attribution::UnknownTrunc;
-                n.detail = DevRejectLedger::clampDetail(fmt::format("d={}", cn.delay));
+            if (cn.rejectCode == EbDevRejectLedger::RejectCode::UnknownTrunc) {
+                EbDevRejectLedger::AttributionNote n;
+                n.code = EbDevRejectLedger::Attribution::UnknownTrunc;
+                n.detail = EbDevRejectLedger::clampDetail(fmt::format("d={}", cn.delay));
                 out.push_back(std::move(n));
                 break;
             }
@@ -107,11 +107,11 @@ DevAttribution::buildAttribution(DevRejectLedger::AttributionInput const& in) {
         if (in.hasBestSurviving) {
             for (auto const& cn : in.ledger->notes) {
                 if (cn.delay == in.bestSurvivingDelay &&
-                    cn.status == DevRejectLedger::Status::Skipped) {
-                    DevRejectLedger::AttributionNote n;
-                    n.code = DevRejectLedger::Attribution::SkippedByPlanner;
-                    n.detail = DevRejectLedger::clampDetail(fmt::format(
-                        "d={} {}", cn.delay, DevRejectLedger::rejectCodeId(cn.rejectCode)));
+                    cn.status == EbDevRejectLedger::Status::Skipped) {
+                    EbDevRejectLedger::AttributionNote n;
+                    n.code = EbDevRejectLedger::Attribution::SkippedByPlanner;
+                    n.detail = EbDevRejectLedger::clampDetail(fmt::format(
+                        "d={} {}", cn.delay, EbDevRejectLedger::rejectCodeId(cn.rejectCode)));
                     out.push_back(std::move(n));
                     break;
                 }

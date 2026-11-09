@@ -19,111 +19,111 @@
 #include <system_error>
 #include <windows.h>
 
-void PauseDevActions::stubDevAction(char const* name) {
-    AssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
+void EbPauseDevActions::stubDevAction(char const* name) {
+    EbAssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
                                 name ? name : "?"));
 }
 
-void PauseDevActions::devStartRecord() {
-    if (!DevConfig::recordEnable()) {
-        AssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
+void EbPauseDevActions::devStartRecord() {
+    if (!EbDevConfig::recordEnable()) {
+        EbAssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
         FLAlertLayer::create("EarlyBuffer Dev",
                              "Turn on Dev Record Enable first, then Start Recording.", "OK")
             ->show();
         return;
     }
-    if (!DevSession::get().start()) {
+    if (!EbDevSession::get().start()) {
         FLAlertLayer::create("EarlyBuffer Dev", "Could not start Dev Lab recording session.", "OK")
             ->show();
         return;
     }
-    auto const& s = DevTraceStore::get().session();
+    auto const& s = EbDevTraceStore::get().session();
     auto const startMsg =
         fmt::format("Recording started (rolling last {}).\nSession {}\nDoes not auto-stop.",
                     s.recordingsTarget, s.sessionId);
     FLAlertLayer::create("EarlyBuffer Dev", startMsg.c_str(), "OK")->show();
 }
 
-void PauseDevActions::devStopRecord() {
-    if (!DevSession::get().isRecording() && !DevTraceStore::get().isOpen()) {
-        AssistLog::info("Dev Lab: no open session to stop");
+void EbPauseDevActions::devStopRecord() {
+    if (!EbDevSession::get().isRecording() && !EbDevTraceStore::get().isOpen()) {
+        EbAssistLog::info("Dev Lab: no open session to stop");
         FLAlertLayer::create("EarlyBuffer Dev", "No session is recording.", "OK")->show();
         return;
     }
-    auto const path = DevSession::get().sessionPath();
-    DevSession::get().stop();
+    auto const path = EbDevSession::get().sessionPath();
+    EbDevSession::get().stop();
     auto const stopMsg = path.empty() ? std::string("Recording stopped.")
                                       : fmt::format("Recording stopped.\n{}", path.string());
     FLAlertLayer::create("EarlyBuffer Dev", stopMsg.c_str(), "OK")->show();
 }
 
-void PauseDevActions::devEvalLast() {
+void EbPauseDevActions::devEvalLast() {
     std::string err;
-    if (!DevReport::evalLastAttempt(err)) {
-        AssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
+    if (!EbDevReport::evalLastAttempt(err)) {
+        EbAssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
         FLAlertLayer::create("EarlyBuffer Dev",
                              err.empty() ? "Eval Last Attempt failed." : err.c_str(), "OK")
             ->show();
         return;
     }
-    AssistController::get().updateOverlay();
-    auto const& r = DevReport::last();
-    AssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
+    EbAssistController::get().updateOverlay();
+    auto const& r = EbDevReport::last();
+    EbAssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
     FLAlertLayer::create("EarlyBuffer Dev",
                          r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str(), "OK")
         ->show();
 }
 
-void PauseDevActions::devEvalSession() {
+void EbPauseDevActions::devEvalSession() {
     std::string err;
     int count = 0;
-    if (!DevReport::evalSession(err, &count)) {
-        AssistLog::info(fmt::format("Dev Lab: Eval Session failed: {}", err));
+    if (!EbDevReport::evalSession(err, &count)) {
+        EbAssistLog::info(fmt::format("Dev Lab: Eval Session failed: {}", err));
         FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Eval Session failed." : err.c_str(),
                              "OK")
             ->show();
         return;
     }
-    AssistController::get().updateOverlay();
-    auto const& r = DevReport::last();
+    EbAssistController::get().updateOverlay();
+    auto const& r = EbDevReport::last();
     auto const message = fmt::format("Evaluated {} attempt(s).\n{}", count, r.overlayLine);
-    AssistLog::info(fmt::format("Dev Lab: Eval Session → {}", message));
+    EbAssistLog::info(fmt::format("Dev Lab: Eval Session → {}", message));
     FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
 }
 
-void PauseDevActions::devExportSession() {
-    auto& store = DevTraceStore::get();
+void EbPauseDevActions::devExportSession() {
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen()) {
-        AssistLog::info("Dev Lab: no open session to export");
+        EbAssistLog::info("Dev Lab: no open session to export");
         FLAlertLayer::create("EarlyBuffer Dev", "No open Dev session. Start Recording first.", "OK")
             ->show();
         return;
     }
     (void)store.flush();
     auto const path = store.sessionPath();
-    AssistLog::info(fmt::format("Dev Lab: session export path {}", path.string()));
-    bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(path);
+    EbAssistLog::info(fmt::format("Dev Lab: session export path {}", path.string()));
+    bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(path);
     auto const message =
         fmt::format("Session JSON:\n"
                     "{}\n"
                     "{}\n\n"
                     "Attempts kept: {}/{} (rolling)",
-                    path.string(), PauseActionBridgeDetail::pathClipboardNote(clipOk),
+                    path.string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
                     store.session().recordingsDone, store.session().recordingsTarget);
     FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
 }
 
-void PauseDevActions::devClearTraces() {
-    int const count = DevSession::get().clearTraces();
+void EbPauseDevActions::devClearTraces() {
+    int const count = EbDevSession::get().clearTraces();
     auto const message = fmt::format("Cleared {} session file(s) under devtraces/.", count);
     FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
 }
 
-void PauseDevActions::devDumpDiag() {
+void EbPauseDevActions::devDumpDiag() {
     std::filesystem::path dir;
     std::string err;
-    if (!DevDiagDump::dumpAll(dir, err)) {
-        AssistLog::info(fmt::format("DIAG dump failed: {}", err));
+    if (!EbDevDiagDump::dumpAll(dir, err)) {
+        EbAssistLog::info(fmt::format("DIAG dump failed: {}", err));
         FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Diag dump failed." : err.c_str(),
                              "OK")
             ->show();
@@ -139,19 +139,19 @@ void PauseDevActions::devDumpDiag() {
     FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
 }
 
-void PauseDevActions::devCopyReport() {
-    if (!DevReport::hasLast()) {
+void EbPauseDevActions::devCopyReport() {
+    if (!EbDevReport::hasLast()) {
         FLAlertLayer::create("EarlyBuffer Dev",
                              "No Dev report yet. Run Eval Last / Eval Session first.", "OK")
             ->show();
         return;
     }
-    auto const& r = DevReport::last();
+    auto const& r = EbDevReport::last();
     // Clipboard / file = same overlay field string (contract A names only).
     std::string const text =
-        r.overlayLine.empty() ? DevReport::formatOverlayLine(r) : r.overlayLine;
+        r.overlayLine.empty() ? EbDevReport::formatOverlayLine(r) : r.overlayLine;
 
-    auto& drops = SaveDropPaths::get();
+    auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     bool fileOk = false;
     std::string fileErr;
@@ -176,7 +176,7 @@ void PauseDevActions::devCopyReport() {
     }
     bool const clipOk = geode::utils::clipboard::write(clipPayload);
 
-    AssistLog::info(fmt::format("Dev Lab: copy report clip={} file={} → {}", clipOk ? "ok" : "fail",
+    EbAssistLog::info(fmt::format("Dev Lab: copy report clip={} file={} → {}", clipOk ? "ok" : "fail",
                                 fileOk ? path.string() : fileErr, text));
 
     std::string msg;
@@ -185,18 +185,18 @@ void PauseDevActions::devCopyReport() {
                           "{}\n"
                           "{}\n\n"
                           "{}",
-                          path.string(), PauseActionBridgeDetail::pathClipboardNote(true), text);
+                          path.string(), EbPauseActionBridgeDetail::pathClipboardNote(true), text);
 #ifndef GEODE_IS_WINDOWS
-        msg += fmt::format("\n\n{}", PauseActionBridgeDetail::mobileTransferHint());
+        msg += fmt::format("\n\n{}", EbPauseActionBridgeDetail::mobileTransferHint());
 #endif
     } else if (fileOk && !clipOk) {
         msg = fmt::format("Clipboard failed; saved to:\n"
                           "{}\n"
                           "{}\n\n"
                           "{}",
-                          path.string(), PauseActionBridgeDetail::pathClipboardNote(false), text);
+                          path.string(), EbPauseActionBridgeDetail::pathClipboardNote(false), text);
 #ifndef GEODE_IS_WINDOWS
-        msg += fmt::format("\n\n{}", PauseActionBridgeDetail::mobileTransferHint());
+        msg += fmt::format("\n\n{}", EbPauseActionBridgeDetail::mobileTransferHint());
 #endif
     } else if (clipOk && !fileOk) {
         msg = fmt::format("Report copied to clipboard.\nFile save failed: {}\n\n{}", fileErr, text);

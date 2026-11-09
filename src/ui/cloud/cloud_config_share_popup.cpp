@@ -4,8 +4,8 @@
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/ui/Layout.hpp>
 
-CloudConfigSharePopup* CloudConfigSharePopup::create(ClosedCallback onClosed) {
-    auto* createdObject = new CloudConfigSharePopup();
+EbCloudConfigSharePopup* EbCloudConfigSharePopup::create(ClosedCallback onClosed) {
+    auto* createdObject = new EbCloudConfigSharePopup();
     if (createdObject->init(std::move(onClosed))) {
         createdObject->autorelease();
         return createdObject;
@@ -14,13 +14,13 @@ CloudConfigSharePopup* CloudConfigSharePopup::create(ClosedCallback onClosed) {
     return nullptr;
 }
 
-void CloudConfigSharePopup::open(ClosedCallback onClosed) {
+void EbCloudConfigSharePopup::open(ClosedCallback onClosed) {
     if (auto* p = create(std::move(onClosed))) {
         p->show();
     }
 }
 
-bool CloudConfigSharePopup::init(ClosedCallback onClosed) {
+bool EbCloudConfigSharePopup::init(ClosedCallback onClosed) {
     m_onClosed = std::move(onClosed);
 
     // Compact height — fields stacked tightly, no big empty band.
@@ -117,18 +117,18 @@ bool CloudConfigSharePopup::init(ClosedCallback onClosed) {
     auto* cancelSpr = ButtonSprite::create("Cancel", "bigFont.fnt", "GJ_button_06.png", 0.8f);
     cancelSpr->setScale(0.44f);
     menu->addChild(CCMenuItemSpriteExtra::create(cancelSpr, this,
-                                                 menu_selector(CloudConfigSharePopup::onClose)));
+                                                 menu_selector(EbCloudConfigSharePopup::onClose)));
 
     auto* okSpr = ButtonSprite::create("Share", "bigFont.fnt", "GJ_button_01.png", 0.8f);
     okSpr->setScale(0.44f);
     menu->addChild(CCMenuItemSpriteExtra::create(okSpr, this,
-                                                 menu_selector(CloudConfigSharePopup::onConfirm)));
+                                                 menu_selector(EbCloudConfigSharePopup::onConfirm)));
     menu->updateLayout();
 
     return true;
 }
 
-void CloudConfigSharePopup::notifyClosed() {
+void EbCloudConfigSharePopup::notifyClosed() {
     if (m_closedNotified)
         return;
     m_closedNotified = true;
@@ -136,19 +136,19 @@ void CloudConfigSharePopup::notifyClosed() {
         m_onClosed();
 }
 
-void CloudConfigSharePopup::onClose(geode::prelude::CCObject* sender) {
+void EbCloudConfigSharePopup::onClose(geode::prelude::CCObject* sender) {
     this->notifyClosed();
     geode::prelude::Popup::onClose(sender);
 }
 
-void CloudConfigSharePopup::syncIdPreview() {
+void EbCloudConfigSharePopup::syncIdPreview() {
     if (!m_idPreview || !m_nameInput)
         return;
-    auto const id = CloudConfigShare::suggestId(m_nameInput->getString());
+    auto const id = EbCloudConfigShare::suggestId(m_nameInput->getString());
     m_idPreview->setString(fmt::format("id: {}", id).c_str());
 }
 
-void CloudConfigSharePopup::onConfirm(geode::prelude::CCObject*) {
+void EbCloudConfigSharePopup::onConfirm(geode::prelude::CCObject*) {
     std::string const name = m_nameInput ? m_nameInput->getString() : "";
     std::string const author = m_authorInput ? m_authorInput->getString() : "";
     std::string const desc = m_descInput ? m_descInput->getString() : "";
@@ -159,8 +159,8 @@ void CloudConfigSharePopup::onConfirm(geode::prelude::CCObject*) {
         return;
     }
 
-    auto const tags = CloudConfigShare::parseTags(tagsRaw);
-    auto const shared = CloudConfigShare::shareCurrent(name, author, desc, tags);
+    auto const tags = EbCloudConfigShare::parseTags(tagsRaw);
+    auto const shared = EbCloudConfigShare::shareCurrent(name, author, desc, tags);
     if (!shared.ok) {
         FLAlertLayer::create("Share", shared.error.empty() ? "Share failed." : shared.error.c_str(),
                              "OK")
@@ -205,6 +205,6 @@ void CloudConfigSharePopup::onConfirm(geode::prelude::CCObject*) {
                     name, shared.suggestedId, tagsLine, publishLine, shared.outboxPath.string(),
                     shared.clipboardOk ? "Envelope copied to clipboard."
                                        : "Clipboard copy failed — use the outbox file.",
-                    CloudConfigShare::discordCommunityUrl());
+                    EbCloudConfigShare::discordCommunityUrl());
     FLAlertLayer::create("Share", message.c_str(), "OK")->show();
 }

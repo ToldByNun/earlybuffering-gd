@@ -3,12 +3,12 @@
 
 #include <string>
 
-class TriggerWorldChecks {
+class EbTriggerWorldChecks {
 public:
     static bool selfCheck(std::string& report);
 
 private:
-    TriggerWorldChecks() = delete;
+    EbTriggerWorldChecks() = delete;
 };
 
 #endif

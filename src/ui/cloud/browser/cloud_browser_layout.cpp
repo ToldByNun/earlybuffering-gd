@@ -9,8 +9,8 @@
 #include <cocos-ext.h>
 #include <string>
 
-bool CloudBrowserLayout::init(CloudConfigPopup& owner) {
-    bool const tight = PlatformLimits::isConstrainedDevice();
+bool EbCloudBrowserLayout::init(EbCloudConfigPopup& owner) {
+    bool const tight = EbPlatformLimits::isConstrainedDevice();
     float const width = tight ? 310.f : 380.f;
     float const height = tight ? 240.f : 268.f;
 
@@ -21,9 +21,9 @@ bool CloudBrowserLayout::init(CloudConfigPopup& owner) {
     owner.setTitle("Cloud Configs", "goldFont.fnt", 0.64f, 12.f);
 
     {
-        CloudConfigStore::ActiveInfo active{};
+        EbCloudConfigStore::ActiveInfo active{};
         std::string err;
-        if (CloudConfigStore::get().readActive(active, err)) {
+        if (EbCloudConfigStore::get().readActive(active, err)) {
             owner.m_activeId = active.id;
         }
     }
@@ -49,7 +49,7 @@ bool CloudBrowserLayout::init(CloudConfigPopup& owner) {
     auto* refreshSpr = ButtonSprite::create("Refresh", "bigFont.fnt", "GJ_button_05.png", 0.8f);
     refreshSpr->setScale(tight ? 0.30f : 0.34f);
     owner.m_refreshBtn = CCMenuItemSpriteExtra::create(refreshSpr, (&owner),
-                                                       menu_selector(CloudConfigPopup::onRefresh));
+                                                       menu_selector(EbCloudConfigPopup::onRefresh));
     owner.m_refreshBtn->setID("cloud-refresh-btn"_spr);
     topMenu->addChildAtPosition(owner.m_refreshBtn, geode::Anchor::Center);
 
@@ -93,7 +93,7 @@ bool CloudBrowserLayout::init(CloudConfigPopup& owner) {
     owner.m_sortLabel->setOpacity(220);
     owner.m_sortLabel->setID("cloud-sort-label"_spr);
     owner.m_sortBtn = CCMenuItemSpriteExtra::create(owner.m_sortLabel, (&owner),
-                                                    menu_selector(CloudConfigPopup::onSortCycle));
+                                                    menu_selector(EbCloudConfigPopup::onSortCycle));
     owner.m_sortBtn->setAnchorPoint({0.f, 0.5f});
     owner.m_sortBtn->setID("cloud-sort-btn"_spr);
     sortMenu->addChildAtPosition(owner.m_sortBtn, geode::Anchor::Left, ccp(0.f, 0.f));
@@ -199,13 +199,13 @@ bool CloudBrowserLayout::init(CloudConfigPopup& owner) {
             lab->setScale(0.45f);
             owner.m_rateStarSpr[index] = nullptr;
             owner.m_rateBtns[index] = CCMenuItemSpriteExtra::create(
-                lab, (&owner), menu_selector(CloudConfigPopup::onRate));
+                lab, (&owner), menu_selector(EbCloudConfigPopup::onRate));
         } else {
             sprite->setScale(tight ? 0.34f : 0.42f);
             sprite->setColor({170, 170, 170});
             owner.m_rateStarSpr[index] = sprite;
             owner.m_rateBtns[index] = CCMenuItemSpriteExtra::create(
-                sprite, (&owner), menu_selector(CloudConfigPopup::onRate));
+                sprite, (&owner), menu_selector(EbCloudConfigPopup::onRate));
         }
         owner.m_rateBtns[index]->setTag(index + 1);
         owner.m_rateBtns[index]->setID(fmt::format("cloud-rate-{}", index + 1));
@@ -244,14 +244,14 @@ bool CloudBrowserLayout::init(CloudConfigPopup& owner) {
     auto* installSpr = ButtonSprite::create("Install", "bigFont.fnt", "GJ_button_01.png", 0.8f);
     installSpr->setScale(0.44f);
     owner.m_installBtn = CCMenuItemSpriteExtra::create(installSpr, (&owner),
-                                                       menu_selector(CloudConfigPopup::onInstall));
+                                                       menu_selector(EbCloudConfigPopup::onInstall));
     owner.m_installBtn->setID("cloud-install-btn"_spr);
     bottom->addChild(owner.m_installBtn);
 
     auto* shareSpr = ButtonSprite::create("Share…", "bigFont.fnt", "GJ_button_05.png", 0.8f);
     shareSpr->setScale(0.44f);
     auto* shareBtn =
-        CCMenuItemSpriteExtra::create(shareSpr, (&owner), menu_selector(CloudConfigPopup::onShare));
+        CCMenuItemSpriteExtra::create(shareSpr, (&owner), menu_selector(EbCloudConfigPopup::onShare));
     shareBtn->setID("cloud-share-btn"_spr);
     bottom->addChild(shareBtn);
     bottom->updateLayout();

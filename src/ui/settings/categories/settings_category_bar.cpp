@@ -9,7 +9,7 @@
 #include <cocos-ext.h>
 #include <fmt/format.h>
 
-void SettingsCategoryBar::onChip(geode::prelude::CCObject* sender) {
+void EbSettingsCategoryBar::onChip(geode::prelude::CCObject* sender) {
     auto* item = geode::prelude::typeinfo_cast<geode::prelude::CCMenuItem*>(sender);
     if (!item || !this->m_owner)
         return;
@@ -27,7 +27,7 @@ void SettingsCategoryBar::onChip(geode::prelude::CCObject* sender) {
         });
 }
 
-auto SettingsCategoryBar::initBar(SettingsFilterKeeperNode* owner, float width) -> bool {
+auto EbSettingsCategoryBar::initBar(EbSettingsFilterKeeperNode* owner, float width) -> bool {
     if (!geode::prelude::CCNode::init())
         return false;
     if (!owner || width < 40.f)
@@ -61,7 +61,7 @@ auto SettingsCategoryBar::initBar(SettingsFilterKeeperNode* owner, float width) 
     return true;
 }
 
-auto SettingsCategoryBar::setCategory(SettingsCategory category) -> void {
+auto EbSettingsCategoryBar::setCategory(SettingsCategory category) -> void {
     if (category == this->m_active)
         return;
     this->m_active = category;
@@ -69,14 +69,14 @@ auto SettingsCategoryBar::setCategory(SettingsCategory category) -> void {
     this->paintLabels(category);
 }
 
-auto SettingsCategoryBar::setMenuTouchPriority(int priority) -> void {
+auto EbSettingsCategoryBar::setMenuTouchPriority(int priority) -> void {
     if (this->m_menu)
         this->m_menu->setTouchPriority(priority);
 }
 
-auto SettingsCategoryBar::create(SettingsFilterKeeperNode* owner, float width)
-    -> SettingsCategoryBar* {
-    auto* createdObject = new SettingsCategoryBar();
+auto EbSettingsCategoryBar::create(EbSettingsFilterKeeperNode* owner, float width)
+    -> EbSettingsCategoryBar* {
+    auto* createdObject = new EbSettingsCategoryBar();
     if (!createdObject || !createdObject->initBar(owner, width)) {
         CC_SAFE_DELETE(createdObject);
         return nullptr;
@@ -85,7 +85,7 @@ auto SettingsCategoryBar::create(SettingsFilterKeeperNode* owner, float width)
     return createdObject;
 }
 
-auto SettingsCategoryBar::paintLabels(SettingsCategory active) -> void {
+auto EbSettingsCategoryBar::paintLabels(SettingsCategory active) -> void {
     if (!this->m_labels)
         return;
     auto* kids = this->m_labels->getChildren();
@@ -107,7 +107,7 @@ auto SettingsCategoryBar::paintLabels(SettingsCategory active) -> void {
     }
 }
 
-auto SettingsCategoryBar::rebuild(SettingsCategory active) -> void {
+auto EbSettingsCategoryBar::rebuild(SettingsCategory active) -> void {
     if (!this->m_menu || !this->m_labels)
         return;
     this->m_menu->removeAllChildren();
@@ -129,7 +129,7 @@ auto SettingsCategoryBar::rebuild(SettingsCategory active) -> void {
         bool const isActive = category == active;
 
         auto* label = geode::prelude::CCLabelBMFont::create(
-            InLevelSettingsFilter::categoryName(category), "bigFont.fnt");
+            EbInLevelSettingsFilter::categoryName(category), "bigFont.fnt");
         if (label) {
             float scale = kMaxFitScale;
             float const maxW = segW - 4.f;
@@ -163,7 +163,7 @@ auto SettingsCategoryBar::rebuild(SettingsCategory active) -> void {
         hit->setContentSize({segW, kBarH});
 
         auto* item =
-            CCMenuItemSpriteExtra::create(hit, this, menu_selector(SettingsCategoryBar::onChip));
+            CCMenuItemSpriteExtra::create(hit, this, menu_selector(EbSettingsCategoryBar::onChip));
         if (!item) {
             x += segW;
             continue;

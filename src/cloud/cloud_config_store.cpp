@@ -1,3 +1,4 @@
+#include "../app/class_manager.hpp"
 #include "cloud_config_store.hpp"
 #include "../core/platform/save_drop_paths.hpp"
 #include <Geode/Geode.hpp>
@@ -7,43 +8,42 @@
 #include <fstream>
 #include <system_error>
 
-CloudConfigStore& CloudConfigStore::get() {
-    static CloudConfigStore inst;
-    return inst;
+EbCloudConfigStore& EbCloudConfigStore::get() {
+    return EbClassManager::get().service<EbCloudConfigStore>();
 }
 
-std::filesystem::path CloudConfigStore::rootDir() const {
-    return SaveDropPaths::get().cloudConfigsDir();
+std::filesystem::path EbCloudConfigStore::rootDir() const {
+    return EbSaveDropPaths::get().cloudConfigsDir();
 }
 
-std::filesystem::path CloudConfigStore::packsDir() const {
+std::filesystem::path EbCloudConfigStore::packsDir() const {
     return this->rootDir() / "packs";
 }
 
-std::filesystem::path CloudConfigStore::outboxDir() const {
+std::filesystem::path EbCloudConfigStore::outboxDir() const {
     return this->rootDir() / "outbox";
 }
 
-std::filesystem::path CloudConfigStore::indexCachePath() const {
+std::filesystem::path EbCloudConfigStore::indexCachePath() const {
     return this->rootDir() / "index-cache.json";
 }
 
-std::filesystem::path CloudConfigStore::metaPath() const {
+std::filesystem::path EbCloudConfigStore::metaPath() const {
     return this->rootDir() / "meta.json";
 }
 
-std::filesystem::path CloudConfigStore::activePath() const {
+std::filesystem::path EbCloudConfigStore::activePath() const {
     return this->rootDir() / "active.json";
 }
 
-std::filesystem::path CloudConfigStore::packPath(std::string const& id) const {
+std::filesystem::path EbCloudConfigStore::packPath(std::string const& id) const {
     if (!isValidPackId(id)) {
         return {};
     }
     return this->packsDir() / (id + ".json");
 }
 
-bool CloudConfigStore::ensureDirs(std::string& err) const {
+bool EbCloudConfigStore::ensureDirs(std::string& err) const {
     err.clear();
     auto const root = this->rootDir();
     auto const packs = this->packsDir();
@@ -83,7 +83,7 @@ bool CloudConfigStore::ensureDirs(std::string& err) const {
     return true;
 }
 
-bool CloudConfigStore::isValidPackId(std::string const& id) {
+bool EbCloudConfigStore::isValidPackId(std::string const& id) {
     if (id.empty() || id.size() > kMaxIdLen)
         return false;
     if (id.front() == '-' || id.back() == '-')
@@ -97,7 +97,7 @@ bool CloudConfigStore::isValidPackId(std::string const& id) {
     return true;
 }
 
-bool CloudConfigStore::readTextFile(std::filesystem::path const& path, std::string& out,
+bool EbCloudConfigStore::readTextFile(std::filesystem::path const& path, std::string& out,
                                     size_t maxBytes, std::string& err) {
     out.clear();
     err.clear();
@@ -143,7 +143,7 @@ bool CloudConfigStore::readTextFile(std::filesystem::path const& path, std::stri
     return true;
 }
 
-bool CloudConfigStore::writeTextFile(std::filesystem::path const& path, std::string const& body,
+bool EbCloudConfigStore::writeTextFile(std::filesystem::path const& path, std::string const& body,
                                      std::string& err) {
     err.clear();
     if (path.empty()) {
@@ -175,11 +175,11 @@ bool CloudConfigStore::writeTextFile(std::filesystem::path const& path, std::str
     return true;
 }
 
-bool CloudConfigStore::readIndexCache(std::string& out, std::string& err) const {
+bool EbCloudConfigStore::readIndexCache(std::string& out, std::string& err) const {
     return readTextFile(this->indexCachePath(), out, kMaxIndexBytes, err);
 }
 
-bool CloudConfigStore::clearIndexCache(std::string& err) const {
+bool EbCloudConfigStore::clearIndexCache(std::string& err) const {
     err.clear();
     auto const path = this->indexCachePath();
     std::error_code ec;
@@ -193,7 +193,7 @@ bool CloudConfigStore::clearIndexCache(std::string& err) const {
     return true;
 }
 
-bool CloudConfigStore::writeIndexCache(std::string const& body, std::string& err) const {
+bool EbCloudConfigStore::writeIndexCache(std::string const& body, std::string& err) const {
     if (body.size() > kMaxIndexBytes) {
         err = "index body too large";
         return false;
@@ -201,7 +201,7 @@ bool CloudConfigStore::writeIndexCache(std::string const& body, std::string& err
     return writeTextFile(this->indexCachePath(), body, err);
 }
 
-bool CloudConfigStore::readPack(std::string const& id, std::string& out, std::string& err) const {
+bool EbCloudConfigStore::readPack(std::string const& id, std::string& out, std::string& err) const {
     auto const path = this->packPath(id);
     if (path.empty()) {
         err = "invalid pack id";
@@ -210,7 +210,7 @@ bool CloudConfigStore::readPack(std::string const& id, std::string& out, std::st
     return readTextFile(path, out, kMaxPackBytes, err);
 }
 
-bool CloudConfigStore::writePack(std::string const& id, std::string const& body,
+bool EbCloudConfigStore::writePack(std::string const& id, std::string const& body,
                                  std::string& err) const {
     if (!isValidPackId(id)) {
         err = "invalid pack id";
@@ -228,7 +228,7 @@ bool CloudConfigStore::writePack(std::string const& id, std::string const& body,
     return writeTextFile(this->packPath(id), body, err);
 }
 
-bool CloudConfigStore::removePack(std::string const& id, std::string& err) const {
+bool EbCloudConfigStore::removePack(std::string const& id, std::string& err) const {
     err.clear();
     auto const path = this->packPath(id);
     if (path.empty()) {
@@ -246,7 +246,7 @@ bool CloudConfigStore::removePack(std::string const& id, std::string& err) const
     return true;
 }
 
-bool CloudConfigStore::hasPack(std::string const& id) const {
+bool EbCloudConfigStore::hasPack(std::string const& id) const {
     auto const path = this->packPath(id);
     if (path.empty())
         return false;
@@ -254,7 +254,7 @@ bool CloudConfigStore::hasPack(std::string const& id) const {
     return std::filesystem::is_regular_file(path, ec) && !ec;
 }
 
-std::vector<std::string> CloudConfigStore::listCachedPackIds() const {
+std::vector<std::string> EbCloudConfigStore::listCachedPackIds() const {
     std::vector<std::string> out;
     auto const directory = this->packsDir();
     std::error_code ec;
@@ -280,7 +280,7 @@ std::vector<std::string> CloudConfigStore::listCachedPackIds() const {
     return out;
 }
 
-bool CloudConfigStore::readActive(ActiveInfo& out, std::string& err) const {
+bool EbCloudConfigStore::readActive(ActiveInfo& out, std::string& err) const {
     out = {};
     std::string body;
     if (!readTextFile(this->activePath(), body, 8u * 1024u, err)) {
@@ -311,7 +311,7 @@ bool CloudConfigStore::readActive(ActiveInfo& out, std::string& err) const {
     return true;
 }
 
-bool CloudConfigStore::writeActive(ActiveInfo const& info, std::string& err) const {
+bool EbCloudConfigStore::writeActive(ActiveInfo const& info, std::string& err) const {
     if (info.id.empty()) {
         err = "active id empty";
         return false;
@@ -334,7 +334,7 @@ bool CloudConfigStore::writeActive(ActiveInfo const& info, std::string& err) con
     return writeTextFile(this->activePath(), root.dump(), err);
 }
 
-bool CloudConfigStore::clearActive(std::string& err) const {
+bool EbCloudConfigStore::clearActive(std::string& err) const {
     err.clear();
     std::error_code ec;
     auto const path = this->activePath();
@@ -348,7 +348,7 @@ bool CloudConfigStore::clearActive(std::string& err) const {
     return true;
 }
 
-bool CloudConfigStore::readMeta(MetaInfo& out, std::string& err) const {
+bool EbCloudConfigStore::readMeta(MetaInfo& out, std::string& err) const {
     out = {};
     std::string body;
     if (!readTextFile(this->metaPath(), body, 8u * 1024u, err)) {
@@ -378,7 +378,7 @@ bool CloudConfigStore::readMeta(MetaInfo& out, std::string& err) const {
     return true;
 }
 
-bool CloudConfigStore::writeMeta(MetaInfo const& info, std::string& err) const {
+bool EbCloudConfigStore::writeMeta(MetaInfo const& info, std::string& err) const {
     std::string dirErr;
     if (!this->ensureDirs(dirErr)) {
         err = dirErr.empty() ? "ensureDirs failed" : dirErr;
@@ -392,7 +392,7 @@ bool CloudConfigStore::writeMeta(MetaInfo const& info, std::string& err) const {
     return writeTextFile(this->metaPath(), root.dump(), err);
 }
 
-std::string CloudConfigStore::sanitizeStem(std::string const& stem) {
+std::string EbCloudConfigStore::sanitizeStem(std::string const& stem) {
     std::string out;
     out.reserve(stem.size());
     for (char const character : stem) {
@@ -414,7 +414,7 @@ std::string CloudConfigStore::sanitizeStem(std::string const& stem) {
     return out;
 }
 
-bool CloudConfigStore::writeOutbox(std::string const& stem, std::string const& body,
+bool EbCloudConfigStore::writeOutbox(std::string const& stem, std::string const& body,
                                    std::filesystem::path& outPath, std::string& err) const {
     outPath.clear();
     if (body.empty()) {
@@ -439,7 +439,7 @@ bool CloudConfigStore::writeOutbox(std::string const& stem, std::string const& b
     return writeTextFile(outPath, body, err);
 }
 
-bool CloudConfigStore::selfCheck(std::string& report) {
+bool EbCloudConfigStore::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -465,7 +465,7 @@ bool CloudConfigStore::selfCheck(std::string& report) {
     expect(sanitizeStem("My Pack!") == "my-pack", "stem-sanitize");
     expect(sanitizeStem("---") == "share", "stem-dashes");
 
-    auto& store = CloudConfigStore::get();
+    auto& store = EbCloudConfigStore::get();
     auto const root = store.rootDir();
     expect(root.filename() == "cloud-configs", "root-name");
     expect(store.packsDir().filename() == "packs", "packs-name");
@@ -479,7 +479,7 @@ bool CloudConfigStore::selfCheck(std::string& report) {
     expect(store.packPath("../x").empty(), "pack-reject-traversal");
     expect(store.packPath("").empty(), "pack-reject-empty");
 
-    expect(SaveDropPaths::get().cloudConfigsDir() == root, "save-drop-cloud-dir");
+    expect(EbSaveDropPaths::get().cloudConfigsDir() == root, "save-drop-cloud-dir");
 
     if (geode::prelude::Mod::get()) {
         std::string err;

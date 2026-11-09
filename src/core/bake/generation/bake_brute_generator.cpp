@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* layer,
+geode::Result<int> EbBakeBruteGenerator::bakeBrute(EbBakeMap& owner, PlayLayer* layer,
                                                  int startSnapshotSlot, int bakeRadius) {
     // Pure brute: no replay. Drive forward from start; at each death, exhaustively
     // try press/release timings in [death-radius, death] and keep windows that
@@ -25,21 +25,21 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
     if (!layer->m_player1)
         return geode::Err("No player");
 
-    bakeRadius = BakeMapImplementation::resolveRadius(bakeRadius, BakeMethod::BruteForce);
+    bakeRadius = EbBakeMapImplementation::resolveRadius(bakeRadius, BakeMethod::BruteForce);
     // Same physics quantum as live plan (AssistClock / estimatedTps = 1/simDt).
-    double tps = AssistController::get().estimatedTps();
+    double tps = EbAssistController::get().estimatedTps();
     if (tps < 60.0 || tps > 480.0)
         tps = 240.0;
     float const deltaTime = static_cast<float>(1.0 / tps);
     int const maxFrames = static_cast<int>(tps * 180.0); // 3 min physics cap
     int const maxClicks = 400;
-    int const horizon = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll()).cap;
-    bool const doRelease = StageConfig::assistRelease();
-    auto const model = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll());
+    int const horizon = EbShadowSimulator::modelFor(layer->m_player1, EbStageConfig::ticksAll()).cap;
+    bool const doRelease = EbStageConfig::assistRelease();
+    auto const model = EbShadowSimulator::modelFor(layer->m_player1, EbStageConfig::ticksAll());
 
-    BakeMapData out;
+    EbBakeMapData out;
     out.levelKey = owner.m_data.levelKey.empty() && layer->m_level
-                       ? LevelProfile::makeKey(layer->m_level)
+                       ? EbLevelProfile::makeKey(layer->m_level)
                        : owner.m_data.levelKey;
     if (out.levelKey.empty())
         out.levelKey = "unknown";
@@ -51,11 +51,11 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
     owner.m_progress.done = 0;
     owner.m_progress.setStatus(
         fmt::format("brute (no replay) · radius {} · serial @ {:.0f} tps", bakeRadius, tps));
-    AssistLog::info(fmt::format(
+    EbAssistLog::info(fmt::format(
         "BAKE brute: death-driven search, radius {}, horizon {}, serial main-thread @ {:.0f} tps",
         bakeRadius, horizon, tps));
 
-    auto holdingAtEnd = [](std::vector<ReplayEvent> const& tl) {
+    auto holdingAtEnd = [](std::vector<EbReplayEvent> const& tl) {
         bool held = false;
         for (auto const& e : tl) {
             if (e.button == 1)
@@ -64,14 +64,14 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
         return held;
     };
 
-    auto runUntil = [&](std::vector<ReplayEvent> const& tl, int until,
-                        int sampleFrame) -> ShadowSimulator::BakeRunResult {
+    auto runUntil = [&](std::vector<EbReplayEvent> const& tl, int until,
+                        int sampleFrame) -> EbShadowSimulator::BakeRunResult {
         std::lock_guard lock(owner.m_simMutex);
-        return ShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, tl, deltaTime,
+        return EbShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, tl, deltaTime,
                                                       until, sampleFrame);
     };
 
-    class Trial {
+    class EbTrial {
     public:
         int actionFrame = 0;
         bool down = true;
@@ -84,7 +84,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
     private:
     };
 
-    std::vector<ReplayEvent> committed;
+    std::vector<EbReplayEvent> committed;
     int lastDeath = -1;
     int stuck = 0;
 
@@ -96,7 +96,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
         if (!baseline.died) {
             owner.m_progress.setStatus(fmt::format("brute done — survived {}f with {} clicks",
                                                    maxFrames, out.clicks.size()));
-            AssistLog::info(fmt::format("BAKE brute: cleared horizon ({} frames) with {} clicks",
+            EbAssistLog::info(fmt::format("BAKE brute: cleared horizon ({} frames) with {} clicks",
                                         maxFrames, out.clicks.size()));
             break;
         }
@@ -106,7 +106,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
             break;
         if (D == lastDeath) {
             if (++stuck >= 2) {
-                AssistLog::info(
+                EbAssistLog::info(
                     fmt::format("BAKE brute: stuck at death frame {} — stopping ({} clicks so far)",
                                 D, out.clicks.size()));
                 break;
@@ -122,7 +122,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
         int const untilProbe = std::min(maxFrames, D + std::max(horizon, 16));
 
         // Build candidate action list: (frame, down, optional release)
-        class ActionSpec {
+        class EbActionSpec {
         public:
             int frame;
             bool down;
@@ -130,7 +130,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
 
         private:
         };
-        std::vector<ActionSpec> specs;
+        std::vector<EbActionSpec> specs;
         specs.reserve(static_cast<size_t>((upperBound - lowerBound + 1) * 4));
 
         for (int tick = lowerBound; tick <= upperBound; ++tick) {
@@ -153,28 +153,28 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
         }
 
         if (specs.empty()) {
-            AssistLog::info(fmt::format("BAKE brute: no actions to try at death {}", D));
+            EbAssistLog::info(fmt::format("BAKE brute: no actions to try at death {}", D));
             break;
         }
 
         owner.m_progress.setStatus(fmt::format("brute death @{} · probing {} combos · clicks {}", D,
                                                specs.size(), out.clicks.size()));
 
-        std::vector<Trial> trials(specs.size());
+        std::vector<EbTrial> trials(specs.size());
 
         auto processSpec = [&](size_t index) {
             if (owner.m_progress.cancel.load())
                 return;
             auto const& sp = specs[index];
             auto tl = committed;
-            tl.push_back(ReplayEvent{sp.frame, 1, false, sp.down});
+            tl.push_back(EbReplayEvent{sp.frame, 1, false, sp.down});
             if (sp.releaseFrame >= 0) {
-                tl.push_back(ReplayEvent{sp.releaseFrame, 1, false, false});
+                tl.push_back(EbReplayEvent{sp.releaseFrame, 1, false, false});
             }
             std::stable_sort(tl.begin(), tl.end(),
                              [](auto const& a, auto const& b) { return a.frame < b.frame; });
 
-            Trial tr;
+            EbTrial tr;
             tr.actionFrame = sp.frame;
             tr.down = sp.down;
             tr.releaseFrame = sp.releaseFrame;
@@ -183,12 +183,12 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
                 std::lock_guard lock(owner.m_simMutex);
                 if (owner.m_progress.cancel.load())
                     return;
-                auto sample = ShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, tl,
+                auto sample = EbShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, tl,
                                                                      deltaTime, sp.frame, sp.frame);
                 tr.x = sample.sampled ? sample.xAtSample : 0.f;
                 tr.mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
 
-                auto result = ShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, tl,
+                auto result = EbShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, tl,
                                                                      deltaTime, untilProbe, -1);
                 if (result.died) {
                     tr.surviveUntil = result.deathFrame;
@@ -223,14 +223,14 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
                 bestUntil = tr.surviveUntil;
         }
         if (bestUntil <= D) {
-            AssistLog::info(
+            EbAssistLog::info(
                 fmt::format("BAKE brute: no combo survives past death {} — stopping", D));
             break;
         }
 
         // Prefer press-downs that reach bestUntil (within 2 frames slack)
         int const slack = 2;
-        std::vector<Trial const*> winners;
+        std::vector<EbTrial const*> winners;
         for (auto const& tr : trials) {
             if (tr.surviveUntil + slack >= bestUntil && tr.surviveUntil > D) {
                 winners.push_back(&tr);
@@ -240,7 +240,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
             break;
 
         // Split by down vs release — prefer whichever group has more / better
-        Trial const* pick = winners.front();
+        EbTrial const* pick = winners.front();
         int earliest = pick->actionFrame;
         int latest = pick->actionFrame;
         bool pickDown = pick->down;
@@ -275,7 +275,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
         float const x = pick->x;
         auto const mode = pick->mode;
 
-        BakedClick c;
+        EbBakedClick c;
         c.nominalFrame = nominal;
         c.earliest = earliest;
         c.latest = latest;
@@ -288,7 +288,7 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
 
         // Also bake release window if we committed a tap-release
         if (pickRel >= 0 && doRelease) {
-            BakedClick rel;
+            EbBakedClick rel;
             rel.nominalFrame = pickRel;
             rel.earliest = pickRel;
             rel.latest = pickRel;
@@ -299,21 +299,21 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
             // Probe dash while press is held through the release frame.
             {
                 auto holdTl = committed;
-                holdTl.push_back(ReplayEvent{nominal, 1, false, true});
+                holdTl.push_back(EbReplayEvent{nominal, 1, false, true});
                 auto dashProbe = runUntil(holdTl, pickRel, pickRel);
                 rel.holdAssist = dashProbe.sampled && dashProbe.dashingAtSample;
             }
             out.clicks.push_back(rel);
         }
 
-        committed.push_back(ReplayEvent{nominal, 1, false, pickDown});
+        committed.push_back(EbReplayEvent{nominal, 1, false, pickDown});
         if (pickRel >= 0) {
-            committed.push_back(ReplayEvent{pickRel, 1, false, false});
+            committed.push_back(EbReplayEvent{pickRel, 1, false, false});
         }
         std::stable_sort(committed.begin(), committed.end(),
                          [](auto const& a, auto const& b) { return a.frame < b.frame; });
 
-        AssistLog::debug(fmt::format("BAKE brute: {} @{} window [{},{}] survives→{} (was death {})",
+        EbAssistLog::debug(fmt::format("BAKE brute: {} @{} window [{},{}] survives→{} (was death {})",
                                      pickDown ? "press" : "release", nominal, earliest, latest,
                                      bestUntil, D));
         owner.m_progress.setStatus(fmt::format("brute click #{} · {} @{} [{},{}] · next death hunt",
@@ -322,15 +322,15 @@ geode::Result<int> BakeBruteGenerator::bakeBrute(BakeMap& owner, PlayLayer* laye
     }
 
     int const nClicks = static_cast<int>(out.clicks.size());
-    AssistLog::info(fmt::format("BAKE done clicks={} frames_cap={} tps={:.0f} (brute)", nClicks,
+    EbAssistLog::info(fmt::format("BAKE done clicks={} frames_cap={} tps={:.0f} (brute)", nClicks,
                                 maxFrames, tps));
 
     if (nClicks <= 0) {
         {
             std::filesystem::path diagDir;
             std::string diagErr;
-            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
-                AssistLog::info(
+            if (EbDevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                EbAssistLog::info(
                     fmt::format("BAKE brute: 0 windows — wrote diag bundle {}", diagDir.string()));
             }
         }

@@ -2,15 +2,15 @@
 #include <algorithm>
 #include <cctype>
 
-char const* CloudConfigHostPolicy::defaultIndexUrl() {
+char const* EbCloudConfigHostPolicy::defaultIndexUrl() {
     return "https://cdn.jsdelivr.net/gh/ToldByNun/earlybuffer-configs@main/index.json";
 }
 
-char const* CloudConfigHostPolicy::fallbackIndexUrl() {
+char const* EbCloudConfigHostPolicy::fallbackIndexUrl() {
     return "https://raw.githubusercontent.com/ToldByNun/earlybuffer-configs/main/index.json";
 }
 
-std::string CloudConfigHostPolicy::hostOf(std::string const& url) {
+std::string EbCloudConfigHostPolicy::hostOf(std::string const& url) {
     std::string host;
     std::string path;
     std::string err;
@@ -20,11 +20,11 @@ std::string CloudConfigHostPolicy::hostOf(std::string const& url) {
     return {};
 }
 
-bool CloudConfigHostPolicy::isAllowlistedHost(std::string const& host) {
+bool EbCloudConfigHostPolicy::isAllowlistedHost(std::string const& host) {
     return host == "cdn.jsdelivr.net" || host == "raw.githubusercontent.com";
 }
 
-bool CloudConfigHostPolicy::parseHttpsUrl(std::string const& url, std::string& hostOut,
+bool EbCloudConfigHostPolicy::parseHttpsUrl(std::string const& url, std::string& hostOut,
                                           std::string& pathOut, std::string& err) {
     hostOut.clear();
     pathOut.clear();
@@ -84,7 +84,7 @@ bool CloudConfigHostPolicy::parseHttpsUrl(std::string const& url, std::string& h
     return true;
 }
 
-bool CloudConfigHostPolicy::isAllowedUrl(std::string const& url,
+bool EbCloudConfigHostPolicy::isAllowedUrl(std::string const& url,
                                          std::string const& customCatalogUrl) {
     std::string host;
     std::string path;
@@ -99,7 +99,7 @@ bool CloudConfigHostPolicy::isAllowedUrl(std::string const& url,
     return !customHost.empty() && host == customHost;
 }
 
-std::string CloudConfigHostPolicy::effectiveIndexUrl(std::string const& customSetting) {
+std::string EbCloudConfigHostPolicy::effectiveIndexUrl(std::string const& customSetting) {
     if (customSetting.empty()) {
         return std::string(defaultIndexUrl());
     }
@@ -109,7 +109,7 @@ std::string CloudConfigHostPolicy::effectiveIndexUrl(std::string const& customSe
     return customSetting;
 }
 
-bool CloudConfigHostPolicy::resolvePackUrl(std::string const& catalogUrl,
+bool EbCloudConfigHostPolicy::resolvePackUrl(std::string const& catalogUrl,
                                            std::string const& relativePath, std::string& outUrl,
                                            std::string& err) {
     outUrl.clear();
@@ -159,7 +159,7 @@ bool CloudConfigHostPolicy::resolvePackUrl(std::string const& catalogUrl,
     return true;
 }
 
-bool CloudConfigHostPolicy::selfCheck(std::string& report) {
+bool EbCloudConfigHostPolicy::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

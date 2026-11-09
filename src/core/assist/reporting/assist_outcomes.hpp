@@ -7,25 +7,25 @@
 
 #include "../assist_controller.hpp"
 
-class AssistOutcomes {
+class EbAssistOutcomes {
 public:
-    static void noteRealJump(AssistController& controller, PlayerObject* player);
-    static void recordDecision(AssistController& controller, PlayLayer* playLayer,
-                               PlayerObject* player, bool down, SimPlan const& plan, int effectTick,
+    static void noteRealJump(EbAssistController& controller, PlayerObject* player);
+    static void recordDecision(EbAssistController& controller, PlayLayer* playLayer,
+                               PlayerObject* player, bool down, EbSimPlan const& plan, int effectTick,
                                int appliedDelay, int limit);
-    static void tickLearning(AssistController& controller, PlayLayer* playLayer,
+    static void tickLearning(EbAssistController& controller, PlayLayer* playLayer,
                              PlayerObject* player);
-    static void runPostmortem(AssistController& controller, PlayLayer* playLayer,
-                              PlayerObject* player, GameObject* object, DecisionEntry& dec);
-    static void beginOutcome(AssistController& controller, SimPlan const& plan, int effectTick);
-    static void pollOutcome(AssistController& controller, PlayLayer* playLayer);
-    static void logPlan(AssistController& controller, SimPlan const& plan, char const* kind);
-    static void noteVerdict(AssistController& controller, AssistReason reason, char const* where);
-    static void onRealDeath(AssistController& controller, PlayLayer* playLayer,
+    static void runPostmortem(EbAssistController& controller, PlayLayer* playLayer,
+                              PlayerObject* player, GameObject* object, EbDecisionEntry& dec);
+    static void beginOutcome(EbAssistController& controller, EbSimPlan const& plan, int effectTick);
+    static void pollOutcome(EbAssistController& controller, PlayLayer* playLayer);
+    static void logPlan(EbAssistController& controller, EbSimPlan const& plan, char const* kind);
+    static void noteVerdict(EbAssistController& controller, AssistReason reason, char const* where);
+    static void onRealDeath(EbAssistController& controller, PlayLayer* playLayer,
                             PlayerObject* player, GameObject* object);
 
 private:
-    AssistOutcomes() = delete;
+    EbAssistOutcomes() = delete;
 };
 
 #endif

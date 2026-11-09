@@ -5,11 +5,11 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowPlanPolicy {
+class EbShadowPlanPolicy {
 public:
-    static ShadowSimulator::Model modelFor(PlayerObject* player, int limit, float capMul);
+    static EbShadowSimulator::Model modelFor(PlayerObject* player, int limit, float capMul);
     static bool isHazardLike(GameObject* object);
-    static ThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
+    static EbThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
     static bool spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit, float deltaTime);
     static bool spatialHazardProximity(PlayLayer* layer, PlayerObject* real, float proximityX);
     static bool shouldWaveHazardProximityPass(bool isWave, bool nearHazard, bool noOrbTarget,
@@ -29,7 +29,7 @@ public:
     static int autoRobustK(PlayerObject* real, float dtVariance, bool spamDense);
 
 private:
-    ShadowPlanPolicy() = delete;
+    EbShadowPlanPolicy() = delete;
 };
 
 #endif

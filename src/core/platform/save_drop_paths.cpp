@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "save_drop_paths.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
@@ -5,12 +6,11 @@
 #include <cctype>
 #include <system_error>
 
-SaveDropPaths& SaveDropPaths::get() {
-    static SaveDropPaths inst;
-    return inst;
+EbSaveDropPaths& EbSaveDropPaths::get() {
+    return EbClassManager::get().service<EbSaveDropPaths>();
 }
 
-std::filesystem::path SaveDropPaths::rootDir() const {
+std::filesystem::path EbSaveDropPaths::rootDir() const {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
         return mod->getSaveDir();
@@ -18,23 +18,23 @@ std::filesystem::path SaveDropPaths::rootDir() const {
     return std::filesystem::path("earlybuffer-save");
 }
 
-std::filesystem::path SaveDropPaths::replayDropDir() const {
+std::filesystem::path EbSaveDropPaths::replayDropDir() const {
     return this->rootDir() / "replay-drop";
 }
 
-std::filesystem::path SaveDropPaths::configPath() const {
+std::filesystem::path EbSaveDropPaths::configPath() const {
     return this->rootDir() / "earlybuffer-config.json";
 }
 
-std::filesystem::path SaveDropPaths::reportPath() const {
+std::filesystem::path EbSaveDropPaths::reportPath() const {
     return this->rootDir() / "earlybuffer-dev-report.txt";
 }
 
-std::filesystem::path SaveDropPaths::cloudConfigsDir() const {
+std::filesystem::path EbSaveDropPaths::cloudConfigsDir() const {
     return this->rootDir() / "cloud-configs";
 }
 
-bool SaveDropPaths::ensureDirs(std::string& err) const {
+bool EbSaveDropPaths::ensureDirs(std::string& err) const {
     err.clear();
     auto const root = this->rootDir();
     auto const replay = this->replayDropDir();
@@ -96,7 +96,7 @@ bool SaveDropPaths::ensureDirs(std::string& err) const {
     return true;
 }
 
-bool SaveDropPaths::isReplayExtension(std::filesystem::path const& path) {
+bool EbSaveDropPaths::isReplayExtension(std::filesystem::path const& path) {
     auto ext = path.extension().string();
     for (char& c : ext) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -104,7 +104,7 @@ bool SaveDropPaths::isReplayExtension(std::filesystem::path const& path) {
     return ext == ".gdr" || ext == ".gdr2" || ext == ".mhr" || ext == ".json" || ext == ".slc";
 }
 
-std::vector<std::filesystem::path> SaveDropPaths::listReplayCandidates() const {
+std::vector<std::filesystem::path> EbSaveDropPaths::listReplayCandidates() const {
     std::vector<std::filesystem::path> out;
     auto const directory = this->replayDropDir();
     std::error_code ec;
@@ -118,7 +118,7 @@ std::vector<std::filesystem::path> SaveDropPaths::listReplayCandidates() const {
         if (!entry.is_regular_file(ec) || ec)
             continue;
         auto const path = entry.path();
-        if (!SaveDropPaths::isReplayExtension(path))
+        if (!EbSaveDropPaths::isReplayExtension(path))
             continue;
         // Skip zero-byte placeholders.
         auto const size = entry.file_size(ec);
@@ -141,7 +141,7 @@ std::vector<std::filesystem::path> SaveDropPaths::listReplayCandidates() const {
     return out;
 }
 
-bool SaveDropPaths::selfCheck(std::string& report) {
+bool EbSaveDropPaths::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -151,7 +151,7 @@ bool SaveDropPaths::selfCheck(std::string& report) {
         }
     };
 
-    auto& paths = SaveDropPaths::get();
+    auto& paths = EbSaveDropPaths::get();
     auto const root = paths.rootDir();
     auto const replay = paths.replayDropDir();
     auto const config = paths.configPath();
@@ -167,12 +167,12 @@ bool SaveDropPaths::selfCheck(std::string& report) {
     expect(reportFile.parent_path() == root, "report-under-root");
     expect(cloud.filename() == "cloud-configs", "cloud-dir-name");
     expect(cloud.parent_path() == root, "cloud-under-root");
-    expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.gdr")), "ext-gdr");
-    expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.GDR2")), "ext-gdr2-case");
-    expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.mhr")), "ext-mhr");
-    expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.json")), "ext-json");
-    expect(SaveDropPaths::isReplayExtension(std::filesystem::path("x.slc")), "ext-slc");
-    expect(!SaveDropPaths::isReplayExtension(std::filesystem::path("x.txt")), "ext-reject-txt");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.gdr")), "ext-gdr");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.GDR2")), "ext-gdr2-case");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.mhr")), "ext-mhr");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.json")), "ext-json");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.slc")), "ext-slc");
+    expect(!EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.txt")), "ext-reject-txt");
 
     // When Mod is live, ensureDirs must succeed (Geode save dir is writable).
     if (geode::prelude::Mod::get()) {

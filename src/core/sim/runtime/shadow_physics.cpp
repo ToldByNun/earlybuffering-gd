@@ -2,7 +2,7 @@
 #include "../../assist/assist_clock.hpp"
 #include "../shadow_simulator.hpp"
 
-void ShadowPhysics::markDead(ShadowSimulator& simulator, PlayerObject* player, GameObject* object) {
+void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* player, GameObject* object) {
     // Active sim body (live shadow or eval ghost) drives m_dead.
     if (player == simulator.m_shadow ||
         (simulator.m_evalActive && player == simulator.m_evalActive)) {
@@ -11,11 +11,11 @@ void ShadowPhysics::markDead(ShadowSimulator& simulator, PlayerObject* player, G
     }
 }
 
-void ShadowPhysics::noteJump(ShadowSimulator& simulator) {
+void EbShadowPhysics::noteJump(EbShadowSimulator& simulator) {
     simulator.m_jumped = true;
 }
 
-void ShadowPhysics::noteActivated(ShadowSimulator& simulator, GameObject* gobj) {
+void EbShadowPhysics::noteActivated(EbShadowSimulator& simulator, GameObject* gobj) {
     auto* object = geode::prelude::typeinfo_cast<EnhancedGameObject*>(gobj);
     if (!object)
         return;
@@ -23,7 +23,7 @@ void ShadowPhysics::noteActivated(ShadowSimulator& simulator, GameObject* gobj) 
         if (s.obj == object)
             return;
     }
-    ShadowSimulator::SavedObject s;
+    EbShadowSimulator::SavedObject s;
     s.obj = object;
     s.activated = object->m_activated;
     s.p1 = object->m_activatedByPlayer1;
@@ -41,11 +41,11 @@ void ShadowPhysics::noteActivated(ShadowSimulator& simulator, GameObject* gobj) 
     simulator.m_saved.push_back(s);
 }
 
-void ShadowPhysics::noteOrbOverlap(ShadowSimulator& simulator) {
+void EbShadowPhysics::noteOrbOverlap(EbShadowSimulator& simulator) {
     simulator.m_orbOverlapTick = true;
 }
 
-void ShadowPhysics::applyRingJump(ShadowSimulator& simulator, PlayerObject* shadow,
+void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* shadow,
                                   RingObject* ring) {
     if (!shadow || !ring || (shadow != simulator.m_shadow && shadow != simulator.m_evalActive))
         return;
@@ -73,19 +73,19 @@ void ShadowPhysics::applyRingJump(ShadowSimulator& simulator, PlayerObject* shad
     // Real orb physics. Re-entrancy flag lets the ringJump hook call the original.
     // VFX hooks (spawnCircle, activateObject visuals, particles) stay blocked.
     // RAII so a throw / early exit never leaves m_applyingRing stuck (iOS live path).
-    class ApplyingRingGuard {
+    class EbApplyingRingGuard {
     public:
         bool& flag;
-        explicit ApplyingRingGuard(bool& f) : flag(f) {
+        explicit EbApplyingRingGuard(bool& f) : flag(f) {
             flag = true;
         }
-        ~ApplyingRingGuard() {
+        ~EbApplyingRingGuard() {
             flag = false;
         }
 
     private:
     };
-    ApplyingRingGuard applyingGuard(simulator.m_applyingRing);
+    EbApplyingRingGuard applyingGuard(simulator.m_applyingRing);
     shadow->ringJump(ring, false);
 
     // Claim for the rest of this run so collision doesn't re-boost every tick.
@@ -104,7 +104,7 @@ void ShadowPhysics::applyRingJump(ShadowSimulator& simulator, PlayerObject* shad
     shadow->m_hasEverHitRing = true;
 }
 
-void ShadowPhysics::stepPreCollide(ShadowSimulator& simulator, PlayLayer* layer,
+void EbShadowPhysics::stepPreCollide(EbShadowSimulator& simulator, PlayLayer* layer,
                                    PlayerObject* state, float deltaTime) {
     // Always use the full step dt here — tiny CBF remainders launch slopes
     // and also under-detect orb/spike overlaps.
@@ -114,14 +114,14 @@ void ShadowPhysics::stepPreCollide(ShadowSimulator& simulator, PlayLayer* layer,
         simulator.applyTriggerWorldAtTick(layer, simulator.m_simAbsTick, state);
         simulator.applyLiveDynamicNear(layer, state);
     }
-    float const gdDt = AssistClock::secondsToGdStep(deltaTime);
+    float const gdDt = EbAssistClock::secondsToGdStep(deltaTime);
     simulator.hideGhost(state);
     simulator.clearCollisionLogs(state);
     layer->checkCollisions(state, gdDt, false);
     simulator.hideGhost(state);
 }
 
-void ShadowPhysics::stepPhysics(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
+void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
                                 float stepDt, float deltaTime) {
     simulator.m_triggerWorldAppliedThisTick = false;
     simulator.m_liveDynamicAppliedIds.clear();
@@ -131,11 +131,11 @@ void ShadowPhysics::stepPhysics(ShadowSimulator& simulator, PlayLayer* layer, Pl
     }
     // v1.2.1 contract: ghost must see the same GD step units as live
     // PlayerObject::update (0.25 @ 240 TPS). stepDt/dt are AssistClock seconds.
-    float const gdStepDt = AssistClock::secondsToGdStep(stepDt);
+    float const gdStepDt = EbAssistClock::secondsToGdStep(stepDt);
     float colDt = stepDt;
     if (colDt < deltaTime)
         colDt = deltaTime; // same rule as pre-collide: never a tiny remainder
-    float const gdColDt = AssistClock::secondsToGdStep(colDt);
+    float const gdColDt = EbAssistClock::secondsToGdStep(colDt);
     simulator.hideGhost(state);
     state->update(gdStepDt);
     simulator.hideGhost(state);

@@ -6,9 +6,9 @@
 #include <string>
 
 // Per-save cues: sound (MP3), icon color flash, and/or frame-counter markers.
-class SaveFeedback {
+class EbSaveFeedback {
 public:
-    static SaveFeedback& get();
+    static EbSaveFeedback& get();
 
     // Call when assist injects a delayed click (delayTicks = ticks held back).
     void onSave(PlayLayer* playLayer, PlayerObject* player, int delayTicks);
@@ -19,7 +19,9 @@ public:
     void reset();
 
 private:
-    SaveFeedback() = default;
+    friend class EbServiceStore;
+
+    EbSaveFeedback() = default;
 
     void playSound(int delayTicks);
     void flashIcon(PlayerObject* player);

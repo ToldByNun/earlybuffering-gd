@@ -5,7 +5,7 @@
 
 // Dev Lab HUD fragment for StatusOverlay (Commit 14).
 // Appended when DevConfig::overlay() and (recording or last report).
-class DevOverlay {
+class EbDevOverlay {
 public:
     // One line: session REC + last report fields (fid/bestSurv/bestEval/obj/ideal).
     static std::string line();
@@ -14,7 +14,7 @@ public:
     static bool shouldShow();
 
 private:
-    DevOverlay() = delete;
+    EbDevOverlay() = delete;
 };
 
 #endif

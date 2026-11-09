@@ -1,19 +1,19 @@
+#include "../../../app/class_manager.hpp"
 #include "click_intent_guard.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
-ClickIntentGuard& ClickIntentGuard::get() {
-    static ClickIntentGuard inst;
-    return inst;
+EbClickIntentGuard& EbClickIntentGuard::get() {
+    return EbClassManager::get().service<EbClickIntentGuard>();
 }
 
-void ClickIntentGuard::reset() {
+void EbClickIntentGuard::reset() {
     this->m_slots[0] = {};
     this->m_slots[1] = {};
 }
 
-int ClickIntentGuard::spamWindowTicks(GameModeKind mode) {
+int EbClickIntentGuard::spamWindowTicks(GameModeKind mode) {
     // Physics ticks (~240/s). Wave/ship spam is denser than cube taps.
     switch (mode) {
     case GameModeKind::Wave:
@@ -31,7 +31,7 @@ int ClickIntentGuard::spamWindowTicks(GameModeKind mode) {
     }
 }
 
-int ClickIntentGuard::spamMinCount(GameModeKind mode) {
+int EbClickIntentGuard::spamMinCount(GameModeKind mode) {
     switch (mode) {
     case GameModeKind::Wave:
         return 3;
@@ -44,7 +44,7 @@ int ClickIntentGuard::spamMinCount(GameModeKind mode) {
     }
 }
 
-float ClickIntentGuard::spamMaxMeanGap(GameModeKind mode) {
+float EbClickIntentGuard::spamMaxMeanGap(GameModeKind mode) {
     switch (mode) {
     case GameModeKind::Wave:
         return 4.f;
@@ -61,7 +61,7 @@ float ClickIntentGuard::spamMaxMeanGap(GameModeKind mode) {
     }
 }
 
-void ClickIntentGuard::notePress(int playerSlot, int attemptTick, GameModeKind mode) {
+void EbClickIntentGuard::notePress(int playerSlot, int attemptTick, GameModeKind mode) {
     (void)mode;
     if (playerSlot < 0 || playerSlot > 1)
         return;
@@ -72,7 +72,7 @@ void ClickIntentGuard::notePress(int playerSlot, int attemptTick, GameModeKind m
         ++s.count;
 }
 
-bool ClickIntentGuard::evaluateSpam(int const* ticks, int tickCount, int attemptTick,
+bool EbClickIntentGuard::evaluateSpam(int const* ticks, int tickCount, int attemptTick,
                                     GameModeKind mode) {
     if (!ticks || tickCount <= 0)
         return false;
@@ -147,11 +147,11 @@ bool ClickIntentGuard::evaluateSpam(int const* ticks, int tickCount, int attempt
     return regular || veryDense;
 }
 
-bool ClickIntentGuard::shouldPassThrough(int playerSlot, int attemptTick, GameModeKind mode) const {
+bool EbClickIntentGuard::shouldPassThrough(int playerSlot, int attemptTick, GameModeKind mode) const {
     return this->shouldPassThrough(playerSlot, attemptTick, mode, false, false);
 }
 
-bool ClickIntentGuard::shouldPassThrough(int playerSlot, int attemptTick, GameModeKind mode,
+bool EbClickIntentGuard::shouldPassThrough(int playerSlot, int attemptTick, GameModeKind mode,
                                          bool nearOrbOrPad, bool nearBakeWindow) const {
     // Orb train / bake window: density is intentional timing → allow assist.
     if (nearOrbOrPad || nearBakeWindow)
@@ -166,7 +166,7 @@ bool ClickIntentGuard::shouldPassThrough(int playerSlot, int attemptTick, GameMo
     return false;
 }
 
-bool ClickIntentGuard::selfCheck(std::string& report) {
+bool EbClickIntentGuard::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

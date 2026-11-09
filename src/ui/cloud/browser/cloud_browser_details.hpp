@@ -3,13 +3,13 @@
 
 #include "../cloud_config_popup.hpp"
 
-class CloudBrowserDetails {
+class EbCloudBrowserDetails {
 public:
-    static void updateRateUi(CloudConfigPopup& owner);
-    static void updateDetail(CloudConfigPopup& owner);
+    static void updateRateUi(EbCloudConfigPopup& owner);
+    static void updateDetail(EbCloudConfigPopup& owner);
 
 private:
-    CloudBrowserDetails() = delete;
+    EbCloudBrowserDetails() = delete;
 };
 
 #endif

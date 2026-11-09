@@ -5,7 +5,7 @@
 #include "../shadow_simulator.hpp"
 #include <cstdint>
 
-bool ShadowSectionSafety::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* object) {
+bool EbShadowSectionSafety::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* object) {
     // Never call GJBaseGameLayer::removeObjectFromSection — it AVs when indices
     // are stale, sections are half-built (init/setupHasCompleted), or mx is bad
     // (crash read @ 0xB8). Erase our pointer from the inner vector ourselves.
@@ -44,14 +44,14 @@ bool ShadowSectionSafety::tryRemoveFromSection(GJBaseGameLayer* layer, GameObjec
     return erased;
 }
 
-void ShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
-                                                       ShadowSimulator* self) {
+void EbShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
+                                                       EbShadowSimulator* self) {
     if (!layer || !self)
         return;
 
     // Only match our known ghost pointers by raw address. Section slots can hold
     // freed/poison entries (0xFFF…); typeinfo_cast on those AVs (read @ -1).
-    GameObject* ghosts[1 + ShadowSimulator::SNAPSHOT_SLOTS + ShadowSimulator::DEV_EVAL_SLOTS]{};
+    GameObject* ghosts[1 + EbShadowSimulator::SNAPSHOT_SLOTS + EbShadowSimulator::DEV_EVAL_SLOTS]{};
     int ghostCount = 0;
     if (self->m_shadow) {
         ghosts[ghostCount++] = self->m_shadow;
@@ -142,9 +142,9 @@ void ShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
     }
 }
 
-void ShadowSectionSafety::evacuateGhosts(ShadowSimulator& simulator, GJBaseGameLayer* layer) {
-    PerfTrace::Scope const scope("evacuateGhosts");
-    LagProbe::Scope const lagScope("eb.evacuateGhosts");
+void EbShadowSectionSafety::evacuateGhosts(EbShadowSimulator& simulator, GJBaseGameLayer* layer) {
+    EbPerfTrace::Scope const scope("evacuateGhosts");
+    EbLagProbe::Scope const lagScope("eb.evacuateGhosts");
     // Abort any in-flight sim; do NOT restoreCapture here — reset/checkpoint
     // rebuilds object state and restoring into freed/reused objects can AV.
     simulator.m_simulating = false;
@@ -166,11 +166,11 @@ void ShadowSectionSafety::evacuateGhosts(ShadowSimulator& simulator, GJBaseGameL
     simulator.m_toggleTargetIds.clear();
     simulator.m_dynamicFollowJobs.clear();
     simulator.m_liveDynamicAppliedIds.clear();
-    ToggleOrbSim::get().restore();
+    EbToggleOrbSim::get().restore();
     // If a sim aborted after applyAtTick moved solids, put them back before
     // we drop the snapshot — reset/checkpoint must not inherit drifted poses.
     if (!simulator.m_savedTransforms.empty() && layer) {
-        LagProbe::Scope const state("eb.trigger.restore");
+        EbLagProbe::Scope const state("eb.trigger.restore");
         simulator.restoreTriggerTransforms(layer);
     }
     simulator.m_saved.clear();
@@ -180,7 +180,7 @@ void ShadowSectionSafety::evacuateGhosts(ShadowSimulator& simulator, GJBaseGameL
     // PlayLayer::init → setupHasCompleted → resetLevel runs BEFORE attach().
     // Touching section vectors or stale ghosts there AVs (GD read @ 0xB8).
     if (!layer || layer != simulator.m_hostLayer || !simulator.m_shadow) {
-        LagProbe::get().mark("evacuate.skip", "no host / no shadow / wrong layer");
+        EbLagProbe::get().mark("evacuate.skip", "no host / no shadow / wrong layer");
         return;
     }
 
@@ -203,20 +203,20 @@ void ShadowSectionSafety::evacuateGhosts(ShadowSimulator& simulator, GJBaseGameL
     for (auto* effectObject : simulator.m_evalGhosts) {
         noteIndexed(effectObject);
     }
-    LagProbe::get().mark("evacuate.indexed", anyIndexed ? "yes" : "no");
+    EbLagProbe::get().mark("evacuate.indexed", anyIndexed ? "yes" : "no");
     if (anyIndexed) {
-        LagProbe::Scope const state("eb.evacuate.scrub");
-        ShadowSimulator::scrubOwnedGhostsFromSections(layer, (&simulator));
+        EbLagProbe::Scope const state("eb.evacuate.scrub");
+        EbShadowSimulator::scrubOwnedGhostsFromSections(layer, (&simulator));
     }
     // Belt-and-suspenders: index erase if scrub missed a stale cell.
     {
-        LagProbe::Scope const state("eb.evacuate.tryRemove");
-        ShadowSimulator::tryRemoveFromSection(layer, simulator.m_shadow);
+        EbLagProbe::Scope const state("eb.evacuate.tryRemove");
+        EbShadowSimulator::tryRemoveFromSection(layer, simulator.m_shadow);
         for (auto* slot : simulator.m_snapshots) {
-            ShadowSimulator::tryRemoveFromSection(layer, slot);
+            EbShadowSimulator::tryRemoveFromSection(layer, slot);
         }
         for (auto* effectObject : simulator.m_evalGhosts) {
-            ShadowSimulator::tryRemoveFromSection(layer, effectObject);
+            EbShadowSimulator::tryRemoveFromSection(layer, effectObject);
         }
     }
 
@@ -243,7 +243,7 @@ void ShadowSectionSafety::evacuateGhosts(ShadowSimulator& simulator, GJBaseGameL
     };
 
     {
-        LagProbe::Scope const state("eb.evacuate.park");
+        EbLagProbe::Scope const state("eb.evacuate.park");
         evac(simulator.m_shadow);
         for (auto* slot : simulator.m_snapshots) {
             evac(slot);

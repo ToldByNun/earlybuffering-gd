@@ -3,7 +3,7 @@
 
 #include "../shadow_simulator.hpp"
 
-class SimulationCandidate {
+class EbSimulationCandidate {
 public:
     int delay = 0;
     bool viable = false;
@@ -23,7 +23,7 @@ public:
     float endX = 0.f;
     float deathX = 0.f;
     int jumpTick = 0;
-    ShadowSimulator::RunResult raw{};
+    EbShadowSimulator::RunResult raw{};
 
 private:
 };

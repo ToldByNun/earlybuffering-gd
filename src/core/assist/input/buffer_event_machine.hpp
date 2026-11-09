@@ -13,7 +13,7 @@ enum class BufferSmState { Idle = 0, ArmedPress, ArmedRelease, PendingRelease };
 //   While userHolding: never force-release.
 //   Press B while ArmedPress + releaseSeen: fire A, then Idle, then maybe re-arm B.
 //   Cancel (death/reset/quit/checkpoint) → Idle. Force-fire (CPS/mode) still injects.
-class BufferEventMachine {
+class EbBufferEventMachine {
 public:
     static bool selfCheck();
     static char const* stateName(BufferSmState state);

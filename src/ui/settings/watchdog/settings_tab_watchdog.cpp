@@ -11,14 +11,14 @@
 #include <string>
 #include <vector>
 
-auto SettingsTabWatchdog::popupIsOurSettings(geode::prelude::CCNode* root) -> bool {
+auto EbSettingsTabWatchdog::popupIsOurSettings(geode::prelude::CCNode* root) -> bool {
     if (!root || !geode::prelude::Mod::get())
         return false;
 
     std::string const ourId = geode::prelude::Mod::get()->getID();
     std::vector<geode::prelude::SettingNodeV3*> settings;
     geode::prelude::ScrollLayer* list = nullptr;
-    SettingsFilterWalk::collect(root, settings, list);
+    EbSettingsFilterWalk::collect(root, settings, list);
     for (auto* sett : settings) {
         if (!sett)
             continue;
@@ -60,7 +60,7 @@ auto SettingsTabWatchdog::popupIsOurSettings(geode::prelude::CCNode* root) -> bo
     return false;
 }
 
-auto SettingsTabWatchdog::collectAlerts(geode::prelude::CCNode* node,
+auto EbSettingsTabWatchdog::collectAlerts(geode::prelude::CCNode* node,
                                         std::vector<FLAlertLayer*>& out) -> void {
     if (!node)
         return;
@@ -75,7 +75,7 @@ auto SettingsTabWatchdog::collectAlerts(geode::prelude::CCNode* node,
     }
 }
 
-auto SettingsTabWatchdog::findUnattachedOurPopup() -> geode::prelude::CCNode* {
+auto EbSettingsTabWatchdog::findUnattachedOurPopup() -> geode::prelude::CCNode* {
     auto* scene = geode::prelude::CCScene::get();
     if (!scene)
         return nullptr;
@@ -98,7 +98,7 @@ auto SettingsTabWatchdog::findUnattachedOurPopup() -> geode::prelude::CCNode* {
     return nullptr;
 }
 
-auto SettingsTabWatchdog::ensureOnScene() -> void {
+auto EbSettingsTabWatchdog::ensureOnScene() -> void {
     auto* scene = geode::prelude::CCScene::get();
     if (!scene)
         return;
@@ -111,24 +111,24 @@ auto SettingsTabWatchdog::ensureOnScene() -> void {
     this->release();
 }
 
-auto SettingsTabWatchdog::onTick(float) -> void {
+auto EbSettingsTabWatchdog::onTick(float) -> void {
     this->ensureOnScene();
     auto* popup = findUnattachedOurPopup();
     if (!popup)
         return;
-    InLevelSettingsFilterKeeper::attach(popup);
+    EbInLevelSettingsFilterKeeper::attach(popup);
 }
 
-auto SettingsTabWatchdog::initWatchdog() -> bool {
+auto EbSettingsTabWatchdog::initWatchdog() -> bool {
     if (!geode::prelude::CCNode::init())
         return false;
     this->setID("earlybuffer-settings-tab-watchdog"_spr);
-    this->schedule(schedule_selector(SettingsTabWatchdog::onTick), 0.1f);
+    this->schedule(schedule_selector(EbSettingsTabWatchdog::onTick), 0.1f);
     return true;
 }
 
-auto SettingsTabWatchdog::create() -> SettingsTabWatchdog* {
-    auto* createdObject = new SettingsTabWatchdog();
+auto EbSettingsTabWatchdog::create() -> EbSettingsTabWatchdog* {
+    auto* createdObject = new EbSettingsTabWatchdog();
     if (!createdObject || !createdObject->initWatchdog()) {
         CC_SAFE_DELETE(createdObject);
         return nullptr;
@@ -137,7 +137,7 @@ auto SettingsTabWatchdog::create() -> SettingsTabWatchdog* {
     return createdObject;
 }
 
-auto SettingsTabWatchdogState::slot() -> geode::prelude::Ref<SettingsTabWatchdog>& {
-    static geode::prelude::Ref<SettingsTabWatchdog> s_watchdog;
+auto EbSettingsTabWatchdogState::slot() -> geode::prelude::Ref<EbSettingsTabWatchdog>& {
+    static geode::prelude::Ref<EbSettingsTabWatchdog> s_watchdog;
     return s_watchdog;
 }

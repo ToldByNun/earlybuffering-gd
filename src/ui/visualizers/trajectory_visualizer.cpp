@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "trajectory_visualizer.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../core/assist/assist_clock.hpp"
@@ -14,33 +15,33 @@
 #include <cmath>
 #include <vector>
 
-geode::prelude::ccColor4F TrajectoryVisualizerImplementation::col(float result, float gameObject,
+geode::prelude::ccColor4F EbTrajectoryVisualizerImplementation::col(float result, float gameObject,
                                                                   float secondValue,
                                                                   float firstValue) {
     return {result, gameObject, secondValue, firstValue};
 }
 
 // Hold Jump from frame 0 for the whole sample (never release).
-std::vector<ReplayEvent> TrajectoryVisualizerImplementation::makeHoldEvents() {
-    return {ReplayEvent{0, 1, false, true}};
+std::vector<EbReplayEvent> EbTrajectoryVisualizerImplementation::makeHoldEvents() {
+    return {EbReplayEvent{0, 1, false, true}};
 }
 
 // Coast / not-hold: force Jump up from frame 0.
-std::vector<ReplayEvent> TrajectoryVisualizerImplementation::makeCoastEvents() {
-    return {ReplayEvent{0, 1, false, false}};
+std::vector<EbReplayEvent> EbTrajectoryVisualizerImplementation::makeCoastEvents() {
+    return {EbReplayEvent{0, 1, false, false}};
 }
 
 // Press assist: coast until delay, then hold Jump (delay 0 = hold now).
-std::vector<ReplayEvent> TrajectoryVisualizerImplementation::makeDelayedHoldEvents(int delay) {
+std::vector<EbReplayEvent> EbTrajectoryVisualizerImplementation::makeDelayedHoldEvents(int delay) {
     if (!(delay <= 0)) {
-        return {ReplayEvent{0, 1, false, false}, ReplayEvent{delay, 1, false, true}};
+        return {EbReplayEvent{0, 1, false, false}, EbReplayEvent{delay, 1, false, true}};
     }
-    return TrajectoryVisualizerImplementation::makeHoldEvents();
+    return EbTrajectoryVisualizerImplementation::makeHoldEvents();
 }
 
 // Drop near-duplicate points so DrawNode work stays cheap.
 std::vector<geode::prelude::CCPoint>
-TrajectoryVisualizerImplementation::decimate(std::vector<geode::prelude::CCPoint> const& pts,
+EbTrajectoryVisualizerImplementation::decimate(std::vector<geode::prelude::CCPoint> const& pts,
                                              float minDistSq) {
     if (pts.size() < 3)
         return pts;
@@ -57,8 +58,8 @@ TrajectoryVisualizerImplementation::decimate(std::vector<geode::prelude::CCPoint
     return out;
 }
 
-void TrajectoryVisualizerImplementation::markDeathX(geode::prelude::CCDrawNode* node,
-                                                    ShadowSimulator::PathSample const& s,
+void EbTrajectoryVisualizerImplementation::markDeathX(geode::prelude::CCDrawNode* node,
+                                                    EbShadowSimulator::PathSample const& s,
                                                     geode::prelude::ccColor4F candidate) {
     if (!node || !s.died || s.points.empty())
         return;
@@ -70,7 +71,7 @@ void TrajectoryVisualizerImplementation::markDeathX(geode::prelude::CCDrawNode* 
                       candidate);
 }
 
-int TrajectoryVisualizerImplementation::surviveBinOfTicks(int ticks) {
+int EbTrajectoryVisualizerImplementation::surviveBinOfTicks(int ticks) {
     if (ticks < 24)
         return 0;
     if (ticks < 48)
@@ -81,12 +82,11 @@ int TrajectoryVisualizerImplementation::surviveBinOfTicks(int ticks) {
     return 2;
 }
 
-TrajectoryVisualizer& TrajectoryVisualizer::get() {
-    static TrajectoryVisualizer inst;
-    return inst;
+EbTrajectoryVisualizer& EbTrajectoryVisualizer::get() {
+    return EbClassManager::get().service<EbTrajectoryVisualizer>();
 }
 
-void TrajectoryVisualizer::setEnabled(bool on) {
+void EbTrajectoryVisualizer::setEnabled(bool on) {
     m_enabled = on;
     if (!on) {
         m_ticksSinceRebuild = 0;
@@ -94,12 +94,12 @@ void TrajectoryVisualizer::setEnabled(bool on) {
     }
 }
 
-void TrajectoryVisualizer::toggle() {
+void EbTrajectoryVisualizer::toggle() {
     setEnabled(!m_enabled);
-    AssistLog::info(fmt::format("TRAJ: visualizer {}", m_enabled ? "ON" : "OFF"));
+    EbAssistLog::info(fmt::format("TRAJ: visualizer {}", m_enabled ? "ON" : "OFF"));
 }
 
-std::string TrajectoryVisualizer::statusHint() const {
+std::string EbTrajectoryVisualizer::statusHint() const {
     if (!m_enabled)
         return {};
     if (m_v2Live) {
@@ -122,7 +122,7 @@ std::string TrajectoryVisualizer::statusHint() const {
     return fmt::format("traj H/C {}t (short)", m_lastDrawCap);
 }
 
-void TrajectoryVisualizer::attach(PlayLayer* layer) {
+void EbTrajectoryVisualizer::attach(PlayLayer* layer) {
     ensureNode(layer);
     m_ticksSinceRebuild = 999;
     m_lastRebuildX = -1e9f;
@@ -135,7 +135,7 @@ void TrajectoryVisualizer::attach(PlayLayer* layer) {
     m_bestDelay = -1;
 }
 
-void TrajectoryVisualizer::detach(bool layerDying) {
+void EbTrajectoryVisualizer::detach(bool layerDying) {
     m_enabled = false;
     m_ticksSinceRebuild = 0;
     m_hasWindow = false;
@@ -154,13 +154,13 @@ void TrajectoryVisualizer::detach(bool layerDying) {
     m_node = nullptr;
 }
 
-void TrajectoryVisualizer::clear() {
+void EbTrajectoryVisualizer::clear() {
     if (m_node && m_node->getParent())
         m_node->clear();
     m_hasWindow = false;
 }
 
-void TrajectoryVisualizer::ensureNode(PlayLayer* layer) {
+void EbTrajectoryVisualizer::ensureNode(PlayLayer* layer) {
     if (!layer)
         return;
     if (m_node && m_node->getParent())
@@ -182,7 +182,7 @@ void TrajectoryVisualizer::ensureNode(PlayLayer* layer) {
     m_node->retain();
 }
 
-void TrajectoryVisualizer::drawPath(geode::prelude::CCDrawNode* node,
+void EbTrajectoryVisualizer::drawPath(geode::prelude::CCDrawNode* node,
                                     std::vector<geode::prelude::CCPoint> const& pts,
                                     geode::prelude::ccColor4F color, float width, int stride) {
     if (!node || pts.size() < 2)
@@ -204,7 +204,7 @@ void TrajectoryVisualizer::drawPath(geode::prelude::CCDrawNode* node,
     }
 }
 
-void TrajectoryVisualizer::drawBand(geode::prelude::CCDrawNode* node,
+void EbTrajectoryVisualizer::drawBand(geode::prelude::CCDrawNode* node,
                                     std::vector<geode::prelude::CCPoint> const& early,
                                     std::vector<geode::prelude::CCPoint> const& late) {
     if (!node)
@@ -214,7 +214,7 @@ void TrajectoryVisualizer::drawBand(geode::prelude::CCDrawNode* node,
         return;
 
     geode::prelude::ccColor4F fill =
-        TrajectoryVisualizerImplementation::col(0.35f, 0.85f, 1.f, 0.10f);
+        EbTrajectoryVisualizerImplementation::col(0.35f, 0.85f, 1.f, 0.10f);
     int step = std::max(2, static_cast<int>(count) / 16);
     for (size_t index = 0; index + static_cast<size_t>(step) < count;
          index += static_cast<size_t>(step)) {
@@ -227,7 +227,7 @@ void TrajectoryVisualizer::drawBand(geode::prelude::CCDrawNode* node,
     }
 }
 
-void TrajectoryVisualizer::drawPredWindow(geode::prelude::CCDrawNode* node,
+void EbTrajectoryVisualizer::drawPredWindow(geode::prelude::CCDrawNode* node,
                                           geode::prelude::CCPoint const& at,
                                           geode::prelude::ccColor4F stroke,
                                           geode::prelude::ccColor4F fill) {
@@ -245,10 +245,10 @@ void TrajectoryVisualizer::drawPredWindow(geode::prelude::CCDrawNode* node,
     node->drawDot(at, 2.8f, stroke);
 }
 
-void TrajectoryVisualizer::onPhysicsTick(PlayLayer* layer, float) {
+void EbTrajectoryVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     if (!m_enabled || !layer || !m_node)
         return;
-    if (ShadowSimulator::get().isSimulating())
+    if (EbShadowSimulator::get().isSimulating())
         return;
     if (!layer->m_objectLayer)
         return;
@@ -266,13 +266,13 @@ void TrajectoryVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     rebuild(layer);
 }
 
-void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
-    PerfTrace::Scope const scope("trajRebuild");
+void EbTrajectoryVisualizer::rebuild(PlayLayer* layer) {
+    EbPerfTrace::Scope const scope("trajRebuild");
     if (!this->m_enabled || !this->m_node || !layer || !layer->m_player1)
         return;
     if (!this->m_node->getParent())
         return;
-    if (ShadowSimulator::get().isSimulating())
+    if (EbShadowSimulator::get().isSimulating())
         return;
 
     auto* player = layer->m_player1;
@@ -281,27 +281,27 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         return;
     }
 
-    float deltaTime = AssistController::get().simDt();
+    float deltaTime = EbAssistController::get().simDt();
     if (deltaTime <= 0.f)
-        deltaTime = static_cast<float>(1.0 / AssistClock::kNominalTps);
+        deltaTime = static_cast<float>(1.0 / EbAssistClock::kNominalTps);
 
-    auto params = StageConfig::paramsFor(player);
-    int liveLimit = params.overwrite ? params.ticks : StageConfig::ticksAll();
-    auto const kind = StageConfig::kindOf(player);
+    auto params = EbStageConfig::paramsFor(player);
+    int liveLimit = params.overwrite ? params.ticks : EbStageConfig::ticksAll();
+    auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
-    bool const trustOk = SimTrust::get().okAt(x);
-    float const capMul = StageConfig::autoTune() ? LevelProfile::get().capMul(kind) : 1.f;
-    auto const caps = AssistHorizon::resolve(kind, trustOk, liveLimit, capMul, params.cap,
-                                             StageConfig::lookAheadCap());
+    bool const trustOk = EbSimTrust::get().okAt(x);
+    float const capMul = EbStageConfig::autoTune() ? EbLevelProfile::get().capMul(kind) : 1.f;
+    auto const caps = EbAssistHorizon::resolve(kind, trustOk, liveLimit, capMul, params.cap,
+                                             EbStageConfig::lookAheadCap());
 
-    bool const v2 = !StageConfig::assistPickLegacy();
+    bool const v2 = !EbStageConfig::assistPickLegacy();
     m_v2Live = v2;
     m_lfExtended = false;
     m_predCount = 0;
     m_bestDelay = -1;
 
     // v1: trajDraw. v2 Live debug: LongForesight scoreHorizon (min 48).
-    int lookAhead = v2 ? std::max(LongForesight::kMinHorizon, caps.scoreHorizon) : caps.trajDraw;
+    int lookAhead = v2 ? std::max(EbLongForesight::kMinHorizon, caps.scoreHorizon) : caps.trajDraw;
     m_trustLong = trustOk;
     m_hasWindow = lookAhead > 0;
 
@@ -311,32 +311,32 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         return;
     }
 
-    int slot = ShadowSimulator::get().captureSnapshot(player);
+    int slot = EbShadowSimulator::get().captureSnapshot(player);
     if (slot < 0)
         return;
 
-    auto& sim = ShadowSimulator::get();
+    auto& sim = EbShadowSimulator::get();
 
-    auto holdRaw = sim.samplePath(layer, slot, TrajectoryVisualizerImplementation::makeHoldEvents(),
+    auto holdRaw = sim.samplePath(layer, slot, EbTrajectoryVisualizerImplementation::makeHoldEvents(),
                                   deltaTime, lookAhead);
     auto coastRaw = sim.samplePath(
-        layer, slot, TrajectoryVisualizerImplementation::makeCoastEvents(), deltaTime, lookAhead);
+        layer, slot, EbTrajectoryVisualizerImplementation::makeCoastEvents(), deltaTime, lookAhead);
 
     // LongForesight parity: extend once if press/hold dies inside the window.
     if (v2 && holdRaw.died && holdRaw.deathFrame >= 0) {
-        int const lookCap = StageConfig::lookAheadCap();
+        int const lookCap = EbStageConfig::lookAheadCap();
         int const hMax =
             lookCap > 0 ? std::max(lookAhead, lookCap)
-                        : std::min(320, lookAhead + lookAhead / 2 + LongForesight::kExtendStep);
-        int const h1 = LongForesight::extendHorizon(lookAhead, holdRaw.deathFrame, hMax);
+                        : std::min(320, lookAhead + lookAhead / 2 + EbLongForesight::kExtendStep);
+        int const h1 = EbLongForesight::extendHorizon(lookAhead, holdRaw.deathFrame, hMax);
         if (h1 > lookAhead) {
             lookAhead = h1;
             m_lfExtended = true;
             holdRaw =
-                sim.samplePath(layer, slot, TrajectoryVisualizerImplementation::makeHoldEvents(),
+                sim.samplePath(layer, slot, EbTrajectoryVisualizerImplementation::makeHoldEvents(),
                                deltaTime, lookAhead);
             coastRaw =
-                sim.samplePath(layer, slot, TrajectoryVisualizerImplementation::makeCoastEvents(),
+                sim.samplePath(layer, slot, EbTrajectoryVisualizerImplementation::makeCoastEvents(),
                                deltaTime, lookAhead);
         }
     }
@@ -345,8 +345,8 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     m_lastBaseCap = baseLookAhead;
     m_lastDrawCap = lookAhead;
 
-    auto hold = TrajectoryVisualizerImplementation::decimate(holdRaw.points, 3.f * 3.f);
-    auto coast = TrajectoryVisualizerImplementation::decimate(coastRaw.points, 3.f * 3.f);
+    auto hold = EbTrajectoryVisualizerImplementation::decimate(holdRaw.points, 3.f * 3.f);
+    auto coast = EbTrajectoryVisualizerImplementation::decimate(coastRaw.points, 3.f * 3.f);
 
     m_node->clear();
 
@@ -354,18 +354,18 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     drawBand(m_node, hold, coast);
 
     // Main green = hold · Red = coast (not hold)
-    drawPath(m_node, hold, TrajectoryVisualizerImplementation::col(0.15f, 1.f, 0.4f, 0.95f), 1.35f,
+    drawPath(m_node, hold, EbTrajectoryVisualizerImplementation::col(0.15f, 1.f, 0.4f, 0.95f), 1.35f,
              1);
-    drawPath(m_node, coast, TrajectoryVisualizerImplementation::col(1.f, 0.28f, 0.22f, 0.75f), 1.0f,
+    drawPath(m_node, coast, EbTrajectoryVisualizerImplementation::col(1.f, 0.28f, 0.22f, 0.75f), 1.0f,
              1);
 
     auto p0 = player->getPosition();
-    m_node->drawDot(p0, 3.f, TrajectoryVisualizerImplementation::col(1.f, 1.f, 1.f, 1.f));
+    m_node->drawDot(p0, 3.f, EbTrajectoryVisualizerImplementation::col(1.f, 1.f, 1.f, 1.f));
 
-    TrajectoryVisualizerImplementation::markDeathX(
-        m_node, holdRaw, TrajectoryVisualizerImplementation::col(0.15f, 1.f, 0.4f, 0.7f));
-    TrajectoryVisualizerImplementation::markDeathX(
-        m_node, coastRaw, TrajectoryVisualizerImplementation::col(1.f, 0.28f, 0.22f, 0.7f));
+    EbTrajectoryVisualizerImplementation::markDeathX(
+        m_node, holdRaw, EbTrajectoryVisualizerImplementation::col(0.15f, 1.f, 0.4f, 0.7f));
+    EbTrajectoryVisualizerImplementation::markDeathX(
+        m_node, coastRaw, EbTrajectoryVisualizerImplementation::col(1.f, 0.28f, 0.22f, 0.7f));
 
     if (!v2)
         return;
@@ -388,22 +388,22 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
     }
 
     geode::prelude::ccColor4F const yellowStroke =
-        TrajectoryVisualizerImplementation::col(1.f, 0.92f, 0.2f, 0.95f);
+        EbTrajectoryVisualizerImplementation::col(1.f, 0.92f, 0.2f, 0.95f);
     geode::prelude::ccColor4F const yellowFill =
-        TrajectoryVisualizerImplementation::col(1.f, 0.88f, 0.15f, 0.18f);
+        EbTrajectoryVisualizerImplementation::col(1.f, 0.88f, 0.15f, 0.18f);
     geode::prelude::ccColor4F const yellowPath =
-        TrajectoryVisualizerImplementation::col(1.f, 0.85f, 0.2f, 0.45f);
+        EbTrajectoryVisualizerImplementation::col(1.f, 0.85f, 0.2f, 0.45f);
     geode::prelude::ccColor4F const darkGreen =
-        TrajectoryVisualizerImplementation::col(0.05f, 0.55f, 0.22f, 0.95f);
+        EbTrajectoryVisualizerImplementation::col(0.05f, 0.55f, 0.22f, 0.95f);
 
-    AssistPickV2::CandView bestView{};
+    EbAssistPickV2::CandView bestView{};
     int bestDelay = -1;
-    ShadowSimulator::PathSample bestRaw{};
+    EbShadowSimulator::PathSample bestRaw{};
     bool haveBest = false;
     float const lam = params.latencyWeight;
 
-    auto considerBest = [&](int delay, ShadowSimulator::PathSample const& raw,
-                            AssistPickV2::CandView const& view) {
+    auto considerBest = [&](int delay, EbShadowSimulator::PathSample const& raw,
+                            EbAssistPickV2::CandView const& view) {
         if (!haveBest) {
             haveBest = true;
             bestView = view;
@@ -421,7 +421,7 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
         if (!view.viable && bestView.viable)
             return;
         if (view.viable) {
-            if (AssistPickV2::foresightBetter(view, delay, bestView, bestDelay, lam)) {
+            if (EbAssistPickV2::foresightBetter(view, delay, bestView, bestDelay, lam)) {
                 bestView = view;
                 bestDelay = delay;
                 bestRaw = raw;
@@ -441,7 +441,7 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
             (delay == 0)
                 ? holdRaw
                 : sim.samplePath(layer, slot,
-                                 TrajectoryVisualizerImplementation::makeDelayedHoldEvents(delay),
+                                 EbTrajectoryVisualizerImplementation::makeDelayedHoldEvents(delay),
                                  deltaTime, lookAhead);
 
         // Jump / prediction window at the delay frame (or start).
@@ -456,24 +456,24 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
 
         // Yellow ghost for every candidate (including deaths).
         if (delay != 0) {
-            auto pts = TrajectoryVisualizerImplementation::decimate(rawData.points, 4.f * 4.f);
+            auto pts = EbTrajectoryVisualizerImplementation::decimate(rawData.points, 4.f * 4.f);
             drawPath(m_node, pts, yellowPath, 0.85f, 1);
             if (rawData.died)
-                TrajectoryVisualizerImplementation::markDeathX(m_node, rawData, yellowStroke);
+                EbTrajectoryVisualizerImplementation::markDeathX(m_node, rawData, yellowStroke);
         }
 
-        AssistPickV2::CandView view{};
+        EbAssistPickV2::CandView view{};
         view.viable = !rawData.died;
         view.surviveTicks = rawData.died ? std::max(0, rawData.deathFrame)
                                          : std::max(0, static_cast<int>(rawData.points.size()) - 1);
-        view.surviveBin = TrajectoryVisualizerImplementation::surviveBinOfTicks(view.surviveTicks);
+        view.surviveBin = EbTrajectoryVisualizerImplementation::surviveBinOfTicks(view.surviveTicks);
         view.endX = rawData.points.empty() ? x : rawData.points.back().x;
         considerBest(delay, rawData, view);
     }
 
     if (haveBest && bestDelay >= 0) {
         m_bestDelay = bestDelay;
-        auto bestPts = TrajectoryVisualizerImplementation::decimate(bestRaw.points, 3.f * 3.f);
+        auto bestPts = EbTrajectoryVisualizerImplementation::decimate(bestRaw.points, 3.f * 3.f);
         drawPath(m_node, bestPts, darkGreen, 1.7f, 1);
         if (!bestRaw.points.empty()) {
             size_t index = 0;
@@ -483,6 +483,6 @@ void TrajectoryVisualizer::rebuild(PlayLayer* layer) {
             m_node->drawDot(bestRaw.points[index], 4.f, darkGreen);
         }
         if (bestRaw.died)
-            TrajectoryVisualizerImplementation::markDeathX(m_node, bestRaw, darkGreen);
+            EbTrajectoryVisualizerImplementation::markDeathX(m_node, bestRaw, darkGreen);
     }
 }

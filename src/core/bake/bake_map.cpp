@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "bake_map.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
@@ -15,15 +16,15 @@
 #include <string>
 #include <vector>
 
-std::filesystem::path BakeMapImplementation::bakesDir() {
+std::filesystem::path EbBakeMapImplementation::bakesDir() {
     return geode::prelude::Mod::get()->getSaveDir() / "bakes";
 }
 
-std::filesystem::path BakeMapImplementation::bakePath(std::string const& key) {
-    return BakeMapImplementation::bakesDir() / (key + ".json");
+std::filesystem::path EbBakeMapImplementation::bakePath(std::string const& key) {
+    return EbBakeMapImplementation::bakesDir() / (key + ".json");
 }
 
-int BakeMapImplementation::nextJumpFrame(std::vector<ReplayEvent> const& ev, int fromIndex,
+int EbBakeMapImplementation::nextJumpFrame(std::vector<EbReplayEvent> const& ev, int fromIndex,
                                          bool player2) {
     for (int index = fromIndex + 1; index < static_cast<int>(ev.size()); ++index) {
         if (ev[index].button != 1)
@@ -36,10 +37,10 @@ int BakeMapImplementation::nextJumpFrame(std::vector<ReplayEvent> const& ev, int
     return -1;
 }
 
-int BakeMapImplementation::resolveRadius(int bakeRadius, BakeMethod method) {
+int EbBakeMapImplementation::resolveRadius(int bakeRadius, BakeMethod method) {
     if (bakeRadius > 0)
         return bakeRadius;
-    int base = StageConfig::ticksAll();
+    int base = EbStageConfig::ticksAll();
     if (method == BakeMethod::BruteForce) {
         return std::max(32, base * 4);
     }
@@ -48,7 +49,7 @@ int BakeMapImplementation::resolveRadius(int bakeRadius, BakeMethod method) {
 
 // After TPS remap, same-source-frame press+release can collapse to one bake
 // frame. Push releases forward so every press is held ≥1 bake tick.
-void BakeMapImplementation::ensureMinHoldTicks(std::vector<ReplayEvent>& ev, int minHold) {
+void EbBakeMapImplementation::ensureMinHoldTicks(std::vector<EbReplayEvent>& ev, int minHold) {
     if (minHold <= 0 || ev.empty())
         return;
     for (size_t index = 0; index < ev.size(); ++index) {
@@ -77,24 +78,24 @@ void BakeMapImplementation::ensureMinHoldTicks(std::vector<ReplayEvent>& ev, int
 
 // Physics-bypass macros (MegaHack 1000–3000): keep author quantum 1:1.
 // Mild FPS (60/360) still snap to live ~240 — discrete collisions match the game.
-double BakeMapImplementation::resolveBakeTps(double srcTps, double liveTps) {
-    if (srcTps > AssistClock::kPlanSnapTpsHi) {
+double EbBakeMapImplementation::resolveBakeTps(double srcTps, double liveTps) {
+    if (srcTps > EbAssistClock::kPlanSnapTpsHi) {
         return std::min(srcTps, 4000.0);
     }
-    if (liveTps < AssistClock::kPlanSnapTpsLo || liveTps > AssistClock::kPlanSnapTpsHi) {
-        return AssistClock::kNominalTps;
+    if (liveTps < EbAssistClock::kPlanSnapTpsLo || liveTps > EbAssistClock::kPlanSnapTpsHi) {
+        return EbAssistClock::kNominalTps;
     }
     return liveTps;
 }
 
 // Scale a ~240-tick radius/horizon to author TPS wall-time.
-int BakeMapImplementation::scaleBakeTicks(int ticks, double bakeTps) {
+int EbBakeMapImplementation::scaleBakeTicks(int ticks, double bakeTps) {
     if (ticks <= 0)
         return ticks;
-    if (bakeTps <= AssistClock::kPlanSnapTpsHi)
+    if (bakeTps <= EbAssistClock::kPlanSnapTpsHi)
         return ticks;
     long long scaled =
-        std::llround(static_cast<double>(ticks) * (bakeTps / AssistClock::kNominalTps));
+        std::llround(static_cast<double>(ticks) * (bakeTps / EbAssistClock::kNominalTps));
     if (scaled < ticks)
         scaled = ticks;
     if (scaled > 2000)
@@ -103,10 +104,10 @@ int BakeMapImplementation::scaleBakeTicks(int ticks, double bakeTps) {
 }
 
 // Remap author FPS → bake TPS (no-op when bakeTps == srcTps), min-hold, P1-only.
-std::vector<ReplayEvent>
-BakeMapImplementation::prepareBakeTimeline(std::vector<ReplayEvent> const& src, double srcTps,
+std::vector<EbReplayEvent>
+EbBakeMapImplementation::prepareBakeTimeline(std::vector<EbReplayEvent> const& src, double srcTps,
                                            double bakeTps, bool forceSoloP1) {
-    std::vector<ReplayEvent> event = src;
+    std::vector<EbReplayEvent> event = src;
     if (forceSoloP1) {
         // Keep real dual P2 only when P1 is majority; else MegaHack all-P2 → P1.
         int playerOne = 0;
@@ -123,14 +124,14 @@ BakeMapImplementation::prepareBakeTimeline(std::vector<ReplayEvent> const& src, 
         } else {
             // Drop P2 dual clicks from P1 bake timeline (don't feed into ghost).
             event.erase(std::remove_if(event.begin(), event.end(),
-                                       [](ReplayEvent const& e) { return e.player2; }),
+                                       [](EbReplayEvent const& e) { return e.player2; }),
                         event.end());
         }
     }
     if (srcTps > 0.0 && bakeTps > 0.0 && std::fabs(srcTps - bakeTps) >= 0.5) {
         float const srcDt = static_cast<float>(1.0 / srcTps);
         for (auto& e : event) {
-            e.frame = AssistClock::get().remapTick(bakeTps, e.frame, srcDt);
+            e.frame = EbAssistClock::get().remapTick(bakeTps, e.frame, srcDt);
         }
     }
     // MegaHack GDR is often 1-based (first physics tick = frame 1). Shift so the
@@ -146,62 +147,61 @@ BakeMapImplementation::prepareBakeTimeline(std::vector<ReplayEvent> const& src, 
                 e.frame -= 1;
         }
     }
-    BakeMapImplementation::ensureMinHoldTicks(event, 1);
+    EbBakeMapImplementation::ensureMinHoldTicks(event, 1);
     return event;
 }
 
-unsigned BakeMapImplementation::workerCount() {
+unsigned EbBakeMapImplementation::workerCount() {
     // Main-thread only: Cocos/PlayLayer are not thread-safe.
     return 1u;
 }
 
-BakeMap& BakeMap::get() {
-    static BakeMap inst;
-    return inst;
+EbBakeMap& EbBakeMap::get() {
+    return EbClassManager::get().service<EbBakeMap>();
 }
 
-void BakeMap::clear() {
+void EbBakeMap::clear() {
     m_data = {};
     m_loaded = false;
     this->m_dirty = false;
 }
 
-void BakeMap::clearPendingReplay() {
+void EbBakeMap::clearPendingReplay() {
     m_replay = {};
     m_hasReplay = false;
 }
 
-void BakeMap::setPendingReplay(ImportedReplay replay) {
+void EbBakeMap::setPendingReplay(EbImportedReplay replay) {
     m_replay = std::move(replay);
     m_hasReplay = true;
-    AssistLog::info(fmt::format("BAKE: loaded replay {} ({} events, {:.0f} tps, {})",
+    EbAssistLog::info(fmt::format("BAKE: loaded replay {} ({} events, {:.0f} tps, {})",
                                 m_replay.sourceName, m_replay.events.size(), m_replay.tps,
                                 m_replay.format));
 }
 
-void BakeMap::loadForLevel(GJGameLevel* level) {
+void EbBakeMap::loadForLevel(GJGameLevel* level) {
     m_data = {};
     m_loaded = false;
     this->m_dirty = false;
     if (!level)
         return;
-    m_data.levelKey = LevelProfile::makeKey(level);
+    m_data.levelKey = EbLevelProfile::makeKey(level);
     auto result = readFile();
     if (result.isOk() && !m_data.clicks.empty()) {
         m_loaded = true;
-        AssistLog::debug(fmt::format("BAKE: loaded map {} ({} clicks, {}, {})", m_data.levelKey,
+        EbAssistLog::debug(fmt::format("BAKE: loaded map {} ({} clicks, {}, {})", m_data.levelKey,
                                      m_data.clicks.size(), m_data.sourceReplay, m_data.method));
         return;
     }
     // Empty / missing bake file — keep levelKey for next save, not a loaded map.
     m_data.sourceReplay.clear();
     m_data.method.clear();
-    m_data.tps = AssistClock::kNominalTps;
+    m_data.tps = EbAssistClock::kNominalTps;
     m_data.clicks.clear();
     m_loaded = false;
 }
 
-void BakeMap::save() const {
+void EbBakeMap::save() const {
     if (!m_loaded || m_data.levelKey.empty())
         return;
     if (!this->m_dirty)
@@ -209,14 +209,14 @@ void BakeMap::save() const {
     auto result = writeFile();
     if (result.isOk()) {
         this->m_dirty = false;
-        AssistLog::debug(fmt::format("BAKE: saved {} ({} clicks, {})", m_data.levelKey,
+        EbAssistLog::debug(fmt::format("BAKE: saved {} ({} clicks, {})", m_data.levelKey,
                                      m_data.clicks.size(), m_data.method));
     } else {
-        AssistLog::debug(fmt::format("BAKE: save failed: {}", result.unwrapErr()));
+        EbAssistLog::debug(fmt::format("BAKE: save failed: {}", result.unwrapErr()));
     }
 }
 
-std::string BakeMap::statusLine() const {
+std::string EbBakeMap::statusLine() const {
     if (m_progress.running.load()) {
         return fmt::format("baking {}/{} ({:.0f}%)", m_progress.done.load(),
                            m_progress.total.load(), m_progress.fraction() * 100.f);
@@ -234,7 +234,7 @@ std::string BakeMap::statusLine() const {
     return "no bake";
 }
 
-std::string BakeMap::pauseStatusLine() const {
+std::string EbBakeMap::pauseStatusLine() const {
     std::string line = statusLine();
     if (m_hasReplay) {
         line = fmt::format("Replay: {} ({} ev @ {:.0f} tps)\n{}", m_replay.sourceName,
@@ -245,40 +245,40 @@ std::string BakeMap::pauseStatusLine() const {
     return line;
 }
 
-int BakeMap::refineSelfWindows(PlayLayer* layer, int startSnapshotSlot,
-                               std::vector<BakedClick>& clicks, int bakeRadius, int budgetSims,
+int EbBakeMap::refineSelfWindows(PlayLayer* layer, int startSnapshotSlot,
+                               std::vector<EbBakedClick>& clicks, int bakeRadius, int budgetSims,
                                std::atomic<bool>* cancel) {
-    return BakeWindowIndex::refineSelfWindows(*this, layer, startSnapshotSlot, clicks, bakeRadius,
+    return EbBakeWindowIndex::refineSelfWindows(*this, layer, startSnapshotSlot, clicks, bakeRadius,
                                               budgetSims, cancel);
 }
 
-std::vector<BakedClick const*> BakeMap::nextClicksAfter(float playerX, bool down, bool player2,
+std::vector<EbBakedClick const*> EbBakeMap::nextClicksAfter(float playerX, bool down, bool player2,
                                                         std::optional<GameModeKind> preferMode,
                                                         int maxCount) const {
-    return BakeWindowIndex::nextClicksAfter(*this, playerX, down, player2, preferMode, maxCount);
+    return EbBakeWindowIndex::nextClicksAfter(*this, playerX, down, player2, preferMode, maxCount);
 }
 
-int BakeMap::mergeSelfClicks(std::vector<BakedClick> const& incoming) {
-    return BakeWindowIndex::mergeSelfClicks(*this, incoming);
+int EbBakeMap::mergeSelfClicks(std::vector<EbBakedClick> const& incoming) {
+    return EbBakeWindowIndex::mergeSelfClicks(*this, incoming);
 }
 
-float BakeMap::windowHalfW(int earliest, int latest) {
-    return BakeWindowIndex::windowHalfW(earliest, latest);
+float EbBakeMap::windowHalfW(int earliest, int latest) {
+    return EbBakeWindowIndex::windowHalfW(earliest, latest);
 }
 
-BakedClick const* BakeMap::findNear(float playerX, int approxFrame, bool down, bool player2,
+EbBakedClick const* EbBakeMap::findNear(float playerX, int approxFrame, bool down, bool player2,
                                     std::optional<GameModeKind> preferMode) const {
-    return BakeWindowIndex::findNear(*this, playerX, approxFrame, down, player2, preferMode);
+    return EbBakeWindowIndex::findNear(*this, playerX, approxFrame, down, player2, preferMode);
 }
 
-bool BakeMap::testShiftedClick(PlayLayer* layer, int startSnapshotSlot,
-                               std::vector<ReplayEvent> timeline, int eventIndex, int testFrame,
+bool EbBakeMap::testShiftedClick(PlayLayer* layer, int startSnapshotSlot,
+                               std::vector<EbReplayEvent> timeline, int eventIndex, int testFrame,
                                int untilFrame, float deltaTime, int substeps) const {
-    return BakeWindowIndex::testShiftedClick(*this, layer, startSnapshotSlot, timeline, eventIndex,
+    return EbBakeWindowIndex::testShiftedClick(*this, layer, startSnapshotSlot, timeline, eventIndex,
                                              testFrame, untilFrame, deltaTime, substeps);
 }
 
-geode::Result<int> BakeMap::bake(PlayLayer* layer, int startSnapshotSlot, int bakeRadius,
+geode::Result<int> EbBakeMap::bake(PlayLayer* layer, int startSnapshotSlot, int bakeRadius,
                                  BakeMethod method) {
     if (m_progress.running.exchange(true)) {
         return geode::Err("Bake already running");
@@ -301,16 +301,16 @@ geode::Result<int> BakeMap::bake(PlayLayer* layer, int startSnapshotSlot, int ba
     return finish(bakeReplay(layer, startSnapshotSlot, bakeRadius));
 }
 
-geode::Result<int> BakeMap::bakeReplay(PlayLayer* layer, int startSnapshotSlot, int bakeRadius) {
-    return BakeReplayGenerator::bakeReplay(*this, layer, startSnapshotSlot, bakeRadius);
+geode::Result<int> EbBakeMap::bakeReplay(PlayLayer* layer, int startSnapshotSlot, int bakeRadius) {
+    return EbBakeReplayGenerator::bakeReplay(*this, layer, startSnapshotSlot, bakeRadius);
 }
 
-geode::Result<int> BakeMap::bakeBrute(PlayLayer* layer, int startSnapshotSlot, int bakeRadius) {
-    return BakeBruteGenerator::bakeBrute(*this, layer, startSnapshotSlot, bakeRadius);
+geode::Result<int> EbBakeMap::bakeBrute(PlayLayer* layer, int startSnapshotSlot, int bakeRadius) {
+    return EbBakeBruteGenerator::bakeBrute(*this, layer, startSnapshotSlot, bakeRadius);
 }
 
-geode::Result<> BakeMap::writeFile() const {
-    (void)geode::utils::file::createDirectoryAll(BakeMapImplementation::bakesDir());
+geode::Result<> EbBakeMap::writeFile() const {
+    (void)geode::utils::file::createDirectoryAll(EbBakeMapImplementation::bakesDir());
     matjson::Value root = matjson::Value::object();
     root["version"] = 1;
     root["key"] = m_data.levelKey;
@@ -328,17 +328,17 @@ geode::Result<> BakeMap::writeFile() const {
         otherIndex["down"] = c.down;
         otherIndex["player2"] = c.player2;
         otherIndex["x"] = c.x;
-        otherIndex["mode"] = StageConfig::kindName(c.mode);
+        otherIndex["mode"] = EbStageConfig::kindName(c.mode);
         if (c.holdAssist)
             otherIndex["holdAssist"] = true;
         arr.push_back(std::move(otherIndex));
     }
     root["clicks"] = arr;
-    return geode::utils::file::writeToJson(BakeMapImplementation::bakePath(m_data.levelKey), root);
+    return geode::utils::file::writeToJson(EbBakeMapImplementation::bakePath(m_data.levelKey), root);
 }
 
-geode::Result<> BakeMap::readFile() {
-    auto result = geode::utils::file::readJson(BakeMapImplementation::bakePath(m_data.levelKey));
+geode::Result<> EbBakeMap::readFile() {
+    auto result = geode::utils::file::readJson(EbBakeMapImplementation::bakePath(m_data.levelKey));
     if (result.isErr())
         return geode::Err(result.unwrapErr());
     auto root = result.unwrap();
@@ -354,7 +354,7 @@ geode::Result<> BakeMap::readFile() {
         return geode::Ok();
 
     for (auto const& j : root["clicks"]) {
-        BakedClick c;
+        EbBakedClick c;
         c.nominalFrame = static_cast<int>(j["nominal"].asInt().unwrapOr(0));
         c.earliest = static_cast<int>(j["earliest"].asInt().unwrapOr(c.nominalFrame));
         c.latest = static_cast<int>(j["latest"].asInt().unwrapOr(c.nominalFrame));
@@ -364,8 +364,8 @@ geode::Result<> BakeMap::readFile() {
         c.holdAssist = j.contains("holdAssist") ? j["holdAssist"].asBool().unwrapOr(false) : false;
         auto modeName = j.contains("mode") ? j["mode"].asString().unwrapOr("cube") : "cube";
         c.mode = GameModeKind::Cube;
-        for (int index = 0; index < StageConfig::MODE_COUNT; ++index) {
-            if (modeName == StageConfig::kindName(static_cast<GameModeKind>(index))) {
+        for (int index = 0; index < EbStageConfig::MODE_COUNT; ++index) {
+            if (modeName == EbStageConfig::kindName(static_cast<GameModeKind>(index))) {
                 c.mode = static_cast<GameModeKind>(index);
                 break;
             }

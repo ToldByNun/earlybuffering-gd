@@ -11,7 +11,7 @@
 #include <vector>
 
 // Wave/Ship/Swing prefer earlier clicks; Cube tolerates delay more.
-float StageConfigImplementation::defaultLatencyWeight(int modeIndex) {
+float EbStageConfigImplementation::defaultLatencyWeight(int modeIndex) {
     static float const kDefaults[] = {
         0.25f, // Cube
         0.75f, // Ship
@@ -22,66 +22,66 @@ float StageConfigImplementation::defaultLatencyWeight(int modeIndex) {
         0.40f, // Spider
         0.85f, // Swing
     };
-    if (!(modeIndex < 0 || modeIndex >= StageConfig::MODE_COUNT)) {
+    if (!(modeIndex < 0 || modeIndex >= EbStageConfig::MODE_COUNT)) {
         return kDefaults[modeIndex];
     }
     return 0.25f;
 }
 
-StageInfo StageConfigImplementation::s_cachedStage{};
-std::array<ModeParams, StageConfig::MODE_COUNT> StageConfigImplementation::s_cachedModes{};
-bool StageConfigImplementation::s_cachedDebug = true;
-bool StageConfigImplementation::s_cachedPerfTrace = true;
-bool StageConfigImplementation::s_cachedLagProbe = true;
-bool StageConfigImplementation::s_cachedSafeMode = false;
-bool StageConfigImplementation::s_cachedShowOverlay = true;
-bool StageConfigImplementation::s_cachedShowTrajectory = false;
-bool StageConfigImplementation::s_cachedShowBakePath = false;
-bool StageConfigImplementation::s_cachedShowPauseBake = true;
-bool StageConfigImplementation::s_cachedShowPauseHub = true;
-bool StageConfigImplementation::s_cachedAssistPress = true;
-bool StageConfigImplementation::s_cachedAssistRelease = true;
-bool StageConfigImplementation::s_cachedAssistOrbs = true;
-bool StageConfigImplementation::s_cachedAutoTune = false;
-bool StageConfigImplementation::s_cachedSelfBake = false;
-bool StageConfigImplementation::s_cachedSelfBakeNormal = false;
-bool StageConfigImplementation::s_cachedSelfBakeRefine = true;
-bool StageConfigImplementation::s_cachedTriggerBake = true;
-bool StageConfigImplementation::s_cachedTriggerBakeSkipDynamic = true;
-AssistMode StageConfigImplementation::s_cachedAssistMode = AssistMode::Hybrid;
-bool StageConfigImplementation::s_cachedAssistPickLegacy = true; // mod.json default v1 (ex-Legacy)
-AssistEngineKind StageConfigImplementation::s_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
-int StageConfigImplementation::s_cachedSimBudgetUs = 1500;
-int StageConfigImplementation::s_cachedBakeRadius = 0;
-int StageConfigImplementation::s_cachedCpsLimit = 0;
-int StageConfigImplementation::s_cachedMinClickIntervalMs = 0;
-int StageConfigImplementation::s_cachedSmartDepth = 1;
-int StageConfigImplementation::s_cachedSmartCombos = 48;
-int StageConfigImplementation::s_cachedSmartHorizon = 0;
-int StageConfigImplementation::s_cachedRobustK = 0;
-bool StageConfigImplementation::s_cachedRobustJitter = false;
-std::string StageConfigImplementation::s_cachedAssistVerify = "off";
-int StageConfigImplementation::s_cachedTickBudget = 4000;
-bool StageConfigImplementation::s_cachedAssistOnlyPractice = false;
-bool StageConfigImplementation::s_cachedAssistStartposOnly = false;
-int StageConfigImplementation::s_cachedAssistPercentMin = 0;
-int StageConfigImplementation::s_cachedAssistPercentMax = 100;
-std::vector<StageConfig::PercentRange> StageConfigImplementation::s_cachedAssistDisableRanges;
-bool StageConfigImplementation::s_cachedSaveFeedbackSound = true;
-bool StageConfigImplementation::s_cachedSaveFeedbackColor = true;
-bool StageConfigImplementation::s_cachedSaveFeedbackCounter = false;
-StageConfig::ColorRgb StageConfigImplementation::s_cachedSaveIconColor{};
-int StageConfigImplementation::s_cachedSlack = 2;
-int StageConfigImplementation::s_cachedLookAhead = 0;
-bool StageConfigImplementation::s_cachedWindowUnitFrames = false;
-bool StageConfigImplementation::s_cacheInitialized = false;
-bool StageConfigImplementation::s_applying = false;
+EbStageInfo EbStageConfigImplementation::s_cachedStage{};
+std::array<EbModeParams, EbStageConfig::MODE_COUNT> EbStageConfigImplementation::s_cachedModes{};
+bool EbStageConfigImplementation::s_cachedDebug = true;
+bool EbStageConfigImplementation::s_cachedPerfTrace = true;
+bool EbStageConfigImplementation::s_cachedLagProbe = true;
+bool EbStageConfigImplementation::s_cachedSafeMode = false;
+bool EbStageConfigImplementation::s_cachedShowOverlay = true;
+bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
+bool EbStageConfigImplementation::s_cachedShowBakePath = false;
+bool EbStageConfigImplementation::s_cachedShowPauseBake = true;
+bool EbStageConfigImplementation::s_cachedShowPauseHub = true;
+bool EbStageConfigImplementation::s_cachedAssistPress = true;
+bool EbStageConfigImplementation::s_cachedAssistRelease = true;
+bool EbStageConfigImplementation::s_cachedAssistOrbs = true;
+bool EbStageConfigImplementation::s_cachedAutoTune = false;
+bool EbStageConfigImplementation::s_cachedSelfBake = false;
+bool EbStageConfigImplementation::s_cachedSelfBakeNormal = false;
+bool EbStageConfigImplementation::s_cachedSelfBakeRefine = true;
+bool EbStageConfigImplementation::s_cachedTriggerBake = true;
+bool EbStageConfigImplementation::s_cachedTriggerBakeSkipDynamic = true;
+AssistMode EbStageConfigImplementation::s_cachedAssistMode = AssistMode::Hybrid;
+bool EbStageConfigImplementation::s_cachedAssistPickLegacy = true; // mod.json default v1 (ex-Legacy)
+AssistEngineKind EbStageConfigImplementation::s_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+int EbStageConfigImplementation::s_cachedSimBudgetUs = 1500;
+int EbStageConfigImplementation::s_cachedBakeRadius = 0;
+int EbStageConfigImplementation::s_cachedCpsLimit = 0;
+int EbStageConfigImplementation::s_cachedMinClickIntervalMs = 0;
+int EbStageConfigImplementation::s_cachedSmartDepth = 1;
+int EbStageConfigImplementation::s_cachedSmartCombos = 48;
+int EbStageConfigImplementation::s_cachedSmartHorizon = 0;
+int EbStageConfigImplementation::s_cachedRobustK = 0;
+bool EbStageConfigImplementation::s_cachedRobustJitter = false;
+std::string EbStageConfigImplementation::s_cachedAssistVerify = "off";
+int EbStageConfigImplementation::s_cachedTickBudget = 4000;
+bool EbStageConfigImplementation::s_cachedAssistOnlyPractice = false;
+bool EbStageConfigImplementation::s_cachedAssistStartposOnly = false;
+int EbStageConfigImplementation::s_cachedAssistPercentMin = 0;
+int EbStageConfigImplementation::s_cachedAssistPercentMax = 100;
+std::vector<EbStageConfig::PercentRange> EbStageConfigImplementation::s_cachedAssistDisableRanges;
+bool EbStageConfigImplementation::s_cachedSaveFeedbackSound = true;
+bool EbStageConfigImplementation::s_cachedSaveFeedbackColor = true;
+bool EbStageConfigImplementation::s_cachedSaveFeedbackCounter = false;
+EbStageConfig::ColorRgb EbStageConfigImplementation::s_cachedSaveIconColor{};
+int EbStageConfigImplementation::s_cachedSlack = 2;
+int EbStageConfigImplementation::s_cachedLookAhead = 0;
+bool EbStageConfigImplementation::s_cachedWindowUnitFrames = false;
+bool EbStageConfigImplementation::s_cacheInitialized = false;
+bool EbStageConfigImplementation::s_applying = false;
 
-int StageConfigImplementation::clampInt(int value, int lowerBound, int upperBound) {
+int EbStageConfigImplementation::clampInt(int value, int lowerBound, int upperBound) {
     return std::max(lowerBound, std::min(upperBound, value));
 }
 
-int StageConfigImplementation::readInt(geode::prelude::Mod* mod, char const* id, int fallback) {
+int EbStageConfigImplementation::readInt(geode::prelude::Mod* mod, char const* id, int fallback) {
     try {
         return static_cast<int>(mod->getSettingValue<int64_t>(id));
     } catch (...) {
@@ -89,7 +89,7 @@ int StageConfigImplementation::readInt(geode::prelude::Mod* mod, char const* id,
     }
 }
 
-bool StageConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id, bool fallback) {
+bool EbStageConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id, bool fallback) {
     try {
         return mod->getSettingValue<bool>(id);
     } catch (...) {
@@ -97,14 +97,14 @@ bool StageConfigImplementation::readBool(geode::prelude::Mod* mod, char const* i
     }
 }
 
-float StageConfigImplementation::clampPct(float value) {
+float EbStageConfigImplementation::clampPct(float value) {
     if (!(!std::isfinite(value))) {
         return std::max(0.f, std::min(100.f, value));
     }
     return 0.f;
 }
 
-float StageConfigImplementation::readFloat(geode::prelude::Mod* mod, char const* id,
+float EbStageConfigImplementation::readFloat(geode::prelude::Mod* mod, char const* id,
                                            float fallback) {
     try {
         return static_cast<float>(mod->getSettingValue<double>(id));
@@ -113,58 +113,58 @@ float StageConfigImplementation::readFloat(geode::prelude::Mod* mod, char const*
     }
 }
 
-float StageConfigImplementation::round2(float value) {
+float EbStageConfigImplementation::round2(float value) {
     return std::round(value * 100.f) / 100.f;
 }
 
-void StageConfigImplementation::loadAssistOffSlots(geode::prelude::Mod* mod,
-                                                   std::vector<StageConfig::PercentRange>& out) {
+void EbStageConfigImplementation::loadAssistOffSlots(geode::prelude::Mod* mod,
+                                                   std::vector<EbStageConfig::PercentRange>& out) {
     out.clear();
     static char const* fromIds[] = {"assist-off-1-from", "assist-off-2-from", "assist-off-3-from",
                                     "assist-off-4-from", "assist-off-5-from", "assist-off-6-from"};
     static char const* toIds[] = {"assist-off-1-to", "assist-off-2-to", "assist-off-3-to",
                                   "assist-off-4-to", "assist-off-5-to", "assist-off-6-to"};
-    static_assert(sizeof(fromIds) / sizeof(fromIds[0]) == StageConfig::ASSIST_OFF_SLOTS);
-    for (int index = 0; index < StageConfig::ASSIST_OFF_SLOTS; ++index) {
-        float firstValue = StageConfigImplementation::readFloat(mod, fromIds[index], -1.f);
-        float secondValue = StageConfigImplementation::readFloat(mod, toIds[index], -1.f);
+    static_assert(sizeof(fromIds) / sizeof(fromIds[0]) == EbStageConfig::ASSIST_OFF_SLOTS);
+    for (int index = 0; index < EbStageConfig::ASSIST_OFF_SLOTS; ++index) {
+        float firstValue = EbStageConfigImplementation::readFloat(mod, fromIds[index], -1.f);
+        float secondValue = EbStageConfigImplementation::readFloat(mod, toIds[index], -1.f);
         // -1 = unused slot
         if (firstValue < 0.f || secondValue < 0.f)
             continue;
         firstValue =
-            StageConfigImplementation::round2(StageConfigImplementation::clampPct(firstValue));
+            EbStageConfigImplementation::round2(EbStageConfigImplementation::clampPct(firstValue));
         secondValue =
-            StageConfigImplementation::round2(StageConfigImplementation::clampPct(secondValue));
+            EbStageConfigImplementation::round2(EbStageConfigImplementation::clampPct(secondValue));
         if (firstValue > secondValue)
             std::swap(firstValue, secondValue);
         out.push_back({firstValue, secondValue});
     }
 }
 
-void StageConfig::refreshCache() {
-    return StageSettingsCache::refreshCache();
+void EbStageConfig::refreshCache() {
+    return EbStageSettingsCache::refreshCache();
 }
 
-void StageConfigImplementation::ensureCache() {
-    if (!StageConfigImplementation::s_cacheInitialized)
-        StageConfig::refreshCache();
+void EbStageConfigImplementation::ensureCache() {
+    if (!EbStageConfigImplementation::s_cacheInitialized)
+        EbStageConfig::refreshCache();
 }
 
-void StageConfig::toggleDebugLogging() {
-    StageConfigImplementation::ensureCache();
-    StageConfigImplementation::s_cachedDebug = !StageConfigImplementation::s_cachedDebug;
+void EbStageConfig::toggleDebugLogging() {
+    EbStageConfigImplementation::ensureCache();
+    EbStageConfigImplementation::s_cachedDebug = !EbStageConfigImplementation::s_cachedDebug;
     geode::prelude::Mod::get()->setSettingValue<bool>("debug-logging",
-                                                      StageConfigImplementation::s_cachedDebug);
+                                                      EbStageConfigImplementation::s_cachedDebug);
 }
 
-void StageConfig::toggleAutoTune() {
-    StageConfigImplementation::ensureCache();
-    StageConfigImplementation::s_cachedAutoTune = !StageConfigImplementation::s_cachedAutoTune;
+void EbStageConfig::toggleAutoTune() {
+    EbStageConfigImplementation::ensureCache();
+    EbStageConfigImplementation::s_cachedAutoTune = !EbStageConfigImplementation::s_cachedAutoTune;
     geode::prelude::Mod::get()->setSettingValue<bool>("auto-tune",
-                                                      StageConfigImplementation::s_cachedAutoTune);
+                                                      EbStageConfigImplementation::s_cachedAutoTune);
 }
 
-char const* StageConfig::assistModeName(AssistMode mode) {
+char const* EbStageConfig::assistModeName(AssistMode mode) {
     switch (mode) {
     case AssistMode::Live:
         return "Live";
@@ -178,7 +178,7 @@ char const* StageConfig::assistModeName(AssistMode mode) {
     return "Hybrid";
 }
 
-char const* StageConfig::assistModeHint(AssistMode mode) {
+char const* EbStageConfig::assistModeHint(AssistMode mode) {
     switch (mode) {
     case AssistMode::Live:
         return "live plan each click";
@@ -192,93 +192,93 @@ char const* StageConfig::assistModeHint(AssistMode mode) {
     return "";
 }
 
-void StageConfig::setAssistMode(AssistMode mode) {
-    StageConfigImplementation::ensureCache();
-    StageConfigImplementation::s_cachedAssistMode = mode;
+void EbStageConfig::setAssistMode(AssistMode mode) {
+    EbStageConfigImplementation::ensureCache();
+    EbStageConfigImplementation::s_cachedAssistMode = mode;
     geode::prelude::Mod::get()->setSettingValue<std::string>("assist-mode",
                                                              std::string(assistModeName(mode)));
 }
 
-void StageConfig::cycleAssistMode() {
-    StageConfigImplementation::ensureCache();
-    int next = (static_cast<int>(StageConfigImplementation::s_cachedAssistMode) + 1) % 4;
+void EbStageConfig::cycleAssistMode() {
+    EbStageConfigImplementation::ensureCache();
+    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 4;
     setAssistMode(static_cast<AssistMode>(next));
 }
 
-void StageConfig::toggleShowTrajectory() {
-    StageConfigImplementation::ensureCache();
-    StageConfigImplementation::s_cachedShowTrajectory =
-        !StageConfigImplementation::s_cachedShowTrajectory;
+void EbStageConfig::toggleShowTrajectory() {
+    EbStageConfigImplementation::ensureCache();
+    EbStageConfigImplementation::s_cachedShowTrajectory =
+        !EbStageConfigImplementation::s_cachedShowTrajectory;
     geode::prelude::Mod::get()->setSettingValue<bool>(
-        "show-trajectory", StageConfigImplementation::s_cachedShowTrajectory);
+        "show-trajectory", EbStageConfigImplementation::s_cachedShowTrajectory);
 }
 
-bool StageConfig::isApplying() {
-    return StageConfigImplementation::s_applying;
+bool EbStageConfig::isApplying() {
+    return EbStageConfigImplementation::s_applying;
 }
 
-void StageConfig::beginApplying() {
-    StageConfigImplementation::s_applying = true;
+void EbStageConfig::beginApplying() {
+    EbStageConfigImplementation::s_applying = true;
 }
 
-void StageConfig::endApplying() {
-    StageConfigImplementation::s_applying = false;
+void EbStageConfig::endApplying() {
+    EbStageConfigImplementation::s_applying = false;
 }
 
-StageInfo StageConfig::fromSettings() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedStage;
+EbStageInfo EbStageConfig::fromSettings() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedStage;
 }
 
-bool StageConfig::isEnabled() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedStage.enabled;
+bool EbStageConfig::isEnabled() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedStage.enabled;
 }
-bool StageConfig::debugLogging() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedDebug;
+bool EbStageConfig::debugLogging() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedDebug;
 }
-bool StageConfig::perfTrace() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedPerfTrace;
+bool EbStageConfig::perfTrace() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedPerfTrace;
 }
-bool StageConfig::lagProbe() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedLagProbe;
+bool EbStageConfig::lagProbe() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedLagProbe;
 }
-bool StageConfig::safeMode() {
+bool EbStageConfig::safeMode() {
     // Critical for progress gates: always re-read so pause toggles apply mid-run.
     if (auto* mod = geode::prelude::Mod::get()) {
         try {
-            StageConfigImplementation::s_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
-            StageConfigImplementation::s_cacheInitialized = true;
-            return StageConfigImplementation::s_cachedSafeMode;
+            EbStageConfigImplementation::s_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
+            EbStageConfigImplementation::s_cacheInitialized = true;
+            return EbStageConfigImplementation::s_cachedSafeMode;
         } catch (...) {
         }
     }
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSafeMode;
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSafeMode;
 }
 
-bool StageConfig::blocksProgressSaves(bool assistTouchedRun) {
+bool EbStageConfig::blocksProgressSaves(bool assistTouchedRun) {
     bool safe = true;
     bool enabled = true;
     if (auto* mod = geode::prelude::Mod::get()) {
         try {
             safe = mod->getSettingValue<bool>("safe-mode");
             enabled = mod->getSettingValue<bool>("enabled");
-            StageConfigImplementation::s_cachedSafeMode = safe;
-            StageConfigImplementation::s_cachedStage.enabled = enabled;
-            StageConfigImplementation::s_cacheInitialized = true;
+            EbStageConfigImplementation::s_cachedSafeMode = safe;
+            EbStageConfigImplementation::s_cachedStage.enabled = enabled;
+            EbStageConfigImplementation::s_cacheInitialized = true;
         } catch (...) {
-            StageConfigImplementation::ensureCache();
-            safe = StageConfigImplementation::s_cachedSafeMode;
-            enabled = StageConfigImplementation::s_cachedStage.enabled;
+            EbStageConfigImplementation::ensureCache();
+            safe = EbStageConfigImplementation::s_cachedSafeMode;
+            enabled = EbStageConfigImplementation::s_cachedStage.enabled;
         }
     } else {
-        StageConfigImplementation::ensureCache();
-        safe = StageConfigImplementation::s_cachedSafeMode;
-        enabled = StageConfigImplementation::s_cachedStage.enabled;
+        EbStageConfigImplementation::ensureCache();
+        safe = EbStageConfigImplementation::s_cachedSafeMode;
+        enabled = EbStageConfigImplementation::s_cachedStage.enabled;
     }
 
     // Safe Mode OFF → never block percentage / bests / normal complete.
@@ -288,82 +288,82 @@ bool StageConfig::blocksProgressSaves(bool assistTouchedRun) {
     return enabled || assistTouchedRun;
 }
 
-bool StageConfig::showOverlay() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedShowOverlay;
+bool EbStageConfig::showOverlay() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowOverlay;
 }
-bool StageConfig::showTrajectory() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedShowTrajectory;
+bool EbStageConfig::showTrajectory() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowTrajectory;
 }
-bool StageConfig::showBakePath() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedShowBakePath;
+bool EbStageConfig::showBakePath() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowBakePath;
 }
-bool StageConfig::showPauseBake() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedShowPauseBake;
+bool EbStageConfig::showPauseBake() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowPauseBake;
 }
-bool StageConfig::showPauseHub() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedShowPauseHub;
+bool EbStageConfig::showPauseHub() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowPauseHub;
 }
-bool StageConfig::assistPress() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistPress;
+bool EbStageConfig::assistPress() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistPress;
 }
-bool StageConfig::assistRelease() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistRelease;
+bool EbStageConfig::assistRelease() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistRelease;
 }
-bool StageConfig::assistOrbs() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistOrbs;
+bool EbStageConfig::assistOrbs() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistOrbs;
 }
-bool StageConfig::autoTune() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAutoTune;
+bool EbStageConfig::autoTune() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAutoTune;
 }
-bool StageConfig::selfBake() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSelfBake;
+bool EbStageConfig::selfBake() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSelfBake;
 }
-bool StageConfig::selfBakeNormal() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSelfBakeNormal;
+bool EbStageConfig::selfBakeNormal() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSelfBakeNormal;
 }
-bool StageConfig::selfBakeRefine() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSelfBakeRefine;
+bool EbStageConfig::selfBakeRefine() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSelfBakeRefine;
 }
-bool StageConfig::triggerBake() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedTriggerBake;
+bool EbStageConfig::triggerBake() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedTriggerBake;
 }
-bool StageConfig::triggerBakeSkipDynamic() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedTriggerBakeSkipDynamic;
+bool EbStageConfig::triggerBakeSkipDynamic() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedTriggerBakeSkipDynamic;
 }
-AssistMode StageConfig::assistMode() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistMode;
-}
-
-bool StageConfig::assistPickLegacy() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistPickLegacy;
+AssistMode EbStageConfig::assistMode() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistMode;
 }
 
-bool StageConfig::assistPickV1() {
+bool EbStageConfig::assistPickLegacy() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistPickLegacy;
+}
+
+bool EbStageConfig::assistPickV1() {
     return assistPickLegacy();
 }
 
-char const* StageConfig::assistPickName() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistPickLegacy ? "v1" : "v2";
+char const* EbStageConfig::assistPickName() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistPickLegacy ? "v1" : "v2";
 }
 
-char const* StageConfig::canonicalizeAssistPick(std::string const& raw) {
+char const* EbStageConfig::canonicalizeAssistPick(std::string const& raw) {
     if (raw == "v1" || raw == "Legacy")
         return "v1";
     if (!(raw == "v2" || raw == "New")) {
@@ -372,21 +372,21 @@ char const* StageConfig::canonicalizeAssistPick(std::string const& raw) {
     return "v2";
 }
 
-StageConfig::AssistEngineKind StageConfig::assistEngine() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistEngine;
+EbStageConfig::AssistEngineKind EbStageConfig::assistEngine() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistEngine;
 }
 
-StageConfig::AssistEngineKind StageConfig::effectiveAssistEngine() {
-    StageConfigImplementation::ensureCache();
+EbStageConfig::AssistEngineKind EbStageConfig::effectiveAssistEngine() {
+    EbStageConfigImplementation::ensureCache();
     // V1 choose is frozen on full ghost runOne — never Trajectory.
-    if (!(StageConfigImplementation::s_cachedAssistPickLegacy)) {
-        return StageConfigImplementation::s_cachedAssistEngine;
+    if (!(EbStageConfigImplementation::s_cachedAssistPickLegacy)) {
+        return EbStageConfigImplementation::s_cachedAssistEngine;
     }
     return AssistEngineKind::ShadowPlayer;
 }
 
-char const* StageConfig::assistEngineName(AssistEngineKind engine) {
+char const* EbStageConfig::assistEngineName(AssistEngineKind engine) {
     switch (engine) {
     case AssistEngineKind::Trajectory:
         return "Trajectory";
@@ -396,152 +396,152 @@ char const* StageConfig::assistEngineName(AssistEngineKind engine) {
     }
 }
 
-char const* StageConfig::assistEngineName() {
+char const* EbStageConfig::assistEngineName() {
     return assistEngineName(effectiveAssistEngine());
 }
-int StageConfig::simBudgetUs() {
-    StageConfigImplementation::ensureCache();
-    return PlatformLimits::get().clampSimBudgetUs(StageConfigImplementation::s_cachedSimBudgetUs);
+int EbStageConfig::simBudgetUs() {
+    EbStageConfigImplementation::ensureCache();
+    return EbPlatformLimits::get().clampSimBudgetUs(EbStageConfigImplementation::s_cachedSimBudgetUs);
 }
-int StageConfig::bakeRadius() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedBakeRadius;
+int EbStageConfig::bakeRadius() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedBakeRadius;
 }
-int StageConfig::cpsLimit() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedCpsLimit;
+int EbStageConfig::cpsLimit() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedCpsLimit;
 }
-int StageConfig::minClickIntervalMs() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedMinClickIntervalMs;
+int EbStageConfig::minClickIntervalMs() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedMinClickIntervalMs;
 }
-int StageConfig::smartDepth() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSmartDepth;
+int EbStageConfig::smartDepth() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSmartDepth;
 }
-int StageConfig::smartCombos() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSmartCombos;
+int EbStageConfig::smartCombos() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSmartCombos;
 }
-int StageConfig::smartHorizon() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSmartHorizon;
+int EbStageConfig::smartHorizon() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSmartHorizon;
 }
-int StageConfig::robustK() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedRobustK;
+int EbStageConfig::robustK() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedRobustK;
 }
-bool StageConfig::robustJitter() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedRobustJitter;
+bool EbStageConfig::robustJitter() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedRobustJitter;
 }
-char const* StageConfig::assistVerifyMode() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistVerify.c_str();
+char const* EbStageConfig::assistVerifyMode() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistVerify.c_str();
 }
-bool StageConfig::assistVerifyAb() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistVerify == "ab";
+bool EbStageConfig::assistVerifyAb() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistVerify == "ab";
 }
-int StageConfig::tickBudgetPerPress() {
-    StageConfigImplementation::ensureCache();
-    return PlatformLimits::get().clampTickBudget(StageConfigImplementation::s_cachedTickBudget);
+int EbStageConfig::tickBudgetPerPress() {
+    EbStageConfigImplementation::ensureCache();
+    return EbPlatformLimits::get().clampTickBudget(EbStageConfigImplementation::s_cachedTickBudget);
 }
-int StageConfig::husReplanBudgetUs() {
+int EbStageConfig::husReplanBudgetUs() {
     int const full = simBudgetUs();
     if (!(full <= 0)) {
         return std::max(200, full / 2);
     }
     return 200;
 }
-int StageConfig::husReplanTickBudget() {
+int EbStageConfig::husReplanTickBudget() {
     return std::max(200, tickBudgetPerPress() / 4);
 }
-bool StageConfig::assistOnlyPractice() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistOnlyPractice;
+bool EbStageConfig::assistOnlyPractice() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistOnlyPractice;
 }
-bool StageConfig::assistStartposOnly() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistStartposOnly;
+bool EbStageConfig::assistStartposOnly() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistStartposOnly;
 }
-int StageConfig::assistPercentMin() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistPercentMin;
+int EbStageConfig::assistPercentMin() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistPercentMin;
 }
-int StageConfig::assistPercentMax() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistPercentMax;
+int EbStageConfig::assistPercentMax() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistPercentMax;
 }
-std::vector<StageConfig::PercentRange> const& StageConfig::assistDisableRanges() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedAssistDisableRanges;
+std::vector<EbStageConfig::PercentRange> const& EbStageConfig::assistDisableRanges() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistDisableRanges;
 }
-bool StageConfig::isInAssistDisableRange(float percent) {
-    StageConfigImplementation::ensureCache();
-    float const valuePointer = StageConfigImplementation::clampPct(percent);
-    for (auto const& r : StageConfigImplementation::s_cachedAssistDisableRanges) {
+bool EbStageConfig::isInAssistDisableRange(float percent) {
+    EbStageConfigImplementation::ensureCache();
+    float const valuePointer = EbStageConfigImplementation::clampPct(percent);
+    for (auto const& r : EbStageConfigImplementation::s_cachedAssistDisableRanges) {
         if (valuePointer + 0.0001f >= r.from && valuePointer - 0.0001f <= r.to)
             return true;
     }
     return false;
 }
-bool StageConfig::saveFeedbackSound() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSaveFeedbackSound;
+bool EbStageConfig::saveFeedbackSound() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSaveFeedbackSound;
 }
-bool StageConfig::saveFeedbackIcon() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSaveFeedbackColor;
+bool EbStageConfig::saveFeedbackIcon() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSaveFeedbackColor;
 }
-bool StageConfig::saveFeedbackCounter() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSaveFeedbackCounter;
+bool EbStageConfig::saveFeedbackCounter() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSaveFeedbackCounter;
 }
-StageConfig::ColorRgb StageConfig::saveFeedbackColor() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSaveIconColor;
+EbStageConfig::ColorRgb EbStageConfig::saveFeedbackColor() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSaveIconColor;
 }
-bool StageConfig::windowUnitFrames() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedWindowUnitFrames;
+bool EbStageConfig::windowUnitFrames() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedWindowUnitFrames;
 }
 
-int StageConfig::windowValueToTicks(int value) {
-    StageConfigImplementation::ensureCache();
+int EbStageConfig::windowValueToTicks(int value) {
+    EbStageConfigImplementation::ensureCache();
     if (value <= 0)
         return 0;
-    if (!(!StageConfigImplementation::s_cachedWindowUnitFrames)) {
-        return AssistClock::framesToTicks(value);
+    if (!(!EbStageConfigImplementation::s_cachedWindowUnitFrames)) {
+        return EbAssistClock::framesToTicks(value);
     }
     return value;
 }
 
-int StageConfig::ticksToWindowValue(int ticks) {
-    StageConfigImplementation::ensureCache();
+int EbStageConfig::ticksToWindowValue(int ticks) {
+    EbStageConfigImplementation::ensureCache();
     if (ticks <= 0)
         return 0;
-    if (!(!StageConfigImplementation::s_cachedWindowUnitFrames)) {
-        return AssistClock::ticksToFrames(ticks);
+    if (!(!EbStageConfigImplementation::s_cachedWindowUnitFrames)) {
+        return EbAssistClock::ticksToFrames(ticks);
     }
     return ticks;
 }
 
-int StageConfig::ticksAll() {
-    return windowValueToTicks(StageConfigImplementation::s_cachedStage.ticksAll);
+int EbStageConfig::ticksAll() {
+    return windowValueToTicks(EbStageConfigImplementation::s_cachedStage.ticksAll);
 }
-int StageConfig::ticksWave() {
-    return windowValueToTicks(StageConfigImplementation::s_cachedStage.ticksWave);
+int EbStageConfig::ticksWave() {
+    return windowValueToTicks(EbStageConfigImplementation::s_cachedStage.ticksWave);
 }
-int StageConfig::deathSlack() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedSlack;
+int EbStageConfig::deathSlack() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedSlack;
 }
-int StageConfig::lookAheadCap() {
-    StageConfigImplementation::ensureCache();
-    return StageConfigImplementation::s_cachedLookAhead;
+int EbStageConfig::lookAheadCap() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedLookAhead;
 }
-GameModeKind StageConfig::kindOf(PlayerObject* player) {
+GameModeKind EbStageConfig::kindOf(PlayerObject* player) {
     if (!player)
         return GameModeKind::Cube;
     if (player->m_isDart)
@@ -562,28 +562,28 @@ GameModeKind StageConfig::kindOf(PlayerObject* player) {
     return GameModeKind::Swing;
 }
 
-char const* StageConfig::kindName(GameModeKind kind) {
+char const* EbStageConfig::kindName(GameModeKind kind) {
     int const index = static_cast<int>(kind);
     if (!(index < 0 || index >= MODE_COUNT)) {
-        return StageConfigImplementation::MODE_IDS[index].name;
+        return EbStageConfigImplementation::MODE_IDS[index].name;
     }
     return "cube";
 }
 
-ModeParams StageConfig::paramsFor(GameModeKind kind) {
-    StageConfigImplementation::ensureCache();
+EbModeParams EbStageConfig::paramsFor(GameModeKind kind) {
+    EbStageConfigImplementation::ensureCache();
     int const index = static_cast<int>(kind);
     if (!(index < 0 || index >= MODE_COUNT)) {
-        return StageConfigImplementation::s_cachedModes[static_cast<size_t>(index)];
+        return EbStageConfigImplementation::s_cachedModes[static_cast<size_t>(index)];
     }
-    return StageConfigImplementation::s_cachedModes[0];
+    return EbStageConfigImplementation::s_cachedModes[0];
 }
 
-ModeParams StageConfig::paramsFor(PlayerObject* player) {
+EbModeParams EbStageConfig::paramsFor(PlayerObject* player) {
     return paramsFor(kindOf(player));
 }
 
-std::string StageConfig::stageLabel(StageInfo const& info) {
+std::string EbStageConfig::stageLabel(EbStageInfo const& info) {
     if (!(!info.enabled)) {
         return fmt::format("{}A/{}W", info.ticksAll, info.ticksWave);
     }

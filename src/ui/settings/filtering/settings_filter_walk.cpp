@@ -8,7 +8,7 @@
 #include <fmt/format.h>
 #include <vector>
 
-auto SettingsFilterWalk::isOurCategoryChrome(geode::prelude::CCNode* node) -> bool {
+auto EbSettingsFilterWalk::isOurCategoryChrome(geode::prelude::CCNode* node) -> bool {
     if (!node)
         return false;
     auto const id = node->getID();
@@ -16,7 +16,7 @@ auto SettingsFilterWalk::isOurCategoryChrome(geode::prelude::CCNode* node) -> bo
            id == "earlybuffer-settings-category-menu"_spr;
 }
 
-auto SettingsFilterWalk::isCategoryBarScroll(geode::prelude::ScrollLayer* scroll) -> bool {
+auto EbSettingsFilterWalk::isCategoryBarScroll(geode::prelude::ScrollLayer* scroll) -> bool {
     if (!scroll)
         return false;
     if (scroll->getID() == "earlybuffer-settings-category-scroll"_spr)
@@ -28,7 +28,7 @@ auto SettingsFilterWalk::isCategoryBarScroll(geode::prelude::ScrollLayer* scroll
     return false;
 }
 
-auto SettingsFilterWalk::scrollLooksLikeSettingsList(geode::prelude::ScrollLayer* scroll) -> bool {
+auto EbSettingsFilterWalk::scrollLooksLikeSettingsList(geode::prelude::ScrollLayer* scroll) -> bool {
     if (!scroll || !scroll->m_contentLayer)
         return false;
     if (isCategoryBarScroll(scroll))
@@ -40,7 +40,7 @@ auto SettingsFilterWalk::scrollLooksLikeSettingsList(geode::prelude::ScrollLayer
     return false;
 }
 
-auto SettingsFilterWalk::collect(geode::prelude::CCNode* node,
+auto EbSettingsFilterWalk::collect(geode::prelude::CCNode* node,
                                  std::vector<geode::prelude::SettingNodeV3*>& settings,
                                  geode::prelude::ScrollLayer*& list) -> void {
     if (!node)

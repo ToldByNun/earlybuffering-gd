@@ -7,7 +7,7 @@
 
 // Public catalog counters + anonymous track (1 download + 1 rating per clientId).
 // clientId and local downloaded/rated sets live under Mod saveDir/cloud-configs/.
-class CloudConfigStats {
+class EbCloudConfigStats {
 public:
     class PackStats {
     public:
@@ -34,7 +34,7 @@ public:
     using FetchCallback = std::function<void(bool ok, std::string const& error)>;
     using TrackCallback = std::function<void(TrackResult const&)>;
 
-    static CloudConfigStats& get();
+    static EbCloudConfigStats& get();
 
     static char const* defaultStatsUrl();
     static char const* defaultTrackUrl();
@@ -82,15 +82,17 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    friend class CloudStatsTracking;
+    friend class EbServiceStore;
 
-    friend class CloudStatsStorage;
+    friend class EbCloudStatsTracking;
 
-    CloudConfigStats();
-    ~CloudConfigStats();
+    friend class EbCloudStatsStorage;
 
-    CloudConfigStats(CloudConfigStats const&) = delete;
-    CloudConfigStats& operator=(CloudConfigStats const&) = delete;
+    EbCloudConfigStats();
+    ~EbCloudConfigStats();
+
+    EbCloudConfigStats(EbCloudConfigStats const&) = delete;
+    EbCloudConfigStats& operator=(EbCloudConfigStats const&) = delete;
 
     void loadLocalSets() const;
     void saveLocalSets();
@@ -111,26 +113,26 @@ private:
 #include <thread>
 #include <unordered_set>
 
-class CloudConfigStatsImplementation {
+class EbCloudConfigStatsImplementation {
 public:
     static bool parseHttpsHost(std::string const& url, std::string& hostOut);
     static bool hostAllowed(std::string const& host);
     static std::string makeUuidV4();
     static std::filesystem::path clientIdPath();
     static std::filesystem::path localStatsPath();
-    static CloudConfigStats::PackStats packStatsFromJson(matjson::Value const& root);
-    static CloudConfigStats::TrackResult postTrackSync(std::string const& url,
+    static EbCloudConfigStats::PackStats packStatsFromJson(matjson::Value const& root);
+    static EbCloudConfigStats::TrackResult postTrackSync(std::string const& url,
                                                        std::string const& clientId,
                                                        std::string const& op,
                                                        std::string const& packId, int stars);
 
 private:
-    CloudConfigStatsImplementation() = delete;
+    EbCloudConfigStatsImplementation() = delete;
 };
 
-class CloudConfigStats::Impl {
+class EbCloudConfigStats::Impl {
 public:
-    CloudConfigClient client;
+    EbCloudConfigClient client;
     std::unordered_map<std::string, PackStats> packs;
     // Lazy disk load may run from const getters.
     mutable std::unordered_set<std::string> downloaded;

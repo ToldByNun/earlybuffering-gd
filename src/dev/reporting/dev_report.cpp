@@ -10,10 +10,10 @@
 #include <cstring>
 #include <fmt/format.h>
 
-DevReport DevReportImplementation::s_lastReport{};
-bool DevReportImplementation::s_hasLastReport = false;
+EbDevReport EbDevReportImplementation::s_lastReport{};
+bool EbDevReportImplementation::s_hasLastReport = false;
 
-char const* DevReportImplementation::fidShort(DevFidelity frame, bool approx) {
+char const* EbDevReportImplementation::fidShort(DevFidelity frame, bool approx) {
     switch (frame) {
     case DevFidelity::Reproduced:
         return "reproduced";
@@ -26,23 +26,23 @@ char const* DevReportImplementation::fidShort(DevFidelity frame, bool approx) {
     return "norepro";
 }
 
-DevObjective::Kind DevReportImplementation::objectiveKindFromConfig() {
-    switch (DevConfig::objective()) {
-    case DevConfig::Objective::PlannerMirror:
-        return DevObjective::Kind::PlannerMirror;
-    case DevConfig::Objective::HorizonClear:
-        return DevObjective::Kind::HorizonClear;
-    case DevConfig::Objective::SurviveThenEndX:
+EbDevObjective::Kind EbDevReportImplementation::objectiveKindFromConfig() {
+    switch (EbDevConfig::objective()) {
+    case EbDevConfig::Objective::PlannerMirror:
+        return EbDevObjective::Kind::PlannerMirror;
+    case EbDevConfig::Objective::HorizonClear:
+        return EbDevObjective::Kind::HorizonClear;
+    case EbDevConfig::Objective::SurviveThenEndX:
         break;
     }
-    return DevObjective::Kind::SurviveThenEndX;
+    return EbDevObjective::Kind::SurviveThenEndX;
 }
 
-DevDecisionEvent const* DevReportImplementation::findPlanFinished(DevAttempt const& attempt) {
+EbDevDecisionEvent const* EbDevReportImplementation::findPlanFinished(EbDevAttempt const& attempt) {
     // Prefer last armed Delay with witness (counterfactual Net / bestSurv).
     // Falling back to last Pass plan made bestEval=0 look like a false "win".
-    DevDecisionEvent const* bestDelay = nullptr;
-    DevDecisionEvent const* bestAny = nullptr;
+    EbDevDecisionEvent const* bestDelay = nullptr;
+    EbDevDecisionEvent const* bestAny = nullptr;
     for (auto const& e : attempt.events) {
         if (e.kind != DevEventKind::PlanFinished)
             continue;
@@ -55,7 +55,7 @@ DevDecisionEvent const* DevReportImplementation::findPlanFinished(DevAttempt con
     return bestDelay ? bestDelay : bestAny;
 }
 
-int DevReportImplementation::limitFromPlanEvent(DevDecisionEvent const& e) {
+int EbDevReportImplementation::limitFromPlanEvent(EbDevDecisionEvent const& e) {
     if (!e.candNotes.empty()) {
         int maxD = 0;
         for (auto const& n : e.candNotes) {
@@ -67,13 +67,13 @@ int DevReportImplementation::limitFromPlanEvent(DevDecisionEvent const& e) {
     return std::max(0, e.plannedDelay);
 }
 
-bool DevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, DevDecisionEvent const& planEv,
-                                                 DevReport& out, std::string& err) {
+bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisionEvent const& planEv,
+                                                 EbDevReport& out, std::string& err) {
     if (!layer) {
         err = "no-playlayer";
         return false;
     }
-    if (!ShadowSimulator::get().isAttachedTo(layer)) {
+    if (!EbShadowSimulator::get().isAttachedTo(layer)) {
         err = "sim-not-attached";
         return false;
     }
@@ -82,50 +82,50 @@ bool DevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, DevDecisionEv
         return false;
     }
 
-    int limit = DevReportImplementation::limitFromPlanEvent(planEv);
-    int const horizon = DevConfig::evalHorizon();
-    int const tail = DevConfig::evalTail();
-    int tickBudget = DevConfig::evalTickBudget();
+    int limit = EbDevReportImplementation::limitFromPlanEvent(planEv);
+    int const horizon = EbDevConfig::evalHorizon();
+    int const tail = EbDevConfig::evalTail();
+    int tickBudget = EbDevConfig::evalTickBudget();
     if (tickBudget < 1)
         tickBudget = 4000;
 
-    DevClassifyOptions opts;
-    opts.requireDeps = DevConfig::evalRequireDeps();
-    opts.freezeWorld = DevConfig::freezeWorld();
+    EbDevClassifyOptions opts;
+    opts.requireDeps = EbDevConfig::evalRequireDeps();
+    opts.freezeWorld = EbDevConfig::freezeWorld();
     opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
 
     float latencyWeight = 0.25f;
     if (layer->m_player1) {
-        latencyWeight = StageConfig::paramsFor(layer->m_player1).latencyWeight;
+        latencyWeight = EbStageConfig::paramsFor(layer->m_player1).latencyWeight;
     }
 
-    int robustK = StageConfig::robustK();
+    int robustK = EbStageConfig::robustK();
     if (robustK <= 0)
         robustK = 1;
 
-    LagProbe::Scope const lag("eb.dev.eval");
-    auto grid = DevEvalEngine::evalGrid(
+    EbLagProbe::Scope const lag("eb.dev.eval");
+    auto grid = EbDevEvalEngine::evalGrid(
         layer, planEv.witness, planEv.down, limit, planEv.plannedDelay, robustK, horizon, tail,
-        DevConfig::evalGrid(), DevReportImplementation::objectiveKindFromConfig(), opts,
+        EbDevConfig::evalGrid(), EbDevReportImplementation::objectiveKindFromConfig(), opts,
         latencyWeight, &tickBudget);
 
     std::string rec;
-    if (DevSession::get().isRecording()) {
-        rec = DevSession::get().statusLine();
+    if (EbDevSession::get().isRecording()) {
+        rec = EbDevSession::get().statusLine();
     }
-    out = DevReport::fromGrid(grid, std::move(rec), planEv.plannedDelay);
+    out = EbDevReport::fromGrid(grid, std::move(rec), planEv.plannedDelay);
     if (out.valid && planEv.plannedDelay > 0 &&
         (!out.hasBestSurviving || out.bestSurvivingDelay < 0)) {
         out.liveVsEvalMismatch = true;
         out.livePlannedDelay = planEv.plannedDelay;
-        out.overlayLine = DevReport::formatOverlayLine(out);
+        out.overlayLine = EbDevReport::formatOverlayLine(out);
     }
     return out.valid;
 }
 
-DevReport DevReport::fromGrid(DevEvalEngine::GridReport const& grid, std::string recLine,
+EbDevReport EbDevReport::fromGrid(EbDevEvalEngine::GridReport const& grid, std::string recLine,
                               int plannedDelay) {
-    DevReport r;
+    EbDevReport r;
     r.recLine = std::move(recLine);
     r.fidelity = grid.fidelity.fidelity;
     r.claimsAllowed = grid.fidelity.claimsAllowed;
@@ -154,21 +154,21 @@ DevReport DevReport::fromGrid(DevEvalEngine::GridReport const& grid, std::string
     // Commit 12: Prev/Caused from d0 vs planned Delay (simEstimate / G10).
     r.plannedDelay = plannedDelay;
     {
-        std::vector<AssistSimEstimate::SampleView> views;
+        std::vector<EbAssistSimEstimate::SampleView> views;
         views.reserve(grid.samples.size());
         for (auto const& s : grid.samples) {
-            AssistSimEstimate::SampleView v;
+            EbAssistSimEstimate::SampleView v;
             v.delay = s.delay;
             v.survivedPrimary = s.survivedPrimary;
             v.inconclusive = s.inconclusive();
             views.push_back(v);
         }
-        auto const cls = AssistSimEstimate::classifyFromSamples(views, plannedDelay);
-        r.simNetClass = AssistSimEstimate::netClassId(cls);
+        auto const cls = EbAssistSimEstimate::classifyFromSamples(views, plannedDelay);
+        r.simNetClass = EbAssistSimEstimate::netClassId(cls);
         if (plannedDelay > 0) {
-            AssistSimEstimate::get().noteEval(cls, r.claimsAllowed);
+            EbAssistSimEstimate::get().noteEval(cls, r.claimsAllowed);
         }
-        auto& est = AssistSimEstimate::get();
+        auto& est = EbAssistSimEstimate::get();
         r.simPrev = est.prev();
         r.simCaused = est.caused();
         r.simNet = est.net();
@@ -180,7 +180,7 @@ DevReport DevReport::fromGrid(DevEvalEngine::GridReport const& grid, std::string
     matjson::Value otherIndex = matjson::Value::object();
     if (!r.recLine.empty())
         otherIndex["rec"] = r.recLine;
-    otherIndex["fidelity"] = DevStateDiff::fidelityId(r.fidelity);
+    otherIndex["fidelity"] = EbDevStateDiff::fidelityId(r.fidelity);
     otherIndex["claimsAllowed"] = r.claimsAllowed;
     otherIndex["approx"] = r.approx;
     otherIndex["objectiveId"] = r.objectiveId;
@@ -218,7 +218,7 @@ DevReport DevReport::fromGrid(DevEvalEngine::GridReport const& grid, std::string
     return r;
 }
 
-std::string DevReport::formatOverlayLine(DevReport const& r) {
+std::string EbDevReport::formatOverlayLine(EbDevReport const& r) {
     std::string line;
     if (!r.recLine.empty()) {
         line = r.recLine;
@@ -232,7 +232,7 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
         line += bit;
     };
 
-    append(fmt::format("fid={}", DevReportImplementation::fidShort(r.fidelity, r.approx)));
+    append(fmt::format("fid={}", EbDevReportImplementation::fidShort(r.fidelity, r.approx)));
 
     if (!r.claimsAllowed) {
         append("bestSurv=none");
@@ -277,25 +277,25 @@ std::string DevReport::formatOverlayLine(DevReport const& r) {
     return line;
 }
 
-void DevReport::setLast(DevReport report) {
-    DevReportImplementation::s_lastReport = std::move(report);
-    DevReportImplementation::s_hasLastReport = DevReportImplementation::s_lastReport.valid;
+void EbDevReport::setLast(EbDevReport report) {
+    EbDevReportImplementation::s_lastReport = std::move(report);
+    EbDevReportImplementation::s_hasLastReport = EbDevReportImplementation::s_lastReport.valid;
 }
 
-DevReport const& DevReport::last() {
-    return DevReportImplementation::s_lastReport;
+EbDevReport const& EbDevReport::last() {
+    return EbDevReportImplementation::s_lastReport;
 }
 
-bool DevReport::hasLast() {
-    return DevReportImplementation::s_hasLastReport && DevReportImplementation::s_lastReport.valid;
+bool EbDevReport::hasLast() {
+    return EbDevReportImplementation::s_hasLastReport && EbDevReportImplementation::s_lastReport.valid;
 }
 
-void DevReport::clearLast() {
-    DevReportImplementation::s_lastReport = {};
-    DevReportImplementation::s_hasLastReport = false;
+void EbDevReport::clearLast() {
+    EbDevReportImplementation::s_lastReport = {};
+    EbDevReportImplementation::s_hasLastReport = false;
 }
 
-bool DevReport::evalLastAttempt(std::string& err) {
+bool EbDevReport::evalLastAttempt(std::string& err) {
     err.clear();
     auto* layer = PlayLayer::get();
     if (!layer) {
@@ -303,13 +303,13 @@ bool DevReport::evalLastAttempt(std::string& err) {
         return false;
     }
 
-    auto& store = DevTraceStore::get();
-    DevAttempt const* target = nullptr;
+    auto& store = EbDevTraceStore::get();
+    EbDevAttempt const* target = nullptr;
 
     if (store.isOpen()) {
         auto const& attempts = store.session().attempts;
         for (auto it = attempts.rbegin(); it != attempts.rend(); ++it) {
-            if (DevReportImplementation::findPlanFinished(*it)) {
+            if (EbDevReportImplementation::findPlanFinished(*it)) {
                 target = &*it;
                 break;
             }
@@ -319,14 +319,14 @@ bool DevReport::evalLastAttempt(std::string& err) {
         err = "No attempt with a planFinished witness in the open session.";
         return false;
     }
-    auto const* planEv = DevReportImplementation::findPlanFinished(*target);
+    auto const* planEv = EbDevReportImplementation::findPlanFinished(*target);
     if (!planEv) {
         err = "No planFinished witness on attempt.";
         return false;
     }
 
-    DevReport rep;
-    if (!DevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, err)) {
+    EbDevReport rep;
+    if (!EbDevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, err)) {
         if (err.empty())
             err = "eval-failed";
         return false;
@@ -335,7 +335,7 @@ bool DevReport::evalLastAttempt(std::string& err) {
     return true;
 }
 
-bool DevReport::evalSession(std::string& err, int* outCount) {
+bool EbDevReport::evalSession(std::string& err, int* outCount) {
     err.clear();
     if (outCount)
         *outCount = 0;
@@ -344,24 +344,24 @@ bool DevReport::evalSession(std::string& err, int* outCount) {
         err = "Enter a level to run eval.";
         return false;
     }
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen()) {
         err = "No open Dev session.";
         return false;
     }
 
     int ran = 0;
-    DevReport lastOk;
+    EbDevReport lastOk;
     for (auto const& attempt : store.session().attempts) {
         if (!attempt.sealed && &attempt != &store.session().attempts.back()) {
             continue;
         }
-        auto const* planEv = DevReportImplementation::findPlanFinished(attempt);
+        auto const* planEv = EbDevReportImplementation::findPlanFinished(attempt);
         if (!planEv)
             continue;
-        DevReport rep;
+        EbDevReport rep;
         std::string localErr;
-        if (!DevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, localErr))
+        if (!EbDevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, localErr))
             continue;
         lastOk = std::move(rep);
         ++ran;
@@ -376,7 +376,7 @@ bool DevReport::evalSession(std::string& err, int* outCount) {
     return true;
 }
 
-bool DevReport::selfCheck(std::string& report) {
+bool EbDevReport::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -390,7 +390,7 @@ bool DevReport::selfCheck(std::string& report) {
 
     // Synthetic: survive objective → no ideal= in overlay.
     {
-        DevReport result;
+        EbDevReport result;
         result.valid = true;
         result.claimsAllowed = true;
         result.fidelity = DevFidelity::Reproduced;
@@ -415,7 +415,7 @@ bool DevReport::selfCheck(std::string& report) {
 
     // No survivor → bestEval labeled (died).
     {
-        DevReport result;
+        EbDevReport result;
         result.claimsAllowed = true;
         result.fidelity = DevFidelity::Reproduced;
         result.objectiveId = "survive_then_endx_v1";
@@ -429,7 +429,7 @@ bool DevReport::selfCheck(std::string& report) {
 
     // Eligible horizon_clear → ideal= present.
     {
-        DevReport result;
+        EbDevReport result;
         result.claimsAllowed = true;
         result.fidelity = DevFidelity::Reproduced;
         result.objectiveId = "horizon_clear_v1";
@@ -446,7 +446,7 @@ bool DevReport::selfCheck(std::string& report) {
 
     // fromGrid must strip ideal when not eligible even if Result has numbers.
     {
-        DevEvalEngine::GridReport gr;
+        EbDevEvalEngine::GridReport gr;
         gr.fidelity.fidelity = DevFidelity::Reproduced;
         gr.fidelity.claimsAllowed = true;
         gr.objective.objectiveId = "survive_then_endx_v1";
@@ -469,30 +469,30 @@ bool DevReport::selfCheck(std::string& report) {
 
     // Commit 12: Prev class from d0 die / delay survive → simEst overlay.
     {
-        AssistSimEstimate::get().resetSession();
-        DevEvalEngine::GridReport gr;
+        EbAssistSimEstimate::get().resetSession();
+        EbDevEvalEngine::GridReport gr;
         gr.fidelity.fidelity = DevFidelity::Reproduced;
         gr.fidelity.claimsAllowed = true;
         gr.objective.objectiveId = "survive_then_endx_v1";
         gr.objective.hasBestSurviving = true;
         gr.objective.bestSurvivingDelay = 4;
-        DevObjective::Sample d0;
+        EbDevObjective::Sample d0;
         d0.delay = 0;
         d0.survivedPrimary = false;
-        DevObjective::Sample arm;
+        EbDevObjective::Sample arm;
         arm.delay = 4;
         arm.survivedPrimary = true;
         gr.samples = {d0, arm};
         auto result = fromGrid(gr, "", 4);
         expect(std::string(result.simNetClass) == "prev", "sim-prev");
         expect(result.overlayLine.find("simEst") != std::string::npos, "sim-ov");
-        expect(AssistSimEstimate::get().prev() == 1, "sim-acc");
-        AssistSimEstimate::get().resetSession();
+        expect(EbAssistSimEstimate::get().prev() == 1, "sim-acc");
+        EbAssistSimEstimate::get().resetSession();
     }
 
     // Claims off → bestSurv=none, no ideal.
     {
-        DevReport result;
+        EbDevReport result;
         result.claimsAllowed = false;
         result.fidelity = DevFidelity::NotReproducible;
         result.objectiveId = "horizon_clear_v1";

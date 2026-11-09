@@ -3,20 +3,20 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowPlayerState {
+class EbShadowPlayerState {
 public:
-    static void copyWaveTrail(ShadowSimulator& simulator, PlayerObject* destination,
+    static void copyWaveTrail(EbShadowSimulator& simulator, PlayerObject* destination,
                               PlayerObject* source);
     static void clearCollisionLogs(PlayerObject* state);
     static void copyPlayerState(PlayerObject* destination, PlayerObject* source);
-    static size_t diagCaptureTransformCount(ShadowSimulator& simulator, PlayLayer* layer);
-    static int captureStartSnapshot(ShadowSimulator& simulator, PlayerObject* real);
-    static int captureSnapshot(ShadowSimulator& simulator, PlayerObject* real);
-    static int captureParitySnapshot(ShadowSimulator& simulator, PlayerObject* real, int which);
-    static PlayerObject* snapshotSlot(ShadowSimulator const& simulator, int slot);
+    static size_t diagCaptureTransformCount(EbShadowSimulator& simulator, PlayLayer* layer);
+    static int captureStartSnapshot(EbShadowSimulator& simulator, PlayerObject* real);
+    static int captureSnapshot(EbShadowSimulator& simulator, PlayerObject* real);
+    static int captureParitySnapshot(EbShadowSimulator& simulator, PlayerObject* real, int which);
+    static PlayerObject* snapshotSlot(EbShadowSimulator const& simulator, int slot);
 
 private:
-    ShadowPlayerState() = delete;
+    EbShadowPlayerState() = delete;
 };
 
 #endif

@@ -1,10 +1,10 @@
 #include "decision_log.hpp"
 
-void DecisionLog::clear() {
+void EbDecisionLog::clear() {
     m_entries.clear();
 }
 
-DecisionEntry& DecisionLog::push(DecisionEntry entry) {
+EbDecisionEntry& EbDecisionLog::push(EbDecisionEntry entry) {
     if (static_cast<int>(m_entries.size()) >= CAPACITY) {
         m_entries.erase(m_entries.begin());
     }
@@ -12,23 +12,23 @@ DecisionEntry& DecisionLog::push(DecisionEntry entry) {
     return m_entries.back();
 }
 
-DecisionEntry* DecisionLog::latest() {
+EbDecisionEntry* EbDecisionLog::latest() {
     return m_entries.empty() ? nullptr : &m_entries.back();
 }
 
-DecisionEntry const* DecisionLog::latest() const {
+EbDecisionEntry const* EbDecisionLog::latest() const {
     return m_entries.empty() ? nullptr : &m_entries.back();
 }
 
-void DecisionLog::noteInput(int tick, bool down) {
+void EbDecisionLog::noteInput(int tick, bool down) {
     for (auto& e : m_entries) {
         if (e.resolved)
             continue;
-        e.timeline.push_back(InputEvent{tick, down});
+        e.timeline.push_back(EbInputEvent{tick, down});
     }
 }
 
-DecisionEntry* DecisionLog::findForDeath(int tick) {
+EbDecisionEntry* EbDecisionLog::findForDeath(int tick) {
     for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
         if (it->resolved)
             continue;

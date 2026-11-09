@@ -10,13 +10,13 @@
 #include <algorithm>
 #include <vector>
 
-void ShadowWorldCapture::captureTriggerTransforms(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_savedTransforms.clear();
-    if (!layer || !StageConfig::triggerBake())
+    if (!layer || !EbStageConfig::triggerBake())
         return;
 
-    auto& store = TriggerWorldStore::get();
-    LagProbe::Scope const scope("eb.trigger.capture");
+    auto& store = EbTriggerWorldStore::get();
+    EbLagProbe::Scope const scope("eb.trigger.capture");
 
     // Collect uniqueIds we may move this sim (ready static bake tracks).
     std::unordered_set<int> wanted;
@@ -25,7 +25,7 @@ void ShadowWorldCapture::captureTriggerTransforms(ShadowSimulator& simulator, Pl
         for (auto const& track : store.data().tracks) {
             if (!track.ready || track.keys.empty())
                 continue;
-            if (!TriggerClassify::isStatic(track.kind))
+            if (!EbTriggerClassify::isStatic(track.kind))
                 continue;
             wanted.insert(track.uniqueId);
         }
@@ -46,7 +46,7 @@ void ShadowWorldCapture::captureTriggerTransforms(ShadowSimulator& simulator, Pl
         if (!seen.insert(uid).second)
             return;
 
-        ShadowSimulator::SavedTransform st;
+        EbShadowSimulator::SavedTransform st;
         st.uniqueId = uid;
         st.obj = object;
         st.x = object->getPositionX();
@@ -83,7 +83,7 @@ void ShadowWorldCapture::captureTriggerTransforms(ShadowSimulator& simulator, Pl
     }
 }
 
-void ShadowWorldCapture::captureToggleUnknownTargets(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_toggleTargetIds.clear();
     if (!layer)
         return;
@@ -102,12 +102,12 @@ void ShadowWorldCapture::captureToggleUnknownTargets(ShadowSimulator& simulator,
             continue;
         if (effect->m_targetGroupID <= 0)
             continue;
-        if (TriggerClassify::classify(effect) != TriggerKind::DynamicOther)
+        if (EbTriggerClassify::classify(effect) != TriggerKind::DynamicOther)
             continue;
         int const oid = effect->m_objectID;
-        bool const toggleOrb = TriggerClassify::isToggleOrbId(oid);
+        bool const toggleOrb = EbTriggerClassify::isToggleOrbId(oid);
         bool const touchToggle =
-            TriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered;
+            EbTriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered;
         if (!toggleOrb && !touchToggle)
             continue;
         toggleEffects.push_back(effect);
@@ -136,30 +136,30 @@ void ShadowWorldCapture::captureToggleUnknownTargets(ShadowSimulator& simulator,
             if (!object->belongsToGroup(groupId))
                 continue;
             // Commit 7: jump/dash rings keep orb path — not Hard toggle-Unknown.
-            if (OrbStackResolver::shouldSkipToggleFlip(object, effect))
+            if (EbOrbStackResolver::shouldSkipToggleFlip(object, effect))
                 continue;
             simulator.m_toggleTargetIds.insert(object->m_uniqueID);
         }
     }
 }
 
-void ShadowWorldCapture::captureDynamicFollows(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_dynamicTargetIds.clear();
     simulator.m_dynamicFollowJobs.clear();
     simulator.m_liveDynamicAppliedIds.clear();
-    if (!layer || !StageConfig::triggerBake())
+    if (!layer || !EbStageConfig::triggerBake())
         return;
 
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children)
         return;
 
-    bool const wantJobs = !StageConfig::triggerBakeSkipDynamic();
+    bool const wantJobs = !EbStageConfig::triggerBakeSkipDynamic();
 
     // First collect DynamicFollow effects only; skip the second full-roster scan when none exist.
     std::vector<EffectGameObject*> followEffects;
     for (unsigned index = 0; index < children->count(); ++index) {
-        if (followEffects.size() >= ShadowSimulator::kMaxDynamicFollowJobs)
+        if (followEffects.size() >= EbShadowSimulator::kMaxDynamicFollowJobs)
             break;
         auto* effect =
             geode::prelude::typeinfo_cast<EffectGameObject*>(children->objectAtIndex(index));
@@ -167,7 +167,7 @@ void ShadowWorldCapture::captureDynamicFollows(ShadowSimulator& simulator, PlayL
             continue;
         if (effect->m_targetGroupID <= 0)
             continue;
-        if (TriggerClassify::classify(effect) != TriggerKind::DynamicFollow)
+        if (EbTriggerClassify::classify(effect) != TriggerKind::DynamicFollow)
             continue;
         followEffects.push_back(effect);
     }
@@ -195,12 +195,12 @@ void ShadowWorldCapture::captureDynamicFollows(ShadowSimulator& simulator, PlayL
     }
 
     for (auto* effect : followEffects) {
-        if (simulator.m_dynamicFollowJobs.size() >= ShadowSimulator::kMaxDynamicFollowJobs)
+        if (simulator.m_dynamicFollowJobs.size() >= EbShadowSimulator::kMaxDynamicFollowJobs)
             break;
 
         // Rotate-follow / non-positional: mark targets Unknown, no cheap probe.
         bool const rotateOnly = effect->m_rotateFollowP1 || effect->m_rotateFollowP2;
-        bool const followY = TriggerClassify::isFollowPlayerTriggerId(effect->m_objectID);
+        bool const followY = EbTriggerClassify::isFollowPlayerTriggerId(effect->m_objectID);
         bool const targetPlayer = effect->m_targetPlayer1 || effect->m_targetPlayer2;
         bool const lockX = effect->m_lockToPlayerX || targetPlayer;
         bool const lockY = effect->m_lockToPlayerY || targetPlayer || followY;
@@ -210,7 +210,7 @@ void ShadowWorldCapture::captureDynamicFollows(ShadowSimulator& simulator, PlayL
         if (groupId <= 0)
             continue;
 
-        ShadowSimulator::DynamicFollowJob job;
+        EbShadowSimulator::DynamicFollowJob job;
         job.effectUniqueId = effect->m_uniqueID;
         job.effect = effect;
         job.lockX = lockX;
@@ -229,10 +229,10 @@ void ShadowWorldCapture::captureDynamicFollows(ShadowSimulator& simulator, PlayL
 
             if (!wantJobs || !probeable)
                 continue;
-            if (job.targets.size() >= ShadowSimulator::kMaxDynamicTargetsPerJob)
+            if (job.targets.size() >= EbShadowSimulator::kMaxDynamicTargetsPerJob)
                 break;
 
-            ShadowSimulator::SavedTransform st;
+            EbShadowSimulator::SavedTransform st;
             st.uniqueId = object->m_uniqueID;
             st.obj = object;
             st.x = object->getPositionX();
@@ -255,7 +255,7 @@ void ShadowWorldCapture::captureDynamicFollows(ShadowSimulator& simulator, PlayL
     }
 }
 
-void ShadowWorldCapture::resetTriggerTransforms(ShadowSimulator& simulator) {
+void EbShadowWorldCapture::resetTriggerTransforms(EbShadowSimulator& simulator) {
     if (simulator.m_savedTransforms.empty())
         return;
 
@@ -277,14 +277,14 @@ void ShadowWorldCapture::resetTriggerTransforms(ShadowSimulator& simulator) {
     }
 }
 
-void ShadowWorldCapture::restoreTriggerTransforms(ShadowSimulator& simulator,
+void EbShadowWorldCapture::restoreTriggerTransforms(EbShadowSimulator& simulator,
                                                   GJBaseGameLayer* layer) {
     (void)layer;
     simulator.resetTriggerTransforms();
     simulator.m_savedTransforms.clear();
 }
 
-void ShadowWorldCapture::beginCapture(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::beginCapture(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_saved.clear();
     simulator.m_savedTransforms.clear();
     simulator.m_dynamicTargetIds.clear();
@@ -293,15 +293,15 @@ void ShadowWorldCapture::beginCapture(ShadowSimulator& simulator, PlayLayer* lay
     simulator.m_liveDynamicAppliedIds.clear();
     simulator.m_toggleUnknownHit = false;
     simulator.m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
-    ToggleOrbSim::get().restore();
-    OrbStackResolver::get().begin();
+    EbToggleOrbSim::get().restore();
+    EbOrbStackResolver::get().begin();
     simulator.captureTriggerTransforms(layer);
     simulator.captureDynamicFollows(layer);
     simulator.captureToggleUnknownTargets(layer);
 }
 
-void ShadowWorldCapture::resetCaptureForNextRun(ShadowSimulator& simulator, PlayLayer* layer) {
-    ToggleOrbSim::get().restore();
+void EbShadowWorldCapture::resetCaptureForNextRun(EbShadowSimulator& simulator, PlayLayer* layer) {
+    EbToggleOrbSim::get().restore();
     simulator.resetTriggerTransforms();
     simulator.m_triggerWorldAppliedThisTick = false;
     simulator.m_liveDynamicAppliedIds.clear();
@@ -331,10 +331,10 @@ void ShadowWorldCapture::resetCaptureForNextRun(ShadowSimulator& simulator, Play
     }
 }
 
-void ShadowWorldCapture::restoreCapture(ShadowSimulator& simulator, PlayLayer* layer) {
-    ToggleOrbSim::get().restore();
+void EbShadowWorldCapture::restoreCapture(EbShadowSimulator& simulator, PlayLayer* layer) {
+    EbToggleOrbSim::get().restore();
     {
-        LagProbe::Scope const scope("eb.trigger.restore");
+        EbLagProbe::Scope const scope("eb.trigger.restore");
         simulator.restoreTriggerTransforms(layer);
     }
     simulator.m_dynamicFollowJobs.clear();

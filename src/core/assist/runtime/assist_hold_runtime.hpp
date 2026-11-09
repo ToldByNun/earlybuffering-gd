@@ -5,16 +5,16 @@
 
 #include "../assist_controller.hpp"
 
-class AssistHoldRuntime {
+class EbAssistHoldRuntime {
 public:
-    static bool armHoldUntilSafe(AssistController& controller, PlayLayer* playLayer,
+    static bool armHoldUntilSafe(EbAssistController& controller, PlayLayer* playLayer,
                                  PlayerObject* player, bool player1, int effectTick, int limit,
-                                 SimPlan const& plan, bool down);
-    static void tickHoldUntilSafe(AssistController& controller, PlayLayer* playLayer,
+                                 EbSimPlan const& plan, bool down);
+    static void tickHoldUntilSafe(EbAssistController& controller, PlayLayer* playLayer,
                                   PlayerObject* player);
 
 private:
-    AssistHoldRuntime() = delete;
+    EbAssistHoldRuntime() = delete;
 };
 
 #endif

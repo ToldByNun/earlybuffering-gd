@@ -7,24 +7,24 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowReplayRunner {
+class EbShadowReplayRunner {
 public:
-    static ShadowSimulator::ReplayResult replay(ShadowSimulator& simulator, PlayLayer* layer,
+    static EbShadowSimulator::ReplayResult replay(EbShadowSimulator& simulator, PlayLayer* layer,
                                                 int slot, int startTick,
-                                                std::vector<InputEvent> const& timeline,
+                                                std::vector<EbInputEvent> const& timeline,
                                                 float deltaTime, int maxTicks, bool shiftActionBy,
                                                 int actionShift);
-    static ShadowSimulator::BakeRunResult
-    runBakeTimeline(ShadowSimulator& simulator, PlayLayer* layer, int slot,
-                    std::vector<ReplayEvent> const& events, float deltaTime, int untilFrame,
+    static EbShadowSimulator::BakeRunResult
+    runBakeTimeline(EbShadowSimulator& simulator, PlayLayer* layer, int slot,
+                    std::vector<EbReplayEvent> const& events, float deltaTime, int untilFrame,
                     int sampleFrame, bool applyP2ToShadow, bool traceFrames, bool parkReals,
                     int substeps, std::function<bool(int frame)> onFrame);
-    static ShadowSimulator::PathSample samplePath(ShadowSimulator& simulator, PlayLayer* layer,
-                                                  int slot, std::vector<ReplayEvent> const& events,
+    static EbShadowSimulator::PathSample samplePath(EbShadowSimulator& simulator, PlayLayer* layer,
+                                                  int slot, std::vector<EbReplayEvent> const& events,
                                                   float deltaTime, int untilFrame);
 
 private:
-    ShadowReplayRunner() = delete;
+    EbShadowReplayRunner() = delete;
 };
 
 #endif

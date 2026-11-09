@@ -5,7 +5,7 @@
 
 // Frozen v1.4.0 assist contracts (Commit 2 LOCK).
 // DO NOT RETUNE thresholds without a new mod version + new contracts doc.
-class AssistContracts140 {
+class EbAssistContracts140 {
 public:
     static constexpr int kSchema = 1;
     static constexpr char const* kCorpusLabel = "solo"; // solo until multi opt-in lands
@@ -67,7 +67,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistContracts140() = delete;
+    EbAssistContracts140() = delete;
 };
 
 #endif

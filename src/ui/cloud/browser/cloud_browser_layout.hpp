@@ -3,12 +3,12 @@
 
 #include "../cloud_config_popup.hpp"
 
-class CloudBrowserLayout {
+class EbCloudBrowserLayout {
 public:
-    static bool init(CloudConfigPopup& owner);
+    static bool init(EbCloudConfigPopup& owner);
 
 private:
-    CloudBrowserLayout() = delete;
+    EbCloudBrowserLayout() = delete;
 };
 
 #endif

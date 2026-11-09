@@ -6,13 +6,13 @@
 
 #include "../dev_trace_store.hpp"
 
-class DevEventCodec {
+class EbDevEventCodec {
 public:
-    static matjson::Value eventToJson(DevDecisionEvent const& e);
-    static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::string& err);
+    static matjson::Value eventToJson(EbDevDecisionEvent const& e);
+    static bool eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e, std::string& err);
 
 private:
-    DevEventCodec() = delete;
+    EbDevEventCodec() = delete;
 };
 
 #endif

@@ -3,14 +3,14 @@
 
 #include "../shadow_plan_context.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanResult {
+class EbShadowPlanResult {
 public:
-    static void publish(ShadowPlanContext& context);
+    static void publish(EbShadowPlanContext& context);
 
 private:
-    ShadowPlanResult() = delete;
+    EbShadowPlanResult() = delete;
 };
 
 #endif

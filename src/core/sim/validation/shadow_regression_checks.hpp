@@ -3,12 +3,12 @@
 
 #include <string>
 
-class ShadowRegressionChecks {
+class EbShadowRegressionChecks {
 public:
     static bool regressionSelfCheck(std::string& report);
 
 private:
-    ShadowRegressionChecks() = delete;
+    EbShadowRegressionChecks() = delete;
 };
 
 #endif

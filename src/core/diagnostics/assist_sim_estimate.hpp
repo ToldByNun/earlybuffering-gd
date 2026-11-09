@@ -7,7 +7,7 @@
 
 // Commit 12 — Counterfactual Net as simEstimate only (G10).
 // Never a ship Pass/Fail by itself. Real gates stay on AssistRealMetrics.
-class AssistSimEstimate {
+class EbAssistSimEstimate {
 public:
     enum class NetClass {
         Neutral = 0,
@@ -25,7 +25,7 @@ public:
     private:
     };
 
-    static AssistSimEstimate& get();
+    static EbAssistSimEstimate& get();
 
     void resetSession();
 
@@ -72,7 +72,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistSimEstimate() = default;
+    friend class EbServiceStore;
+
+    EbAssistSimEstimate() = default;
 
     int m_prev = 0;
     int m_caused = 0;

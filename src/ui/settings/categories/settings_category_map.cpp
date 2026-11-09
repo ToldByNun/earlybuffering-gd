@@ -11,7 +11,7 @@
 #include <fmt/format.h>
 #include <string>
 
-SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryMap::kCount] = {
+EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCategoryMap::kCount] = {
     {"title-general", SettingsCategory::Main},
     {"enabled", SettingsCategory::Main},
     {"safe-mode", SettingsCategory::Main},
@@ -181,15 +181,15 @@ SettingsCategoryMap::Entry const SettingsCategoryMap::kEntries[SettingsCategoryM
     {"dev-dump-diag-action", SettingsCategory::Dev},
 };
 
-auto SettingsCategoryMap::begin() -> Entry const* {
+auto EbSettingsCategoryMap::begin() -> Entry const* {
     return kEntries;
 }
 
-auto SettingsCategoryMap::end() -> Entry const* {
+auto EbSettingsCategoryMap::end() -> Entry const* {
     return kEntries + kCount;
 }
 
-auto SettingsCategoryMap::lookup(std::string const& key) -> SettingsCategory {
+auto EbSettingsCategoryMap::lookup(std::string const& key) -> SettingsCategory {
     for (auto const* it = begin(); it != end(); ++it) {
         if (std::strcmp(it->key, key.c_str()) == 0)
             return it->cat;

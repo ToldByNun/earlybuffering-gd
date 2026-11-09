@@ -26,18 +26,18 @@
 #include <algorithm>
 #include <cstdlib>
 
-bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* playLayer,
+bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLayer* playLayer,
                                        PlayerObject* player, bool player1, int effectTick,
-                                       float firstDt, DevClockContract::Stamp const& clockIn) {
-    DevClockContract::Stamp clock = clockIn;
+                                       float firstDt, EbDevClockContract::Stamp const& clockIn) {
+    EbDevClockContract::Stamp clock = clockIn;
 
     // Same rules as purple bake viz: wave/ship/swing/robot, else dash/holdAssist only.
     // Cube/ball/ufo/spider normal UP → Pass (no false release ASSIST).
     if (!controller.shouldPlanRelease(playLayer, player, player1, effectTick)) {
-        AssistLog::debug(fmt::format("release: discrete-skip mode={} dashing={} holdAssistBake=0",
-                                     StageConfig::kindName(StageConfig::kindOf(player)),
+        EbAssistLog::debug(fmt::format("release: discrete-skip mode={} dashing={} holdAssistBake=0",
+                                     EbStageConfig::kindName(EbStageConfig::kindOf(player)),
                                      player && player->m_isDashing ? 1 : 0));
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassReleaseDiscrete,
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassReleaseDiscrete,
                                              "release-discrete-skip");
         controller.noteVerdict(AssistReason::PassReleaseDiscrete, "release-discrete-skip");
         controller.updateOverlay();
@@ -46,7 +46,7 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
 
     int const limit = controller.activeLimit(player);
     if (limit <= 0) {
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");
         controller.noteVerdict(AssistReason::PassLimitZero, "release-limit0");
         return true;
     }
@@ -55,32 +55,32 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
     {
         float const xGate = player->getPositionX();
         AssistReason parityReason = AssistReason::None;
-        if (SimTrust::get().forcePassReason(xGate, parityReason)) {
-            AssistLog::debug(
-                fmt::format("SIMTRUST pass release ({})", AssistVerdict::name(parityReason)));
+        if (EbSimTrust::get().forcePassReason(xGate, parityReason)) {
+            EbAssistLog::debug(
+                fmt::format("SIMTRUST pass release ({})", EbAssistVerdict::name(parityReason)));
             controller.m_untrustPassHint = true;
             char const* where = parityReason == AssistReason::PassParityDrift
                                     ? "release-parity-drift"
                                     : "release-spot-untrusted";
-            DevCycleRecorder::get().noteGatePass(parityReason, where);
+            EbDevCycleRecorder::get().noteGatePass(parityReason, where);
             controller.noteVerdict(parityReason, where);
             controller.updateOverlay();
             return true;
         }
     }
 
-    PressSimBudget pressBudget;
-    pressBudget.tickLeft = StageConfig::tickBudgetPerPress();
+    EbPressSimBudget pressBudget;
+    pressBudget.tickLeft = EbStageConfig::tickBudgetPerPress();
     {
-        int const fullUs = StageConfig::simBudgetUs();
+        int const fullUs = EbStageConfig::simBudgetUs();
         pressBudget.usUnlimited = (fullUs <= 0);
         pressBudget.usLeft = pressBudget.usUnlimited ? 0 : fullUs;
     }
-    bool const shareHybrid = StageConfig::assistMode() == AssistMode::Hybrid;
+    bool const shareHybrid = EbStageConfig::assistMode() == AssistMode::Hybrid;
 
     bool bakeHandled = false;
     bool hybridVerifyAttempted = false;
-    HybridPressReuse hybridReuse{};
+    EbHybridPressReuse hybridReuse{};
     bool const bakeRet = controller.tryBakeAssist(
         playLayer, player, player1, false, effectTick, firstDt, bakeHandled,
         shareHybrid ? &pressBudget : nullptr, shareHybrid ? &hybridVerifyAttempted : nullptr,
@@ -88,33 +88,33 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
     if (bakeHandled)
         return bakeRet;
 
-    LagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
+    EbLagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
                            fmt::format("vfy={} remTick={} remUs={}", hybridVerifyAttempted ? 1 : 0,
                                        pressBudget.tickLeft,
                                        pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
 
-    auto const kind = StageConfig::kindOf(player);
+    auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
-    auto& profile = LevelProfile::get();
+    auto& profile = EbLevelProfile::get();
     int const slot = player1 ? 0 : 1;
-    bool const nearOrb = AssistControllerImplementation::nearOrbOrPadHint(playLayer, player, limit,
+    bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(playLayer, player, limit,
                                                                           controller.m_simDt);
-    bool nearBake = AssistControllerImplementation::nearBakeWindowHint(
+    bool nearBake = EbAssistControllerImplementation::nearBakeWindowHint(
         player, player1, false, effectTick, controller.m_simDt,
         shareHybrid ? &hybridReuse : nullptr);
     if (hybridVerifyAttempted)
         nearBake = false;
 
-    if (DivergenceTracker::get().simUntrusted()) {
+    if (EbDivergenceTracker::get().simUntrusted()) {
         if (!nearOrb) {
-            AssistLog::debug("UNTRUST pass (release)");
+            EbAssistLog::debug("UNTRUST pass (release)");
             controller.m_untrustPassHint = true;
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassUntrust, "release-untrust");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassUntrust, "release-untrust");
             controller.noteVerdict(AssistReason::PassUntrust, "release-untrust");
             controller.updateOverlay();
             return true;
         }
-        AssistLog::debug("UNTRUST soft (release orb foresight — allow plan)");
+        EbAssistLog::debug("UNTRUST soft (release orb foresight — allow plan)");
         controller.m_untrustPassHint = false;
     } else {
         controller.m_untrustPassHint = false;
@@ -124,36 +124,36 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
     // (wave hold-longer saves must not lose to spam / PassNoThreat).
     bool mustDelaySearch = false;
     {
-        PerfectAssistPolicy::TrustInput trustIn;
-        trustIn.parityDrift = SimTrust::get().parityDrift();
-        trustIn.spotUntrusted = SpotTrustMap::get().isUntrusted(x);
-        trustIn.divergenceUntrusted = DivergenceTracker::get().simUntrusted() && !nearOrb;
-        if (StageConfig::triggerBake()) {
-            auto& tw = TriggerWorldStore::get();
-            auto& baker = TriggerWorldBaker::get();
+        EbPerfectAssistPolicy::TrustInput trustIn;
+        trustIn.parityDrift = EbSimTrust::get().parityDrift();
+        trustIn.spotUntrusted = EbSpotTrustMap::get().isUntrusted(x);
+        trustIn.divergenceUntrusted = EbDivergenceTracker::get().simUntrusted() && !nearOrb;
+        if (EbStageConfig::triggerBake()) {
+            auto& tw = EbTriggerWorldStore::get();
+            auto& baker = EbTriggerWorldBaker::get();
             trustIn.twEmptyWhenExpected =
                 tw.loaded() && !tw.hasTracks() && !baker.running() &&
                 !baker.lastCollectIncomplete() &&
                 (baker.lastBakedEffects() > 0 || baker.lastBakedStartTimed() > 0);
         }
         AssistReason namedPass = AssistReason::None;
-        if (PerfectAssistPolicy::forcePassReason(trustIn, namedPass) &&
+        if (EbPerfectAssistPolicy::forcePassReason(trustIn, namedPass) &&
             namedPass == AssistReason::PassTwEmpty) {
-            AssistLog::debug("PERFECT pass-tw-empty (release)");
+            EbAssistLog::debug("PERFECT pass-tw-empty (release)");
             controller.m_untrustPassHint = true;
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassTwEmpty, "release-tw-empty");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassTwEmpty, "release-tw-empty");
             controller.noteVerdict(AssistReason::PassTwEmpty, "release-tw-empty");
             controller.updateOverlay();
             return true;
         }
-        PerfectAssistPolicy::OpportunityInput oppIn;
+        EbPerfectAssistPolicy::OpportunityInput oppIn;
         oppIn.foresightOrbPad = nearOrb;
         oppIn.bakePreferBand = nearBake;
         oppIn.orbWindowFound = nearOrb;
-        auto const decision = PerfectAssistPolicy::classify(trustIn, oppIn);
-        mustDelaySearch = (decision == PerfectAssistPolicy::Decision::MustDelaySearch);
+        auto const decision = EbPerfectAssistPolicy::classify(trustIn, oppIn);
+        mustDelaySearch = (decision == EbPerfectAssistPolicy::Decision::MustDelaySearch);
         if (mustDelaySearch) {
-            AssistLog::debug("PERFECT must-delay-search release (trust+opportunity)");
+            EbAssistLog::debug("PERFECT must-delay-search release (trust+opportunity)");
         }
     }
 
@@ -161,25 +161,25 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
     // PerfectAssist demands a Delay-search (orb/bake opportunity).
     bool const continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
     if (continuous && !mustDelaySearch) {
-        if (ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
-            AssistLog::debug(fmt::format("intent: spam Pass release (mode={}, tick={})",
-                                         StageConfig::kindName(kind), effectTick));
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
+        if (EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
+            EbAssistLog::debug(fmt::format("intent: spam Pass release (mode={}, tick={})",
+                                         EbStageConfig::kindName(kind), effectTick));
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
             controller.noteVerdict(AssistReason::PassSpam, "release-spam");
             controller.updateOverlay();
             return true;
         }
     }
 
-    if (!mustDelaySearch && StageConfig::autoTune() && profile.loaded() && !nearOrb) {
+    if (!mustDelaySearch && EbStageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
-            if (spot->n >= LevelProfile::TRUST_PASS_MIN_N &&
-                spot->trust < LevelProfile::TRUST_PASS_THRESHOLD &&
-                !AssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
-                AssistLog::debug(
-                    fmt::format("learned: low trust @{} (release)", LevelProfile::spotBucket(x)));
-                AssistLearning::decaySpot(kind, x);
-                DevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust,
+            if (spot->n >= EbLevelProfile::TRUST_PASS_MIN_N &&
+                spot->trust < EbLevelProfile::TRUST_PASS_THRESHOLD &&
+                !EbAssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
+                EbAssistLog::debug(
+                    fmt::format("learned: low trust @{} (release)", EbLevelProfile::spotBucket(x)));
+                EbAssistLearning::decaySpot(kind, x);
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust,
                                                      "release-low-trust");
                 controller.noteVerdict(AssistReason::PassLowTrust, "release-low-trust");
                 controller.updateOverlay();
@@ -188,7 +188,7 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
         }
     }
 
-    PlanOptions opts;
+    EbPlanOptions opts;
     if (shareHybrid) {
         opts.tickBudget = std::max(0, pressBudget.tickLeft);
         if (pressBudget.usUnlimited) {
@@ -197,34 +197,34 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
             opts.budgetUs = std::max(1, pressBudget.usLeft);
         }
     } else {
-        opts.budgetUs = StageConfig::simBudgetUs();
-        opts.tickBudget = StageConfig::tickBudgetPerPress();
+        opts.budgetUs = EbStageConfig::simBudgetUs();
+        opts.tickBudget = EbStageConfig::tickBudgetPerPress();
     }
     if (shareHybrid && hybridVerifyAttempted) {
-        int const halfTick = std::max(400, StageConfig::tickBudgetPerPress() / 2);
+        int const halfTick = std::max(400, EbStageConfig::tickBudgetPerPress() / 2);
         opts.tickBudget = std::min(opts.tickBudget, halfTick);
         if (!pressBudget.usUnlimited) {
-            int const fullUs = StageConfig::simBudgetUs();
+            int const fullUs = EbStageConfig::simBudgetUs();
             int const halfUs = std::max(200, fullUs / 2);
             opts.budgetUs = std::max(1, std::min(opts.budgetUs, halfUs));
         }
     }
-    opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
-    if (DivergenceTracker::get().shouldWarn()) {
+    opts.capMul = EbStageConfig::autoTune() ? profile.capMul(kind) : 1.f;
+    if (EbDivergenceTracker::get().shouldWarn()) {
         opts.capMul *= 0.85f;
     }
     opts.maxBranches = 4;
     opts.attemptStartTick = effectTick;
-    opts.legacyPick = StageConfig::assistPickLegacy();
-    opts.assistEngine = StageConfig::effectiveAssistEngine();
+    opts.legacyPick = EbStageConfig::assistPickLegacy();
+    opts.assistEngine = EbStageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
-    bool const spamDenseRel = ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
-    AssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
+    bool const spamDenseRel = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
+    EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                           spamDenseRel);
     if (!hybridVerifyAttempted) {
-        AssistControllerImplementation::fillBakePreferBand(
+        EbAssistControllerImplementation::fillBakePreferBand(
             opts, player, player1, false, effectTick, limit, controller.m_attemptTick,
             controller.m_simDt, shareHybrid ? &hybridReuse : nullptr);
     }
@@ -232,15 +232,15 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
-    auto plan = ShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
+    auto plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
                                             firstDt, opts);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
-    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);
+    EbDevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);
 
     // Belt: never arm Delay when sim marked unknown / toggle-target uncertainty.
     if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("release: refuse Delay (toggle/unknown) → Pass id={}", plan.planId));
         plan.action = PlanAction::Pass;
         plan.delay = 0;
@@ -254,7 +254,7 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
         }
-        DevCycleRecorder::get().notePassThrough(passReason, "release-plan");
+        EbDevCycleRecorder::get().notePassThrough(passReason, "release-plan");
         controller.noteVerdict(passReason, "release-plan");
         controller.recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
         return true;
@@ -262,22 +262,22 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
 
     int delay = plan.delay;
     int const plannedDelay = plan.delay;
-    if (StageConfig::autoTune() && profile.loaded()) {
+    if (EbStageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
             bool const bakePrefer =
                 opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin;
             bool const spamDense =
-                ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
-            if (AssistLearning::allowHistogramExplore(kind, spot->histN, spamDense, bakePrefer,
+                EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
+            if (EbAssistLearning::allowHistogramExplore(kind, spot->histN, spamDense, bakePrefer,
                                                       spot->diedAfterAssist)) {
-                bool const freezeRand = DevConfig::recordEnable() && DevConfig::disableRandom() &&
-                                        DevCycleRecorder::get().isRecording();
+                bool const freezeRand = EbDevConfig::recordEnable() && EbDevConfig::disableRandom() &&
+                                        EbDevCycleRecorder::get().isRecording();
                 if (!freezeRand) {
                     off += (std::rand() % 3) - 1;
                 }
-                AssistLog::debug(fmt::format("learn: hist explore ±1 release @{} histN={}",
-                                             LevelProfile::spotBucket(x), spot->histN));
+                EbAssistLog::debug(fmt::format("learn: hist explore ±1 release @{} histN={}",
+                                             EbLevelProfile::spotBucket(x), spot->histN));
             }
             if (spot->diedAfterAssist > 0 && off < 1) {
                 off = 1;
@@ -287,7 +287,7 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
         if (delay < plannedDelay) {
             delay = plannedDelay;
         }
-        delay = MissAssistContracts::clampDelayToWindow(delay, limit);
+        delay = EbMissAssistContracts::clampDelayToWindow(delay, limit);
         if (delay < 1)
             delay = 1;
     }
@@ -309,26 +309,26 @@ bool AssistReleasePlanner::planRelease(AssistController& controller, PlayLayer* 
     controller.m_buffer.mode = kind;
     controller.m_buffer.fireTick = std::min(controller.m_buffer.fireTick, effectTick + limit);
 
-    AssistLog::debug(
+    EbAssistLog::debug(
         fmt::format("ASSIST release +{} ticks (now dies @+{}, limit {}, tick={} fire={})", delay,
                     plan.firstDeathTick, limit, effectTick, controller.m_buffer.fireTick));
     AssistReason delayReason = plan.reason;
-    if (!AssistVerdict::isDelay(delayReason)) {
-        delayReason = AssistVerdict::inferDelayReason(
+    if (!EbAssistVerdict::isDelay(delayReason)) {
+        delayReason = EbAssistVerdict::inferDelayReason(
             plan.activatedRing, plan.requireOrb,
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin);
     }
     {
-        DevCycleRecorder::DelayArmMeta meta{};
+        EbDevCycleRecorder::DelayArmMeta meta{};
         meta.armVerifyOk = true;
         meta.budgetHitAtArm = plan.budgetHit;
-        controller.m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+        controller.m_buffer.devPressId = EbDevCycleRecorder::get().noteDelayArm(
             delayReason, "release-delay", delay, controller.m_buffer.fireTick, plan.planId,
             DevEventSource::Live, meta);
     }
     controller.noteVerdict(delayReason, "release-delay");
     if (delay > 0)
-        AssistRealMetrics::get().noteArm();
+        EbAssistRealMetrics::get().noteArm();
     controller.recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     controller.updateOverlay();
     return false;

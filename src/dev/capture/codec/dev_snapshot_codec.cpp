@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-matjson::Value DevSnapshotCodec::clockStampToJson(DevClockContract::Stamp const& st) {
+matjson::Value EbDevSnapshotCodec::clockStampToJson(EbDevClockContract::Stamp const& st) {
     matjson::Value candidate = matjson::Value::object();
     candidate["clockSchema"] = st.clockSchema;
     candidate["timeBasis"] = st.timeBasis;
@@ -26,11 +26,11 @@ matjson::Value DevSnapshotCodec::clockStampToJson(DevClockContract::Stamp const&
     candidate["simTps"] = st.simTps;
     candidate["wallDt"] = st.wallDt;
     candidate["speedScaleSuspect"] = st.speedScaleSuspect;
-    candidate["liveSimPathId"] = DevClockContract::simPathId(st.liveSimPathId);
+    candidate["liveSimPathId"] = EbDevClockContract::simPathId(st.liveSimPathId);
     return candidate;
 }
 
-bool DevSnapshotCodec::clockStampFromJson(matjson::Value const& j, DevClockContract::Stamp& st,
+bool EbDevSnapshotCodec::clockStampFromJson(matjson::Value const& j, EbDevClockContract::Stamp& st,
                                           std::string& err) {
     st = {};
     st.clockSchema =
@@ -56,7 +56,7 @@ bool DevSnapshotCodec::clockStampFromJson(matjson::Value const& j, DevClockContr
     auto path = j.contains("liveSimPathId")
                     ? std::string(j["liveSimPathId"].asString().unwrapOr("none"))
                     : "none";
-    if (!DevClockContract::parseSimPathId(path, st.liveSimPathId)) {
+    if (!EbDevClockContract::parseSimPathId(path, st.liveSimPathId)) {
         err = "bad-liveSimPathId";
         return false;
     }
@@ -64,7 +64,7 @@ bool DevSnapshotCodec::clockStampFromJson(matjson::Value const& j, DevClockContr
     return true;
 }
 
-matjson::Value DevSnapshotCodec::playerBlobToJson(DevPlayerBlob const& b) {
+matjson::Value EbDevSnapshotCodec::playerBlobToJson(EbDevPlayerBlob const& b) {
     matjson::Value otherIndex = matjson::Value::object();
     otherIndex["present"] = b.present;
     if (!b.present)
@@ -111,7 +111,7 @@ matjson::Value DevSnapshotCodec::playerBlobToJson(DevPlayerBlob const& b) {
     return otherIndex;
 }
 
-void DevSnapshotCodec::playerBlobFromJson(matjson::Value const& j, DevPlayerBlob& b) {
+void EbDevSnapshotCodec::playerBlobFromJson(matjson::Value const& j, EbDevPlayerBlob& b) {
     b = {};
     b.present = j.contains("present") ? j["present"].asBool().unwrapOr(false) : false;
     if (!b.present)
@@ -165,22 +165,22 @@ void DevSnapshotCodec::playerBlobFromJson(matjson::Value const& j, DevPlayerBlob
     bo("maybeIsBoosted", b.maybeIsBoosted);
 }
 
-matjson::Value DevSnapshotCodec::witnessToJson(DevLiveWitness const& w) {
+matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {
     matjson::Value otherIndex = matjson::Value::object();
     otherIndex["playerBlobSchema"] = fmt::format("{:016x}", w.playerBlobSchema);
     otherIndex["freezeWorld"] = w.freezeWorld;
-    otherIndex["player"] = DevTraceStoreImplementation::playerBlobToJson(w.player);
+    otherIndex["player"] = EbDevTraceStoreImplementation::playerBlobToJson(w.player);
     if (w.dual.present)
-        otherIndex["dual"] = DevTraceStoreImplementation::playerBlobToJson(w.dual);
+        otherIndex["dual"] = EbDevTraceStoreImplementation::playerBlobToJson(w.dual);
     if (w.clock.valid)
-        otherIndex["clock"] = DevTraceStoreImplementation::clockStampToJson(w.clock);
+        otherIndex["clock"] = EbDevTraceStoreImplementation::clockStampToJson(w.clock);
 
     std::vector<matjson::Value> cats;
     cats.reserve(w.categories.size());
     for (auto const& c : w.categories) {
         matjson::Value cj = matjson::Value::object();
-        cj["category"] = DevLiveWitness::categoryId(c.category);
-        cj["status"] = DevLiveWitness::statusId(c.status);
+        cj["category"] = EbDevLiveWitness::categoryId(c.category);
+        cj["status"] = EbDevLiveWitness::statusId(c.status);
         if (c.digest != 0) {
             cj["digest"] = fmt::format("{:016x}", c.digest);
         }
@@ -192,7 +192,7 @@ matjson::Value DevSnapshotCodec::witnessToJson(DevLiveWitness const& w) {
 
     std::vector<matjson::Value> deps;
     for (int delay : w.worldDeps) {
-        deps.push_back(DevLiveWitness::categoryId(static_cast<DevWitnessCategory>(delay)));
+        deps.push_back(EbDevLiveWitness::categoryId(static_cast<DevWitnessCategory>(delay)));
     }
     otherIndex["worldDeps"] = deps;
 
@@ -238,7 +238,7 @@ matjson::Value DevSnapshotCodec::witnessToJson(DevLiveWitness const& w) {
     return otherIndex;
 }
 
-bool DevSnapshotCodec::witnessFromJson(matjson::Value const& j, DevLiveWitness& w,
+bool EbDevSnapshotCodec::witnessFromJson(matjson::Value const& j, EbDevLiveWitness& w,
                                        std::string& err) {
     w = {};
     w.valid = true;
@@ -248,26 +248,26 @@ bool DevSnapshotCodec::witnessFromJson(matjson::Value const& j, DevLiveWitness& 
     }
     w.freezeWorld = j.contains("freezeWorld") ? j["freezeWorld"].asBool().unwrapOr(false) : false;
     if (j.contains("player"))
-        DevTraceStoreImplementation::playerBlobFromJson(j["player"], w.player);
+        EbDevTraceStoreImplementation::playerBlobFromJson(j["player"], w.player);
     if (j.contains("dual"))
-        DevTraceStoreImplementation::playerBlobFromJson(j["dual"], w.dual);
+        EbDevTraceStoreImplementation::playerBlobFromJson(j["dual"], w.dual);
     if (j.contains("clock")) {
         std::string clockErr;
-        if (!DevTraceStoreImplementation::clockStampFromJson(j["clock"], w.clock, clockErr)) {
+        if (!EbDevTraceStoreImplementation::clockStampFromJson(j["clock"], w.clock, clockErr)) {
             err = clockErr.empty() ? "bad-witness-clock" : clockErr;
             return false;
         }
     }
     if (j.contains("categories") && j["categories"].isArray()) {
         for (auto const& cj : j["categories"].asArray().unwrap()) {
-            DevWitnessCategoryEntry e;
+            EbDevWitnessCategoryEntry e;
             auto categoryValue = std::string(cj["category"].asString().unwrapOr(""));
             auto state = std::string(cj["status"].asString().unwrapOr("absent"));
-            if (!DevLiveWitness::parseCategory(categoryValue, e.category)) {
+            if (!EbDevLiveWitness::parseCategory(categoryValue, e.category)) {
                 err = "bad-witness-category";
                 return false;
             }
-            if (!DevLiveWitness::parseStatus(state, e.status)) {
+            if (!EbDevLiveWitness::parseStatus(state, e.status)) {
                 err = "bad-witness-status";
                 return false;
             }
@@ -285,7 +285,7 @@ bool DevSnapshotCodec::witnessFromJson(matjson::Value const& j, DevLiveWitness& 
         for (auto const& dj : j["worldDeps"].asArray().unwrap()) {
             auto name = std::string(dj.asString().unwrapOr(""));
             DevWitnessCategory c;
-            if (!DevLiveWitness::parseCategory(name, c)) {
+            if (!EbDevLiveWitness::parseCategory(name, c)) {
                 err = "bad-worldDep";
                 return false;
             }
@@ -299,7 +299,7 @@ bool DevSnapshotCodec::witnessFromJson(matjson::Value const& j, DevLiveWitness& 
     }
     if (j.contains("moverPoses") && j["moverPoses"].isArray()) {
         for (auto const& pj : j["moverPoses"].asArray().unwrap()) {
-            DevObjectPose p;
+            EbDevObjectPose p;
             p.uniqueId = static_cast<int>(pj["id"].asInt().unwrapOr(0));
             p.x = static_cast<float>(pj["x"].asDouble().unwrapOr(0.0));
             p.y = static_cast<float>(pj["y"].asDouble().unwrapOr(0.0));

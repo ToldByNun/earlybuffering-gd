@@ -6,9 +6,9 @@
 #include <vector>
 
 // Mobile / non-Win I/O: fixed paths under the mod save dir (no file dialogs).
-class SaveDropPaths {
+class EbSaveDropPaths {
 public:
-    static SaveDropPaths& get();
+    static EbSaveDropPaths& get();
 
     // Mod::get()->getSaveDir(), or "earlybuffer-save" if Mod is unavailable.
     std::filesystem::path rootDir() const;
@@ -31,7 +31,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    SaveDropPaths() = default;
+    friend class EbServiceStore;
+
+    EbSaveDropPaths() = default;
 
     static bool isReplayExtension(std::filesystem::path const& path);
 };

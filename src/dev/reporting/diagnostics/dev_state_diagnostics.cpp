@@ -16,63 +16,63 @@
 #include <sstream>
 #include <string>
 
-std::string DevStateDiagnostics::buildSettings() {
+std::string EbDevStateDiagnostics::buildSettings() {
     std::ostringstream o;
-    o << "# Portable ConfigBundleKeys (" << ConfigBundleKeys::count() << ")\n";
+    o << "# Portable ConfigBundleKeys (" << EbConfigBundleKeys::count() << ")\n";
     o << "# Values from live Geode setting store (Apply if drafts pending)\n\n";
-    for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
-        o << DevDiagDumpImplementation::settingValueLine(*it) << "\n";
+    for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
+        o << EbDevDiagDumpImplementation::settingValueLine(*it) << "\n";
     }
     o << "\n# StageConfig / DevConfig caches\n";
-    o << "enabled=" << DevDiagDumpImplementation::boolStr(StageConfig::isEnabled()) << "\n";
-    o << "assistMode=" << StageConfig::assistModeName(StageConfig::assistMode()) << "\n";
-    o << "showTrajectory=" << DevDiagDumpImplementation::boolStr(StageConfig::showTrajectory())
+    o << "enabled=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::isEnabled()) << "\n";
+    o << "assistMode=" << EbStageConfig::assistModeName(EbStageConfig::assistMode()) << "\n";
+    o << "showTrajectory=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showTrajectory())
       << "\n";
-    o << "showBakePath=" << DevDiagDumpImplementation::boolStr(StageConfig::showBakePath()) << "\n";
-    o << "triggerBake=" << DevDiagDumpImplementation::boolStr(StageConfig::triggerBake()) << "\n";
+    o << "showBakePath=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showBakePath()) << "\n";
+    o << "triggerBake=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::triggerBake()) << "\n";
     o << "triggerBakeSkipDynamic="
-      << DevDiagDumpImplementation::boolStr(StageConfig::triggerBakeSkipDynamic()) << "\n";
-    o << "bakeRadius=" << StageConfig::bakeRadius() << "\n";
-    o << "ticksAll=" << StageConfig::ticksAll() << "\n";
-    o << "assistPress=" << DevDiagDumpImplementation::boolStr(StageConfig::assistPress()) << "\n";
-    o << "assistRelease=" << DevDiagDumpImplementation::boolStr(StageConfig::assistRelease())
+      << EbDevDiagDumpImplementation::boolStr(EbStageConfig::triggerBakeSkipDynamic()) << "\n";
+    o << "bakeRadius=" << EbStageConfig::bakeRadius() << "\n";
+    o << "ticksAll=" << EbStageConfig::ticksAll() << "\n";
+    o << "assistPress=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::assistPress()) << "\n";
+    o << "assistRelease=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::assistRelease())
       << "\n";
-    o << "debugLogging=" << DevDiagDumpImplementation::boolStr(StageConfig::debugLogging()) << "\n";
-    o << "perfTrace=" << DevDiagDumpImplementation::boolStr(StageConfig::perfTrace()) << "\n";
-    o << "dev.recordEnable=" << DevDiagDumpImplementation::boolStr(DevConfig::recordEnable())
+    o << "debugLogging=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::debugLogging()) << "\n";
+    o << "perfTrace=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::perfTrace()) << "\n";
+    o << "dev.recordEnable=" << EbDevDiagDumpImplementation::boolStr(EbDevConfig::recordEnable())
       << "\n";
-    o << "dev.overlay=" << DevDiagDumpImplementation::boolStr(DevConfig::overlay()) << "\n";
+    o << "dev.overlay=" << EbDevDiagDumpImplementation::boolStr(EbDevConfig::overlay()) << "\n";
     return o.str();
 }
 
-std::string DevStateDiagnostics::buildClockAssist() {
+std::string EbDevStateDiagnostics::buildClockAssist() {
     std::ostringstream o;
-    auto& ac = AssistController::get();
+    auto& ac = EbAssistController::get();
     o << "attemptTick=" << ac.attemptTick() << "\n";
     o << "lastDt=" << ac.lastDt() << "\n";
     o << "simDt=" << ac.simDt() << "\n";
     o << "estimatedTps=" << ac.estimatedTps() << "\n";
     o << "startSnapshotSlot=" << ac.startSnapshotSlot() << "\n";
-    o << "AssistClock::kNominalTps=" << AssistClock::kNominalTps << "\n";
+    o << "AssistClock::kNominalTps=" << EbAssistClock::kNominalTps << "\n";
     o << "shadow.simulating="
-      << DevDiagDumpImplementation::boolStr(ShadowSimulator::get().isSimulating()) << "\n";
+      << EbDevDiagDumpImplementation::boolStr(EbShadowSimulator::get().isSimulating()) << "\n";
     o << "shadow.bakeOffline="
-      << DevDiagDumpImplementation::boolStr(ShadowSimulator::get().bakeOffline()) << "\n";
-    o << "triggerBake=" << DevDiagDumpImplementation::boolStr(StageConfig::triggerBake()) << "\n";
-    DevDiagDumpImplementation::dumpVehicleFlags(
-        o, "startSnap", ShadowSimulator::get().snapshotSlot(ShadowSimulator::START_SNAPSHOT_SLOT));
+      << EbDevDiagDumpImplementation::boolStr(EbShadowSimulator::get().bakeOffline()) << "\n";
+    o << "triggerBake=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::triggerBake()) << "\n";
+    EbDevDiagDumpImplementation::dumpVehicleFlags(
+        o, "startSnap", EbShadowSimulator::get().snapshotSlot(EbShadowSimulator::START_SNAPSHOT_SLOT));
     auto* playLayer = PlayLayer::get();
-    DevDiagDumpImplementation::dumpVehicleFlags(o, "liveP1",
+    EbDevDiagDumpImplementation::dumpVehicleFlags(o, "liveP1",
                                                 playLayer ? playLayer->m_player1 : nullptr);
-    DevDiagDumpImplementation::dumpVehicleFlags(o, "liveP2",
+    EbDevDiagDumpImplementation::dumpVehicleFlags(o, "liveP2",
                                                 playLayer ? playLayer->m_player2 : nullptr);
-    DevDiagDumpImplementation::dumpVehicleFlags(o, "shadow", ShadowSimulator::get().shadow());
+    EbDevDiagDumpImplementation::dumpVehicleFlags(o, "shadow", EbShadowSimulator::get().shadow());
     return o.str();
 }
 
-std::string DevStateDiagnostics::buildReplay() {
+std::string EbDevStateDiagnostics::buildReplay() {
     std::ostringstream o;
-    auto const* report = BakeMap::get().pendingReplay();
+    auto const* report = EbBakeMap::get().pendingReplay();
     if (!report) {
         o << "pendingReplay=none\n";
         return o.str();
@@ -112,20 +112,20 @@ std::string DevStateDiagnostics::buildReplay() {
         if (count >= 20)
             break;
         o << fmt::format("  [{}] f={} btn={} down={} p2={}\n", count, e.frame, e.button,
-                         DevDiagDumpImplementation::boolStr(e.down),
-                         DevDiagDumpImplementation::boolStr(e.player2));
+                         EbDevDiagDumpImplementation::boolStr(e.down),
+                         EbDevDiagDumpImplementation::boolStr(e.player2));
         ++count;
     }
     return o.str();
 }
 
-std::string DevStateDiagnostics::buildBakeMap() {
+std::string EbDevStateDiagnostics::buildBakeMap() {
     std::ostringstream o;
-    auto& bake = BakeMap::get();
+    auto& bake = EbBakeMap::get();
     o << "statusLine=" << bake.statusLine() << "\n";
-    o << "loaded=" << DevDiagDumpImplementation::boolStr(bake.loaded()) << "\n";
-    o << "baking=" << DevDiagDumpImplementation::boolStr(bake.isBaking()) << "\n";
-    o << "pendingReplay=" << DevDiagDumpImplementation::boolStr(bake.pendingReplay() != nullptr)
+    o << "loaded=" << EbDevDiagDumpImplementation::boolStr(bake.loaded()) << "\n";
+    o << "baking=" << EbDevDiagDumpImplementation::boolStr(bake.isBaking()) << "\n";
+    o << "pendingReplay=" << EbDevDiagDumpImplementation::boolStr(bake.pendingReplay() != nullptr)
       << "\n";
     auto const& d = bake.data();
     o << "levelKey=" << d.levelKey << "\n";
@@ -138,33 +138,33 @@ std::string DevStateDiagnostics::buildBakeMap() {
         auto const& c = d.clicks[static_cast<size_t>(index)];
         o << fmt::format("  click[{}] f={} [{}..{}] x={:.1f} down={} p2={} mode={}\n", index,
                          c.nominalFrame, c.earliest, c.latest, c.x,
-                         DevDiagDumpImplementation::boolStr(c.down),
-                         DevDiagDumpImplementation::boolStr(c.player2), static_cast<int>(c.mode));
+                         EbDevDiagDumpImplementation::boolStr(c.down),
+                         EbDevDiagDumpImplementation::boolStr(c.player2), static_cast<int>(c.mode));
     }
     return o.str();
 }
 
-std::string DevStateDiagnostics::buildTriggerWorld() {
+std::string EbDevStateDiagnostics::buildTriggerWorld() {
     std::ostringstream o;
-    auto& tw = TriggerWorldStore::get();
-    auto& baker = TriggerWorldBaker::get();
-    o << "loaded=" << DevDiagDumpImplementation::boolStr(tw.loaded()) << "\n";
-    o << "hasTracks=" << DevDiagDumpImplementation::boolStr(tw.hasTracks()) << "\n";
+    auto& tw = EbTriggerWorldStore::get();
+    auto& baker = EbTriggerWorldBaker::get();
+    o << "loaded=" << EbDevDiagDumpImplementation::boolStr(tw.loaded()) << "\n";
+    o << "hasTracks=" << EbDevDiagDumpImplementation::boolStr(tw.hasTracks()) << "\n";
     o << "trackCount=" << tw.trackCount() << "\n";
     o << "readyTrackCount=" << tw.readyTrackCount() << "\n";
-    o << "softcapHit=" << DevDiagDumpImplementation::boolStr(tw.softcapHit()) << "\n";
+    o << "softcapHit=" << EbDevDiagDumpImplementation::boolStr(tw.softcapHit()) << "\n";
     o << "tps=" << tw.data().tps << "\n";
     o << "levelKey=" << tw.data().levelKey << "\n";
     o << "statusLine=" << baker.statusLine() << "\n";
-    o << "bakerRunning=" << DevDiagDumpImplementation::boolStr(baker.running()) << "\n";
+    o << "bakerRunning=" << EbDevDiagDumpImplementation::boolStr(baker.running()) << "\n";
     o << fmt::format("lastBake bakedEffects={} startTimed={} skipFollow={} skipDyn={} "
                      "skipTouch={} children={} effects={} sectionExtras={} collectIncomplete={}\n",
                      baker.lastBakedEffects(), baker.lastBakedStartTimed(),
                      baker.lastSkippedFollow(), baker.lastSkippedDynamic(),
                      baker.lastSkippedTouch(), baker.lastChildCount(), baker.lastEffectCount(),
                      baker.lastSectionExtras(),
-                     DevDiagDumpImplementation::boolStr(baker.lastCollectIncomplete()));
-    o << "softMaxTracks=" << TriggerWorldStore::kSoftMaxTracks << "\n";
+                     EbDevDiagDumpImplementation::boolStr(baker.lastCollectIncomplete()));
+    o << "softMaxTracks=" << EbTriggerWorldStore::kSoftMaxTracks << "\n";
     // Kind histogram
     int kinds[16]{};
     for (auto const& t : tw.data().tracks) {

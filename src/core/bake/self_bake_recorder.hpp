@@ -20,7 +20,7 @@ class PlayerObject;
 //
 // Refine uses GD physics and must stay on the main thread — we amortize it
 // across ticks (kIdleRefineSimsPerTick) instead of blocking one frame.
-class SelfBakeRecorder {
+class EbSelfBakeRecorder {
 public:
     static constexpr size_t kMaxPending = 512;
     static constexpr size_t kIdleMergePerTick = 12;
@@ -39,7 +39,7 @@ public:
     private:
     };
 
-    static SelfBakeRecorder& get();
+    static EbSelfBakeRecorder& get();
 
     void onLevelInit(PlayLayer* layer);
     void onLevelQuit();
@@ -68,7 +68,9 @@ public:
     }
 
 private:
-    SelfBakeRecorder() = default;
+    friend class EbServiceStore;
+
+    EbSelfBakeRecorder() = default;
 
     bool shouldRecord(PlayLayer* layer, PlayerObject* player) const;
     bool canDrain(PlayLayer* layer) const;
@@ -77,7 +79,7 @@ private:
 
     std::vector<Sample> m_pending;
     // Point windows already merged; waiting for budgeted refine expansion.
-    std::vector<BakedClick> m_refineQueue;
+    std::vector<EbBakedClick> m_refineQueue;
     std::string m_levelKey;
     std::atomic<bool> m_cancelRefine{false};
 };

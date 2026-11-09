@@ -4,7 +4,7 @@
 #include <Geode/utils/VersionInfo.hpp>
 #include <cctype>
 
-bool CloudConfigIndex::isLowerHexSha256(std::string const& hex) {
+bool EbCloudConfigIndex::isLowerHexSha256(std::string const& hex) {
     if (hex.size() != 64)
         return false;
     for (char const character : hex) {
@@ -16,7 +16,7 @@ bool CloudConfigIndex::isLowerHexSha256(std::string const& hex) {
     return true;
 }
 
-bool CloudConfigIndex::isSafeRelativePackPath(std::string const& path) {
+bool EbCloudConfigIndex::isSafeRelativePackPath(std::string const& path) {
     if (path.empty() || path.front() == '/' || path.find("://") != std::string::npos) {
         return false;
     }
@@ -38,8 +38,8 @@ bool CloudConfigIndex::isSafeRelativePackPath(std::string const& path) {
     return true;
 }
 
-bool CloudConfigIndex::validatePack(PackEntry const& p, std::string& err) {
-    if (!CloudConfigStore::isValidPackId(p.id)) {
+bool EbCloudConfigIndex::validatePack(PackEntry const& p, std::string& err) {
+    if (!EbCloudConfigStore::isValidPackId(p.id)) {
         err = "pack id invalid";
         return false;
     }
@@ -83,7 +83,7 @@ bool CloudConfigIndex::validatePack(PackEntry const& p, std::string& err) {
         err = "pack path must be packs/<id>.json";
         return false;
     }
-    if (p.size == 0 || p.size > CloudConfigStore::kMaxPackBytes) {
+    if (p.size == 0 || p.size > EbCloudConfigStore::kMaxPackBytes) {
         err = "pack size out of range";
         return false;
     }
@@ -97,14 +97,14 @@ bool CloudConfigIndex::validatePack(PackEntry const& p, std::string& err) {
     return true;
 }
 
-bool CloudConfigIndex::parse(std::string const& json, Catalog& out, std::string& err) {
+bool EbCloudConfigIndex::parse(std::string const& json, Catalog& out, std::string& err) {
     out = {};
     err.clear();
     if (json.empty()) {
         err = "index empty";
         return false;
     }
-    if (json.size() > CloudConfigStore::kMaxIndexBytes) {
+    if (json.size() > EbCloudConfigStore::kMaxIndexBytes) {
         err = "index too large";
         return false;
     }
@@ -244,7 +244,7 @@ bool CloudConfigIndex::parse(std::string const& json, Catalog& out, std::string&
     return true;
 }
 
-bool CloudConfigIndex::meetsMinModVersion(PackEntry const& entry,
+bool EbCloudConfigIndex::meetsMinModVersion(PackEntry const& entry,
                                           std::string const& liveModVersion) {
     if (entry.minModVersion.empty())
         return true;
@@ -258,7 +258,7 @@ bool CloudConfigIndex::meetsMinModVersion(PackEntry const& entry,
     return false;
 }
 
-CloudConfigIndex::PackEntry const* CloudConfigIndex::findById(Catalog const& catalog,
+EbCloudConfigIndex::PackEntry const* EbCloudConfigIndex::findById(Catalog const& catalog,
                                                               std::string const& id) {
     for (auto const& p : catalog.packs) {
         if (p.id == id)
@@ -267,7 +267,7 @@ CloudConfigIndex::PackEntry const* CloudConfigIndex::findById(Catalog const& cat
     return nullptr;
 }
 
-bool CloudConfigIndex::selfCheck(std::string& report) {
+bool EbCloudConfigIndex::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

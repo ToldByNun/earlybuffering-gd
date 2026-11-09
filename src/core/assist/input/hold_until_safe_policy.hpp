@@ -4,17 +4,17 @@
 #include "../../sim/planning/simulation_plan.hpp"
 #include <string>
 
-class HoldUntilSafePolicy {
+class EbHoldUntilSafePolicy {
 public:
-    static bool shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk);
-    static int holdUntilSafeEtaTicks(SimPlan const& plan, int limit);
+    static bool shouldArmHoldUntilSafe(EbSimPlan const& plan, bool trustOk);
+    static int holdUntilSafeEtaTicks(EbSimPlan const& plan, int limit);
     static bool holdUntilSafeSelfCheck(std::string& report);
     static bool shouldReplanHoldUntilSafe(int attemptTick, int lastReplanTick, float x,
                                           float lastReplanX, bool foresightNow, bool foresightLast,
                                           int remainingTicks);
 
 private:
-    HoldUntilSafePolicy() = delete;
+    EbHoldUntilSafePolicy() = delete;
 };
 
 #endif

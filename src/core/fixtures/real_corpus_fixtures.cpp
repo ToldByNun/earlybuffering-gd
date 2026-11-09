@@ -6,38 +6,38 @@
 #include <string>
 
 // tg2 bakefail: coast into solid#42181 @f185 (from bakefail diag).
-RealCorpusFixtures::Pose const RealCorpusFixturesImplementation::kTg2Poses[] = {
+EbRealCorpusFixtures::Pose const EbRealCorpusFixturesImplementation::kTg2Poses[] = {
     {0, 17639.f, 165.f, true},    {40, 17720.f, 170.f, true},
     {80, 17810.f, 175.f, true},   {120, 17900.f, 178.f, true},
     {160, 17970.f, 176.f, false}, // release ~168 in diag
-    {168, 17990.f, 174.f, false}, {185, Tg2BakeFixture::kDeathX, Tg2BakeFixture::kDeathY, false},
+    {168, 17990.f, 174.f, false}, {185, EbTg2BakeFixture::kDeathX, EbTg2BakeFixture::kDeathY, false},
 };
 
 // GRIEF: minimal synthetic wave crumb (level id pinned; poses are contract pins,
 // not a claimed bot path). Death marks a mid-wave solid for horizon tests.
-RealCorpusFixtures::Pose const RealCorpusFixturesImplementation::kGriefPoses[] = {
+EbRealCorpusFixtures::Pose const EbRealCorpusFixturesImplementation::kGriefPoses[] = {
     {0, 400.f, 120.f, true},  {24, 470.f, 140.f, true}, {48, 540.f, 110.f, false},
     {72, 610.f, 150.f, true}, {96, 680.f, 125.f, true}, {128, 760.f, 160.f, false},
 };
 
-RealCorpusFixtures::Trace const& RealCorpusFixtures::tg2Bakefail() {
+EbRealCorpusFixtures::Trace const& EbRealCorpusFixtures::tg2Bakefail() {
     static Trace const tick{
         "tg2-bakefail",
-        Tg2BakeFixture::kLevelKeyPrefix,
+        EbTg2BakeFixture::kLevelKeyPrefix,
         80045794,
-        Tg2BakeFixture::kDeathFrame,
-        Tg2BakeFixture::kDeathObjId,
-        Tg2BakeFixture::kDeathObjType,
-        Tg2BakeFixture::kDeathX,
-        Tg2BakeFixture::kDeathY,
-        RealCorpusFixturesImplementation::kTg2Poses,
-        sizeof(RealCorpusFixturesImplementation::kTg2Poses) /
-            sizeof(RealCorpusFixturesImplementation::kTg2Poses[0]),
+        EbTg2BakeFixture::kDeathFrame,
+        EbTg2BakeFixture::kDeathObjId,
+        EbTg2BakeFixture::kDeathObjType,
+        EbTg2BakeFixture::kDeathX,
+        EbTg2BakeFixture::kDeathY,
+        EbRealCorpusFixturesImplementation::kTg2Poses,
+        sizeof(EbRealCorpusFixturesImplementation::kTg2Poses) /
+            sizeof(EbRealCorpusFixturesImplementation::kTg2Poses[0]),
     };
     return tick;
 }
 
-RealCorpusFixtures::Trace const& RealCorpusFixtures::griefMinimal() {
+EbRealCorpusFixtures::Trace const& EbRealCorpusFixtures::griefMinimal() {
     static Trace const tick{
         "grief-minimal",
         "id_149992717",
@@ -47,25 +47,25 @@ RealCorpusFixtures::Trace const& RealCorpusFixtures::griefMinimal() {
         2, // GameObjectType::Solid
         760.f,
         160.f,
-        RealCorpusFixturesImplementation::kGriefPoses,
-        sizeof(RealCorpusFixturesImplementation::kGriefPoses) /
-            sizeof(RealCorpusFixturesImplementation::kGriefPoses[0]),
+        EbRealCorpusFixturesImplementation::kGriefPoses,
+        sizeof(EbRealCorpusFixturesImplementation::kGriefPoses) /
+            sizeof(EbRealCorpusFixturesImplementation::kGriefPoses[0]),
     };
     return tick;
 }
 
-size_t RealCorpusFixtures::traceCount() {
+size_t EbRealCorpusFixtures::traceCount() {
     return 2;
 }
 
-RealCorpusFixtures::Trace const& RealCorpusFixtures::traceAt(size_t index) {
+EbRealCorpusFixtures::Trace const& EbRealCorpusFixtures::traceAt(size_t index) {
     if (!(index == 0)) {
         return griefMinimal();
     }
     return tg2Bakefail();
 }
 
-bool RealCorpusFixtures::traceWellFormed(Trace const& t, std::string& detail) {
+bool EbRealCorpusFixtures::traceWellFormed(Trace const& t, std::string& detail) {
     detail.clear();
     if (!t.name || !*t.name) {
         detail = "empty-name";
@@ -107,7 +107,7 @@ bool RealCorpusFixtures::traceWellFormed(Trace const& t, std::string& detail) {
     return true;
 }
 
-bool RealCorpusFixtures::holdCoastLengthOk(int holdLen, int coastLen, int trajDrawCap,
+bool EbRealCorpusFixtures::holdCoastLengthOk(int holdLen, int coastLen, int trajDrawCap,
                                            std::string& detail) {
     detail.clear();
     if (trajDrawCap < 16) {
@@ -133,7 +133,7 @@ bool RealCorpusFixtures::holdCoastLengthOk(int holdLen, int coastLen, int trajDr
     return true;
 }
 
-bool RealCorpusFixtures::selfCheck(std::string& report) {
+bool EbRealCorpusFixtures::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -152,9 +152,9 @@ bool RealCorpusFixtures::selfCheck(std::string& report) {
     expect(traceWellFormed(griefMinimal(), detail), "grief-wellformed");
 
     auto const& tg2 = tg2Bakefail();
-    expect(tg2.deathFrame == Tg2BakeFixture::kDeathFrame, "tg2-death-frame");
-    expect(tg2.deathObjId == Tg2BakeFixture::kDeathObjId, "tg2-death-obj");
-    expect(Tg2BakeFixture::matchesFrozenDeath(tg2.deathFrame, tg2.deathObjId, tg2.deathObjType),
+    expect(tg2.deathFrame == EbTg2BakeFixture::kDeathFrame, "tg2-death-frame");
+    expect(tg2.deathObjId == EbTg2BakeFixture::kDeathObjId, "tg2-death-obj");
+    expect(EbTg2BakeFixture::matchesFrozenDeath(tg2.deathFrame, tg2.deathObjId, tg2.deathObjType),
            "tg2-matches-fixture");
 
     auto const& grief = griefMinimal();
@@ -162,15 +162,15 @@ bool RealCorpusFixtures::selfCheck(std::string& report) {
     expect(std::string(grief.levelKeyPrefix) == "id_149992717", "grief-key");
 
     // Hold/coast length contract vs trust-long wave draw.
-    auto const caps = AssistHorizon::resolve(GameModeKind::Wave, true, 8, 1.f);
+    auto const caps = EbAssistHorizon::resolve(GameModeKind::Wave, true, 8, 1.f);
     expect(holdCoastLengthOk(caps.trajDraw + 1, caps.trajDraw / 2, caps.trajDraw, detail),
            "hold-coast-ok");
     expect(!holdCoastLengthOk(2, 2, caps.trajDraw, detail), "hold-coast-both-short");
 
     // Long-path success ties AssistHorizon (platform-after-jump).
-    int const minS = AssistHorizon::minSurviveTicksForSuccess(caps.scoreHorizon, true);
-    expect(AssistHorizon::longPathSuccessOk(minS, false, false, minS), "long-success-alive");
-    expect(!AssistHorizon::longPathSuccessOk(minS / 2, false, false, minS),
+    int const minS = EbAssistHorizon::minSurviveTicksForSuccess(caps.scoreHorizon, true);
+    expect(EbAssistHorizon::longPathSuccessOk(minS, false, false, minS), "long-success-alive");
+    expect(!EbAssistHorizon::longPathSuccessOk(minS / 2, false, false, minS),
            "long-fail-short-alive");
 
     if (fails == 0) {

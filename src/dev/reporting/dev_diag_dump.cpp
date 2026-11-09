@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-std::string DevDiagDumpImplementation::stampNow() {
+std::string EbDevDiagDumpImplementation::stampNow() {
     using clock = std::chrono::system_clock;
     auto const timestamp = clock::to_time_t(clock::now());
     std::tm tm{};
@@ -31,7 +31,7 @@ std::string DevDiagDumpImplementation::stampNow() {
     return std::string(buffer);
 }
 
-bool DevDiagDumpImplementation::writeTextFile(std::filesystem::path const& path,
+bool EbDevDiagDumpImplementation::writeTextFile(std::filesystem::path const& path,
                                               std::string const& body) {
     std::error_code ec;
     auto const parent = path.parent_path();
@@ -45,33 +45,33 @@ bool DevDiagDumpImplementation::writeTextFile(std::filesystem::path const& path,
     return static_cast<bool>(outputFile);
 }
 
-char const* DevDiagDumpImplementation::boolStr(bool value) {
+char const* EbDevDiagDumpImplementation::boolStr(bool value) {
     return value ? "true" : "false";
 }
 
-std::string DevDiagDumpImplementation::settingValueLine(ConfigBundleKeys::Entry const& e) {
+std::string EbDevDiagDumpImplementation::settingValueLine(EbConfigBundleKeys::Entry const& e) {
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return fmt::format("{}=<no-mod>", e.key);
     try {
         switch (e.kind) {
-        case ConfigBundleKeys::Kind::Bool:
+        case EbConfigBundleKeys::Kind::Bool:
             return fmt::format(
                 "{}={} (bool)", e.key,
-                DevDiagDumpImplementation::boolStr(mod->getSettingValue<bool>(e.key)));
-        case ConfigBundleKeys::Kind::Int:
+                EbDevDiagDumpImplementation::boolStr(mod->getSettingValue<bool>(e.key)));
+        case EbConfigBundleKeys::Kind::Int:
             return fmt::format("{}={} (int)", e.key, mod->getSettingValue<int64_t>(e.key));
-        case ConfigBundleKeys::Kind::Float:
+        case EbConfigBundleKeys::Kind::Float:
             return fmt::format("{}={} (float)", e.key, mod->getSettingValue<double>(e.key));
-        case ConfigBundleKeys::Kind::String:
+        case EbConfigBundleKeys::Kind::String:
             return fmt::format("{}=\"{}\" (string)", e.key,
                                mod->getSettingValue<std::string>(e.key));
-        case ConfigBundleKeys::Kind::Color: {
+        case EbConfigBundleKeys::Kind::Color: {
             auto candidate = mod->getSettingValue<cocos2d::ccColor3B>(e.key);
             return fmt::format("{}=#{:02X}{:02X}{:02X} (color)", e.key, candidate.r, candidate.g,
                                candidate.b);
         }
-        case ConfigBundleKeys::Kind::Keybind:
+        case EbConfigBundleKeys::Kind::Keybind:
             return fmt::format("{}=<keybind> (skipped detail)", e.key);
         default:
             return fmt::format("{}=<unknown-kind>", e.key);
@@ -83,7 +83,7 @@ std::string DevDiagDumpImplementation::settingValueLine(ConfigBundleKeys::Entry 
     }
 }
 
-std::filesystem::path DevDiagDump::makeStampDir(char const* prefix, std::string& errMsg) {
+std::filesystem::path EbDevDiagDump::makeStampDir(char const* prefix, std::string& errMsg) {
     errMsg.clear();
     auto* mod = geode::prelude::Mod::get();
     if (!mod) {
@@ -92,7 +92,7 @@ std::filesystem::path DevDiagDump::makeStampDir(char const* prefix, std::string&
     }
     auto const root = mod->getSaveDir() / "diag";
     auto const directory = root / fmt::format("{}_{}", prefix ? prefix : "diag",
-                                              DevDiagDumpImplementation::stampNow());
+                                              EbDevDiagDumpImplementation::stampNow());
     std::error_code ec;
     std::filesystem::create_directories(directory, ec);
     if (ec) {
@@ -102,17 +102,17 @@ std::filesystem::path DevDiagDump::makeStampDir(char const* prefix, std::string&
     return directory;
 }
 
-bool DevDiagDump::writeFile(std::filesystem::path const& dir, char const* name,
+bool EbDevDiagDump::writeFile(std::filesystem::path const& dir, char const* name,
                             std::string const& body, std::string& errMsg) {
     auto const path = dir / name;
-    if (!DevDiagDumpImplementation::writeTextFile(path, body)) {
+    if (!EbDevDiagDumpImplementation::writeTextFile(path, body)) {
         errMsg = fmt::format("write failed: {}", path.string());
         return false;
     }
     return true;
 }
 
-std::string DevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeFailOnly) {
+std::string EbDevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeFailOnly) {
     std::ostringstream o;
     o << "EarlyBuffer diagnostic dump\n";
     o << "dir: " << dir.string() << "\n";
@@ -140,7 +140,7 @@ std::string DevDiagDump::buildIndex(std::filesystem::path const& dir, bool bakeF
     return o.str();
 }
 
-int DevDiagDump::deathTraceUntil(int deathFrame, int lastEventFrame) {
+int EbDevDiagDump::deathTraceUntil(int deathFrame, int lastEventFrame) {
     // Commit 3: always cover death+8; never hard-cap at 128.
     int until = 0;
     if (deathFrame >= 0) {
@@ -158,7 +158,7 @@ int DevDiagDump::deathTraceUntil(int deathFrame, int lastEventFrame) {
 }
 
 std::string
-DevDiagDump::formatUnknownTop3(std::vector<ShadowSimulator::UnknownHistBin> const& hist) {
+EbDevDiagDump::formatUnknownTop3(std::vector<EbShadowSimulator::UnknownHistBin> const& hist) {
     if (hist.empty())
         return "-";
     std::string s;
@@ -174,7 +174,7 @@ DevDiagDump::formatUnknownTop3(std::vector<ShadowSimulator::UnknownHistBin> cons
     return s.empty() ? "-" : s;
 }
 
-bool DevDiagDump::selfCheck(std::string& report) {
+bool EbDevDiagDump::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -192,9 +192,9 @@ bool DevDiagDump::selfCheck(std::string& report) {
     // Surviving huge macro without death is capped.
     expect(deathTraceUntil(-1, 10000) == 4096, "survive-cap");
 
-    std::vector<ShadowSimulator::UnknownHistBin> empty;
+    std::vector<EbShadowSimulator::UnknownHistBin> empty;
     expect(formatUnknownTop3(empty) == "-", "top3-empty");
-    std::vector<ShadowSimulator::UnknownHistBin> bins = {
+    std::vector<EbShadowSimulator::UnknownHistBin> bins = {
         {10, 0, 1, true, 5},
         {20, 0, 2, false, 3},
         {30, 0, 3, false, 1},
@@ -210,77 +210,77 @@ bool DevDiagDump::selfCheck(std::string& report) {
     return false;
 }
 
-std::string DevDiagDump::buildSettings() {
-    return DevStateDiagnostics::buildSettings();
+std::string EbDevDiagDump::buildSettings() {
+    return EbDevStateDiagnostics::buildSettings();
 }
 
-void DevDiagDumpImplementation::dumpVehicleFlags(std::ostringstream& o, char const* prefix,
+void EbDevDiagDumpImplementation::dumpVehicleFlags(std::ostringstream& o, char const* prefix,
                                                  PlayerObject* player) {
-    return DevGhostDiagnostics::dumpVehicleFlags(o, prefix, player);
+    return EbDevGhostDiagnostics::dumpVehicleFlags(o, prefix, player);
 }
 
-std::string DevDiagDump::buildClockAssist() {
-    return DevStateDiagnostics::buildClockAssist();
+std::string EbDevDiagDump::buildClockAssist() {
+    return EbDevStateDiagnostics::buildClockAssist();
 }
 
-bool DevDiagDumpImplementation::isHazardType(GameObject* object) {
-    return DevGhostDiagnostics::isHazardType(object);
+bool EbDevDiagDumpImplementation::isHazardType(GameObject* object) {
+    return EbDevGhostDiagnostics::isHazardType(object);
 }
 
-void DevDiagDumpImplementation::dumpRectLine(std::ostringstream& o, char const* name,
+void EbDevDiagDumpImplementation::dumpRectLine(std::ostringstream& o, char const* name,
                                              PlayerObject* player) {
-    return DevGhostDiagnostics::dumpRectLine(o, name, player);
+    return EbDevGhostDiagnostics::dumpRectLine(o, name, player);
 }
 
-int DevDiagDumpImplementation::countHazardOverlaps(PlayLayer* layer, PlayerObject* player,
+int EbDevDiagDumpImplementation::countHazardOverlaps(PlayLayer* layer, PlayerObject* player,
                                                    std::ostringstream& detail, int maxDetail) {
-    return DevGhostDiagnostics::countHazardOverlaps(layer, player, detail, maxDetail);
+    return EbDevGhostDiagnostics::countHazardOverlaps(layer, player, detail, maxDetail);
 }
 
-std::string DevDiagDump::buildGhostHitbox() {
-    return DevGhostDiagnostics::buildGhostHitbox();
+std::string EbDevDiagDump::buildGhostHitbox() {
+    return EbDevGhostDiagnostics::buildGhostHitbox();
 }
 
-std::string DevDiagDump::buildReplay() {
-    return DevStateDiagnostics::buildReplay();
+std::string EbDevDiagDump::buildReplay() {
+    return EbDevStateDiagnostics::buildReplay();
 }
 
-std::string DevDiagDump::buildBakeMap() {
-    return DevStateDiagnostics::buildBakeMap();
+std::string EbDevDiagDump::buildBakeMap() {
+    return EbDevStateDiagnostics::buildBakeMap();
 }
 
-std::string DevDiagDump::buildTriggerWorld() {
-    return DevStateDiagnostics::buildTriggerWorld();
+std::string EbDevDiagDump::buildTriggerWorld() {
+    return EbDevStateDiagnostics::buildTriggerWorld();
 }
 
-bool DevDiagDump::prepareBakeEvents(PlayLayer*& outLayer, int& outSlot, float& outDt,
+bool EbDevDiagDump::prepareBakeEvents(PlayLayer*& outLayer, int& outSlot, float& outDt,
                                     double& outSrcTps, double& outBakeTps,
-                                    std::vector<ReplayEvent>& outEv, std::string& outErr,
+                                    std::vector<EbReplayEvent>& outEv, std::string& outErr,
                                     int* outSubsteps, BakePrepStats* outStats) {
-    return DevBakeDiagnostics::prepareBakeEvents(outLayer, outSlot, outDt, outSrcTps, outBakeTps,
+    return EbDevBakeDiagnostics::prepareBakeEvents(outLayer, outSlot, outDt, outSrcTps, outBakeTps,
                                                  outEv, outErr, outSubsteps, outStats);
 }
 
-std::string DevDiagDump::buildReplayRemap() {
-    return DevBakeDiagnostics::buildReplayRemap();
+std::string EbDevDiagDump::buildReplayRemap() {
+    return EbDevBakeDiagnostics::buildReplayRemap();
 }
 
-std::string DevDiagDump::buildBakeProbe(int maxJobs) {
-    return DevBakeDiagnostics::buildBakeProbe(maxJobs);
+std::string EbDevDiagDump::buildBakeProbe(int maxJobs) {
+    return EbDevBakeDiagnostics::buildBakeProbe(maxJobs);
 }
 
-std::string DevDiagDump::buildBakeFrameTrace() {
-    return DevBakeDiagnostics::buildBakeFrameTrace();
+std::string EbDevDiagDump::buildBakeFrameTrace() {
+    return EbDevBakeDiagnostics::buildBakeFrameTrace();
 }
 
-std::string DevDiagDump::buildUnknownHistogram() {
-    return DevBakeDiagnostics::buildUnknownHistogram();
+std::string EbDevDiagDump::buildUnknownHistogram() {
+    return EbDevBakeDiagnostics::buildUnknownHistogram();
 }
 
-std::string DevDiagDump::buildSelfChecks() {
+std::string EbDevDiagDump::buildSelfChecks() {
     std::ostringstream o;
     std::string report;
-    if (PlanGoldCorpus::run(report)) {
+    if (EbPlanGoldCorpus::run(report)) {
         o << "PlanGoldCorpus: OK\n" << report << "\n";
     } else {
         o << "PlanGoldCorpus: FAIL\n" << report << "\n";
@@ -288,18 +288,18 @@ std::string DevDiagDump::buildSelfChecks() {
     return o.str();
 }
 
-std::string DevDiagDump::buildOverlay() {
+std::string EbDevDiagDump::buildOverlay() {
     std::ostringstream o;
     // Force refresh then read.
-    AssistController::get().updateOverlay();
-    o << "attemptTick=" << AssistController::get().attemptTick() << "\n";
+    EbAssistController::get().updateOverlay();
+    o << "attemptTick=" << EbAssistController::get().attemptTick() << "\n";
     o << "assistTouched="
-      << DevDiagDumpImplementation::boolStr(AssistController::get().assistTouchedRun()) << "\n";
+      << EbDevDiagDumpImplementation::boolStr(EbAssistController::get().assistTouchedRun()) << "\n";
     o << "(see Geode console / overlay HUD for live line)\n";
     return o.str();
 }
 
-bool DevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
+bool EbDevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
     outDir = makeStampDir("full", errMsg);
     if (outDir.empty())
         return false;
@@ -335,11 +335,11 @@ bool DevDiagDump::dumpAll(std::filesystem::path& outDir, std::string& errMsg) {
     if (!put("08_overlay.txt", buildOverlay()))
         return false;
 
-    AssistLog::info(fmt::format("DIAG: full dump → {}", outDir.string()));
+    EbAssistLog::info(fmt::format("DIAG: full dump → {}", outDir.string()));
     return true;
 }
 
-bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg) {
+bool EbDevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMsg) {
     outDir = makeStampDir("bakefail", errMsg);
     if (outDir.empty())
         return false;
@@ -368,6 +368,6 @@ bool DevDiagDump::dumpBakeFail(std::filesystem::path& outDir, std::string& errMs
     softPut("06c_unknown_hist.txt", buildUnknownHistogram());
     softPut("08_overlay.txt", buildOverlay());
 
-    AssistLog::info(fmt::format("DIAG: bake-fail dump → {} (files={})", outDir.string(), wrote));
+    EbAssistLog::info(fmt::format("DIAG: bake-fail dump → {} (files={})", outDir.string(), wrote));
     return wrote > 0;
 }

@@ -11,12 +11,12 @@
 #include <fmt/format.h>
 #include <vector>
 
-class SettingsCategoryBar;
+class EbSettingsCategoryBar;
 
-class SettingsFilterKeeperNode : public geode::prelude::CCNode {
+class EbSettingsFilterKeeperNode : public geode::prelude::CCNode {
 public:
     SettingsCategory m_category = SettingsCategory::Main;
-    SettingsCategoryBar* m_bar = nullptr;
+    EbSettingsCategoryBar* m_bar = nullptr;
     geode::prelude::ScrollLayer* m_list = nullptr;
     std::vector<geode::prelude::Ref<geode::prelude::SettingNodeV3>> m_all;
     size_t m_lastChildCount = 0;
@@ -28,7 +28,7 @@ public:
 
     void cycle(int delta);
 
-    void layoutBar(geode::prelude::ScrollLayer* list, SettingsCategoryBar* bar);
+    void layoutBar(geode::prelude::ScrollLayer* list, EbSettingsCategoryBar* bar);
 
     void ensureBar(geode::prelude::ScrollLayer* list);
 
@@ -42,9 +42,9 @@ public:
 
     void onTick(float);
 
-    static SettingsFilterKeeperNode* create();
+    static EbSettingsFilterKeeperNode* create();
 
-    static SettingsFilterKeeperNode* findOpen();
+    static EbSettingsFilterKeeperNode* findOpen();
 
 private:
     geode::prelude::ListenerHandle m_changeHandle{};

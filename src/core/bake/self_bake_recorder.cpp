@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "self_bake_recorder.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../debug/lag_probe.hpp"
@@ -12,32 +13,31 @@
 #include <cstring>
 #include <fmt/format.h>
 
-SelfBakeRecorder& SelfBakeRecorder::get() {
-    static SelfBakeRecorder inst;
-    return inst;
+EbSelfBakeRecorder& EbSelfBakeRecorder::get() {
+    return EbClassManager::get().service<EbSelfBakeRecorder>();
 }
 
-bool SelfBakeRecorder::shouldRecord(PlayLayer* layer, PlayerObject* player) const {
+bool EbSelfBakeRecorder::shouldRecord(PlayLayer* layer, PlayerObject* player) const {
     if (!layer || !player)
         return false;
-    if (!StageConfig::selfBake())
+    if (!EbStageConfig::selfBake())
         return false;
-    if (AssistScopeGate::isPlatformer(player))
+    if (EbAssistScopeGate::isPlatformer(player))
         return false;
-    if (BakeMap::get().isBaking())
+    if (EbBakeMap::get().isBaking())
         return false;
     if (!(layer->m_isPracticeMode)) {
-        return StageConfig::selfBakeNormal();
+        return EbStageConfig::selfBakeNormal();
     }
     return true;
 }
 
-bool SelfBakeRecorder::canDrain(PlayLayer* layer) const {
+bool EbSelfBakeRecorder::canDrain(PlayLayer* layer) const {
     if (!layer)
         return false;
-    if (!StageConfig::selfBake())
+    if (!EbStageConfig::selfBake())
         return false;
-    if (BakeMap::get().isBaking())
+    if (EbBakeMap::get().isBaking())
         return false;
     // Never burn frame time during death / fail anim — that was the hitch.
     if (auto* p = layer->m_player1) {
@@ -47,32 +47,32 @@ bool SelfBakeRecorder::canDrain(PlayLayer* layer) const {
     return true;
 }
 
-void SelfBakeRecorder::onLevelInit(PlayLayer* layer) {
+void EbSelfBakeRecorder::onLevelInit(PlayLayer* layer) {
     this->m_cancelRefine = false;
     this->clearPending();
     this->m_refineQueue.clear();
     this->m_levelKey.clear();
     if (layer && layer->m_level) {
-        this->m_levelKey = LevelProfile::makeKey(layer->m_level);
+        this->m_levelKey = EbLevelProfile::makeKey(layer->m_level);
     }
 }
 
-void SelfBakeRecorder::onLevelQuit() {
+void EbSelfBakeRecorder::onLevelQuit() {
     this->cancelRefine();
     this->clearPending();
     this->m_refineQueue.clear();
     this->m_levelKey.clear();
 }
 
-void SelfBakeRecorder::cancelRefine() {
+void EbSelfBakeRecorder::cancelRefine() {
     this->m_cancelRefine = true;
 }
 
-void SelfBakeRecorder::clearPending() {
+void EbSelfBakeRecorder::clearPending() {
     this->m_pending.clear();
 }
 
-void SelfBakeRecorder::noteVanillaInput(PlayLayer* layer, PlayerObject* player, bool player1,
+void EbSelfBakeRecorder::noteVanillaInput(PlayLayer* layer, PlayerObject* player, bool player1,
                                         bool down, int attemptTick, float simDt) {
     if (!this->shouldRecord(layer, player))
         return;
@@ -80,7 +80,7 @@ void SelfBakeRecorder::noteVanillaInput(PlayLayer* layer, PlayerObject* player, 
         return;
 
     if (layer->m_level) {
-        auto const key = LevelProfile::makeKey(layer->m_level);
+        auto const key = EbLevelProfile::makeKey(layer->m_level);
         if (!this->m_levelKey.empty() && key != this->m_levelKey) {
             this->clearPending();
             this->m_refineQueue.clear();
@@ -90,17 +90,17 @@ void SelfBakeRecorder::noteVanillaInput(PlayLayer* layer, PlayerObject* player, 
         }
     }
 
-    double tps = AssistClock::kNominalTps;
-    auto const& bake = BakeMap::get();
+    double tps = EbAssistClock::kNominalTps;
+    auto const& bake = EbBakeMap::get();
     if (bake.loaded() && bake.data().tps > 0.0)
         tps = bake.data().tps;
     if (simDt <= 0.f)
-        simDt = static_cast<float>(1.0 / AssistClock::kNominalTps);
+        simDt = static_cast<float>(1.0 / EbAssistClock::kNominalTps);
 
     Sample s;
-    s.frame = AssistClock::get().remapTick(tps, attemptTick, simDt);
+    s.frame = EbAssistClock::get().remapTick(tps, attemptTick, simDt);
     s.x = player->getPositionX();
-    s.mode = StageConfig::kindOf(player);
+    s.mode = EbStageConfig::kindOf(player);
     s.down = down;
     s.player2 = !player1;
     // Release while dashing → dash/hold-orb tag for purple viz / release gate.
@@ -108,14 +108,14 @@ void SelfBakeRecorder::noteVanillaInput(PlayLayer* layer, PlayerObject* player, 
     this->m_pending.push_back(s);
 }
 
-void SelfBakeRecorder::mergeSamples(std::vector<Sample>& samples, char const* reason) {
+void EbSelfBakeRecorder::mergeSamples(std::vector<Sample>& samples, char const* reason) {
     if (samples.empty())
         return;
 
-    std::vector<BakedClick> clicks;
+    std::vector<EbBakedClick> clicks;
     clicks.reserve(samples.size());
     for (auto const& s : samples) {
-        BakedClick c;
+        EbBakedClick c;
         c.nominalFrame = s.frame;
         c.earliest = s.frame;
         c.latest = s.frame;
@@ -128,14 +128,14 @@ void SelfBakeRecorder::mergeSamples(std::vector<Sample>& samples, char const* re
     }
     samples.clear();
 
-    int const count = BakeMap::get().mergeSelfClicks(clicks);
+    int const count = EbBakeMap::get().mergeSelfClicks(clicks);
     if (count > 0) {
-        AssistLog::debug(fmt::format("self-bake: merged {} click(s) ({}) → map +{}", clicks.size(),
+        EbAssistLog::debug(fmt::format("self-bake: merged {} click(s) ({}) → map +{}", clicks.size(),
                                      reason ? reason : "?", count));
     }
 
     // Queue for slow refine (only when setting on). Cap queue growth.
-    if (StageConfig::selfBakeRefine()) {
+    if (EbStageConfig::selfBakeRefine()) {
         for (auto const& c : clicks) {
             if (this->m_refineQueue.size() >= kMaxPending)
                 break;
@@ -144,36 +144,36 @@ void SelfBakeRecorder::mergeSamples(std::vector<Sample>& samples, char const* re
     }
 }
 
-void SelfBakeRecorder::drainRefine(PlayLayer* layer) {
+void EbSelfBakeRecorder::drainRefine(PlayLayer* layer) {
     if (!layer || this->m_refineQueue.empty())
         return;
-    if (!StageConfig::selfBakeRefine()) {
+    if (!EbStageConfig::selfBakeRefine()) {
         this->m_refineQueue.clear();
         return;
     }
-    if (AssistController::get().assistTouchedRun()) {
+    if (EbAssistController::get().assistTouchedRun()) {
         // Assist polluted this attempt's start snapshot usefulness — drop queue.
         this->m_refineQueue.clear();
         return;
     }
-    int const slot = AssistController::get().startSnapshotSlot();
+    int const slot = EbAssistController::get().startSnapshotSlot();
     if (slot < 0)
         return;
 
     // One click per tick, tiny sim budget — spreads cost across frames.
-    BakedClick click = this->m_refineQueue.front();
+    EbBakedClick click = this->m_refineQueue.front();
     this->m_refineQueue.erase(this->m_refineQueue.begin());
 
-    std::vector<BakedClick> one{click};
+    std::vector<EbBakedClick> one{click};
     this->m_cancelRefine = false;
-    int const expanded = BakeMap::get().refineSelfWindows(
-        layer, slot, one, StageConfig::bakeRadius(), kIdleRefineSimsPerTick, &this->m_cancelRefine);
+    int const expanded = EbBakeMap::get().refineSelfWindows(
+        layer, slot, one, EbStageConfig::bakeRadius(), kIdleRefineSimsPerTick, &this->m_cancelRefine);
     if (expanded > 0 || one[0].earliest != click.earliest || one[0].latest != click.latest) {
-        BakeMap::get().mergeSelfClicks(one);
+        EbBakeMap::get().mergeSelfClicks(one);
     }
 }
 
-void SelfBakeRecorder::onPhysicsTick(PlayLayer* layer) {
+void EbSelfBakeRecorder::onPhysicsTick(PlayLayer* layer) {
     if (!this->canDrain(layer))
         return;
 
@@ -184,34 +184,34 @@ void SelfBakeRecorder::onPhysicsTick(PlayLayer* layer) {
                                   this->m_pending.begin() + static_cast<std::ptrdiff_t>(count));
         this->m_pending.erase(this->m_pending.begin(),
                               this->m_pending.begin() + static_cast<std::ptrdiff_t>(count));
-        LagProbe::Scope const scope("eb.selfBake.idleMerge");
+        EbLagProbe::Scope const scope("eb.selfBake.idleMerge");
         this->mergeSamples(batch, "idle");
     }
 
     // 2) Amortized refine — only when merge buffer is quiet.
     if (this->m_pending.empty() && !this->m_refineQueue.empty()) {
-        LagProbe::Scope const scope("eb.selfBake.idleRefine");
+        EbLagProbe::Scope const scope("eb.selfBake.idleRefine");
         this->drainRefine(layer);
     }
 }
 
-void SelfBakeRecorder::flushMergeOnly(PlayLayer* layer, char const* reason) {
+void EbSelfBakeRecorder::flushMergeOnly(PlayLayer* layer, char const* reason) {
     (void)layer;
     if (this->m_pending.empty()) {
-        LagProbe::get().mark("flushMergeOnly.empty", reason ? reason : "?");
+        EbLagProbe::get().mark("flushMergeOnly.empty", reason ? reason : "?");
         return;
     }
-    if (BakeMap::get().isBaking()) {
-        LagProbe::get().mark("flushMergeOnly.skippedBake", reason ? reason : "?");
+    if (EbBakeMap::get().isBaking()) {
+        EbLagProbe::get().mark("flushMergeOnly.skippedBake", reason ? reason : "?");
         return;
     }
-    LagProbe::Scope const scope("eb.selfBake.flushMergeOnly", reason ? reason : "?");
+    EbLagProbe::Scope const scope("eb.selfBake.flushMergeOnly", reason ? reason : "?");
     this->mergeSamples(this->m_pending, reason);
     // Drop refine queue on forced flush — quit/complete shouldn't start sims.
     this->m_refineQueue.clear();
 }
 
-void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool allowRefine) {
+void EbSelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool allowRefine) {
     // Hot-path compatibility shim: NEVER refine here. Merge-only, or no-op if
     // caller is reset/checkpoint (those should leave work to idle drain).
     (void)allowRefine;
@@ -219,7 +219,7 @@ void SelfBakeRecorder::flushSegment(PlayLayer* layer, char const* reason, bool a
     // Death/reset/checkpoint must stay instant — leave buffer for idle drain.
     if (std::strcmp(result, "reset") == 0 || std::strcmp(result, "checkpoint") == 0 ||
         std::strcmp(result, "death") == 0) {
-        LagProbe::get().mark("flushSegment.deferred",
+        EbLagProbe::get().mark("flushSegment.deferred",
                              fmt::format("reason={} pending={} refineQ={}", result,
                                          this->m_pending.size(), this->m_refineQueue.size()));
         return;

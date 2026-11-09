@@ -12,10 +12,10 @@
 #include <cmath>
 #include <vector>
 
-SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLayer* layer,
+EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, PlayLayer* layer,
                                             PlayerObject* real, bool down, int limit,
                                             float deltaTime, float firstDt,
-                                            PlanOptions const& options) {
+                                            EbPlanOptions const& options) {
     auto single = simulator.plan(layer, real, down, limit, deltaTime, firstDt, options);
     int const depth = std::clamp(options.smartDepth, 1, 3);
 
@@ -41,14 +41,14 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
         return single;
     }
 
-    ShadowSimulator::Model model = simulator.modelFor(real, limit, options.capMul);
+    EbShadowSimulator::Model model = simulator.modelFor(real, limit, options.capMul);
     model.continuePastClear = options.requireAliveForDelay;
     // ScoreHorizon from AssistHorizon (long only when trusted).
     int horizon = options.smartHorizon;
     if (horizon <= 0) {
-        bool const trustOk = SimTrust::get().okAt(real->getPositionX());
-        horizon = AssistHorizon::resolve(StageConfig::kindOf(real), trustOk, limit, options.capMul,
-                                         0, StageConfig::lookAheadCap())
+        bool const trustOk = EbSimTrust::get().okAt(real->getPositionX());
+        horizon = EbAssistHorizon::resolve(EbStageConfig::kindOf(real), trustOk, limit, options.capMul,
+                                         0, EbStageConfig::lookAheadCap())
                       .scoreHorizon;
         horizon = std::max(horizon, model.cap);
     }
@@ -59,7 +59,7 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
     if (slot < 0)
         return single;
 
-    class Best {
+    class EbBest {
     public:
         bool found = false;
         int d0 = 0;
@@ -69,10 +69,10 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
     private:
     } best;
 
-    auto pushTap = [&](std::vector<InputEvent>& tl, int pressTick, bool tap) {
-        tl.push_back(InputEvent{pressTick, true});
+    auto pushTap = [&](std::vector<EbInputEvent>& tl, int pressTick, bool tap) {
+        tl.push_back(EbInputEvent{pressTick, true});
         if (tap)
-            tl.push_back(InputEvent{pressTick + 2, false});
+            tl.push_back(EbInputEvent{pressTick + 2, false});
     };
     bool const tap = model.tapRelease;
     int minGap = tap ? 6 : 4;
@@ -80,17 +80,17 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
     int combos = 0;
 
     // Smart bake-chain: fix follow-up clicks from BakeMap when available.
-    GameModeKind const kind = StageConfig::kindOf(real);
+    GameModeKind const kind = EbStageConfig::kindOf(real);
     bool const player2 = layer && layer->m_player2 && real == layer->m_player2;
     int const chainDepth = std::max(0, depth - 1);
-    auto followUps = (BakeMap::get().loaded() && chainDepth > 0)
-                         ? BakeMap::get().nextClicksAfter(real->getPositionX(), true, player2, kind,
+    auto followUps = (EbBakeMap::get().loaded() && chainDepth > 0)
+                         ? EbBakeMap::get().nextClicksAfter(real->getPositionX(), true, player2, kind,
                                                           std::min(chainDepth, 2))
-                         : std::vector<BakedClick const*>{};
+                         : std::vector<EbBakedClick const*>{};
 
     float const speed =
         std::max(0.5f, real->m_playerSpeed * 311.2f * std::max(deltaTime, 1.f / 240.f));
-    std::vector<BakedClick const*> chain;
+    std::vector<EbBakedClick const*> chain;
     for (auto const* candidate : followUps) {
         if (!candidate)
             continue;
@@ -111,7 +111,7 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
             break;
 
         if (useBakeChain) {
-            std::vector<InputEvent> tl;
+            std::vector<EbInputEvent> tl;
             pushTap(tl, d0, tap);
             for (auto const* candidate : chain) {
                 float const deltaX = candidate->x - real->getPositionX();
@@ -127,7 +127,7 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
             }
             auto rr = simulator.replay(layer, slot, 0, tl, deltaTime, horizon, false, 0);
             ++combos;
-            bool const survived = ShadowSurvivalRules::exitSurvivedHonest(rr.died, rr.unknown);
+            bool const survived = EbShadowSurvivalRules::exitSurvivedHonest(rr.died, rr.unknown);
             int sc = survived ? 100000 : rr.deathTick * 50;
             float const lat = std::max(0.f, options.latencyWeight);
             sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
@@ -135,7 +135,7 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
                 sc += 5000;
             if (!chain.empty() && survived) {
                 float const targetX = chain.front()->x;
-                if (rr.endX + BakeMap::LOOKUP_X_TOL >= targetX)
+                if (rr.endX + EbBakeMap::LOOKUP_X_TOL >= targetX)
                     sc += 20000;
                 else
                     sc -= 10000;
@@ -148,11 +148,11 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
 
         {
             // Single-press exit probe: which first delay actually clears ahead?
-            std::vector<InputEvent> tl;
+            std::vector<EbInputEvent> tl;
             pushTap(tl, d0, tap);
             auto rr = simulator.replay(layer, slot, 0, tl, deltaTime, horizon, false, 0);
             ++combos;
-            bool const survived = ShadowSurvivalRules::exitSurvivedHonest(rr.died, rr.unknown);
+            bool const survived = EbShadowSurvivalRules::exitSurvivedHonest(rr.died, rr.unknown);
             int sc = survived ? 100000 : rr.deathTick * 50;
             float const lat = std::max(0.f, options.latencyWeight);
             sc += static_cast<int>(rr.endX - lat * static_cast<float>(d0));
@@ -164,13 +164,13 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
         }
         if (depth >= 2) {
             for (int d1 = d0 + minGap; d1 < horizon && combos < comboBudget; d1 += step) {
-                std::vector<InputEvent> tl2;
+                std::vector<EbInputEvent> tl2;
                 pushTap(tl2, d0, tap);
                 pushTap(tl2, d1, tap);
                 auto rr2 = simulator.replay(layer, slot, 0, tl2, deltaTime, horizon, false, 0);
                 ++combos;
                 bool const survived2 =
-                    ShadowSurvivalRules::exitSurvivedHonest(rr2.died, rr2.unknown);
+                    EbShadowSurvivalRules::exitSurvivedHonest(rr2.died, rr2.unknown);
                 int sc2 = survived2 ? 100000 : rr2.deathTick * 50;
                 float const lat2 = std::max(0.f, options.latencyWeight);
                 sc2 += static_cast<int>(rr2.endX - lat2 * static_cast<float>(d0));
@@ -187,7 +187,7 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
     single.smartCombosUsed = combos;
     // Only accept a predicted exit that actually survived the horizon.
     if (!best.found || !best.survived) {
-        AssistLog::debug(fmt::format("planSequence id={} no surviving exit — keep plan delay={}",
+        EbAssistLog::debug(fmt::format("planSequence id={} no surviving exit — keep plan delay={}",
                                      single.planId, single.delay));
         return single;
     }
@@ -203,14 +203,14 @@ SimPlan ShadowSequencePlanner::planSequence(ShadowSimulator& simulator, PlayLaye
         single.action = PlanAction::Delay;
         single.delay = best.d0;
         single.nowIsSafe = false;
-        if (!AssistVerdict::isDelay(single.reason)) {
+        if (!EbAssistVerdict::isDelay(single.reason)) {
             single.reason =
-                AssistVerdict::inferDelayReason(single.activatedRing, single.requireOrb, false);
+                EbAssistVerdict::inferDelayReason(single.activatedRing, single.requireOrb, false);
         }
     }
-    AssistLog::debug(fmt::format(
+    EbAssistLog::debug(fmt::format(
         "planSequence id={} depth={} d0={} verdict={} allowed={} combos={} bakeChain={}",
-        single.planId, depth, best.d0, AssistVerdict::name(single.reason), allowed.size(), combos,
+        single.planId, depth, best.d0, EbAssistVerdict::name(single.reason), allowed.size(), combos,
         useBakeChain));
     return single;
 }

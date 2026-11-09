@@ -10,20 +10,20 @@
 #include <limits>
 #include <vector>
 
-int BakeWindowIndex::refineSelfWindows(BakeMap& owner, PlayLayer* layer, int startSnapshotSlot,
-                                       std::vector<BakedClick>& clicks, int bakeRadius,
+int EbBakeWindowIndex::refineSelfWindows(EbBakeMap& owner, PlayLayer* layer, int startSnapshotSlot,
+                                       std::vector<EbBakedClick>& clicks, int bakeRadius,
                                        int budgetSims, std::atomic<bool>* cancel) {
     if (!layer || startSnapshotSlot < 0 || clicks.empty() || budgetSims <= 0)
         return 0;
     if (owner.isBaking())
         return 0;
 
-    bakeRadius = BakeMapImplementation::resolveRadius(bakeRadius, BakeMethod::Replay);
+    bakeRadius = EbBakeMapImplementation::resolveRadius(bakeRadius, BakeMethod::Replay);
     double tps = owner.m_data.tps > 0.0 ? owner.m_data.tps : 240.0;
     float deltaTime = static_cast<float>(1.0 / tps);
     int const horizon =
-        ShadowSimulator::modelFor(layer->m_player1 ? layer->m_player1 : layer->m_player2,
-                                  StageConfig::ticksAll())
+        EbShadowSimulator::modelFor(layer->m_player1 ? layer->m_player1 : layer->m_player2,
+                                  EbStageConfig::ticksAll())
             .cap;
 
     std::stable_sort(clicks.begin(), clicks.end(), [](auto const& a, auto const& b) {
@@ -32,10 +32,10 @@ int BakeWindowIndex::refineSelfWindows(BakeMap& owner, PlayLayer* layer, int sta
         return a.player2 < b.player2;
     });
 
-    std::vector<ReplayEvent> timeline;
+    std::vector<EbReplayEvent> timeline;
     timeline.reserve(clicks.size());
     for (auto const& c : clicks) {
-        timeline.push_back(ReplayEvent{c.nominalFrame, 1, c.player2, c.down});
+        timeline.push_back(EbReplayEvent{c.nominalFrame, 1, c.player2, c.down});
     }
 
     int simsLeft = budgetSims;
@@ -121,20 +121,20 @@ int BakeWindowIndex::refineSelfWindows(BakeMap& owner, PlayLayer* layer, int sta
         }
     }
 
-    AssistLog::debug(fmt::format("self-bake refine: {}/{} expanded, sims left {}", expanded,
+    EbAssistLog::debug(fmt::format("self-bake refine: {}/{} expanded, sims left {}", expanded,
                                  clicks.size(), simsLeft));
     return expanded;
 }
 
-std::vector<BakedClick const*>
-BakeWindowIndex::nextClicksAfter(BakeMap const& owner, float playerX, bool down, bool player2,
+std::vector<EbBakedClick const*>
+EbBakeWindowIndex::nextClicksAfter(EbBakeMap const& owner, float playerX, bool down, bool player2,
                                  std::optional<GameModeKind> preferMode, int maxCount) {
-    std::vector<BakedClick const*> out;
+    std::vector<EbBakedClick const*> out;
     if (maxCount <= 0 || !owner.m_loaded)
         return out;
 
     auto collect = [&](bool requireMode) {
-        std::vector<BakedClick const*> hits;
+        std::vector<EbBakedClick const*> hits;
         for (auto const& c : owner.m_data.clicks) {
             if (c.down != down || c.player2 != player2)
                 continue;
@@ -163,7 +163,7 @@ BakeWindowIndex::nextClicksAfter(BakeMap const& owner, float playerX, bool down,
     return out;
 }
 
-int BakeWindowIndex::mergeSelfClicks(BakeMap& owner, std::vector<BakedClick> const& incoming) {
+int EbBakeWindowIndex::mergeSelfClicks(EbBakeMap& owner, std::vector<EbBakedClick> const& incoming) {
     if (incoming.empty() || !owner.m_loaded)
         return 0;
     if (owner.isBaking())
@@ -173,13 +173,13 @@ int BakeWindowIndex::mergeSelfClicks(BakeMap& owner, std::vector<BakedClick> con
     int touched = 0;
 
     for (auto const& neu : incoming) {
-        BakedClick* match = nullptr;
+        EbBakedClick* match = nullptr;
         for (auto& old : owner.m_data.clicks) {
             if (old.down != neu.down || old.player2 != neu.player2)
                 continue;
-            if (std::fabs(old.x - neu.x) > BakeMap::MERGE_X_TOL)
+            if (std::fabs(old.x - neu.x) > EbBakeMap::MERGE_X_TOL)
                 continue;
-            if (std::abs(old.nominalFrame - neu.nominalFrame) > BakeMap::MERGE_FRAME_TOL)
+            if (std::abs(old.nominalFrame - neu.nominalFrame) > EbBakeMap::MERGE_FRAME_TOL)
                 continue;
             match = &old;
             break;
@@ -197,7 +197,7 @@ int BakeWindowIndex::mergeSelfClicks(BakeMap& owner, std::vector<BakedClick> con
             }
             continue;
         }
-        if (owner.m_data.clicks.size() >= BakeMap::kMaxMapClicks)
+        if (owner.m_data.clicks.size() >= EbBakeMap::kMaxMapClicks)
             continue;
         owner.m_data.clicks.push_back(neu);
         ++touched;
@@ -217,14 +217,14 @@ int BakeWindowIndex::mergeSelfClicks(BakeMap& owner, std::vector<BakedClick> con
     return touched;
 }
 
-float BakeWindowIndex::windowHalfW(int earliest, int latest) {
+float EbBakeWindowIndex::windowHalfW(int earliest, int latest) {
     // Keep the drawn band tight — oversized boxes invited late presses that
     // still look "in window" after latest (salvage then dies).
     int const span = (std::max)(0, latest - earliest);
     return (std::clamp)(2.5f + static_cast<float>(span) * 0.28f, 2.5f, 16.f);
 }
 
-BakedClick const* BakeWindowIndex::findNear(BakeMap const& owner, float playerX, int approxFrame,
+EbBakedClick const* EbBakeWindowIndex::findNear(EbBakeMap const& owner, float playerX, int approxFrame,
                                             bool down, bool player2,
                                             std::optional<GameModeKind> preferMode) {
     // Temporal gate: do not pick a window whose absolute bake frames are far
@@ -235,8 +235,8 @@ BakedClick const* BakeWindowIndex::findNear(BakeMap const& owner, float playerX,
 
     // Prefer clicks whose drawn band contains playerX (viz overlap), else nearest X.
     // Among temporal candidates, prefer those with approxFrame inside [earliest, latest].
-    auto pick = [&](bool requireMode) -> BakedClick const* {
-        BakedClick const* best = nullptr;
+    auto pick = [&](bool requireMode) -> EbBakedClick const* {
+        EbBakedClick const* best = nullptr;
         float bestScore = 1e9f;
         for (auto const& c : owner.m_data.clicks) {
             if (c.down != down || c.player2 != player2)
@@ -244,7 +244,7 @@ BakedClick const* BakeWindowIndex::findNear(BakeMap const& owner, float playerX,
             if (requireMode && preferMode && c.mode != *preferMode)
                 continue;
             float const deltaX = std::fabs(c.x - playerX);
-            if (deltaX > BakeMap::LOOKUP_X_TOL)
+            if (deltaX > EbBakeMap::LOOKUP_X_TOL)
                 continue;
             if (approxFrame >= 0) {
                 if (c.latest + kFramePastSlop < approxFrame)
@@ -259,9 +259,9 @@ BakedClick const* BakeWindowIndex::findNear(BakeMap const& owner, float playerX,
             // Score: in-time+in-band best, then in-time, then in-band, then dx.
             float score = deltaX;
             if (!inBand)
-                score += BakeMap::LOOKUP_X_TOL;
+                score += EbBakeMap::LOOKUP_X_TOL;
             if (!inTime)
-                score += BakeMap::LOOKUP_X_TOL * 2.f;
+                score += EbBakeMap::LOOKUP_X_TOL * 2.f;
             if (score < bestScore) {
                 bestScore = score;
                 best = &c;
@@ -277,8 +277,8 @@ BakedClick const* BakeWindowIndex::findNear(BakeMap const& owner, float playerX,
     return pick(false);
 }
 
-bool BakeWindowIndex::testShiftedClick(BakeMap const& owner, PlayLayer* layer,
-                                       int startSnapshotSlot, std::vector<ReplayEvent> timeline,
+bool EbBakeWindowIndex::testShiftedClick(EbBakeMap const& owner, PlayLayer* layer,
+                                       int startSnapshotSlot, std::vector<EbReplayEvent> timeline,
                                        int eventIndex, int testFrame, int untilFrame,
                                        float deltaTime, int substeps) {
     if (eventIndex < 0 || eventIndex >= static_cast<int>(timeline.size()))
@@ -286,7 +286,7 @@ bool BakeWindowIndex::testShiftedClick(BakeMap const& owner, PlayLayer* layer,
     timeline[static_cast<size_t>(eventIndex)].frame = testFrame;
     std::stable_sort(timeline.begin(), timeline.end(),
                      [](auto const& a, auto const& b) { return a.frame < b.frame; });
-    auto result = ShadowSimulator::get().runBakeTimeline(
+    auto result = EbShadowSimulator::get().runBakeTimeline(
         layer, startSnapshotSlot, timeline, deltaTime, untilFrame, -1, true, false, true, substeps);
     return !result.died;
 }

@@ -10,39 +10,39 @@
 #include <chrono>
 
 // Per-call state shared by search phases. Capture cleanup remains scoped to run().
-class ShadowPlanContext {
+class EbShadowPlanContext {
 public:
-    ShadowPlanContext(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
-                      int limit, float deltaTime, float firstDt, PlanOptions const& options,
-                      SimPlan& plan);
+    EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
+                      int limit, float deltaTime, float firstDt, EbPlanOptions const& options,
+                      EbSimPlan& plan);
 
 private:
-    friend class ShadowPlanInputWindow;
-    friend class ShadowPlanThreatProbe;
-    friend class ShadowPlanForesight;
-    friend class ShadowPlanCandidateSearch;
-    friend class ShadowPlanSelection;
-    friend class ShadowPlanResult;
-    friend class ShadowPlanSearch;
+    friend class EbShadowPlanInputWindow;
+    friend class EbShadowPlanThreatProbe;
+    friend class EbShadowPlanForesight;
+    friend class EbShadowPlanCandidateSearch;
+    friend class EbShadowPlanSelection;
+    friend class EbShadowPlanResult;
+    friend class EbShadowPlanSearch;
     bool wallExceeded() const;
     bool linkedDual() const;
-    ShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,
-                                         ThreatZone const* zonePointer);
-    void publishLedger(int chosenDelay, bool doPassFlag, DevRejectLedger::EarlyExit early);
-    SimulationCandidate evalDelay(int delayValue, int releaseAfter);
-    void finalizeViable(SimulationCandidate& candidate, int releaseAfter);
+    EbShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,
+                                         EbThreatZone const* zonePointer);
+    void publishLedger(int chosenDelay, bool doPassFlag, EbDevRejectLedger::EarlyExit early);
+    EbSimulationCandidate evalDelay(int delayValue, int releaseAfter);
+    void finalizeViable(EbSimulationCandidate& candidate, int releaseAfter);
     bool jitterOk(int delay, int releaseAfter);
 
-    ShadowSimulator& simulator;
+    EbShadowSimulator& simulator;
     PlayLayer* layer;
     PlayerObject* real;
     bool down;
     int limit;
     float deltaTime;
     float firstDt;
-    PlanOptions const& options;
-    SimPlan& plan;
-    ShadowSimulator::Model model;
+    EbPlanOptions const& options;
+    EbSimPlan& plan;
+    EbShadowSimulator::Model model;
     int robustK;
     float latencyWeight;
     int tickBudget;
@@ -52,10 +52,10 @@ private:
     bool hadToggleTargets = false;
     bool inputWindow = false;
     bool orbAssist = false;
-    ShadowSimulator::OrbWindow orbHint{};
+    EbShadowSimulator::OrbWindow orbHint{};
     bool spatialHint = false;
-    ThreatZone zone{};
-    std::vector<SimulationCandidate> cands;
+    EbThreatZone zone{};
+    std::vector<EbSimulationCandidate> cands;
     std::vector<char> candReady;
     int ledgerActMin = -1;
     int ledgerActMax = -1;

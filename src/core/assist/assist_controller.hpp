@@ -19,7 +19,7 @@ enum class BufferState {
     FiredHolding // legacy — cleared if seen
 };
 
-class BufferedInput {
+class EbBufferedInput {
 public:
     bool fixedFireTick = false;
     BufferState state = BufferState::Idle;
@@ -68,9 +68,9 @@ public:
 private:
 };
 
-class AssistController {
+class EbAssistController {
 public:
-    static AssistController& get();
+    static EbAssistController& get();
 
     void resetAttempt(PlayLayer* playLayer = nullptr);
     void onLevelInit(PlayLayer* playLayer);
@@ -103,7 +103,7 @@ public:
     geode::Result<> ensureStartSnapshot(PlayLayer* layer);
 
     bool isInjecting() const;
-    BufferedInput const& buffer() const;
+    EbBufferedInput const& buffer() const;
     int attemptTick() const;
     float lastDt() const;
     // Physics step quantum after timeWarp strip (plan / remap).
@@ -153,8 +153,8 @@ public:
     // Soft Hold-Until-Safe (press or release): PassBudget / hopeless / foresight —
     // never past limit. Commit 13: only when trustOk (sonst Pass).
     // Release: swallow UP, keep Jump held, inject release when Delay confirms.
-    static bool shouldArmHoldUntilSafe(SimPlan const& plan, bool trustOk = true);
-    static int holdUntilSafeEtaTicks(SimPlan const& plan, int limit);
+    static bool shouldArmHoldUntilSafe(EbSimPlan const& plan, bool trustOk = true);
+    static int holdUntilSafeEtaTicks(EbSimPlan const& plan, int limit);
     // Full plan() only every N ticks, on ΔX, foresight edge, first call, or near deadline.
     static constexpr int kHusReplanEveryTicks = 3;
     static constexpr float kHusReplanDeltaX = 8.f;
@@ -165,38 +165,42 @@ public:
 
     // Recheck slide (Commit 13): never earlier; late ≤+1 (OrbAlign::kRecheckMaxSlide).
     // requireOrb kept for API; slide cap is shared. Returns -1 = reject.
-    static constexpr int kRecheckMaxSlide = OrbAlign::kRecheckMaxSlide;
+    static constexpr int kRecheckMaxSlide = EbOrbAlign::kRecheckMaxSlide;
     static int acceptRecheckSlide(int oldFire, int attemptTick, int proposedFire, int absMax,
                                   int robustK, int deadline, bool requireOrb, bool planOk);
     static int estimateRobustK(PlayerObject* player, float dtVariance);
     static bool recheckSlideSelfCheck(std::string& report);
 
 private:
-    friend class AssistReleasePlanner;
+    friend class EbLevelLifecycle;
 
-    friend class AssistPressPlanner;
+    friend class EbServiceStore;
 
-    friend class AssistBakeReuse;
+    friend class EbAssistReleasePlanner;
 
-    friend class AssistOutcomes;
+    friend class EbAssistPressPlanner;
 
-    friend class AssistOverlay;
+    friend class EbAssistBakeReuse;
 
-    friend class AssistInputRuntime;
+    friend class EbAssistOutcomes;
 
-    friend class AssistBufferRuntime;
+    friend class EbAssistOverlay;
 
-    friend class AssistHoldRuntime;
+    friend class EbAssistInputRuntime;
 
-    friend class HoldUntilSafePolicy;
+    friend class EbAssistBufferRuntime;
 
-    friend class AssistInputGate;
+    friend class EbAssistHoldRuntime;
 
-    friend class AssistTimingRules;
+    friend class EbHoldUntilSafePolicy;
 
-    friend class AssistLifecycle;
+    friend class EbAssistInputGate;
 
-    AssistController() = default;
+    friend class EbAssistTimingRules;
+
+    friend class EbAssistLifecycle;
+
+    EbAssistController() = default;
 
     int activeLimit(PlayerObject* player) const;
     bool shouldAssistPlayer(PlayerObject* player) const;
@@ -204,9 +208,9 @@ private:
     void inject(GJBaseGameLayer* layer, bool down);
     void syncButtonState(PlayLayer* playLayer);
     bool planPress(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick,
-                   float firstDt, DevClockContract::Stamp const& clock);
+                   float firstDt, EbDevClockContract::Stamp const& clock);
     bool planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick,
-                     float firstDt, DevClockContract::Stamp const& clock);
+                     float firstDt, EbDevClockContract::Stamp const& clock);
     // Returns true if bake handled the input (caller should return that bool).
     // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
     // sharedBudget: Hybrid press envelope (verify spends first; Live uses remainder).
@@ -215,8 +219,8 @@ private:
     // reuse: copy findNear window + verify threatZone for Live (no bake ptrs).
     bool tryBakeAssist(PlayLayer* playLayer, PlayerObject* player, bool player1, bool down,
                        int effectTick, float firstDt, bool& handled,
-                       PressSimBudget* sharedBudget = nullptr, bool* verifyAttempted = nullptr,
-                       HybridPressReuse* reuse = nullptr);
+                       EbPressSimBudget* sharedBudget = nullptr, bool* verifyAttempted = nullptr,
+                       EbHybridPressReuse* reuse = nullptr);
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
@@ -225,24 +229,24 @@ private:
     }
     void noteUserClick();
     void pruneClickTimes();
-    void beginOutcome(SimPlan const& plan, int effectTick);
+    void beginOutcome(EbSimPlan const& plan, int effectTick);
     void pollOutcome(PlayLayer* playLayer);
-    void logPlan(SimPlan const& plan, char const* kind);
+    void logPlan(EbSimPlan const& plan, char const* kind);
     void noteVerdict(AssistReason reason, char const* where);
     // Arm soft hold buffer (swallows press or release). Returns false for onHandleButton.
     bool armHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick,
-                          int limit, SimPlan const& plan, bool down = true);
+                          int limit, EbSimPlan const& plan, bool down = true);
     // Cadenced replan while holdUntilSafe buffer is armed (not every tick).
     void tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player);
 
-    void recordDecision(PlayLayer* playLayer, PlayerObject* player, bool down, SimPlan const& plan,
+    void recordDecision(PlayLayer* playLayer, PlayerObject* player, bool down, EbSimPlan const& plan,
                         int effectTick, int appliedDelay, int limit);
     void tickLearning(PlayLayer* playLayer, PlayerObject* player);
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object,
-                       DecisionEntry& dec);
+                       EbDecisionEntry& dec);
 
-    BufferedInput m_buffer{};
-    DecisionLog m_log{};
+    EbBufferedInput m_buffer{};
+    EbDecisionLog m_log{};
     bool m_injecting = false;
     int m_attemptTick = 0;
     float m_lastDt = 1.f / 240.f;
@@ -297,42 +301,42 @@ private:
 #include <cstdlib>
 #include <cstring>
 
-class AssistControllerImplementation {
+class EbAssistControllerImplementation {
 public:
     static int roundBias(float bias);
-    static void fillPlanRobustLatency(PlanOptions& opts, PlayerObject* player, float dtVariance,
+    static void fillPlanRobustLatency(EbPlanOptions& opts, PlayerObject* player, float dtVariance,
                                       bool spamDense = false);
-    static void fillBakePreferBandFromReuse(PlanOptions& opts, HybridPressReuse const& reuse,
+    static void fillBakePreferBandFromReuse(EbPlanOptions& opts, EbHybridPressReuse const& reuse,
                                             int effectTick, int limit, float simDt);
-    static void fillBakePreferBand(PlanOptions& opts, PlayerObject* player, bool player1, bool down,
+    static void fillBakePreferBand(EbPlanOptions& opts, PlayerObject* player, bool player1, bool down,
                                    int effectTick, int limit, int attemptTick, float simDt,
-                                   HybridPressReuse const* reuse = nullptr);
+                                   EbHybridPressReuse const* reuse = nullptr);
     static bool nearBakeWindowHint(PlayerObject* player, bool player1, bool down, int attemptTick,
-                                   float simDt, HybridPressReuse const* reuse = nullptr);
-    static bool husBlockedBeforeBakeNominal(HybridPressReuse const& reuse, int effectTick,
+                                   float simDt, EbHybridPressReuse const* reuse = nullptr);
+    static bool husBlockedBeforeBakeNominal(EbHybridPressReuse const& reuse, int effectTick,
                                             float simDt, int& outNomTick);
     static bool nearOrbOrPadHint(PlayLayer* playLayer, PlayerObject* player, int limit,
                                  float simDt);
 
 private:
-    friend class AssistReleasePlanner;
+    friend class EbAssistReleasePlanner;
 
-    friend class AssistPressPlanner;
+    friend class EbAssistPressPlanner;
 
-    friend class AssistOverlay;
+    friend class EbAssistOverlay;
 
-    friend class AssistInputRuntime;
+    friend class EbAssistInputRuntime;
 
-    friend class AssistBufferRuntime;
+    friend class EbAssistBufferRuntime;
 
-    friend class AssistHoldRuntime;
+    friend class EbAssistHoldRuntime;
 
-    friend class BufferedInput;
-    friend class AssistController;
+    friend class EbBufferedInput;
+    friend class EbAssistController;
 
     inline static constexpr int JUMP_BUTTON = 1;
 
-    AssistControllerImplementation() = delete;
+    EbAssistControllerImplementation() = delete;
 };
 
 #endif

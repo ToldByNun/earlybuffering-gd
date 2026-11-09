@@ -1,9 +1,9 @@
 #ifndef DIVERGENCE_TRACKER_HPP
 #define DIVERGENCE_TRACKER_HPP
 #include <string>
-class DivergenceTracker {
+class EbDivergenceTracker {
 public:
-    static DivergenceTracker& get();
+    static EbDivergenceTracker& get();
     void note(bool planDelay, bool died, bool expectOrb, bool gotOrb);
     float mismatchRate() const;
     bool shouldWarn() const;
@@ -15,6 +15,8 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
+    friend class EbServiceStore;
+
     static constexpr int N = 48;
     bool m_bad[N]{};
     int m_i = 0;

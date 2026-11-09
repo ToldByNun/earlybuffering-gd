@@ -2,17 +2,17 @@
 #include <cmath>
 #include <fmt/format.h>
 
-bool PerfectAssistPolicy::isOpportunity(OpportunityInput const& o) {
+bool EbPerfectAssistPolicy::isOpportunity(OpportunityInput const& o) {
     return o.foresightOrbPad || o.threatZoneValid || o.idleSafer || o.ascentUseful ||
            o.bakePreferBand || o.orbWindowFound || o.d0ActivatedRing || o.probeShowsGain;
 }
 
-bool PerfectAssistPolicy::trustOk(TrustInput const& t) {
+bool EbPerfectAssistPolicy::trustOk(TrustInput const& t) {
     return !t.parityDrift && !t.spotUntrusted && !t.divergenceUntrusted && !t.twEmptyWhenExpected &&
            !t.hardUnknownHit;
 }
 
-bool PerfectAssistPolicy::forcePassReason(TrustInput const& t, AssistReason& out) {
+bool EbPerfectAssistPolicy::forcePassReason(TrustInput const& t, AssistReason& out) {
     if (t.parityDrift) {
         out = AssistReason::PassParityDrift;
         return true;
@@ -37,7 +37,7 @@ bool PerfectAssistPolicy::forcePassReason(TrustInput const& t, AssistReason& out
     return false;
 }
 
-PerfectAssistPolicy::Decision PerfectAssistPolicy::classify(TrustInput const& t,
+EbPerfectAssistPolicy::Decision EbPerfectAssistPolicy::classify(TrustInput const& t,
                                                             OpportunityInput const& o) {
     AssistReason ignored = AssistReason::None;
     if (forcePassReason(t, ignored))
@@ -48,7 +48,7 @@ PerfectAssistPolicy::Decision PerfectAssistPolicy::classify(TrustInput const& t,
     return Decision::MustDelaySearch;
 }
 
-bool PerfectAssistPolicy::allowPassBudget(bool trustOkFlag, bool opportunity,
+bool EbPerfectAssistPolicy::allowPassBudget(bool trustOkFlag, bool opportunity,
                                           bool budgetRemainsForProbe) {
     // Trusted opportunity with remaining probe budget must keep searching.
     if (!(trustOkFlag && opportunity && budgetRemainsForProbe)) {
@@ -57,7 +57,7 @@ bool PerfectAssistPolicy::allowPassBudget(bool trustOkFlag, bool opportunity,
     return false;
 }
 
-bool PerfectAssistPolicy::allowArmDelay(bool candViable, bool budgetHit, bool softTrustPartial) {
+bool EbPerfectAssistPolicy::allowArmDelay(bool candViable, bool budgetHit, bool softTrustPartial) {
     // Only block inventing a Delay from an incomplete partial pick under budgetHit.
     if (!(softTrustPartial && budgetHit)) {
         return candViable;
@@ -65,15 +65,15 @@ bool PerfectAssistPolicy::allowArmDelay(bool candViable, bool budgetHit, bool so
     return false;
 }
 
-bool PerfectAssistPolicy::allowInventClick() {
+bool EbPerfectAssistPolicy::allowInventClick() {
     return false;
 }
 
-bool PerfectAssistPolicy::allowInventRelease() {
+bool EbPerfectAssistPolicy::allowInventRelease() {
     return false;
 }
 
-bool PerfectAssistPolicy::interveneOk(bool d0Viable, bool delayViable, bool delayClearsBetter) {
+bool EbPerfectAssistPolicy::interveneOk(bool d0Viable, bool delayViable, bool delayClearsBetter) {
     if (!delayViable)
         return false;
     if (!(d0Viable && !delayClearsBetter)) {
@@ -82,7 +82,7 @@ bool PerfectAssistPolicy::interveneOk(bool d0Viable, bool delayViable, bool dela
     return false;
 }
 
-bool PerfectAssistPolicy::preferSmallerWaveClear(float clearA, float clearB, float marginPx) {
+bool EbPerfectAssistPolicy::preferSmallerWaveClear(float clearA, float clearB, float marginPx) {
     bool const aOk = clearA >= marginPx + 1.f;
     bool const bOk = clearB >= marginPx + 1.f;
     if (aOk != bOk)
@@ -93,7 +93,7 @@ bool PerfectAssistPolicy::preferSmallerWaveClear(float clearA, float clearB, flo
     return false;
 }
 
-bool PerfectAssistPolicy::selfCheck(std::string& report) {
+bool EbPerfectAssistPolicy::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

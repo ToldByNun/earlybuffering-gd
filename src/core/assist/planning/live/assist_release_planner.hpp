@@ -5,14 +5,14 @@
 
 #include "../../assist_controller.hpp"
 
-class AssistReleasePlanner {
+class EbAssistReleasePlanner {
 public:
-    static bool planRelease(AssistController& controller, PlayLayer* playLayer,
+    static bool planRelease(EbAssistController& controller, PlayLayer* playLayer,
                             PlayerObject* player, bool player1, int effectTick, float firstDt,
-                            DevClockContract::Stamp const& clockIn);
+                            EbDevClockContract::Stamp const& clockIn);
 
 private:
-    AssistReleasePlanner() = delete;
+    EbAssistReleasePlanner() = delete;
 };
 
 #endif

@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <fmt/format.h>
 
-int OrbAlign::clampFireIntoOrbWindow(int fireTick, int pressTick, int dMin, int dMax, int limit) {
+int EbOrbAlign::clampFireIntoOrbWindow(int fireTick, int pressTick, int dMin, int dMax, int limit) {
     int fire = fireTick;
     if (dMin >= 0) {
         fire = std::max(fire, pressTick + dMin);
@@ -16,14 +16,14 @@ int OrbAlign::clampFireIntoOrbWindow(int fireTick, int pressTick, int dMin, int 
     return fire;
 }
 
-int OrbAlign::waitUntilInsideRing(int fireTick, int pressTick, int dMin) {
+int EbOrbAlign::waitUntilInsideRing(int fireTick, int pressTick, int dMin) {
     if (!(dMin < 0)) {
         return std::max(fireTick, pressTick + dMin);
     }
     return fireTick;
 }
 
-bool OrbAlign::wrongOrbReject(int actDelay, int dMin, int dMax) {
+bool EbOrbAlign::wrongOrbReject(int actDelay, int dMin, int dMax) {
     if (dMin < 0 && dMax < 0)
         return false;
     if (dMin >= 0 && actDelay < dMin)
@@ -34,7 +34,7 @@ bool OrbAlign::wrongOrbReject(int actDelay, int dMin, int dMax) {
     return true;
 }
 
-bool OrbAlign::robustNeighborsOk(bool centerOk, bool hasLo, bool loOk, bool hasHi, bool hiOk) {
+bool EbOrbAlign::robustNeighborsOk(bool centerOk, bool hasLo, bool loOk, bool hasHi, bool hiOk) {
     if (!centerOk)
         return false;
     if (hasLo && !loOk)
@@ -45,7 +45,7 @@ bool OrbAlign::robustNeighborsOk(bool centerOk, bool hasLo, bool loOk, bool hasH
     return false;
 }
 
-int OrbAlign::acceptRecheckSlide(int oldFire, int attemptTick, int proposedFire, int absMax,
+int EbOrbAlign::acceptRecheckSlide(int oldFire, int attemptTick, int proposedFire, int absMax,
                                  int robustK, int deadline, bool planOk) {
     if (!planOk)
         return -1;
@@ -80,7 +80,7 @@ int OrbAlign::acceptRecheckSlide(int oldFire, int attemptTick, int proposedFire,
     return -1;
 }
 
-bool OrbAlign::selfCheck(std::string& report) {
+bool EbOrbAlign::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

@@ -3,7 +3,7 @@
 
 #include <string>
 
-class AssistTimingRules {
+class EbAssistTimingRules {
 public:
     static int resolveEffectTick(int attemptTick, bool midStep, bool continuous);
     static bool effectTickSelfCheck(std::string& report);
@@ -19,7 +19,7 @@ public:
     static bool recheckSlideSelfCheck(std::string& report);
 
 private:
-    AssistTimingRules() = delete;
+    EbAssistTimingRules() = delete;
 };
 
 #endif

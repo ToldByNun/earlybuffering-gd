@@ -10,7 +10,7 @@ enum class DevFidelity { Reproduced = 0, PlayerOnlyApproximated, NotReproducible
 
 enum class DevDiffKind { Mismatch = 0, Unrestored, DigestOnly };
 
-class DevDiffEntry {
+class EbDevDiffEntry {
 public:
     DevWitnessCategory category = DevWitnessCategory::Player;
     std::string fieldOrObjectId;
@@ -21,7 +21,7 @@ public:
 private:
 };
 
-class DevClassifyOptions {
+class EbDevClassifyOptions {
 public:
     bool requireDeps = true; // DevConfig::evalRequireDeps
     bool freezeWorld = false;
@@ -30,46 +30,46 @@ public:
 private:
 };
 
-class DevClassifyResult {
+class EbDevClassifyResult {
 public:
     DevFidelity fidelity = DevFidelity::NotReproducible;
     bool claimsAllowed = false;
     bool approx = false; // true iff PlayerOnlyApproximated
     std::string evalSuppressedReason;
-    std::vector<DevDiffEntry> diffs;
+    std::vector<EbDevDiffEntry> diffs;
 
 private:
 };
 
 // Vertrag B: compare witness vs restore, emit fidelity + claimsAllowed.
-class DevStateDiff {
+class EbDevStateDiff {
 public:
     static char const* fidelityId(DevFidelity frame);
     static bool parseFidelity(std::string const& s, DevFidelity& out);
     static char const* diffKindId(DevDiffKind offset);
 
     // Field-wise player blob compare; appends mismatch diffs when out != nullptr.
-    static bool playerBlobsEqual(DevPlayerBlob const& live, DevPlayerBlob const& restored,
-                                 DevWitnessCategory category, std::vector<DevDiffEntry>* outDiffs);
+    static bool playerBlobsEqual(EbDevPlayerBlob const& live, EbDevPlayerBlob const& restored,
+                                 DevWitnessCategory category, std::vector<EbDevDiffEntry>* outDiffs);
 
     // Full classify after a restore attempt (Commit 9+ calls this post-write).
-    static DevClassifyResult classify(DevLiveWitness const& witness, DevEvalRestore const& restore,
-                                      DevClassifyOptions const& opts);
+    static EbDevClassifyResult classify(EbDevLiveWitness const& witness, EbDevEvalRestore const& restore,
+                                      EbDevClassifyOptions const& opts);
 
     // Pre-sim gate: suppress when the witness alone already forces notReproducible
     // (missing player / bad clock / schema). No restore object required.
-    static DevClassifyResult classifyWitnessGate(DevLiveWitness const& witness,
-                                                 DevClassifyOptions const& opts);
+    static EbDevClassifyResult classifyWitnessGate(EbDevLiveWitness const& witness,
+                                                 EbDevClassifyOptions const& opts);
 
     static bool selfCheck(std::string& report);
 
 private:
-    friend class DevFidelityChecks;
+    friend class EbDevFidelityChecks;
 
-    DevStateDiff() = delete;
+    EbDevStateDiff() = delete;
 
-    static bool isHardFailDep(DevWitnessCategory candidate, DevClassifyOptions const& opts);
-    static void pushDiff(std::vector<DevDiffEntry>& diffs, DevWitnessCategory category,
+    static bool isHardFailDep(DevWitnessCategory candidate, EbDevClassifyOptions const& opts);
+    static void pushDiff(std::vector<EbDevDiffEntry>& diffs, DevWitnessCategory category,
                          char const* field, std::string liveValue, std::string restoredValue,
                          DevDiffKind kind);
 };

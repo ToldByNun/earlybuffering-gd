@@ -15,7 +15,7 @@
 class PlayLayer;
 
 // Clock-bound eval + grid/tail/objectives (Commits 9–10).
-class DevEvalEngine {
+class EbDevEvalEngine {
 public:
     class Report {
     public:
@@ -25,9 +25,9 @@ public:
         std::string evalSimPathId;
         uint64_t stepScheduleHash = 0;
         bool clockMismatch = false;
-        DevClassifyResult fidelity{};
-        DevEvalRestore restore{};
-        DevObjective::Sample sample{};
+        EbDevClassifyResult fidelity{};
+        EbDevEvalRestore restore{};
+        EbDevObjective::Sample sample{};
         bool ran = false;
 
     private:
@@ -41,12 +41,12 @@ public:
         std::string evalSimPathId;
         uint64_t stepScheduleHash = 0;
         bool clockMismatch = false;
-        DevClassifyResult fidelity{};
-        DevEvalRestore restore{};
-        std::vector<DevObjective::Sample> samples;
-        DevObjective::Result objective{};
+        EbDevClassifyResult fidelity{};
+        EbDevEvalRestore restore{};
+        std::vector<EbDevObjective::Sample> samples;
+        EbDevObjective::Result objective{};
         bool objectivePartial = false;
-        DevConfig::EvalGrid grid = DevConfig::EvalGrid::Band;
+        EbDevConfig::EvalGrid grid = EbDevConfig::EvalGrid::Band;
         int horizonTicks = 48;
         int tailTicks = 48;
         int limit = 0;
@@ -56,34 +56,34 @@ public:
 
     // Counterfactual delay on the witness stamp (evalDelayFromFreeze).
     // Pass horizonTicks = H (primary only) or H+T (combined; use classifyPrimaryAndTail).
-    static Report evalDelay(PlayLayer* layer, DevLiveWitness const& witness, int delay,
-                            int horizonTicks, bool down, DevClassifyOptions const& opts,
+    static Report evalDelay(PlayLayer* layer, EbDevLiveWitness const& witness, int delay,
+                            int horizonTicks, bool down, EbDevClassifyOptions const& opts,
                             int* tickBudgetLeft = nullptr);
 
     // Replay absolute actualFireTick on the same stamp.
-    static Report replayActualFire(PlayLayer* layer, DevLiveWitness const& witness,
+    static Report replayActualFire(PlayLayer* layer, EbDevLiveWitness const& witness,
                                    int actualFireTickAbs, int horizonTicks, bool down,
-                                   DevClassifyOptions const& opts, int* tickBudgetLeft = nullptr);
+                                   EbDevClassifyOptions const& opts, int* tickBudgetLeft = nullptr);
 
     // Delays to evaluate for a grid mode.
-    static std::vector<int> buildGridDelays(DevConfig::EvalGrid grid, int limit, int plannedDelay,
+    static std::vector<int> buildGridDelays(EbDevConfig::EvalGrid grid, int limit, int plannedDelay,
                                             int robustK);
 
     // Run grid with primary H + optional tail T, then score with DevObjective.
-    static GridReport evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool down,
+    static GridReport evalGrid(PlayLayer* layer, EbDevLiveWitness const& witness, bool down,
                                int limit, int plannedDelay, int robustK, int horizonTicks,
-                               int tailTicks, DevConfig::EvalGrid grid,
-                               DevObjective::Kind objective, DevClassifyOptions const& opts,
+                               int tailTicks, EbDevConfig::EvalGrid grid,
+                               EbDevObjective::Kind objective, EbDevClassifyOptions const& opts,
                                float latencyWeight = 0.25f, int* tickBudgetLeft = nullptr);
 
     static bool selfCheck(std::string& report);
 
 private:
-    DevEvalEngine() = delete;
+    EbDevEvalEngine() = delete;
 
-    static Report finishReport(DevLiveWitness const& witness,
-                               ShadowSimulator::EvalFromFreezeResult const& raw, int delay,
-                               int primaryHorizon, int tailTicks, DevClassifyOptions opts,
+    static Report finishReport(EbDevLiveWitness const& witness,
+                               EbShadowSimulator::EvalFromFreezeResult const& raw, int delay,
+                               int primaryHorizon, int tailTicks, EbDevClassifyOptions opts,
                                DevSimPathId expectedPath);
 };
 

@@ -3,24 +3,19 @@
 
 #include "../assist_controller.hpp"
 
-class AssistLifecycle {
+class EbAssistLifecycle {
 public:
-    static void onCheckpointLoad(AssistController& controller);
-    static void onLevelComplete(AssistController& controller, PlayLayer* playLayer);
-    static void syncButtonState(AssistController& controller, PlayLayer* playLayer);
-    static void resetAttempt(AssistController& controller, PlayLayer* playLayer);
-    static void onLevelInit(AssistController& controller, PlayLayer* playLayer);
-    static void onLevelQuit(AssistController& controller);
-    static geode::Result<> ensureStartSnapshot(AssistController& controller, PlayLayer* layer);
-    static geode::Result<int> runBakeMap(AssistController& controller, PlayLayer* layer,
+    static void syncButtonState(EbAssistController& controller, PlayLayer* playLayer);
+    static geode::Result<> ensureStartSnapshot(EbAssistController& controller, PlayLayer* layer);
+    static geode::Result<int> runBakeMap(EbAssistController& controller, PlayLayer* layer,
                                          bool bruteForce);
-    static void resetLevelProfile(AssistController& controller);
-    static void beginRealUpdate(AssistController& controller);
-    static void endRealUpdate(AssistController& controller);
-    static void onSubStep(AssistController& controller, PlayerObject* player, float deltaTime);
+    static void resetLevelProfile(EbAssistController& controller);
+    static void beginRealUpdate(EbAssistController& controller);
+    static void endRealUpdate(EbAssistController& controller);
+    static void onSubStep(EbAssistController& controller, PlayerObject* player, float deltaTime);
 
 private:
-    AssistLifecycle() = delete;
+    EbAssistLifecycle() = delete;
 };
 
 #endif

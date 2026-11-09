@@ -24,14 +24,14 @@
 #include <cmath>
 #include <cstdlib>
 
-void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* playLayer,
+void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLayer* playLayer,
                                        float deltaTime) {
-    PerfTrace::get().beginTick(controller.m_attemptTick, deltaTime);
+    EbPerfTrace::get().beginTick(controller.m_attemptTick, deltaTime);
     // endTick runs on every exit path (including early returns).
-    class TickEndGuard {
+    class EbTickEndGuard {
     public:
-        ~TickEndGuard() {
-            PerfTrace::get().endTick();
+        ~EbTickEndGuard() {
+            EbPerfTrace::get().endTick();
         }
 
     private:
@@ -41,14 +41,14 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
     // Hook dt is GD step units (0.25 @ 240 TPS every tick — not a hitch).
     // Convert to seconds before sanity / EMA (v1.2.1 passed GD units through;
     // we keep seconds internally for TPS/bake and reconvert at the ghost).
-    float const secDt = AssistClock::gdStepToSeconds(deltaTime);
+    float const secDt = EbAssistClock::gdStepToSeconds(deltaTime);
     if (secDt > 0.f) {
         timeWarp = playLayer ? playLayer->m_gameState.m_timeWarp : 1.f;
         if (timeWarp <= 0.f)
             timeWarp = 1.f;
         float const simSample = secDt / timeWarp;
         // Real-seconds hitch/pause dumps must NOT stick in m_lastDt.
-        auto& clock = AssistClock::get();
+        auto& clock = EbAssistClock::get();
         if (clock.isSaneSimDt(simSample)) {
             if (controller.m_lastDt <= 0.f || controller.m_attemptTick < 3) {
                 controller.m_lastDt = secDt;
@@ -57,7 +57,7 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
             }
             controller.m_simDt = controller.m_lastDt / timeWarp;
         } else if (controller.m_simDt <= 0.f || !clock.isSaneSimDt(controller.m_simDt)) {
-            controller.m_simDt = AssistClock::kNominalSimDt;
+            controller.m_simDt = EbAssistClock::kNominalSimDt;
             controller.m_lastDt = controller.m_simDt * timeWarp;
         }
         float const beforeSnap = controller.m_simDt;
@@ -75,14 +75,14 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
     }
     ++controller.m_attemptTick;
     {
-        double const simTps = AssistClock::get().simTpsFromDt(controller.m_simDt);
-        if (AssistClock::get().noteSpeedScale(timeWarp, simTps, controller.m_attemptTick)) {
-            AssistLog::debug(fmt::format("speed-scale: suspect simTps={:.1f} wallTps={:.1f} "
+        double const simTps = EbAssistClock::get().simTpsFromDt(controller.m_simDt);
+        if (EbAssistClock::get().noteSpeedScale(timeWarp, simTps, controller.m_attemptTick)) {
+            EbAssistLog::debug(fmt::format("speed-scale: suspect simTps={:.1f} wallTps={:.1f} "
                                          "tw={:.3f} simDt={:.6f} lastDt={:.6f}",
                                          simTps,
-                                         AssistClock::get().wallTpsFromDt(controller.m_lastDt),
+                                         EbAssistClock::get().wallTpsFromDt(controller.m_lastDt),
                                          timeWarp, controller.m_simDt, controller.m_lastDt));
-            LagProbe::get().mark("eb.speed.scale",
+            EbLagProbe::get().mark("eb.speed.scale",
                                  fmt::format("tps={:.1f} tw={:.3f}", simTps, timeWarp));
         }
     }
@@ -90,46 +90,46 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
         return;
 
     {
-        PerfTrace::Scope const scope("pollOutcome");
+        EbPerfTrace::Scope const scope("pollOutcome");
         controller.pollOutcome(playLayer);
     }
     {
-        PerfTrace::Scope const scope("flushPendingRelease");
+        EbPerfTrace::Scope const scope("flushPendingRelease");
         controller.flushPendingRelease(playLayer);
     }
     {
-        PerfTrace::Scope const scope("saveFeedbackTick");
-        SaveFeedback::get().onPhysicsTick();
+        EbPerfTrace::Scope const scope("saveFeedbackTick");
+        EbSaveFeedback::get().onPhysicsTick();
     }
     {
-        PerfTrace::Scope const scope("selfBakeIdle");
-        SelfBakeRecorder::get().onPhysicsTick(playLayer);
+        EbPerfTrace::Scope const scope("selfBakeIdle");
+        EbSelfBakeRecorder::get().onPhysicsTick(playLayer);
     }
     {
-        PerfTrace::Scope const scope("triggerBakeSlice");
-        TriggerWorldBaker::get().kickIfStaleEmpty(playLayer);
-        TriggerWorldBaker::get().tickSlice();
+        EbPerfTrace::Scope const scope("triggerBakeSlice");
+        EbTriggerWorldBaker::get().kickIfStaleEmpty(playLayer);
+        EbTriggerWorldBaker::get().tickSlice();
     }
 
     auto* playerOne = playLayer->m_player1;
     if (playerOne) {
         {
-            PerfTrace::Scope const scope("ghostParity");
-            GhostParityProbe::get().onPhysicsTick(playLayer, playerOne, controller.m_simDt,
+            EbPerfTrace::Scope const scope("ghostParity");
+            EbGhostParityProbe::get().onPhysicsTick(playLayer, playerOne, controller.m_simDt,
                                                   controller.m_attemptTick);
         }
         // Drift mid-buffer → drop Delay; never fire a plan made under bad trust.
-        if (SimTrust::get().parityDrift() && controller.m_buffer.state == BufferState::Buffered) {
-            AssistLog::debug("parity drift → clear buffer (force Pass)");
+        if (EbSimTrust::get().parityDrift() && controller.m_buffer.state == BufferState::Buffered) {
+            EbAssistLog::debug("parity drift → clear buffer (force Pass)");
             controller.clearBuffer();
             controller.syncButtonState(playLayer);
             controller.noteVerdict(AssistReason::PassParityDrift, "parity-clear-buffer");
         }
         controller.m_lastPlayerX = playerOne->getPositionX();
-        controller.m_lastMode = StageConfig::kindOf(playerOne);
+        controller.m_lastMode = EbStageConfig::kindOf(playerOne);
         if (!controller.m_startSnapshotTaken && controller.m_attemptTick <= 2) {
-            PerfTrace::Scope const scope("captureStartSnapshot");
-            controller.m_startSnapshotSlot = ShadowSimulator::get().captureStartSnapshot(playerOne);
+            EbPerfTrace::Scope const scope("captureStartSnapshot");
+            controller.m_startSnapshotSlot = EbShadowSimulator::get().captureStartSnapshot(playerOne);
             controller.m_startSnapshotTaken = controller.m_startSnapshotSlot >= 0;
         }
 
@@ -151,38 +151,38 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
         controller.m_modeKnown = true;
 
         if (modeChanged && controller.m_buffer.state != BufferState::Idle) {
-            AssistLog::debug("mode change → delivering buffered input");
-            PerfTrace::Scope const scope("fireBuffered.modeChange");
+            EbAssistLog::debug("mode change → delivering buffered input");
+            EbPerfTrace::Scope const scope("fireBuffered.modeChange");
             controller.fireBuffered(playLayer, playerOne, false);
             controller.updateOverlay();
         }
 
         {
-            PerfTrace::Scope const scope("tickLearning");
+            EbPerfTrace::Scope const scope("tickLearning");
             controller.tickLearning(playLayer, playerOne);
         }
     }
 
     {
-        PerfTrace::Scope const scope("trajectory");
-        TrajectoryVisualizer::get().onPhysicsTick(playLayer, deltaTime);
+        EbPerfTrace::Scope const scope("trajectory");
+        EbTrajectoryVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
     {
-        PerfTrace::Scope const scope("bakePath");
-        BakePathVisualizer::get().onPhysicsTick(playLayer, deltaTime);
+        EbPerfTrace::Scope const scope("bakePath");
+        EbBakePathVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
 
     controller.pruneClickTimes();
-    int const cpsLim = StageConfig::cpsLimit();
+    int const cpsLim = EbStageConfig::cpsLimit();
     if (cpsLim > 0) {
         bool const limited = controller.currentCps() >= cpsLim;
         if (controller.m_cpsLocked && !limited) {
             controller.m_cpsLocked = false;
-            AssistLog::info(
+            EbAssistLog::info(
                 fmt::format("CPS: unlocked (now {}/{})", controller.currentCps(), cpsLim));
         }
         if (limited && controller.m_buffer.state == BufferState::Buffered && playerOne) {
-            PerfTrace::Scope const scope("fireBuffered.cps");
+            EbPerfTrace::Scope const scope("fireBuffered.cps");
             controller.fireBuffered(playLayer, playerOne, false);
         }
     }
@@ -202,7 +202,7 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
 
     if (controller.m_buffer.state == BufferState::Buffered) {
         if (controller.m_buffer.holdUntilSafe) {
-            PerfTrace::Scope const scope("tickHoldUntilSafe");
+            EbPerfTrace::Scope const scope("tickHoldUntilSafe");
             controller.tickHoldUntilSafe(playLayer, player);
         }
         if (controller.m_buffer.state == BufferState::Buffered) {
@@ -211,7 +211,7 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
                 controller.m_buffer.pressTick, controller.m_buffer.planDelay,
                 controller.m_buffer.limit);
             if (due) {
-                PerfTrace::Scope const scope("fireBuffered");
+                EbPerfTrace::Scope const scope("fireBuffered");
                 controller.fireBuffered(playLayer, player);
             }
         }
@@ -221,11 +221,11 @@ void AssistInputRuntime::onPhysicsTick(AssistController& controller, PlayLayer* 
     controller.updateOverlay();
 }
 
-bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGameLayer* layer,
+bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBaseGameLayer* layer,
                                         bool down, int button, bool player1) {
     if (controller.m_injecting)
         return true;
-    if (button != AssistControllerImplementation::JUMP_BUTTON)
+    if (button != EbAssistControllerImplementation::JUMP_BUTTON)
         return true;
 
     auto* playLayer = geode::prelude::typeinfo_cast<PlayLayer*>(layer);
@@ -245,7 +245,7 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
         controller.m_pendingReleaseContinuous = false;
         controller.m_pendingReleaseUserUpTick = -1;
         controller.m_pendingReleaseMaxExtend = 0;
-        AssistLog::debug("hold-assist: cancel pending release (re-click)");
+        EbAssistLog::debug("hold-assist: cancel pending release (re-click)");
     }
 
     // Attribution: see resolveEffectTick / assist_reference.md "effectTick".
@@ -257,7 +257,7 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
 
     auto finish = [&](bool passThrough) -> bool {
         if (passThrough) {
-            SelfBakeRecorder::get().noteVanillaInput(playLayer, player, player1, down, effectTick,
+            EbSelfBakeRecorder::get().noteVanillaInput(playLayer, player, player1, down, effectTick,
                                                      controller.m_simDt);
         }
         return passThrough;
@@ -265,27 +265,27 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
 
     int const playerIndex = player1 ? 0 : 1;
     auto beginDevPress = [&]() {
-        DevCycleRecorder::get().beginPress(playerIndex, down, effectTick, controller.m_attemptTick,
+        EbDevCycleRecorder::get().beginPress(playerIndex, down, effectTick, controller.m_attemptTick,
                                            DevEventSource::Live);
     };
 
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {
-        int const minMs = StageConfig::minClickIntervalMs();
+        int const minMs = EbStageConfig::minClickIntervalMs();
         if (minMs > 0 && !controller.m_clickTimes.empty()) {
             auto const elapsed = std::chrono::steady_clock::now() - controller.m_clickTimes.back();
             if (elapsed < std::chrono::milliseconds(minMs)) {
-                AssistLog::debug(fmt::format(
+                EbAssistLog::debug(fmt::format(
                     "click debounce: no assist ({}ms < {}ms), pass through",
                     std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), minMs));
                 beginDevPress();
-                DevCycleRecorder::get().noteGatePass(AssistReason::PassDebounce, "debounce");
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassDebounce, "debounce");
                 controller.noteVerdict(AssistReason::PassDebounce, "debounce");
                 return finish(true);
             }
         }
         controller.noteUserClick();
-        ClickIntentGuard::get().notePress(playerIndex, effectTick, StageConfig::kindOf(player));
+        EbClickIntentGuard::get().notePress(playerIndex, effectTick, EbStageConfig::kindOf(player));
     }
 
     // firstDt: full sim dt between frames; CBF remainder / timeWarp when mid-step.
@@ -305,13 +305,13 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
         if (firstDt > controller.m_simDt)
             firstDt = controller.m_simDt;
     }
-    DevClockContract::Stamp const clockStamp = DevClockContract::get().makeStamp(
+    EbDevClockContract::Stamp const clockStamp = EbDevClockContract::get().makeStamp(
         controller.m_attemptTick, midStep, continuous, controller.m_simDt, firstDt,
         controller.m_lastDt, timeWarp, DevSimPathId::None);
 
     // Attribution log only under debug-logging (not every press into perf file).
-    if (down && StageConfig::debugLogging()) {
-        AssistLog::debug(fmt::format("attrib: effectTick={} attemptTick={} midStep={} "
+    if (down && EbStageConfig::debugLogging()) {
+        EbAssistLog::debug(fmt::format("attrib: effectTick={} attemptTick={} midStep={} "
                                      "continuous={} firstDt={:.6f} simDt={:.6f} p{}",
                                      effectTick, controller.m_attemptTick, midStep ? 1 : 0,
                                      continuous ? 1 : 0, firstDt, controller.m_simDt,
@@ -332,7 +332,7 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
             controller.m_buffer.releaseTick = effectTick;
             controller.m_log.noteInput(effectTick, false);
             // Early UP does not cancel Delay: stay Buffered, fire still due.
-            AssistLog::debug(fmt::format(
+            EbAssistLog::debug(fmt::format(
                 "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} p{}",
                 controller.m_buffer.fireTick, controller.m_attemptTick, player1 ? 1 : 2));
             return false;
@@ -345,30 +345,30 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
                 controller.m_pendingReleaseTick =
                     controller.m_pendingReleaseUserUpTick + controller.m_pendingReleaseMaxExtend;
             }
-            AssistLog::debug(
+            EbAssistLog::debug(
                 fmt::format("hold-assist: swallow user release @{} extend≤{} deadline={}",
                             controller.m_attemptTick, controller.m_pendingReleaseMaxExtend,
                             controller.m_pendingReleaseTick));
             return false;
         }
 
-        if (!controller.shouldAssistPlayer(player) || !StageConfig::assistRelease()) {
+        if (!controller.shouldAssistPlayer(player) || !EbStageConfig::assistRelease()) {
             beginDevPress();
             if (controller.cpsLimited()) {
-                DevCycleRecorder::get().noteGatePass(AssistReason::PassCps, "release-cps");
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassCps, "release-cps");
                 controller.noteVerdict(AssistReason::PassCps, "release-cps");
-            } else if (AssistScopeGate::blockReason(playLayer, player)) {
-                DevCycleRecorder::get().noteGatePass(AssistReason::PassScope, "release-scope");
+            } else if (EbAssistScopeGate::blockReason(playLayer, player)) {
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassScope, "release-scope");
                 controller.noteVerdict(AssistReason::PassScope, "release-scope");
             } else {
-                DevCycleRecorder::get().noteGatePass(AssistReason::PassAssistOff, "release-off");
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassAssistOff, "release-off");
                 controller.noteVerdict(AssistReason::PassAssistOff, "release-off");
             }
             return finish(true);
         }
         if (controller.m_attemptTick <= 2) {
             beginDevPress();
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassEarlyAttempt, "release-early");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassEarlyAttempt, "release-early");
             controller.noteVerdict(AssistReason::PassEarlyAttempt, "release-early");
             return finish(true);
         }
@@ -385,7 +385,7 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
         //  - after early UP (releaseSeen): classic re-click → fire A, plan B
         //  - still holding (multi-key double-click): never swallow — GD must see
         //    both clicks. Deliver A now, then fall through to plan B.
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("buffer: 2nd DOWN while armed (releaseSeen={}) → fire A then plan B",
                         controller.m_buffer.releaseSeen ? 1 : 0));
         controller.fireBuffered(playLayer, player, false);
@@ -394,23 +394,23 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
         controller.fireBuffered(playLayer, player, false);
     }
 
-    if (!controller.shouldAssistPlayer(player) || !StageConfig::assistPress()) {
+    if (!controller.shouldAssistPlayer(player) || !EbStageConfig::assistPress()) {
         beginDevPress();
         if (controller.cpsLimited()) {
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassCps, "press-cps");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassCps, "press-cps");
             controller.noteVerdict(AssistReason::PassCps, "press-cps");
-        } else if (AssistScopeGate::blockReason(playLayer, player)) {
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassScope, "press-scope");
+        } else if (EbAssistScopeGate::blockReason(playLayer, player)) {
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassScope, "press-scope");
             controller.noteVerdict(AssistReason::PassScope, "press-scope");
         } else {
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassAssistOff, "press-off");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassAssistOff, "press-off");
             controller.noteVerdict(AssistReason::PassAssistOff, "press-off");
         }
         return finish(true);
     }
     if (controller.m_attemptTick <= 2) {
         beginDevPress();
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassEarlyAttempt, "press-early");
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassEarlyAttempt, "press-early");
         controller.noteVerdict(AssistReason::PassEarlyAttempt, "press-early");
         return finish(true);
     }
@@ -422,7 +422,7 @@ bool AssistInputRuntime::onHandleButton(AssistController& controller, GJBaseGame
     return finish(pass);
 }
 
-bool AssistInputRuntime::allowPushButton(AssistController& controller, PlayerObject* player,
+bool EbAssistInputRuntime::allowPushButton(EbAssistController& controller, PlayerObject* player,
                                          PlayerButton button) {
     if (controller.m_injecting)
         return true;

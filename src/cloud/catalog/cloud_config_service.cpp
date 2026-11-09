@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "cloud_config_service.hpp"
 #include "../cloud_config_store.hpp"
 #include "../transport/cloud_config_client.hpp"
@@ -9,39 +10,38 @@
 #include <chrono>
 #include <utility>
 
-CloudConfigService& CloudConfigService::get() {
-    static CloudConfigService inst;
-    return inst;
+EbCloudConfigService& EbCloudConfigService::get() {
+    return EbClassManager::get().service<EbCloudConfigService>();
 }
 
-CloudConfigService::CloudConfigService() : m_impl(new Impl()) {}
+EbCloudConfigService::EbCloudConfigService() : m_impl(new Impl()) {}
 
-CloudConfigService::~CloudConfigService() {
+EbCloudConfigService::~EbCloudConfigService() {
     this->cancel();
     delete m_impl;
     m_impl = nullptr;
 }
 
-void CloudConfigService::cancel() {
+void EbCloudConfigService::cancel() {
     if (!m_impl)
         return;
     m_impl->client.cancel();
     m_impl->clearBusy();
 }
 
-bool CloudConfigService::isBusy() const {
+bool EbCloudConfigService::isBusy() const {
     return m_impl && m_impl->busy;
 }
 
-CloudConfigIndex::Catalog const& CloudConfigService::catalog() const {
-    static CloudConfigIndex::Catalog empty;
+EbCloudConfigIndex::Catalog const& EbCloudConfigService::catalog() const {
+    static EbCloudConfigIndex::Catalog empty;
     if (!(!m_impl)) {
         return m_impl->catalog;
     }
     return empty;
 }
 
-std::string const& CloudConfigService::catalogUrl() const {
+std::string const& EbCloudConfigService::catalogUrl() const {
     static std::string empty;
     if (!(!m_impl)) {
         return m_impl->catalogUrl;
@@ -49,33 +49,33 @@ std::string const& CloudConfigService::catalogUrl() const {
     return empty;
 }
 
-CloudConfigService::CatalogSource CloudConfigService::source() const {
+EbCloudConfigService::CatalogSource EbCloudConfigService::source() const {
     if (!(!m_impl)) {
         return m_impl->source;
     }
     return CatalogSource::None;
 }
 
-std::string CloudConfigService::readCatalogUrlSetting() {
+std::string EbCloudConfigService::readCatalogUrlSetting() {
     // Built-in catalog only (ToldByNun/earlybuffer-configs via HostPolicy).
     return {};
 }
 
-bool CloudConfigService::loadLocalCatalog(RefreshResult& out) {
+bool EbCloudConfigService::loadLocalCatalog(RefreshResult& out) {
     out = {};
     if (!m_impl) {
         out.error = "service unavailable";
         return false;
     }
 
-    auto& store = CloudConfigStore::get();
+    auto& store = EbCloudConfigStore::get();
     std::string body;
     std::string err;
 
     if (store.readIndexCache(body, err)) {
         if (m_impl->applyCatalogBody(body,
                                      m_impl->catalogUrl.empty()
-                                         ? CloudConfigHostPolicy::defaultIndexUrl()
+                                         ? EbCloudConfigHostPolicy::defaultIndexUrl()
                                          : m_impl->catalogUrl,
                                      CatalogSource::DiskCache, err) &&
             !m_impl->catalog.packs.empty()) {
@@ -90,7 +90,7 @@ bool CloudConfigService::loadLocalCatalog(RefreshResult& out) {
         err.clear();
     }
 
-    if (CloudConfigSeed::readIndex(body, err)) {
+    if (EbCloudConfigSeed::readIndex(body, err)) {
         std::string applyErr;
         if (m_impl->applyCatalogBody(body, "seed://cloud-seed/index.json", CatalogSource::Seed,
                                      applyErr)) {
@@ -108,22 +108,22 @@ bool CloudConfigService::loadLocalCatalog(RefreshResult& out) {
     return false;
 }
 
-std::string CloudConfigServiceImplementation::stripUrlQuery(std::string url) {
+std::string EbCloudConfigServiceImplementation::stripUrlQuery(std::string url) {
     auto const queryOffset = url.find_first_of("?#");
     if (queryOffset != std::string::npos)
         url.resize(queryOffset);
     return url;
 }
 
-std::string CloudConfigServiceImplementation::withCacheBust(std::string url) {
-    url = CloudConfigServiceImplementation::stripUrlQuery(std::move(url));
+std::string EbCloudConfigServiceImplementation::withCacheBust(std::string url) {
+    url = EbCloudConfigServiceImplementation::stripUrlQuery(std::move(url));
     auto const elapsedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
                                          std::chrono::system_clock::now().time_since_epoch())
                                          .count();
     return url + "?eb=" + std::to_string(elapsedMilliseconds);
 }
 
-void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
+void EbCloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
                                         RefreshCallback callback, bool forceRefresh) {
     RefreshResult early{};
     if (!m_impl) {
@@ -143,16 +143,16 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
         return;
     }
 
-    std::string const primary = CloudConfigHostPolicy::effectiveIndexUrl(customCatalogUrl);
+    std::string const primary = EbCloudConfigHostPolicy::effectiveIndexUrl(customCatalogUrl);
     // Only use built-in GH raw fallback when the caller did not pin a custom URL
     // (effective may still be default if custom was rejected).
     bool const useBuiltInFallback =
         customCatalogUrl.empty() ||
-        !CloudConfigHostPolicy::isAllowedUrl(customCatalogUrl, customCatalogUrl);
+        !EbCloudConfigHostPolicy::isAllowedUrl(customCatalogUrl, customCatalogUrl);
 
     if (forceRefresh) {
         std::string clearErr;
-        (void)CloudConfigStore::get().clearIndexCache(clearErr);
+        (void)EbCloudConfigStore::get().clearIndexCache(clearErr);
     }
 
     m_impl->busy = true;
@@ -165,7 +165,7 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
         if (!m_impl)
             return;
         // Pack resolve must use a clean catalog URL (no ?eb= cache buster).
-        std::string const cleanUrl = CloudConfigServiceImplementation::stripUrlQuery(url);
+        std::string const cleanUrl = EbCloudConfigServiceImplementation::stripUrlQuery(url);
         std::string err;
         RefreshResult result{};
         result.usedFallback = usedFallback;
@@ -181,8 +181,8 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
             return;
         }
         std::string writeErr;
-        (void)CloudConfigStore::get().ensureDirs(writeErr);
-        if (!CloudConfigStore::get().writeIndexCache(body, writeErr)) {
+        (void)EbCloudConfigStore::get().ensureDirs(writeErr);
+        if (!EbCloudConfigStore::get().writeIndexCache(body, writeErr)) {
             // Keep in-memory catalog even if disk cache write fails.
             m_impl->lastRefreshError = writeErr;
         }
@@ -199,7 +199,7 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
     auto finishFail = [this, callback](std::string const& url, std::string const& error) {
         if (!m_impl)
             return;
-        std::string const cleanUrl = CloudConfigServiceImplementation::stripUrlQuery(url);
+        std::string const cleanUrl = EbCloudConfigServiceImplementation::stripUrlQuery(url);
         m_impl->writeMeta(false, cleanUrl, error);
         m_impl->clearBusy();
         RefreshResult result{};
@@ -212,12 +212,12 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
     };
 
     auto startGet = [this, finishOk, finishFail](std::string const& url, bool isFallback) {
-        std::string const fetchUrl = CloudConfigServiceImplementation::withCacheBust(url);
+        std::string const fetchUrl = EbCloudConfigServiceImplementation::withCacheBust(url);
         m_impl->client.getText(
-            fetchUrl, CloudConfigStore::kMaxIndexBytes, CloudConfigClient::kDefaultTimeoutSec,
+            fetchUrl, EbCloudConfigStore::kMaxIndexBytes, EbCloudConfigClient::kDefaultTimeoutSec,
             m_impl->allowCustom,
             [this, finishOk, finishFail, url,
-             isFallback](CloudConfigClient::FetchResult const& fr) {
+             isFallback](EbCloudConfigClient::FetchResult const& fr) {
                 if (!m_impl)
                     return;
                 if (fr.cancelled) {
@@ -239,12 +239,12 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
 
                 if (!isFallback && m_impl->tryFallbackPending) {
                     m_impl->tryFallbackPending = false;
-                    std::string const fb = CloudConfigHostPolicy::fallbackIndexUrl();
-                    std::string const fbFetch = CloudConfigServiceImplementation::withCacheBust(fb);
+                    std::string const fb = EbCloudConfigHostPolicy::fallbackIndexUrl();
+                    std::string const fbFetch = EbCloudConfigServiceImplementation::withCacheBust(fb);
                     m_impl->client.getText(
-                        fbFetch, CloudConfigStore::kMaxIndexBytes,
-                        CloudConfigClient::kDefaultTimeoutSec, m_impl->allowCustom,
-                        [finishOk, finishFail, fb](CloudConfigClient::FetchResult const& fr2) {
+                        fbFetch, EbCloudConfigStore::kMaxIndexBytes,
+                        EbCloudConfigClient::kDefaultTimeoutSec, m_impl->allowCustom,
+                        [finishOk, finishFail, fb](EbCloudConfigClient::FetchResult const& fr2) {
                             if (fr2.cancelled) {
                                 return;
                             }
@@ -264,7 +264,7 @@ void CloudConfigService::refreshCatalog(std::string const& customCatalogUrl,
     startGet(primary, false);
 }
 
-void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
+void EbCloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
                                    PackCallback callback) {
     PackFetchResult early{};
     early.id = id;
@@ -282,14 +282,14 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
             callback(early);
         return;
     }
-    if (!CloudConfigStore::isValidPackId(id)) {
+    if (!EbCloudConfigStore::isValidPackId(id)) {
         early.error = "invalid pack id";
         if (callback)
             callback(early);
         return;
     }
 
-    auto const* entry = CloudConfigIndex::findById(m_impl->catalog, id);
+    auto const* entry = EbCloudConfigIndex::findById(m_impl->catalog, id);
     if (!entry) {
         early.error = "pack not in catalog";
         if (callback)
@@ -304,7 +304,7 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
                               static_cast<unsigned long long>(entry->size));
             return false;
         }
-        auto const hex = CloudConfigSha256::hashHex(body);
+        auto const hex = EbCloudConfigSha256::hashHex(body);
         if (hex != entry->sha256) {
             err = "sha256 mismatch";
             return false;
@@ -312,7 +312,7 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
         return true;
     };
 
-    auto& store = CloudConfigStore::get();
+    auto& store = EbCloudConfigStore::get();
 
     if (!forceNetwork && store.hasPack(id)) {
         std::string body;
@@ -331,7 +331,7 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
     if (!forceNetwork && m_impl->source == CatalogSource::Seed) {
         std::string body;
         std::string err;
-        if (CloudConfigSeed::readPack(id, body, err) && verifyBody(body, err)) {
+        if (EbCloudConfigSeed::readPack(id, body, err) && verifyBody(body, err)) {
             std::string writeErr;
             (void)store.ensureDirs(writeErr);
             (void)store.writePack(id, body, writeErr);
@@ -347,13 +347,13 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
     std::string packUrl;
     std::string resolveErr;
     std::string const baseUrl =
-        m_impl->catalogUrl.empty() ? CloudConfigHostPolicy::defaultIndexUrl() : m_impl->catalogUrl;
+        m_impl->catalogUrl.empty() ? EbCloudConfigHostPolicy::defaultIndexUrl() : m_impl->catalogUrl;
     // seed:// cannot resolve — try default host if catalog came from seed.
     std::string resolveBase = baseUrl;
     if (resolveBase.rfind("seed://", 0) == 0) {
-        resolveBase = CloudConfigHostPolicy::defaultIndexUrl();
+        resolveBase = EbCloudConfigHostPolicy::defaultIndexUrl();
     }
-    if (!CloudConfigHostPolicy::resolvePackUrl(resolveBase, entry->path, packUrl, resolveErr)) {
+    if (!EbCloudConfigHostPolicy::resolvePackUrl(resolveBase, entry->path, packUrl, resolveErr)) {
         early.error = resolveErr.empty() ? "resolve failed" : resolveErr;
         if (callback)
             callback(early);
@@ -363,16 +363,16 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
     m_impl->busy = true;
     std::string const allowCustom =
         m_impl->allowCustom.empty()
-            ? (resolveBase == CloudConfigHostPolicy::defaultIndexUrl() ||
-                       resolveBase == CloudConfigHostPolicy::fallbackIndexUrl()
+            ? (resolveBase == EbCloudConfigHostPolicy::defaultIndexUrl() ||
+                       resolveBase == EbCloudConfigHostPolicy::fallbackIndexUrl()
                    ? std::string{}
                    : resolveBase)
             : m_impl->allowCustom;
 
-    m_impl->client.getText(packUrl, CloudConfigStore::kMaxPackBytes,
-                           CloudConfigClient::kDefaultTimeoutSec, allowCustom,
+    m_impl->client.getText(packUrl, EbCloudConfigStore::kMaxPackBytes,
+                           EbCloudConfigClient::kDefaultTimeoutSec, allowCustom,
                            [this, callback = std::move(callback), id, entrySha = entry->sha256,
-                            entrySize = entry->size](CloudConfigClient::FetchResult const& fr) {
+                            entrySize = entry->size](EbCloudConfigClient::FetchResult const& fr) {
                                if (!m_impl)
                                    return;
                                PackFetchResult result{};
@@ -403,22 +403,22 @@ void CloudConfigService::fetchPack(std::string const& id, bool forceNetwork,
                                    done();
                                    return;
                                }
-                               if (CloudConfigSha256::hashHex(fr.body) != entrySha) {
+                               if (EbCloudConfigSha256::hashHex(fr.body) != entrySha) {
                                    result.error = "sha256 mismatch";
                                    done();
                                    return;
                                }
 
                                std::string writeErr;
-                               (void)CloudConfigStore::get().ensureDirs(writeErr);
-                               (void)CloudConfigStore::get().writePack(id, fr.body, writeErr);
+                               (void)EbCloudConfigStore::get().ensureDirs(writeErr);
+                               (void)EbCloudConfigStore::get().writePack(id, fr.body, writeErr);
                                result.ok = true;
                                result.body = fr.body;
                                done();
                            });
 }
 
-bool CloudConfigService::selfCheck(std::string& report) {
+bool EbCloudConfigService::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -429,9 +429,9 @@ bool CloudConfigService::selfCheck(std::string& report) {
     };
 
     std::string clientReport;
-    expect(CloudConfigClient::selfCheck(clientReport), "client");
+    expect(EbCloudConfigClient::selfCheck(clientReport), "client");
 
-    auto& svc = CloudConfigService::get();
+    auto& svc = EbCloudConfigService::get();
     svc.cancel();
     expect(!svc.isBusy(), "idle");
 
@@ -468,23 +468,23 @@ bool CloudConfigService::selfCheck(std::string& report) {
     return false;
 }
 
-auto CloudConfigService::Impl::nowStamp() -> std::string {
+auto EbCloudConfigService::Impl::nowStamp() -> std::string {
     auto const secs = std::chrono::duration_cast<std::chrono::seconds>(
                           std::chrono::system_clock::now().time_since_epoch())
                           .count();
     return fmt::format("{}", secs);
 }
 
-auto CloudConfigService::Impl::clearBusy() -> void {
+auto EbCloudConfigService::Impl::clearBusy() -> void {
     this->busy = false;
     this->tryFallbackPending = false;
 }
 
-auto CloudConfigService::Impl::applyCatalogBody(std::string const& body, std::string const& url,
+auto EbCloudConfigService::Impl::applyCatalogBody(std::string const& body, std::string const& url,
                                                 CatalogSource sourceValue,
                                                 std::string& err) -> bool {
-    CloudConfigIndex::Catalog parsed;
-    if (!CloudConfigIndex::parse(body, parsed, err)) {
+    EbCloudConfigIndex::Catalog parsed;
+    if (!EbCloudConfigIndex::parse(body, parsed, err)) {
         return false;
     }
     this->catalog = std::move(parsed);
@@ -493,13 +493,13 @@ auto CloudConfigService::Impl::applyCatalogBody(std::string const& body, std::st
     return true;
 }
 
-auto CloudConfigService::Impl::writeMeta(bool ok, std::string const& url,
+auto EbCloudConfigService::Impl::writeMeta(bool ok, std::string const& url,
                                          std::string const& error) -> void {
-    CloudConfigStore::MetaInfo meta;
+    EbCloudConfigStore::MetaInfo meta;
     meta.lastRefreshOk = ok;
     meta.lastError = error;
     meta.sourceUrl = url;
     meta.updatedAt = nowStamp();
     std::string ignore;
-    (void)CloudConfigStore::get().writeMeta(meta, ignore);
+    (void)EbCloudConfigStore::get().writeMeta(meta, ignore);
 }

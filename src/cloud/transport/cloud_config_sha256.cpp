@@ -2,8 +2,8 @@
 #include <array>
 #include <cstring>
 
-std::string CloudConfigSha256::hashHex(void const* data, size_t length) {
-    CloudConfigSha256Core core;
+std::string EbCloudConfigSha256::hashHex(void const* data, size_t length) {
+    EbCloudConfigSha256Core core;
     if (data && length > 0) {
         core.update(static_cast<uint8_t const*>(data), length);
     }
@@ -19,11 +19,11 @@ std::string CloudConfigSha256::hashHex(void const* data, size_t length) {
     return out;
 }
 
-std::string CloudConfigSha256::hashHex(std::string_view bytes) {
+std::string EbCloudConfigSha256::hashHex(std::string_view bytes) {
     return hashHex(bytes.data(), bytes.size());
 }
 
-bool CloudConfigSha256::selfCheck(std::string& report) {
+bool EbCloudConfigSha256::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -54,18 +54,18 @@ bool CloudConfigSha256::selfCheck(std::string& report) {
     return false;
 }
 
-CloudConfigSha256Core::CloudConfigSha256Core() {
+EbCloudConfigSha256Core::EbCloudConfigSha256Core() {
     this->reset();
 }
 
-auto CloudConfigSha256Core::reset() -> void {
+auto EbCloudConfigSha256Core::reset() -> void {
     this->m_hashState = {0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,
                          0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u};
     this->m_totalBytes = 0;
     this->m_bufferSize = 0;
 }
 
-auto CloudConfigSha256Core::update(uint8_t const* data, size_t length) -> void {
+auto EbCloudConfigSha256Core::update(uint8_t const* data, size_t length) -> void {
     this->m_totalBytes += length;
     while (length > 0) {
         size_t const count =
@@ -81,7 +81,7 @@ auto CloudConfigSha256Core::update(uint8_t const* data, size_t length) -> void {
     }
 }
 
-auto CloudConfigSha256Core::finalize(uint8_t output[32]) -> void {
+auto EbCloudConfigSha256Core::finalize(uint8_t output[32]) -> void {
     uint64_t const bitLen = this->m_totalBytes * 8ull;
     this->m_buffer[this->m_bufferSize++] = 0x80;
     if (this->m_bufferSize > 56) {
@@ -105,11 +105,11 @@ auto CloudConfigSha256Core::finalize(uint8_t output[32]) -> void {
     }
 }
 
-auto CloudConfigSha256Core::rotr(uint32_t x, uint32_t count) -> uint32_t {
+auto EbCloudConfigSha256Core::rotr(uint32_t x, uint32_t count) -> uint32_t {
     return (x >> count) | (x << (32u - count));
 }
 
-auto CloudConfigSha256Core::transform(uint8_t const* chunk) -> void {
+auto EbCloudConfigSha256Core::transform(uint8_t const* chunk) -> void {
     static uint32_t const roundConstants[64] = {
         0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u, 0x3956c25bu, 0x59f111f1u, 0x923f82a4u,
         0xab1c5ed5u, 0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u, 0x72be5d74u, 0x80deb1feu,

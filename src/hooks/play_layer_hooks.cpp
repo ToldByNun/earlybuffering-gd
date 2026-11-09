@@ -1,3 +1,4 @@
+#include "../app/class_manager.hpp"
 #include "play_layer_hooks.hpp"
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_controller.hpp"
@@ -11,37 +12,32 @@
 auto EbPlayLayer::init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer) -> bool {
     if (!PlayLayer::init(level, useReplay, dontCreatePlayer))
         return false;
-    AssistController::get().onLevelInit(this);
+    EbClassManager::get().onLevelInit(this);
     return true;
 }
 
 auto EbPlayLayer::resetLevel() -> void {
     // Ghosts land in section vectors via sim checkCollisions. Vanilla
     // resetLevel → sortSectionVector then AVs on those bodies — evacuate first.
-    PerfTrace::Scope const scope("resetLevelHook");
-    LagProbe::get().beginEpisode("resetLevel", fmt::format("attemptTickWas={} practice={}",
-                                                           AssistController::get().attemptTick(),
+    EbPerfTrace::Scope const scope("resetLevelHook");
+    EbLagProbe::get().beginEpisode("resetLevel", fmt::format("attemptTickWas={} practice={}",
+                                                           EbAssistController::get().attemptTick(),
                                                            this->m_isPracticeMode));
+    EbClassManager::get().beforeLevelReset(this);
     {
-        LagProbe::Scope const state("eb.bakeCancel");
-        BakeScheduler::get().cancel();
-    }
-    ShadowSimulator::get().evacuateGhosts(this);
-    AssistController::get().resetAttempt(this);
-    {
-        LagProbe::Scope const state("vanilla.PlayLayer::resetLevel");
+        EbLagProbe::Scope const state("vanilla.PlayLayer::resetLevel");
         PlayLayer::resetLevel();
     }
-    LagProbe::get().endEpisode();
+    EbLagProbe::get().endEpisode();
 }
 
 auto EbPlayLayer::onQuit() -> void {
-    AssistController::get().onLevelQuit();
+    EbClassManager::get().onLevelQuit(this);
     PlayLayer::onQuit();
 }
 
 auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> void {
-    auto& sim = ShadowSimulator::get();
+    auto& sim = EbShadowSimulator::get();
 
     // Ghosts (shadow + snapshots) must NEVER enter vanilla destroyPlayer.
     // That path can fail the real attempt — looks like "death to nothing"
@@ -59,7 +55,7 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
     // snapshot/shadow body) — treat as non-event, not a level fail.
     if (auto* killer = geode::prelude::typeinfo_cast<PlayerObject*>(object)) {
         if (sim.isOwnedGhost(killer)) {
-            AssistLog::debug("destroyPlayer: swallowed death to owned ghost body");
+            EbAssistLog::debug("destroyPlayer: swallowed death to owned ghost body");
             if (player)
                 player->m_isDead = false;
             return;
@@ -79,38 +75,38 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
     }
 
     if (object != m_anticheatSpike) {
-        auto const mode = player ? StageConfig::kindName(StageConfig::kindOf(player)) : "?";
-        LagProbe::get().beginEpisode(
+        auto const mode = player ? EbStageConfig::kindName(EbStageConfig::kindOf(player)) : "?";
+        EbLagProbe::get().beginEpisode(
             "death", fmt::format("x={:.1f} y={:.1f} tick={} mode={} killer={} practice={}",
                                  player ? player->getPositionX() : 0.f,
                                  player ? player->getPositionY() : 0.f,
-                                 AssistController::get().attemptTick(), mode ? mode : "?",
+                                 EbAssistController::get().attemptTick(), mode ? mode : "?",
                                  object ? object->m_objectID : -1, this->m_isPracticeMode));
-        AssistController::get().onRealDeath(this, player, object);
+        EbAssistController::get().onRealDeath(this, player, object);
         {
-            LagProbe::Scope const state("vanilla.destroyPlayer");
+            EbLagProbe::Scope const state("vanilla.destroyPlayer");
             PlayLayer::destroyPlayer(player, object);
         }
-        LagProbe::get().endEpisode();
+        EbLagProbe::get().endEpisode();
         return;
     }
     PlayLayer::destroyPlayer(player, object);
 }
 
 auto EbPlayLayer::playEndAnimationToPos(cocos2d::CCPoint position) -> void {
-    if (GameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating())
         return;
     PlayLayer::playEndAnimationToPos(position);
 }
 
 auto EbPlayLayer::playGravityEffect(bool flip) -> void {
-    if (GameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating())
         return;
     PlayLayer::playGravityEffect(flip);
 }
 
 auto EbPlayLayer::spawnCircle() -> void {
-    if (GameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating())
         return;
     PlayLayer::spawnCircle();
 }
@@ -118,50 +114,42 @@ auto EbPlayLayer::spawnCircle() -> void {
 auto EbPlayLayer::levelComplete() -> void {
     // Safe Mode OFF → never force test mode (progress like vanilla).
     // Safe Mode ON → enabled or assist-touched runs count as test clears.
-    bool const block = StageConfig::blocksProgressSaves(AssistController::get().assistTouchedRun());
+    bool const block = EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun());
     if (block) {
         this->m_isTestMode = true;
-        AssistLog::debug("Safe Mode ON: levelComplete → testMode (no normal progress)");
+        EbAssistLog::debug("Safe Mode ON: levelComplete → testMode (no normal progress)");
     } else {
-        AssistLog::debug("Safe Mode OFF: levelComplete allows normal progress");
+        EbAssistLog::debug("Safe Mode OFF: levelComplete allows normal progress");
     }
-    AssistController::get().onLevelComplete(this);
+    EbClassManager::get().onLevelComplete(this);
     PlayLayer::levelComplete();
 }
 
 auto EbPlayLayer::showNewBest(bool newReward, int orbs, int diamonds, bool demonKey, bool noRetry,
                               bool noTitle) -> void {
-    if (StageConfig::blocksProgressSaves(AssistController::get().assistTouchedRun())) {
-        AssistLog::debug("Safe Mode ON: showNewBest swallowed");
+    if (EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun())) {
+        EbAssistLog::debug("Safe Mode ON: showNewBest swallowed");
         return;
     }
     PlayLayer::showNewBest(newReward, orbs, diamonds, demonKey, noRetry, noTitle);
 }
 
 auto EbPlayLayer::loadFromCheckpoint(CheckpointObject* checkpoint) -> void {
-    LagProbe::get().beginEpisode(
+    EbLagProbe::get().beginEpisode(
         "loadFromCheckpoint",
-        fmt::format("attemptTickWas={}", AssistController::get().attemptTick()));
+        fmt::format("attemptTickWas={}", EbAssistController::get().attemptTick()));
+    EbClassManager::get().onCheckpointLoad(this);
     {
-        LagProbe::Scope const state("eb.bakeCancel");
-        BakeScheduler::get().cancel();
-    }
-    ShadowSimulator::get().evacuateGhosts(this);
-    {
-        LagProbe::Scope const state("eb.onCheckpointLoad");
-        AssistController::get().onCheckpointLoad();
-    }
-    {
-        LagProbe::Scope const state("vanilla.loadFromCheckpoint");
+        EbLagProbe::Scope const state("vanilla.loadFromCheckpoint");
         PlayLayer::loadFromCheckpoint(checkpoint);
     }
-    LagProbe::get().endEpisode();
+    EbLagProbe::get().endEpisode();
 }
 
 auto EbGJGameLevel::savePercentage(int percent, bool isPracticeMode, int clicks, int attempts,
                                    bool isChkValid) -> void {
     // Same contract as PlayLayer::showNewBest / levelComplete (live Safe Mode read).
-    if (StageConfig::blocksProgressSaves(AssistController::get().assistTouchedRun())) {
+    if (EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun())) {
         return;
     }
     GJGameLevel::savePercentage(percent, isPracticeMode, clicks, attempts, isChkValid);

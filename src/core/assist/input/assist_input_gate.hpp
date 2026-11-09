@@ -6,24 +6,24 @@
 
 #include "../assist_controller.hpp"
 
-class AssistInputGate {
+class EbAssistInputGate {
 public:
     static bool continuousModeKind(GameModeKind kind);
     static bool continuousModePlayer(PlayerObject* player);
     static bool releaseAssistModeKind(GameModeKind kind);
     static bool releaseAssistModePlayer(PlayerObject* player);
-    static bool shouldPlanRelease(AssistController const& controller, PlayLayer* /*playLayer*/,
+    static bool shouldPlanRelease(EbAssistController const& controller, PlayLayer* /*playLayer*/,
                                   PlayerObject* player, bool player1, int effectTick);
     static bool releaseGateSelfCheck(std::string& report);
-    static int activeLimit(AssistController const& controller, PlayerObject* player);
-    static bool shouldAssistPlayer(AssistController const& controller, PlayerObject* player);
-    static void pruneClickTimes(AssistController& controller);
-    static void noteUserClick(AssistController& controller);
-    static int currentCps(AssistController const& controller);
-    static bool cpsLimited(AssistController const& controller);
+    static int activeLimit(EbAssistController const& controller, PlayerObject* player);
+    static bool shouldAssistPlayer(EbAssistController const& controller, PlayerObject* player);
+    static void pruneClickTimes(EbAssistController& controller);
+    static void noteUserClick(EbAssistController& controller);
+    static int currentCps(EbAssistController const& controller);
+    static bool cpsLimited(EbAssistController const& controller);
 
 private:
-    AssistInputGate() = delete;
+    EbAssistInputGate() = delete;
 };
 
 #endif

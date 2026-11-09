@@ -9,18 +9,18 @@
 #include <system_error>
 #include <vector>
 
-ConfigBundle::ImportStats ConfigBundle::lastImportStats() {
-    return ConfigBundleImportState::stats();
+EbConfigBundle::ImportStats EbConfigBundle::lastImportStats() {
+    return EbConfigBundleImportState::stats();
 }
 
-ConfigBundle::ExportStats ConfigBundle::lastExportStats() {
-    return ConfigBundleExportState::stats();
+EbConfigBundle::ExportStats EbConfigBundle::lastExportStats() {
+    return EbConfigBundleExportState::stats();
 }
 
-geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
-    auto& stats = ConfigBundleExportState::stats();
+geode::Result<> EbConfigBundle::exportToString(std::string& outJson) {
+    auto& stats = EbConfigBundleExportState::stats();
     stats = {};
-    stats.version = ConfigBundle::kFormatVersion;
+    stats.version = EbConfigBundle::kFormatVersion;
     outJson.clear();
 
     auto* mod = geode::prelude::Mod::get();
@@ -32,35 +32,35 @@ geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
     int written = 0;
     int skipped = 0;
 
-    for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
+    for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
         auto const& entry = *it;
         try {
             switch (entry.kind) {
-            case ConfigBundleKeys::Kind::Bool:
+            case EbConfigBundleKeys::Kind::Bool:
                 settings[entry.key] = mod->getSettingValue<bool>(entry.key);
                 ++written;
                 break;
-            case ConfigBundleKeys::Kind::Int:
+            case EbConfigBundleKeys::Kind::Int:
                 settings[entry.key] = mod->getSettingValue<int64_t>(entry.key);
                 ++written;
                 break;
-            case ConfigBundleKeys::Kind::Float:
+            case EbConfigBundleKeys::Kind::Float:
                 settings[entry.key] = mod->getSettingValue<double>(entry.key);
                 ++written;
                 break;
-            case ConfigBundleKeys::Kind::String:
+            case EbConfigBundleKeys::Kind::String:
                 settings[entry.key] = mod->getSettingValue<std::string>(entry.key);
                 ++written;
                 break;
-            case ConfigBundleKeys::Kind::Color: {
+            case EbConfigBundleKeys::Kind::Color: {
                 auto const color = mod->getSettingValue<cocos2d::ccColor3B>(entry.key);
-                settings[entry.key] = ConfigBundleCodec::colorToHex(color);
+                settings[entry.key] = EbConfigBundleCodec::colorToHex(color);
                 ++written;
                 break;
             }
-            case ConfigBundleKeys::Kind::Keybind: {
+            case EbConfigBundleKeys::Kind::Keybind: {
                 auto const binds = mod->getSettingValue<std::vector<geode::Keybind>>(entry.key);
-                settings[entry.key] = ConfigBundleCodec::keybindsToString(binds);
+                settings[entry.key] = EbConfigBundleCodec::keybindsToString(binds);
                 ++written;
                 break;
             }
@@ -75,7 +75,7 @@ geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
     }
 
     matjson::Value root;
-    root["version"] = ConfigBundle::kFormatVersion;
+    root["version"] = EbConfigBundle::kFormatVersion;
     root["settings"] = settings;
     outJson = root.dump();
     if (outJson.empty()) {
@@ -87,9 +87,9 @@ geode::Result<> ConfigBundle::exportToString(std::string& outJson) {
     return geode::Ok();
 }
 
-geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
+geode::Result<> EbConfigBundle::exportTo(std::filesystem::path const& path) {
     std::string body;
-    auto const built = ConfigBundle::exportToString(body);
+    auto const built = EbConfigBundle::exportToString(body);
     if (built.isErr()) {
         return built;
     }
@@ -105,12 +105,12 @@ geode::Result<> ConfigBundle::exportTo(std::filesystem::path const& path) {
     return geode::Ok();
 }
 
-geode::Result<> ConfigBundle::importFromString(std::string const& json) {
-    return ConfigBundle::importFromString(json, ApplyOptions{});
+geode::Result<> EbConfigBundle::importFromString(std::string const& json) {
+    return EbConfigBundle::importFromString(json, ApplyOptions{});
 }
 
-geode::Result<> ConfigBundle::importFromString(std::string const& json, ApplyOptions const& opt) {
-    auto& stats = ConfigBundleImportState::stats();
+geode::Result<> EbConfigBundle::importFromString(std::string const& json, ApplyOptions const& opt) {
+    auto& stats = EbConfigBundleImportState::stats();
     stats = {};
 
     if (json.empty()) {
@@ -149,7 +149,7 @@ geode::Result<> ConfigBundle::importFromString(std::string const& json, ApplyOpt
     } else {
         // v1 flat: copy only known portable keys from root (ignore unknown / "version").
         version = 1;
-        for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
+        for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
             if (root.contains(it->key)) {
                 settings[it->key] = root[it->key];
             }
@@ -161,17 +161,17 @@ geode::Result<> ConfigBundle::importFromString(std::string const& json, ApplyOpt
     int skipped = 0;
 
     {
-        ConfigBundleApplyGuard guard;
+        EbConfigBundleApplyGuard guard;
 
-        for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
+        for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
             if (!settings.contains(it->key)) {
                 continue; // merge: leave live value
             }
-            if (ConfigBundleApplyHelpers::shouldSkip(*it, opt)) {
+            if (EbConfigBundleApplyHelpers::shouldSkip(*it, opt)) {
                 ++skipped;
                 continue;
             }
-            ConfigBundleApplyHelpers::applyOneSetting(mod, *it, settings[it->key], applied,
+            EbConfigBundleApplyHelpers::applyOneSetting(mod, *it, settings[it->key], applied,
                                                       skipped);
         }
         // Legacy preset / stage-index keys in old exports are ignored (removed).
@@ -179,25 +179,25 @@ geode::Result<> ConfigBundle::importFromString(std::string const& json, ApplyOpt
         guard.release();
     }
 
-    StageConfig::refreshCache();
+    EbStageConfig::refreshCache();
     // Applying-guard skips setting watchers — refresh Dev Lab cache explicitly.
-    DevConfig::refreshCache();
+    EbDevConfig::refreshCache();
 
     stats.applied = applied;
     stats.skipped = skipped;
     return geode::Ok();
 }
 
-geode::Result<> ConfigBundle::importFrom(std::filesystem::path const& path) {
+geode::Result<> EbConfigBundle::importFrom(std::filesystem::path const& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         return geode::Err("import open failed");
     }
     std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return ConfigBundle::importFromString(body, ApplyOptions{});
+    return EbConfigBundle::importFromString(body, ApplyOptions{});
 }
 
-bool ConfigBundle::selfCheck(std::string& report) {
+bool EbConfigBundle::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -207,26 +207,26 @@ bool ConfigBundle::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(ConfigBundleKeys::count() == 126, "portable-keys");
-    expect(ConfigBundleApplyHelpers::isDevKey("dev-overlay"), "dev-key-yes");
-    expect(!ConfigBundleApplyHelpers::isDevKey("look-ahead-cap"), "dev-key-no");
-    expect(!ConfigBundleApplyHelpers::isDevKey(nullptr), "dev-key-null");
+    expect(EbConfigBundle::kFormatVersion == 2, "format-v2");
+    expect(EbConfigBundleKeys::count() == 126, "portable-keys");
+    expect(EbConfigBundleApplyHelpers::isDevKey("dev-overlay"), "dev-key-yes");
+    expect(!EbConfigBundleApplyHelpers::isDevKey("look-ahead-cap"), "dev-key-no");
+    expect(!EbConfigBundleApplyHelpers::isDevKey(nullptr), "dev-key-null");
 
     {
-        ConfigBundleKeys::Entry kb{"hotkey-debug", ConfigBundleKeys::Kind::Keybind};
-        ConfigBundleKeys::Entry dev{"dev-overlay", ConfigBundleKeys::Kind::Bool};
-        ConfigBundleKeys::Entry ticks{"ticks-all", ConfigBundleKeys::Kind::Int};
+        EbConfigBundleKeys::Entry kb{"hotkey-debug", EbConfigBundleKeys::Kind::Keybind};
+        EbConfigBundleKeys::Entry dev{"dev-overlay", EbConfigBundleKeys::Kind::Bool};
+        EbConfigBundleKeys::Entry ticks{"ticks-all", EbConfigBundleKeys::Kind::Int};
         ApplyOptions skipKb{true, false};
         ApplyOptions skipDev{false, true};
         ApplyOptions skipBoth{true, true};
-        expect(ConfigBundleApplyHelpers::shouldSkip(kb, skipKb), "skip-kb");
-        expect(!ConfigBundleApplyHelpers::shouldSkip(ticks, skipKb), "skip-kb-keep-ticks");
-        expect(ConfigBundleApplyHelpers::shouldSkip(dev, skipDev), "skip-dev");
-        expect(!ConfigBundleApplyHelpers::shouldSkip(ticks, skipDev), "skip-dev-keep-ticks");
-        expect(ConfigBundleApplyHelpers::shouldSkip(kb, skipBoth), "skip-both-kb");
-        expect(ConfigBundleApplyHelpers::shouldSkip(dev, skipBoth), "skip-both-dev");
-        expect(!ConfigBundleApplyHelpers::shouldSkip(ticks, skipBoth), "skip-both-keep");
+        expect(EbConfigBundleApplyHelpers::shouldSkip(kb, skipKb), "skip-kb");
+        expect(!EbConfigBundleApplyHelpers::shouldSkip(ticks, skipKb), "skip-kb-keep-ticks");
+        expect(EbConfigBundleApplyHelpers::shouldSkip(dev, skipDev), "skip-dev");
+        expect(!EbConfigBundleApplyHelpers::shouldSkip(ticks, skipDev), "skip-dev-keep-ticks");
+        expect(EbConfigBundleApplyHelpers::shouldSkip(kb, skipBoth), "skip-both-kb");
+        expect(EbConfigBundleApplyHelpers::shouldSkip(dev, skipBoth), "skip-both-dev");
+        expect(!EbConfigBundleApplyHelpers::shouldSkip(ticks, skipBoth), "skip-both-keep");
     }
 
     auto* mod = geode::prelude::Mod::get();
@@ -263,7 +263,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
     }
 
     auto restore = [&]() {
-        ConfigBundleApplyGuard guard;
+        EbConfigBundleApplyGuard guard;
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", snapCap);
             mod->setSettingValue<int64_t>("ticks-all", snapTicks);
@@ -271,49 +271,49 @@ bool ConfigBundle::selfCheck(std::string& report) {
         } catch (...) {
         }
         guard.release();
-        StageConfig::refreshCache();
-        DevConfig::refreshCache();
+        EbStageConfig::refreshCache();
+        EbDevConfig::refreshCache();
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
     };
 
     // --- Export → mutate → import round-trip (file) ---
     {
-        StageConfig::beginApplying();
+        EbStageConfig::beginApplying();
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", 42);
             mod->setSettingValue<int64_t>("ticks-all", 7);
         } catch (...) {
-            StageConfig::endApplying();
+            EbStageConfig::endApplying();
             restore();
             expect(false, "seed-roundtrip");
             report = std::string("ConfigBundle selfCheck fails: ") + report;
             return false;
         }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
+        EbStageConfig::endApplying();
+        EbStageConfig::refreshCache();
 
-        auto const exp = ConfigBundle::exportTo(tmp);
+        auto const exp = EbConfigBundle::exportTo(tmp);
         expect(exp.isOk(), "export-ok");
         if (exp.isOk()) {
-            auto const es = ConfigBundle::lastExportStats();
+            auto const es = EbConfigBundle::lastExportStats();
             expect(es.version == 2, "export-stats-v2");
             expect(es.written >= 110, "export-stats-written");
         }
 
-        StageConfig::beginApplying();
+        EbStageConfig::beginApplying();
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", 0);
             mod->setSettingValue<int64_t>("ticks-all", 1);
         } catch (...) {
         }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
+        EbStageConfig::endApplying();
+        EbStageConfig::refreshCache();
 
-        auto const importedConfig = ConfigBundle::importFrom(tmp);
+        auto const importedConfig = EbConfigBundle::importFrom(tmp);
         expect(importedConfig.isOk(), "import-roundtrip-ok");
         if (importedConfig.isOk()) {
-            auto const is = ConfigBundle::lastImportStats();
+            auto const is = EbConfigBundle::lastImportStats();
             expect(is.version == 2, "import-stats-v2");
             expect(is.applied > 0, "import-stats-applied");
             try {
@@ -327,30 +327,30 @@ bool ConfigBundle::selfCheck(std::string& report) {
 
     // --- String export → import round-trip ---
     {
-        StageConfig::beginApplying();
+        EbStageConfig::beginApplying();
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", 33);
             mod->setSettingValue<int64_t>("ticks-all", 5);
         } catch (...) {
         }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
+        EbStageConfig::endApplying();
+        EbStageConfig::refreshCache();
 
         std::string dumped;
-        auto const exp = ConfigBundle::exportToString(dumped);
+        auto const exp = EbConfigBundle::exportToString(dumped);
         expect(exp.isOk(), "export-string-ok");
         expect(!dumped.empty(), "export-string-body");
 
-        StageConfig::beginApplying();
+        EbStageConfig::beginApplying();
         try {
             mod->setSettingValue<int64_t>("look-ahead-cap", 0);
             mod->setSettingValue<int64_t>("ticks-all", 1);
         } catch (...) {
         }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
+        EbStageConfig::endApplying();
+        EbStageConfig::refreshCache();
 
-        auto const importedConfig = ConfigBundle::importFromString(dumped);
+        auto const importedConfig = EbConfigBundle::importFromString(dumped);
         expect(importedConfig.isOk(), "import-string-ok");
         if (importedConfig.isOk()) {
             try {
@@ -364,15 +364,15 @@ bool ConfigBundle::selfCheck(std::string& report) {
 
     // --- ApplyOptions: skipDevKeys leaves live Dev Lab bool unchanged ---
     {
-        StageConfig::beginApplying();
+        EbStageConfig::beginApplying();
         try {
             mod->setSettingValue<bool>("dev-overlay", false);
             mod->setSettingValue<int64_t>("look-ahead-cap", 10);
         } catch (...) {
         }
-        StageConfig::endApplying();
-        StageConfig::refreshCache();
-        DevConfig::refreshCache();
+        EbStageConfig::endApplying();
+        EbStageConfig::refreshCache();
+        EbDevConfig::refreshCache();
 
         std::string const filtered = R"({
   "version": 2,
@@ -383,10 +383,10 @@ bool ConfigBundle::selfCheck(std::string& report) {
 })";
         ApplyOptions opt{};
         opt.skipDevKeys = true;
-        auto const importedConfig = ConfigBundle::importFromString(filtered, opt);
+        auto const importedConfig = EbConfigBundle::importFromString(filtered, opt);
         expect(importedConfig.isOk(), "filter-dev-import");
         if (importedConfig.isOk()) {
-            auto const is = ConfigBundle::lastImportStats();
+            auto const is = EbConfigBundle::lastImportStats();
             expect(is.skipped >= 1, "filter-dev-skipped");
             try {
                 expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 91, "filter-dev-cap");
@@ -411,7 +411,7 @@ bool ConfigBundle::selfCheck(std::string& report) {
 })";
             output.close();
 
-            auto const importedConfig = ConfigBundle::importFrom(tmp);
+            auto const importedConfig = EbConfigBundle::importFrom(tmp);
             expect(importedConfig.isOk(), "guard-import");
             if (importedConfig.isOk()) {
                 try {
@@ -430,10 +430,10 @@ bool ConfigBundle::selfCheck(std::string& report) {
         if (output) {
             output << R"({"version":1,"look-ahead-cap":55,"ticks-all":3,"preset":"Normal"})";
             output.close();
-            auto const importedConfig = ConfigBundle::importFrom(tmp);
+            auto const importedConfig = EbConfigBundle::importFrom(tmp);
             expect(importedConfig.isOk(), "v1-import");
             if (importedConfig.isOk()) {
-                auto const is = ConfigBundle::lastImportStats();
+                auto const is = EbConfigBundle::lastImportStats();
                 expect(is.version == 1, "v1-stats-version");
                 try {
                     expect(mod->getSettingValue<int64_t>("look-ahead-cap") == 55, "v1-cap");
@@ -455,42 +455,42 @@ bool ConfigBundle::selfCheck(std::string& report) {
     return false;
 }
 
-auto ConfigBundleImportState::stats() -> ConfigBundle::ImportStats& {
-    static ConfigBundle::ImportStats s;
+auto EbConfigBundleImportState::stats() -> EbConfigBundle::ImportStats& {
+    static EbConfigBundle::ImportStats s;
     return s;
 }
 
-auto ConfigBundleExportState::stats() -> ConfigBundle::ExportStats& {
-    static ConfigBundle::ExportStats s;
+auto EbConfigBundleExportState::stats() -> EbConfigBundle::ExportStats& {
+    static EbConfigBundle::ExportStats s;
     return s;
 }
 
-ConfigBundleApplyGuard::ConfigBundleApplyGuard() {
-    StageConfig::beginApplying();
+EbConfigBundleApplyGuard::EbConfigBundleApplyGuard() {
+    EbStageConfig::beginApplying();
     this->m_active = true;
 }
 
-ConfigBundleApplyGuard::~ConfigBundleApplyGuard() {
+EbConfigBundleApplyGuard::~EbConfigBundleApplyGuard() {
     this->release();
 }
 
-auto ConfigBundleApplyGuard::release() -> void {
+auto EbConfigBundleApplyGuard::release() -> void {
     if (this->m_active) {
-        StageConfig::endApplying();
+        EbStageConfig::endApplying();
         this->m_active = false;
     }
 }
 
-auto ConfigBundleApplyHelpers::isDevKey(char const* key) -> bool {
+auto EbConfigBundleApplyHelpers::isDevKey(char const* key) -> bool {
     if (!(!key)) {
         return std::strncmp(key, "dev-", 4) == 0;
     }
     return false;
 }
 
-auto ConfigBundleApplyHelpers::shouldSkip(ConfigBundleKeys::Entry const& entry,
-                                          ConfigBundle::ApplyOptions const& opt) -> bool {
-    if (opt.skipKeybinds && entry.kind == ConfigBundleKeys::Kind::Keybind) {
+auto EbConfigBundleApplyHelpers::shouldSkip(EbConfigBundleKeys::Entry const& entry,
+                                          EbConfigBundle::ApplyOptions const& opt) -> bool {
+    if (opt.skipKeybinds && entry.kind == EbConfigBundleKeys::Kind::Keybind) {
         return true;
     }
     if (opt.skipDevKeys && isDevKey(entry.key)) {
@@ -499,13 +499,13 @@ auto ConfigBundleApplyHelpers::shouldSkip(ConfigBundleKeys::Entry const& entry,
     return false;
 }
 
-auto ConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
-                                               ConfigBundleKeys::Entry const& entry,
+auto EbConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
+                                               EbConfigBundleKeys::Entry const& entry,
                                                matjson::Value const& value, int& applied,
                                                int& skipped) -> bool {
     try {
         switch (entry.kind) {
-        case ConfigBundleKeys::Kind::Bool: {
+        case EbConfigBundleKeys::Kind::Bool: {
             auto const parsed = value.asBool();
             if (parsed.isErr()) {
                 ++skipped;
@@ -515,7 +515,7 @@ auto ConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
             ++applied;
             return true;
         }
-        case ConfigBundleKeys::Kind::Int: {
+        case EbConfigBundleKeys::Kind::Int: {
             auto const parsed = value.asInt();
             if (parsed.isErr()) {
                 ++skipped;
@@ -525,7 +525,7 @@ auto ConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
             ++applied;
             return true;
         }
-        case ConfigBundleKeys::Kind::Float: {
+        case EbConfigBundleKeys::Kind::Float: {
             auto const parsed = value.asDouble();
             if (parsed.isErr()) {
                 ++skipped;
@@ -535,7 +535,7 @@ auto ConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
             ++applied;
             return true;
         }
-        case ConfigBundleKeys::Kind::String: {
+        case EbConfigBundleKeys::Kind::String: {
             auto const parsed = value.asString();
             if (parsed.isErr()) {
                 ++skipped;
@@ -548,14 +548,14 @@ auto ConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
             ++applied;
             return true;
         }
-        case ConfigBundleKeys::Kind::Color: {
+        case EbConfigBundleKeys::Kind::Color: {
             auto const parsed = value.asString();
             if (parsed.isErr()) {
                 ++skipped;
                 return false;
             }
             cocos2d::ccColor3B color{};
-            if (!ConfigBundleCodec::hexToColor(std::string(parsed.unwrap()), color)) {
+            if (!EbConfigBundleCodec::hexToColor(std::string(parsed.unwrap()), color)) {
                 ++skipped;
                 return false;
             }
@@ -563,9 +563,9 @@ auto ConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
             ++applied;
             return true;
         }
-        case ConfigBundleKeys::Kind::Keybind: {
+        case EbConfigBundleKeys::Kind::Keybind: {
             std::vector<geode::Keybind> binds;
-            if (!ConfigBundleCodec::jsonToKeybinds(value, binds)) {
+            if (!EbConfigBundleCodec::jsonToKeybinds(value, binds)) {
                 ++skipped;
                 return false;
             }

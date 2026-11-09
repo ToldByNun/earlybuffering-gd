@@ -29,13 +29,13 @@
 #include <chrono>
 #include <cstdlib>
 
-bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* playLayer,
+bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* playLayer,
                                    PlayerObject* player, bool player1, int effectTick,
-                                   float firstDt, DevClockContract::Stamp const& clockIn) {
-    DevClockContract::Stamp clock = clockIn;
+                                   float firstDt, EbDevClockContract::Stamp const& clockIn) {
+    EbDevClockContract::Stamp clock = clockIn;
     int const limit = controller.activeLimit(player);
     if (limit <= 0) {
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
         controller.noteVerdict(AssistReason::PassLimitZero, "press-limit0");
         return true;
     }
@@ -43,8 +43,8 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     // Opportunity (Commit 2): every press that reaches assist decisioning.
     {
         float const xOpp = player->getPositionX();
-        bool const trusted = SimTrust::get().okAt(xOpp);
-        AssistRealMetrics::get().noteOpportunity(trusted);
+        bool const trusted = EbSimTrust::get().okAt(xOpp);
+        EbAssistRealMetrics::get().noteOpportunity(trusted);
     }
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
@@ -52,11 +52,11 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     {
         float const xGate = player->getPositionX();
         AssistReason parityReason = AssistReason::None;
-        if (SimTrust::get().forcePassReason(xGate, parityReason)) {
-            AssistLog::debug(
-                fmt::format("SIMTRUST pass press ({})", AssistVerdict::name(parityReason)));
+        if (EbSimTrust::get().forcePassReason(xGate, parityReason)) {
+            EbAssistLog::debug(
+                fmt::format("SIMTRUST pass press ({})", EbAssistVerdict::name(parityReason)));
             controller.m_untrustPassHint = true;
-            SimPlan dummy;
+            EbSimPlan dummy;
             dummy.action = PlanAction::Pass;
             dummy.reason = parityReason;
             dummy.firstDeathTick = -1;
@@ -64,7 +64,7 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
             char const* where = parityReason == AssistReason::PassParityDrift
                                     ? "press-parity-drift"
                                     : "press-spot-untrusted";
-            DevCycleRecorder::get().noteGatePass(parityReason, where);
+            EbDevCycleRecorder::get().noteGatePass(parityReason, where);
             controller.noteVerdict(parityReason, where);
             controller.recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
             controller.updateOverlay();
@@ -73,18 +73,18 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     }
 
     // Hybrid: one press wall/tick envelope for bake verify + Live fallthrough.
-    PressSimBudget pressBudget;
-    pressBudget.tickLeft = StageConfig::tickBudgetPerPress();
+    EbPressSimBudget pressBudget;
+    pressBudget.tickLeft = EbStageConfig::tickBudgetPerPress();
     {
-        int const fullUs = StageConfig::simBudgetUs();
+        int const fullUs = EbStageConfig::simBudgetUs();
         pressBudget.usUnlimited = (fullUs <= 0);
         pressBudget.usLeft = pressBudget.usUnlimited ? 0 : fullUs;
     }
-    bool const shareHybrid = StageConfig::assistMode() == AssistMode::Hybrid;
+    bool const shareHybrid = EbStageConfig::assistMode() == AssistMode::Hybrid;
 
     bool bakeHandled = false;
     bool hybridVerifyAttempted = false;
-    HybridPressReuse hybridReuse{};
+    EbHybridPressReuse hybridReuse{};
     bool const bakeRet = controller.tryBakeAssist(
         playLayer, player, player1, true, effectTick, firstDt, bakeHandled,
         shareHybrid ? &pressBudget : nullptr, shareHybrid ? &hybridVerifyAttempted : nullptr,
@@ -93,21 +93,21 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
         return bakeRet;
 
     // Times Live fallthrough (verify already paid / skipped). Standalone LagProbe.
-    LagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
+    EbLagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
                            fmt::format("vfy={} remTick={} remUs={}", hybridVerifyAttempted ? 1 : 0,
                                        pressBudget.tickLeft,
                                        pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
 
-    auto const kind = StageConfig::kindOf(player);
+    auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
-    auto& profile = LevelProfile::get();
+    auto& profile = EbLevelProfile::get();
     int const slot = player1 ? 0 : 1;
-    bool const nearOrb = AssistControllerImplementation::nearOrbOrPadHint(playLayer, player, limit,
+    bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(playLayer, player, limit,
                                                                           controller.m_simDt);
     // After Hybrid bake verify rejected the window, do not treat near-bake as
     // spam override — that forced full Live on every ~5 CPS click (main-thread hitch).
     // Reuse findNear result from tryBakeAssist when present (no second lookup).
-    bool nearBake = AssistControllerImplementation::nearBakeWindowHint(
+    bool nearBake = EbAssistControllerImplementation::nearBakeWindowHint(
         player, player1, true, effectTick, controller.m_simDt,
         shareHybrid ? &hybridReuse : nullptr);
     if (hybridVerifyAttempted)
@@ -115,22 +115,22 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
 
     // Live/Hybrid-live: sim mismatch → hard Pass, unless orb/pad ahead
     // (allow Delay / Soft Hold — solitary early orb miss must still assist).
-    if (DivergenceTracker::get().simUntrusted()) {
+    if (EbDivergenceTracker::get().simUntrusted()) {
         if (!nearOrb) {
-            AssistLog::debug("UNTRUST pass (press)");
+            EbAssistLog::debug("UNTRUST pass (press)");
             controller.m_untrustPassHint = true;
-            SimPlan dummy;
+            EbSimPlan dummy;
             dummy.action = PlanAction::Pass;
             dummy.reason = AssistReason::PassUntrust;
             dummy.firstDeathTick = -1;
             dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassUntrust, "press-untrust");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassUntrust, "press-untrust");
             controller.noteVerdict(AssistReason::PassUntrust, "press-untrust");
             controller.recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
             controller.updateOverlay();
             return true;
         }
-        AssistLog::debug("UNTRUST soft (press orb foresight — allow plan)");
+        EbAssistLog::debug("UNTRUST soft (press orb foresight — allow plan)");
         controller.m_untrustPassHint = false;
     } else {
         controller.m_untrustPassHint = false;
@@ -140,57 +140,57 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     // Named Pass for TW-empty-when-expected (effects baked, 0 tracks).
     bool mustDelaySearch = false;
     {
-        PerfectAssistPolicy::TrustInput trustIn;
-        trustIn.parityDrift = SimTrust::get().parityDrift();
-        trustIn.spotUntrusted = SpotTrustMap::get().isUntrusted(x);
-        trustIn.divergenceUntrusted = DivergenceTracker::get().simUntrusted() && !nearOrb;
-        if (StageConfig::triggerBake()) {
-            auto& tw = TriggerWorldStore::get();
-            auto& baker = TriggerWorldBaker::get();
+        EbPerfectAssistPolicy::TrustInput trustIn;
+        trustIn.parityDrift = EbSimTrust::get().parityDrift();
+        trustIn.spotUntrusted = EbSpotTrustMap::get().isUntrusted(x);
+        trustIn.divergenceUntrusted = EbDivergenceTracker::get().simUntrusted() && !nearOrb;
+        if (EbStageConfig::triggerBake()) {
+            auto& tw = EbTriggerWorldStore::get();
+            auto& baker = EbTriggerWorldBaker::get();
             trustIn.twEmptyWhenExpected =
                 tw.loaded() && !tw.hasTracks() && !baker.running() &&
                 !baker.lastCollectIncomplete() &&
                 (baker.lastBakedEffects() > 0 || baker.lastBakedStartTimed() > 0);
         }
         AssistReason namedPass = AssistReason::None;
-        if (PerfectAssistPolicy::forcePassReason(trustIn, namedPass) &&
+        if (EbPerfectAssistPolicy::forcePassReason(trustIn, namedPass) &&
             namedPass == AssistReason::PassTwEmpty) {
-            AssistLog::debug("PERFECT pass-tw-empty (expected movers, 0 tracks)");
+            EbAssistLog::debug("PERFECT pass-tw-empty (expected movers, 0 tracks)");
             controller.m_untrustPassHint = true;
-            SimPlan dummy;
+            EbSimPlan dummy;
             dummy.action = PlanAction::Pass;
             dummy.reason = AssistReason::PassTwEmpty;
             dummy.firstDeathTick = -1;
             dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            DevCycleRecorder::get().noteGatePass(AssistReason::PassTwEmpty, "press-tw-empty");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassTwEmpty, "press-tw-empty");
             controller.noteVerdict(AssistReason::PassTwEmpty, "press-tw-empty");
             controller.recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
             controller.updateOverlay();
             return true;
         }
-        PerfectAssistPolicy::OpportunityInput oppIn;
+        EbPerfectAssistPolicy::OpportunityInput oppIn;
         oppIn.foresightOrbPad = nearOrb;
         oppIn.bakePreferBand = nearBake;
         oppIn.orbWindowFound = nearOrb;
-        auto const decision = PerfectAssistPolicy::classify(trustIn, oppIn);
-        mustDelaySearch = (decision == PerfectAssistPolicy::Decision::MustDelaySearch);
+        auto const decision = EbPerfectAssistPolicy::classify(trustIn, oppIn);
+        mustDelaySearch = (decision == EbPerfectAssistPolicy::Decision::MustDelaySearch);
         if (mustDelaySearch) {
-            AssistLog::debug("PERFECT must-delay-search (trust+opportunity)");
+            EbAssistLog::debug("PERFECT must-delay-search (trust+opportunity)");
         }
     }
 
     // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
     // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
     if (!mustDelaySearch &&
-        ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
-        AssistLog::debug(fmt::format("intent: spam Pass (mode={}, tick={})",
-                                     StageConfig::kindName(kind), effectTick));
-        SimPlan dummy;
+        EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
+        EbAssistLog::debug(fmt::format("intent: spam Pass (mode={}, tick={})",
+                                     EbStageConfig::kindName(kind), effectTick));
+        EbSimPlan dummy;
         dummy.action = PlanAction::Pass;
         dummy.reason = AssistReason::PassSpam;
         dummy.firstDeathTick = -1;
         dummy.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-        DevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "press-spam");
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "press-spam");
         controller.noteVerdict(AssistReason::PassSpam, "press-spam");
         controller.recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
         controller.updateOverlay();
@@ -199,19 +199,19 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
 
     // Low trust at this spot → pass through (unless explore roll or orb ahead).
     // Commit 11: trusted opportunity MustDelaySearch overrides learned low-trust Pass.
-    if (!mustDelaySearch && StageConfig::autoTune() && profile.loaded() && !nearOrb) {
+    if (!mustDelaySearch && EbStageConfig::autoTune() && profile.loaded() && !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
-            if (spot->n >= LevelProfile::TRUST_PASS_MIN_N &&
-                spot->trust < LevelProfile::TRUST_PASS_THRESHOLD &&
-                !AssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
-                AssistLog::debug(fmt::format("learned: low trust @{} (trust {:.2f}, n={})",
-                                             LevelProfile::spotBucket(x), spot->trust, spot->n));
-                AssistLearning::decaySpot(kind, x);
-                SimPlan dummy;
+            if (spot->n >= EbLevelProfile::TRUST_PASS_MIN_N &&
+                spot->trust < EbLevelProfile::TRUST_PASS_THRESHOLD &&
+                !EbAssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
+                EbAssistLog::debug(fmt::format("learned: low trust @{} (trust {:.2f}, n={})",
+                                             EbLevelProfile::spotBucket(x), spot->trust, spot->n));
+                EbAssistLearning::decaySpot(kind, x);
+                EbSimPlan dummy;
                 dummy.action = PlanAction::Pass;
                 dummy.reason = AssistReason::PassLowTrust;
                 dummy.firstDeathTick = -1;
-                DevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust, "press-low-trust");
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust, "press-low-trust");
                 controller.noteVerdict(AssistReason::PassLowTrust, "press-low-trust");
                 controller.recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
                 controller.updateOverlay();
@@ -220,7 +220,7 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
         }
     }
 
-    PlanOptions opts;
+    EbPlanOptions opts;
     // Hybrid fallthrough: remainder after bake verify (not a second full envelope).
     // Exhausted remainder (usLeft==0) must NOT map to PlanOptions unlimited.
     if (shareHybrid) {
@@ -231,45 +231,45 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
             opts.budgetUs = std::max(1, pressBudget.usLeft);
         }
     } else {
-        opts.budgetUs = StageConfig::simBudgetUs();
-        opts.tickBudget = StageConfig::tickBudgetPerPress();
+        opts.budgetUs = EbStageConfig::simBudgetUs();
+        opts.tickBudget = EbStageConfig::tickBudgetPerPress();
     }
     // Verify already paid this press: hard-cap Live so verify-fail + full plan
     // cannot hitch the game (~0.75 feel / stutter at moderate CPS).
     if (shareHybrid && hybridVerifyAttempted) {
-        int const halfTick = std::max(400, StageConfig::tickBudgetPerPress() / 2);
+        int const halfTick = std::max(400, EbStageConfig::tickBudgetPerPress() / 2);
         opts.tickBudget = std::min(opts.tickBudget, halfTick);
         if (!pressBudget.usUnlimited) {
-            int const fullUs = StageConfig::simBudgetUs();
+            int const fullUs = EbStageConfig::simBudgetUs();
             int const halfUs = std::max(200, fullUs / 2);
             opts.budgetUs = std::min(opts.budgetUs, halfUs);
             opts.budgetUs = std::max(1, opts.budgetUs);
         }
     }
-    opts.capMul = StageConfig::autoTune() ? profile.capMul(kind) : 1.f;
+    opts.capMul = EbStageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     // Soft warn: shorten look-ahead slightly (no hard Pass).
-    if (DivergenceTracker::get().shouldWarn()) {
+    if (EbDivergenceTracker::get().shouldWarn()) {
         opts.capMul *= 0.85f;
     }
     opts.maxBranches = 4;
-    opts.smartDepth = StageConfig::smartDepth();
-    opts.smartCombos = StageConfig::smartCombos();
-    opts.smartHorizon = StageConfig::smartHorizon();
+    opts.smartDepth = EbStageConfig::smartDepth();
+    opts.smartCombos = EbStageConfig::smartCombos();
+    opts.smartHorizon = EbStageConfig::smartHorizon();
     opts.attemptStartTick = effectTick;
-    opts.legacyPick = StageConfig::assistPickLegacy();
-    opts.assistEngine = StageConfig::effectiveAssistEngine();
+    opts.legacyPick = EbStageConfig::assistPickLegacy();
+    opts.assistEngine = EbStageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
-    bool const spamDense = ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
-    AssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
+    bool const spamDense = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
+    EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                           spamDense);
     // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
     // Otherwise reuse findNear window fields from tryBakeAssist.
     if (!hybridVerifyAttempted) {
-        AssistControllerImplementation::fillBakePreferBand(
+        EbAssistControllerImplementation::fillBakePreferBand(
             opts, player, player1, true, effectTick, limit, controller.m_attemptTick,
             controller.m_simDt, shareHybrid ? &hybridReuse : nullptr);
     }
@@ -285,25 +285,25 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
         useSequence = false;
     }
-    auto plan = useSequence ? ShadowSimulator::get().planSequence(playLayer, player, true, limit,
+    auto plan = useSequence ? EbShadowSimulator::get().planSequence(playLayer, player, true, limit,
                                                                   controller.m_simDt, firstDt, opts)
-                            : ShadowSimulator::get().plan(playLayer, player, true, limit,
+                            : EbShadowSimulator::get().plan(playLayer, player, true, limit,
                                                           controller.m_simDt, firstDt, opts);
     int const planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
-    AssistPerfStats::get().notePlan(planUs, plan.budgetHit);
+    EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
 
     controller.logPlan(plan, "press");
     controller.m_outcomePlayer1 = player1;
     controller.beginOutcome(plan, effectTick);
     clock.liveSimPathId = useSequence ? DevSimPathId::PlanSequence : DevSimPathId::Plan;
     clock.effectTick = effectTick;
-    DevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);
+    EbDevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);
 
     // Belt: never arm Delay when sim marked unknown / toggle-target uncertainty.
     if (plan.action == PlanAction::Delay && (plan.unknown || plan.toggleUnknown)) {
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("press: refuse Delay (toggle/unknown) → Pass id={}", plan.planId));
         plan.action = PlanAction::Pass;
         plan.delay = 0;
@@ -320,11 +320,11 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
         }
-        DevCycleRecorder::get().notePassThrough(passReason, "press-plan");
+        EbDevCycleRecorder::get().notePassThrough(passReason, "press-plan");
         controller.noteVerdict(passReason, "press-plan");
         controller.recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
         // Vanilla/Pass click timing — feed earliness histogram (never inject saves).
-        if (StageConfig::autoTune() && profile.loaded()) {
+        if (EbStageConfig::autoTune() && profile.loaded()) {
             profile.noteEarliness(kind, x, 0, "pass");
         }
         return true;
@@ -334,24 +334,24 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     int const plannedDelay = plan.delay;
     bool learningFloored = false;
     bool learningNudged = false;
-    if (StageConfig::autoTune() && profile.loaded()) {
+    if (EbStageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
             bool const bakePrefer =
                 opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin;
             // Density for explore gate even when orb forced us past spam Pass.
             bool const spamDense =
-                ClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
-            if (AssistLearning::allowHistogramExplore(kind, spot->histN, spamDense, bakePrefer,
+                EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
+            if (EbAssistLearning::allowHistogramExplore(kind, spot->histN, spamDense, bakePrefer,
                                                       spot->diedAfterAssist)) {
                 // Dev recording + disable-random: keep live/eval deterministic.
-                bool const freezeRand = DevConfig::recordEnable() && DevConfig::disableRandom() &&
-                                        DevCycleRecorder::get().isRecording();
+                bool const freezeRand = EbDevConfig::recordEnable() && EbDevConfig::disableRandom() &&
+                                        EbDevCycleRecorder::get().isRecording();
                 if (!freezeRand) {
                     off += (std::rand() % 3) - 1;
                 }
-                AssistLog::debug(fmt::format("learn: hist explore ±1 @{} histN={}",
-                                             LevelProfile::spotBucket(x), spot->histN));
+                EbAssistLog::debug(fmt::format("learn: hist explore ±1 @{} histN={}",
+                                             EbLevelProfile::spotBucket(x), spot->histN));
             }
             // After assist deaths at this spot, nudge later — never pull earlier.
             if (spot->diedAfterAssist > 0 && off < 1) {
@@ -361,7 +361,7 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
         }
         // Miss-assist: learning must not undo the planner wait (caused +N then die).
         if (delay < plannedDelay) {
-            AssistLog::debug(fmt::format("learn: floor delay {}→{} (never earlier than plan)",
+            EbAssistLog::debug(fmt::format("learn: floor delay {}→{} (never earlier than plan)",
                                          delay, plannedDelay));
             delay = plannedDelay;
             learningFloored = true;
@@ -375,12 +375,12 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
                 learningFloored = true;
             }
         }
-        delay = MissAssistContracts::clampDelayToWindow(delay, limit);
+        delay = EbMissAssistContracts::clampDelayToWindow(delay, limit);
         if (delay < 1)
             delay = 1;
         learningNudged = (delay != plannedDelay) && !learningFloored;
         if (learningNudged || learningFloored) {
-            DevCycleRecorder::get().noteLearningOnPlan(plannedDelay, delay, learningFloored, false);
+            EbDevCycleRecorder::get().noteLearningOnPlan(plannedDelay, delay, learningFloored, false);
         }
     }
 
@@ -390,15 +390,15 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     if (delay > 0 && delay != plannedDelay && controller.m_simDt > 0.f) {
         float const firstStepDelta =
             (firstDt > 0.f && firstDt <= controller.m_simDt) ? firstDt : controller.m_simDt;
-        PlanOptions vopts = opts;
-        vopts.tickBudget = std::max(200, StageConfig::tickBudgetPerPress() / 4);
-        vopts.budgetUs = StageConfig::husReplanBudgetUs();
+        EbPlanOptions vopts = opts;
+        vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 4);
+        vopts.budgetUs = EbStageConfig::husReplanBudgetUs();
         vopts.maxBranches = 0;
         vopts.smartDepth = 1;
-        auto const vr = ShadowSimulator::get().verifyDelay(
+        auto const vr = EbShadowSimulator::get().verifyDelay(
             playLayer, player, true, delay, limit, controller.m_simDt, firstStepDelta, vopts);
         if (!vr.ok) {
-            AssistLog::debug(
+            EbAssistLog::debug(
                 fmt::format("ASSIST learning shift {}→{} verify-fail → keep plannedDelay={}",
                             plannedDelay, delay, plannedDelay));
             delay = plannedDelay;
@@ -407,14 +407,14 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     }
 
     // Commit 13: wrong-orb reject — activation outside intended window.
-    if (plan.requireOrb && OrbAlign::wrongOrbReject(delay, plan.dMin, plan.dMax)) {
-        AssistLog::debug(fmt::format("ASSIST wrong-orb reject delay={} win=[{},{}] → Pass", delay,
+    if (plan.requireOrb && EbOrbAlign::wrongOrbReject(delay, plan.dMin, plan.dMax)) {
+        EbAssistLog::debug(fmt::format("ASSIST wrong-orb reject delay={} win=[{},{}] → Pass", delay,
                                      plan.dMin, plan.dMax));
-        SimPlan pass = plan;
+        EbSimPlan pass = plan;
         pass.action = PlanAction::Pass;
         pass.delay = 0;
         pass.reason = AssistReason::PassUnknown;
-        DevCycleRecorder::get().notePassThrough(pass.reason, "press-wrong-orb");
+        EbDevCycleRecorder::get().notePassThrough(pass.reason, "press-wrong-orb");
         controller.noteVerdict(pass.reason, "press-wrong-orb");
         controller.recordDecision(playLayer, player, true, pass, effectTick, 0, limit);
         controller.updateOverlay();
@@ -446,10 +446,10 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
     if (plan.requireOrb) {
         controller.m_buffer.dMin = plan.dMin;
         controller.m_buffer.dMax = plan.dMax;
-        controller.m_buffer.fireTick = OrbAlign::clampFireIntoOrbWindow(
+        controller.m_buffer.fireTick = EbOrbAlign::clampFireIntoOrbWindow(
             controller.m_buffer.fireTick, effectTick, plan.dMin, plan.dMax, limit);
         controller.m_buffer.fireTick =
-            OrbAlign::waitUntilInsideRing(controller.m_buffer.fireTick, effectTick, plan.dMin);
+            EbOrbAlign::waitUntilInsideRing(controller.m_buffer.fireTick, effectTick, plan.dMin);
     } else {
         controller.m_buffer.dMin = -1;
         controller.m_buffer.dMax = -1;
@@ -462,7 +462,7 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
         controller.m_buffer.fireTick = std::min(controller.m_buffer.fireTick, effectTick + limit);
     }
 
-    AssistLog::debug(fmt::format("ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} "
+    EbAssistLog::debug(fmt::format("ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} "
                                  "win=[{},{}] fire={} jump={} orb={}",
                                  delay, plan.planId, plan.activatedRing, plan.requireHold,
                                  plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter,
@@ -470,22 +470,22 @@ bool AssistPressPlanner::planPress(AssistController& controller, PlayLayer* play
                                  controller.m_buffer.fireTick, controller.m_buffer.expectedJumpTick,
                                  plan.requireOrb ? 1 : 0));
     AssistReason delayReason = plan.reason;
-    if (!AssistVerdict::isDelay(delayReason)) {
-        delayReason = AssistVerdict::inferDelayReason(
+    if (!EbAssistVerdict::isDelay(delayReason)) {
+        delayReason = EbAssistVerdict::inferDelayReason(
             plan.activatedRing, plan.requireOrb,
             opts.preferDelayMin >= 0 && opts.preferDelayMax >= opts.preferDelayMin);
     }
     {
-        DevCycleRecorder::DelayArmMeta meta{};
+        EbDevCycleRecorder::DelayArmMeta meta{};
         meta.armVerifyOk = armVerifyOk;
         meta.budgetHitAtArm = plan.budgetHit;
-        controller.m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+        controller.m_buffer.devPressId = EbDevCycleRecorder::get().noteDelayArm(
             delayReason, "press-delay", delay, controller.m_buffer.fireTick, plan.planId,
             DevEventSource::Live, meta);
     }
     controller.noteVerdict(delayReason, "press-delay");
     if (delay > 0)
-        AssistRealMetrics::get().noteArm();
+        EbAssistRealMetrics::get().noteArm();
     controller.recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     controller.updateOverlay();
     return false;

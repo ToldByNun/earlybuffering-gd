@@ -1,6 +1,6 @@
 #include "assist_verdict.hpp"
 
-char const* AssistVerdict::name(AssistReason reason) {
+char const* EbAssistVerdict::name(AssistReason reason) {
     switch (reason) {
     case AssistReason::None:
         return "none";
@@ -74,7 +74,7 @@ char const* AssistVerdict::name(AssistReason reason) {
     return "pass-unknown";
 }
 
-char const* AssistVerdict::overlayBit(AssistReason reason) {
+char const* EbAssistVerdict::overlayBit(AssistReason reason) {
     switch (reason) {
     case AssistReason::None:
         return "";
@@ -148,7 +148,7 @@ char const* AssistVerdict::overlayBit(AssistReason reason) {
     return "PASS unknown";
 }
 
-bool AssistVerdict::isPass(AssistReason reason) {
+bool EbAssistVerdict::isPass(AssistReason reason) {
     switch (reason) {
     case AssistReason::None:
     case AssistReason::DelayOrb:
@@ -162,7 +162,7 @@ bool AssistVerdict::isPass(AssistReason reason) {
     }
 }
 
-bool AssistVerdict::isDelay(AssistReason reason) {
+bool EbAssistVerdict::isDelay(AssistReason reason) {
     switch (reason) {
     case AssistReason::DelayOrb:
     case AssistReason::DelayThreat:
@@ -174,17 +174,17 @@ bool AssistVerdict::isDelay(AssistReason reason) {
     }
 }
 
-bool AssistVerdict::isHold(AssistReason reason) {
+bool EbAssistVerdict::isHold(AssistReason reason) {
     return reason == AssistReason::HoldPending;
 }
 
-bool AssistVerdict::isKnown(AssistReason reason) {
+bool EbAssistVerdict::isKnown(AssistReason reason) {
     int const value = static_cast<int>(reason);
     return value > static_cast<int>(AssistReason::None) &&
            value < static_cast<int>(AssistReason::PassUnknown);
 }
 
-AssistReason AssistVerdict::inferDelayReason(bool activatedRing, bool requireOrb,
+AssistReason EbAssistVerdict::inferDelayReason(bool activatedRing, bool requireOrb,
                                              bool usedPreferBand) {
     if (activatedRing || requireOrb)
         return AssistReason::DelayOrb;
@@ -194,7 +194,7 @@ AssistReason AssistVerdict::inferDelayReason(bool activatedRing, bool requireOrb
     return AssistReason::DelayPrefer;
 }
 
-bool AssistVerdict::selfCheck(std::string& report) {
+bool EbAssistVerdict::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* label) {
@@ -211,46 +211,46 @@ bool AssistVerdict::selfCheck(std::string& report) {
     int const last = static_cast<int>(AssistReason::PassUnknown);
     for (int index = first; index <= last; ++index) {
         auto const result = static_cast<AssistReason>(index);
-        char const* count = AssistVerdict::name(result);
+        char const* count = EbAssistVerdict::name(result);
         expect(count != nullptr && count[0] != '\0', "name-empty");
-        char const* outputStream = AssistVerdict::overlayBit(result);
+        char const* outputStream = EbAssistVerdict::overlayBit(result);
         expect(outputStream != nullptr, "overlay-null");
         if (result == AssistReason::None) {
             expect(outputStream[0] == '\0', "overlay-none-empty");
-            expect(!AssistVerdict::isPass(result), "none-not-pass");
-            expect(!AssistVerdict::isDelay(result), "none-not-delay");
-            expect(!AssistVerdict::isKnown(result), "none-not-known");
+            expect(!EbAssistVerdict::isPass(result), "none-not-pass");
+            expect(!EbAssistVerdict::isDelay(result), "none-not-delay");
+            expect(!EbAssistVerdict::isKnown(result), "none-not-known");
         } else if (result == AssistReason::PassUnknown) {
-            expect(AssistVerdict::isPass(result), "unknown-is-pass");
-            expect(!AssistVerdict::isKnown(result), "unknown-not-known");
+            expect(EbAssistVerdict::isPass(result), "unknown-is-pass");
+            expect(!EbAssistVerdict::isKnown(result), "unknown-not-known");
             expect(std::string(count) == "pass-unknown", "unknown-name");
-        } else if (AssistVerdict::isDelay(result)) {
-            expect(!AssistVerdict::isPass(result), "delay-not-pass");
-            expect(AssistVerdict::isKnown(result), "delay-known");
-            expect(std::string(AssistVerdict::overlayBit(result)).find("DELAY") == 0,
+        } else if (EbAssistVerdict::isDelay(result)) {
+            expect(!EbAssistVerdict::isPass(result), "delay-not-pass");
+            expect(EbAssistVerdict::isKnown(result), "delay-known");
+            expect(std::string(EbAssistVerdict::overlayBit(result)).find("DELAY") == 0,
                    "delay-overlay");
-        } else if (AssistVerdict::isHold(result)) {
-            expect(!AssistVerdict::isPass(result), "hold-not-pass");
-            expect(AssistVerdict::isKnown(result), "hold-known");
+        } else if (EbAssistVerdict::isHold(result)) {
+            expect(!EbAssistVerdict::isPass(result), "hold-not-pass");
+            expect(EbAssistVerdict::isKnown(result), "hold-known");
         } else {
-            expect(AssistVerdict::isPass(result), "pass-is-pass");
-            expect(AssistVerdict::isKnown(result), "pass-known");
-            expect(std::string(AssistVerdict::overlayBit(result)).find("PASS") == 0,
+            expect(EbAssistVerdict::isPass(result), "pass-is-pass");
+            expect(EbAssistVerdict::isKnown(result), "pass-known");
+            expect(std::string(EbAssistVerdict::overlayBit(result)).find("PASS") == 0,
                    "pass-overlay");
         }
     }
 
     // Out-of-range → pass-unknown name (defensive).
-    expect(std::string(AssistVerdict::name(static_cast<AssistReason>(999))) == "pass-unknown",
+    expect(std::string(EbAssistVerdict::name(static_cast<AssistReason>(999))) == "pass-unknown",
            "oob-name");
 
-    expect(AssistVerdict::inferDelayReason(true, false, false) == AssistReason::DelayOrb,
+    expect(EbAssistVerdict::inferDelayReason(true, false, false) == AssistReason::DelayOrb,
            "infer-orb");
-    expect(AssistVerdict::inferDelayReason(false, true, false) == AssistReason::DelayOrb,
+    expect(EbAssistVerdict::inferDelayReason(false, true, false) == AssistReason::DelayOrb,
            "infer-require-orb");
-    expect(AssistVerdict::inferDelayReason(false, false, true) == AssistReason::DelayPrefer,
+    expect(EbAssistVerdict::inferDelayReason(false, false, true) == AssistReason::DelayPrefer,
            "infer-prefer");
-    expect(AssistVerdict::inferDelayReason(false, false, false) == AssistReason::DelayThreat,
+    expect(EbAssistVerdict::inferDelayReason(false, false, false) == AssistReason::DelayThreat,
            "infer-threat");
 
     // No two distinct known reasons share a name (except defensive unknown).
@@ -262,8 +262,8 @@ bool AssistVerdict::selfCheck(std::string& report) {
                 continue;
             if (firstValue == AssistReason::None || secondValue == AssistReason::None)
                 continue;
-            expect(std::string(AssistVerdict::name(firstValue)) !=
-                       std::string(AssistVerdict::name(secondValue)),
+            expect(std::string(EbAssistVerdict::name(firstValue)) !=
+                       std::string(EbAssistVerdict::name(secondValue)),
                    "name-unique");
         }
     }

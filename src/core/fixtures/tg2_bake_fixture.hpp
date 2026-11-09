@@ -5,7 +5,7 @@
 
 // Frozen bakefail corpus for The Golden 2 startpos / tg2.gdr2 (Commit 6).
 // Live PlayLayer not required — contracts + residual diag format + portal Include.
-class Tg2BakeFixture {
+class EbTg2BakeFixture {
 public:
     static constexpr char const* kLevelKeyPrefix = "id_80045794";
     static constexpr char const* kReplaySource = "tg2.gdr2";
@@ -35,7 +35,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    Tg2BakeFixture() = delete;
+    EbTg2BakeFixture() = delete;
 };
 
 #endif

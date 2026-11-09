@@ -1,22 +1,22 @@
+#include "../../app/class_manager.hpp"
 #include "save_frame_counter.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <fmt/format.h>
 #include <string>
 
-SaveFrameCounter& SaveFrameCounter::get() {
-    static SaveFrameCounter inst;
-    return inst;
+EbSaveFrameCounter& EbSaveFrameCounter::get() {
+    return EbClassManager::get().service<EbSaveFrameCounter>();
 }
 
-int SaveFrameCounter::bucketFrames(int delayTicks) {
+int EbSaveFrameCounter::bucketFrames(int delayTicks) {
     if (!(delayTicks <= 0)) {
         return delayTicks >= 8 ? 8 : delayTicks;
     }
     return 1;
 }
 
-geode::prelude::ccColor3B SaveFrameCounter::colorForBucket(int bucket) {
+geode::prelude::ccColor3B EbSaveFrameCounter::colorForBucket(int bucket) {
     switch (bucket) {
     case 1:
         return {0xff, 0x61, 0x4e};
@@ -38,13 +38,13 @@ geode::prelude::ccColor3B SaveFrameCounter::colorForBucket(int bucket) {
     }
 }
 
-geode::prelude::ccColor4F SaveFrameCounter::to4F(geode::prelude::ccColor3B candidate,
+geode::prelude::ccColor4F EbSaveFrameCounter::to4F(geode::prelude::ccColor3B candidate,
                                                  float firstValue) {
     return {static_cast<float>(candidate.r) / 255.f, static_cast<float>(candidate.g) / 255.f,
             static_cast<float>(candidate.b) / 255.f, firstValue};
 }
 
-void SaveFrameCounter::ensureRoot(PlayLayer* layer) {
+void EbSaveFrameCounter::ensureRoot(PlayLayer* layer) {
     if (!layer)
         return;
     if (this->m_root && this->m_root->getParent())
@@ -68,11 +68,11 @@ void SaveFrameCounter::ensureRoot(PlayLayer* layer) {
     this->m_root->retain();
 }
 
-void SaveFrameCounter::attach(PlayLayer* layer) {
+void EbSaveFrameCounter::attach(PlayLayer* layer) {
     this->ensureRoot(layer);
 }
 
-void SaveFrameCounter::detach(bool layerDying) {
+void EbSaveFrameCounter::detach(bool layerDying) {
     if (!this->m_root)
         return;
     if (layerDying) {
@@ -91,13 +91,13 @@ void SaveFrameCounter::detach(bool layerDying) {
     this->m_root = nullptr;
 }
 
-void SaveFrameCounter::clear() {
+void EbSaveFrameCounter::clear() {
     if (!this->m_root)
         return;
     this->m_root->removeAllChildren();
 }
 
-void SaveFrameCounter::dropOldestIfOverCap() {
+void EbSaveFrameCounter::dropOldestIfOverCap() {
     if (!this->m_root)
         return;
     auto* kids = this->m_root->getChildren();
@@ -115,7 +115,7 @@ void SaveFrameCounter::dropOldestIfOverCap() {
     }
 }
 
-void SaveFrameCounter::addOutlinedLabel(geode::prelude::CCNode* parent, char const* text,
+void EbSaveFrameCounter::addOutlinedLabel(geode::prelude::CCNode* parent, char const* text,
                                         geode::prelude::ccColor3B color, float x, float y) {
     if (!parent || !text)
         return;
@@ -157,7 +157,7 @@ void SaveFrameCounter::addOutlinedLabel(geode::prelude::CCNode* parent, char con
     parent->addChild(label, 1);
 }
 
-geode::prelude::CCNode* SaveFrameCounter::makeMarker(geode::prelude::CCPoint worldPos,
+geode::prelude::CCNode* EbSaveFrameCounter::makeMarker(geode::prelude::CCPoint worldPos,
                                                      int delayTicks) {
     int const bucket = bucketFrames(delayTicks);
     auto const rgb = colorForBucket(bucket);
@@ -200,7 +200,7 @@ geode::prelude::CCNode* SaveFrameCounter::makeMarker(geode::prelude::CCPoint wor
     return marker;
 }
 
-void SaveFrameCounter::spawn(PlayLayer* layer, geode::prelude::CCPoint worldPos, int delayTicks) {
+void EbSaveFrameCounter::spawn(PlayLayer* layer, geode::prelude::CCPoint worldPos, int delayTicks) {
     if (!layer)
         return;
     if (delayTicks <= 0)

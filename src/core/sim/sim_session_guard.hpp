@@ -2,24 +2,24 @@
 #define SIM_SESSION_GUARD_HPP
 
 class PlayLayer;
-class ShadowSimulator;
+class EbShadowSimulator;
 
 // RAII around a shadow-sim session: beginCapture + m_simulating on enter;
 // restoreCapture, clear flags, and parkGhosts on exit (every early return /
 // exception path). Keeps live playerTouchedRing from seeing half-restored
 // ring/activated state — especially important on iOS with multi-mod update hooks.
-class SimSessionGuard {
+class EbSimSessionGuard {
 public:
-    SimSessionGuard(ShadowSimulator& sim, PlayLayer* layer);
-    ~SimSessionGuard();
+    EbSimSessionGuard(EbShadowSimulator& sim, PlayLayer* layer);
+    ~EbSimSessionGuard();
 
-    SimSessionGuard(SimSessionGuard const&) = delete;
-    SimSessionGuard& operator=(SimSessionGuard const&) = delete;
-    SimSessionGuard(SimSessionGuard&& other) noexcept;
-    SimSessionGuard& operator=(SimSessionGuard&& other) noexcept;
+    EbSimSessionGuard(EbSimSessionGuard const&) = delete;
+    EbSimSessionGuard& operator=(EbSimSessionGuard const&) = delete;
+    EbSimSessionGuard(EbSimSessionGuard&& other) noexcept;
+    EbSimSessionGuard& operator=(EbSimSessionGuard&& other) noexcept;
 
 private:
-    ShadowSimulator* m_sim = nullptr;
+    EbShadowSimulator* m_sim = nullptr;
     PlayLayer* m_layer = nullptr;
 };
 

@@ -4,7 +4,7 @@
 #include "../../config/stage_config.hpp"
 #include <string>
 
-class AssistLearning {
+class EbAssistLearning {
 public:
     static void decaySpot(GameModeKind kind, float x);
     static bool shouldExploreDespiteLowTrust(float trust);

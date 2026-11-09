@@ -7,11 +7,11 @@
 #include <fmt/format.h>
 #include <vector>
 
-geode::Result<> TriggerWorldCodec::writeFile(TriggerWorldStore const& owner) {
-    (void)geode::utils::file::createDirectoryAll(TriggerWorldStore::triggersDir());
+geode::Result<> EbTriggerWorldCodec::writeFile(EbTriggerWorldStore const& owner) {
+    (void)geode::utils::file::createDirectoryAll(EbTriggerWorldStore::triggersDir());
 
     matjson::Value root = matjson::Value::object();
-    root["version"] = TriggerWorldStore::kFileVersion;
+    root["version"] = EbTriggerWorldStore::kFileVersion;
     root["key"] = owner.m_data.levelKey;
     root["tps"] = owner.m_data.tps;
 
@@ -21,7 +21,7 @@ geode::Result<> TriggerWorldCodec::writeFile(TriggerWorldStore const& owner) {
         matjson::Value tj = matjson::Value::object();
         tj["uniqueId"] = track.uniqueId;
         tj["objectId"] = track.objectId;
-        tj["kind"] = TriggerWorldStore::kindToString(track.kind);
+        tj["kind"] = EbTriggerWorldStore::kindToString(track.kind);
         tj["ready"] = track.ready;
 
         std::vector<matjson::Value> keysArr;
@@ -42,21 +42,21 @@ geode::Result<> TriggerWorldCodec::writeFile(TriggerWorldStore const& owner) {
     }
     root["tracks"] = tracksArr;
 
-    return geode::utils::file::writeToJson(TriggerWorldStore::triggerPath(owner.m_data.levelKey),
+    return geode::utils::file::writeToJson(EbTriggerWorldStore::triggerPath(owner.m_data.levelKey),
                                            root);
 }
 
-geode::Result<> TriggerWorldCodec::readFile(TriggerWorldStore& owner) {
+geode::Result<> EbTriggerWorldCodec::readFile(EbTriggerWorldStore& owner) {
     auto result =
-        geode::utils::file::readJson(TriggerWorldStore::triggerPath(owner.m_data.levelKey));
+        geode::utils::file::readJson(EbTriggerWorldStore::triggerPath(owner.m_data.levelKey));
     if (result.isErr())
         return geode::Err(result.unwrapErr());
 
     auto root = result.unwrap();
     int const ver = static_cast<int>(root["version"].asInt().unwrapOr(0));
-    if (ver != TriggerWorldStore::kFileVersion) {
+    if (ver != EbTriggerWorldStore::kFileVersion) {
         owner.m_data.tracks.clear();
-        return geode::Err(fmt::format("version {} != {}", ver, TriggerWorldStore::kFileVersion));
+        return geode::Err(fmt::format("version {} != {}", ver, EbTriggerWorldStore::kFileVersion));
     }
 
     if (root.contains("tps")) {
@@ -71,19 +71,19 @@ geode::Result<> TriggerWorldCodec::readFile(TriggerWorldStore& owner) {
     }
 
     for (auto const& tj : root["tracks"]) {
-        if (owner.m_data.tracks.size() >= TriggerWorldStore::kHardMaxTracks) {
+        if (owner.m_data.tracks.size() >= EbTriggerWorldStore::kHardMaxTracks) {
             owner.noteSoftcap("load-hard-tracks");
             break;
         }
-        if (owner.m_data.tracks.size() >= TriggerWorldStore::kSoftMaxTracks) {
+        if (owner.m_data.tracks.size() >= EbTriggerWorldStore::kSoftMaxTracks) {
             owner.noteSoftcap("load-soft-tracks");
             // Keep loading until hard — soft is warn, not silent stop under soft.
         }
 
-        TriggerTrack track;
+        EbTriggerTrack track;
         track.uniqueId = static_cast<int>(tj["uniqueId"].asInt().unwrapOr(0));
         track.objectId = static_cast<int>(tj["objectId"].asInt().unwrapOr(0));
-        track.kind = TriggerWorldStore::kindFromString(
+        track.kind = EbTriggerWorldStore::kindFromString(
             tj.contains("kind") ? tj["kind"].asString().unwrapOr("Ignore") : "Ignore");
         track.ready = tj["ready"].asBool().unwrapOr(false);
 
@@ -97,14 +97,14 @@ geode::Result<> TriggerWorldCodec::readFile(TriggerWorldStore& owner) {
         }
 
         for (auto const& kj : tj["keys"]) {
-            if (track.keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack) {
+            if (track.keys.size() >= EbTriggerWorldStore::kHardMaxKeysPerTrack) {
                 owner.noteSoftcap("load-hard-keys");
                 break;
             }
-            if (track.keys.size() >= TriggerWorldStore::kSoftMaxKeysPerTrack) {
+            if (track.keys.size() >= EbTriggerWorldStore::kSoftMaxKeysPerTrack) {
                 owner.noteSoftcap("load-soft-keys");
             }
-            TriggerPose pose;
+            EbTriggerPose pose;
             pose.tick = static_cast<int>(kj["t"].asInt().unwrapOr(0));
             pose.x = static_cast<float>(kj["x"].asDouble().unwrapOr(0.0));
             pose.y = static_cast<float>(kj["y"].asDouble().unwrapOr(0.0));
@@ -117,7 +117,7 @@ geode::Result<> TriggerWorldCodec::readFile(TriggerWorldStore& owner) {
 
         std::stable_sort(
             track.keys.begin(), track.keys.end(),
-            [](TriggerPose const& a, TriggerPose const& b) { return a.tick < b.tick; });
+            [](EbTriggerPose const& a, EbTriggerPose const& b) { return a.tick < b.tick; });
         owner.m_data.tracks.push_back(std::move(track));
     }
 

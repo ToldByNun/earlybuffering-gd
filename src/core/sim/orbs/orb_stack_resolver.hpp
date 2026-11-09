@@ -15,7 +15,7 @@ class RingObject;
 // Sim early-return on 1594 used to drop the stacked jump orb; flip also used to
 // hide jump rings in the toggle group. Rule: stacked partners always dual-fire.
 // Same ring is never boosted twice (claim / touchedRings guards).
-class OrbStackResolver {
+class EbOrbStackResolver {
 public:
     // Match AssistContracts140 ε — stacked rings share a tile within noise.
     static constexpr float kColocateEps = 12.f;
@@ -49,7 +49,7 @@ public:
     private:
     };
 
-    static OrbStackResolver& get();
+    static EbOrbStackResolver& get();
 
     void begin();
     Stats const& stats() const {
@@ -78,7 +78,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    OrbStackResolver() = default;
+    friend class EbServiceStore;
+
+    EbOrbStackResolver() = default;
 
     int fireNormalOrbsAt(PlayLayer* layer, PlayerObject* shadow, GameObject* toggleHit);
     int fireTogglesAt(PlayLayer* layer, PlayerObject* shadow, GameObject* jumpHit);

@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-void CloudStatsStorage::loadLocalSets(CloudConfigStats const& owner) {
+void EbCloudStatsStorage::loadLocalSets(EbCloudConfigStats const& owner) {
     if (!owner.m_impl || owner.m_impl->localLoaded)
         return;
     owner.m_impl->localLoaded = true;
@@ -21,7 +21,7 @@ void CloudStatsStorage::loadLocalSets(CloudConfigStats const& owner) {
 
     std::string err;
     std::string body;
-    if (!CloudConfigStore::readTextFile(CloudConfigStatsImplementation::localStatsPath(), body,
+    if (!EbCloudConfigStore::readTextFile(EbCloudConfigStatsImplementation::localStatsPath(), body,
                                         256u * 1024u, err)) {
         return;
     }
@@ -34,7 +34,7 @@ void CloudStatsStorage::loadLocalSets(CloudConfigStats const& owner) {
             if (!v.isString())
                 continue;
             auto const id = v.asString().unwrapOrDefault();
-            if (CloudConfigStore::isValidPackId(id))
+            if (EbCloudConfigStore::isValidPackId(id))
                 owner.m_impl->downloaded.insert(id);
         }
     }
@@ -43,13 +43,13 @@ void CloudStatsStorage::loadLocalSets(CloudConfigStats const& owner) {
             if (!v.isString())
                 continue;
             auto const id = v.asString().unwrapOrDefault();
-            if (CloudConfigStore::isValidPackId(id))
+            if (EbCloudConfigStore::isValidPackId(id))
                 owner.m_impl->rated.insert(id);
         }
     }
     if (root.contains("myStars") && root["myStars"].isObject()) {
         for (auto const& [id, raw] : root["myStars"]) {
-            if (!CloudConfigStore::isValidPackId(id))
+            if (!EbCloudConfigStore::isValidPackId(id))
                 continue;
             int const state = static_cast<int>(raw.asInt().unwrapOr(0));
             if (state < 1 || state > 5)
@@ -60,11 +60,11 @@ void CloudStatsStorage::loadLocalSets(CloudConfigStats const& owner) {
     }
 }
 
-void CloudStatsStorage::saveLocalSets(CloudConfigStats& owner) {
+void EbCloudStatsStorage::saveLocalSets(EbCloudConfigStats& owner) {
     if (!owner.m_impl)
         return;
     std::string dirErr;
-    if (!CloudConfigStore::get().ensureDirs(dirErr))
+    if (!EbCloudConfigStore::get().ensureDirs(dirErr))
         return;
 
     matjson::Value downloaded = matjson::Value::array();
@@ -84,13 +84,13 @@ void CloudStatsStorage::saveLocalSets(CloudConfigStats& owner) {
     root["myStars"] = myStars;
 
     std::string err;
-    (void)CloudConfigStore::writeTextFile(CloudConfigStatsImplementation::localStatsPath(),
+    (void)EbCloudConfigStore::writeTextFile(EbCloudConfigStatsImplementation::localStatsPath(),
                                           root.dump(), err);
 }
 
-void CloudStatsStorage::unmarkLocal(CloudConfigStats& owner, std::string const& packId,
+void EbCloudStatsStorage::unmarkLocal(EbCloudConfigStats& owner, std::string const& packId,
                                     bool downloaded, bool rated) {
-    if (!owner.m_impl || !CloudConfigStore::isValidPackId(packId))
+    if (!owner.m_impl || !EbCloudConfigStore::isValidPackId(packId))
         return;
     owner.loadLocalSets();
     bool changed = false;
@@ -104,7 +104,7 @@ void CloudStatsStorage::unmarkLocal(CloudConfigStats& owner, std::string const& 
         owner.saveLocalSets();
 }
 
-std::string CloudStatsStorage::ensureClientId(CloudConfigStats& owner) {
+std::string EbCloudStatsStorage::ensureClientId(EbCloudConfigStats& owner) {
     if (!owner.m_impl)
         return {};
     if (!owner.m_impl->clientId.empty() && owner.isValidClientId(owner.m_impl->clientId)) {
@@ -112,11 +112,11 @@ std::string CloudStatsStorage::ensureClientId(CloudConfigStats& owner) {
     }
 
     std::string dirErr;
-    (void)CloudConfigStore::get().ensureDirs(dirErr);
+    (void)EbCloudConfigStore::get().ensureDirs(dirErr);
 
     std::string err;
     std::string existing;
-    if (CloudConfigStore::readTextFile(CloudConfigStatsImplementation::clientIdPath(), existing,
+    if (EbCloudConfigStore::readTextFile(EbCloudConfigStatsImplementation::clientIdPath(), existing,
                                        128, err)) {
         // Trim whitespace / newlines.
         while (!existing.empty() && (existing.back() == '\n' || existing.back() == '\r' ||
@@ -136,11 +136,11 @@ std::string CloudStatsStorage::ensureClientId(CloudConfigStats& owner) {
         }
     }
 
-    std::string const fresh = CloudConfigStatsImplementation::makeUuidV4();
+    std::string const fresh = EbCloudConfigStatsImplementation::makeUuidV4();
     if (!owner.isValidClientId(fresh))
         return {};
     std::string writeErr;
-    if (!CloudConfigStore::writeTextFile(CloudConfigStatsImplementation::clientIdPath(),
+    if (!EbCloudConfigStore::writeTextFile(EbCloudConfigStatsImplementation::clientIdPath(),
                                          fresh + "\n", writeErr)) {
         // Still use in-memory id for this session.
         owner.m_impl->clientId = fresh;
@@ -150,22 +150,22 @@ std::string CloudStatsStorage::ensureClientId(CloudConfigStats& owner) {
     return owner.m_impl->clientId;
 }
 
-bool CloudStatsStorage::hasDownloaded(CloudConfigStats const& owner, std::string const& packId) {
-    if (!owner.m_impl || !CloudConfigStore::isValidPackId(packId))
+bool EbCloudStatsStorage::hasDownloaded(EbCloudConfigStats const& owner, std::string const& packId) {
+    if (!owner.m_impl || !EbCloudConfigStore::isValidPackId(packId))
         return false;
     owner.loadLocalSets();
     return owner.m_impl->downloaded.count(packId) > 0;
 }
 
-bool CloudStatsStorage::hasRated(CloudConfigStats const& owner, std::string const& packId) {
-    if (!owner.m_impl || !CloudConfigStore::isValidPackId(packId))
+bool EbCloudStatsStorage::hasRated(EbCloudConfigStats const& owner, std::string const& packId) {
+    if (!owner.m_impl || !EbCloudConfigStore::isValidPackId(packId))
         return false;
     owner.loadLocalSets();
     return owner.m_impl->rated.count(packId) > 0 || owner.m_impl->myStars.count(packId) > 0;
 }
 
-int CloudStatsStorage::myStarsFor(CloudConfigStats const& owner, std::string const& packId) {
-    if (!owner.m_impl || !CloudConfigStore::isValidPackId(packId))
+int EbCloudStatsStorage::myStarsFor(EbCloudConfigStats const& owner, std::string const& packId) {
+    if (!owner.m_impl || !EbCloudConfigStore::isValidPackId(packId))
         return 0;
     owner.loadLocalSets();
     auto it = owner.m_impl->myStars.find(packId);
@@ -175,8 +175,8 @@ int CloudStatsStorage::myStarsFor(CloudConfigStats const& owner, std::string con
     return 0;
 }
 
-void CloudStatsStorage::markDownloaded(CloudConfigStats& owner, std::string const& packId) {
-    if (!owner.m_impl || !CloudConfigStore::isValidPackId(packId))
+void EbCloudStatsStorage::markDownloaded(EbCloudConfigStats& owner, std::string const& packId) {
+    if (!owner.m_impl || !EbCloudConfigStore::isValidPackId(packId))
         return;
     owner.loadLocalSets();
     if (owner.m_impl->downloaded.insert(packId).second) {
@@ -184,8 +184,8 @@ void CloudStatsStorage::markDownloaded(CloudConfigStats& owner, std::string cons
     }
 }
 
-void CloudStatsStorage::markRated(CloudConfigStats& owner, std::string const& packId, int stars) {
-    if (!owner.m_impl || !CloudConfigStore::isValidPackId(packId))
+void EbCloudStatsStorage::markRated(EbCloudConfigStats& owner, std::string const& packId, int stars) {
+    if (!owner.m_impl || !EbCloudConfigStore::isValidPackId(packId))
         return;
     owner.loadLocalSets();
     bool changed = owner.m_impl->rated.insert(packId).second;

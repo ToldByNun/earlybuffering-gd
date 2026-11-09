@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "ghost_parity_probe.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../debug/lag_probe.hpp"
@@ -11,19 +12,18 @@
 #include <cmath>
 #include <fmt/format.h>
 
-GhostParityProbe& GhostParityProbe::get() {
-    static GhostParityProbe inst;
-    return inst;
+EbGhostParityProbe& EbGhostParityProbe::get() {
+    return EbClassManager::get().service<EbGhostParityProbe>();
 }
 
-void GhostParityProbe::setEps(float epsX, float epsY) {
+void EbGhostParityProbe::setEps(float epsX, float epsY) {
     if (epsX > 0.f && std::isfinite(epsX))
         this->m_epsX = epsX;
     if (epsY > 0.f && std::isfinite(epsY))
         this->m_epsY = epsY;
 }
 
-void GhostParityProbe::resetAttempt() {
+void EbGhostParityProbe::resetAttempt() {
     this->m_poses.clear();
     this->m_anchors[0] = {};
     this->m_anchors[1] = {};
@@ -32,13 +32,13 @@ void GhostParityProbe::resetAttempt() {
     // Keep probe/drift counters across attempts for overlay diagnostics.
 }
 
-void GhostParityProbe::onLevelQuit() {
+void EbGhostParityProbe::onLevelQuit() {
     this->resetAttempt();
     this->m_probeCount = 0;
     this->m_driftCount = 0;
 }
 
-void GhostParityProbe::recordPose(PlayerObject* player, int attemptTick) {
+void EbGhostParityProbe::recordPose(PlayerObject* player, int attemptTick) {
     if (!player)
         return;
     PoseSample s;
@@ -49,14 +49,14 @@ void GhostParityProbe::recordPose(PlayerObject* player, int attemptTick) {
     s.jumpHeld = player->m_holdingButtons[jumpIdx];
     s.dead = player->m_isDead;
     this->m_poses.push_back(s);
-    if (static_cast<int>(this->m_poses.size()) > GhostParityProbe::kPoseCap) {
+    if (static_cast<int>(this->m_poses.size()) > EbGhostParityProbe::kPoseCap) {
         this->m_poses.erase(this->m_poses.begin(),
                             this->m_poses.begin() + (static_cast<int>(this->m_poses.size()) -
-                                                     GhostParityProbe::kPoseCap));
+                                                     EbGhostParityProbe::kPoseCap));
     }
 }
 
-GhostParityProbe::PoseSample const* GhostParityProbe::findPose(int tick) const {
+EbGhostParityProbe::PoseSample const* EbGhostParityProbe::findPose(int tick) const {
     for (auto it = this->m_poses.rbegin(); it != this->m_poses.rend(); ++it) {
         if (it->tick == tick)
             return &(*it);
@@ -64,17 +64,17 @@ GhostParityProbe::PoseSample const* GhostParityProbe::findPose(int tick) const {
     return nullptr;
 }
 
-void GhostParityProbe::maybeCaptureAnchor(PlayerObject* player, int attemptTick) {
+void EbGhostParityProbe::maybeCaptureAnchor(PlayerObject* player, int attemptTick) {
     if (!player || player->m_isDead)
         return;
     if (attemptTick < 2)
         return;
-    if (attemptTick % GhostParityProbe::kAnchorEvery != 0)
+    if (attemptTick % EbGhostParityProbe::kAnchorEvery != 0)
         return;
 
     int const which = this->m_nextAnchor & 1;
     this->m_nextAnchor = (this->m_nextAnchor + 1) & 1;
-    int const slot = ShadowSimulator::get().captureParitySnapshot(player, which);
+    int const slot = EbShadowSimulator::get().captureParitySnapshot(player, which);
     if (slot < 0)
         return;
 
@@ -83,16 +83,16 @@ void GhostParityProbe::maybeCaptureAnchor(PlayerObject* player, int attemptTick)
     this->m_anchors[which].valid = true;
 }
 
-void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, float simDt,
+void EbGhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, float simDt,
                                      int attemptTick) {
     if (!layer || !player || player->m_isDead)
         return;
-    if (ShadowSimulator::get().isSimulating())
+    if (EbShadowSimulator::get().isSimulating())
         return;
-    if (attemptTick < GhostParityProbe::kHorizonTicks + GhostParityProbe::kAnchorEvery) {
+    if (attemptTick < EbGhostParityProbe::kHorizonTicks + EbGhostParityProbe::kAnchorEvery) {
         return;
     }
-    if (attemptTick % GhostParityProbe::kProbeEvery != 0)
+    if (attemptTick % EbGhostParityProbe::kProbeEvery != 0)
         return;
     if (!(simDt > 0.f) || !std::isfinite(simDt))
         return;
@@ -104,9 +104,9 @@ void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, flo
         if (!a.valid || a.slot < 0)
             continue;
         int const age = attemptTick - a.tick;
-        if (age < GhostParityProbe::kHorizonTicks / 2)
+        if (age < EbGhostParityProbe::kHorizonTicks / 2)
             continue;
-        if (age > GhostParityProbe::kPoseCap)
+        if (age > EbGhostParityProbe::kPoseCap)
             continue;
         if (age > bestAge) {
             bestAge = age;
@@ -116,15 +116,15 @@ void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, flo
     if (!anchor || bestAge <= 0)
         return;
 
-    int const until = std::min(bestAge, GhostParityProbe::kHorizonTicks);
-    std::vector<ReplayEvent> events;
+    int const until = std::min(bestAge, EbGhostParityProbe::kHorizonTicks);
+    std::vector<EbReplayEvent> events;
     events.reserve(static_cast<size_t>(until) / 4 + 2);
 
     bool prevHeld = false;
     if (auto const* startPose = this->findPose(anchor->tick)) {
         prevHeld = startPose->jumpHeld;
         if (prevHeld) {
-            events.push_back(ReplayEvent{0, 1, false, true});
+            events.push_back(EbReplayEvent{0, 1, false, true});
         }
     }
 
@@ -134,7 +134,7 @@ void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, flo
             continue;
         if (pose->jumpHeld == prevHeld)
             continue;
-        events.push_back(ReplayEvent{tickValue, 1, false, pose->jumpHeld});
+        events.push_back(EbReplayEvent{tickValue, 1, false, pose->jumpHeld});
         prevHeld = pose->jumpHeld;
     }
 
@@ -142,10 +142,10 @@ void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, flo
     if (!livePose)
         return;
 
-    PerfTrace::Scope const scope("ghostParity");
+    EbPerfTrace::Scope const scope("ghostParity");
     auto const start = std::chrono::steady_clock::now();
 
-    auto sample = ShadowSimulator::get().samplePath(layer, anchor->slot, events, simDt, until);
+    auto sample = EbShadowSimulator::get().samplePath(layer, anchor->slot, events, simDt, until);
 
     auto const elapsedMicroseconds =
         static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
@@ -153,8 +153,8 @@ void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, flo
                              .count());
     ++this->m_probeCount;
 
-    if (elapsedMicroseconds > GhostParityProbe::kMaxProbeUs) {
-        AssistLog::debug(
+    if (elapsedMicroseconds > EbGhostParityProbe::kMaxProbeUs) {
+        EbAssistLog::debug(
             fmt::format("parity: probe slow {}us (horizon={})", elapsedMicroseconds, until));
     }
 
@@ -171,24 +171,24 @@ void GhostParityProbe::maybeRunProbe(PlayLayer* layer, PlayerObject* player, flo
     bool const drifted = deathMismatch || deltaX > this->m_epsX || deltaY > this->m_epsY;
 
     this->m_lastDrifted = drifted;
-    AssistRealMetrics::get().noteParityProbe(drifted, deltaX, deltaY);
+    EbAssistRealMetrics::get().noteParityProbe(drifted, deltaX, deltaY);
     if (!drifted) {
-        SimTrust::get().clearParityDrift();
-        SpotTrustMap::get().noteGoodParity(livePose->x);
+        EbSimTrust::get().clearParityDrift();
+        EbSpotTrustMap::get().noteGoodParity(livePose->x);
         return;
     }
 
     ++this->m_driftCount;
-    SimTrust::get().noteParityDrift();
-    SpotTrustMap::get().markUntrusted(livePose->x);
-    LagProbe::get().mark("eb.parity.drift",
+    EbSimTrust::get().noteParityDrift();
+    EbSpotTrustMap::get().markUntrusted(livePose->x);
+    EbLagProbe::get().mark("eb.parity.drift",
                          fmt::format("dx={:.1f} dy={:.1f} deathMis={} age={} us={}", deltaX, deltaY,
                                      deathMismatch ? 1 : 0, until, elapsedMicroseconds));
-    AssistLog::debug(fmt::format("parity DRIFT dx={:.1f} dy={:.1f} deathMis={} @x={:.0f}", deltaX,
+    EbAssistLog::debug(fmt::format("parity DRIFT dx={:.1f} dy={:.1f} deathMis={} @x={:.0f}", deltaX,
                                  deltaY, deathMismatch ? 1 : 0, livePose->x));
 }
 
-void GhostParityProbe::onPhysicsTick(PlayLayer* layer, PlayerObject* player, float simDt,
+void EbGhostParityProbe::onPhysicsTick(PlayLayer* layer, PlayerObject* player, float simDt,
                                      int attemptTick) {
     if (!layer || !player)
         return;
@@ -197,7 +197,7 @@ void GhostParityProbe::onPhysicsTick(PlayLayer* layer, PlayerObject* player, flo
     this->maybeRunProbe(layer, player, simDt, attemptTick);
 }
 
-bool GhostParityProbe::selfCheck(std::string& report) {
+bool EbGhostParityProbe::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -209,11 +209,11 @@ bool GhostParityProbe::selfCheck(std::string& report) {
         report += name;
     };
 
-    GhostParityProbe& probe = GhostParityProbe::get();
+    EbGhostParityProbe& probe = EbGhostParityProbe::get();
     probe.onLevelQuit();
     expect(probe.probeCount() == 0, "quit-reset-probes");
-    expect(probe.epsX() == GhostParityProbe::kDefaultEpsX, "default-eps-x");
-    expect(probe.epsY() == GhostParityProbe::kDefaultEpsY, "default-eps-y");
+    expect(probe.epsX() == EbGhostParityProbe::kDefaultEpsX, "default-eps-x");
+    expect(probe.epsY() == EbGhostParityProbe::kDefaultEpsY, "default-eps-y");
 
     probe.setEps(5.f, 7.f);
     expect(probe.epsX() == 5.f, "set-eps-x");
@@ -225,7 +225,7 @@ bool GhostParityProbe::selfCheck(std::string& report) {
     expect(!probe.lastProbeDrifted(), "reset-no-drift");
 
     // Restore defaults for play.
-    probe.setEps(GhostParityProbe::kDefaultEpsX, GhostParityProbe::kDefaultEpsY);
+    probe.setEps(EbGhostParityProbe::kDefaultEpsX, EbGhostParityProbe::kDefaultEpsY);
     probe.onLevelQuit();
 
     if (fails == 0) {

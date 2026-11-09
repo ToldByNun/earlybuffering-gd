@@ -14,7 +14,7 @@ class PlayerObject;
 // Reversible group on/off for toggle orb 1594 / touch-toggle 1049 during shadow sim.
 // Does NOT call vanilla triggerObject — only collision-relevant pose fields.
 // Restore on every capture reset so live objects never keep sim flips.
-class ToggleOrbSim {
+class EbToggleOrbSim {
 public:
     class CollisionSnap {
     public:
@@ -33,7 +33,7 @@ public:
     private:
     };
 
-    static ToggleOrbSim& get();
+    static EbToggleOrbSim& get();
 
     void begin();
     void restore();
@@ -53,7 +53,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    ToggleOrbSim() = default;
+    friend class EbServiceStore;
+
+    EbToggleOrbSim() = default;
 
     static constexpr size_t kMaxFlipMembers = 512;
     static constexpr size_t kMaxClaimedEffects = 64;

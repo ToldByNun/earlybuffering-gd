@@ -16,9 +16,9 @@ class PlayerObject;
 
 // Live press-cycle writer for DevTraceStore.
 // Commit 4: through DelayArm. Commit 5: recheck / HUS / fire / outcome + attempt seal.
-class DevCycleRecorder {
+class EbDevCycleRecorder {
 public:
-    static DevCycleRecorder& get();
+    static EbDevCycleRecorder& get();
 
     bool isRecording() const;
 
@@ -31,8 +31,8 @@ public:
     }
 
     void noteGatePass(AssistReason reason, char const* where);
-    void notePlanFinished(SimPlan const& plan, int effectTick, int limit,
-                          DevClockContract::Stamp const& clock, PlayLayer* layer,
+    void notePlanFinished(EbSimPlan const& plan, int effectTick, int limit,
+                          EbDevClockContract::Stamp const& clock, PlayLayer* layer,
                           PlayerObject* player);
     // After learning/verify adjusts the armed delay relative to plan.delay.
     void noteLearningOnPlan(int plannedDelay, int finalDelay, bool floored, bool verifyRefused);
@@ -79,7 +79,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevCycleRecorder() = default;
+    friend class EbServiceStore;
+
+    EbDevCycleRecorder() = default;
 
     class TrackedCycle {
     public:
@@ -109,7 +111,7 @@ private:
     bool canWriteActive() const;
     TrackedCycle* tracked(int64_t pressId);
     TrackedCycle* ensureActiveTracked();
-    DevDecisionEvent* appendTo(TrackedCycle& cycle, DevEventKind kind, int64_t parentEventId,
+    EbDevDecisionEvent* appendTo(TrackedCycle& cycle, DevEventKind kind, int64_t parentEventId,
                                int64_t planId, AssistReason reason, char const* where);
     void writeOutcomesForOpenCycles(std::string const& endReason, bool lived, int attemptTick);
     bool shouldCountAttempt() const;

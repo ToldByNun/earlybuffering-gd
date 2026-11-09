@@ -4,7 +4,7 @@
 #include <fmt/format.h>
 #include <string>
 
-bool DevRejectChecks::selfCheck(std::string& report) {
+bool EbDevRejectChecks::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -16,23 +16,23 @@ bool DevRejectChecks::selfCheck(std::string& report) {
         report += name;
     };
 
-    expect(std::strcmp(DevRejectLedger::rejectCodeId(DevRejectLedger::RejectCode::Chosen),
+    expect(std::strcmp(EbDevRejectLedger::rejectCodeId(EbDevRejectLedger::RejectCode::Chosen),
                        "chosen") == 0,
            "code-chosen");
-    expect(std::strcmp(DevRejectLedger::statusId(DevRejectLedger::Status::Skipped), "skipped") == 0,
+    expect(std::strcmp(EbDevRejectLedger::statusId(EbDevRejectLedger::Status::Skipped), "skipped") == 0,
            "status-skipped");
-    expect(std::strcmp(DevRejectLedger::attributionId(DevRejectLedger::Attribution::GatePass),
+    expect(std::strcmp(EbDevRejectLedger::attributionId(EbDevRejectLedger::Attribution::GatePass),
                        "gate-pass") == 0,
            "attr-gate");
 
-    DevRejectLedger::RejectCode parsed = DevRejectLedger::RejectCode::Chosen;
-    expect(DevRejectLedger::parseRejectCode("robust-k-failed", parsed) &&
-               parsed == DevRejectLedger::RejectCode::RobustKFailed,
+    EbDevRejectLedger::RejectCode parsed = EbDevRejectLedger::RejectCode::Chosen;
+    expect(EbDevRejectLedger::parseRejectCode("robust-k-failed", parsed) &&
+               parsed == EbDevRejectLedger::RejectCode::RobustKFailed,
            "parse-code");
 
     // Full ledger: every delay 0..limit once; chosen marked.
     {
-        DevRejectLedger::BuildInput in;
+        EbDevRejectLedger::BuildInput in;
         in.limit = 3;
         in.chosenDelay = 2;
         in.latencyWeight = 0.25f;
@@ -48,19 +48,19 @@ bool DevRejectChecks::selfCheck(std::string& report) {
         in.snaps[1].diedBeforeAction = true;
         in.snaps[1].viable = false;
 
-        auto ledger = DevRejectLedger::build(in);
+        auto ledger = EbDevRejectLedger::build(in);
         expect(static_cast<int>(ledger.notes.size()) == 4, "notes-n");
         expect(!ledger.truncated, "not-trunc");
         int chosenCount = 0;
         for (auto const& n : ledger.notes) {
-            if (n.status == DevRejectLedger::Status::Chosen) {
+            if (n.status == EbDevRejectLedger::Status::Chosen) {
                 ++chosenCount;
                 expect(n.delay == 2, "chosen-d");
-                expect(n.rejectCode == DevRejectLedger::RejectCode::Chosen, "chosen-code");
+                expect(n.rejectCode == EbDevRejectLedger::RejectCode::Chosen, "chosen-code");
             }
             if (n.delay == 1) {
-                expect(n.status == DevRejectLedger::Status::Rejected, "died-status");
-                expect(n.rejectCode == DevRejectLedger::RejectCode::DiedBeforeAction, "died-code");
+                expect(n.status == EbDevRejectLedger::Status::Rejected, "died-status");
+                expect(n.rejectCode == EbDevRejectLedger::RejectCode::DiedBeforeAction, "died-code");
             }
             if (n.delay == 0) {
                 expect(n.hasScores && n.surviveBin == 0, "scores-0");
@@ -71,27 +71,27 @@ bool DevRejectChecks::selfCheck(std::string& report) {
 
     // Skipped after wave proximity.
     {
-        DevRejectLedger::BuildInput in;
+        EbDevRejectLedger::BuildInput in;
         in.limit = 2;
         in.doPass = true;
         in.chosenDelay = 0;
-        in.earlyExit = DevRejectLedger::EarlyExit::WaveProximity;
+        in.earlyExit = EbDevRejectLedger::EarlyExit::WaveProximity;
         in.snaps.resize(3);
         in.snaps[0].evaluated = true;
         in.snaps[0].viable = true;
         in.snaps[0].endX = 5.f;
-        auto ledger = DevRejectLedger::build(in);
-        expect(ledger.notes[0].status == DevRejectLedger::Status::Chosen, "prox-chosen");
-        expect(ledger.notes[1].status == DevRejectLedger::Status::Skipped &&
-                   ledger.notes[1].rejectCode == DevRejectLedger::RejectCode::WaveHazardProximity,
+        auto ledger = EbDevRejectLedger::build(in);
+        expect(ledger.notes[0].status == EbDevRejectLedger::Status::Chosen, "prox-chosen");
+        expect(ledger.notes[1].status == EbDevRejectLedger::Status::Skipped &&
+                   ledger.notes[1].rejectCode == EbDevRejectLedger::RejectCode::WaveHazardProximity,
                "prox-skip");
-        expect(ledger.notes[2].status == DevRejectLedger::Status::Skipped, "prox-skip2");
+        expect(ledger.notes[2].status == EbDevRejectLedger::Status::Skipped, "prox-skip2");
     }
 
     // Truncation: codes remain past kMaxCandNotes, scores drop.
     {
-        DevRejectLedger::BuildInput in;
-        in.limit = DevRejectLedger::kMaxCandNotes + 2;
+        EbDevRejectLedger::BuildInput in;
+        in.limit = EbDevRejectLedger::kMaxCandNotes + 2;
         in.chosenDelay = 0;
         in.doPass = true;
         in.includeScores = true;
@@ -101,31 +101,31 @@ bool DevRejectChecks::selfCheck(std::string& report) {
             in.snaps[static_cast<size_t>(delay)].viable = true;
             in.snaps[static_cast<size_t>(delay)].endX = 1.f;
         }
-        auto ledger = DevRejectLedger::build(in);
+        auto ledger = EbDevRejectLedger::build(in);
         expect(ledger.truncated, "trunc-flag");
         expect(static_cast<int>(ledger.notes.size()) == in.limit + 1, "trunc-n");
         expect(ledger.notes[0].hasScores, "trunc-score-low");
-        expect(!ledger.notes[static_cast<size_t>(DevRejectLedger::kMaxCandNotes)].hasScores,
+        expect(!ledger.notes[static_cast<size_t>(EbDevRejectLedger::kMaxCandNotes)].hasScores,
                "trunc-score-high");
-        expect(ledger.notes[static_cast<size_t>(DevRejectLedger::kMaxCandNotes)].rejectCode !=
-                       DevRejectLedger::RejectCode::Chosen ||
-                   ledger.notes[0].status == DevRejectLedger::Status::Chosen,
+        expect(ledger.notes[static_cast<size_t>(EbDevRejectLedger::kMaxCandNotes)].rejectCode !=
+                       EbDevRejectLedger::RejectCode::Chosen ||
+                   ledger.notes[0].status == EbDevRejectLedger::Status::Chosen,
                "trunc-codes");
     }
 
     // Attribution: gate-pass alone.
     {
-        DevRejectLedger::AttributionInput a;
+        EbDevRejectLedger::AttributionInput a;
         a.gatePass = true;
         a.hasPlanFinished = false;
-        auto attrs = DevRejectLedger::buildAttribution(a);
+        auto attrs = EbDevRejectLedger::buildAttribution(a);
         expect(attrs.size() == 1, "attr-n");
-        expect(attrs[0].code == DevRejectLedger::Attribution::GatePass, "attr-gate-code");
+        expect(attrs[0].code == EbDevRejectLedger::Attribution::GatePass, "attr-gate-code");
     }
 
     // Attribution: chosen differs best surviving.
     {
-        DevRejectLedger::BuildInput in;
+        EbDevRejectLedger::BuildInput in;
         in.limit = 2;
         in.chosenDelay = 0;
         in.doPass = true;
@@ -136,9 +136,9 @@ bool DevRejectChecks::selfCheck(std::string& report) {
             in.snaps[static_cast<size_t>(delay)].endX = static_cast<float>(delay);
             in.snaps[static_cast<size_t>(delay)].surviveBin = 1;
         }
-        auto ledgerValue = DevRejectLedger::build(in);
+        auto ledgerValue = EbDevRejectLedger::build(in);
 
-        DevRejectLedger::AttributionInput a;
+        EbDevRejectLedger::AttributionInput a;
         a.hasPlanFinished = true;
         a.claimsAllowed = true;
         a.hasBestSurviving = true;
@@ -146,10 +146,10 @@ bool DevRejectChecks::selfCheck(std::string& report) {
         a.plannedDelay = 0;
         a.objectiveId = "survive_then_endx_v1";
         a.ledger = &ledgerValue;
-        auto attrs = DevRejectLedger::buildAttribution(a);
+        auto attrs = EbDevRejectLedger::buildAttribution(a);
         bool found = false;
         for (auto const& at : attrs) {
-            if (at.code == DevRejectLedger::Attribution::ChosenDiffersBestSurviving) {
+            if (at.code == EbDevRejectLedger::Attribution::ChosenDiffersBestSurviving) {
                 found = true;
                 expect(at.detail.find("bestSurv=2") != std::string::npos, "attr-detail");
             }

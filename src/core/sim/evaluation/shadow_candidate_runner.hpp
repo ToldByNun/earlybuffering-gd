@@ -5,31 +5,31 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowCandidateRunner {
+class EbShadowCandidateRunner {
 public:
-    static ShadowSimulator::RunResult runOne(ShadowSimulator& simulator, PlayLayer* layer,
+    static EbShadowSimulator::RunResult runOne(EbShadowSimulator& simulator, PlayLayer* layer,
                                              PlayerObject* real, bool down, int delay, int limit,
                                              float deltaTime, float firstDt,
-                                             ShadowSimulator::Model const& model, int releaseAfter,
-                                             ThreatZone const* zone, int* tickBudgetLeft);
-    static ShadowSimulator::RunResult runTrajectoryOne(ShadowSimulator& simulator, PlayLayer* layer,
+                                             EbShadowSimulator::Model const& model, int releaseAfter,
+                                             EbThreatZone const* zone, int* tickBudgetLeft);
+    static EbShadowSimulator::RunResult runTrajectoryOne(EbShadowSimulator& simulator, PlayLayer* layer,
                                                        PlayerObject* real, bool down, int delay,
                                                        int limit, float deltaTime, float firstDt,
-                                                       ShadowSimulator::Model const& model,
-                                                       int releaseAfter, ThreatZone const* zone,
+                                                       EbShadowSimulator::Model const& model,
+                                                       int releaseAfter, EbThreatZone const* zone,
                                                        int* tickBudgetLeft);
-    static ShadowSimulator::RunResult runBaseline(ShadowSimulator& simulator, PlayLayer* layer,
+    static EbShadowSimulator::RunResult runBaseline(EbShadowSimulator& simulator, PlayLayer* layer,
                                                   PlayerObject* real, bool down, float deltaTime,
                                                   float firstDt,
-                                                  ShadowSimulator::Model const& model,
+                                                  EbShadowSimulator::Model const& model,
                                                   int* tickBudgetLeft);
-    static ShadowSimulator::OrbWindow scanOrbWindow(ShadowSimulator& simulator, PlayLayer* layer,
+    static EbShadowSimulator::OrbWindow scanOrbWindow(EbShadowSimulator& simulator, PlayLayer* layer,
                                                     PlayerObject* real, bool down, int scanTicks,
                                                     float deltaTime, float firstDt,
                                                     int* tickBudgetLeft, bool holdJump);
 
 private:
-    ShadowCandidateRunner() = delete;
+    EbShadowCandidateRunner() = delete;
 };
 
 #endif

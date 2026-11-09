@@ -3,158 +3,158 @@
 #include <string>
 #include <unordered_set>
 
-ConfigBundleKeys::Entry const ConfigBundleKeysTable::kEntries[125] = {
-    {"enabled", ConfigBundleKeys::Kind::Bool},
-    {"safe-mode", ConfigBundleKeys::Kind::Bool},
-    {"show-overlay", ConfigBundleKeys::Kind::Bool},
-    {"debug-logging", ConfigBundleKeys::Kind::Bool},
-    {"perf-trace", ConfigBundleKeys::Kind::Bool},
-    {"lag-probe", ConfigBundleKeys::Kind::Bool},
-    {"show-trajectory", ConfigBundleKeys::Kind::Bool},
-    {"show-bake-path", ConfigBundleKeys::Kind::Bool},
-    {"show-pause-bake", ConfigBundleKeys::Kind::Bool},
-    {"show-pause-hub", ConfigBundleKeys::Kind::Bool},
-    {"save-feedback-sound", ConfigBundleKeys::Kind::Bool},
-    {"save-feedback-color", ConfigBundleKeys::Kind::Bool},
-    {"save-feedback-counter", ConfigBundleKeys::Kind::Bool},
-    {"save-icon-color", ConfigBundleKeys::Kind::Color},
-    {"assist-only-practice", ConfigBundleKeys::Kind::Bool},
-    {"assist-startpos-only", ConfigBundleKeys::Kind::Bool},
-    {"assist-percent-min", ConfigBundleKeys::Kind::Int},
-    {"assist-percent-max", ConfigBundleKeys::Kind::Int},
-    {"assist-off-1-from", ConfigBundleKeys::Kind::Float},
-    {"assist-off-1-to", ConfigBundleKeys::Kind::Float},
-    {"assist-off-2-from", ConfigBundleKeys::Kind::Float},
-    {"assist-off-2-to", ConfigBundleKeys::Kind::Float},
-    {"assist-off-3-from", ConfigBundleKeys::Kind::Float},
-    {"assist-off-3-to", ConfigBundleKeys::Kind::Float},
-    {"assist-off-4-from", ConfigBundleKeys::Kind::Float},
-    {"assist-off-4-to", ConfigBundleKeys::Kind::Float},
-    {"assist-off-5-from", ConfigBundleKeys::Kind::Float},
-    {"assist-off-5-to", ConfigBundleKeys::Kind::Float},
-    {"assist-off-6-from", ConfigBundleKeys::Kind::Float},
-    {"assist-off-6-to", ConfigBundleKeys::Kind::Float},
-    {"window-unit", ConfigBundleKeys::Kind::String},
-    {"ticks-all", ConfigBundleKeys::Kind::Int},
-    {"ticks-wave", ConfigBundleKeys::Kind::Int},
-    {"death-slack", ConfigBundleKeys::Kind::Int},
-    {"look-ahead-cap", ConfigBundleKeys::Kind::Int},
-    {"assist-mode", ConfigBundleKeys::Kind::String},
-    {"assist-pick", ConfigBundleKeys::Kind::String},
-    {"assist-engine", ConfigBundleKeys::Kind::String},
-    {"bake-radius", ConfigBundleKeys::Kind::Int},
-    {"cps-limit", ConfigBundleKeys::Kind::Int},
-    {"min-click-interval-ms", ConfigBundleKeys::Kind::Int},
-    {"assist-orbs", ConfigBundleKeys::Kind::Bool},
-    {"sim-budget-us", ConfigBundleKeys::Kind::Int},
-    {"tick-budget", ConfigBundleKeys::Kind::Int},
-    {"assist-press", ConfigBundleKeys::Kind::Bool},
-    {"assist-release", ConfigBundleKeys::Kind::Bool},
-    {"smart-depth", ConfigBundleKeys::Kind::Int},
-    {"smart-combos", ConfigBundleKeys::Kind::Int},
-    {"smart-horizon", ConfigBundleKeys::Kind::Int},
-    {"robust-k", ConfigBundleKeys::Kind::Int},
-    {"robust-jitter", ConfigBundleKeys::Kind::Bool},
-    {"auto-tune", ConfigBundleKeys::Kind::Bool},
-    {"self-bake", ConfigBundleKeys::Kind::Bool},
-    {"self-bake-normal", ConfigBundleKeys::Kind::Bool},
-    {"self-bake-refine", ConfigBundleKeys::Kind::Bool},
-    {"trigger-bake", ConfigBundleKeys::Kind::Bool},
-    {"trigger-bake-skip-dynamic", ConfigBundleKeys::Kind::Bool},
-    {"assist-verify", ConfigBundleKeys::Kind::String},
-    {"cube-enable", ConfigBundleKeys::Kind::Bool},
-    {"cube-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"cube-ticks", ConfigBundleKeys::Kind::Int},
-    {"cube-cap", ConfigBundleKeys::Kind::Int},
-    {"cube-slack", ConfigBundleKeys::Kind::Int},
-    {"cube-latency", ConfigBundleKeys::Kind::Float},
-    {"ship-enable", ConfigBundleKeys::Kind::Bool},
-    {"ship-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"ship-ticks", ConfigBundleKeys::Kind::Int},
-    {"ship-cap", ConfigBundleKeys::Kind::Int},
-    {"ship-slack", ConfigBundleKeys::Kind::Int},
-    {"ship-latency", ConfigBundleKeys::Kind::Float},
-    {"ball-enable", ConfigBundleKeys::Kind::Bool},
-    {"ball-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"ball-ticks", ConfigBundleKeys::Kind::Int},
-    {"ball-cap", ConfigBundleKeys::Kind::Int},
-    {"ball-slack", ConfigBundleKeys::Kind::Int},
-    {"ball-latency", ConfigBundleKeys::Kind::Float},
-    {"ufo-enable", ConfigBundleKeys::Kind::Bool},
-    {"ufo-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"ufo-ticks", ConfigBundleKeys::Kind::Int},
-    {"ufo-cap", ConfigBundleKeys::Kind::Int},
-    {"ufo-slack", ConfigBundleKeys::Kind::Int},
-    {"ufo-latency", ConfigBundleKeys::Kind::Float},
-    {"wave-enable", ConfigBundleKeys::Kind::Bool},
-    {"wave-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"wave-ticks", ConfigBundleKeys::Kind::Int},
-    {"wave-cap", ConfigBundleKeys::Kind::Int},
-    {"wave-slack", ConfigBundleKeys::Kind::Int},
-    {"wave-latency", ConfigBundleKeys::Kind::Float},
-    {"robot-enable", ConfigBundleKeys::Kind::Bool},
-    {"robot-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"robot-ticks", ConfigBundleKeys::Kind::Int},
-    {"robot-cap", ConfigBundleKeys::Kind::Int},
-    {"robot-slack", ConfigBundleKeys::Kind::Int},
-    {"robot-latency", ConfigBundleKeys::Kind::Float},
-    {"spider-enable", ConfigBundleKeys::Kind::Bool},
-    {"spider-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"spider-ticks", ConfigBundleKeys::Kind::Int},
-    {"spider-cap", ConfigBundleKeys::Kind::Int},
-    {"spider-slack", ConfigBundleKeys::Kind::Int},
-    {"spider-latency", ConfigBundleKeys::Kind::Float},
-    {"swing-enable", ConfigBundleKeys::Kind::Bool},
-    {"swing-overwrite", ConfigBundleKeys::Kind::Bool},
-    {"swing-ticks", ConfigBundleKeys::Kind::Int},
-    {"swing-cap", ConfigBundleKeys::Kind::Int},
-    {"swing-slack", ConfigBundleKeys::Kind::Int},
-    {"swing-latency", ConfigBundleKeys::Kind::Float},
-    {"hotkey-debug", ConfigBundleKeys::Kind::Keybind},
-    {"hotkey-reset-level", ConfigBundleKeys::Kind::Keybind},
-    {"hotkey-auto-tune", ConfigBundleKeys::Kind::Keybind},
-    {"hotkey-assist-mode", ConfigBundleKeys::Kind::Keybind},
-    {"hotkey-trajectory", ConfigBundleKeys::Kind::Keybind},
-    {"dev-record-enable", ConfigBundleKeys::Kind::Bool},
-    {"dev-record-count", ConfigBundleKeys::Kind::Int},
-    {"dev-count-empty-attempts", ConfigBundleKeys::Kind::Bool},
-    {"dev-freeze-world", ConfigBundleKeys::Kind::Bool},
-    {"dev-disable-random", ConfigBundleKeys::Kind::Bool},
-    {"dev-eval-on-death", ConfigBundleKeys::Kind::Bool},
-    {"dev-eval-grid", ConfigBundleKeys::Kind::String},
-    {"dev-eval-horizon", ConfigBundleKeys::Kind::Int},
-    {"dev-eval-tail", ConfigBundleKeys::Kind::Int},
-    {"dev-objective", ConfigBundleKeys::Kind::String},
-    {"dev-eval-require-deps", ConfigBundleKeys::Kind::Bool},
-    {"dev-record-cands", ConfigBundleKeys::Kind::Bool},
-    {"dev-eval-tick-budget", ConfigBundleKeys::Kind::Int},
-    {"dev-overlay", ConfigBundleKeys::Kind::Bool}};
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[125] = {
+    {"enabled", EbConfigBundleKeys::Kind::Bool},
+    {"safe-mode", EbConfigBundleKeys::Kind::Bool},
+    {"show-overlay", EbConfigBundleKeys::Kind::Bool},
+    {"debug-logging", EbConfigBundleKeys::Kind::Bool},
+    {"perf-trace", EbConfigBundleKeys::Kind::Bool},
+    {"lag-probe", EbConfigBundleKeys::Kind::Bool},
+    {"show-trajectory", EbConfigBundleKeys::Kind::Bool},
+    {"show-bake-path", EbConfigBundleKeys::Kind::Bool},
+    {"show-pause-bake", EbConfigBundleKeys::Kind::Bool},
+    {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
+    {"save-feedback-sound", EbConfigBundleKeys::Kind::Bool},
+    {"save-feedback-color", EbConfigBundleKeys::Kind::Bool},
+    {"save-feedback-counter", EbConfigBundleKeys::Kind::Bool},
+    {"save-icon-color", EbConfigBundleKeys::Kind::Color},
+    {"assist-only-practice", EbConfigBundleKeys::Kind::Bool},
+    {"assist-startpos-only", EbConfigBundleKeys::Kind::Bool},
+    {"assist-percent-min", EbConfigBundleKeys::Kind::Int},
+    {"assist-percent-max", EbConfigBundleKeys::Kind::Int},
+    {"assist-off-1-from", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-1-to", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-2-from", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-2-to", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-3-from", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-3-to", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-4-from", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-4-to", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-5-from", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-5-to", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-6-from", EbConfigBundleKeys::Kind::Float},
+    {"assist-off-6-to", EbConfigBundleKeys::Kind::Float},
+    {"window-unit", EbConfigBundleKeys::Kind::String},
+    {"ticks-all", EbConfigBundleKeys::Kind::Int},
+    {"ticks-wave", EbConfigBundleKeys::Kind::Int},
+    {"death-slack", EbConfigBundleKeys::Kind::Int},
+    {"look-ahead-cap", EbConfigBundleKeys::Kind::Int},
+    {"assist-mode", EbConfigBundleKeys::Kind::String},
+    {"assist-pick", EbConfigBundleKeys::Kind::String},
+    {"assist-engine", EbConfigBundleKeys::Kind::String},
+    {"bake-radius", EbConfigBundleKeys::Kind::Int},
+    {"cps-limit", EbConfigBundleKeys::Kind::Int},
+    {"min-click-interval-ms", EbConfigBundleKeys::Kind::Int},
+    {"assist-orbs", EbConfigBundleKeys::Kind::Bool},
+    {"sim-budget-us", EbConfigBundleKeys::Kind::Int},
+    {"tick-budget", EbConfigBundleKeys::Kind::Int},
+    {"assist-press", EbConfigBundleKeys::Kind::Bool},
+    {"assist-release", EbConfigBundleKeys::Kind::Bool},
+    {"smart-depth", EbConfigBundleKeys::Kind::Int},
+    {"smart-combos", EbConfigBundleKeys::Kind::Int},
+    {"smart-horizon", EbConfigBundleKeys::Kind::Int},
+    {"robust-k", EbConfigBundleKeys::Kind::Int},
+    {"robust-jitter", EbConfigBundleKeys::Kind::Bool},
+    {"auto-tune", EbConfigBundleKeys::Kind::Bool},
+    {"self-bake", EbConfigBundleKeys::Kind::Bool},
+    {"self-bake-normal", EbConfigBundleKeys::Kind::Bool},
+    {"self-bake-refine", EbConfigBundleKeys::Kind::Bool},
+    {"trigger-bake", EbConfigBundleKeys::Kind::Bool},
+    {"trigger-bake-skip-dynamic", EbConfigBundleKeys::Kind::Bool},
+    {"assist-verify", EbConfigBundleKeys::Kind::String},
+    {"cube-enable", EbConfigBundleKeys::Kind::Bool},
+    {"cube-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"cube-ticks", EbConfigBundleKeys::Kind::Int},
+    {"cube-cap", EbConfigBundleKeys::Kind::Int},
+    {"cube-slack", EbConfigBundleKeys::Kind::Int},
+    {"cube-latency", EbConfigBundleKeys::Kind::Float},
+    {"ship-enable", EbConfigBundleKeys::Kind::Bool},
+    {"ship-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"ship-ticks", EbConfigBundleKeys::Kind::Int},
+    {"ship-cap", EbConfigBundleKeys::Kind::Int},
+    {"ship-slack", EbConfigBundleKeys::Kind::Int},
+    {"ship-latency", EbConfigBundleKeys::Kind::Float},
+    {"ball-enable", EbConfigBundleKeys::Kind::Bool},
+    {"ball-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"ball-ticks", EbConfigBundleKeys::Kind::Int},
+    {"ball-cap", EbConfigBundleKeys::Kind::Int},
+    {"ball-slack", EbConfigBundleKeys::Kind::Int},
+    {"ball-latency", EbConfigBundleKeys::Kind::Float},
+    {"ufo-enable", EbConfigBundleKeys::Kind::Bool},
+    {"ufo-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"ufo-ticks", EbConfigBundleKeys::Kind::Int},
+    {"ufo-cap", EbConfigBundleKeys::Kind::Int},
+    {"ufo-slack", EbConfigBundleKeys::Kind::Int},
+    {"ufo-latency", EbConfigBundleKeys::Kind::Float},
+    {"wave-enable", EbConfigBundleKeys::Kind::Bool},
+    {"wave-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"wave-ticks", EbConfigBundleKeys::Kind::Int},
+    {"wave-cap", EbConfigBundleKeys::Kind::Int},
+    {"wave-slack", EbConfigBundleKeys::Kind::Int},
+    {"wave-latency", EbConfigBundleKeys::Kind::Float},
+    {"robot-enable", EbConfigBundleKeys::Kind::Bool},
+    {"robot-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"robot-ticks", EbConfigBundleKeys::Kind::Int},
+    {"robot-cap", EbConfigBundleKeys::Kind::Int},
+    {"robot-slack", EbConfigBundleKeys::Kind::Int},
+    {"robot-latency", EbConfigBundleKeys::Kind::Float},
+    {"spider-enable", EbConfigBundleKeys::Kind::Bool},
+    {"spider-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"spider-ticks", EbConfigBundleKeys::Kind::Int},
+    {"spider-cap", EbConfigBundleKeys::Kind::Int},
+    {"spider-slack", EbConfigBundleKeys::Kind::Int},
+    {"spider-latency", EbConfigBundleKeys::Kind::Float},
+    {"swing-enable", EbConfigBundleKeys::Kind::Bool},
+    {"swing-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"swing-ticks", EbConfigBundleKeys::Kind::Int},
+    {"swing-cap", EbConfigBundleKeys::Kind::Int},
+    {"swing-slack", EbConfigBundleKeys::Kind::Int},
+    {"swing-latency", EbConfigBundleKeys::Kind::Float},
+    {"hotkey-debug", EbConfigBundleKeys::Kind::Keybind},
+    {"hotkey-reset-level", EbConfigBundleKeys::Kind::Keybind},
+    {"hotkey-auto-tune", EbConfigBundleKeys::Kind::Keybind},
+    {"hotkey-assist-mode", EbConfigBundleKeys::Kind::Keybind},
+    {"hotkey-trajectory", EbConfigBundleKeys::Kind::Keybind},
+    {"dev-record-enable", EbConfigBundleKeys::Kind::Bool},
+    {"dev-record-count", EbConfigBundleKeys::Kind::Int},
+    {"dev-count-empty-attempts", EbConfigBundleKeys::Kind::Bool},
+    {"dev-freeze-world", EbConfigBundleKeys::Kind::Bool},
+    {"dev-disable-random", EbConfigBundleKeys::Kind::Bool},
+    {"dev-eval-on-death", EbConfigBundleKeys::Kind::Bool},
+    {"dev-eval-grid", EbConfigBundleKeys::Kind::String},
+    {"dev-eval-horizon", EbConfigBundleKeys::Kind::Int},
+    {"dev-eval-tail", EbConfigBundleKeys::Kind::Int},
+    {"dev-objective", EbConfigBundleKeys::Kind::String},
+    {"dev-eval-require-deps", EbConfigBundleKeys::Kind::Bool},
+    {"dev-record-cands", EbConfigBundleKeys::Kind::Bool},
+    {"dev-eval-tick-budget", EbConfigBundleKeys::Kind::Int},
+    {"dev-overlay", EbConfigBundleKeys::Kind::Bool}};
 
-ConfigBundleKeys::Entry const* ConfigBundleKeys::begin() {
-    return ConfigBundleKeysTable::kEntries;
+EbConfigBundleKeys::Entry const* EbConfigBundleKeys::begin() {
+    return EbConfigBundleKeysTable::kEntries;
 }
 
-ConfigBundleKeys::Entry const* ConfigBundleKeys::end() {
-    return ConfigBundleKeysTable::kEntries + ConfigBundleKeysTable::kEntryCount;
+EbConfigBundleKeys::Entry const* EbConfigBundleKeys::end() {
+    return EbConfigBundleKeysTable::kEntries + EbConfigBundleKeysTable::kEntryCount;
 }
 
-int ConfigBundleKeys::count() {
-    return ConfigBundleKeysTable::kEntryCount;
+int EbConfigBundleKeys::count() {
+    return EbConfigBundleKeysTable::kEntryCount;
 }
 
-ConfigBundleKeys::Entry const* ConfigBundleKeys::find(char const* key) {
+EbConfigBundleKeys::Entry const* EbConfigBundleKeys::find(char const* key) {
     if (!key) {
         return nullptr;
     }
-    for (int index = 0; index < ConfigBundleKeysTable::kEntryCount; ++index) {
-        if (std::strcmp(ConfigBundleKeysTable::kEntries[index].key, key) == 0) {
-            return &ConfigBundleKeysTable::kEntries[index];
+    for (int index = 0; index < EbConfigBundleKeysTable::kEntryCount; ++index) {
+        if (std::strcmp(EbConfigBundleKeysTable::kEntries[index].key, key) == 0) {
+            return &EbConfigBundleKeysTable::kEntries[index];
         }
     }
     return nullptr;
 }
 
-bool ConfigBundleKeys::selfCheck(std::string& report) {
+bool EbConfigBundleKeys::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -164,10 +164,10 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(ConfigBundleKeysTable::kEntryCount == 125, "count-125");
-    expect(ConfigBundleKeys::count() == ConfigBundleKeysTable::kEntryCount, "count-api");
-    expect(static_cast<int>(ConfigBundleKeys::end() - ConfigBundleKeys::begin()) ==
-               ConfigBundleKeysTable::kEntryCount,
+    expect(EbConfigBundleKeysTable::kEntryCount == 125, "count-125");
+    expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
+    expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
+               EbConfigBundleKeysTable::kEntryCount,
            "begin-end");
 
     std::unordered_set<std::string> seen;
@@ -177,8 +177,8 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     int kindString = 0;
     int kindColor = 0;
     int kindKeybind = 0;
-    for (int index = 0; index < ConfigBundleKeysTable::kEntryCount; ++index) {
-        auto const& e = ConfigBundleKeysTable::kEntries[index];
+    for (int index = 0; index < EbConfigBundleKeysTable::kEntryCount; ++index) {
+        auto const& e = EbConfigBundleKeysTable::kEntries[index];
         expect(e.key != nullptr && e.key[0] != '\0', "nonempty-key");
         bool const inserted = seen.insert(std::string(e.key)).second;
         expect(inserted, "unique");
@@ -206,7 +206,7 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
             break;
         }
     }
-    expect(static_cast<int>(seen.size()) == ConfigBundleKeysTable::kEntryCount, "unique-count");
+    expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
     expect(kindBool == 49, "kind-bool-49");
     expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
@@ -214,21 +214,21 @@ bool ConfigBundleKeys::selfCheck(std::string& report) {
     expect(kindColor == 1, "kind-color-1");
     expect(kindKeybind == 5, "kind-keybind-5");
 
-    auto const* enabled = ConfigBundleKeys::find("enabled");
+    auto const* enabled = EbConfigBundleKeys::find("enabled");
     expect(enabled != nullptr, "find-enabled");
     expect(enabled && enabled->kind == Kind::Bool, "find-enabled-bool");
-    auto const* bakePath = ConfigBundleKeys::find("show-bake-path");
+    auto const* bakePath = EbConfigBundleKeys::find("show-bake-path");
     expect(bakePath && bakePath->kind == Kind::Bool, "find-show-bake-path");
-    auto const* color = ConfigBundleKeys::find("save-icon-color");
+    auto const* color = EbConfigBundleKeys::find("save-icon-color");
     expect(color && color->kind == Kind::Color, "find-color");
-    auto const* hotkey = ConfigBundleKeys::find("hotkey-assist-mode");
+    auto const* hotkey = EbConfigBundleKeys::find("hotkey-assist-mode");
     expect(hotkey && hotkey->kind == Kind::Keybind, "find-keybind");
-    auto const* offFrom = ConfigBundleKeys::find("assist-off-1-from");
+    auto const* offFrom = EbConfigBundleKeys::find("assist-off-1-from");
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
-    expect(ConfigBundleKeys::find("preset") == nullptr, "preset-removed");
-    expect(ConfigBundleKeys::find("stage-index") == nullptr, "stage-index-removed");
-    expect(ConfigBundleKeys::find("no-such-setting") == nullptr, "find-miss");
-    expect(ConfigBundleKeys::find(nullptr) == nullptr, "find-null");
+    expect(EbConfigBundleKeys::find("preset") == nullptr, "preset-removed");
+    expect(EbConfigBundleKeys::find("stage-index") == nullptr, "stage-index-removed");
+    expect(EbConfigBundleKeys::find("no-such-setting") == nullptr, "find-miss");
+    expect(EbConfigBundleKeys::find(nullptr) == nullptr, "find-null");
 
     if (fails == 0) {
         report = "ConfigBundleKeys selfCheck OK";

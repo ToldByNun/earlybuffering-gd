@@ -19,22 +19,22 @@
 #include <string>
 #include <vector>
 
-std::string CloudConfigPopupImplementation::toLower(std::string text) {
+std::string EbCloudConfigPopupImplementation::toLower(std::string text) {
     for (char& c : text) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
     return text;
 }
 
-bool CloudConfigPopupImplementation::containsInsensitive(std::string const& hay,
+bool EbCloudConfigPopupImplementation::containsInsensitive(std::string const& hay,
                                                          std::string const& needleLower) {
     if (!(needleLower.empty())) {
-        return CloudConfigPopupImplementation::toLower(hay).find(needleLower) != std::string::npos;
+        return EbCloudConfigPopupImplementation::toLower(hay).find(needleLower) != std::string::npos;
     }
     return true;
 }
 
-std::string CloudConfigPopupImplementation::truncate(std::string text, size_t maxChars) {
+std::string EbCloudConfigPopupImplementation::truncate(std::string text, size_t maxChars) {
     if (text.size() <= maxChars)
         return text;
     if (!(maxChars <= 3)) {
@@ -43,7 +43,7 @@ std::string CloudConfigPopupImplementation::truncate(std::string text, size_t ma
     return text.substr(0, maxChars);
 }
 
-std::string CloudConfigPopupImplementation::formatBytes(size_t count) {
+std::string EbCloudConfigPopupImplementation::formatBytes(size_t count) {
     if (count < 1024)
         return fmt::format("{} B", count);
     if (!(count < 1024 * 1024)) {
@@ -52,7 +52,7 @@ std::string CloudConfigPopupImplementation::formatBytes(size_t count) {
     return fmt::format("{:.1f} KB", count / 1024.0);
 }
 
-std::string CloudConfigPopupImplementation::formatDownloads(int count) {
+std::string EbCloudConfigPopupImplementation::formatDownloads(int count) {
     if (count >= 1000000)
         return fmt::format("{:.1f}M", count / 1000000.0);
     if (!(count >= 10000)) {
@@ -61,8 +61,8 @@ std::string CloudConfigPopupImplementation::formatDownloads(int count) {
     return fmt::format("{}k", count / 1000);
 }
 
-CloudConfigPopup* CloudConfigPopup::create() {
-    auto* createdObject = new CloudConfigPopup();
+EbCloudConfigPopup* EbCloudConfigPopup::create() {
+    auto* createdObject = new EbCloudConfigPopup();
     if (createdObject->init()) {
         createdObject->autorelease();
         return createdObject;
@@ -71,17 +71,17 @@ CloudConfigPopup* CloudConfigPopup::create() {
     return nullptr;
 }
 
-void CloudConfigPopup::open() {
+void EbCloudConfigPopup::open() {
     if (auto* p = create()) {
         p->show();
     }
 }
 
-bool CloudConfigPopup::init() {
-    return CloudBrowserLayout::init(*this);
+bool EbCloudConfigPopup::init() {
+    return EbCloudBrowserLayout::init(*this);
 }
 
-void CloudConfigPopup::setShareOpen(bool open) {
+void EbCloudConfigPopup::setShareOpen(bool open) {
     m_shareOpen = open;
     if (m_closeBtn) {
         m_closeBtn->setVisible(!open);
@@ -89,77 +89,77 @@ void CloudConfigPopup::setShareOpen(bool open) {
     }
 }
 
-std::string CloudConfigPopup::liveModVersion() const {
+std::string EbCloudConfigPopup::liveModVersion() const {
     if (auto* mod = geode::prelude::Mod::get()) {
         return mod->getVersion().toVString();
     }
     return "0.0.0";
 }
 
-bool CloudConfigPopup::isCached(std::string const& id) const {
-    return CloudConfigStore::get().hasPack(id);
+bool EbCloudConfigPopup::isCached(std::string const& id) const {
+    return EbCloudConfigStore::get().hasPack(id);
 }
 
-bool CloudConfigPopup::isActive(std::string const& id) const {
+bool EbCloudConfigPopup::isActive(std::string const& id) const {
     return !id.empty() && id == m_activeId;
 }
 
-bool CloudConfigPopup::hasUpdate(CloudConfigIndex::PackEntry const& e) const {
+bool EbCloudConfigPopup::hasUpdate(EbCloudConfigIndex::PackEntry const& e) const {
     if (!this->isCached(e.id))
         return false;
     std::string body;
     std::string err;
-    if (!CloudConfigStore::get().readPack(e.id, body, err))
+    if (!EbCloudConfigStore::get().readPack(e.id, body, err))
         return false;
-    CloudConfigStore::ActiveInfo active{};
-    if (CloudConfigStore::get().readActive(active, err) && active.id == e.id &&
+    EbCloudConfigStore::ActiveInfo active{};
+    if (EbCloudConfigStore::get().readActive(active, err) && active.id == e.id &&
         !active.sha256.empty()) {
         return active.sha256 != e.sha256;
     }
     return body.size() != e.size;
 }
 
-CloudConfigIndex::PackEntry const* CloudConfigPopup::selectedEntry() const {
-    return CloudConfigIndex::findById(CloudConfigService::get().catalog(), m_selectedId);
+EbCloudConfigIndex::PackEntry const* EbCloudConfigPopup::selectedEntry() const {
+    return EbCloudConfigIndex::findById(EbCloudConfigService::get().catalog(), m_selectedId);
 }
 
-bool CloudConfigPopup::packMatchesSearch(CloudConfigIndex::PackEntry const& e) const {
-    return CloudBrowserList::packMatchesSearch(*this, e);
+bool EbCloudConfigPopup::packMatchesSearch(EbCloudConfigIndex::PackEntry const& e) const {
+    return EbCloudBrowserList::packMatchesSearch(*this, e);
 }
 
-void CloudConfigPopup::setStatus(std::string const& text, bool isError) {
+void EbCloudConfigPopup::setStatus(std::string const& text, bool isError) {
     if (!m_statusLabel)
         return;
     // Leave room for the nudged Refresh control.
-    size_t const maxChars = PlatformLimits::isConstrainedDevice() ? 26 : 36;
-    m_statusLabel->setString(CloudConfigPopupImplementation::truncate(text, maxChars).c_str());
+    size_t const maxChars = EbPlatformLimits::isConstrainedDevice() ? 26 : 36;
+    m_statusLabel->setString(EbCloudConfigPopupImplementation::truncate(text, maxChars).c_str());
     m_statusLabel->setColor(isError ? geode::prelude::ccColor3B{255, 90, 90}
                                     : geode::prelude::ccColor3B{255, 255, 255});
 }
 
-void CloudConfigPopup::ensureLocalCatalog() {
-    if (!CloudConfigService::get().catalog().packs.empty())
+void EbCloudConfigPopup::ensureLocalCatalog() {
+    if (!EbCloudConfigService::get().catalog().packs.empty())
         return;
-    CloudConfigService::RefreshResult local{};
-    (void)CloudConfigService::get().loadLocalCatalog(local);
+    EbCloudConfigService::RefreshResult local{};
+    (void)EbCloudConfigService::get().loadLocalCatalog(local);
 }
 
-CloudConfigListCell::StatsBadge CloudConfigPopup::statsBadgeFor(std::string const& id) const {
-    CloudConfigListCell::StatsBadge secondValue{};
-    auto const state = CloudConfigStats::get().statsFor(id);
+EbCloudConfigListCell::StatsBadge EbCloudConfigPopup::statsBadgeFor(std::string const& id) const {
+    EbCloudConfigListCell::StatsBadge secondValue{};
+    auto const state = EbCloudConfigStats::get().statsFor(id);
     if (state.downloads <= 0 && state.ratingCount <= 0)
         return secondValue;
     secondValue.show = true;
     secondValue.downloads = state.downloads;
     secondValue.ratingCount = state.ratingCount;
-    secondValue.ratingAvg = CloudConfigStats::averageRating(state);
+    secondValue.ratingAvg = EbCloudConfigStats::averageRating(state);
     return secondValue;
 }
 
-void CloudConfigPopup::startStatsFetch() {
+void EbCloudConfigPopup::startStatsFetch() {
     uint64_t const generation = ++m_statsGen;
-    geode::prelude::Ref<CloudConfigPopup> self = this;
-    CloudConfigStats::get().fetchStats([self, generation](bool ok, std::string const&) {
+    geode::prelude::Ref<EbCloudConfigPopup> self = this;
+    EbCloudConfigStats::get().fetchStats([self, generation](bool ok, std::string const&) {
         if (!self || generation != self->m_statsGen)
             return;
         if (!ok)
@@ -169,12 +169,12 @@ void CloudConfigPopup::startStatsFetch() {
     });
 }
 
-void CloudConfigPopup::loadInitial() {
+void EbCloudConfigPopup::loadInitial() {
     this->ensureLocalCatalog();
-    auto const& cat = CloudConfigService::get().catalog();
+    auto const& cat = EbCloudConfigService::get().catalog();
     char const* sourceValue =
-        CloudConfigService::get().source() == CloudConfigService::CatalogSource::Seed ? "Seed"
-        : CloudConfigService::get().source() == CloudConfigService::CatalogSource::DiskCache
+        EbCloudConfigService::get().source() == EbCloudConfigService::CatalogSource::Seed ? "Seed"
+        : EbCloudConfigService::get().source() == EbCloudConfigService::CatalogSource::DiskCache
             ? "Cache"
             : "Local";
     this->setStatus(fmt::format("{} · {} packs", sourceValue, cat.packs.size()), cat.packs.empty());
@@ -188,8 +188,8 @@ void CloudConfigPopup::loadInitial() {
     this->startRefresh(false);
 }
 
-void CloudConfigPopup::startRefresh(bool force) {
-    if (m_busyUi || CloudConfigService::get().isBusy()) {
+void EbCloudConfigPopup::startRefresh(bool force) {
+    if (m_busyUi || EbCloudConfigService::get().isBusy()) {
         this->setStatus("Busy…", false);
         return;
     }
@@ -199,11 +199,11 @@ void CloudConfigPopup::startRefresh(bool force) {
     if (m_refreshBtn)
         m_refreshBtn->setEnabled(false);
 
-    std::string const custom = CloudConfigService::readCatalogUrlSetting();
-    geode::prelude::Ref<CloudConfigPopup> self = this;
-    CloudConfigService::get().refreshCatalog(
+    std::string const custom = EbCloudConfigService::readCatalogUrlSetting();
+    geode::prelude::Ref<EbCloudConfigPopup> self = this;
+    EbCloudConfigService::get().refreshCatalog(
         custom,
-        [self, generation](CloudConfigService::RefreshResult const& r) {
+        [self, generation](EbCloudConfigService::RefreshResult const& r) {
             if (!self || generation != self->m_opGen)
                 return;
             self->onRefreshDone(r);
@@ -211,7 +211,7 @@ void CloudConfigPopup::startRefresh(bool force) {
         force);
 }
 
-void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r) {
+void EbCloudConfigPopup::onRefreshDone(EbCloudConfigService::RefreshResult const& r) {
     m_busyUi = false;
     if (m_refreshBtn)
         m_refreshBtn->setEnabled(true);
@@ -222,10 +222,10 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
     }
     if (!r.ok) {
         this->ensureLocalCatalog();
-        auto const count = CloudConfigService::get().catalog().packs.size();
+        auto const count = EbCloudConfigService::get().catalog().packs.size();
         this->setStatus(fmt::format("Offline · {} packs", count), count == 0);
         if (m_selectedId.empty() && count > 0) {
-            m_selectedId = CloudConfigService::get().catalog().packs.front().id;
+            m_selectedId = EbCloudConfigService::get().catalog().packs.front().id;
         }
         this->rebuildList();
         this->updateDetail();
@@ -246,60 +246,60 @@ void CloudConfigPopup::onRefreshDone(CloudConfigService::RefreshResult const& r)
     if (r.catalog.packs.empty()) {
         this->ensureLocalCatalog();
     }
-    if (m_selectedId.empty() && !CloudConfigService::get().catalog().packs.empty()) {
-        m_selectedId = CloudConfigService::get().catalog().packs.front().id;
-    } else if (!CloudConfigIndex::findById(CloudConfigService::get().catalog(), m_selectedId) &&
-               !CloudConfigService::get().catalog().packs.empty()) {
-        m_selectedId = CloudConfigService::get().catalog().packs.front().id;
+    if (m_selectedId.empty() && !EbCloudConfigService::get().catalog().packs.empty()) {
+        m_selectedId = EbCloudConfigService::get().catalog().packs.front().id;
+    } else if (!EbCloudConfigIndex::findById(EbCloudConfigService::get().catalog(), m_selectedId) &&
+               !EbCloudConfigService::get().catalog().packs.empty()) {
+        m_selectedId = EbCloudConfigService::get().catalog().packs.front().id;
     }
     this->rebuildList();
     this->updateDetail();
     this->startStatsFetch();
 }
 
-char const* CloudConfigPopup::sortModeLabel() const {
-    return CloudBrowserList::sortModeLabel(*this);
+char const* EbCloudConfigPopup::sortModeLabel() const {
+    return EbCloudBrowserList::sortModeLabel(*this);
 }
 
-void CloudConfigPopup::updateSortLabel() {
-    return CloudBrowserList::updateSortLabel(*this);
+void EbCloudConfigPopup::updateSortLabel() {
+    return EbCloudBrowserList::updateSortLabel(*this);
 }
 
-void CloudConfigPopup::onSortCycle(geode::prelude::CCObject* argument0) {
-    return CloudBrowserList::onSortCycle(*this, argument0);
+void EbCloudConfigPopup::onSortCycle(geode::prelude::CCObject* argument0) {
+    return EbCloudBrowserList::onSortCycle(*this, argument0);
 }
 
-void CloudConfigPopup::applySort(std::vector<CloudConfigIndex::PackEntry const*>& rows) const {
-    return CloudBrowserList::applySort(*this, rows);
+void EbCloudConfigPopup::applySort(std::vector<EbCloudConfigIndex::PackEntry const*>& rows) const {
+    return EbCloudBrowserList::applySort(*this, rows);
 }
 
-void CloudConfigPopup::rebuildList() {
-    return CloudBrowserList::rebuildList(*this);
+void EbCloudConfigPopup::rebuildList() {
+    return EbCloudBrowserList::rebuildList(*this);
 }
 
-void CloudConfigPopup::selectPack(std::string const& id) {
+void EbCloudConfigPopup::selectPack(std::string const& id) {
     m_selectedId = id;
     this->rebuildList();
     this->updateDetail();
 }
 
-void CloudConfigPopup::updateRateUi() {
-    return CloudBrowserDetails::updateRateUi(*this);
+void EbCloudConfigPopup::updateRateUi() {
+    return EbCloudBrowserDetails::updateRateUi(*this);
 }
 
-void CloudConfigPopup::updateDetail() {
-    return CloudBrowserDetails::updateDetail(*this);
+void EbCloudConfigPopup::updateDetail() {
+    return EbCloudBrowserDetails::updateDetail(*this);
 }
 
-void CloudConfigPopup::onRefresh(geode::prelude::CCObject*) {
+void EbCloudConfigPopup::onRefresh(geode::prelude::CCObject*) {
     this->startRefresh(true);
 }
 
-void CloudConfigPopup::onInstall(geode::prelude::CCObject*) {
+void EbCloudConfigPopup::onInstall(geode::prelude::CCObject*) {
     auto const* entry = this->selectedEntry();
     if (!entry || m_busyUi)
         return;
-    if (!CloudConfigIndex::meetsMinModVersion(*entry, this->liveModVersion())) {
+    if (!EbCloudConfigIndex::meetsMinModVersion(*entry, this->liveModVersion())) {
         FLAlertLayer::create("Cloud Configs", "This pack needs a newer EarlyBuffer version.", "OK")
             ->show();
         return;
@@ -315,8 +315,8 @@ void CloudConfigPopup::onInstall(geode::prelude::CCObject*) {
                                      });
 }
 
-void CloudConfigPopup::doInstall(std::string const& id) {
-    auto const* entryValue = CloudConfigIndex::findById(CloudConfigService::get().catalog(), id);
+void EbCloudConfigPopup::doInstall(std::string const& id) {
+    auto const* entryValue = EbCloudConfigIndex::findById(EbCloudConfigService::get().catalog(), id);
     if (!entryValue)
         return;
 
@@ -326,19 +326,19 @@ void CloudConfigPopup::doInstall(std::string const& id) {
     if (m_installBtn)
         m_installBtn->setEnabled(false);
 
-    CloudConfigIndex::PackEntry entry = *entryValue;
-    geode::prelude::Ref<CloudConfigPopup> self = this;
-    CloudConfigService::get().fetchPack(
+    EbCloudConfigIndex::PackEntry entry = *entryValue;
+    geode::prelude::Ref<EbCloudConfigPopup> self = this;
+    EbCloudConfigService::get().fetchPack(
         id, this->hasUpdate(entry),
-        [self, generation, entry](CloudConfigService::PackFetchResult const& fr) {
+        [self, generation, entry](EbCloudConfigService::PackFetchResult const& fr) {
             if (!self || generation != self->m_opGen)
                 return;
             self->onPackFetched(fr, entry);
         });
 }
 
-void CloudConfigPopup::onPackFetched(CloudConfigService::PackFetchResult const& fr,
-                                     CloudConfigIndex::PackEntry entry) {
+void EbCloudConfigPopup::onPackFetched(EbCloudConfigService::PackFetchResult const& fr,
+                                     EbCloudConfigIndex::PackEntry entry) {
     m_busyUi = false;
     if (m_installBtn)
         m_installBtn->setEnabled(true);
@@ -360,7 +360,7 @@ void CloudConfigPopup::onPackFetched(CloudConfigService::PackFetchResult const& 
     }
 
     auto const applied =
-        CloudConfigApply::applyPackBody(entry.id, entry.name, entry.sha256, entry.size, fr.body);
+        EbCloudConfigApply::applyPackBody(entry.id, entry.name, entry.sha256, entry.size, fr.body);
     if (!applied.ok) {
         this->setStatus("Install failed", true);
         FLAlertLayer::create("Cloud Configs", applied.error.c_str(), "OK")->show();
@@ -375,14 +375,14 @@ void CloudConfigPopup::onPackFetched(CloudConfigService::PackFetchResult const& 
     // Fire-and-forget; never fails install UX. Local/server dedupe = 1 dl / actor.
     this->trackInstallDownload(entry.id);
 
-    PauseActionBridge::afterConfigApplied(
+    EbPauseActionBridge::afterConfigApplied(
         fmt::format("Installed cloud config \"{}\".\nApplied {} settings ({} skipped).", entry.name,
                     applied.stats.applied, applied.stats.skipped));
 }
 
-void CloudConfigPopup::trackInstallDownload(std::string const& packId) {
-    geode::prelude::Ref<CloudConfigPopup> self = this;
-    CloudConfigStats::get().trackDownload(packId, [self](CloudConfigStats::TrackResult const& r) {
+void EbCloudConfigPopup::trackInstallDownload(std::string const& packId) {
+    geode::prelude::Ref<EbCloudConfigPopup> self = this;
+    EbCloudConfigStats::get().trackDownload(packId, [self](EbCloudConfigStats::TrackResult const& r) {
         if (!self)
             return;
         // Refresh badges when counters moved; silent on network errors.
@@ -393,7 +393,7 @@ void CloudConfigPopup::trackInstallDownload(std::string const& packId) {
     });
 }
 
-void CloudConfigPopup::onRate(geode::prelude::CCObject* sender) {
+void EbCloudConfigPopup::onRate(geode::prelude::CCObject* sender) {
     auto const* entry = this->selectedEntry();
     if (!entry || m_busyUi || m_rateBusy)
         return;
@@ -406,7 +406,7 @@ void CloudConfigPopup::onRate(geode::prelude::CCObject* sender) {
         return;
 
     // Same as current vote — just refresh paint.
-    if (CloudConfigStats::get().myStarsFor(entry->id) == stars) {
+    if (EbCloudConfigStats::get().myStarsFor(entry->id) == stars) {
         this->updateRateUi();
         return;
     }
@@ -416,9 +416,9 @@ void CloudConfigPopup::onRate(geode::prelude::CCObject* sender) {
     this->updateRateUi();
 
     std::string const id = entry->id;
-    geode::prelude::Ref<CloudConfigPopup> self = this;
-    CloudConfigStats::get().trackRate(
-        id, stars, [self, generation, stars](CloudConfigStats::TrackResult const& r) {
+    geode::prelude::Ref<EbCloudConfigPopup> self = this;
+    EbCloudConfigStats::get().trackRate(
+        id, stars, [self, generation, stars](EbCloudConfigStats::TrackResult const& r) {
             if (!self || generation != self->m_rateGen)
                 return;
             self->m_rateBusy = false;
@@ -442,12 +442,12 @@ void CloudConfigPopup::onRate(geode::prelude::CCObject* sender) {
         });
 }
 
-void CloudConfigPopup::onShare(geode::prelude::CCObject*) {
+void EbCloudConfigPopup::onShare(geode::prelude::CCObject*) {
     if (m_busyUi || m_shareOpen)
         return;
     this->setShareOpen(true);
-    geode::prelude::Ref<CloudConfigPopup> self = this;
-    CloudConfigSharePopup::open([self]() {
+    geode::prelude::Ref<EbCloudConfigPopup> self = this;
+    EbCloudConfigSharePopup::open([self]() {
         if (self)
             self->setShareOpen(false);
     });

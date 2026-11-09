@@ -4,7 +4,7 @@
 #include <cstring>
 #include <fmt/format.h>
 
-char const* ModeSurvival::classId(Class candidate) {
+char const* EbModeSurvival::classId(Class candidate) {
     switch (candidate) {
     case Class::Alive:
         return "alive";
@@ -20,47 +20,47 @@ char const* ModeSurvival::classId(Class candidate) {
     return "lethal";
 }
 
-bool ModeSurvival::countsAsSafeForDelay(Class candidate) {
+bool EbModeSurvival::countsAsSafeForDelay(Class candidate) {
     return candidate == Class::Alive || candidate == Class::Landing ||
            candidate == Class::Recoverable || candidate == Class::LateCrashAfterClear;
 }
 
-bool ModeSurvival::countsAsDelayWorthy(Class candidate) {
+bool EbModeSurvival::countsAsDelayWorthy(Class candidate) {
     return candidate == Class::Alive;
 }
 
-bool ModeSurvival::shouldSkipFalseOpportunity(Class candidate) {
+bool EbModeSurvival::shouldSkipFalseOpportunity(Class candidate) {
     return candidate == Class::LateCrashAfterClear || candidate == Class::Landing;
 }
 
-bool ModeSurvival::narrowOverlapIgnore(Input const& in) {
+bool EbModeSurvival::narrowOverlapIgnore(Input const& in) {
     // Narrow only — never ignore a fresh overlapping spike as "already there".
     return in.hazardOverlapAtClick && in.hazardIsFollowOrSpent;
 }
 
-float ModeSurvival::clearMarginPx(float obstacleX, float endX) {
+float EbModeSurvival::clearMarginPx(float obstacleX, float endX) {
     return endX - obstacleX;
 }
 
-bool ModeSurvival::waveSmallestClearOk(float clearPx, float marginPx) {
+bool EbModeSurvival::waveSmallestClearOk(float clearPx, float marginPx) {
     // Commit 11: same +1px margin rule as PerfectAssistPolicy wave helper.
-    return PerfectAssistPolicy::preferSmallerWaveClear(clearPx, clearPx, marginPx);
+    return EbPerfectAssistPolicy::preferSmallerWaveClear(clearPx, clearPx, marginPx);
 }
 
-bool ModeSurvival::waveFlipProbeClears(float obstacleX, float const sampleEndX[kWaveFlipProbes],
+bool EbModeSurvival::waveFlipProbeClears(float obstacleX, float const sampleEndX[kWaveFlipProbes],
                                        float marginPx) {
     if (!sampleEndX)
         return false;
     for (int index = 0; index < kWaveFlipProbes; ++index) {
-        if (ModeSurvival::waveSmallestClearOk(
-                ModeSurvival::clearMarginPx(obstacleX, sampleEndX[index]), marginPx)) {
+        if (EbModeSurvival::waveSmallestClearOk(
+                EbModeSurvival::clearMarginPx(obstacleX, sampleEndX[index]), marginPx)) {
             return true;
         }
     }
     return false;
 }
 
-bool ModeSurvival::ascentAloneNotLanding(bool died, bool zoneCleared, bool groundedSettled,
+bool EbModeSurvival::ascentAloneNotLanding(bool died, bool zoneCleared, bool groundedSettled,
                                          bool deathLooksLikeAscent) {
     // ParityGate: ceiling-bump shaped death without settle/clear ≠ Landing.
     if (!died)
@@ -71,11 +71,11 @@ bool ModeSurvival::ascentAloneNotLanding(bool died, bool zoneCleared, bool groun
     return true;
 }
 
-ModeSurvival::Class ModeSurvival::classify(Input const& in) {
+EbModeSurvival::Class EbModeSurvival::classify(Input const& in) {
     if (in.diedBeforeAction)
         return Class::Lethal;
 
-    if (ModeSurvival::narrowOverlapIgnore(in)) {
+    if (EbModeSurvival::narrowOverlapIgnore(in)) {
         // Spent/follow hazard already eating the player — not this click's fault.
         if (!in.died)
             return Class::Alive;
@@ -121,7 +121,7 @@ ModeSurvival::Class ModeSurvival::classify(Input const& in) {
     return Class::LateCrashAfterClear;
 }
 
-bool ModeSurvival::selfCheck(std::string& report) {
+bool EbModeSurvival::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

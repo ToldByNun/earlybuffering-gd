@@ -11,13 +11,13 @@
 #include <string>
 #include <vector>
 
-auto SettingsImportUiSync::syncNodesFromStore(geode::prelude::CCNode* root,
+auto EbSettingsImportUiSync::syncNodesFromStore(geode::prelude::CCNode* root,
                                               std::string const& ourId) -> void {
     if (!root)
         return;
     std::vector<geode::prelude::SettingNodeV3*> settings;
     geode::prelude::ScrollLayer* list = nullptr;
-    SettingsFilterWalk::collect(root, settings, list);
+    EbSettingsFilterWalk::collect(root, settings, list);
     for (auto* sett : settings) {
         if (!sett)
             continue;
@@ -40,12 +40,12 @@ auto SettingsImportUiSync::syncNodesFromStore(geode::prelude::CCNode* root,
     }
 }
 
-auto SettingsImportUiSync::findOurSettingsPopup(geode::prelude::CCNode* scene,
+auto EbSettingsImportUiSync::findOurSettingsPopup(geode::prelude::CCNode* scene,
                                                 std::string const& ourId)
     -> geode::prelude::CCNode* {
     if (!scene)
         return nullptr;
-    if (auto* keeper = SettingsFilterKeeperNode::findOpen()) {
+    if (auto* keeper = EbSettingsFilterKeeperNode::findOpen()) {
         if (auto* parent = keeper->getParent())
             return parent;
     }
@@ -55,7 +55,7 @@ auto SettingsImportUiSync::findOurSettingsPopup(geode::prelude::CCNode* scene,
             continue;
         std::vector<geode::prelude::SettingNodeV3*> settings;
         geode::prelude::ScrollLayer* list = nullptr;
-        SettingsFilterWalk::collect(alert, settings, list);
+        EbSettingsFilterWalk::collect(alert, settings, list);
         for (auto* sett : settings) {
             if (!sett)
                 continue;

@@ -12,7 +12,7 @@
 #include <fmt/format.h>
 #include <string>
 
-class SettingsCategoryMap {
+class EbSettingsCategoryMap {
 public:
     class Entry {
     public:
@@ -32,7 +32,7 @@ public:
 private:
     static Entry const kEntries[kCount];
 
-    SettingsCategoryMap() = delete;
+    EbSettingsCategoryMap() = delete;
 };
 
 #endif

@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <string>
 
-class AssistLog {
+class EbAssistLog {
 public:
     static char const* modTag();
     static void printBanner();

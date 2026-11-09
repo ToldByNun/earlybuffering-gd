@@ -3,15 +3,15 @@
 
 #include "../assist_controller.hpp"
 
-class AssistBufferRuntime {
+class EbAssistBufferRuntime {
 public:
-    static void inject(AssistController& controller, GJBaseGameLayer* layer, bool down);
-    static void flushPendingRelease(AssistController& controller, PlayLayer* playLayer);
-    static void fireBuffered(AssistController& controller, PlayLayer* playLayer,
+    static void inject(EbAssistController& controller, GJBaseGameLayer* layer, bool down);
+    static void flushPendingRelease(EbAssistController& controller, PlayLayer* playLayer);
+    static void fireBuffered(EbAssistController& controller, PlayLayer* playLayer,
                              PlayerObject* player, bool allowRecheck);
 
 private:
-    AssistBufferRuntime() = delete;
+    EbAssistBufferRuntime() = delete;
 };
 
 #endif

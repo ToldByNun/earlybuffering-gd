@@ -6,7 +6,7 @@
 #include <vector>
 
 // Encode/decode helpers for ConfigBundle JSON (color hex + keybind strings).
-class ConfigBundleCodec {
+class EbConfigBundleCodec {
 public:
     // "#RRGGBB" (uppercase hex).
     static std::string colorToHex(cocos2d::ccColor3B color);
@@ -25,7 +25,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    ConfigBundleCodec() = default;
+    EbConfigBundleCodec() = default;
 
     static int hexNibble(char character);
     static void trimInPlace(std::string& s);

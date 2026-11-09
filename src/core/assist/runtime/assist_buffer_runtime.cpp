@@ -10,7 +10,7 @@
 #include "../assist_controller.hpp"
 #include <algorithm>
 
-void AssistBufferRuntime::inject(AssistController& controller, GJBaseGameLayer* layer, bool down) {
+void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLayer* layer, bool down) {
     if (!layer)
         return;
     controller.m_assistTouchedRun = true;
@@ -20,12 +20,12 @@ void AssistBufferRuntime::inject(AssistController& controller, GJBaseGameLayer* 
     }
     // Timeline already seeded in recordDecision with the planned fire tick.
     controller.m_injecting = true;
-    layer->handleButton(down, AssistControllerImplementation::JUMP_BUTTON,
+    layer->handleButton(down, EbAssistControllerImplementation::JUMP_BUTTON,
                         controller.m_buffer.player1);
     controller.m_injecting = false;
 }
 
-void AssistBufferRuntime::flushPendingRelease(AssistController& controller, PlayLayer* playLayer) {
+void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller, PlayLayer* playLayer) {
     if (!controller.m_pendingRelease || !playLayer)
         return;
 
@@ -43,7 +43,7 @@ void AssistBufferRuntime::flushPendingRelease(AssistController& controller, Play
         controller.m_pendingReleaseUserUpTick = controller.m_attemptTick;
         controller.m_pendingReleaseTick =
             controller.m_pendingReleaseUserUpTick + controller.m_pendingReleaseMaxExtend;
-        AssistLog::debug(fmt::format(
+        EbAssistLog::debug(fmt::format(
             "hold-assist: user-up @{} extend≤{} deadline={}", controller.m_pendingReleaseUserUpTick,
             controller.m_pendingReleaseMaxExtend, controller.m_pendingReleaseTick));
     }
@@ -73,13 +73,13 @@ void AssistBufferRuntime::flushPendingRelease(AssistController& controller, Play
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
     controller.m_injecting = true;
-    playLayer->handleButton(false, AssistControllerImplementation::JUMP_BUTTON, playerOne);
+    playLayer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, playerOne);
     controller.m_injecting = false;
-    AssistLog::debug(fmt::format("hold-assist: injected release @{} (p{}) [extend done]",
+    EbAssistLog::debug(fmt::format("hold-assist: injected release @{} (p{}) [extend done]",
                                  controller.m_attemptTick, playerOne ? 1 : 2));
 }
 
-void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* playLayer,
+void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLayer* playLayer,
                                        PlayerObject* player, bool allowRecheck) {
     int const elapsed = controller.m_attemptTick - controller.m_buffer.pressTick;
     int const remaining = controller.m_buffer.limit - elapsed;
@@ -87,7 +87,7 @@ void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* 
     // Soft path (physics due / recheck): never inject before fireTick.
     // Force paths (CPS / mode-change / HUS deadline) pass allowRecheck=false.
     if (allowRecheck && controller.m_buffer.fireTick > controller.m_attemptTick && remaining > 0) {
-        AssistLog::debug(fmt::format("fireBuffered: not due yet attempt={} fire={} — wait",
+        EbAssistLog::debug(fmt::format("fireBuffered: not due yet attempt={} fire={} — wait",
                                      controller.m_attemptTick, controller.m_buffer.fireTick));
         return;
     }
@@ -110,36 +110,36 @@ void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* 
             int const oldFire = controller.m_buffer.fireTick;
             controller.m_buffer.fireTick = absMin;
             ++controller.m_buffer.rechecks;
-            DevCycleRecorder::get().noteRecheck(controller.m_buffer.devPressId, oldFire, absMin,
+            EbDevCycleRecorder::get().noteRecheck(controller.m_buffer.devPressId, oldFire, absMin,
                                                 "orb-dmin");
-            if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
+            if (EbStageConfig::debugLogging() || EbStageConfig::perfTrace()) {
                 auto const detail =
                     fmt::format("recheck: oldFire={}→newFire={} (orb-dMin wait tick={})", oldFire,
                                 absMin, controller.m_attemptTick);
-                AssistLog::debug(detail);
-                PerfTrace::get().note("recheck", detail);
+                EbAssistLog::debug(detail);
+                EbPerfTrace::get().note("recheck", detail);
             }
             return;
         }
         if (controller.m_attemptTick > absMax && controller.m_buffer.requireOrb) {
             // Past window — fire immediately
         } else if (!controller.m_buffer.requireOrb || controller.m_attemptTick <= absMax) {
-            PlanOptions opts;
-            opts.budgetUs = StageConfig::simBudgetUs();
-            opts.tickBudget = StageConfig::tickBudgetPerPress() / 4;
+            EbPlanOptions opts;
+            opts.budgetUs = EbStageConfig::simBudgetUs();
+            opts.tickBudget = EbStageConfig::tickBudgetPerPress() / 4;
             opts.attemptStartTick = controller.m_attemptTick;
-            opts.capMul = StageConfig::autoTune()
-                              ? LevelProfile::get().capMul(controller.m_buffer.mode)
+            opts.capMul = EbStageConfig::autoTune()
+                              ? EbLevelProfile::get().capMul(controller.m_buffer.mode)
                               : 1.f;
             opts.maxBranches = 2;
             opts.smartDepth = 1;
-            opts.legacyPick = StageConfig::assistPickLegacy();
-            opts.assistEngine = StageConfig::effectiveAssistEngine();
+            opts.legacyPick = EbStageConfig::assistPickLegacy();
+            opts.assistEngine = EbStageConfig::effectiveAssistEngine();
             opts.requireAliveForDelay = true;
-            AssistControllerImplementation::fillPlanRobustLatency(opts, player,
+            EbAssistControllerImplementation::fillPlanRobustLatency(opts, player,
                                                                   controller.m_dtVarEma, true);
             auto re =
-                ShadowSimulator::get().plan(playLayer, player, controller.m_buffer.down, remaining,
+                EbShadowSimulator::get().plan(playLayer, player, controller.m_buffer.down, remaining,
                                             controller.m_simDt, controller.m_simDt, opts);
 
             // Surviving Delay only — never slide into a lethal / hopeless replan.
@@ -168,15 +168,15 @@ void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* 
                     controller.m_buffer.fireTick = accepted;
                     controller.m_buffer.expectedJumpTick = controller.m_attemptTick + jumpRel;
                     controller.m_buffer.planDelay = re.delay;
-                    DevCycleRecorder::get().noteRecheck(controller.m_buffer.devPressId, oldFire,
+                    EbDevCycleRecorder::get().noteRecheck(controller.m_buffer.devPressId, oldFire,
                                                         accepted, "slide");
-                    if (StageConfig::debugLogging() || StageConfig::perfTrace()) {
+                    if (EbStageConfig::debugLogging() || EbStageConfig::perfTrace()) {
                         auto const detail =
                             fmt::format("recheck: oldFire={}→newFire={} jump={} Δ={} (tick={})",
                                         oldFire, accepted, controller.m_buffer.expectedJumpTick,
                                         accepted - oldFire, controller.m_attemptTick);
-                        AssistLog::debug(detail);
-                        PerfTrace::get().note("recheck", detail);
+                        EbAssistLog::debug(detail);
+                        EbPerfTrace::get().note("recheck", detail);
                     }
                     return;
                 }
@@ -201,21 +201,21 @@ void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* 
     int const queuedHold = controller.resolveQueuedHoldTicks(
         requireHold, continuous, releaseAfter, releaseEarliest, releaseLatest, extendCap);
 
-    DevCycleRecorder::get().noteFire(devPressId, controller.m_attemptTick);
+    EbDevCycleRecorder::get().noteFire(devPressId, controller.m_attemptTick);
 
     controller.inject(playLayer, controller.m_buffer.down);
     // Real-harm watch: death after a fired Delay inject (Commit 2 DAF).
     if (delayed > 0 && wasPress) {
         controller.m_dafWatch = true;
     }
-    AssistLog::printSavedPress(delayed, controller.m_buffer.pressTick, controller.m_attemptTick,
+    EbAssistLog::printSavedPress(delayed, controller.m_buffer.pressTick, controller.m_attemptTick,
                                controller.m_buffer.limit, controller.estimatedTps());
-    if (delayed > 0 && (StageConfig::saveFeedbackSound() || StageConfig::saveFeedbackIcon() ||
-                        StageConfig::saveFeedbackCounter())) {
-        SaveFeedback::get().onSave(playLayer, player, delayed);
+    if (delayed > 0 && (EbStageConfig::saveFeedbackSound() || EbStageConfig::saveFeedbackIcon() ||
+                        EbStageConfig::saveFeedbackCounter())) {
+        EbSaveFeedback::get().onSave(playLayer, player, delayed);
     }
     if (!wasPress) {
-        AssistLog::debug(fmt::format("(assisted RELEASE, tick={})", controller.m_attemptTick));
+        EbAssistLog::debug(fmt::format("(assisted RELEASE, tick={})", controller.m_attemptTick));
     }
 
     controller.m_outcomePending = true;
@@ -245,17 +245,17 @@ void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* 
                 controller.m_pendingReleaseContinuous = continuous;
                 controller.m_pendingReleaseMaxExtend = queuedHold;
                 controller.m_pendingReleaseTick = controller.m_attemptTick + queuedHold;
-                AssistLog::debug(fmt::format(
+                EbAssistLog::debug(fmt::format(
                     "hold-assist: arm queued hold={} @fire={} hold={} cont={} rel=[{},{}]@{}",
                     queuedHold, controller.m_attemptTick, requireHold ? 1 : 0, continuous ? 1 : 0,
                     releaseEarliest, releaseLatest, releaseAfter));
-                DevCycleRecorder::get().noteHoldExtend(devPressId, queuedHold);
+                EbDevCycleRecorder::get().noteHoldExtend(devPressId, queuedHold);
             } else {
                 controller.m_pendingReleaseHold = false;
                 controller.m_pendingReleaseContinuous = false;
                 controller.m_pendingReleaseMaxExtend = 0;
                 controller.m_pendingReleaseTick = controller.m_attemptTick; // flush ASAP
-                AssistLog::debug(
+                EbAssistLog::debug(
                     fmt::format("hold-assist: arm release ASAP (user already up) @fire={}",
                                 controller.m_attemptTick));
             }
@@ -272,10 +272,10 @@ void AssistBufferRuntime::fireBuffered(AssistController& controller, PlayLayer* 
             controller.m_pendingReleaseUserUpTick = -1;
             controller.m_pendingReleaseMaxExtend = extend;
             controller.m_pendingReleaseTick = 0; // set on user-up
-            AssistLog::debug(fmt::format(
+            EbAssistLog::debug(fmt::format(
                 "hold-assist: arm extend-after-release max={} @fire={} hold={} cont={}", extend,
                 controller.m_attemptTick, requireHold ? 1 : 0, continuous ? 1 : 0));
-            DevCycleRecorder::get().noteHoldExtend(devPressId, extend);
+            EbDevCycleRecorder::get().noteHoldExtend(devPressId, extend);
         }
         // else: plain Delay tap — user owns hold+release fully (no pending).
     }

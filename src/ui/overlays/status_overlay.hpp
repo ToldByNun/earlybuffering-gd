@@ -4,7 +4,7 @@
 #include <Geode/Geode.hpp>
 #include <string>
 
-class StatusOverlay {
+class EbStatusOverlay {
 public:
     static void attach(PlayLayer* playLayer);
     static void detach(bool layerDying = false);
@@ -18,15 +18,15 @@ private:
 #include "../../config/stage_config.hpp"
 #include "../../core/platform/platform_limits.hpp"
 
-class StatusOverlayImplementation {
+class EbStatusOverlayImplementation {
 public:
 private:
-    friend class StatusOverlay;
+    friend class EbStatusOverlay;
 
     static std::string s_lastText;
     static bool s_lastVisible;
 
-    StatusOverlayImplementation() = delete;
+    EbStatusOverlayImplementation() = delete;
 };
 
 #endif

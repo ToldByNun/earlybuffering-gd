@@ -1,7 +1,7 @@
 #ifndef SHADOW_SIMULATOR_HPP
 #define SHADOW_SIMULATOR_HPP
 
-class SimulationCandidate;
+class EbSimulationCandidate;
 
 #include "../../config/stage_config.hpp"
 #include "../../dev/capture/dev_clock_contract.hpp"
@@ -21,7 +21,7 @@ class SimulationCandidate;
 
 // Lexicographic planner: threat-zone clear, orb activation windows, adaptive ±k
 // robustness, optional firstDt jitter, latency-weighted endX. Never blocks (Pass).
-class ShadowSimulator {
+class EbShadowSimulator {
 public:
     static constexpr int SNAPSHOT_SLOTS = 16;
     // Slot 0 is immortal attempt-start (bake). Plan/traj ring uses 1..13.
@@ -42,7 +42,7 @@ public:
     // Delays that do not improve surviveBin / endX beyond this → Pass (wave).
     static constexpr float kFutileEndXGain = 8.f;
 
-    static ShadowSimulator& get();
+    static EbShadowSimulator& get();
 
     void attach(PlayLayer* layer);
     // layerDying=true: only drop pointers (parent tree already tearing down).
@@ -151,11 +151,11 @@ public:
     int captureParitySnapshot(PlayerObject* real, int which);
     PlayerObject* snapshotSlot(int slot) const;
 
-    SimPlan plan(PlayLayer* layer, PlayerObject* real, bool down, int limit, float deltaTime,
-                 float firstDt, PlanOptions const& options = {});
+    EbSimPlan plan(PlayLayer* layer, PlayerObject* real, bool down, int limit, float deltaTime,
+                 float firstDt, EbPlanOptions const& options = {});
 
-    SimPlan planSequence(PlayLayer* layer, PlayerObject* real, bool down, int limit,
-                         float deltaTime, float firstDt, PlanOptions const& options = {});
+    EbSimPlan planSequence(PlayLayer* layer, PlayerObject* real, bool down, int limit,
+                         float deltaTime, float firstDt, EbPlanOptions const& options = {});
 
     // Single-candidate bake check: runOne(delay) must clear the threat zone
     // and not die before the action. Used by Hybrid bake verify (O(1) sim).
@@ -169,13 +169,13 @@ public:
         bool unknown = false;
         int ticksSpent = 0; // physics ticks consumed from options.tickBudget
         int usSpent = 0;    // wall µs for this call (for shared press envelope)
-        ThreatZone threatZone{};
+        EbThreatZone threatZone{};
 
     private:
     };
     VerifyDelayResult verifyDelay(PlayLayer* layer, PlayerObject* real, bool down, int delay,
                                   int limit, float deltaTime, float firstDt,
-                                  PlanOptions const& options = {});
+                                  EbPlanOptions const& options = {});
 
     // --- Dev Lab eval (Commit 9): clock-bound stepSchedule, own ghosts ---
     class EvalFromFreezeResult {
@@ -192,29 +192,29 @@ public:
         int actionTick = -1; // schedule index where input fired
         uint64_t stepScheduleHash = 0;
         DevSimPathId evalSimPathId = DevSimPathId::None;
-        DevEvalRestore restore{};
+        EbDevEvalRestore restore{};
 
     private:
     };
 
     // Overlay serializable blob fields onto a ghost (eval restore path).
-    static void applyPlayerBlob(PlayerObject* destination, DevPlayerBlob const& blob);
+    static void applyPlayerBlob(PlayerObject* destination, EbDevPlayerBlob const& blob);
 
     // Commit 11: write dual/orbs/triggers/mover poses from witness into the
     // layer/ghosts, bookkeeping on restore. Snapshots prior world state for
     // finishEvalWorldRestore. Does not run physics.
-    void applyEvalWorldRestore(PlayLayer* layer, DevLiveWitness const& witness,
-                               DevEvalRestore& restore);
+    void applyEvalWorldRestore(PlayLayer* layer, EbDevLiveWitness const& witness,
+                               EbDevEvalRestore& restore);
     // Undo layer mutations from applyEvalWorldRestore (transforms + orb flags).
     void finishEvalWorldRestore(PlayLayer* layer);
 
     // Counterfactual delay d on witness stamp; steps from DevClockContract::stepSchedule.
-    EvalFromFreezeResult evalDelayFromFreeze(PlayLayer* layer, DevLiveWitness const& witness,
+    EvalFromFreezeResult evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const& witness,
                                              int delay, int horizonTicks, bool down,
                                              int* tickBudgetLeft = nullptr);
 
     // Replay actualFireTick (absolute) on the same stamp — not a delay search.
-    EvalFromFreezeResult replayActualFire(PlayLayer* layer, DevLiveWitness const& witness,
+    EvalFromFreezeResult replayActualFire(PlayLayer* layer, EbDevLiveWitness const& witness,
                                           int actualFireTickAbs, int horizonTicks, bool down,
                                           int* tickBudgetLeft = nullptr);
 
@@ -228,7 +228,7 @@ public:
     }
 
     // Build hazard cluster around a death X / object (public for tests/logging).
-    static ThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
+    static EbThreatZone buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj);
 
     // Ahead-X / jump-reach orb hint (used by bake heuristic + planner).
     static bool spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit, float deltaTime);
@@ -284,7 +284,7 @@ public:
     private:
     };
     ReplayResult replay(PlayLayer* layer, int snapshotSlot, int startTick,
-                        std::vector<InputEvent> const& timeline, float deltaTime, int maxTicks,
+                        std::vector<EbInputEvent> const& timeline, float deltaTime, int maxTicks,
                         bool shiftActionBy = false, int actionShift = 0);
 
     // Optional per-frame bake/diag trace (filled when traceFrames=true).
@@ -335,7 +335,7 @@ public:
     // substeps: optional micro-steps per bake tick (usually 1; bypass macros bake 1:1).
     // onFrame: optional progress hook; return false to cancel (bake validate).
     BakeRunResult runBakeTimeline(PlayLayer* layer, int snapshotSlot,
-                                  std::vector<ReplayEvent> const& events, float deltaTime,
+                                  std::vector<EbReplayEvent> const& events, float deltaTime,
                                   int untilFrame, int sampleFrame = -1, bool applyP2ToShadow = true,
                                   bool traceFrames = false, bool parkReals = true, int substeps = 1,
                                   std::function<bool(int frame)> onFrame = {});
@@ -349,7 +349,7 @@ public:
     private:
     };
     PathSample samplePath(PlayLayer* layer, int snapshotSlot,
-                          std::vector<ReplayEvent> const& events, float deltaTime, int untilFrame);
+                          std::vector<EbReplayEvent> const& events, float deltaTime, int untilFrame);
 
     class Model {
     public:
@@ -401,28 +401,30 @@ public:
     };
 
 private:
-    friend class ShadowPlanInputWindow;
-    friend class ShadowPlanThreatProbe;
-    friend class ShadowPlanForesight;
-    friend class ShadowPlanCandidateSearch;
-    friend class ShadowPlanSelection;
-    friend class ShadowPlanResult;
-    friend class ShadowPlanSearch;
-    friend class ShadowPlanContext;
+    friend class EbServiceStore;
 
-    friend class ShadowGhostLifecycle;
-    friend class ShadowSectionSafety;
-    friend class ShadowWorldCapture;
-    friend class ShadowWorldDynamics;
-    friend class ShadowPlayerState;
-    friend class ShadowPhysics;
-    friend class ShadowCandidateRunner;
-    friend class ShadowPlanPolicy;
-    friend class ShadowDelayVerifier;
-    friend class ShadowSequencePlanner;
-    friend class ShadowReplayRunner;
-    friend class ShadowFreezeEvaluator;
-    friend class ShadowRegressionChecks;
+    friend class EbShadowPlanInputWindow;
+    friend class EbShadowPlanThreatProbe;
+    friend class EbShadowPlanForesight;
+    friend class EbShadowPlanCandidateSearch;
+    friend class EbShadowPlanSelection;
+    friend class EbShadowPlanResult;
+    friend class EbShadowPlanSearch;
+    friend class EbShadowPlanContext;
+
+    friend class EbShadowGhostLifecycle;
+    friend class EbShadowSectionSafety;
+    friend class EbShadowWorldCapture;
+    friend class EbShadowWorldDynamics;
+    friend class EbShadowPlayerState;
+    friend class EbShadowPhysics;
+    friend class EbShadowCandidateRunner;
+    friend class EbShadowPlanPolicy;
+    friend class EbShadowDelayVerifier;
+    friend class EbShadowSequencePlanner;
+    friend class EbShadowReplayRunner;
+    friend class EbShadowFreezeEvaluator;
+    friend class EbShadowRegressionChecks;
 
     class SavedObject {
     public:
@@ -475,16 +477,16 @@ private:
 
     static void hideGhost(PlayerObject* player);
     static bool tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* object);
-    static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self);
+    static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, EbShadowSimulator* self);
 
     RunResult runOne(PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
                      float deltaTime, float firstDt, Model const& model, int releaseAfter,
-                     ThreatZone const* zone, int* tickBudgetLeft);
+                     EbThreatZone const* zone, int* tickBudgetLeft);
     // Live V2 Trajectory engine: hold/coast button path (no orb pre-scan).
     // Same delay / releaseAfter / zone-settle contract as runOne for cand eval.
     RunResult runTrajectoryOne(PlayLayer* layer, PlayerObject* real, bool down, int delay,
                                int limit, float deltaTime, float firstDt, Model const& model,
-                               int releaseAfter, ThreatZone const* zone, int* tickBudgetLeft);
+                               int releaseAfter, EbThreatZone const* zone, int* tickBudgetLeft);
     RunResult runBaseline(PlayLayer* layer, PlayerObject* real, bool down, float deltaTime,
                           float firstDt, Model const& model, int* tickBudgetLeft);
 

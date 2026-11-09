@@ -8,7 +8,7 @@
 
 // Disk layout under Mod saveDir/cloud-configs/:
 //   index-cache.json, meta.json, active.json, packs/<id>.json, outbox/
-class CloudConfigStore {
+class EbCloudConfigStore {
 public:
     static constexpr size_t kMaxPackBytes = 256u * 1024u;
     static constexpr size_t kMaxIndexBytes = 512u * 1024u;
@@ -34,7 +34,7 @@ public:
     private:
     };
 
-    static CloudConfigStore& get();
+    static EbCloudConfigStore& get();
 
     std::filesystem::path rootDir() const;
     std::filesystem::path packsDir() const;
@@ -82,7 +82,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigStore() = default;
+    friend class EbServiceStore;
+
+    EbCloudConfigStore() = default;
 
     static std::string sanitizeStem(std::string const& stem);
 };

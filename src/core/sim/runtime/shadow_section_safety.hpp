@@ -3,14 +3,14 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowSectionSafety {
+class EbShadowSectionSafety {
 public:
     static bool tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* object);
-    static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, ShadowSimulator* self);
-    static void evacuateGhosts(ShadowSimulator& simulator, GJBaseGameLayer* layer);
+    static void scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, EbShadowSimulator* self);
+    static void evacuateGhosts(EbShadowSimulator& simulator, GJBaseGameLayer* layer);
 
 private:
-    ShadowSectionSafety() = delete;
+    EbShadowSectionSafety() = delete;
 };
 
 #endif

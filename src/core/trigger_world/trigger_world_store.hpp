@@ -12,7 +12,7 @@ class GameObject;
 class PlayLayer;
 
 // One sampled pose for a moved/rotated/scaled object at an absolute attempt tick.
-class TriggerPose {
+class EbTriggerPose {
 public:
     int tick = 0;
     float x = 0.f;
@@ -26,23 +26,23 @@ private:
 };
 
 // Sparse keyframe track for one GameObject (keyed by m_uniqueID).
-class TriggerTrack {
+class EbTriggerTrack {
 public:
     int uniqueId = 0;
     int objectId = 0;
     TriggerKind kind = TriggerKind::Ignore;
     bool ready = false;
-    std::vector<TriggerPose> keys;
+    std::vector<EbTriggerPose> keys;
 
 private:
 };
 
-class TriggerWorldData {
+class EbTriggerWorldData {
 public:
     std::string levelKey;
     double tps = 240.0;
     int version = 1;
-    std::vector<TriggerTrack> tracks;
+    std::vector<EbTriggerTrack> tracks;
 
 private:
 };
@@ -50,7 +50,7 @@ private:
 // Content-keyed cache of static trigger motion.
 // Disk: {saveDir}/triggers/{fullKey}.json
 // Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
-class TriggerWorldStore {
+class EbTriggerWorldStore {
 public:
     static constexpr int kFileVersion = 1;
     // Soft ceiling: refuse NEW tracks/keys with AssistLog — never silent drop under soft.
@@ -63,7 +63,7 @@ public:
     static constexpr size_t kMaxTracks = kSoftMaxTracks;
     static constexpr size_t kMaxKeysPerTrack = kSoftMaxKeysPerTrack;
 
-    static TriggerWorldStore& get();
+    static EbTriggerWorldStore& get();
 
     void clear();
     void loadForLevel(GJGameLevel* level);
@@ -93,12 +93,12 @@ public:
         return keyCount >= kSoftMaxKeysPerTrack;
     }
 
-    TriggerWorldData const& data() const {
+    EbTriggerWorldData const& data() const {
         return this->m_data;
     }
 
     // Replace in-memory data (baker). Softcap logs; hard-only truncate.
-    void setData(TriggerWorldData data);
+    void setData(EbTriggerWorldData data);
     // Commit 4: empty incomplete collect must not poison the on-disk cache.
     void clearDirty() {
         this->m_dirty = false;
@@ -107,9 +107,9 @@ public:
     void discardCacheFile() const;
 
     // Keep endpoints + evenly spaced samples (long movers under key soft/hard).
-    static void decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep);
+    static void decimateKeys(std::vector<EbTriggerPose>& keys, size_t maxKeep);
 
-    TriggerTrack const* findTrack(int uniqueId) const;
+    EbTriggerTrack const* findTrack(int uniqueId) const;
     size_t trackCount() const {
         return this->m_data.tracks.size();
     }
@@ -123,13 +123,13 @@ public:
     // Sample at live absTick (remaps to store tick first).
     // Hold last; before first key → false = keep baseline.
     // Overload with liveSimDt for offline bake (do not use live hitch dt).
-    bool samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const;
-    bool samplePose(int uniqueId, int liveAbsTick, float liveSimDt, TriggerPose& out) const;
+    bool samplePose(int uniqueId, int liveAbsTick, EbTriggerPose& out) const;
+    bool samplePose(int uniqueId, int liveAbsTick, float liveSimDt, EbTriggerPose& out) const;
     // Sample with an already-remapped store tick (tests / bakers).
-    bool samplePoseAtStoreTick(int uniqueId, int storeTick, TriggerPose& out) const;
+    bool samplePoseAtStoreTick(int uniqueId, int storeTick, EbTriggerPose& out) const;
 
     // Write a sampled pose onto a live GameObject (position/rot/scale/visible).
-    static void writePose(GameObject* object, TriggerPose const& pose);
+    static void writePose(GameObject* object, EbTriggerPose const& pose);
 
     // Apply all ready Static* tracks at live absTick (remapped). Walks objectLayer.
     // Returns number of objects written. No-op if store empty / bake off caller.
@@ -142,11 +142,13 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    friend class TriggerWorldChecks;
+    friend class EbServiceStore;
 
-    friend class TriggerWorldCodec;
+    friend class EbTriggerWorldChecks;
 
-    TriggerWorldStore() = default;
+    friend class EbTriggerWorldCodec;
+
+    EbTriggerWorldStore() = default;
 
     geode::Result<> writeFile() const;
     geode::Result<> readFile();
@@ -166,9 +168,9 @@ private:
 
     private:
     };
-    static ClampResult clampData(TriggerWorldData& data);
+    static ClampResult clampData(EbTriggerWorldData& data);
 
-    TriggerWorldData m_data;
+    EbTriggerWorldData m_data;
     bool m_loaded = false;
     mutable bool m_dirty = false;
     bool m_softcapHit = false;

@@ -5,7 +5,7 @@
 #include "simulation_plan.hpp"
 #include <algorithm>
 
-int ShadowSurvivalRules::surviveBinOf(int ticks) {
+int EbShadowSurvivalRules::surviveBinOf(int ticks) {
     if (ticks < 24)
         return 0;
     if (ticks < 48)
@@ -17,7 +17,7 @@ int ShadowSurvivalRules::surviveBinOf(int ticks) {
 }
 
 // Ranking / ascent inputs: ticks until death, else full run — not neutral stamp.
-int ShadowSurvivalRules::rankingSurviveTicks(ShadowSimulator::RunResult const& r) {
+int EbShadowSurvivalRules::rankingSurviveTicks(EbShadowSimulator::RunResult const& r) {
     if (r.died && r.deathTick >= 0)
         return r.deathTick + 1;
     if (!(r.ticksRan > 0)) {
@@ -26,8 +26,8 @@ int ShadowSurvivalRules::rankingSurviveTicks(ShadowSimulator::RunResult const& r
     return r.ticksRan;
 }
 
-bool ShadowSurvivalRules::clearsThreatOf(ShadowSimulator::RunResult const& r,
-                                         ThreatZone const& zone) {
+bool EbShadowSurvivalRules::clearsThreatOf(EbShadowSimulator::RunResult const& r,
+                                         EbThreatZone const& zone) {
     if (!zone.valid) {
         if (r.unknownTrunc)
             return true;
@@ -40,17 +40,17 @@ bool ShadowSurvivalRules::clearsThreatOf(ShadowSimulator::RunResult const& r,
 }
 
 // LateCrash never invent a Delay opportunity.
-bool ShadowSurvivalRules::delayViableHonest(bool diedBeforeAction, bool died, bool unknownTrunc,
+bool EbShadowSurvivalRules::delayViableHonest(bool diedBeforeAction, bool died, bool unknownTrunc,
                                             bool toggleUnknown, bool clearsThreat, bool zoneCleared,
-                                            bool zoneValid, ModeSurvival::Class survival,
+                                            bool zoneValid, EbModeSurvival::Class survival,
                                             bool requireAliveForDelay) {
     if (diedBeforeAction || unknownTrunc || toggleUnknown)
         return false;
-    if (requireAliveForDelay && ModeSurvival::shouldSkipFalseOpportunity(survival)) {
+    if (requireAliveForDelay && EbModeSurvival::shouldSkipFalseOpportunity(survival)) {
         return false;
     }
-    bool const classOk = requireAliveForDelay ? ModeSurvival::countsAsDelayWorthy(survival)
-                                              : ModeSurvival::countsAsSafeForDelay(survival);
+    bool const classOk = requireAliveForDelay ? EbModeSurvival::countsAsDelayWorthy(survival)
+                                              : EbModeSurvival::countsAsSafeForDelay(survival);
     if (died && !classOk)
         return false;
     // Alive path: still need threat clear when a zone exists.
@@ -61,11 +61,11 @@ bool ShadowSurvivalRules::delayViableHonest(bool diedBeforeAction, bool died, bo
     return classOk && (!zoneValid || clearsThreat || zoneCleared);
 }
 
-ModeSurvival::Input ShadowSurvivalRules::survivalInputFrom(ShadowSimulator::RunResult const& r,
-                                                           ThreatZone const& zone,
-                                                           ShadowSimulator::Model const& model,
+EbModeSurvival::Input EbShadowSurvivalRules::survivalInputFrom(EbShadowSimulator::RunResult const& r,
+                                                           EbThreatZone const& zone,
+                                                           EbShadowSimulator::Model const& model,
                                                            PlayerObject* real) {
-    ModeSurvival::Input in;
+    EbModeSurvival::Input in;
     in.continuous = model.continuous;
     if (real) {
         in.isWave = real->m_isDart;
@@ -93,30 +93,30 @@ ModeSurvival::Input ShadowSurvivalRules::survivalInputFrom(ShadowSimulator::RunR
     return in;
 }
 
-bool ShadowSurvivalRules::runResultDelaySafe(ShadowSimulator::RunResult const& r,
-                                             ThreatZone const& zone,
-                                             ShadowSimulator::Model const& model,
+bool EbShadowSurvivalRules::runResultDelaySafe(EbShadowSimulator::RunResult const& r,
+                                             EbThreatZone const& zone,
+                                             EbShadowSimulator::Model const& model,
                                              PlayerObject* real, bool requireAliveForDelay) {
     auto const cls =
-        ModeSurvival::classify(ShadowSurvivalRules::survivalInputFrom(r, zone, model, real));
-    return ShadowSurvivalRules::delayViableHonest(
+        EbModeSurvival::classify(EbShadowSurvivalRules::survivalInputFrom(r, zone, model, real));
+    return EbShadowSurvivalRules::delayViableHonest(
         r.diedBeforeAction, r.died, r.unknownTrunc, r.toggleUnknown,
-        ShadowSurvivalRules::clearsThreatOf(r, zone), r.zoneCleared, zone.valid, cls,
+        EbShadowSurvivalRules::clearsThreatOf(r, zone), r.zoneCleared, zone.valid, cls,
         requireAliveForDelay);
 }
 
 // planSequence exit: unknown truncation is NOT survival.
-bool ShadowSurvivalRules::exitSurvivedHonest(bool died, bool unknown) {
+bool EbShadowSurvivalRules::exitSurvivedHonest(bool died, bool unknown) {
     return !died && !unknown;
 }
 
 // 0 = auto from mode / speed / dt variance / spam density; else clamp 1–3.
-int ShadowSurvivalRules::resolveRobustK(PlayerObject* real, PlanOptions const& options) {
+int EbShadowSurvivalRules::resolveRobustK(PlayerObject* real, EbPlanOptions const& options) {
     int forced = options.robustK;
     if (forced <= 0)
-        forced = StageConfig::robustK();
+        forced = EbStageConfig::robustK();
     if (!(forced > 0)) {
-        return ShadowSimulator::autoRobustK(real, options.dtVariance, options.spamDense);
+        return EbShadowSimulator::autoRobustK(real, options.dtVariance, options.spamDense);
     }
     return std::clamp(forced, 1, 3);
 }

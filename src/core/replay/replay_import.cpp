@@ -5,7 +5,7 @@
 #include <gdr/gdr.hpp>
 #include <span>
 
-std::string ReplayImportImplementation::lowerExt(std::filesystem::path const& path) {
+std::string EbReplayImportImplementation::lowerExt(std::filesystem::path const& path) {
     auto entry = path.extension().string();
     std::transform(entry.begin(), entry.end(), entry.begin(), [](unsigned char character) {
         return static_cast<char>(std::tolower(character));
@@ -13,16 +13,16 @@ std::string ReplayImportImplementation::lowerExt(std::filesystem::path const& pa
     return entry;
 }
 
-std::string ReplayImportImplementation::fileStemName(std::filesystem::path const& path) {
+std::string EbReplayImportImplementation::fileStemName(std::filesystem::path const& path) {
     return path.filename().string();
 }
 
-bool ReplayImportImplementation::isMhrJsonName(std::filesystem::path const& path) {
+bool EbReplayImportImplementation::isMhrJsonName(std::filesystem::path const& path) {
     auto name = path.filename().string();
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char character) {
         return static_cast<char>(std::tolower(character));
     });
-    return name.ends_with(".mhr.json") || (ReplayImportImplementation::lowerExt(path) == ".json" &&
+    return name.ends_with(".mhr.json") || (EbReplayImportImplementation::lowerExt(path) == ".json" &&
                                            name.find("mhr") != std::string::npos);
 }
 
@@ -42,7 +42,7 @@ template <class T> T readBE(std::ifstream& f) {
     return value;
 }
 
-void ReplayImportImplementation::normalizeSoloPlayer2(ImportedReplay& out) {
+void EbReplayImportImplementation::normalizeSoloPlayer2(EbImportedReplay& out) {
     // MegaHack GDR often stores almost all inputs as player2 (p1Inputs≈0 or
     // tiny P1 stub). Solo bake/assist only drives P1 — flip majority-P2 to P1.
     int playerOne = 0;
@@ -59,25 +59,25 @@ void ReplayImportImplementation::normalizeSoloPlayer2(ImportedReplay& out) {
     }
 }
 
-geode::Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& path) {
+geode::Result<EbImportedReplay> EbReplayImport::load(std::filesystem::path const& path) {
     if (!std::filesystem::exists(path))
         return geode::Err("File not found");
 
-    auto ext = ReplayImportImplementation::lowerExt(path);
+    auto ext = EbReplayImportImplementation::lowerExt(path);
     auto name = path.filename().string();
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char character) {
         return static_cast<char>(std::tolower(character));
     });
 
-    auto finish = [](geode::Result<ImportedReplay> result) -> geode::Result<ImportedReplay> {
+    auto finish = [](geode::Result<EbImportedReplay> result) -> geode::Result<EbImportedReplay> {
         if (result.isOk())
-            ReplayImportImplementation::normalizeSoloPlayer2(result.unwrap());
+            EbReplayImportImplementation::normalizeSoloPlayer2(result.unwrap());
         return result;
     };
 
     if (ext == ".gdr" || ext == ".gdr2")
         return finish(loadGdr(path));
-    if (name.ends_with(".mhr.json") || ReplayImportImplementation::isMhrJsonName(path))
+    if (name.ends_with(".mhr.json") || EbReplayImportImplementation::isMhrJsonName(path))
         return finish(loadMhrJson(path));
     if (ext == ".mhr") {
         // JSON saved as .mhr, or binary HACK magic
@@ -96,7 +96,7 @@ geode::Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& pa
         // Try MHR-shaped JSON, else fail
         auto mhr = loadMhrJson(path);
         if (mhr.isOk()) {
-            ReplayImportImplementation::normalizeSoloPlayer2(mhr.unwrap());
+            EbReplayImportImplementation::normalizeSoloPlayer2(mhr.unwrap());
             return mhr;
         }
         return geode::Err("Unsupported .json (expected MegaHack meta/events layout)");
@@ -116,19 +116,19 @@ geode::Result<ImportedReplay> ReplayImport::load(std::filesystem::path const& pa
     return finish(loadMhrJson(path));
 }
 
-geode::Result<ImportedReplay> ReplayImport::loadGdr(std::filesystem::path const& path) {
-    auto result = ImportedReplayData::importData(path);
+geode::Result<EbImportedReplay> EbReplayImport::loadGdr(std::filesystem::path const& path) {
+    auto result = EbImportedReplayData::importData(path);
     if (result.isErr())
         return geode::Err(result.unwrapErr());
 
     auto const& r = result.unwrap();
-    ImportedReplay out;
+    EbImportedReplay out;
     out.tps = r.framerate > 0.0 ? r.framerate : 240.0;
-    out.sourceName = ReplayImportImplementation::fileStemName(path);
+    out.sourceName = EbReplayImportImplementation::fileStemName(path);
     out.format = "gdr2";
     out.events.reserve(r.inputs.size());
     for (auto const& in : r.inputs) {
-        ReplayEvent e;
+        EbReplayEvent e;
         e.frame = static_cast<int>(in.frame);
         e.button = in.button == 0 ? 1 : static_cast<int>(in.button);
         e.player2 = in.player2;
@@ -140,14 +140,14 @@ geode::Result<ImportedReplay> ReplayImport::loadGdr(std::filesystem::path const&
     return geode::Ok(std::move(out));
 }
 
-geode::Result<ImportedReplay> ReplayImport::loadMhrJson(std::filesystem::path const& path) {
+geode::Result<EbImportedReplay> EbReplayImport::loadMhrJson(std::filesystem::path const& path) {
     auto jsonRes = geode::utils::file::readJson(path);
     if (jsonRes.isErr())
         return geode::Err(jsonRes.unwrapErr());
     auto root = jsonRes.unwrap();
 
-    ImportedReplay out;
-    out.sourceName = ReplayImportImplementation::fileStemName(path);
+    EbImportedReplay out;
+    out.sourceName = EbReplayImportImplementation::fileStemName(path);
     out.format = "mhr.json";
 
     double fps = 240.0;
@@ -190,7 +190,7 @@ geode::Result<ImportedReplay> ReplayImport::loadMhrJson(std::filesystem::path co
         if (ev.contains("button"))
             button = static_cast<int>(ev["button"].asInt().unwrapOr(1));
 
-        out.events.push_back(ReplayEvent{frame, button, playerTwo, down});
+        out.events.push_back(EbReplayEvent{frame, button, playerTwo, down});
     }
 
     std::stable_sort(out.events.begin(), out.events.end(),
@@ -201,7 +201,7 @@ geode::Result<ImportedReplay> ReplayImport::loadMhrJson(std::filesystem::path co
     return geode::Err("MHR JSON: no usable events");
 }
 
-geode::Result<ImportedReplay> ReplayImport::loadMhrBin(std::filesystem::path const& path) {
+geode::Result<EbImportedReplay> EbReplayImport::loadMhrBin(std::filesystem::path const& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f)
         return geode::Err("Failed to open MHR binary");
@@ -224,9 +224,9 @@ geode::Result<ImportedReplay> ReplayImport::loadMhrBin(std::filesystem::path con
 
     f.seekg(12);
     uint32_t fpsU = readBE<uint32_t>(f);
-    ImportedReplay out;
+    EbImportedReplay out;
     out.tps = fpsU > 0 ? static_cast<double>(fpsU) : 240.0;
-    out.sourceName = ReplayImportImplementation::fileStemName(path);
+    out.sourceName = EbReplayImportImplementation::fileStemName(path);
     out.format = "mhr";
 
     f.seekg(28);
@@ -241,7 +241,7 @@ geode::Result<ImportedReplay> ReplayImport::loadMhrBin(std::filesystem::path con
         f.seekg(24, std::ios::cur);
         if (!f)
             break;
-        out.events.push_back(ReplayEvent{static_cast<int>(frame), 1,
+        out.events.push_back(EbReplayEvent{static_cast<int>(frame), 1,
                                          p1B != 0, // p1==0 means player1 in zcb3; p1B==0 → !player2
                                          downB == 1});
         // Fix: zcb3 says p1 = (read == 0); so player2 = !p1 = (p1B != 0). Correct above.
@@ -260,7 +260,7 @@ geode::Result<ImportedReplay> ReplayImport::loadMhrBin(std::filesystem::path con
     return geode::Err("MHR binary: no actions");
 }
 
-geode::Result<ImportedReplay> ReplayImport::loadSlc(std::filesystem::path const& path) {
+geode::Result<EbImportedReplay> EbReplayImport::loadSlc(std::filesystem::path const& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f)
         return geode::Err("Failed to open SLC");
@@ -272,8 +272,8 @@ geode::Result<ImportedReplay> ReplayImport::loadSlc(std::filesystem::path const&
             "Unsupported SLC (need v2 SILL header; convert v3 to .gdr2 or re-export)");
     }
 
-    ImportedReplay out;
-    out.sourceName = ReplayImportImplementation::fileStemName(path);
+    EbImportedReplay out;
+    out.sourceName = EbReplayImportImplementation::fileStemName(path);
     out.format = "slc";
 
     double tps = 0.0;
@@ -295,7 +295,7 @@ geode::Result<ImportedReplay> ReplayImport::loadSlc(std::filesystem::path const&
     if (blobCount > 1'000'000)
         return geode::Err("SLC: absurd blob count");
 
-    class Blob {
+    class EbBlob {
     public:
         uint64_t byteSize = 1;
         uint64_t start = 0;
@@ -303,7 +303,7 @@ geode::Result<ImportedReplay> ReplayImport::loadSlc(std::filesystem::path const&
 
     private:
     };
-    std::vector<Blob> blobs(blobCount);
+    std::vector<EbBlob> blobs(blobCount);
     for (auto& b : blobs) {
         f.read(reinterpret_cast<char*>(&b.byteSize), sizeof(uint64_t));
         f.read(reinterpret_cast<char*>(&b.start), sizeof(uint64_t));
@@ -343,7 +343,7 @@ geode::Result<ImportedReplay> ReplayImport::loadSlc(std::filesystem::path const&
                 continue; // Skip / Restart / Death
             // 1 Jump, 2 Left, 3 Right
             out.events.push_back(
-                ReplayEvent{static_cast<int>(frame), static_cast<int>(type), playerTwo, hold});
+                EbReplayEvent{static_cast<int>(frame), static_cast<int>(type), playerTwo, hold});
         }
     }
 

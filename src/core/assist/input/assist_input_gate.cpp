@@ -9,7 +9,7 @@
 #include <chrono>
 #include <string>
 
-bool AssistInputGate::continuousModeKind(GameModeKind kind) {
+bool EbAssistInputGate::continuousModeKind(GameModeKind kind) {
     switch (kind) {
     case GameModeKind::Wave:
     case GameModeKind::Ship:
@@ -22,14 +22,14 @@ bool AssistInputGate::continuousModeKind(GameModeKind kind) {
     }
 }
 
-bool AssistInputGate::continuousModePlayer(PlayerObject* player) {
+bool EbAssistInputGate::continuousModePlayer(PlayerObject* player) {
     if (!(!player)) {
-        return AssistController::continuousModeKind(StageConfig::kindOf(player));
+        return EbAssistController::continuousModeKind(EbStageConfig::kindOf(player));
     }
     return false;
 }
 
-bool AssistInputGate::releaseAssistModeKind(GameModeKind kind) {
+bool EbAssistInputGate::releaseAssistModeKind(GameModeKind kind) {
     // Same set as BakePathVisualizer purple windows (not ufo/spider).
     switch (kind) {
     case GameModeKind::Wave:
@@ -42,14 +42,14 @@ bool AssistInputGate::releaseAssistModeKind(GameModeKind kind) {
     }
 }
 
-bool AssistInputGate::releaseAssistModePlayer(PlayerObject* player) {
+bool EbAssistInputGate::releaseAssistModePlayer(PlayerObject* player) {
     if (!(!player)) {
-        return AssistController::releaseAssistModeKind(StageConfig::kindOf(player));
+        return EbAssistController::releaseAssistModeKind(EbStageConfig::kindOf(player));
     }
     return false;
 }
 
-bool AssistInputGate::shouldPlanRelease(AssistController const& controller,
+bool EbAssistInputGate::shouldPlanRelease(EbAssistController const& controller,
                                         PlayLayer* /*playLayer*/, PlayerObject* player,
                                         bool player1, int effectTick) {
     if (!player)
@@ -65,22 +65,22 @@ bool AssistInputGate::shouldPlanRelease(AssistController const& controller,
     if (controller.m_buffer.requireHold)
         return true;
 
-    auto& bake = BakeMap::get();
+    auto& bake = EbBakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty())
         return false;
 
-    double tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
+    double tps = bake.data().tps > 0.0 ? bake.data().tps : EbAssistClock::kNominalTps;
     float const simDt = controller.m_simDt > 0.f
                             ? controller.m_simDt
-                            : static_cast<float>(1.0 / AssistClock::kNominalTps);
-    int const approxFrame = AssistClock::get().remapTick(
+                            : static_cast<float>(1.0 / EbAssistClock::kNominalTps);
+    int const approxFrame = EbAssistClock::get().remapTick(
         tps, controller.m_attemptTick > 0 ? controller.m_attemptTick : effectTick, simDt);
-    auto const kind = StageConfig::kindOf(player);
+    auto const kind = EbStageConfig::kindOf(player);
     auto const* win = bake.findNear(player->getPositionX(), approxFrame, false, !player1, kind);
     return win && win->holdAssist;
 }
 
-bool AssistInputGate::releaseGateSelfCheck(std::string& report) {
+bool EbAssistInputGate::releaseGateSelfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -92,23 +92,23 @@ bool AssistInputGate::releaseGateSelfCheck(std::string& report) {
         report += name;
     };
 
-    expect(AssistController::releaseAssistModeKind(GameModeKind::Wave), "rel-wave");
-    expect(AssistController::releaseAssistModeKind(GameModeKind::Ship), "rel-ship");
-    expect(AssistController::releaseAssistModeKind(GameModeKind::Swing), "rel-swing");
-    expect(AssistController::releaseAssistModeKind(GameModeKind::Robot), "rel-robot");
-    expect(!AssistController::releaseAssistModeKind(GameModeKind::Cube), "rel-not-cube");
-    expect(!AssistController::releaseAssistModeKind(GameModeKind::Ball), "rel-not-ball");
-    expect(!AssistController::releaseAssistModeKind(GameModeKind::Ufo), "rel-not-ufo");
-    expect(!AssistController::releaseAssistModeKind(GameModeKind::Spider), "rel-not-spider");
+    expect(EbAssistController::releaseAssistModeKind(GameModeKind::Wave), "rel-wave");
+    expect(EbAssistController::releaseAssistModeKind(GameModeKind::Ship), "rel-ship");
+    expect(EbAssistController::releaseAssistModeKind(GameModeKind::Swing), "rel-swing");
+    expect(EbAssistController::releaseAssistModeKind(GameModeKind::Robot), "rel-robot");
+    expect(!EbAssistController::releaseAssistModeKind(GameModeKind::Cube), "rel-not-cube");
+    expect(!EbAssistController::releaseAssistModeKind(GameModeKind::Ball), "rel-not-ball");
+    expect(!EbAssistController::releaseAssistModeKind(GameModeKind::Ufo), "rel-not-ufo");
+    expect(!EbAssistController::releaseAssistModeKind(GameModeKind::Spider), "rel-not-spider");
     // Viz parity: BakePathVisualizer must match this set.
-    expect(BakePathVisualizer::releaseWindowMode(GameModeKind::Wave) ==
-               AssistController::releaseAssistModeKind(GameModeKind::Wave),
+    expect(EbBakePathVisualizer::releaseWindowMode(GameModeKind::Wave) ==
+               EbAssistController::releaseAssistModeKind(GameModeKind::Wave),
            "viz-wave");
-    expect(BakePathVisualizer::releaseWindowMode(GameModeKind::Cube) ==
-               AssistController::releaseAssistModeKind(GameModeKind::Cube),
+    expect(EbBakePathVisualizer::releaseWindowMode(GameModeKind::Cube) ==
+               EbAssistController::releaseAssistModeKind(GameModeKind::Cube),
            "viz-cube");
-    expect(BakePathVisualizer::releaseWindowMode(GameModeKind::Robot) ==
-               AssistController::releaseAssistModeKind(GameModeKind::Robot),
+    expect(EbBakePathVisualizer::releaseWindowMode(GameModeKind::Robot) ==
+               EbAssistController::releaseAssistModeKind(GameModeKind::Robot),
            "viz-robot");
 
     if (fails == 0) {
@@ -119,26 +119,26 @@ bool AssistInputGate::releaseGateSelfCheck(std::string& report) {
     return false;
 }
 
-int AssistInputGate::activeLimit(AssistController const& controller, PlayerObject* player) {
-    return StageConfig::paramsFor(player).ticks;
+int EbAssistInputGate::activeLimit(EbAssistController const& controller, PlayerObject* player) {
+    return EbStageConfig::paramsFor(player).ticks;
 }
 
-bool AssistInputGate::shouldAssistPlayer(AssistController const& controller, PlayerObject* player) {
-    if (!StageConfig::isEnabled())
+bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller, PlayerObject* player) {
+    if (!EbStageConfig::isEnabled())
         return false;
     if (!player || player->m_isDead)
         return false;
     if (controller.cpsLimited())
         return false;
-    if (!StageConfig::paramsFor(player).enabled)
+    if (!EbStageConfig::paramsFor(player).enabled)
         return false;
-    if (!(!AssistScopeGate::allowAssist(PlayLayer::get(), player))) {
+    if (!(!EbAssistScopeGate::allowAssist(PlayLayer::get(), player))) {
         return true;
     }
     return false;
 }
 
-void AssistInputGate::pruneClickTimes(AssistController& controller) {
+void EbAssistInputGate::pruneClickTimes(EbAssistController& controller) {
     auto const now = std::chrono::steady_clock::now();
     while (!controller.m_clickTimes.empty() &&
            now - controller.m_clickTimes.front() > std::chrono::seconds(1)) {
@@ -146,20 +146,20 @@ void AssistInputGate::pruneClickTimes(AssistController& controller) {
     }
 }
 
-void AssistInputGate::noteUserClick(AssistController& controller) {
+void EbAssistInputGate::noteUserClick(EbAssistController& controller) {
     controller.m_clickTimes.push_back(std::chrono::steady_clock::now());
     controller.pruneClickTimes();
-    int const limitValue = StageConfig::cpsLimit();
+    int const limitValue = EbStageConfig::cpsLimit();
     if (limitValue > 0 && static_cast<int>(controller.m_clickTimes.size()) >= limitValue) {
         if (!controller.m_cpsLocked) {
             controller.m_cpsLocked = true;
-            AssistLog::info(fmt::format("CPS: limit hit ({} >= {}) — assist paused",
+            EbAssistLog::info(fmt::format("CPS: limit hit ({} >= {}) — assist paused",
                                         controller.m_clickTimes.size(), limitValue));
         }
     }
 }
 
-int AssistInputGate::currentCps(AssistController const& controller) {
+int EbAssistInputGate::currentCps(EbAssistController const& controller) {
     auto const now = std::chrono::steady_clock::now();
     int count = 0;
     for (auto const& t : controller.m_clickTimes) {
@@ -169,8 +169,8 @@ int AssistInputGate::currentCps(AssistController const& controller) {
     return count;
 }
 
-bool AssistInputGate::cpsLimited(AssistController const& controller) {
-    int const limit = StageConfig::cpsLimit();
+bool EbAssistInputGate::cpsLimited(EbAssistController const& controller) {
+    int const limit = EbStageConfig::cpsLimit();
     if (!(limit <= 0)) {
         return controller.currentCps() >= limit;
     }

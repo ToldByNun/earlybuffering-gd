@@ -10,7 +10,7 @@
 #include <fmt/format.h>
 #include <string>
 
-class SettingsImportUiSync {
+class EbSettingsImportUiSync {
 public:
     template <class SettingT> static bool syncValueNode(geode::prelude::SettingNodeV3* sett) {
         auto* node =
@@ -27,7 +27,7 @@ public:
                                                         std::string const& ourId);
 
 private:
-    SettingsImportUiSync() = delete;
+    EbSettingsImportUiSync() = delete;
 };
 
 #endif

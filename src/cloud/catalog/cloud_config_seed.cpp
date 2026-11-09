@@ -8,7 +8,7 @@
 // Packaged resources may omit nested JSON; keep an identical offline fallback compiled in.
 // Pack bytes must match resources/cloud-seed/packs/safe-defaults.json (LF, 379 bytes).
 
-std::filesystem::path CloudConfigSeed::rootDir() {
+std::filesystem::path EbCloudConfigSeed::rootDir() {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
         return mod->getResourcesDir() / "cloud-seed";
@@ -16,7 +16,7 @@ std::filesystem::path CloudConfigSeed::rootDir() {
     return {};
 }
 
-std::filesystem::path CloudConfigSeed::indexPath() {
+std::filesystem::path EbCloudConfigSeed::indexPath() {
     auto const root = rootDir();
     if (!(root.empty())) {
         return root / "index.json";
@@ -24,8 +24,8 @@ std::filesystem::path CloudConfigSeed::indexPath() {
     return {};
 }
 
-std::filesystem::path CloudConfigSeed::packPath(std::string const& id) {
-    if (!CloudConfigStore::isValidPackId(id))
+std::filesystem::path EbCloudConfigSeed::packPath(std::string const& id) {
+    if (!EbCloudConfigStore::isValidPackId(id))
         return {};
     auto const root = rootDir();
     if (!(root.empty())) {
@@ -34,46 +34,46 @@ std::filesystem::path CloudConfigSeed::packPath(std::string const& id) {
     return {};
 }
 
-bool CloudConfigSeed::readIndex(std::string& out, std::string& err) {
+bool EbCloudConfigSeed::readIndex(std::string& out, std::string& err) {
     out.clear();
     err.clear();
     auto const path = indexPath();
     if (!path.empty() &&
-        CloudConfigStore::readTextFile(path, out, CloudConfigStore::kMaxIndexBytes, err)) {
+        EbCloudConfigStore::readTextFile(path, out, EbCloudConfigStore::kMaxIndexBytes, err)) {
         return true;
     }
     // Flat resource name fallback (some Geode packages flatten resources/).
     if (auto* mod = geode::prelude::Mod::get()) {
         auto const flat = mod->getResourcesDir() / "cloud-seed-index.json";
         std::string flatErr;
-        if (CloudConfigStore::readTextFile(flat, out, CloudConfigStore::kMaxIndexBytes, flatErr)) {
+        if (EbCloudConfigStore::readTextFile(flat, out, EbCloudConfigStore::kMaxIndexBytes, flatErr)) {
             err.clear();
             return true;
         }
     }
-    out = CloudConfigSeedEmbedded::indexJson();
+    out = EbCloudConfigSeedEmbedded::indexJson();
     err.clear();
     return !out.empty();
 }
 
-bool CloudConfigSeed::readPack(std::string const& id, std::string& out, std::string& err) {
+bool EbCloudConfigSeed::readPack(std::string const& id, std::string& out, std::string& err) {
     out.clear();
     err.clear();
     auto const path = packPath(id);
     if (!path.empty() &&
-        CloudConfigStore::readTextFile(path, out, CloudConfigStore::kMaxPackBytes, err)) {
+        EbCloudConfigStore::readTextFile(path, out, EbCloudConfigStore::kMaxPackBytes, err)) {
         return true;
     }
     if (auto* mod = geode::prelude::Mod::get()) {
         auto const flat = mod->getResourcesDir() / (std::string("cloud-seed-") + id + ".json");
         std::string flatErr;
-        if (CloudConfigStore::readTextFile(flat, out, CloudConfigStore::kMaxPackBytes, flatErr)) {
+        if (EbCloudConfigStore::readTextFile(flat, out, EbCloudConfigStore::kMaxPackBytes, flatErr)) {
             err.clear();
             return true;
         }
     }
     if (id == "safe-defaults") {
-        out = CloudConfigSeedEmbedded::safeDefaultsPackJson();
+        out = EbCloudConfigSeedEmbedded::safeDefaultsPackJson();
         err.clear();
         return !out.empty();
     }
@@ -81,13 +81,13 @@ bool CloudConfigSeed::readPack(std::string const& id, std::string& out, std::str
     return false;
 }
 
-bool CloudConfigSeed::available() {
+bool EbCloudConfigSeed::available() {
     std::string body;
     std::string err;
     return readIndex(body, err);
 }
 
-bool CloudConfigSeed::selfCheck(std::string& report) {
+bool EbCloudConfigSeed::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -102,9 +102,9 @@ bool CloudConfigSeed::selfCheck(std::string& report) {
 
     // Embedded pack must match the hashed size/sha recorded in the index.
     {
-        std::string const pack = CloudConfigSeedEmbedded::safeDefaultsPackJson();
+        std::string const pack = EbCloudConfigSeedEmbedded::safeDefaultsPackJson();
         expect(pack.size() == 379, "embed-pack-size");
-        expect(CloudConfigSha256::hashHex(pack) ==
+        expect(EbCloudConfigSha256::hashHex(pack) ==
                    "d07a6bc9765374bf8a87aa5b69455e2333d0eb542905179444acfa0633bae3b0",
                "embed-pack-sha");
     }
@@ -112,15 +112,15 @@ bool CloudConfigSeed::selfCheck(std::string& report) {
     std::string indexBody;
     std::string err;
     expect(readIndex(indexBody, err), "seed-read-index");
-    CloudConfigIndex::Catalog category{};
-    expect(CloudConfigIndex::parse(indexBody, category, err), "seed-parse-index");
+    EbCloudConfigIndex::Catalog category{};
+    expect(EbCloudConfigIndex::parse(indexBody, category, err), "seed-parse-index");
     expect(!category.packs.empty(), "seed-has-packs");
 
     for (auto const& p : category.packs) {
         std::string packBody;
         expect(readPack(p.id, packBody, err), "seed-read-pack");
         expect(packBody.size() == p.size, "seed-size-match");
-        expect(CloudConfigSha256::hashHex(packBody) == p.sha256, "seed-sha-match");
+        expect(EbCloudConfigSha256::hashHex(packBody) == p.sha256, "seed-sha-match");
         auto parsed = matjson::parse(packBody);
         expect(parsed.isOk() && parsed.unwrap().isObject(), "seed-pack-json");
         if (parsed.isOk() && parsed.unwrap().isObject()) {
@@ -139,7 +139,7 @@ bool CloudConfigSeed::selfCheck(std::string& report) {
     return false;
 }
 
-auto CloudConfigSeedEmbedded::indexJson() -> char const* {
+auto EbCloudConfigSeedEmbedded::indexJson() -> char const* {
     return R"({
   "schema": 1,
   "updatedAt": "2026-11-04T00:00:00Z",
@@ -160,7 +160,7 @@ auto CloudConfigSeedEmbedded::indexJson() -> char const* {
 })";
 }
 
-auto CloudConfigSeedEmbedded::safeDefaultsPackJson() -> char const* {
+auto EbCloudConfigSeedEmbedded::safeDefaultsPackJson() -> char const* {
     return "{\n"
            "  \"version\": 2,\n"
            "  \"settings\": {\n"

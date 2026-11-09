@@ -1,12 +1,12 @@
 #ifndef GAME_HOOK_SIMULATION_GUARD_HPP
 #define GAME_HOOK_SIMULATION_GUARD_HPP
 
-class GameHookSimulationGuard {
+class EbGameHookSimulationGuard {
 public:
     static bool simulating();
 
 private:
-    GameHookSimulationGuard() = delete;
+    EbGameHookSimulationGuard() = delete;
 };
 
 #endif

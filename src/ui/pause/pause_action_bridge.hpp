@@ -1,7 +1,7 @@
 #ifndef PAUSE_ACTION_BRIDGE_HPP
 #define PAUSE_ACTION_BRIDGE_HPP
 
-class PauseActionBridgeDetail;
+class EbPauseActionBridgeDetail;
 
 #include <filesystem>
 #include <string>
@@ -9,7 +9,7 @@ class PauseActionBridgeDetail;
 class PauseLayer;
 
 // Pause / hub actions in one place. Hooks and popups call these; no UI layout here.
-class PauseActionBridge {
+class EbPauseActionBridge {
 public:
     static void refreshPauseLabels(PauseLayer* pause);
 
@@ -50,11 +50,11 @@ public:
     static void refreshOpenSettings();
 
 private:
-    friend class PauseConfigActions;
+    friend class EbPauseConfigActions;
 
-    friend class PauseDevActions;
+    friend class EbPauseDevActions;
 
-    PauseActionBridge() = delete;
+    EbPauseActionBridge() = delete;
 
     static void handleImportedPath(std::filesystem::path const& path);
     static void stubDevAction(char const* name);
@@ -86,7 +86,7 @@ private:
 #include <optional>
 #include <system_error>
 
-class PauseActionBridgeDetail {
+class EbPauseActionBridgeDetail {
 public:
     static geode::prelude::CCLabelBMFont* findStatusLabel(PauseLayer* self);
 
@@ -150,7 +150,7 @@ public:
     // Non-Win: pick newest replay from SaveDropPaths::replayDropDir().
     // nullopt = user was already alerted (ensureDirs fail / empty folder).
     static std::optional<std::filesystem::path> pickReplayFromDropDir() {
-        auto& drops = SaveDropPaths::get();
+        auto& drops = EbSaveDropPaths::get();
         std::string err;
         if (!drops.ensureDirs(err)) {
             FLAlertLayer::create(
@@ -179,7 +179,7 @@ public:
 
         auto const& chosen = candidates.front(); // newest mtime
         if (candidates.size() > 1) {
-            AssistLog::info(fmt::format("Import: {} file(s) in drop folder — using newest '{}'",
+            EbAssistLog::info(fmt::format("Import: {} file(s) in drop folder — using newest '{}'",
                                         candidates.size(), chosen.filename().string()));
         }
         return chosen;

@@ -7,29 +7,29 @@
 #include <cstring>
 #include <fmt/format.h>
 
-uint64_t DevLiveWitnessImplementation::fnv1aMix(uint64_t hash, uint64_t value) {
+uint64_t EbDevLiveWitnessImplementation::fnv1aMix(uint64_t hash, uint64_t value) {
     hash ^= value;
     hash *= 1099511628211ull;
     return hash;
 }
 
-uint64_t DevLiveWitnessImplementation::fnv1aBytes(void const* data, size_t count) {
+uint64_t EbDevLiveWitnessImplementation::fnv1aBytes(void const* data, size_t count) {
     uint64_t height = 14695981039346656037ull;
     auto const* valuePointer = static_cast<unsigned char const*>(data);
     for (size_t index = 0; index < count; ++index) {
-        height = DevLiveWitnessImplementation::fnv1aMix(height, valuePointer[index]);
+        height = EbDevLiveWitnessImplementation::fnv1aMix(height, valuePointer[index]);
     }
     return height;
 }
 
-uint64_t DevLiveWitnessImplementation::fnv1aStr(char const* state) {
+uint64_t EbDevLiveWitnessImplementation::fnv1aStr(char const* state) {
     if (!(!state)) {
-        return DevLiveWitnessImplementation::fnv1aBytes(state, std::strlen(state));
+        return EbDevLiveWitnessImplementation::fnv1aBytes(state, std::strlen(state));
     }
-    return DevLiveWitnessImplementation::fnv1aBytes("", 0);
+    return EbDevLiveWitnessImplementation::fnv1aBytes("", 0);
 }
 
-char const* DevLiveWitness::categoryId(DevWitnessCategory candidate) {
+char const* EbDevLiveWitness::categoryId(DevWitnessCategory candidate) {
     switch (candidate) {
     case DevWitnessCategory::Player:
         return "player";
@@ -49,7 +49,7 @@ char const* DevLiveWitness::categoryId(DevWitnessCategory candidate) {
     return "player";
 }
 
-bool DevLiveWitness::parseCategory(std::string const& s, DevWitnessCategory& out) {
+bool EbDevLiveWitness::parseCategory(std::string const& s, DevWitnessCategory& out) {
     if (s == "player") {
         out = DevWitnessCategory::Player;
         return true;
@@ -81,7 +81,7 @@ bool DevLiveWitness::parseCategory(std::string const& s, DevWitnessCategory& out
     return false;
 }
 
-char const* DevLiveWitness::statusId(DevWitnessStatus state) {
+char const* EbDevLiveWitness::statusId(DevWitnessStatus state) {
     switch (state) {
     case DevWitnessStatus::Absent:
         return "absent";
@@ -95,7 +95,7 @@ char const* DevLiveWitness::statusId(DevWitnessStatus state) {
     return "absent";
 }
 
-bool DevLiveWitness::parseStatus(std::string const& s, DevWitnessStatus& out) {
+bool EbDevLiveWitness::parseStatus(std::string const& s, DevWitnessStatus& out) {
     if (s == "absent") {
         out = DevWitnessStatus::Absent;
         return true;
@@ -115,7 +115,7 @@ bool DevLiveWitness::parseStatus(std::string const& s, DevWitnessStatus& out) {
     return false;
 }
 
-char const* const* DevLiveWitness::playerBlobFieldNames(size_t& count) {
+char const* const* EbDevLiveWitness::playerBlobFieldNames(size_t& count) {
     static char const* const kNames[] = {
         "x",
         "y",
@@ -161,21 +161,21 @@ char const* const* DevLiveWitness::playerBlobFieldNames(size_t& count) {
     return kNames;
 }
 
-uint64_t DevLiveWitness::computePlayerBlobSchema() {
+uint64_t EbDevLiveWitness::computePlayerBlobSchema() {
     size_t count = 0;
-    char const* const* names = DevLiveWitness::playerBlobFieldNames(count);
+    char const* const* names = EbDevLiveWitness::playerBlobFieldNames(count);
     uint64_t height = 14695981039346656037ull;
-    height = DevLiveWitnessImplementation::fnv1aMix(
+    height = EbDevLiveWitnessImplementation::fnv1aMix(
         height, static_cast<uint64_t>(kPlayerBlobSchemaVersion));
-    height = DevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(count));
+    height = EbDevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(count));
     for (size_t index = 0; index < count; ++index) {
-        height = DevLiveWitnessImplementation::fnv1aMix(
-            height, DevLiveWitnessImplementation::fnv1aStr(names[index]));
+        height = EbDevLiveWitnessImplementation::fnv1aMix(
+            height, EbDevLiveWitnessImplementation::fnv1aStr(names[index]));
     }
     return height;
 }
 
-void DevLiveWitness::setCategory(DevLiveWitness& w, DevWitnessCategory candidate,
+void EbDevLiveWitness::setCategory(EbDevLiveWitness& w, DevWitnessCategory candidate,
                                  DevWitnessStatus status, uint64_t digest) {
     for (auto& e : w.categories) {
         if (e.category == candidate) {
@@ -184,14 +184,14 @@ void DevLiveWitness::setCategory(DevLiveWitness& w, DevWitnessCategory candidate
             return;
         }
     }
-    DevWitnessCategoryEntry e;
+    EbDevWitnessCategoryEntry e;
     e.category = candidate;
     e.status = status;
     e.digest = digest;
     w.categories.push_back(e);
 }
 
-DevWitnessStatus DevLiveWitness::categoryStatus(DevLiveWitness const& w,
+DevWitnessStatus EbDevLiveWitness::categoryStatus(EbDevLiveWitness const& w,
                                                 DevWitnessCategory candidate) {
     for (auto const& e : w.categories) {
         if (e.category == candidate)
@@ -200,11 +200,11 @@ DevWitnessStatus DevLiveWitness::categoryStatus(DevLiveWitness const& w,
     return DevWitnessStatus::Absent;
 }
 
-bool DevLiveWitness::hasWorldDep(DevLiveWitness const& w, DevWitnessCategory candidate) {
+bool EbDevLiveWitness::hasWorldDep(EbDevLiveWitness const& w, DevWitnessCategory candidate) {
     return w.worldDeps.count(static_cast<int>(candidate)) > 0;
 }
 
-void DevLiveWitness::fillWorldDeps(DevLiveWitness& w, SimPlan const& plan, bool dualActive) {
+void EbDevLiveWitness::fillWorldDeps(EbDevLiveWitness& w, EbSimPlan const& plan, bool dualActive) {
     w.worldDeps.clear();
     // player + clock always.
     w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Player));
@@ -218,7 +218,7 @@ void DevLiveWitness::fillWorldDeps(DevLiveWitness& w, SimPlan const& plan, bool 
         w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Orbs));
     }
     // Triggers dep only when store has ready tracks that eval can spool.
-    auto& tw = TriggerWorldStore::get();
+    auto& tw = EbTriggerWorldStore::get();
     if (tw.loaded() && tw.hasTracks() && tw.readyTrackCount() > 0) {
         w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Triggers));
     }
@@ -228,7 +228,7 @@ void DevLiveWitness::fillWorldDeps(DevLiveWitness& w, SimPlan const& plan, bool 
     }
 }
 
-void DevLiveWitness::fillPlayerBlob(DevPlayerBlob& blob, PlayerObject* source) {
+void EbDevLiveWitness::fillPlayerBlob(EbDevPlayerBlob& blob, PlayerObject* source) {
     blob = {};
     if (!source)
         return;
@@ -274,7 +274,7 @@ void DevLiveWitness::fillPlayerBlob(DevPlayerBlob& blob, PlayerObject* source) {
     blob.maybeIsBoosted = source->m_maybeIsBoosted;
 }
 
-bool DevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {
+bool EbDevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {
     if (!object)
         return false;
     switch (object->m_objectType) {
@@ -286,7 +286,7 @@ bool DevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {
     }
 }
 
-uint64_t DevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player,
+uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player,
                                                 float radiusX) {
     if (!layer || !player || !layer->m_objectLayer || radiusX <= 0.f)
         return 0;
@@ -302,7 +302,7 @@ uint64_t DevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject* 
     int count = 0;
     for (unsigned index = 0; index < children->count(); ++index) {
         auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-        if (!DevLiveWitnessImplementation::hazardLikeObject(object))
+        if (!EbDevLiveWitnessImplementation::hazardLikeObject(object))
             continue;
         float const objectX = object->getPositionX();
         float const objectY = object->getPositionY();
@@ -314,29 +314,29 @@ uint64_t DevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject* 
         float half = object->getContentSize().width * std::fabs(object->getScaleX()) * 0.5f;
         if (half < 8.f)
             half = 8.f;
-        height = DevLiveWitnessImplementation::fnv1aMix(height,
+        height = EbDevLiveWitnessImplementation::fnv1aMix(height,
                                                         static_cast<uint64_t>(object->m_uniqueID));
-        height = DevLiveWitnessImplementation::fnv1aMix(
+        height = EbDevLiveWitnessImplementation::fnv1aMix(
             height, static_cast<uint64_t>(static_cast<int>(object->m_objectType)));
         long long const xUs = static_cast<long long>(std::llround(objectX * 100.0));
         long long const yUs = static_cast<long long>(std::llround(objectY * 100.0));
         long long const halfUs = static_cast<long long>(std::llround(half * 100.0));
-        height = DevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(xUs));
-        height = DevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(yUs));
-        height = DevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(halfUs));
+        height = EbDevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(xUs));
+        height = EbDevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(yUs));
+        height = EbDevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(halfUs));
         ++count;
     }
-    height = DevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(count));
+    height = EbDevLiveWitnessImplementation::fnv1aMix(height, static_cast<uint64_t>(count));
     return height;
 }
 
-DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
-                                       PlayerObject* player2, SimPlan const& plan,
-                                       DevClockContract::Stamp const& clock, int effectTick,
+EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
+                                       PlayerObject* player2, EbSimPlan const& plan,
+                                       EbDevClockContract::Stamp const& clock, int effectTick,
                                        bool freezeWorld) {
-    DevLiveWitness w;
+    EbDevLiveWitness w;
     w.freezeWorld = freezeWorld;
-    w.playerBlobSchema = DevLiveWitness::computePlayerBlobSchema();
+    w.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();
     w.clock = clock;
     w.clock.effectTick = effectTick;
 
@@ -362,7 +362,7 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
     }
 
     // --- clock ---
-    if (clock.valid && DevClockContract::get().clockOk(w.clock)) {
+    if (clock.valid && EbDevClockContract::get().clockOk(w.clock)) {
         setCategory(w, DevWitnessCategory::Clock, DevWitnessStatus::Restored);
     } else if (clock.valid) {
         setCategory(w, DevWitnessCategory::Clock, DevWitnessStatus::Partial);
@@ -403,8 +403,8 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
 
     // --- triggers ---
     {
-        auto& tw = TriggerWorldStore::get();
-        auto& baker = TriggerWorldBaker::get();
+        auto& tw = EbTriggerWorldStore::get();
+        auto& baker = EbTriggerWorldBaker::get();
         w.triggerStoreKey = tw.data().levelKey;
         w.triggerStoreVersion = tw.data().version;
         w.triggerApplyTick = effectTick;
@@ -419,7 +419,7 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
         w.triggerCanSpool = tw.loaded() && tw.hasTracks() && tw.readyTrackCount() > 0;
         if (w.triggerCanSpool) {
             setCategory(w, DevWitnessCategory::Triggers, DevWitnessStatus::Partial);
-        } else if (ShadowSimulator::get().triggerWorldAppliedThisTick()) {
+        } else if (EbShadowSimulator::get().triggerWorldAppliedThisTick()) {
             setCategory(w, DevWitnessCategory::Triggers, DevWitnessStatus::Partial);
         } else {
             setCategory(w, DevWitnessCategory::Triggers, DevWitnessStatus::Absent);
@@ -441,7 +441,7 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
                 float const playerY = player->getPositionY();
                 float const yReach =
                     player->m_isShip || player->m_isDart || player->m_isSwing ? 120.f : 80.f;
-                auto& tw = TriggerWorldStore::get();
+                auto& tw = EbTriggerWorldStore::get();
                 for (unsigned index = 0; index < children->count(); ++index) {
                     auto* object =
                         geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
@@ -454,7 +454,7 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
                     if (std::fabs(objectY - playerY) > yReach)
                         continue;
 
-                    bool want = DevLiveWitnessImplementation::hazardLikeObject(object);
+                    bool want = EbDevLiveWitnessImplementation::hazardLikeObject(object);
                     if (!want && tw.loaded()) {
                         auto const* track = tw.findTrack(object->m_uniqueID);
                         want = track && track->ready && !track->keys.empty();
@@ -462,7 +462,7 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
                     if (!want)
                         continue;
 
-                    DevObjectPose pose;
+                    EbDevObjectPose pose;
                     pose.uniqueId = object->m_uniqueID;
                     pose.x = objectX;
                     pose.y = objectY;
@@ -488,7 +488,7 @@ DevLiveWitness DevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
     return w;
 }
 
-bool DevLiveWitness::selfCheck(std::string& report) {
+bool EbDevLiveWitness::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -514,11 +514,11 @@ bool DevLiveWitness::selfCheck(std::string& report) {
 
     // Synthetic witness: missing player → player Absent; hazard digestOnly.
     {
-        SimPlan plan;
+        EbSimPlan plan;
         plan.requireOrb = true;
-        DevClockContract::Stamp clock = DevClockContract::get().makeStamp(
+        EbDevClockContract::Stamp clock = EbDevClockContract::get().makeStamp(
             10, false, false, 1.f / 240.f, 1.f / 240.f, 1.f / 240.f, 1.f, DevSimPathId::Plan);
-        DevLiveWitness width = capture(nullptr, nullptr, nullptr, plan, clock, 11, false);
+        EbDevLiveWitness width = capture(nullptr, nullptr, nullptr, plan, clock, 11, false);
         expect(width.valid, "cap-valid");
         expect(categoryStatus(width, DevWitnessCategory::Player) == DevWitnessStatus::Absent,
                "cap-player-absent");
@@ -534,10 +534,10 @@ bool DevLiveWitness::selfCheck(std::string& report) {
 
     // worldDeps: foresight orb pad tags orbs; dualActive tags dual.
     {
-        DevLiveWitness width;
+        EbDevLiveWitness width;
         width.freezeWorld = false;
         width.hasHazardDigest = true;
-        SimPlan plan;
+        EbSimPlan plan;
         plan.foresightOrbPad = true;
         fillWorldDeps(width, plan, true);
         expect(hasWorldDep(width, DevWitnessCategory::Orbs), "dep-foresight");
@@ -547,18 +547,18 @@ bool DevLiveWitness::selfCheck(std::string& report) {
 
     // Hashes alone stay DigestOnly; freeze-world poses may be Restored.
     {
-        DevLiveWitness width;
+        EbDevLiveWitness width;
         setCategory(width, DevWitnessCategory::Movers, DevWitnessStatus::DigestOnly, 0xabc);
         expect(categoryStatus(width, DevWitnessCategory::Movers) == DevWitnessStatus::DigestOnly,
                "movers-digest-only");
         expect(std::strcmp(statusId(DevWitnessStatus::Restored), "restored") == 0,
                "status-restored-id");
 
-        DevLiveWitness wf;
+        EbDevLiveWitness wf;
         wf.freezeWorld = true;
         wf.hasHazardDigest = true;
         wf.hazardDigest = 0xabc;
-        DevObjectPose valuePointer{};
+        EbDevObjectPose valuePointer{};
         valuePointer.uniqueId = 9;
         valuePointer.x = 3.f;
         wf.moverPoses.push_back(valuePointer);

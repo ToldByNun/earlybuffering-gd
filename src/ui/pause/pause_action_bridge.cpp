@@ -28,40 +28,40 @@
 #include <windows.h>
 #endif
 
-void PauseActionBridge::refreshPauseLabels(PauseLayer* self) {
+void EbPauseActionBridge::refreshPauseLabels(PauseLayer* self) {
     if (!self)
         return;
-    if (auto* mode = PauseActionBridgeDetail::findModeLabel(self)) {
-        auto m = StageConfig::assistMode();
-        mode->setString(fmt::format("Mode: {} — {}", StageConfig::assistModeName(m),
-                                    StageConfig::assistModeHint(m))
+    if (auto* mode = EbPauseActionBridgeDetail::findModeLabel(self)) {
+        auto m = EbStageConfig::assistMode();
+        mode->setString(fmt::format("Mode: {} — {}", EbStageConfig::assistModeName(m),
+                                    EbStageConfig::assistModeHint(m))
                             .c_str());
     }
-    if (auto* st = PauseActionBridgeDetail::findStatusLabel(self)) {
-        auto& bake = BakeMap::get();
-        if (bake.isBaking() || BakeScheduler::get().running()) {
+    if (auto* st = EbPauseActionBridgeDetail::findStatusLabel(self)) {
+        auto& bake = EbBakeMap::get();
+        if (bake.isBaking() || EbBakeScheduler::get().running()) {
             st->setString(fmt::format("{}\n{:.0f}%  ({}/{})", bake.progress().getStatus(),
                                       bake.progress().fraction() * 100.f,
                                       bake.progress().done.load(), bake.progress().total.load())
                               .c_str());
-        } else if (DevSession::get().isRecording()) {
-            st->setString(DevSession::get().statusLine().c_str());
+        } else if (EbDevSession::get().isRecording()) {
+            st->setString(EbDevSession::get().statusLine().c_str());
         } else {
             st->setString(bake.pauseStatusLine().c_str());
         }
     }
 }
 
-void PauseActionBridge::handleImportedPath(std::filesystem::path const& path) {
-    auto loaded = ReplayImport::load(path);
+void EbPauseActionBridge::handleImportedPath(std::filesystem::path const& path) {
+    auto loaded = EbReplayImport::load(path);
     if (loaded.isErr()) {
-        AssistLog::info(fmt::format("Import failed: {}", loaded.unwrapErr()));
+        EbAssistLog::info(fmt::format("Import failed: {}", loaded.unwrapErr()));
         FLAlertLayer::create("EarlyBuffer", loaded.unwrapErr().c_str(), "OK")->show();
         return;
     }
-    BakeMap::get().setPendingReplay(loaded.unwrap());
-    AssistController::get().updateOverlay();
-    auto const* result = BakeMap::get().pendingReplay();
+    EbBakeMap::get().setPendingReplay(loaded.unwrap());
+    EbAssistController::get().updateOverlay();
+    auto const* result = EbBakeMap::get().pendingReplay();
     FLAlertLayer::create("EarlyBuffer",
                          fmt::format("Imported {}\n{} events @ {:.0f} tps ({})\n\n"
                                      "Press Bake Map for replay windows.\n"
@@ -76,35 +76,35 @@ void PauseActionBridge::handleImportedPath(std::filesystem::path const& path) {
     }
 }
 
-void PauseActionBridge::importReplay() {
-    if (BakeMap::get().isBaking() || BakeScheduler::get().running()) {
+void EbPauseActionBridge::importReplay() {
+    if (EbBakeMap::get().isBaking() || EbBakeScheduler::get().running()) {
         FLAlertLayer::create("EarlyBuffer", "Bake in progress — wait or cancel.", "OK")->show();
         return;
     }
 #ifdef GEODE_IS_WINDOWS
-    auto picked = PauseActionBridgeDetail::pickReplayFileWin32();
+    auto picked = EbPauseActionBridgeDetail::pickReplayFileWin32();
     if (!picked)
         return;
     handleImportedPath(*picked);
 #else
-    auto picked = PauseActionBridgeDetail::pickReplayFromDropDir();
+    auto picked = EbPauseActionBridgeDetail::pickReplayFromDropDir();
     if (!picked)
         return;
     handleImportedPath(*picked);
 #endif
 }
 
-void PauseActionBridge::startBake(bool brute) {
+void EbPauseActionBridge::startBake(bool brute) {
     auto* playLayer = PlayLayer::get();
     if (!playLayer) {
         FLAlertLayer::create("EarlyBuffer", "No level loaded.", "OK")->show();
         return;
     }
-    if (BakeMap::get().isBaking() || BakeScheduler::get().running()) {
+    if (EbBakeMap::get().isBaking() || EbBakeScheduler::get().running()) {
         FLAlertLayer::create("EarlyBuffer", "Bake already running.", "OK")->show();
         return;
     }
-    if (!brute && !BakeMap::get().pendingReplay()) {
+    if (!brute && !EbBakeMap::get().pendingReplay()) {
         FLAlertLayer::create("EarlyBuffer",
                              "Bake Map needs a replay.\nImport Replay first — or use Brute "
                              "Bake\n(no macro, explores safe clicks).",
@@ -112,7 +112,7 @@ void PauseActionBridge::startBake(bool brute) {
             ->show();
         return;
     }
-    auto snap = AssistController::get().ensureStartSnapshot(playLayer);
+    auto snap = EbAssistController::get().ensureStartSnapshot(playLayer);
     if (snap.isErr()) {
         FLAlertLayer::create("EarlyBuffer",
                              "Reset the level once (play from start),\nthen pause and bake again.",
@@ -121,156 +121,156 @@ void PauseActionBridge::startBake(bool brute) {
         return;
     }
 
-    int slot = AssistController::get().startSnapshotSlot();
-    AssistLog::info(
+    int slot = EbAssistController::get().startSnapshotSlot();
+    EbAssistLog::info(
         fmt::format("BAKE UI: starting {} (main-thread)", brute ? "BruteForce" : "Replay"));
 
-    bool ok = BakeScheduler::get().start(playLayer, slot, StageConfig::bakeRadius(),
+    bool ok = EbBakeScheduler::get().start(playLayer, slot, EbStageConfig::bakeRadius(),
                                          brute ? BakeMethod::BruteForce : BakeMethod::Replay);
     if (!ok) {
         FLAlertLayer::create("EarlyBuffer", "Could not start bake.", "OK")->show();
         return;
     }
-    AssistController::get().updateOverlay();
+    EbAssistController::get().updateOverlay();
     if (auto* pause = geode::prelude::CCScene::get()->getChildByType<PauseLayer>(0)) {
         refreshPauseLabels(pause);
     }
 }
 
-void PauseActionBridge::cycleAssistMode() {
-    StageConfig::cycleAssistMode();
-    auto mode = StageConfig::assistMode();
-    AssistLog::info(fmt::format("ASSIST MODE: {} — {}", StageConfig::assistModeName(mode),
-                                StageConfig::assistModeHint(mode)));
-    AssistController::get().updateOverlay();
+void EbPauseActionBridge::cycleAssistMode() {
+    EbStageConfig::cycleAssistMode();
+    auto mode = EbStageConfig::assistMode();
+    EbAssistLog::info(fmt::format("ASSIST MODE: {} — {}", EbStageConfig::assistModeName(mode),
+                                EbStageConfig::assistModeHint(mode)));
+    EbAssistController::get().updateOverlay();
     if (auto* pause = geode::prelude::CCScene::get()->getChildByType<PauseLayer>(0)) {
         refreshPauseLabels(pause);
     }
 }
 
-void PauseActionBridge::cancelBake() {
-    if (!BakeMap::get().isBaking() && !BakeScheduler::get().running())
+void EbPauseActionBridge::cancelBake() {
+    if (!EbBakeMap::get().isBaking() && !EbBakeScheduler::get().running())
         return;
-    BakeScheduler::get().cancel();
-    AssistLog::info("BAKE: cancel requested");
+    EbBakeScheduler::get().cancel();
+    EbAssistLog::info("BAKE: cancel requested");
 }
 
-void PauseActionBridge::toggleDebug() {
-    StageConfig::toggleDebugLogging();
-    AssistLog::info(fmt::format("debug-logging: {}", StageConfig::debugLogging() ? "ON" : "OFF"));
+void EbPauseActionBridge::toggleDebug() {
+    EbStageConfig::toggleDebugLogging();
+    EbAssistLog::info(fmt::format("debug-logging: {}", EbStageConfig::debugLogging() ? "ON" : "OFF"));
 }
 
-void PauseActionBridge::resetLearning() {
-    AssistController::get().resetLevelProfile();
-    AssistLog::info("LEARN: level profile reset");
+void EbPauseActionBridge::resetLearning() {
+    EbAssistController::get().resetLevelProfile();
+    EbAssistLog::info("LEARN: level profile reset");
 }
 
-void PauseActionBridge::toggleAutoTune() {
-    StageConfig::toggleAutoTune();
-    AssistLog::info(
-        fmt::format("LEARN: smart learning {}", StageConfig::autoTune() ? "ON" : "OFF"));
-    AssistController::get().updateOverlay();
+void EbPauseActionBridge::toggleAutoTune() {
+    EbStageConfig::toggleAutoTune();
+    EbAssistLog::info(
+        fmt::format("LEARN: smart learning {}", EbStageConfig::autoTune() ? "ON" : "OFF"));
+    EbAssistController::get().updateOverlay();
 }
 
-void PauseActionBridge::toggleTrajectory() {
-    StageConfig::toggleShowTrajectory();
-    bool const on = StageConfig::showTrajectory();
-    TrajectoryVisualizer::get().setEnabled(on);
+void EbPauseActionBridge::toggleTrajectory() {
+    EbStageConfig::toggleShowTrajectory();
+    bool const on = EbStageConfig::showTrajectory();
+    EbTrajectoryVisualizer::get().setEnabled(on);
     if (on) {
         auto* playLayer = PlayLayer::get();
         if (playLayer)
-            TrajectoryVisualizer::get().attach(playLayer);
+            EbTrajectoryVisualizer::get().attach(playLayer);
     }
-    AssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
-    AssistController::get().updateOverlay();
+    EbAssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
+    EbAssistController::get().updateOverlay();
 }
 
-void PauseActionBridge::exportConfig() {
-    return PauseConfigActions::exportConfig();
+void EbPauseActionBridge::exportConfig() {
+    return EbPauseConfigActions::exportConfig();
 }
 
-void PauseActionBridge::importConfig() {
-    return PauseConfigActions::importConfig();
+void EbPauseActionBridge::importConfig() {
+    return EbPauseConfigActions::importConfig();
 }
 
-void PauseActionBridge::openCloudConfigs() {
-    return PauseConfigActions::openCloudConfigs();
+void EbPauseActionBridge::openCloudConfigs() {
+    return EbPauseConfigActions::openCloudConfigs();
 }
 
-void PauseActionBridge::afterConfigApplied(std::string const& successMsg) {
-    return PauseConfigActions::afterConfigApplied(successMsg);
+void EbPauseActionBridge::afterConfigApplied(std::string const& successMsg) {
+    return EbPauseConfigActions::afterConfigApplied(successMsg);
 }
 
-void PauseActionBridge::stubDevAction(char const* name) {
-    return PauseDevActions::stubDevAction(name);
+void EbPauseActionBridge::stubDevAction(char const* name) {
+    return EbPauseDevActions::stubDevAction(name);
 }
 
-void PauseActionBridge::devStartRecord() {
-    return PauseDevActions::devStartRecord();
+void EbPauseActionBridge::devStartRecord() {
+    return EbPauseDevActions::devStartRecord();
 }
 
-void PauseActionBridge::devStopRecord() {
-    return PauseDevActions::devStopRecord();
+void EbPauseActionBridge::devStopRecord() {
+    return EbPauseDevActions::devStopRecord();
 }
 
-void PauseActionBridge::devEvalLast() {
-    return PauseDevActions::devEvalLast();
+void EbPauseActionBridge::devEvalLast() {
+    return EbPauseDevActions::devEvalLast();
 }
 
-void PauseActionBridge::devEvalSession() {
-    return PauseDevActions::devEvalSession();
+void EbPauseActionBridge::devEvalSession() {
+    return EbPauseDevActions::devEvalSession();
 }
 
-void PauseActionBridge::devExportSession() {
-    return PauseDevActions::devExportSession();
+void EbPauseActionBridge::devExportSession() {
+    return EbPauseDevActions::devExportSession();
 }
 
-void PauseActionBridge::devClearTraces() {
-    return PauseDevActions::devClearTraces();
+void EbPauseActionBridge::devClearTraces() {
+    return EbPauseDevActions::devClearTraces();
 }
 
-void PauseActionBridge::devDumpDiag() {
-    return PauseDevActions::devDumpDiag();
+void EbPauseActionBridge::devDumpDiag() {
+    return EbPauseDevActions::devDumpDiag();
 }
 
-void PauseActionBridge::devCopyReport() {
-    return PauseDevActions::devCopyReport();
+void EbPauseActionBridge::devCopyReport() {
+    return EbPauseDevActions::devCopyReport();
 }
 
-void PauseActionBridge::openModSettings() {
-    if (InLevelSettingsFilterKeeper::isOpen())
+void EbPauseActionBridge::openModSettings() {
+    if (EbInLevelSettingsFilterKeeper::isOpen())
         return;
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return;
     auto* popup = geode::openSettingsPopup(mod, false);
     if (!popup) {
-        AssistLog::info("openModSettings: no settings popup (mod has no settings?)");
+        EbAssistLog::info("openModSettings: no settings popup (mod has no settings?)");
         return;
     }
-    InLevelSettingsFilterKeeper::attach(popup);
+    EbInLevelSettingsFilterKeeper::attach(popup);
 }
 
-void PauseActionBridge::openHub() {
+void EbPauseActionBridge::openHub() {
     openModSettings();
 }
 
-void PauseActionBridge::refreshOpenSettings() {
-    InLevelSettingsFilterKeeper::refreshOpen();
+void EbPauseActionBridge::refreshOpenSettings() {
+    EbInLevelSettingsFilterKeeper::refreshOpen();
 }
 
-auto PauseActionBridgeDetail::findStatusLabel(PauseLayer* self) -> geode::prelude::CCLabelBMFont* {
+auto EbPauseActionBridgeDetail::findStatusLabel(PauseLayer* self) -> geode::prelude::CCLabelBMFont* {
     // Labels live under main-layer (NodeIDs) or PauseLayer root (legacy).
     return geode::prelude::typeinfo_cast<geode::prelude::CCLabelBMFont*>(
         self->getChildByIDRecursive("earlybuffer-bake-status"_spr));
 }
 
-auto PauseActionBridgeDetail::findModeLabel(PauseLayer* self) -> geode::prelude::CCLabelBMFont* {
+auto EbPauseActionBridgeDetail::findModeLabel(PauseLayer* self) -> geode::prelude::CCLabelBMFont* {
     return geode::prelude::typeinfo_cast<geode::prelude::CCLabelBMFont*>(
         self->getChildByIDRecursive("earlybuffer-mode-label"_spr));
 }
 
-auto PauseActionBridgeDetail::tryCopyPathToClipboard(std::filesystem::path const& path) -> bool {
+auto EbPauseActionBridgeDetail::tryCopyPathToClipboard(std::filesystem::path const& path) -> bool {
     auto const text = path.string();
     if (!(text.empty())) {
         return geode::utils::clipboard::write(text);
@@ -278,14 +278,14 @@ auto PauseActionBridgeDetail::tryCopyPathToClipboard(std::filesystem::path const
     return false;
 }
 
-auto PauseActionBridgeDetail::pathClipboardNote(bool clipOk) -> std::string {
+auto EbPauseActionBridgeDetail::pathClipboardNote(bool clipOk) -> std::string {
     return clipOk ? "(Path copied to clipboard.)"
                   : "(Could not copy path to clipboard — copy it from above.)";
 }
 
-auto PauseActionBridgeDetail::formatExportSuccess(std::filesystem::path const& path)
+auto EbPauseActionBridgeDetail::formatExportSuccess(std::filesystem::path const& path)
     -> std::string {
-    auto const state = ConfigBundle::lastExportStats();
+    auto const state = EbConfigBundle::lastExportStats();
     bool const clipOk = tryCopyPathToClipboard(path);
 #ifndef GEODE_IS_WINDOWS
     return fmt::format("Config exported (v{}).\n"
@@ -305,9 +305,9 @@ auto PauseActionBridgeDetail::formatExportSuccess(std::filesystem::path const& p
 #endif
 }
 
-auto PauseActionBridgeDetail::formatImportSuccess(std::optional<std::filesystem::path> const& path)
+auto EbPauseActionBridgeDetail::formatImportSuccess(std::optional<std::filesystem::path> const& path)
     -> std::string {
-    auto const state = ConfigBundle::lastImportStats();
+    auto const state = EbConfigBundle::lastImportStats();
     if (path) {
         bool const clipOk = tryCopyPathToClipboard(*path);
 #ifndef GEODE_IS_WINDOWS

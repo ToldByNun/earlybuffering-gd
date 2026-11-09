@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "save_feedback.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
@@ -6,12 +7,11 @@
 #include <Geode/Geode.hpp>
 #include <algorithm>
 
-SaveFeedback& SaveFeedback::get() {
-    static SaveFeedback inst;
-    return inst;
+EbSaveFeedback& EbSaveFeedback::get() {
+    return EbClassManager::get().service<EbSaveFeedback>();
 }
 
-void SaveFeedback::restoreFlash() {
+void EbSaveFeedback::restoreFlash() {
     if (!this->m_flashing || !this->m_flashPlayer)
         return;
     if (this->m_flashPlayer->m_isDead)
@@ -24,7 +24,7 @@ void SaveFeedback::restoreFlash() {
     }
 }
 
-void SaveFeedback::reset() {
+void EbSaveFeedback::reset() {
     if (this->m_flashing && this->m_flashPlayer && !this->m_flashPlayer->m_isDead) {
         this->m_flashPlayer->setColor(this->m_savedColor1);
         this->m_flashPlayer->setSecondColor(this->m_savedColor2);
@@ -35,15 +35,15 @@ void SaveFeedback::reset() {
     this->m_flashing = false;
     this->m_flashPlayer = nullptr;
     this->m_flashTicksLeft = 0;
-    SaveFrameCounter::get().clear();
+    EbSaveFrameCounter::get().clear();
 }
 
-std::string SaveFeedback::cueFileName(int delayTicks) {
+std::string EbSaveFeedback::cueFileName(int delayTicks) {
     int const bucket = delayTicks >= 8 ? 8 : std::max(1, delayTicks);
     return fmt::format("{}-tick.mp3", bucket);
 }
 
-std::filesystem::path SaveFeedback::cuePathFor(std::string const& file) {
+std::filesystem::path EbSaveFeedback::cuePathFor(std::string const& file) {
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return {};
@@ -68,13 +68,13 @@ std::filesystem::path SaveFeedback::cuePathFor(std::string const& file) {
     return {};
 }
 
-void SaveFeedback::playSound(int delayTicks) {
+void EbSaveFeedback::playSound(int delayTicks) {
     if (delayTicks <= 0)
         return;
 
     auto* eng = FMODAudioEngine::sharedEngine();
     if (!eng) {
-        AssistLog::info("save cue: no FMOD engine");
+        EbAssistLog::info("save cue: no FMOD engine");
         return;
     }
 
@@ -89,18 +89,18 @@ void SaveFeedback::playSound(int delayTicks) {
 
     if (!path.empty()) {
         eng->playEffect(path.generic_string());
-        AssistLog::debug(fmt::format("save cue +{} → {}", delayTicks, path.generic_string()));
+        EbAssistLog::debug(fmt::format("save cue +{} → {}", delayTicks, path.generic_string()));
         return;
     }
 
     // Last resort: spr-style relative name even if we couldn't stat the file yet
     // (unzipped path can lag one frame after install).
     eng->playEffect(sprName);
-    AssistLog::debug(fmt::format("save cue +{} via spr '{}' (resourcesDir={})", delayTicks, sprName,
+    EbAssistLog::debug(fmt::format("save cue +{} via spr '{}' (resourcesDir={})", delayTicks, sprName,
                                  mod->getResourcesDir()));
 }
 
-void SaveFeedback::flashIcon(PlayerObject* player) {
+void EbSaveFeedback::flashIcon(PlayerObject* player) {
     if (!player || player->m_isDead)
         return;
 
@@ -122,7 +122,7 @@ void SaveFeedback::flashIcon(PlayerObject* player) {
         this->m_savedGlow = player->m_glowColor;
     }
 
-    auto const rgb = StageConfig::saveFeedbackColor();
+    auto const rgb = EbStageConfig::saveFeedbackColor();
     cocos2d::ccColor3B const flash{rgb.r, rgb.g, rgb.b};
     player->setColor(flash);
     player->setSecondColor(flash);
@@ -136,31 +136,31 @@ void SaveFeedback::flashIcon(PlayerObject* player) {
     this->m_flashTicksLeft = 48;
 }
 
-void SaveFeedback::onSave(PlayLayer* playLayer, PlayerObject* player, int delayTicks) {
-    PerfTrace::Scope const scope("onSave");
+void EbSaveFeedback::onSave(PlayLayer* playLayer, PlayerObject* player, int delayTicks) {
+    EbPerfTrace::Scope const scope("onSave");
     if (delayTicks <= 0)
         return;
 
-    if (StageConfig::saveFeedbackSound()) {
-        PerfTrace::Scope const soundScope("saveSound");
+    if (EbStageConfig::saveFeedbackSound()) {
+        EbPerfTrace::Scope const soundScope("saveSound");
         this->playSound(delayTicks);
     }
-    if (StageConfig::saveFeedbackIcon() && player) {
-        PerfTrace::Scope const iconScope("saveIcon");
+    if (EbStageConfig::saveFeedbackIcon() && player) {
+        EbPerfTrace::Scope const iconScope("saveIcon");
         this->flashIcon(player);
     }
-    if (!StageConfig::saveFeedbackCounter())
+    if (!EbStageConfig::saveFeedbackCounter())
         return;
     if (!playLayer || !player)
         return;
 
-    PerfTrace::Scope const counterScope("saveCounter");
-    auto& counter = SaveFrameCounter::get();
+    EbPerfTrace::Scope const counterScope("saveCounter");
+    auto& counter = EbSaveFrameCounter::get();
     counter.attach(playLayer);
     counter.spawn(playLayer, player->getPosition(), delayTicks);
 }
 
-void SaveFeedback::onPhysicsTick() {
+void EbSaveFeedback::onPhysicsTick() {
     if (!this->m_flashing)
         return;
     if (--this->m_flashTicksLeft > 0)

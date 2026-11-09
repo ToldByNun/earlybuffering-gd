@@ -3,19 +3,19 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowWorldCapture {
+class EbShadowWorldCapture {
 public:
-    static void captureTriggerTransforms(ShadowSimulator& simulator, PlayLayer* layer);
-    static void captureToggleUnknownTargets(ShadowSimulator& simulator, PlayLayer* layer);
-    static void captureDynamicFollows(ShadowSimulator& simulator, PlayLayer* layer);
-    static void resetTriggerTransforms(ShadowSimulator& simulator);
-    static void restoreTriggerTransforms(ShadowSimulator& simulator, GJBaseGameLayer* layer);
-    static void beginCapture(ShadowSimulator& simulator, PlayLayer* layer);
-    static void resetCaptureForNextRun(ShadowSimulator& simulator, PlayLayer* layer);
-    static void restoreCapture(ShadowSimulator& simulator, PlayLayer* layer);
+    static void captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void captureDynamicFollows(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void resetTriggerTransforms(EbShadowSimulator& simulator);
+    static void restoreTriggerTransforms(EbShadowSimulator& simulator, GJBaseGameLayer* layer);
+    static void beginCapture(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void resetCaptureForNextRun(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void restoreCapture(EbShadowSimulator& simulator, PlayLayer* layer);
 
 private:
-    ShadowWorldCapture() = delete;
+    EbShadowWorldCapture() = delete;
 };
 
 #endif

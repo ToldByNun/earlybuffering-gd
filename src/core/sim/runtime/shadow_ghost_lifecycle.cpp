@@ -2,7 +2,7 @@
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 
-void ShadowGhostLifecycle::attach(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.detach();
     if (!layer || !layer->m_objectLayer)
         return;
@@ -22,21 +22,21 @@ void ShadowGhostLifecycle::attach(ShadowSimulator& simulator, PlayLayer* layer) 
     };
 
     simulator.m_shadow = makeHidden("earlybuffer-shadow-player"_spr);
-    for (int index = 0; index < ShadowSimulator::SNAPSHOT_SLOTS; ++index) {
+    for (int index = 0; index < EbShadowSimulator::SNAPSHOT_SLOTS; ++index) {
         auto const id = fmt::format("earlybuffer-snapshot-{}", index);
         simulator.m_snapshots[index] = makeHidden(id.c_str());
     }
-    for (int index = 0; index < ShadowSimulator::DEV_EVAL_SLOTS; ++index) {
+    for (int index = 0; index < EbShadowSimulator::DEV_EVAL_SLOTS; ++index) {
         auto const id = fmt::format("earlybuffer-eval-{}", index);
         simulator.m_evalGhosts[index] = makeHidden(id.c_str());
     }
     simulator.m_evalActive = nullptr;
     simulator.m_evalAbort = false;
-    simulator.m_nextSnapshot = ShadowSimulator::SNAPSHOT_RING_BEGIN;
+    simulator.m_nextSnapshot = EbShadowSimulator::SNAPSHOT_RING_BEGIN;
     simulator.m_hostLayer = layer;
 }
 
-void ShadowGhostLifecycle::detach(ShadowSimulator& simulator, bool layerDying) {
+void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDying) {
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
     simulator.m_simulating = false;
     simulator.m_bakeOffline = false;
@@ -58,7 +58,7 @@ void ShadowGhostLifecycle::detach(ShadowSimulator& simulator, bool layerDying) {
     simulator.m_toggleTargetIds.clear();
     simulator.m_dynamicFollowJobs.clear();
     simulator.m_liveDynamicAppliedIds.clear();
-    ToggleOrbSim::get().restore();
+    EbToggleOrbSim::get().restore();
     simulator.m_saved.clear();
     simulator.m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
@@ -106,7 +106,7 @@ void ShadowGhostLifecycle::detach(ShadowSimulator& simulator, bool layerDying) {
     simulator.m_evalAbort = false;
 }
 
-bool ShadowGhostLifecycle::isOwnedGhost(ShadowSimulator const& simulator, PlayerObject* player) {
+bool EbShadowGhostLifecycle::isOwnedGhost(EbShadowSimulator const& simulator, PlayerObject* player) {
     if (!player)
         return false;
     if (player == simulator.m_shadow)
@@ -122,13 +122,13 @@ bool ShadowGhostLifecycle::isOwnedGhost(ShadowSimulator const& simulator, Player
     return false;
 }
 
-void ShadowGhostLifecycle::parkGhosts(ShadowSimulator& simulator) {
+void EbShadowGhostLifecycle::parkGhosts(EbShadowSimulator& simulator) {
     auto scrub = [&](PlayerObject* player) {
         if (!player)
             return;
         if (auto* layer = PlayLayer::get()) {
             if (layer == simulator.m_hostLayer) {
-                ShadowSimulator::tryRemoveFromSection(layer, player);
+                EbShadowSimulator::tryRemoveFromSection(layer, player);
             }
         }
         player->m_outerSectionIndex = -1;
@@ -162,13 +162,13 @@ void ShadowGhostLifecycle::parkGhosts(ShadowSimulator& simulator) {
     }
 }
 
-void ShadowGhostLifecycle::beginSession(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowGhostLifecycle::beginSession(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_simulating = true;
     simulator.m_applyingRing = false;
     simulator.beginCapture(layer);
 }
 
-void ShadowGhostLifecycle::endSession(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowGhostLifecycle::endSession(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_simAbsTick = -1;
     simulator.m_poseRemapDt = -1.f;
     simulator.m_bakeOffline = false;
@@ -176,7 +176,7 @@ void ShadowGhostLifecycle::endSession(ShadowSimulator& simulator, PlayLayer* lay
         simulator.restoreCapture(layer);
     } else {
         // Still drop claim deltas / flags if the layer vanished mid-sim.
-        ToggleOrbSim::get().restore();
+        EbToggleOrbSim::get().restore();
         simulator.m_saved.clear();
         simulator.m_savedTransforms.clear();
         simulator.m_dynamicTargetIds.clear();
@@ -191,7 +191,7 @@ void ShadowGhostLifecycle::endSession(ShadowSimulator& simulator, PlayLayer* lay
     simulator.parkGhosts();
 }
 
-void ShadowGhostLifecycle::hideGhost(PlayerObject* player) {
+void EbShadowGhostLifecycle::hideGhost(PlayerObject* player) {
     if (!player)
         return;
     player->setVisible(false);

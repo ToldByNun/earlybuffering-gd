@@ -13,6 +13,36 @@ project(earlybuffer VERSION 1.4.3)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
+# Generated class catalog (eb_class_catalog.hpp + service dependency TU).
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(EB_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(EB_CLASS_CATALOG "${EB_GENERATED_DIR}/eb_class_catalog.hpp")
+set(EB_SERVICE_DEPS "${EB_GENERATED_DIR}/eb_service_dependencies.cpp")
+file(MAKE_DIRECTORY "${EB_GENERATED_DIR}")
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_class_registry.py"
+        --root "${CMAKE_CURRENT_SOURCE_DIR}"
+        --output "${EB_GENERATED_DIR}"
+    RESULT_VARIABLE EB_CATALOG_RESULT
+)
+if (NOT EB_CATALOG_RESULT EQUAL 0)
+    message(FATAL_ERROR "EarlyBuffer: class catalog generation failed")
+endif()
+add_custom_target(earlybuffer_class_catalog
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_class_registry.py"
+        --root "${CMAKE_CURRENT_SOURCE_DIR}"
+        --output "${EB_GENERATED_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    BYPRODUCTS "${EB_CLASS_CATALOG}" "${EB_SERVICE_DEPS}"
+    COMMENT "EarlyBuffer: generate class catalog"
+    VERBATIM
+)
+add_dependencies(${PROJECT_NAME} earlybuffer_class_catalog)
+target_include_directories(${PROJECT_NAME} PRIVATE "${EB_GENERATED_DIR}")
+target_sources(${PROJECT_NAME} PRIVATE "${EB_SERVICE_DEPS}")
+
 if (NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
 else()

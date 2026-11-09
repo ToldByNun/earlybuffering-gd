@@ -5,21 +5,21 @@
 
 #include "../cloud_config_stats.hpp"
 
-class CloudStatsStorage {
+class EbCloudStatsStorage {
 public:
-    static void loadLocalSets(CloudConfigStats const& owner);
-    static void saveLocalSets(CloudConfigStats& owner);
-    static void unmarkLocal(CloudConfigStats& owner, std::string const& packId, bool downloaded,
+    static void loadLocalSets(EbCloudConfigStats const& owner);
+    static void saveLocalSets(EbCloudConfigStats& owner);
+    static void unmarkLocal(EbCloudConfigStats& owner, std::string const& packId, bool downloaded,
                             bool rated);
-    static std::string ensureClientId(CloudConfigStats& owner);
-    static bool hasDownloaded(CloudConfigStats const& owner, std::string const& packId);
-    static bool hasRated(CloudConfigStats const& owner, std::string const& packId);
-    static int myStarsFor(CloudConfigStats const& owner, std::string const& packId);
-    static void markDownloaded(CloudConfigStats& owner, std::string const& packId);
-    static void markRated(CloudConfigStats& owner, std::string const& packId, int stars);
+    static std::string ensureClientId(EbCloudConfigStats& owner);
+    static bool hasDownloaded(EbCloudConfigStats const& owner, std::string const& packId);
+    static bool hasRated(EbCloudConfigStats const& owner, std::string const& packId);
+    static int myStarsFor(EbCloudConfigStats const& owner, std::string const& packId);
+    static void markDownloaded(EbCloudConfigStats& owner, std::string const& packId);
+    static void markRated(EbCloudConfigStats& owner, std::string const& packId, int stars);
 
 private:
-    CloudStatsStorage() = delete;
+    EbCloudStatsStorage() = delete;
 };
 
 #endif

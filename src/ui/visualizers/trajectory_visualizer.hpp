@@ -9,9 +9,9 @@
 // v1: draw length = AssistHorizon trajDraw.
 // v2 Live debug: LongForesight horizon (+extend) + yellow prediction windows
 // for candidate delays + dark-green best foresight path (13b).
-class TrajectoryVisualizer {
+class EbTrajectoryVisualizer {
 public:
-    static TrajectoryVisualizer& get();
+    static EbTrajectoryVisualizer& get();
 
     void attach(PlayLayer* layer);
     void detach(bool layerDying = false);
@@ -28,7 +28,9 @@ public:
     std::string statusHint() const;
 
 private:
-    TrajectoryVisualizer() = default;
+    friend class EbServiceStore;
+
+    EbTrajectoryVisualizer() = default;
 
     void ensureNode(PlayLayer* layer);
     void rebuild(PlayLayer* layer);
@@ -67,21 +69,21 @@ private:
 #include <algorithm>
 #include <cmath>
 
-class TrajectoryVisualizerImplementation {
+class EbTrajectoryVisualizerImplementation {
 public:
     static geode::prelude::ccColor4F col(float result, float gameObject, float secondValue,
                                          float firstValue = 0.95f);
-    static std::vector<ReplayEvent> makeHoldEvents();
-    static std::vector<ReplayEvent> makeCoastEvents();
-    static std::vector<ReplayEvent> makeDelayedHoldEvents(int delay);
+    static std::vector<EbReplayEvent> makeHoldEvents();
+    static std::vector<EbReplayEvent> makeCoastEvents();
+    static std::vector<EbReplayEvent> makeDelayedHoldEvents(int delay);
     static std::vector<geode::prelude::CCPoint>
     decimate(std::vector<geode::prelude::CCPoint> const& pts, float minDistSq);
-    static void markDeathX(geode::prelude::CCDrawNode* node, ShadowSimulator::PathSample const& s,
+    static void markDeathX(geode::prelude::CCDrawNode* node, EbShadowSimulator::PathSample const& s,
                            geode::prelude::ccColor4F candidate);
     static int surviveBinOfTicks(int ticks);
 
 private:
-    TrajectoryVisualizerImplementation() = delete;
+    EbTrajectoryVisualizerImplementation() = delete;
 };
 
 #endif

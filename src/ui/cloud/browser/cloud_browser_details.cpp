@@ -11,21 +11,21 @@
 #include <cocos-ext.h>
 #include <string>
 
-void CloudBrowserDetails::updateRateUi(CloudConfigPopup& owner) {
+void EbCloudBrowserDetails::updateRateUi(EbCloudConfigPopup& owner) {
     auto const* entry = owner.selectedEntry();
     bool const hasPack = entry != nullptr;
     bool const enable = hasPack && !owner.m_busyUi && !owner.m_rateBusy;
-    int const mine = hasPack ? CloudConfigStats::get().myStarsFor(entry->id) : 0;
+    int const mine = hasPack ? EbCloudConfigStats::get().myStarsFor(entry->id) : 0;
 
     // Paint: own vote if set, else community average (display only).
     int filled = 0;
     if (mine >= 1 && mine <= 5) {
         filled = mine;
     } else if (hasPack) {
-        auto const state = CloudConfigStats::get().statsFor(entry->id);
+        auto const state = EbCloudConfigStats::get().statsFor(entry->id);
         if (state.ratingCount > 0) {
             filled = static_cast<int>(
-                std::lround(static_cast<double>(CloudConfigStats::averageRating(state))));
+                std::lround(static_cast<double>(EbCloudConfigStats::averageRating(state))));
             if (filled < 1)
                 filled = 1;
             if (filled > 5)
@@ -75,7 +75,7 @@ void CloudBrowserDetails::updateRateUi(CloudConfigPopup& owner) {
         owner.m_rateMenu->setVisible(hasPack);
 }
 
-void CloudBrowserDetails::updateDetail(CloudConfigPopup& owner) {
+void EbCloudBrowserDetails::updateDetail(EbCloudConfigPopup& owner) {
     auto const* entry = owner.selectedEntry();
     if (!entry) {
         if (owner.m_detailTitle)
@@ -95,7 +95,7 @@ void CloudBrowserDetails::updateDetail(CloudConfigPopup& owner) {
     }
 
     if (owner.m_detailTitle) {
-        auto title = CloudConfigPopupImplementation::truncate(entry->name, 22);
+        auto title = EbCloudConfigPopupImplementation::truncate(entry->name, 22);
         owner.m_detailTitle->setString(title.c_str());
         float const maxW = owner.m_detailWidth - 14.f;
         if (owner.m_detailTitle->getScaledContentSize().width > maxW &&
@@ -115,47 +115,47 @@ void CloudBrowserDetails::updateDetail(CloudConfigPopup& owner) {
     if (tags.empty())
         tags = "—";
 
-    bool const tight = PlatformLimits::isConstrainedDevice();
+    bool const tight = EbPlatformLimits::isConstrainedDevice();
     if (owner.m_detailMeta) {
         owner.m_detailMeta->setString(
-            CloudConfigPopupImplementation::truncate(
+            EbCloudConfigPopupImplementation::truncate(
                 fmt::format("by {} · {}", entry->author.empty() ? "?" : entry->author, tags),
                 tight ? 32 : 42)
                 .c_str());
     }
 
-    bool const verOk = CloudConfigIndex::meetsMinModVersion(*entry, owner.liveModVersion());
+    bool const verOk = EbCloudConfigIndex::meetsMinModVersion(*entry, owner.liveModVersion());
     if (owner.m_detailBody) {
         owner.m_detailBody->setText(entry->description.empty() ? "(no description)"
                                                                : entry->description);
     }
     if (owner.m_detailFoot) {
-        auto const state = CloudConfigStats::get().statsFor(entry->id);
+        auto const state = EbCloudConfigStats::get().statsFor(entry->id);
         std::string statsBit;
         if (state.downloads > 0 || state.ratingCount > 0) {
             if (state.ratingCount > 0) {
                 statsBit =
                     tight ? fmt::format(
                                 " · {}dl · {:.1f}*",
-                                CloudConfigPopupImplementation::formatDownloads(state.downloads),
-                                CloudConfigStats::averageRating(state))
+                                EbCloudConfigPopupImplementation::formatDownloads(state.downloads),
+                                EbCloudConfigStats::averageRating(state))
                           : fmt::format(
                                 " · {}dl · {:.1f}* ({}r)",
-                                CloudConfigPopupImplementation::formatDownloads(state.downloads),
-                                CloudConfigStats::averageRating(state), state.ratingCount);
+                                EbCloudConfigPopupImplementation::formatDownloads(state.downloads),
+                                EbCloudConfigStats::averageRating(state), state.ratingCount);
             } else {
                 statsBit = fmt::format(
-                    " · {}dl", CloudConfigPopupImplementation::formatDownloads(state.downloads));
+                    " · {}dl", EbCloudConfigPopupImplementation::formatDownloads(state.downloads));
             }
         }
         std::string const line1 =
-            fmt::format("{}{} · min {}", CloudConfigPopupImplementation::formatBytes(entry->size),
+            fmt::format("{}{} · min {}", EbCloudConfigPopupImplementation::formatBytes(entry->size),
                         statsBit, entry->minModVersion.empty() ? "any" : entry->minModVersion);
         std::string const line2 =
             verOk ? (owner.isCached(entry->id) ? "Ready to install." : "Downloads on Install.")
                   : "Needs newer EarlyBuffer.";
         owner.m_detailFoot->setString(
-            fmt::format("{}\n{}", CloudConfigPopupImplementation::truncate(line1, tight ? 36 : 48),
+            fmt::format("{}\n{}", EbCloudConfigPopupImplementation::truncate(line1, tight ? 36 : 48),
                         line2)
                 .c_str());
         float const footMax = owner.m_detailWidth - 12.f;

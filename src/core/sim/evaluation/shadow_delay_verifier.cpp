@@ -6,21 +6,21 @@
 #include <algorithm>
 #include <chrono>
 
-ShadowSimulator::VerifyDelayResult
-ShadowDelayVerifier::verifyDelay(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
+EbShadowSimulator::VerifyDelayResult
+EbShadowDelayVerifier::verifyDelay(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
                                  bool down, int delay, int limit, float deltaTime, float firstDt,
-                                 PlanOptions const& options) {
-    ShadowSimulator::VerifyDelayResult out;
+                                 EbPlanOptions const& options) {
+    EbShadowSimulator::VerifyDelayResult out;
     if (!layer || !real || !simulator.m_shadow || limit < 0 || deltaTime <= 0.f)
         return out;
     if (firstDt <= 0.f || firstDt > deltaTime)
         firstDt = deltaTime;
     delay = std::max(0, delay);
 
-    ShadowSimulator::Model model = simulator.modelFor(real, limit, options.capMul);
+    EbShadowSimulator::Model model = simulator.modelFor(real, limit, options.capMul);
     model.continuePastClear = options.requireAliveForDelay;
     int tickBudget =
-        options.tickBudget > 0 ? options.tickBudget : ShadowSimulator::kDefaultTickBudget;
+        options.tickBudget > 0 ? options.tickBudget : EbShadowSimulator::kDefaultTickBudget;
     int const tickBudgetStart = tickBudget;
     auto const wall0 = std::chrono::steady_clock::now();
     auto wallExceeded = [&]() -> bool {
@@ -52,9 +52,9 @@ ShadowDelayVerifier::verifyDelay(ShadowSimulator& simulator, PlayLayer* layer, P
 
     simulator.m_simTickBase = std::max(0, options.attemptStartTick);
     simulator.m_simAbsTick = -1;
-    SimSessionGuard session(*(&simulator), layer);
+    EbSimSessionGuard session(*(&simulator), layer);
 
-    ThreatZone zone{};
+    EbThreatZone zone{};
     // Probe d0 to build the same threat zone Live uses. When delay==0 the
     // planned candidate is identical — reuse that runOne (no second sim).
     auto c0 = simulator.runOne(layer, real, down, 0, limit, deltaTime, firstDt, model, -1, nullptr,
@@ -70,7 +70,7 @@ ShadowDelayVerifier::verifyDelay(ShadowSimulator& simulator, PlayLayer* layer, P
         return out;
     }
 
-    ShadowSimulator::RunResult r;
+    EbShadowSimulator::RunResult r;
     if (delay == 0) {
         r = c0;
     } else {
@@ -80,11 +80,11 @@ ShadowDelayVerifier::verifyDelay(ShadowSimulator& simulator, PlayLayer* layer, P
     }
 
     out.diedBeforeAction = r.diedBeforeAction;
-    out.clearsThreat = ShadowSurvivalRules::clearsThreatOf(r, zone);
+    out.clearsThreat = EbShadowSurvivalRules::clearsThreatOf(r, zone);
     out.unknown = r.unknown || r.unknownTrunc || r.toggleUnknown;
     // clearsThreat honesty + ModeSurvival (soft or Alive-only via options).
     bool const requireAlive = options.requireAliveForDelay;
-    bool viable = ShadowSurvivalRules::runResultDelaySafe(r, zone, model, real, requireAlive);
+    bool viable = EbShadowSurvivalRules::runResultDelaySafe(r, zone, model, real, requireAlive);
 
     // Linked dual: still one runOne for the other player (even when delay==0).
     if (viable && linkedDual()) {
@@ -93,7 +93,7 @@ ShadowDelayVerifier::verifyDelay(ShadowSimulator& simulator, PlayLayer* layer, P
             auto r2 = simulator.runOne(layer, other, down, delay, limit, deltaTime, firstDt, model,
                                        -1, zone.valid ? &zone : nullptr, &tickBudget);
             simulator.resetCaptureForNextRun(layer);
-            if (!ShadowSurvivalRules::runResultDelaySafe(r2, zone, model, other, requireAlive)) {
+            if (!EbShadowSurvivalRules::runResultDelaySafe(r2, zone, model, other, requireAlive)) {
                 viable = false;
                 out.clearsThreat = false;
             }

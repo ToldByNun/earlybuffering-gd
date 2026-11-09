@@ -6,7 +6,7 @@
 // Single physics-quantum clock for assist / bake / trigger-world.
 // Live planning uses simDt = lastDt / timeWarp; author TPS must match 1/simDt,
 // never warped 1/lastDt (MegaHack-style speed without timeWarp).
-class AssistClock {
+class EbAssistClock {
 public:
     static constexpr double kNominalTps = 240.0;
     static constexpr float kNominalSimDt = 1.f / 240.f;
@@ -29,7 +29,7 @@ public:
     // Throttle suspect logs to once per this many attempt ticks while sticky.
     static constexpr int kSuspectLogEveryTicks = 240;
 
-    static AssistClock& get();
+    static EbAssistClock& get();
 
     // Physics TPS after portal timeWarp strip (plan / bake / trigger author).
     double simTpsFromDt(float simDt) const;
@@ -78,7 +78,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistClock() = default;
+    friend class EbServiceStore;
+
+    EbAssistClock() = default;
 
     int m_lastSuspectLogTick = -1000000;
     bool m_lastSuspect = false;

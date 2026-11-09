@@ -10,7 +10,7 @@
 #include <fmt/format.h>
 #include <vector>
 
-class SettingsFilterWalk {
+class EbSettingsFilterWalk {
 public:
     static bool isOurCategoryChrome(geode::prelude::CCNode* node);
 
@@ -24,7 +24,7 @@ public:
                         geode::prelude::ScrollLayer*& list);
 
 private:
-    SettingsFilterWalk() = delete;
+    EbSettingsFilterWalk() = delete;
 };
 
 #endif

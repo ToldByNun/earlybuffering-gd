@@ -6,7 +6,7 @@
 // Live V2 only: long press-hold vs idle/coast foresight.
 // Pure policy over path outcomes — ShadowSimulator fills PathStats
 // (Trajectory sample loop or ShadowPlayer runOne/runBaseline).
-class LongForesight {
+class EbLongForesight {
 public:
     static constexpr int kMinHorizon = 48;
     static constexpr int kExtendStep = 32;
@@ -65,7 +65,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    LongForesight() = default;
+    EbLongForesight() = default;
 };
 
 #endif

@@ -5,15 +5,15 @@
 
 #include "../../assist_controller.hpp"
 
-class AssistBakeReuse {
+class EbAssistBakeReuse {
 public:
-    static bool tryBakeAssist(AssistController& controller, PlayLayer* playLayer,
+    static bool tryBakeAssist(EbAssistController& controller, PlayLayer* playLayer,
                               PlayerObject* player, bool player1, bool down, int effectTick,
-                              float firstDt, bool& handled, PressSimBudget* sharedBudget,
-                              bool* verifyAttempted, HybridPressReuse* reuse);
+                              float firstDt, bool& handled, EbPressSimBudget* sharedBudget,
+                              bool* verifyAttempted, EbHybridPressReuse* reuse);
 
 private:
-    AssistBakeReuse() = delete;
+    EbAssistBakeReuse() = delete;
 };
 
 #endif

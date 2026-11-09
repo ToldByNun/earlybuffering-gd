@@ -8,8 +8,8 @@
 #include <fmt/format.h>
 #include <vector>
 
-TriggerWorldBaker::LivePose TriggerEffectBaker::poseFromObject(GameObject* object) {
-    TriggerWorldBaker::LivePose p;
+EbTriggerWorldBaker::LivePose EbTriggerEffectBaker::poseFromObject(GameObject* object) {
+    EbTriggerWorldBaker::LivePose p;
     if (!object)
         return p;
     p.x = object->getPositionX();
@@ -22,8 +22,8 @@ TriggerWorldBaker::LivePose TriggerEffectBaker::poseFromObject(GameObject* objec
     return p;
 }
 
-TriggerPose TriggerEffectBaker::toKey(int tick, TriggerWorldBaker::LivePose const& live) {
-    TriggerPose k;
+EbTriggerPose EbTriggerEffectBaker::toKey(int tick, EbTriggerWorldBaker::LivePose const& live) {
+    EbTriggerPose k;
     k.tick = tick;
     k.x = live.x;
     k.y = live.y;
@@ -34,40 +34,40 @@ TriggerPose TriggerEffectBaker::toKey(int tick, TriggerWorldBaker::LivePose cons
     return k;
 }
 
-void TriggerEffectBaker::pushKey(TriggerTrack& track, int tick,
-                                 TriggerWorldBaker::LivePose const& live) {
+void EbTriggerEffectBaker::pushKey(EbTriggerTrack& track, int tick,
+                                 EbTriggerWorldBaker::LivePose const& live) {
     // Soft key ceiling: decimate long movers, keep track — never silent drop whole track.
-    if (track.keys.size() >= TriggerWorldStore::kSoftMaxKeysPerTrack) {
-        TriggerWorldStore::decimateKeys(track.keys,
-                                        TriggerWorldStore::kSoftMaxKeysPerTrack * 3 / 4);
-        TriggerWorldStore::get().noteSoftcap("bake-keys");
+    if (track.keys.size() >= EbTriggerWorldStore::kSoftMaxKeysPerTrack) {
+        EbTriggerWorldStore::decimateKeys(track.keys,
+                                        EbTriggerWorldStore::kSoftMaxKeysPerTrack * 3 / 4);
+        EbTriggerWorldStore::get().noteSoftcap("bake-keys");
     }
-    if (track.keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack) {
-        TriggerWorldStore::get().noteSoftcap("bake-keys-hard");
+    if (track.keys.size() >= EbTriggerWorldStore::kHardMaxKeysPerTrack) {
+        EbTriggerWorldStore::get().noteSoftcap("bake-keys-hard");
         return;
     }
     if (!track.keys.empty() && track.keys.back().tick == tick) {
-        track.keys.back() = TriggerWorldBaker::toKey(tick, live);
+        track.keys.back() = EbTriggerWorldBaker::toKey(tick, live);
         return;
     }
     if (!track.keys.empty() && track.keys.back().tick > tick)
         return;
-    track.keys.push_back(TriggerWorldBaker::toKey(tick, live));
+    track.keys.push_back(EbTriggerWorldBaker::toKey(tick, live));
 }
 
-int TriggerEffectBaker::durationTicks(float durationSec, double tps) {
+int EbTriggerEffectBaker::durationTicks(float durationSec, double tps) {
     if (durationSec <= 0.f)
         return 0;
     int const ticks = static_cast<int>(std::lround(static_cast<double>(durationSec) * tps));
     return std::max(0, ticks);
 }
 
-bool TriggerEffectBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind) {
+bool EbTriggerEffectBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind) {
     if (!effect)
         return false;
     if (kind != TriggerKind::StaticMove)
         return false;
-    if (TriggerClassify::isFollowTriggerId(effect->m_objectID))
+    if (EbTriggerClassify::isFollowTriggerId(effect->m_objectID))
         return true;
     if (effect->m_useMoveTarget || effect->m_followCPP)
         return true;
@@ -78,8 +78,8 @@ bool TriggerEffectBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKin
 }
 
 cocos2d::CCPoint
-TriggerEffectBaker::groupCenter(int groupId, std::vector<GameObject*> const& objects,
-                                std::unordered_map<int, TriggerWorldBaker::LivePose> const& live) {
+EbTriggerEffectBaker::groupCenter(int groupId, std::vector<GameObject*> const& objects,
+                                std::unordered_map<int, EbTriggerWorldBaker::LivePose> const& live) {
     double sx = 0.0;
     double sy = 0.0;
     int count = 0;
@@ -102,7 +102,7 @@ TriggerEffectBaker::groupCenter(int groupId, std::vector<GameObject*> const& obj
     return {0.f, 0.f};
 }
 
-TriggerTrack* TriggerEffectBaker::ensureTrack(TriggerWorldBaker& owner, GameObject* object,
+EbTriggerTrack* EbTriggerEffectBaker::ensureTrack(EbTriggerWorldBaker& owner, GameObject* object,
                                               TriggerKind kind) {
     if (!object)
         return nullptr;
@@ -110,26 +110,26 @@ TriggerTrack* TriggerEffectBaker::ensureTrack(TriggerWorldBaker& owner, GameObje
     auto it = owner.m_tracks.find(id);
     if (it != owner.m_tracks.end())
         return &it->second;
-    if (owner.m_tracks.size() >= TriggerWorldStore::kSoftMaxTracks) {
-        TriggerWorldStore::get().noteSoftcap("bake-tracks");
+    if (owner.m_tracks.size() >= EbTriggerWorldStore::kSoftMaxTracks) {
+        EbTriggerWorldStore::get().noteSoftcap("bake-tracks");
         return nullptr;
     }
 
-    TriggerWorldBaker::LivePose const pose = TriggerWorldBaker::poseFromObject(object);
+    EbTriggerWorldBaker::LivePose const pose = EbTriggerWorldBaker::poseFromObject(object);
     owner.m_live.emplace(id, pose);
 
-    TriggerTrack track;
+    EbTriggerTrack track;
     track.uniqueId = id;
     track.objectId = object->m_objectID;
     track.kind = kind;
     track.ready = false;
-    TriggerWorldBaker::pushKey(track, 0, pose);
+    EbTriggerWorldBaker::pushKey(track, 0, pose);
     auto [ins, ok] = owner.m_tracks.emplace(id, std::move(track));
     (void)ok;
     return &ins->second;
 }
 
-std::vector<GameObject*> TriggerEffectBaker::objectsInGroup(TriggerWorldBaker const& owner,
+std::vector<GameObject*> EbTriggerEffectBaker::objectsInGroup(EbTriggerWorldBaker const& owner,
                                                             int groupId) {
     std::vector<GameObject*> out;
     if (groupId <= 0)
@@ -144,21 +144,21 @@ std::vector<GameObject*> TriggerEffectBaker::objectsInGroup(TriggerWorldBaker co
     return out;
 }
 
-void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObject* effect) {
+void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameObject* effect) {
     if (!effect)
         return;
 
-    TriggerKind const kind = TriggerClassify::classify(effect);
+    TriggerKind const kind = EbTriggerClassify::classify(effect);
     // Follow-player / Dynamic* never enter static JSON (live probe only).
-    if (TriggerClassify::isDynamic(kind)) {
+    if (EbTriggerClassify::isDynamic(kind)) {
         ++owner.m_skippedDynamic;
         return;
     }
-    if (!TriggerClassify::isStatic(kind))
+    if (!EbTriggerClassify::isStatic(kind))
         return;
     if (kind == TriggerKind::StaticSpawn)
         return;
-    if (TriggerWorldBaker::isFollowLikeStatic(effect, kind)) {
+    if (EbTriggerWorldBaker::isFollowLikeStatic(effect, kind)) {
         ++owner.m_skippedFollow;
         return;
     }
@@ -180,10 +180,10 @@ void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObjec
     // — previously skipped all non-spawn → empty TW on many levels (e.g. id_80045794).
     bool const spawn = effect->m_isSpawnTriggered;
     int const startTick =
-        spawn ? TriggerWorldBaker::durationTicks(effect->m_spawnTriggerDelay, owner.m_tps) : 0;
+        spawn ? EbTriggerWorldBaker::durationTicks(effect->m_spawnTriggerDelay, owner.m_tps) : 0;
     if (!spawn)
         ++owner.m_bakedStartTimed;
-    int const dur = TriggerWorldBaker::durationTicks(effect->m_duration, owner.m_tps);
+    int const dur = EbTriggerWorldBaker::durationTicks(effect->m_duration, owner.m_tps);
 
     if (kind == TriggerKind::StaticToggle) {
         for (auto* object : targets) {
@@ -194,7 +194,7 @@ void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObjec
                 break;
             auto& pose = owner.m_live[object->m_uniqueID];
             pose.active = effect->m_activateGroup;
-            TriggerWorldBaker::pushKey(*track, startTick, pose);
+            EbTriggerWorldBaker::pushKey(*track, startTick, pose);
             track->ready = track->keys.size() >= 1;
         }
         ++owner.m_bakedEffects;
@@ -210,12 +210,12 @@ void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObjec
     if (kind == TriggerKind::StaticRotate) {
         int const centerId = effect->m_centerGroupID;
         if (centerId > 0) {
-            center = TriggerWorldBaker::groupCenter(centerId, owner.m_objects, owner.m_live);
+            center = EbTriggerWorldBaker::groupCenter(centerId, owner.m_objects, owner.m_live);
         } else {
             for (auto* object : targets) {
                 (void)owner.ensureTrack(object, kind);
             }
-            center = TriggerWorldBaker::groupCenter(groupId, owner.m_objects, owner.m_live);
+            center = EbTriggerWorldBaker::groupCenter(groupId, owner.m_objects, owner.m_live);
         }
     }
 
@@ -237,15 +237,15 @@ void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObjec
         relativeScale = xf->m_relativeScale;
     }
 
-    class TargetBake {
+    class EbTargetBake {
     public:
         GameObject* obj = nullptr;
-        TriggerWorldBaker::LivePose start{};
-        TriggerWorldBaker::LivePose end{};
+        EbTriggerWorldBaker::LivePose start{};
+        EbTriggerWorldBaker::LivePose end{};
 
     private:
     };
-    std::vector<TargetBake> bakes;
+    std::vector<EbTargetBake> bakes;
     bakes.reserve(targets.size());
 
     for (auto* object : targets) {
@@ -254,7 +254,7 @@ void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObjec
         auto* track = owner.ensureTrack(object, kind);
         if (!track)
             break;
-        TargetBake tb;
+        EbTargetBake tb;
         tb.obj = object;
         tb.start = owner.m_live[object->m_uniqueID];
         tb.end = tb.start;
@@ -298,31 +298,31 @@ void TriggerEffectBaker::bakeOneEffect(TriggerWorldBaker& owner, EffectGameObjec
         if (!track)
             break;
 
-        TriggerWorldBaker::pushKey(*track, startTick, tb.start);
+        EbTriggerWorldBaker::pushKey(*track, startTick, tb.start);
 
         if (dur <= 0) {
             owner.m_live[tb.obj->m_uniqueID] = tb.end;
-            TriggerWorldBaker::pushKey(*track, startTick, tb.end);
+            EbTriggerWorldBaker::pushKey(*track, startTick, tb.end);
             track->ready = true;
             continue;
         }
 
         for (int tick = startTick + step; tick < endTick; tick += step) {
-            if (track->keys.size() >= TriggerWorldStore::kHardMaxKeysPerTrack)
+            if (track->keys.size() >= EbTriggerWorldStore::kHardMaxKeysPerTrack)
                 break;
             float const u = static_cast<float>(tick - startTick) / static_cast<float>(dur);
-            TriggerWorldBaker::LivePose mid = tb.start;
+            EbTriggerWorldBaker::LivePose mid = tb.start;
             mid.x = tb.start.x + (tb.end.x - tb.start.x) * u;
             mid.y = tb.start.y + (tb.end.y - tb.start.y) * u;
             mid.rotation = tb.start.rotation + (tb.end.rotation - tb.start.rotation) * u;
             mid.scaleX = tb.start.scaleX + (tb.end.scaleX - tb.start.scaleX) * u;
             mid.scaleY = tb.start.scaleY + (tb.end.scaleY - tb.start.scaleY) * u;
             mid.active = tb.end.active;
-            TriggerWorldBaker::pushKey(*track, tick, mid);
+            EbTriggerWorldBaker::pushKey(*track, tick, mid);
         }
 
         owner.m_live[tb.obj->m_uniqueID] = tb.end;
-        TriggerWorldBaker::pushKey(*track, endTick, tb.end);
+        EbTriggerWorldBaker::pushKey(*track, endTick, tb.end);
         track->ready = true;
     }
     ++owner.m_bakedEffects;

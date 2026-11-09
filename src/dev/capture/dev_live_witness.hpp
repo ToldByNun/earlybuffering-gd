@@ -9,7 +9,7 @@
 
 class PlayLayer;
 class PlayerObject;
-class SimPlan;
+class EbSimPlan;
 
 // Observation quality per category (Vertrag B).
 // At capture time: Restored = complete restorable snapshot held in the witness.
@@ -20,7 +20,7 @@ enum class DevWitnessCategory { Player = 0, Dual, Clock, Orbs, Triggers, Movers,
 
 // Nearby object pose for freeze-world restore (Commit 11).
 // Hashes stay DigestOnly; these poses can upgrade Movers to Restored.
-class DevObjectPose {
+class EbDevObjectPose {
 public:
     int uniqueId = 0;
     float x = 0.f;
@@ -33,18 +33,18 @@ public:
 private:
 };
 
-inline bool operator==(DevObjectPose const& a, DevObjectPose const& b) {
+inline bool operator==(EbDevObjectPose const& a, EbDevObjectPose const& b) {
     return a.uniqueId == b.uniqueId && a.x == b.x && a.y == b.y && a.rotation == b.rotation &&
            a.scaleX == b.scaleX && a.scaleY == b.scaleY && a.active == b.active;
 }
 
-inline bool operator!=(DevObjectPose const& a, DevObjectPose const& b) {
+inline bool operator!=(EbDevObjectPose const& a, EbDevObjectPose const& b) {
     return !(a == b);
 }
 
 // Serializable physics subset of ShadowSimulator::copyPlayerState.
 // Pointer/object-ref fields are intentionally absent (see collisionFlags).
-class DevPlayerBlob {
+class EbDevPlayerBlob {
 public:
     bool present = false;
     float x = 0.f;
@@ -90,7 +90,7 @@ public:
 private:
 };
 
-class DevWitnessCategoryEntry {
+class EbDevWitnessCategoryEntry {
 public:
     DevWitnessCategory category = DevWitnessCategory::Player;
     DevWitnessStatus status = DevWitnessStatus::Absent;
@@ -101,18 +101,18 @@ private:
 };
 
 // Live observation at plan time. No restore in Commit 7.
-class DevLiveWitness {
+class EbDevLiveWitness {
 public:
     // Bump when the serializable field list of DevPlayerBlob changes.
     static constexpr int kPlayerBlobSchemaVersion = 1;
 
-    std::vector<DevWitnessCategoryEntry> categories;
+    std::vector<EbDevWitnessCategoryEntry> categories;
     std::unordered_set<int> worldDeps; // DevWitnessCategory as int
-    DevPlayerBlob player{};
-    DevPlayerBlob dual{};
-    DevClockContract::Stamp clock{};
+    EbDevPlayerBlob player{};
+    EbDevPlayerBlob dual{};
+    EbDevClockContract::Stamp clock{};
     std::vector<int> orbIds;
-    std::vector<DevObjectPose> moverPoses; // only when freezeWorld
+    std::vector<EbDevObjectPose> moverPoses; // only when freezeWorld
     std::string triggerStoreKey;
     int triggerStoreVersion = 0;
     int triggerApplyTick = -1;
@@ -141,24 +141,24 @@ public:
     static uint64_t computePlayerBlobSchema();
     static char const* const* playerBlobFieldNames(size_t& count);
 
-    static DevWitnessStatus categoryStatus(DevLiveWitness const& w, DevWitnessCategory candidate);
-    static bool hasWorldDep(DevLiveWitness const& w, DevWitnessCategory candidate);
+    static DevWitnessStatus categoryStatus(EbDevLiveWitness const& w, DevWitnessCategory candidate);
+    static bool hasWorldDep(EbDevLiveWitness const& w, DevWitnessCategory candidate);
 
     // Capture from live play. player required for a useful witness.
-    static DevLiveWitness capture(PlayLayer* layer, PlayerObject* player, PlayerObject* player2,
-                                  SimPlan const& plan, DevClockContract::Stamp const& clock,
+    static EbDevLiveWitness capture(PlayLayer* layer, PlayerObject* player, PlayerObject* player2,
+                                  EbSimPlan const& plan, EbDevClockContract::Stamp const& clock,
                                   int effectTick, bool freezeWorld);
 
     // worldDeps from SimPlan flags + dual presence (not post-death heuristics).
-    static void fillWorldDeps(DevLiveWitness& w, SimPlan const& plan, bool dualActive);
+    static void fillWorldDeps(EbDevLiveWitness& w, EbSimPlan const& plan, bool dualActive);
 
     static bool selfCheck(std::string& report);
 
-    DevLiveWitness() = default;
+    EbDevLiveWitness() = default;
 
 private:
-    static void fillPlayerBlob(DevPlayerBlob& blob, PlayerObject* source);
-    static void setCategory(DevLiveWitness& w, DevWitnessCategory candidate,
+    static void fillPlayerBlob(EbDevPlayerBlob& blob, PlayerObject* source);
+    static void setCategory(EbDevLiveWitness& w, DevWitnessCategory candidate,
                             DevWitnessStatus status, uint64_t digest = 0);
     static uint64_t hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player, float radiusX);
 };
@@ -168,7 +168,7 @@ private:
 #include <cstring>
 #include <fmt/format.h>
 
-class DevLiveWitnessImplementation {
+class EbDevLiveWitnessImplementation {
 public:
     static uint64_t fnv1aMix(uint64_t height, uint64_t value);
     static uint64_t fnv1aBytes(void const* data, size_t count);
@@ -176,7 +176,7 @@ public:
     static bool hazardLikeObject(GameObject* object);
 
 private:
-    DevLiveWitnessImplementation() = delete;
+    EbDevLiveWitnessImplementation() = delete;
 };
 
 #endif

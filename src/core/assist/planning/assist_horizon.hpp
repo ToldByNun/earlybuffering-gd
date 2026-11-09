@@ -7,7 +7,7 @@
 // Commit 15 — unified plan / score / traj draw horizons.
 // Short ≈ today's modelFor autos; long only when SimTrust is OK (plan rule).
 // Draw length = trust cap (trajDraw tracks scoreHorizon when trusted).
-class AssistHorizon {
+class EbAssistHorizon {
 public:
     class Caps {
     public:
@@ -35,7 +35,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistHorizon() = delete;
+    EbAssistHorizon() = delete;
 
     static int applyMul(int base, float capMul);
     static Caps shortCaps(GameModeKind mode, int limit);

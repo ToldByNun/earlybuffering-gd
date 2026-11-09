@@ -3,7 +3,7 @@
 
 #include <Geode/Geode.hpp>
 
-class InLevelSettingsFilterKeeper {
+class EbInLevelSettingsFilterKeeper {
 public:
     static void attach(cocos2d::CCNode* popup);
 
@@ -22,7 +22,7 @@ public:
     static void startWatchdog();
 
 private:
-    InLevelSettingsFilterKeeper() = delete;
+    EbInLevelSettingsFilterKeeper() = delete;
 };
 
 #endif

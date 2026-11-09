@@ -19,12 +19,12 @@
 #include <cstring>
 #include <string>
 
-void AssistOverlay::updateOverlay(AssistController& controller) {
-    if (!StageConfig::showOverlay()) {
-        StatusOverlay::setVisible(false);
+void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
+    if (!EbStageConfig::showOverlay()) {
+        EbStatusOverlay::setVisible(false);
         return;
     }
-    auto const stage = StageConfig::fromSettings();
+    auto const stage = EbStageConfig::fromSettings();
     char const* state = "idle";
     if (controller.m_buffer.state == BufferState::Buffered) {
         if (controller.m_buffer.holdUntilSafe)
@@ -41,24 +41,24 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
         if (controller.m_buffer.state == BufferState::Buffered)
             left = controller.m_buffer.fireTick - controller.m_attemptTick;
 
-        auto mode = StageConfig::assistMode();
-        auto const* modeName = StageConfig::assistModeName(mode);
+        auto mode = EbStageConfig::assistMode();
+        auto const* modeName = EbStageConfig::assistModeName(mode);
         std::string learnBit;
         // Learning only applies to Live / Hybrid fallback — not bake windows.
         if (mode == AssistMode::Replay || mode == AssistMode::BruteForce) {
             learnBit = "learn n/a";
-        } else if (StageConfig::autoTune()) {
+        } else if (EbStageConfig::autoTune()) {
             auto spot =
-                LevelProfile::get().overlaySpot(controller.m_lastMode, controller.m_lastPlayerX);
+                EbLevelProfile::get().overlaySpot(controller.m_lastMode, controller.m_lastPlayerX);
             learnBit =
                 fmt::format("learn bias{:+d} t{:.1f}",
-                            AssistControllerImplementation::roundBias(spot.bias), spot.trust);
+                            EbAssistControllerImplementation::roundBias(spot.bias), spot.trust);
         } else {
             learnBit = "learn OFF";
         }
         // Template ownership: last bake arm/miss hint over map status.
         // Hybrid/Replay/Brute prefix so Live foresight is never confused with tpl.
-        std::string bakeBit = controller.m_lastBakeHint.empty() ? BakeMap::get().statusLine()
+        std::string bakeBit = controller.m_lastBakeHint.empty() ? EbBakeMap::get().statusLine()
                                                                 : controller.m_lastBakeHint;
         if (!controller.m_lastBakeHint.empty()) {
             char const* pref = nullptr;
@@ -75,14 +75,14 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
         if (controller.m_buffer.state == BufferState::Buffered && controller.m_buffer.fromBake) {
             bakeBit = fmt::format("{} · tpl{}", bakeBit, controller.m_buffer.down ? "↓" : "↑");
         }
-        std::string trajBit = TrajectoryVisualizer::get().statusHint();
-        std::string bakeVizBit = BakePathVisualizer::get().statusHint();
-        int const smartDepth = StageConfig::smartDepth();
+        std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
+        std::string bakeVizBit = EbBakePathVisualizer::get().statusHint();
+        int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
-            smartBit = fmt::format("smart {}j/{}c", smartDepth, StageConfig::smartCombos());
+            smartBit = fmt::format("smart {}j/{}c", smartDepth, EbStageConfig::smartCombos());
         }
-        int const cpsLim = StageConfig::cpsLimit();
+        int const cpsLim = EbStageConfig::cpsLimit();
         std::string cpsBit;
         if (cpsLim > 0) {
             int const cps = controller.currentCps();
@@ -91,7 +91,7 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
         }
         controller.m_overlayText =
             fmt::format("EarlyBuffer {} | mode {} | {} left={} | {} | {}",
-                        StageConfig::stageLabel(stage), modeName, state, left, learnBit, bakeBit);
+                        EbStageConfig::stageLabel(stage), modeName, state, left, learnBit, bakeBit);
         if (!smartBit.empty())
             controller.m_overlayText += " | " + smartBit;
         if (!cpsBit.empty())
@@ -100,12 +100,12 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
             controller.m_overlayText += " | " + trajBit;
         if (!bakeVizBit.empty())
             controller.m_overlayText += " | " + bakeVizBit;
-        if (StageConfig::triggerBake()) {
-            if (TriggerWorldBaker::get().running()) {
+        if (EbStageConfig::triggerBake()) {
+            if (EbTriggerWorldBaker::get().running()) {
                 controller.m_overlayText += fmt::format(
-                    " | tw building {:.0f}%", TriggerWorldBaker::get().progress() * 100.f);
+                    " | tw building {:.0f}%", EbTriggerWorldBaker::get().progress() * 100.f);
             } else {
-                auto& tw = TriggerWorldStore::get();
+                auto& tw = EbTriggerWorldStore::get();
                 if (!tw.loaded()) {
                     controller.m_overlayText += " | tw off";
                 } else if (!tw.hasTracks()) {
@@ -119,19 +119,19 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
                 }
             }
         }
-        if (StageConfig::assistOrbs())
+        if (EbStageConfig::assistOrbs())
             controller.m_overlayText += " | orbs";
-        controller.m_overlayText += fmt::format(" | pick={}", StageConfig::assistPickName());
-        controller.m_overlayText += fmt::format(" | eng={}", StageConfig::assistEngineName());
-        if (StageConfig::assistVerifyAb())
+        controller.m_overlayText += fmt::format(" | pick={}", EbStageConfig::assistPickName());
+        controller.m_overlayText += fmt::format(" | eng={}", EbStageConfig::assistEngineName());
+        if (EbStageConfig::assistVerifyAb())
             controller.m_overlayText += " | VERIFY AB ON";
-        if (!StageConfig::safeMode() && StageConfig::isEnabled())
+        if (!EbStageConfig::safeMode() && EbStageConfig::isEnabled())
             controller.m_overlayText += " | UNSAFE";
         if (auto* pl = PlayLayer::get()) {
-            if (AssistScopeGate::isPlatformer(pl->m_player1)) {
+            if (EbAssistScopeGate::isPlatformer(pl->m_player1)) {
                 controller.m_overlayText += " | platformer: off";
             }
-            if (auto const* reason = AssistScopeGate::blockReason(pl, pl->m_player1)) {
+            if (auto const* reason = EbAssistScopeGate::blockReason(pl, pl->m_player1)) {
                 if (std::strcmp(reason, "percent-disable") == 0) {
                     controller.m_overlayText +=
                         fmt::format(" | pct-off @{:.2f}%", pl->getCurrentPercent());
@@ -141,19 +141,19 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
             }
         }
         {
-            auto bit = AssistPerfStats::get().overlayBit();
+            auto bit = EbAssistPerfStats::get().overlayBit();
             if (!bit.empty())
                 controller.m_overlayText += " | " + bit;
         }
         {
-            auto bit = DivergenceTracker::get().overlayBit();
+            auto bit = EbDivergenceTracker::get().overlayBit();
             if (!bit.empty())
                 controller.m_overlayText += " | " + bit;
             if (controller.m_untrustPassHint)
                 controller.m_overlayText += " | UNTRUST pass";
         }
         {
-            char const* const trustBit = SimTrust::get().overlayBit();
+            char const* const trustBit = EbSimTrust::get().overlayBit();
             if (trustBit && trustBit[0] != '\0') {
                 controller.m_overlayText += " | ";
                 controller.m_overlayText += trustBit;
@@ -161,11 +161,11 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
         }
         {
             // Commit 12: real metrics primary; simEstimate secondary (G10).
-            auto const metricsBit = AssistRealMetrics::get().overlayBit();
+            auto const metricsBit = EbAssistRealMetrics::get().overlayBit();
             if (!metricsBit.empty()) {
                 controller.m_overlayText += " | " + metricsBit;
             }
-            auto const simBit = AssistSimEstimate::get().overlayBit();
+            auto const simBit = EbAssistSimEstimate::get().overlayBit();
             if (!simBit.empty()) {
                 controller.m_overlayText += " | " + simBit;
             }
@@ -179,20 +179,20 @@ void AssistOverlay::updateOverlay(AssistController& controller) {
                 fmt::format(" | orbWin[{},{}]", controller.m_buffer.dMin, controller.m_buffer.dMax);
         }
         {
-            char const* const verdictBit = AssistVerdict::overlayBit(controller.m_lastVerdict);
+            char const* const verdictBit = EbAssistVerdict::overlayBit(controller.m_lastVerdict);
             if (verdictBit && verdictBit[0] != '\0') {
                 controller.m_overlayText += " | ";
                 controller.m_overlayText += verdictBit;
             }
         }
     }
-    if (DevOverlay::shouldShow()) {
-        auto const devLine = DevOverlay::line();
+    if (EbDevOverlay::shouldShow()) {
+        auto const devLine = EbDevOverlay::line();
         if (!devLine.empty()) {
             if (!controller.m_overlayText.empty())
                 controller.m_overlayText += " || ";
             controller.m_overlayText += devLine;
         }
     }
-    StatusOverlay::update(controller.m_overlayText);
+    EbStatusOverlay::update(controller.m_overlayText);
 }

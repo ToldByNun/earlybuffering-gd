@@ -5,7 +5,7 @@
 
 // Cached Dev Lab settings (mod.json keys under title-dev* / dev-*).
 // Safe defaults: recording off. refreshCache from StageConfig watchers / load.
-class DevConfig {
+class EbDevConfig {
 public:
     enum class EvalGrid { Full = 0, Band, Sparse };
 
@@ -43,7 +43,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevConfig() = delete;
+    EbDevConfig() = delete;
 };
 
 #include <Geode/Geode.hpp>
@@ -52,18 +52,18 @@ private:
 #include <cstring>
 #include <fmt/format.h>
 
-class DevConfigImplementation {
+class EbDevConfigImplementation {
 public:
     static int clampInt(int value, int lo, int hi);
     static int readInt(geode::prelude::Mod* mod, char const* id, int fallback);
     static bool readBool(geode::prelude::Mod* mod, char const* id, bool fallback);
     static std::string readString(geode::prelude::Mod* mod, char const* id, char const* fallback);
-    static DevConfig::EvalGrid parseEvalGrid(std::string const& s);
-    static DevConfig::Objective parseObjective(std::string const& s);
+    static EbDevConfig::EvalGrid parseEvalGrid(std::string const& s);
+    static EbDevConfig::Objective parseObjective(std::string const& s);
     static void ensureCache();
 
 private:
-    friend class DevConfig;
+    friend class EbDevConfig;
 
     static bool s_devCacheInit;
     static bool s_devRecordEnable;
@@ -72,16 +72,16 @@ private:
     static bool s_devFreezeWorld;
     static bool s_devDisableRandom;
     static bool s_devEvalOnDeath;
-    static DevConfig::EvalGrid s_devEvalGrid;
+    static EbDevConfig::EvalGrid s_devEvalGrid;
     static int s_devEvalHorizon;
     static int s_devEvalTail;
-    static DevConfig::Objective s_devObjective;
+    static EbDevConfig::Objective s_devObjective;
     static bool s_devEvalRequireDeps;
     static bool s_devRecordCands;
     static int s_devEvalTickBudget;
     static bool s_devOverlay;
 
-    DevConfigImplementation() = delete;
+    EbDevConfigImplementation() = delete;
 };
 
 #endif

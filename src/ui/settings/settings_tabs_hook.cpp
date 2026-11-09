@@ -4,7 +4,7 @@
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/modify/FLAlertLayer.hpp>
 
-auto SettingsPopupAttach::nodeTreeHasOurSetting(geode::prelude::CCNode* root) -> bool {
+auto EbSettingsPopupAttach::nodeTreeHasOurSetting(geode::prelude::CCNode* root) -> bool {
     if (!root || !geode::prelude::Mod::get())
         return false;
     auto* ourMod = geode::prelude::Mod::get();
@@ -51,7 +51,7 @@ auto SettingsPopupAttach::nodeTreeHasOurSetting(geode::prelude::CCNode* root) ->
     return false;
 }
 
-auto SettingsPopupAttach::tryAttachTabs(FLAlertLayer* layer) -> void {
+auto EbSettingsPopupAttach::tryAttachTabs(FLAlertLayer* layer) -> void {
     if (!layer)
         return;
     if (layer->getChildByID("earlybuffer-inlevel-settings-filter"_spr))
@@ -60,7 +60,7 @@ auto SettingsPopupAttach::tryAttachTabs(FLAlertLayer* layer) -> void {
         return;
     if (!nodeTreeHasOurSetting(layer))
         return;
-    InLevelSettingsFilterKeeper::attach(layer);
+    EbInLevelSettingsFilterKeeper::attach(layer);
 }
 
 auto EbSettingsFLAlertHook::show() -> void {
@@ -70,14 +70,14 @@ auto EbSettingsFLAlertHook::show() -> void {
     geode::prelude::Loader::get()->queueInMainThread([self] {
         if (!self)
             return;
-        SettingsPopupAttach::tryAttachTabs(self.data());
+        EbSettingsPopupAttach::tryAttachTabs(self.data());
         geode::prelude::Loader::get()->queueInMainThread([self] {
             if (!self)
                 return;
-            SettingsPopupAttach::tryAttachTabs(self.data());
+            EbSettingsPopupAttach::tryAttachTabs(self.data());
             geode::prelude::Loader::get()->queueInMainThread([self] {
                 if (self)
-                    SettingsPopupAttach::tryAttachTabs(self.data());
+                    EbSettingsPopupAttach::tryAttachTabs(self.data());
             });
         });
     });

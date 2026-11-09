@@ -6,28 +6,28 @@
 #include <fmt/format.h>
 #include <string>
 
-bool DevConfigImplementation::s_devCacheInit = false;
-bool DevConfigImplementation::s_devRecordEnable = false;
-int DevConfigImplementation::s_devRecordCount = 10;
-bool DevConfigImplementation::s_devCountEmptyAttempts = false;
-bool DevConfigImplementation::s_devFreezeWorld = false;
-bool DevConfigImplementation::s_devDisableRandom = true;
-bool DevConfigImplementation::s_devEvalOnDeath = true;
-DevConfig::EvalGrid DevConfigImplementation::s_devEvalGrid = DevConfig::EvalGrid::Band;
-int DevConfigImplementation::s_devEvalHorizon = 48;
-int DevConfigImplementation::s_devEvalTail = 48;
-DevConfig::Objective DevConfigImplementation::s_devObjective =
-    DevConfig::Objective::SurviveThenEndX;
-bool DevConfigImplementation::s_devEvalRequireDeps = true;
-bool DevConfigImplementation::s_devRecordCands = true;
-int DevConfigImplementation::s_devEvalTickBudget = 8000;
-bool DevConfigImplementation::s_devOverlay = false;
+bool EbDevConfigImplementation::s_devCacheInit = false;
+bool EbDevConfigImplementation::s_devRecordEnable = false;
+int EbDevConfigImplementation::s_devRecordCount = 10;
+bool EbDevConfigImplementation::s_devCountEmptyAttempts = false;
+bool EbDevConfigImplementation::s_devFreezeWorld = false;
+bool EbDevConfigImplementation::s_devDisableRandom = true;
+bool EbDevConfigImplementation::s_devEvalOnDeath = true;
+EbDevConfig::EvalGrid EbDevConfigImplementation::s_devEvalGrid = EbDevConfig::EvalGrid::Band;
+int EbDevConfigImplementation::s_devEvalHorizon = 48;
+int EbDevConfigImplementation::s_devEvalTail = 48;
+EbDevConfig::Objective EbDevConfigImplementation::s_devObjective =
+    EbDevConfig::Objective::SurviveThenEndX;
+bool EbDevConfigImplementation::s_devEvalRequireDeps = true;
+bool EbDevConfigImplementation::s_devRecordCands = true;
+int EbDevConfigImplementation::s_devEvalTickBudget = 8000;
+bool EbDevConfigImplementation::s_devOverlay = false;
 
-int DevConfigImplementation::clampInt(int value, int lowerBound, int upperBound) {
+int EbDevConfigImplementation::clampInt(int value, int lowerBound, int upperBound) {
     return std::max(lowerBound, std::min(upperBound, value));
 }
 
-int DevConfigImplementation::readInt(geode::prelude::Mod* mod, char const* id, int fallback) {
+int EbDevConfigImplementation::readInt(geode::prelude::Mod* mod, char const* id, int fallback) {
     try {
         return static_cast<int>(mod->getSettingValue<int64_t>(id));
     } catch (...) {
@@ -35,7 +35,7 @@ int DevConfigImplementation::readInt(geode::prelude::Mod* mod, char const* id, i
     }
 }
 
-bool DevConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id, bool fallback) {
+bool EbDevConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id, bool fallback) {
     try {
         return mod->getSettingValue<bool>(id);
     } catch (...) {
@@ -43,7 +43,7 @@ bool DevConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id,
     }
 }
 
-std::string DevConfigImplementation::readString(geode::prelude::Mod* mod, char const* id,
+std::string EbDevConfigImplementation::readString(geode::prelude::Mod* mod, char const* id,
                                                 char const* fallback) {
     try {
         return mod->getSettingValue<std::string>(id);
@@ -52,106 +52,106 @@ std::string DevConfigImplementation::readString(geode::prelude::Mod* mod, char c
     }
 }
 
-DevConfig::EvalGrid DevConfigImplementation::parseEvalGrid(std::string const& s) {
+EbDevConfig::EvalGrid EbDevConfigImplementation::parseEvalGrid(std::string const& s) {
     if (s == "full")
-        return DevConfig::EvalGrid::Full;
+        return EbDevConfig::EvalGrid::Full;
     if (!(s == "sparse")) {
-        return DevConfig::EvalGrid::Band;
+        return EbDevConfig::EvalGrid::Band;
     }
-    return DevConfig::EvalGrid::Sparse;
+    return EbDevConfig::EvalGrid::Sparse;
 }
 
-DevConfig::Objective DevConfigImplementation::parseObjective(std::string const& s) {
+EbDevConfig::Objective EbDevConfigImplementation::parseObjective(std::string const& s) {
     if (s == "planner_mirror_v1")
-        return DevConfig::Objective::PlannerMirror;
+        return EbDevConfig::Objective::PlannerMirror;
     if (!(s == "horizon_clear_v1")) {
-        return DevConfig::Objective::SurviveThenEndX;
+        return EbDevConfig::Objective::SurviveThenEndX;
     }
-    return DevConfig::Objective::HorizonClear;
+    return EbDevConfig::Objective::HorizonClear;
 }
 
-void DevConfig::refreshCache() {
+void EbDevConfig::refreshCache() {
     auto* mod = geode::prelude::Mod::get();
     if (!mod) {
-        DevConfigImplementation::s_devCacheInit = true;
+        EbDevConfigImplementation::s_devCacheInit = true;
         return;
     }
 
-    DevConfigImplementation::s_devRecordEnable =
-        DevConfigImplementation::readBool(mod, "dev-record-enable", false);
-    DevConfigImplementation::s_devRecordCount = DevConfigImplementation::clampInt(
-        DevConfigImplementation::readInt(mod, "dev-record-count", 10), 1, 50);
-    DevConfigImplementation::s_devCountEmptyAttempts =
-        DevConfigImplementation::readBool(mod, "dev-count-empty-attempts", false);
+    EbDevConfigImplementation::s_devRecordEnable =
+        EbDevConfigImplementation::readBool(mod, "dev-record-enable", false);
+    EbDevConfigImplementation::s_devRecordCount = EbDevConfigImplementation::clampInt(
+        EbDevConfigImplementation::readInt(mod, "dev-record-count", 10), 1, 50);
+    EbDevConfigImplementation::s_devCountEmptyAttempts =
+        EbDevConfigImplementation::readBool(mod, "dev-count-empty-attempts", false);
     // Commit 2 LOCK: freeze-world default ON for honest corpus / eval records.
-    DevConfigImplementation::s_devFreezeWorld =
-        DevConfigImplementation::readBool(mod, "dev-freeze-world", true);
-    DevConfigImplementation::s_devDisableRandom =
-        DevConfigImplementation::readBool(mod, "dev-disable-random", true);
-    DevConfigImplementation::s_devEvalOnDeath =
-        DevConfigImplementation::readBool(mod, "dev-eval-on-death", true);
-    DevConfigImplementation::s_devEvalGrid = DevConfigImplementation::parseEvalGrid(
-        DevConfigImplementation::readString(mod, "dev-eval-grid", "band"));
-    DevConfigImplementation::s_devEvalHorizon = DevConfigImplementation::clampInt(
-        DevConfigImplementation::readInt(mod, "dev-eval-horizon", 48), 1, 320);
-    DevConfigImplementation::s_devEvalTail = DevConfigImplementation::clampInt(
-        DevConfigImplementation::readInt(mod, "dev-eval-tail", 48), 0, 320);
-    DevConfigImplementation::s_devObjective = DevConfigImplementation::parseObjective(
-        DevConfigImplementation::readString(mod, "dev-objective", "survive_then_endx_v1"));
-    DevConfigImplementation::s_devEvalRequireDeps =
-        DevConfigImplementation::readBool(mod, "dev-eval-require-deps", true);
-    DevConfigImplementation::s_devRecordCands =
-        DevConfigImplementation::readBool(mod, "dev-record-cands", true);
-    DevConfigImplementation::s_devEvalTickBudget = DevConfigImplementation::clampInt(
-        DevConfigImplementation::readInt(mod, "dev-eval-tick-budget", 8000), 500, 50000);
-    DevConfigImplementation::s_devOverlay =
-        DevConfigImplementation::readBool(mod, "dev-overlay", false);
+    EbDevConfigImplementation::s_devFreezeWorld =
+        EbDevConfigImplementation::readBool(mod, "dev-freeze-world", true);
+    EbDevConfigImplementation::s_devDisableRandom =
+        EbDevConfigImplementation::readBool(mod, "dev-disable-random", true);
+    EbDevConfigImplementation::s_devEvalOnDeath =
+        EbDevConfigImplementation::readBool(mod, "dev-eval-on-death", true);
+    EbDevConfigImplementation::s_devEvalGrid = EbDevConfigImplementation::parseEvalGrid(
+        EbDevConfigImplementation::readString(mod, "dev-eval-grid", "band"));
+    EbDevConfigImplementation::s_devEvalHorizon = EbDevConfigImplementation::clampInt(
+        EbDevConfigImplementation::readInt(mod, "dev-eval-horizon", 48), 1, 320);
+    EbDevConfigImplementation::s_devEvalTail = EbDevConfigImplementation::clampInt(
+        EbDevConfigImplementation::readInt(mod, "dev-eval-tail", 48), 0, 320);
+    EbDevConfigImplementation::s_devObjective = EbDevConfigImplementation::parseObjective(
+        EbDevConfigImplementation::readString(mod, "dev-objective", "survive_then_endx_v1"));
+    EbDevConfigImplementation::s_devEvalRequireDeps =
+        EbDevConfigImplementation::readBool(mod, "dev-eval-require-deps", true);
+    EbDevConfigImplementation::s_devRecordCands =
+        EbDevConfigImplementation::readBool(mod, "dev-record-cands", true);
+    EbDevConfigImplementation::s_devEvalTickBudget = EbDevConfigImplementation::clampInt(
+        EbDevConfigImplementation::readInt(mod, "dev-eval-tick-budget", 8000), 500, 50000);
+    EbDevConfigImplementation::s_devOverlay =
+        EbDevConfigImplementation::readBool(mod, "dev-overlay", false);
 
-    DevConfigImplementation::s_devCacheInit = true;
+    EbDevConfigImplementation::s_devCacheInit = true;
 }
 
-void DevConfigImplementation::ensureCache() {
-    if (!DevConfigImplementation::s_devCacheInit) {
-        DevConfig::refreshCache();
+void EbDevConfigImplementation::ensureCache() {
+    if (!EbDevConfigImplementation::s_devCacheInit) {
+        EbDevConfig::refreshCache();
     }
 }
 
-bool DevConfig::recordEnable() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devRecordEnable;
+bool EbDevConfig::recordEnable() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devRecordEnable;
 }
 
-int DevConfig::recordCount() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devRecordCount;
+int EbDevConfig::recordCount() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devRecordCount;
 }
 
-bool DevConfig::countEmptyAttempts() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devCountEmptyAttempts;
+bool EbDevConfig::countEmptyAttempts() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devCountEmptyAttempts;
 }
 
-bool DevConfig::freezeWorld() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devFreezeWorld;
+bool EbDevConfig::freezeWorld() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devFreezeWorld;
 }
 
-bool DevConfig::disableRandom() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devDisableRandom;
+bool EbDevConfig::disableRandom() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devDisableRandom;
 }
 
-bool DevConfig::evalOnDeath() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devEvalOnDeath;
+bool EbDevConfig::evalOnDeath() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devEvalOnDeath;
 }
 
-DevConfig::EvalGrid DevConfig::evalGrid() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devEvalGrid;
+EbDevConfig::EvalGrid EbDevConfig::evalGrid() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devEvalGrid;
 }
 
-char const* DevConfig::evalGridId(EvalGrid grid) {
+char const* EbDevConfig::evalGridId(EvalGrid grid) {
     switch (grid) {
     case EvalGrid::Full:
         return "full";
@@ -163,22 +163,22 @@ char const* DevConfig::evalGridId(EvalGrid grid) {
     return "band";
 }
 
-int DevConfig::evalHorizon() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devEvalHorizon;
+int EbDevConfig::evalHorizon() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devEvalHorizon;
 }
 
-int DevConfig::evalTail() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devEvalTail;
+int EbDevConfig::evalTail() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devEvalTail;
 }
 
-DevConfig::Objective DevConfig::objective() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devObjective;
+EbDevConfig::Objective EbDevConfig::objective() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devObjective;
 }
 
-char const* DevConfig::objectiveId(Objective object) {
+char const* EbDevConfig::objectiveId(Objective object) {
     switch (object) {
     case Objective::PlannerMirror:
         return "planner_mirror_v1";
@@ -190,27 +190,27 @@ char const* DevConfig::objectiveId(Objective object) {
     return "survive_then_endx_v1";
 }
 
-bool DevConfig::evalRequireDeps() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devEvalRequireDeps;
+bool EbDevConfig::evalRequireDeps() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devEvalRequireDeps;
 }
 
-bool DevConfig::recordCands() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devRecordCands;
+bool EbDevConfig::recordCands() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devRecordCands;
 }
 
-int DevConfig::evalTickBudget() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devEvalTickBudget;
+int EbDevConfig::evalTickBudget() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devEvalTickBudget;
 }
 
-bool DevConfig::overlay() {
-    DevConfigImplementation::ensureCache();
-    return DevConfigImplementation::s_devOverlay;
+bool EbDevConfig::overlay() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devOverlay;
 }
 
-bool DevConfig::selfCheck(std::string& report) {
+bool EbDevConfig::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -230,24 +230,24 @@ bool DevConfig::selfCheck(std::string& report) {
     expect(std::strcmp(objectiveId(Objective::HorizonClear), "horizon_clear_v1") == 0,
            "obj-horizon-id");
 
-    expect(DevConfigImplementation::parseEvalGrid("full") == EvalGrid::Full, "parse-grid-full");
-    expect(DevConfigImplementation::parseEvalGrid("band") == EvalGrid::Band, "parse-grid-band");
-    expect(DevConfigImplementation::parseEvalGrid("sparse") == EvalGrid::Sparse,
+    expect(EbDevConfigImplementation::parseEvalGrid("full") == EvalGrid::Full, "parse-grid-full");
+    expect(EbDevConfigImplementation::parseEvalGrid("band") == EvalGrid::Band, "parse-grid-band");
+    expect(EbDevConfigImplementation::parseEvalGrid("sparse") == EvalGrid::Sparse,
            "parse-grid-sparse");
-    expect(DevConfigImplementation::parseEvalGrid("nope") == EvalGrid::Band, "parse-grid-fallback");
-    expect(DevConfigImplementation::parseObjective("survive_then_endx_v1") ==
+    expect(EbDevConfigImplementation::parseEvalGrid("nope") == EvalGrid::Band, "parse-grid-fallback");
+    expect(EbDevConfigImplementation::parseObjective("survive_then_endx_v1") ==
                Objective::SurviveThenEndX,
            "parse-obj-survive");
-    expect(DevConfigImplementation::parseObjective("planner_mirror_v1") == Objective::PlannerMirror,
+    expect(EbDevConfigImplementation::parseObjective("planner_mirror_v1") == Objective::PlannerMirror,
            "parse-obj-mirror");
-    expect(DevConfigImplementation::parseObjective("horizon_clear_v1") == Objective::HorizonClear,
+    expect(EbDevConfigImplementation::parseObjective("horizon_clear_v1") == Objective::HorizonClear,
            "parse-obj-horizon");
-    expect(DevConfigImplementation::parseObjective("nope") == Objective::SurviveThenEndX,
+    expect(EbDevConfigImplementation::parseObjective("nope") == Objective::SurviveThenEndX,
            "parse-obj-fallback");
 
-    expect(DevConfigImplementation::clampInt(0, 1, 50) == 1, "clamp-lo");
-    expect(DevConfigImplementation::clampInt(99, 1, 50) == 50, "clamp-hi");
-    expect(DevConfigImplementation::clampInt(10, 1, 50) == 10, "clamp-mid");
+    expect(EbDevConfigImplementation::clampInt(0, 1, 50) == 1, "clamp-lo");
+    expect(EbDevConfigImplementation::clampInt(99, 1, 50) == 50, "clamp-hi");
+    expect(EbDevConfigImplementation::clampInt(10, 1, 50) == 10, "clamp-mid");
 
     // Cache refresh must leave recording off by default when settings missing / defaults.
     refreshCache();

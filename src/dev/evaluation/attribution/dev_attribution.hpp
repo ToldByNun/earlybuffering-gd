@@ -5,13 +5,13 @@
 
 #include "../dev_reject_ledger.hpp"
 
-class DevAttribution {
+class EbDevAttribution {
 public:
-    static std::vector<DevRejectLedger::AttributionNote>
-    buildAttribution(DevRejectLedger::AttributionInput const& in);
+    static std::vector<EbDevRejectLedger::AttributionNote>
+    buildAttribution(EbDevRejectLedger::AttributionInput const& in);
 
 private:
-    DevAttribution() = delete;
+    EbDevAttribution() = delete;
 };
 
 #endif

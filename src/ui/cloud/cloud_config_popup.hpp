@@ -14,9 +14,9 @@
 #include <vector>
 
 // Catalog browser matching GD / Geode popup + list aesthetics.
-class CloudConfigPopup : public geode::Popup {
+class EbCloudConfigPopup : public geode::Popup {
 public:
-    static CloudConfigPopup* create();
+    static EbCloudConfigPopup* create();
     static void open();
 
 protected:
@@ -30,11 +30,11 @@ protected:
 
     void loadInitial();
     void startRefresh(bool force);
-    void onRefreshDone(CloudConfigService::RefreshResult const& r);
+    void onRefreshDone(EbCloudConfigService::RefreshResult const& r);
     void startStatsFetch();
     void ensureLocalCatalog();
     void rebuildList();
-    void applySort(std::vector<CloudConfigIndex::PackEntry const*>& rows) const;
+    void applySort(std::vector<EbCloudConfigIndex::PackEntry const*>& rows) const;
     void updateSortLabel();
     void updateDetail();
     void updateRateUi();
@@ -42,17 +42,17 @@ protected:
     char const* sortModeLabel() const;
     void selectPack(std::string const& id);
     void doInstall(std::string const& id);
-    void onPackFetched(CloudConfigService::PackFetchResult const& fr,
-                       CloudConfigIndex::PackEntry entry);
+    void onPackFetched(EbCloudConfigService::PackFetchResult const& fr,
+                       EbCloudConfigIndex::PackEntry entry);
     void trackInstallDownload(std::string const& packId);
-    CloudConfigListCell::StatsBadge statsBadgeFor(std::string const& id) const;
+    EbCloudConfigListCell::StatsBadge statsBadgeFor(std::string const& id) const;
 
-    bool packMatchesSearch(CloudConfigIndex::PackEntry const& e) const;
+    bool packMatchesSearch(EbCloudConfigIndex::PackEntry const& e) const;
     std::string liveModVersion() const;
     bool isCached(std::string const& id) const;
     bool isActive(std::string const& id) const;
-    bool hasUpdate(CloudConfigIndex::PackEntry const& e) const;
-    CloudConfigIndex::PackEntry const* selectedEntry() const;
+    bool hasUpdate(EbCloudConfigIndex::PackEntry const& e) const;
+    EbCloudConfigIndex::PackEntry const* selectedEntry() const;
     void setShareOpen(bool open);
 
     geode::ScrollLayer* m_listScroll = nullptr;
@@ -93,11 +93,11 @@ protected:
     uint64_t m_rateGen = 0;
 
 private:
-    friend class CloudBrowserList;
+    friend class EbCloudBrowserList;
 
-    friend class CloudBrowserDetails;
+    friend class EbCloudBrowserDetails;
 
-    friend class CloudBrowserLayout;
+    friend class EbCloudBrowserLayout;
 };
 
 #include "../../cloud/cloud_config_apply.hpp"
@@ -115,7 +115,7 @@ private:
 #include <cmath>
 #include <cocos-ext.h>
 
-class CloudConfigPopupImplementation {
+class EbCloudConfigPopupImplementation {
 public:
     static std::string toLower(std::string text);
     static bool containsInsensitive(std::string const& hay, std::string const& needleLower);
@@ -124,7 +124,7 @@ public:
     static std::string formatDownloads(int count);
 
 private:
-    CloudConfigPopupImplementation() = delete;
+    EbCloudConfigPopupImplementation() = delete;
 };
 
 #endif

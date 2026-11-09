@@ -10,9 +10,9 @@
 #include <cocos-ext.h>
 #include <fmt/format.h>
 
-class SettingsFilterKeeperNode;
+class EbSettingsFilterKeeperNode;
 
-class SettingsCategoryBar : public geode::prelude::CCNode {
+class EbSettingsCategoryBar : public geode::prelude::CCNode {
 public:
     static constexpr float kBarH = 32.f;
     static constexpr float kSidePad = 2.f;
@@ -20,7 +20,7 @@ public:
     static constexpr float kMinFitScale = 0.20f;
     static constexpr float kMaxFitScale = 0.40f;
 
-    bool initBar(SettingsFilterKeeperNode* owner, float width);
+    bool initBar(EbSettingsFilterKeeperNode* owner, float width);
 
     void setCategory(SettingsCategory category);
 
@@ -28,14 +28,14 @@ public:
 
     void onChip(geode::prelude::CCObject* sender);
 
-    static SettingsCategoryBar* create(SettingsFilterKeeperNode* owner, float width);
+    static EbSettingsCategoryBar* create(EbSettingsFilterKeeperNode* owner, float width);
 
 private:
     void paintLabels(SettingsCategory active);
 
     void rebuild(SettingsCategory active);
 
-    SettingsFilterKeeperNode* m_owner = nullptr;
+    EbSettingsFilterKeeperNode* m_owner = nullptr;
     SettingsCategory m_active = SettingsCategory::Main;
     geode::prelude::CCNode* m_labels = nullptr;
     geode::prelude::CCMenu* m_menu = nullptr;

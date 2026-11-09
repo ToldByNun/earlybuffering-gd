@@ -20,14 +20,14 @@
 #include <system_error>
 #include <windows.h>
 
-void PauseConfigActions::exportConfig() {
+void EbPauseConfigActions::exportConfig() {
     std::optional<std::filesystem::path> path;
 #ifdef GEODE_IS_WINDOWS
-    path = PauseActionBridgeDetail::pickSaveJsonWin32(true);
+    path = EbPauseActionBridgeDetail::pickSaveJsonWin32(true);
     if (!path)
         return;
 #else
-    auto& drops = SaveDropPaths::get();
+    auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     if (!drops.ensureDirs(dirErr)) {
         FLAlertLayer::create("EarlyBuffer",
@@ -38,36 +38,36 @@ void PauseConfigActions::exportConfig() {
     }
     path = drops.configPath();
 #endif
-    auto result = ConfigBundle::exportTo(*path);
+    auto result = EbConfigBundle::exportTo(*path);
     if (result.isErr()) {
         auto errorMessage = result.unwrapErr();
         if (errorMessage.empty())
             errorMessage = "Config export failed.";
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
+        bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(*path);
 #ifndef GEODE_IS_WINDOWS
         errorMessage = fmt::format("{}\n\n{}\n{}\n\n{}", errorMessage, path->string(),
-                                   PauseActionBridgeDetail::pathClipboardNote(clipOk),
-                                   PauseActionBridgeDetail::mobileTransferHint());
+                                   EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
+                                   EbPauseActionBridgeDetail::mobileTransferHint());
 #else
         errorMessage = fmt::format("{}\n\n{}\n{}", errorMessage, path->string(),
-                                   PauseActionBridgeDetail::pathClipboardNote(clipOk));
+                                   EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
 #endif
         FLAlertLayer::create("EarlyBuffer", errorMessage.c_str(), "OK")->show();
         return;
     }
-    FLAlertLayer::create("EarlyBuffer", PauseActionBridgeDetail::formatExportSuccess(*path).c_str(),
+    FLAlertLayer::create("EarlyBuffer", EbPauseActionBridgeDetail::formatExportSuccess(*path).c_str(),
                          "OK")
         ->show();
 }
 
-void PauseConfigActions::importConfig() {
+void EbPauseConfigActions::importConfig() {
     std::optional<std::filesystem::path> path;
 #ifdef GEODE_IS_WINDOWS
-    path = PauseActionBridgeDetail::pickSaveJsonWin32(false);
+    path = EbPauseActionBridgeDetail::pickSaveJsonWin32(false);
     if (!path)
         return;
 #else
-    auto& drops = SaveDropPaths::get();
+    auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     if (!drops.ensureDirs(dirErr)) {
         FLAlertLayer::create("EarlyBuffer",
@@ -80,7 +80,7 @@ void PauseConfigActions::importConfig() {
     std::error_code ec;
     bool const exists = std::filesystem::is_regular_file(*path, ec) && !ec;
     if (!exists) {
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
+        bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const message =
             fmt::format("No config file found.\n\n"
                         "Place earlybuffer-config.json (full settings export) at:\n"
@@ -88,66 +88,66 @@ void PauseConfigActions::importConfig() {
                         "{}\n\n"
                         "{}\n\n"
                         "Export Config writes that path. Then Import again.",
-                        path->string(), PauseActionBridgeDetail::pathClipboardNote(clipOk),
-                        PauseActionBridgeDetail::mobileTransferHint());
+                        path->string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
+                        EbPauseActionBridgeDetail::mobileTransferHint());
         FLAlertLayer::create("EarlyBuffer", message.c_str(), "OK")->show();
         return;
     }
     auto const size = std::filesystem::file_size(*path, ec);
     if (ec || size == 0) {
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
+        bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const emptyMsg =
             fmt::format("Config file is empty or unreadable:\n"
                         "{}\n"
                         "{}",
-                        path->string(), PauseActionBridgeDetail::pathClipboardNote(clipOk));
+                        path->string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
         FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
         return;
     }
 #endif
-    auto result = ConfigBundle::importFrom(*path);
+    auto result = EbConfigBundle::importFrom(*path);
     if (result.isErr()) {
-        bool const clipOk = PauseActionBridgeDetail::tryCopyPathToClipboard(*path);
+        bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const badMsg = fmt::format("{}\n\nFile:\n{}\n{}", result.unwrapErr(), path->string(),
-                                        PauseActionBridgeDetail::pathClipboardNote(clipOk));
+                                        EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
         FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
         return;
     }
 
-    PauseActionBridge::afterConfigApplied(PauseActionBridgeDetail::formatImportSuccess(path));
+    EbPauseActionBridge::afterConfigApplied(EbPauseActionBridgeDetail::formatImportSuccess(path));
 }
 
-void PauseConfigActions::openCloudConfigs() {
-    CloudConfigPopup::open();
+void EbPauseConfigActions::openCloudConfigs() {
+    EbCloudConfigPopup::open();
 }
 
-void PauseConfigActions::afterConfigApplied(std::string const& successMsg) {
+void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
     // Import runs under applying-guard — sync UI that listeners would have skipped.
-    StatusOverlay::setVisible(StageConfig::showOverlay());
+    EbStatusOverlay::setVisible(EbStageConfig::showOverlay());
     {
-        bool const traj = StageConfig::showTrajectory();
-        TrajectoryVisualizer::get().setEnabled(traj);
+        bool const traj = EbStageConfig::showTrajectory();
+        EbTrajectoryVisualizer::get().setEnabled(traj);
         if (traj) {
             if (auto* pl = PlayLayer::get()) {
-                TrajectoryVisualizer::get().attach(pl);
+                EbTrajectoryVisualizer::get().attach(pl);
             }
         } else {
-            TrajectoryVisualizer::get().clear();
+            EbTrajectoryVisualizer::get().clear();
         }
-        bool const bakePath = StageConfig::showBakePath();
-        BakePathVisualizer::get().setEnabled(bakePath);
+        bool const bakePath = EbStageConfig::showBakePath();
+        EbBakePathVisualizer::get().setEnabled(bakePath);
         if (bakePath) {
             if (auto* pl = PlayLayer::get()) {
-                BakePathVisualizer::get().attach(pl);
+                EbBakePathVisualizer::get().attach(pl);
             }
         } else {
-            BakePathVisualizer::get().clear();
+            EbBakePathVisualizer::get().clear();
         }
     }
-    AssistController::get().updateOverlay();
+    EbAssistController::get().updateOverlay();
     // Open ModSettingsPopup rows keep stale uncommitted values after setSettingValue
     // → green labels / Apply would overwrite the import. Sync + rebuild UI.
-    InLevelSettingsFilterKeeper::reloadAfterImport();
+    EbInLevelSettingsFilterKeeper::reloadAfterImport();
     // Show success after the settings rebuild so it stays on top.
     geode::prelude::Loader::get()->queueInMainThread(
         [successMsg] { FLAlertLayer::create("EarlyBuffer", successMsg.c_str(), "OK")->show(); });

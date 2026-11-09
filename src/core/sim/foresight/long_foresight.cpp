@@ -3,7 +3,7 @@
 #include <cmath>
 #include <fmt/format.h>
 
-int LongForesight::extendHorizon(int currentHorizon, int pressDeathTick, int maxHorizon) {
+int EbLongForesight::extendHorizon(int currentHorizon, int pressDeathTick, int maxHorizon) {
     if (pressDeathTick < 0)
         return 0;
     if (currentHorizon <= 0 || maxHorizon <= currentHorizon)
@@ -16,7 +16,7 @@ int LongForesight::extendHorizon(int currentHorizon, int pressDeathTick, int max
     return next > currentHorizon ? next : 0;
 }
 
-bool LongForesight::idleLooksSafer(PathStats const& press, PathStats const& idle) {
+bool EbLongForesight::idleLooksSafer(PathStats const& press, PathStats const& idle) {
     // Idle must look better than pressing/releasing now.
     if (!press.died)
         return false;
@@ -32,7 +32,7 @@ bool LongForesight::idleLooksSafer(PathStats const& press, PathStats const& idle
     return false;
 }
 
-LongForesight::Result LongForesight::decide(Input const& in) {
+EbLongForesight::Result EbLongForesight::decide(Input const& in) {
     Result r;
     PathStats const* press = &in.press;
     PathStats const* idle = &in.idle;
@@ -68,7 +68,7 @@ LongForesight::Result LongForesight::decide(Input const& in) {
     return r;
 }
 
-bool LongForesight::selfCheck(std::string& report) {
+bool EbLongForesight::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

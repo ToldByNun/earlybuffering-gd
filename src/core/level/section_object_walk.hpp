@@ -10,7 +10,7 @@ class GJBaseGameLayer;
 
 // Poison-safe walk of GJBaseGameLayer::m_sections.
 // Section slots can hold freed / 0xFFF… entries — never typeinfo_cast those.
-class SectionObjectWalk {
+class EbSectionObjectWalk {
 public:
     // Reject null, null-page, and classic poison (~0) without dereferencing.
     static bool pointerLooksLive(void const* valuePointer);
@@ -26,7 +26,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    SectionObjectWalk() = delete;
+    EbSectionObjectWalk() = delete;
 };
 
 #endif

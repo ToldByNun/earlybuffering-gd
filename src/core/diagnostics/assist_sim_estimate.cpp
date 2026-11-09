@@ -1,14 +1,14 @@
+#include "../../app/class_manager.hpp"
 #include "assist_sim_estimate.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
-AssistSimEstimate& AssistSimEstimate::get() {
-    static AssistSimEstimate inst;
-    return inst;
+EbAssistSimEstimate& EbAssistSimEstimate::get() {
+    return EbClassManager::get().service<EbAssistSimEstimate>();
 }
 
-void AssistSimEstimate::resetSession() {
+void EbAssistSimEstimate::resetSession() {
     this->m_prev = 0;
     this->m_caused = 0;
     this->m_neutral = 0;
@@ -16,7 +16,7 @@ void AssistSimEstimate::resetSession() {
     this->m_evalArms = 0;
 }
 
-char const* AssistSimEstimate::netClassId(NetClass candidate) {
+char const* EbAssistSimEstimate::netClassId(NetClass candidate) {
     switch (candidate) {
     case NetClass::Neutral:
         return "neutral";
@@ -30,7 +30,7 @@ char const* AssistSimEstimate::netClassId(NetClass candidate) {
     return "neutral";
 }
 
-AssistSimEstimate::NetClass AssistSimEstimate::classifyArm(bool d0SurvivedPrimary,
+EbAssistSimEstimate::NetClass EbAssistSimEstimate::classifyArm(bool d0SurvivedPrimary,
                                                            bool d0Inconclusive,
                                                            bool delaySurvivedPrimary,
                                                            bool delayInconclusive,
@@ -47,8 +47,8 @@ AssistSimEstimate::NetClass AssistSimEstimate::classifyArm(bool d0SurvivedPrimar
     return NetClass::Caused;
 }
 
-AssistSimEstimate::NetClass
-AssistSimEstimate::classifyFromSamples(std::vector<SampleView> const& samples, int plannedDelay) {
+EbAssistSimEstimate::NetClass
+EbAssistSimEstimate::classifyFromSamples(std::vector<SampleView> const& samples, int plannedDelay) {
     if (plannedDelay <= 0)
         return NetClass::Neutral;
     SampleView const* d0 = nullptr;
@@ -66,7 +66,7 @@ AssistSimEstimate::classifyFromSamples(std::vector<SampleView> const& samples, i
     return NetClass::Inconclusive;
 }
 
-void AssistSimEstimate::noteEval(NetClass candidate, bool claimsAllowed) {
+void EbAssistSimEstimate::noteEval(NetClass candidate, bool claimsAllowed) {
     if (!claimsAllowed) {
         ++this->m_inconclusive;
         return;
@@ -88,19 +88,19 @@ void AssistSimEstimate::noteEval(NetClass candidate, bool claimsAllowed) {
     }
 }
 
-float AssistSimEstimate::harmRateSim() const {
+float EbAssistSimEstimate::harmRateSim() const {
     int const delay = std::max(1, this->m_evalArms);
     return static_cast<float>(this->m_caused) / static_cast<float>(delay);
 }
 
-std::string AssistSimEstimate::reportLine() const {
+std::string EbAssistSimEstimate::reportLine() const {
     return fmt::format("simEstimate Prev={} Caused={} Net={} HarmRate_sim={:.4f} "
                        "evalArms={} neutral={} inconclusive={} (G10 diagnostic only)",
                        this->m_prev, this->m_caused, this->net(), this->harmRateSim(),
                        this->m_evalArms, this->m_neutral, this->m_inconclusive);
 }
 
-std::string AssistSimEstimate::overlayBit() const {
+std::string EbAssistSimEstimate::overlayBit() const {
     if (!(this->m_evalArms <= 0 && this->m_inconclusive <= 0)) {
         return fmt::format("simEst net=+{}/-{} harm={:.0f}%", this->m_prev, this->m_caused,
                            this->harmRateSim() * 100.f);
@@ -108,7 +108,7 @@ std::string AssistSimEstimate::overlayBit() const {
     return {};
 }
 
-bool AssistSimEstimate::selfCheck(std::string& report) {
+bool EbAssistSimEstimate::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -132,7 +132,7 @@ bool AssistSimEstimate::selfCheck(std::string& report) {
     expect(classifyFromSamples(samples, 5) == NetClass::Inconclusive, "from-inc");
     expect(classifyFromSamples(samples, 9) == NetClass::Inconclusive, "miss");
 
-    AssistSimEstimate& m = AssistSimEstimate::get();
+    EbAssistSimEstimate& m = EbAssistSimEstimate::get();
     m.resetSession();
     m.noteEval(NetClass::Prev, true);
     m.noteEval(NetClass::Prev, true);

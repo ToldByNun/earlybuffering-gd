@@ -3,28 +3,28 @@
 #include <Geode/Geode.hpp>
 #include <fmt/format.h>
 
-char const* AssistLog::modTag() {
+char const* EbAssistLog::modTag() {
     return "EarlyBuffer";
 }
 
-double AssistLog::ticksToFrames60(int ticks, double physicsTps) {
+double EbAssistLog::ticksToFrames60(int ticks, double physicsTps) {
     if (physicsTps <= 0.0)
         physicsTps = 240.0;
     return static_cast<double>(ticks) * (60.0 / physicsTps);
 }
 
-void AssistLog::info(std::string const& message) {
+void EbAssistLog::info(std::string const& message) {
     geode::log::info("[{}] {}", modTag(), message);
 }
 
-void AssistLog::debug(std::string const& message) {
-    if (!StageConfig::debugLogging())
+void EbAssistLog::debug(std::string const& message) {
+    if (!EbStageConfig::debugLogging())
         return;
     geode::log::info("[{}] {}", modTag(), message);
 }
 
-void AssistLog::printBanner() {
-    auto const stage = StageConfig::fromSettings();
+void EbAssistLog::printBanner() {
+    auto const stage = EbStageConfig::fromSettings();
     auto const version = geode::prelude::Mod::get()->getVersion().toVString();
     geode::log::info("======================");
     geode::log::info("[{}] {} LOADED", modTag(), version);
@@ -32,15 +32,15 @@ void AssistLog::printBanner() {
         geode::log::info("[{}] Starting Mode: OFF", modTag());
     } else {
         geode::log::info("[{}] Starting windows: {} ALL / {} Wave (slack {})", modTag(),
-                         stage.ticksAll, stage.ticksWave, StageConfig::deathSlack());
+                         stage.ticksAll, stage.ticksWave, EbStageConfig::deathSlack());
     }
     geode::log::info(
         "[{}] Ctrl+Shift+M: modes  |  Ctrl+Shift+T: trajectory  |  Ctrl+Shift+L: learning",
         modTag());
     geode::log::info("[{}] Assist mode: {} ({})", modTag(),
-                     StageConfig::assistModeName(StageConfig::assistMode()),
-                     StageConfig::assistModeHint(StageConfig::assistMode()));
-    if (StageConfig::debugLogging()) {
+                     EbStageConfig::assistModeName(EbStageConfig::assistMode()),
+                     EbStageConfig::assistModeHint(EbStageConfig::assistMode()));
+    if (EbStageConfig::debugLogging()) {
         geode::log::info("[{}] Trigger-world manual edge matrix:", modTag());
         geode::log::info("[{}]   1) static move corridor — bake ready → Include, pose follows keys",
                          modTag());
@@ -61,9 +61,9 @@ void AssistLog::printBanner() {
     geode::log::info("======================");
 }
 
-void AssistLog::printSavedPress(int delayedTicks, int frame0, int delayedFrame, int limit,
+void EbAssistLog::printSavedPress(int delayedTicks, int frame0, int delayedFrame, int limit,
                                 double physicsTps) {
-    if (!StageConfig::debugLogging())
+    if (!EbStageConfig::debugLogging())
         return;
     auto const frames60 = ticksToFrames60(delayedTicks, physicsTps);
     geode::log::info("[{}] *** SAVED +{} TICKS ({:.2f} frames @ 60fps) PRESS! (Frame0: {} -> "

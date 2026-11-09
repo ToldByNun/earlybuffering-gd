@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-bool DevTraceValidation::validatePressChain(std::vector<DevDecisionEvent> const& events,
+bool EbDevTraceValidation::validatePressChain(std::vector<EbDevDecisionEvent> const& events,
                                             int64_t pressId, std::string& err) {
     err.clear();
     if (pressId <= 0) {
@@ -19,7 +19,7 @@ bool DevTraceValidation::validatePressChain(std::vector<DevDecisionEvent> const&
         return false;
     }
 
-    std::vector<DevDecisionEvent const*> chain;
+    std::vector<EbDevDecisionEvent const*> chain;
     chain.reserve(events.size());
     for (auto const& e : events) {
         if (e.pressId == pressId) {
@@ -39,10 +39,10 @@ bool DevTraceValidation::validatePressChain(std::vector<DevDecisionEvent> const&
         }
     }
 
-    std::unordered_map<int64_t, DevDecisionEvent const*> byId;
+    std::unordered_map<int64_t, EbDevDecisionEvent const*> byId;
     byId.reserve(chain.size());
 
-    DevDecisionEvent const* press = nullptr;
+    EbDevDecisionEvent const* press = nullptr;
     for (auto const* entry : chain) {
         if (entry->eventId <= 0) {
             err = "eventId<=0";
@@ -191,9 +191,9 @@ bool DevTraceValidation::validatePressChain(std::vector<DevDecisionEvent> const&
     return true;
 }
 
-DevDecisionEvent DevTraceValidation::makeEv(DevEventKind kind, int64_t eventId, int64_t attemptId,
+EbDevDecisionEvent EbDevTraceValidation::makeEv(DevEventKind kind, int64_t eventId, int64_t attemptId,
                                             int64_t pressId, int64_t parent, int64_t planId) {
-    DevDecisionEvent e;
+    EbDevDecisionEvent e;
     e.kind = kind;
     e.eventId = eventId;
     e.attemptId = attemptId;
@@ -206,7 +206,7 @@ DevDecisionEvent DevTraceValidation::makeEv(DevEventKind kind, int64_t eventId, 
     return e;
 }
 
-bool DevTraceValidation::selfCheck(std::string& report) {
+bool EbDevTraceValidation::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -216,54 +216,54 @@ bool DevTraceValidation::selfCheck(std::string& report) {
         }
     };
 
-    expect(std::strcmp(DevTraceStore::kindId(DevEventKind::PressObserved), "pressObserved") == 0,
+    expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::PressObserved), "pressObserved") == 0,
            "kind-press");
-    expect(std::strcmp(DevTraceStore::kindId(DevEventKind::Outcome), "outcome") == 0,
+    expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::Outcome), "outcome") == 0,
            "kind-outcome");
     DevEventKind offset = DevEventKind::PressObserved;
-    expect(DevTraceStore::parseKind("delayArm", offset) && offset == DevEventKind::DelayArm,
+    expect(EbDevTraceStore::parseKind("delayArm", offset) && offset == DevEventKind::DelayArm,
            "parse-delayArm");
-    expect(!DevTraceStore::parseKind("nope", offset), "parse-kind-fail");
+    expect(!EbDevTraceStore::parseKind("nope", offset), "parse-kind-fail");
 
     // Valid Delay chain: press → plan → arm → fire → outcome
-    std::vector<DevDecisionEvent> good;
+    std::vector<EbDevDecisionEvent> good;
     good.push_back(
-        DevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 1, 1, 10, 0, 0));
+        EbDevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 1, 1, 10, 0, 0));
     good.push_back(
-        DevTraceStoreImplementation::makeEv(DevEventKind::PlanFinished, 2, 1, 10, 1, 42));
-    good.push_back(DevTraceStoreImplementation::makeEv(DevEventKind::DelayArm, 3, 1, 10, 2, 42));
-    good.push_back(DevTraceStoreImplementation::makeEv(DevEventKind::Fire, 4, 1, 10, 3, 42));
-    good.push_back(DevTraceStoreImplementation::makeEv(DevEventKind::Outcome, 5, 1, 10, 4, 42));
+        EbDevTraceStoreImplementation::makeEv(DevEventKind::PlanFinished, 2, 1, 10, 1, 42));
+    good.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::DelayArm, 3, 1, 10, 2, 42));
+    good.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::Fire, 4, 1, 10, 3, 42));
+    good.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::Outcome, 5, 1, 10, 4, 42));
     std::string err;
-    expect(DevTraceStore::validatePressChain(good, 10, err), "chain-good");
+    expect(EbDevTraceStore::validatePressChain(good, 10, err), "chain-good");
 
     // Missing parentEventId on fire
     auto badParent = good;
     badParent[3].parentEventId = 0;
-    expect(!DevTraceStore::validatePressChain(badParent, 10, err), "chain-missing-parent");
+    expect(!EbDevTraceStore::validatePressChain(badParent, 10, err), "chain-missing-parent");
     expect(err == "missing-parentEventId", "chain-missing-parent-msg");
 
     // Parent not in chain
     auto badRef = good;
     badRef[3].parentEventId = 99;
-    expect(!DevTraceStore::validatePressChain(badRef, 10, err), "chain-parent-missing");
+    expect(!EbDevTraceStore::validatePressChain(badRef, 10, err), "chain-parent-missing");
     expect(err == "parent-not-in-chain", "chain-parent-missing-msg");
 
     // Gate cycle: press → gatePass → outcome
-    std::vector<DevDecisionEvent> gate;
-    gate.push_back(DevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 1, 1, 7, 0, 0));
-    gate.push_back(DevTraceStoreImplementation::makeEv(DevEventKind::GatePass, 2, 1, 7, 1, 0));
-    gate.push_back(DevTraceStoreImplementation::makeEv(DevEventKind::Outcome, 3, 1, 7, 2, 0));
-    expect(DevTraceStore::validatePressChain(gate, 7, err), "chain-gate");
+    std::vector<EbDevDecisionEvent> gate;
+    gate.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 1, 1, 7, 0, 0));
+    gate.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::GatePass, 2, 1, 7, 1, 0));
+    gate.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::Outcome, 3, 1, 7, 2, 0));
+    expect(EbDevTraceStore::validatePressChain(gate, 7, err), "chain-gate");
 
     // JSON roundtrip preserves IDs
-    DevSessionFile sess;
-    sess.traceSchema = DevTraceStore::kTraceSchema;
+    EbDevSessionFile sess;
+    sess.traceSchema = EbDevTraceStore::kTraceSchema;
     sess.modVersion = "v1.3.2-test";
     sess.sessionId = "selfcheck";
     sess.recordingsTarget = 10;
     sess.recordingsDone = 1;
-    DevAttempt att;
+    EbDevAttempt att;
     att.attemptId = 1;
     att.startTick = 0;
     att.endReason = "death";
@@ -271,26 +271,26 @@ bool DevTraceValidation::selfCheck(std::string& report) {
     att.events = good;
     sess.attempts.push_back(att);
 
-    auto body = DevTraceStore::sessionToJsonString(sess);
+    auto body = EbDevTraceStore::sessionToJsonString(sess);
     expect(!body.empty(), "json-nonempty");
-    DevSessionFile back;
+    EbDevSessionFile back;
     std::string jerr;
-    expect(DevTraceStore::sessionFromJsonString(body, back, jerr), "json-parse-ok");
-    expect(back.traceSchema == DevTraceStore::kTraceSchema, "json-schema");
+    expect(EbDevTraceStore::sessionFromJsonString(body, back, jerr), "json-parse-ok");
+    expect(back.traceSchema == EbDevTraceStore::kTraceSchema, "json-schema");
     expect(back.sessionId == "selfcheck", "json-sessionId");
     expect(back.attempts.size() == 1, "json-attempts");
     expect(back.attempts[0].events.size() == 5, "json-events");
     expect(back.attempts[0].events[0].pressId == 10, "json-pressId");
     expect(back.attempts[0].events[1].planId == 42, "json-planId");
     expect(back.attempts[0].events[3].parentEventId == 3, "json-parent");
-    expect(DevTraceStore::validatePressChain(back.attempts[0].events, 10, err), "json-chain");
+    expect(EbDevTraceStore::validatePressChain(back.attempts[0].events, 10, err), "json-chain");
 
     // Store API: begin/append/seal/flush (disk) when Mod is available.
     // Constrained devices (Android/iOS) skip disk gold — PlatformLimits::allowLoadDiskSelfCheck.
-    if (PlatformLimits::get().allowLoadDiskSelfCheck()) {
-        auto& store = DevTraceStore::get();
+    if (EbPlatformLimits::get().allowLoadDiskSelfCheck()) {
+        auto& store = EbDevTraceStore::get();
         bool const wasOpen = store.isOpen();
-        DevSessionFile saved = store.session();
+        EbDevSessionFile saved = store.session();
         expect(store.beginSession("selfcheck-api", 3), "store-begin");
         store.setModVersion("v1.3.2-test");
         store.setLevelMeta("lvl", "Level", false, true, "fp");
@@ -298,12 +298,12 @@ bool DevTraceValidation::selfCheck(std::string& report) {
         int64_t const pid = store.allocPressId();
         expect(pid > 0, "store-pressId");
 
-        DevDecisionEvent e1 =
-            DevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 0, 0, pid, 0, 0);
+        EbDevDecisionEvent e1 =
+            EbDevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 0, 0, pid, 0, 0);
         e1.pressTick = 100;
         expect(store.appendEvent(e1) != nullptr, "store-append-press");
         auto* pPlan = store.appendEvent(
-            DevTraceStoreImplementation::makeEv(DevEventKind::PlanFinished, 0, 0, pid, 0, 9));
+            EbDevTraceStoreImplementation::makeEv(DevEventKind::PlanFinished, 0, 0, pid, 0, 9));
         expect(pPlan != nullptr, "store-append-plan");
         // Fix parent to press eventId after auto-assign.
         auto* cur = store.currentAttempt();
@@ -311,16 +311,16 @@ bool DevTraceValidation::selfCheck(std::string& report) {
         if (cur && cur->events.size() >= 2) {
             cur->events[1].parentEventId = cur->events[0].eventId;
             cur->events[1].planId = 9;
-            auto* arm = store.appendEvent(DevTraceStoreImplementation::makeEv(
+            auto* arm = store.appendEvent(EbDevTraceStoreImplementation::makeEv(
                 DevEventKind::DelayArm, 0, 0, pid, cur->events[1].eventId, 9));
             expect(arm != nullptr, "store-append-arm");
-            auto* fire = store.appendEvent(DevTraceStoreImplementation::makeEv(
+            auto* fire = store.appendEvent(EbDevTraceStoreImplementation::makeEv(
                 DevEventKind::Fire, 0, 0, pid, arm->eventId, 9));
             expect(fire != nullptr, "store-append-fire");
-            auto* output = store.appendEvent(DevTraceStoreImplementation::makeEv(
+            auto* output = store.appendEvent(EbDevTraceStoreImplementation::makeEv(
                 DevEventKind::Outcome, 0, 0, pid, fire->eventId, 9));
             expect(output != nullptr, "store-append-outcome");
-            expect(DevTraceStore::validatePressChain(cur->events, pid, err), "store-chain");
+            expect(EbDevTraceStore::validatePressChain(cur->events, pid, err), "store-chain");
         }
         expect(store.sealAttempt("death", true), "store-seal");
         expect(store.session().recordingsDone == 1, "store-count");
@@ -332,11 +332,11 @@ bool DevTraceValidation::selfCheck(std::string& report) {
         expect(static_cast<bool>(in), "store-file-open");
         std::string diskBody((std::istreambuf_iterator<char>(in)),
                              std::istreambuf_iterator<char>());
-        DevSessionFile diskSess;
-        expect(DevTraceStore::sessionFromJsonString(diskBody, diskSess, jerr), "store-disk-parse");
+        EbDevSessionFile diskSess;
+        expect(EbDevTraceStore::sessionFromJsonString(diskBody, diskSess, jerr), "store-disk-parse");
         expect(diskSess.attempts.size() == 1, "store-disk-attempt");
         if (!diskSess.attempts.empty()) {
-            expect(DevTraceStore::validatePressChain(diskSess.attempts[0].events, pid, err),
+            expect(EbDevTraceStore::validatePressChain(diskSess.attempts[0].events, pid, err),
                    "store-disk-chain");
         }
 

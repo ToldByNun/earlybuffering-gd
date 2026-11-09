@@ -3,12 +3,12 @@
 
 #include <string>
 
-class DevRejectChecks {
+class EbDevRejectChecks {
 public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevRejectChecks() = delete;
+    EbDevRejectChecks() = delete;
 };
 
 #endif

@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-class DecisionEntry {
+class EbDecisionEntry {
 public:
     int tick = 0; // effect / decision tick
     float x = 0.f;
@@ -23,36 +23,36 @@ public:
     bool resolved = false; // survival / pessimism already applied
     bool assisted = false; // Delay was chosen (or would have been)
 
-    std::vector<InputEvent> timeline; // absolute ticks from decision onward
+    std::vector<EbInputEvent> timeline; // absolute ticks from decision onward
 
 private:
 };
 
-class DecisionLog {
+class EbDecisionLog {
 public:
-    static constexpr int CAPACITY = ShadowSimulator::SNAPSHOT_SLOTS;
+    static constexpr int CAPACITY = EbShadowSimulator::SNAPSHOT_SLOTS;
 
     void clear();
-    DecisionEntry& push(DecisionEntry entry);
-    DecisionEntry* latest();
-    DecisionEntry const* latest() const;
+    EbDecisionEntry& push(EbDecisionEntry entry);
+    EbDecisionEntry* latest();
+    EbDecisionEntry const* latest() const;
 
     // Append an input to the latest open decision's timeline (and any still open).
     void noteInput(int tick, bool down);
 
     // Iterate mutable entries (newest last).
-    std::vector<DecisionEntry>& entries() {
+    std::vector<EbDecisionEntry>& entries() {
         return m_entries;
     }
-    std::vector<DecisionEntry> const& entries() const {
+    std::vector<EbDecisionEntry> const& entries() const {
         return m_entries;
     }
 
     // Most recent unresolved decision whose window still covers `tick`.
-    DecisionEntry* findForDeath(int tick);
+    EbDecisionEntry* findForDeath(int tick);
 
 private:
-    std::vector<DecisionEntry> m_entries;
+    std::vector<EbDecisionEntry> m_entries;
 };
 
 #endif

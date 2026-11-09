@@ -6,7 +6,7 @@
 
 // Commit 15 — minimal real-corpus traces for PlanGold (no live PlayLayer).
 // GRIEF + bakefail/tg2 pose crumbs so horizon / death contracts stay pinned.
-class RealCorpusFixtures {
+class EbRealCorpusFixtures {
 public:
     class Pose {
     public:
@@ -53,7 +53,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    RealCorpusFixtures() = delete;
+    EbRealCorpusFixtures() = delete;
 };
 
 #include "../assist/planning/assist_horizon.hpp"
@@ -61,15 +61,15 @@ private:
 #include <algorithm>
 #include <fmt/format.h>
 
-class RealCorpusFixturesImplementation {
+class EbRealCorpusFixturesImplementation {
 public:
 private:
-    friend class RealCorpusFixtures;
+    friend class EbRealCorpusFixtures;
 
-    static RealCorpusFixtures::Pose const kTg2Poses[];
-    static RealCorpusFixtures::Pose const kGriefPoses[];
+    static EbRealCorpusFixtures::Pose const kTg2Poses[];
+    static EbRealCorpusFixtures::Pose const kGriefPoses[];
 
-    RealCorpusFixturesImplementation() = delete;
+    EbRealCorpusFixturesImplementation() = delete;
 };
 
 #endif

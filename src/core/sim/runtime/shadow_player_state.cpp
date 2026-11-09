@@ -1,7 +1,7 @@
 #include "shadow_player_state.hpp"
 #include "../shadow_simulator.hpp"
 
-void ShadowPlayerState::copyWaveTrail(ShadowSimulator& simulator, PlayerObject* destination,
+void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObject* destination,
                                       PlayerObject* source) {
     auto* delay = destination->m_waveTrail;
     auto* state = source->m_waveTrail;
@@ -23,7 +23,7 @@ void ShadowPlayerState::copyWaveTrail(ShadowSimulator& simulator, PlayerObject* 
     }
 }
 
-void ShadowPlayerState::clearCollisionLogs(PlayerObject* state) {
+void EbShadowPlayerState::clearCollisionLogs(PlayerObject* state) {
     state->m_collisionLogTop->removeAllObjects();
     state->m_collisionLogBottom->removeAllObjects();
     state->m_collisionLogLeft->removeAllObjects();
@@ -34,7 +34,7 @@ void ShadowPlayerState::clearCollisionLogs(PlayerObject* state) {
     state->m_lastCollisionRight = -1;
 }
 
-void ShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObject* source) {
+void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObject* source) {
     if (!destination || !source)
         return;
 
@@ -43,7 +43,7 @@ void ShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObject*
     destination->setRotation(source->getRotation());
     destination->setScaleX(source->getScaleX());
     destination->setScaleY(source->getScaleY());
-    ShadowSimulator::hideGhost(destination);
+    EbShadowSimulator::hideGhost(destination);
 
     destination->m_position = source->m_position;
     destination->m_yVelocity = source->m_yVelocity;
@@ -224,11 +224,11 @@ void ShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObject*
         }
     }
 
-    ShadowSimulator::clearCollisionLogs(destination);
+    EbShadowSimulator::clearCollisionLogs(destination);
 
     if (source->m_isDart) {
         // local helper via instance method — static caller uses get()
-        ShadowSimulator::get().copyWaveTrail(destination, source);
+        EbShadowSimulator::get().copyWaveTrail(destination, source);
     }
 
     // Ghost is created as icon cube (create 1,1). Mode flags alone leave a
@@ -303,11 +303,11 @@ void ShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObject*
     destination->m_hasEverHitRing = source->m_hasEverHitRing;
     destination->m_holdingButtons = source->m_holdingButtons;
 
-    ShadowSimulator::hideGhost(destination);
-    ShadowSimulator::clearCollisionLogs(destination);
+    EbShadowSimulator::hideGhost(destination);
+    EbShadowSimulator::clearCollisionLogs(destination);
 }
 
-size_t ShadowPlayerState::diagCaptureTransformCount(ShadowSimulator& simulator, PlayLayer* layer) {
+size_t EbShadowPlayerState::diagCaptureTransformCount(EbShadowSimulator& simulator, PlayLayer* layer) {
     if (!layer)
         return 0;
     simulator.beginCapture(layer);
@@ -316,43 +316,43 @@ size_t ShadowPlayerState::diagCaptureTransformCount(ShadowSimulator& simulator, 
     return count;
 }
 
-int ShadowPlayerState::captureStartSnapshot(ShadowSimulator& simulator, PlayerObject* real) {
-    if (!real || !simulator.m_snapshots[ShadowSimulator::START_SNAPSHOT_SLOT])
+int EbShadowPlayerState::captureStartSnapshot(EbShadowSimulator& simulator, PlayerObject* real) {
+    if (!real || !simulator.m_snapshots[EbShadowSimulator::START_SNAPSHOT_SLOT])
         return -1;
-    simulator.copyPlayerState(simulator.m_snapshots[ShadowSimulator::START_SNAPSHOT_SLOT], real);
-    return ShadowSimulator::START_SNAPSHOT_SLOT;
+    simulator.copyPlayerState(simulator.m_snapshots[EbShadowSimulator::START_SNAPSHOT_SLOT], real);
+    return EbShadowSimulator::START_SNAPSHOT_SLOT;
 }
 
-int ShadowPlayerState::captureSnapshot(ShadowSimulator& simulator, PlayerObject* real) {
+int EbShadowPlayerState::captureSnapshot(EbShadowSimulator& simulator, PlayerObject* real) {
     if (!real || !simulator.m_snapshots[0])
         return -1;
     // Never clobber attempt-start (bake) or parity anchors (14–15).
-    if (simulator.m_nextSnapshot <= ShadowSimulator::START_SNAPSHOT_SLOT ||
-        simulator.m_nextSnapshot >= ShadowSimulator::SNAPSHOT_RING_END) {
-        simulator.m_nextSnapshot = ShadowSimulator::SNAPSHOT_RING_BEGIN;
+    if (simulator.m_nextSnapshot <= EbShadowSimulator::START_SNAPSHOT_SLOT ||
+        simulator.m_nextSnapshot >= EbShadowSimulator::SNAPSHOT_RING_END) {
+        simulator.m_nextSnapshot = EbShadowSimulator::SNAPSHOT_RING_BEGIN;
     }
     int const slot = simulator.m_nextSnapshot;
     ++simulator.m_nextSnapshot;
-    if (simulator.m_nextSnapshot >= ShadowSimulator::SNAPSHOT_RING_END) {
-        simulator.m_nextSnapshot = ShadowSimulator::SNAPSHOT_RING_BEGIN;
+    if (simulator.m_nextSnapshot >= EbShadowSimulator::SNAPSHOT_RING_END) {
+        simulator.m_nextSnapshot = EbShadowSimulator::SNAPSHOT_RING_BEGIN;
     }
     simulator.copyPlayerState(simulator.m_snapshots[slot], real);
     return slot;
 }
 
-int ShadowPlayerState::captureParitySnapshot(ShadowSimulator& simulator, PlayerObject* real,
+int EbShadowPlayerState::captureParitySnapshot(EbShadowSimulator& simulator, PlayerObject* real,
                                              int which) {
     if (!real || !simulator.m_snapshots[0])
         return -1;
-    int const slot = (which & 1) ? ShadowSimulator::PARITY_SLOT_B : ShadowSimulator::PARITY_SLOT_A;
+    int const slot = (which & 1) ? EbShadowSimulator::PARITY_SLOT_B : EbShadowSimulator::PARITY_SLOT_A;
     if (!simulator.m_snapshots[slot])
         return -1;
     simulator.copyPlayerState(simulator.m_snapshots[slot], real);
     return slot;
 }
 
-PlayerObject* ShadowPlayerState::snapshotSlot(ShadowSimulator const& simulator, int slot) {
-    if (!(slot < 0 || slot >= ShadowSimulator::SNAPSHOT_SLOTS)) {
+PlayerObject* EbShadowPlayerState::snapshotSlot(EbShadowSimulator const& simulator, int slot) {
+    if (!(slot < 0 || slot >= EbShadowSimulator::SNAPSHOT_SLOTS)) {
         return simulator.m_snapshots[slot];
     }
     return nullptr;

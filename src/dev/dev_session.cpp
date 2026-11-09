@@ -1,3 +1,4 @@
+#include "../app/class_manager.hpp"
 #include "dev_session.hpp"
 #include "../core/assist/assist_controller.hpp"
 #include "../core/learning/level_profile.hpp"
@@ -9,13 +10,12 @@
 #include <cstring>
 #include <fmt/format.h>
 
-DevSession& DevSession::get() {
-    static DevSession inst;
-    return inst;
+EbDevSession& EbDevSession::get() {
+    return EbClassManager::get().service<EbDevSession>();
 }
 
-void DevSession::refreshLevelMeta() {
-    auto& store = DevTraceStore::get();
+void EbDevSession::refreshLevelMeta() {
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen())
         return;
 
@@ -25,59 +25,59 @@ void DevSession::refreshLevelMeta() {
     bool startPos = false;
     bool practice = false;
     if (layer && layer->m_level) {
-        key = LevelProfile::makeKey(layer->m_level);
+        key = EbLevelProfile::makeKey(layer->m_level);
         name = std::string(layer->m_level->m_levelName);
         startPos = layer->m_isTestMode;
         practice = layer->m_isPracticeMode;
     }
     store.setLevelMeta(std::move(key), std::move(name), startPos, practice,
-                       DevTraceStore::makeSettingsFingerprint());
+                       EbDevTraceStore::makeSettingsFingerprint());
 }
 
-bool DevSession::start() {
-    if (!DevConfig::recordEnable()) {
-        AssistLog::info("Dev Lab: record enable off — cannot start session");
+bool EbDevSession::start() {
+    if (!EbDevConfig::recordEnable()) {
+        EbAssistLog::info("Dev Lab: record enable off — cannot start session");
         return false;
     }
-    if (this->m_state == State::Recording && DevTraceStore::get().isOpen()) {
-        AssistLog::info("Dev Lab: session already recording");
+    if (this->m_state == State::Recording && EbDevTraceStore::get().isOpen()) {
+        EbAssistLog::info("Dev Lab: session already recording");
         return true;
     }
 
-    auto& store = DevTraceStore::get();
-    int const window = DevConfig::recordCount();
+    auto& store = EbDevTraceStore::get();
+    int const window = EbDevConfig::recordCount();
     if (!store.beginSession("", window)) {
         this->m_state = State::Idle;
-        AssistLog::info("Dev Lab: beginSession failed");
+        EbAssistLog::info("Dev Lab: beginSession failed");
         return false;
     }
 
     this->refreshLevelMeta();
 
-    int const tick = AssistController::get().attemptTick();
+    int const tick = EbAssistController::get().attemptTick();
     if (!store.beginAttempt(tick)) {
         store.closeSession();
         this->m_state = State::Idle;
-        AssistLog::info("Dev Lab: beginAttempt failed");
+        EbAssistLog::info("Dev Lab: beginAttempt failed");
         return false;
     }
 
-    DevCycleRecorder::get().clearActive();
+    EbDevCycleRecorder::get().clearActive();
     this->m_state = State::Recording;
-    AssistLog::info(fmt::format("Dev Lab: recording session {} (rolling last {})",
+    EbAssistLog::info(fmt::format("Dev Lab: recording session {} (rolling last {})",
                                 store.session().sessionId, window));
     return true;
 }
 
-void DevSession::stop() {
-    auto& store = DevTraceStore::get();
+void EbDevSession::stop() {
+    auto& store = EbDevTraceStore::get();
     if (this->m_state != State::Recording && !store.isOpen()) {
         this->m_state = State::Idle;
         return;
     }
 
     if (store.hasOpenAttempt()) {
-        (void)DevCycleRecorder::get().sealAttemptWithOutcomes("manual", false);
+        (void)EbDevCycleRecorder::get().sealAttemptWithOutcomes("manual", false);
         if (store.hasOpenAttempt()) {
             (void)store.sealAttempt("manual", false);
         }
@@ -87,17 +87,17 @@ void DevSession::stop() {
 
     auto const path = store.sessionPath();
     store.closeSession();
-    DevCycleRecorder::get().clearActive();
+    EbDevCycleRecorder::get().clearActive();
     this->m_state = State::Idle;
-    AssistLog::info(fmt::format("Dev Lab: session stopped → {}", path.string()));
+    EbAssistLog::info(fmt::format("Dev Lab: session stopped → {}", path.string()));
 }
 
-std::string DevSession::statusLine() const {
-    if (this->m_state != State::Recording || !DevTraceStore::get().isOpen()) {
+std::string EbDevSession::statusLine() const {
+    if (this->m_state != State::Recording || !EbDevTraceStore::get().isOpen()) {
         return "Dev idle";
     }
-    auto const& s = DevTraceStore::get().session();
-    int const count = s.recordingsTarget > 0 ? s.recordingsTarget : DevConfig::recordCount();
+    auto const& s = EbDevTraceStore::get().session();
+    int const count = s.recordingsTarget > 0 ? s.recordingsTarget : EbDevConfig::recordCount();
     int const offset = s.recordingsDone;
     if (offset >= count) {
         return fmt::format("REC {}/{} rolling", count, count);
@@ -105,19 +105,19 @@ std::string DevSession::statusLine() const {
     return fmt::format("REC {}/{}", offset, count);
 }
 
-std::filesystem::path DevSession::sessionPath() const {
-    if (!(!DevTraceStore::get().isOpen())) {
-        return DevTraceStore::get().sessionPath();
+std::filesystem::path EbDevSession::sessionPath() const {
+    if (!(!EbDevTraceStore::get().isOpen())) {
+        return EbDevTraceStore::get().sessionPath();
     }
     return {};
 }
 
-int DevSession::clearTraces() {
-    if (this->m_state == State::Recording || DevTraceStore::get().isOpen()) {
+int EbDevSession::clearTraces() {
+    if (this->m_state == State::Recording || EbDevTraceStore::get().isOpen()) {
         this->stop();
     }
 
-    auto const directory = DevTraceStore::get().tracesDir();
+    auto const directory = EbDevTraceStore::get().tracesDir();
     if (directory.empty() || !std::filesystem::exists(directory))
         return 0;
 
@@ -141,12 +141,12 @@ int DevSession::clearTraces() {
             ++removed;
         ec.clear();
     }
-    AssistLog::info(
+    EbAssistLog::info(
         fmt::format("Dev Lab: cleared {} trace file(s) under {}", removed, directory.string()));
     return removed;
 }
 
-bool DevSession::selfCheck(std::string& report) {
+bool EbDevSession::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -158,8 +158,8 @@ bool DevSession::selfCheck(std::string& report) {
         report += name;
     };
 
-    auto& sess = DevSession::get();
-    auto& store = DevTraceStore::get();
+    auto& sess = EbDevSession::get();
+    auto& store = EbDevTraceStore::get();
 
     // Ensure idle start.
     if (store.isOpen())
@@ -171,7 +171,7 @@ bool DevSession::selfCheck(std::string& report) {
         expect(store.beginSession("session-roll-selfcheck", 2), "roll-begin");
         for (int index = 0; index < 4; ++index) {
             expect(store.beginAttempt(index * 10), "roll-attempt");
-            DevDecisionEvent ev;
+            EbDevDecisionEvent ev;
             ev.pressId = store.allocPressId();
             ev.kind = DevEventKind::PressObserved;
             ev.down = true;

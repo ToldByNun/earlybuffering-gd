@@ -8,7 +8,7 @@
 #include <string>
 #include <unordered_map>
 
-class SpotStats {
+class EbSpotStats {
 public:
     static constexpr int HIST_RADIUS = 8;                 // bins cover [-8, +8]
     static constexpr int HIST_BINS = HIST_RADIUS * 2 + 1; // 17
@@ -27,22 +27,22 @@ public:
 private:
 };
 
-class ModeLearn {
+class EbModeLearn {
 public:
     float capMul = 1.f;                       // [0.5, 2.0]
-    std::unordered_map<int, SpotStats> spots; // key = x-bucket
+    std::unordered_map<int, EbSpotStats> spots; // key = x-bucket
 
 private:
 };
 
 // Per-level learned assist tuning. Window (ticks) is NEVER touched.
-class LevelProfile {
+class EbLevelProfile {
 public:
     static constexpr float SPOT_SIZE = 90.f; // ~3 blocks
     static constexpr float TRUST_PASS_THRESHOLD = 0.35f;
     static constexpr int TRUST_PASS_MIN_N = 4;
 
-    static LevelProfile& get();
+    static EbLevelProfile& get();
 
     void loadForLevel(GJGameLevel* level);
     void save();
@@ -60,8 +60,8 @@ public:
     static int spotBucket(float x);
     static std::string makeKey(GJGameLevel* level);
 
-    SpotStats& spot(GameModeKind kind, float x);
-    SpotStats const* trySpot(GameModeKind kind, float x) const;
+    EbSpotStats& spot(GameModeKind kind, float x);
+    EbSpotStats const* trySpot(GameModeKind kind, float x) const;
     float capMul(GameModeKind kind) const;
     void setCapMul(GameModeKind kind, float multiplier);
 
@@ -85,13 +85,15 @@ public:
     }
 
     // Overlay helpers
-    SpotStats overlaySpot(GameModeKind kind, float x) const;
+    EbSpotStats overlaySpot(GameModeKind kind, float x) const;
 
 private:
-    LevelProfile() = default;
+    friend class EbServiceStore;
 
-    ModeLearn& mode(GameModeKind kind);
-    ModeLearn const* tryMode(GameModeKind kind) const;
+    EbLevelProfile() = default;
+
+    EbModeLearn& mode(GameModeKind kind);
+    EbModeLearn const* tryMode(GameModeKind kind) const;
     void recomputeCapMul(GameModeKind kind);
     geode::Result<> writeFile() const;
     geode::Result<> readFile();
@@ -100,21 +102,21 @@ private:
     bool m_loaded = false;
     bool m_dirty = false;
     int m_deathsSinceSave = 0;
-    ModeLearn m_modes[StageConfig::MODE_COUNT];
+    EbModeLearn m_modes[EbStageConfig::MODE_COUNT];
 };
 
 #include <Geode/utils/file.hpp>
 #include <algorithm>
 #include <fstream>
 
-class LevelProfileImplementation {
+class EbLevelProfileImplementation {
 public:
     static float clamp01f(float value, float lo, float hi);
     static std::filesystem::path levelsDir();
     static std::filesystem::path profilePath(std::string const& key);
 
 private:
-    LevelProfileImplementation() = delete;
+    EbLevelProfileImplementation() = delete;
 };
 
 #endif

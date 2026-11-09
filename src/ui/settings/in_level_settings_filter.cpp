@@ -17,7 +17,7 @@
 
 // Exhaustive key → tab table (mod.json order). Unknown keys → Count (no Assist dump).
 
-char const* InLevelSettingsFilter::categoryName(SettingsCategory category) {
+char const* EbInLevelSettingsFilter::categoryName(SettingsCategory category) {
     switch (category) {
     case SettingsCategory::Main:
         return "Main";
@@ -41,37 +41,37 @@ char const* InLevelSettingsFilter::categoryName(SettingsCategory category) {
     return "?";
 }
 
-SettingsCategory InLevelSettingsFilter::categoryForKey(std::string const& key) {
-    return SettingsCategoryMap::lookup(key);
+SettingsCategory EbInLevelSettingsFilter::categoryForKey(std::string const& key) {
+    return EbSettingsCategoryMap::lookup(key);
 }
 
-bool InLevelSettingsFilter::keepKey(std::string const& key, SettingsCategory category) {
+bool EbInLevelSettingsFilter::keepKey(std::string const& key, SettingsCategory category) {
     return categoryForKey(key) == category;
 }
 
-bool InLevelSettingsFilter::keepKey(std::string const& key) {
+bool EbInLevelSettingsFilter::keepKey(std::string const& key) {
     auto const candidate = categoryForKey(key);
     return candidate == SettingsCategory::Main || candidate == SettingsCategory::Scope ||
            candidate == SettingsCategory::Assist || candidate == SettingsCategory::Visual ||
            candidate == SettingsCategory::Bake;
 }
 
-float InLevelSettingsFilter::preservedContentY(float posBefore, float heightBefore,
+float EbInLevelSettingsFilter::preservedContentY(float posBefore, float heightBefore,
                                                float heightAfter) {
     return posBefore + (heightBefore - heightAfter);
 }
 
-class SettingsFilterKeeperNode;
+class EbSettingsFilterKeeperNode;
 
 // Text-only tab strip: selected = white, idle = grey. No chrome / fills.
 // Invisible CCMenu hit targets (opacity 1) — Geode ScrollLayer was eating bar touches.
 
-void InLevelSettingsFilter::apply(geode::prelude::CCNode* popup, SettingsCategory category) {
+void EbInLevelSettingsFilter::apply(geode::prelude::CCNode* popup, SettingsCategory category) {
     if (!popup)
         return;
     std::vector<geode::prelude::SettingNodeV3*> settings;
     geode::prelude::ScrollLayer* list = nullptr;
-    SettingsFilterWalk::collect(popup, settings, list);
+    EbSettingsFilterWalk::collect(popup, settings, list);
     if (!list || !list->m_contentLayer || settings.empty())
         return;
 
@@ -95,7 +95,7 @@ void InLevelSettingsFilter::apply(geode::prelude::CCNode* popup, SettingsCategor
     content->setPositionY(preservedContentY(yBefore, hBefore, content->getContentHeight()));
 }
 
-bool InLevelSettingsFilter::selfCheck(std::string& report) {
+bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -159,28 +159,28 @@ bool InLevelSettingsFilter::selfCheck(std::string& report) {
 
     // Every table entry maps to a real tab (not Count).
     int mapped = 0;
-    for (auto const* it = SettingsCategoryMap::begin(); it != SettingsCategoryMap::end(); ++it) {
+    for (auto const* it = EbSettingsCategoryMap::begin(); it != EbSettingsCategoryMap::end(); ++it) {
         auto const candidate = categoryForKey(it->key);
         expect(candidate == it->cat, it->key);
         expect(candidate != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == SettingsCategoryMap::kCount, "map-count-165");
+    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-165");
 
     // Every portable ConfigBundle key must be in the category map.
-    for (auto const* it = ConfigBundleKeys::begin(); it != ConfigBundleKeys::end(); ++it) {
+    for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
         auto const candidate = categoryForKey(it->key);
         expect(candidate != SettingsCategory::Count, it->key);
     }
-    expect(ConfigBundleKeys::count() > 0, "config-keys-nonempty");
+    expect(EbConfigBundleKeys::count() > 0, "config-keys-nonempty");
 
     expect(preservedContentY(100.f, 800.f, 400.f) == 500.f, "scroll-shrink");
     expect(preservedContentY(0.f, 100.f, 100.f) == 0.f, "scroll-same");
-    expect(SettingsCategoryBar::kBarH == 32.f, "chip-bar-height");
-    expect(SettingsCategoryBar::kMinFitScale > 0.f, "chip-min-fit");
-    expect(SettingsFilterWalk::isOurCategoryChrome(nullptr) == false, "chrome-null");
-    expect(SettingsFilterWalk::isCategoryBarScroll(nullptr) == false, "cat-scroll-null");
-    expect(SettingsFilterWalk::scrollLooksLikeSettingsList(nullptr) == false, "list-null");
+    expect(EbSettingsCategoryBar::kBarH == 32.f, "chip-bar-height");
+    expect(EbSettingsCategoryBar::kMinFitScale > 0.f, "chip-min-fit");
+    expect(EbSettingsFilterWalk::isOurCategoryChrome(nullptr) == false, "chrome-null");
+    expect(EbSettingsFilterWalk::isCategoryBarScroll(nullptr) == false, "cat-scroll-null");
+    expect(EbSettingsFilterWalk::scrollLooksLikeSettingsList(nullptr) == false, "list-null");
 
     if (fails == 0)
         report = "InLevelSettingsFilter selfCheck OK";

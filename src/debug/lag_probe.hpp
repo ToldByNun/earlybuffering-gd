@@ -39,7 +39,7 @@
 //   4. GAP lines in earlybuffer-perf.log (if Perf Trace on) measure wall time
 //      BETWEEN physics ticks (includes death anim + other mods).
 //   5. For Hybrid lag without dying: search HYBRID eb.hybrid.verify / .live.
-class LagProbe {
+class EbLagProbe {
 public:
     class Scope {
     public:
@@ -58,7 +58,7 @@ public:
         std::chrono::steady_clock::time_point m_standaloneStart{};
     };
 
-    static LagProbe& get();
+    static EbLagProbe& get();
 
     void setEnabled(bool on);
     bool enabled() const;
@@ -88,7 +88,9 @@ public:
     void reset();
 
 private:
-    LagProbe() = default;
+    friend class EbServiceStore;
+
+    EbLagProbe() = default;
 
     void appendLine(std::string const& line);
     void writeToFile(std::string const& text);

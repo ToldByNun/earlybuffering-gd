@@ -11,7 +11,7 @@
 // Delay-worthy = viable && !died (Alive escape). Force-search never
 // invents Delay when every later cand is dead.
 // Pure over cand views — no PlayLayer / sim. ShadowSimulator owns jitter.
-class AssistPickV2 {
+class EbAssistPickV2 {
 public:
     class CandView {
     public:
@@ -74,7 +74,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistPickV2() = default;
+    EbAssistPickV2() = default;
 
     static bool neighborRobust(CandView const* cands, int limit, int robustK, int delay,
                                bool needActivation);

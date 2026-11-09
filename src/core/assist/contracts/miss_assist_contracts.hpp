@@ -6,7 +6,7 @@
 
 // Pure logic contracts for early-press / miss-assist (no PlayLayer).
 // PlanGold + pick modes share these fixtures. Live v1 = AssistPickV1; v2 = AssistPickV2.
-class MissAssistContracts {
+class EbMissAssistContracts {
 public:
     // Continuous inputs need another direction change after the local window.
     // This is the lookahead added after the common delay window.
@@ -62,20 +62,20 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    MissAssistContracts() = default;
+    EbMissAssistContracts() = default;
 };
 
 #include <algorithm>
 
-class MissAssistContractsImplementation {
+class EbMissAssistContractsImplementation {
 public:
 private:
-    friend class MissAssistContracts;
+    friend class EbMissAssistContracts;
 
-    static MissAssistContracts::EarlyPressCase const s_cases[];
+    static EbMissAssistContracts::EarlyPressCase const s_cases[];
     static int const s_caseCount;
 
-    MissAssistContractsImplementation() = delete;
+    EbMissAssistContractsImplementation() = delete;
 };
 
 #endif

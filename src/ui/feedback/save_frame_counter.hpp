@@ -5,11 +5,11 @@
 
 // World-space +N markers at assisted click positions (N = physics ticks held).
 // Markers persist until clear() (death / attempt reset) or detach() (level quit).
-class SaveFrameCounter {
+class EbSaveFrameCounter {
 public:
     static constexpr int kMaxMarkers = 64;
 
-    static SaveFrameCounter& get();
+    static EbSaveFrameCounter& get();
 
     void attach(PlayLayer* layer);
     void detach(bool layerDying);
@@ -23,6 +23,8 @@ public:
     static cocos2d::ccColor3B colorForBucket(int bucket);
 
 private:
+    friend class EbServiceStore;
+
     static constexpr float kRingRadius = 8.f;
     static constexpr float kRingBorder = 1.8f;
     static constexpr float kOutlineBorder = 1.25f;
@@ -32,7 +34,7 @@ private:
     static constexpr float kLabelOutlinePx = 1.6f;
     static constexpr unsigned kRingSegments = 32;
 
-    SaveFrameCounter() = default;
+    EbSaveFrameCounter() = default;
 
     void ensureRoot(PlayLayer* layer);
     void dropOldestIfOverCap();

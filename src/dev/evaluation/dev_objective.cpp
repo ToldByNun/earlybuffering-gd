@@ -5,7 +5,7 @@
 #include <fmt/format.h>
 #include <limits>
 
-char const* DevObjective::kindId(Kind offset) {
+char const* EbDevObjective::kindId(Kind offset) {
     switch (offset) {
     case Kind::SurviveThenEndX:
         return "survive_then_endx_v1";
@@ -17,7 +17,7 @@ char const* DevObjective::kindId(Kind offset) {
     return "survive_then_endx_v1";
 }
 
-bool DevObjective::parseKind(std::string const& s, Kind& out) {
+bool EbDevObjective::parseKind(std::string const& s, Kind& out) {
     if (s == "survive_then_endx_v1") {
         out = Kind::SurviveThenEndX;
         return true;
@@ -33,7 +33,7 @@ bool DevObjective::parseKind(std::string const& s, Kind& out) {
     return false;
 }
 
-void DevObjective::classifyPrimaryAndTail(Sample& s, int delay, int horizonTicks, int tailTicks,
+void EbDevObjective::classifyPrimaryAndTail(Sample& s, int delay, int horizonTicks, int tailTicks,
                                           bool died, int deathTick, float endX, bool unknown,
                                           bool budgetHit, bool aborted, int ticksRan) {
     if (delay < 0)
@@ -103,7 +103,7 @@ void DevObjective::classifyPrimaryAndTail(Sample& s, int delay, int horizonTicks
     }
 }
 
-std::optional<int> DevObjective::bestSurvivingDelay(std::vector<Sample> const& samples) {
+std::optional<int> EbDevObjective::bestSurvivingDelay(std::vector<Sample> const& samples) {
     bool found = false;
     int bestDelay = -1;
     float bestEndX = -std::numeric_limits<float>::infinity();
@@ -123,7 +123,7 @@ std::optional<int> DevObjective::bestSurvivingDelay(std::vector<Sample> const& s
     return std::nullopt;
 }
 
-void DevObjective::applyClaimsGate(Result& r, Meta const& meta) {
+void EbDevObjective::applyClaimsGate(Result& r, Meta const& meta) {
     if (meta.claimsAllowed)
         return;
     r.hasBestSurviving = false;
@@ -136,7 +136,7 @@ void DevObjective::applyClaimsGate(Result& r, Meta const& meta) {
     r.idealBlockedReason = "claims_suppressed";
 }
 
-void DevObjective::fillIdealGate(Result& r, Meta const& meta, Kind kind, bool clearSetNonEmpty) {
+void EbDevObjective::fillIdealGate(Result& r, Meta const& meta, Kind kind, bool clearSetNonEmpty) {
     r.idealEligible = false;
     r.hasIdealDelay = false;
     r.idealDelay = -1;
@@ -173,12 +173,12 @@ void DevObjective::fillIdealGate(Result& r, Meta const& meta, Kind kind, bool cl
     r.idealEligible = true;
 }
 
-bool DevObjective::clearEligible(Sample const& s) {
+bool EbDevObjective::clearEligible(Sample const& s) {
     return s.survivedPrimary && !s.tailFailed && s.threatCleared && !s.unknown && !s.budgetHit &&
            !s.aborted && s.tailComplete;
 }
 
-DevObjective::Result DevObjective::evaluateSurviveThenEndX(std::vector<Sample> const& samples,
+EbDevObjective::Result EbDevObjective::evaluateSurviveThenEndX(std::vector<Sample> const& samples,
                                                            Meta const& meta) {
     Result r;
     r.kind = Kind::SurviveThenEndX;
@@ -222,7 +222,7 @@ DevObjective::Result DevObjective::evaluateSurviveThenEndX(std::vector<Sample> c
     return r;
 }
 
-DevObjective::Result DevObjective::evaluatePlannerMirror(std::vector<Sample> const& samples,
+EbDevObjective::Result EbDevObjective::evaluatePlannerMirror(std::vector<Sample> const& samples,
                                                          Meta const& meta) {
     Result r;
     r.kind = Kind::PlannerMirror;
@@ -290,7 +290,7 @@ DevObjective::Result DevObjective::evaluatePlannerMirror(std::vector<Sample> con
     return r;
 }
 
-DevObjective::Result DevObjective::evaluateHorizonClear(std::vector<Sample> const& samples,
+EbDevObjective::Result EbDevObjective::evaluateHorizonClear(std::vector<Sample> const& samples,
                                                         Meta const& meta) {
     Result r;
     r.kind = Kind::HorizonClear;
@@ -339,7 +339,7 @@ DevObjective::Result DevObjective::evaluateHorizonClear(std::vector<Sample> cons
     return r;
 }
 
-DevObjective::Result DevObjective::evaluate(Kind kind, std::vector<Sample> const& samples,
+EbDevObjective::Result EbDevObjective::evaluate(Kind kind, std::vector<Sample> const& samples,
                                             Meta const& meta) {
     switch (kind) {
     case Kind::PlannerMirror:
@@ -352,7 +352,7 @@ DevObjective::Result DevObjective::evaluate(Kind kind, std::vector<Sample> const
     return evaluateSurviveThenEndX(samples, meta);
 }
 
-bool DevObjective::selfCheck(std::string& report) {
+bool EbDevObjective::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

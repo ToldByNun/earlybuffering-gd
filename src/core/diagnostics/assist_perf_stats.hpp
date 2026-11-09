@@ -3,15 +3,17 @@
 
 #include <string>
 
-class AssistPerfStats {
+class EbAssistPerfStats {
 public:
-    static AssistPerfStats& get();
+    static EbAssistPerfStats& get();
     void notePlan(int micros, bool budgetHit);
     float avgMicros() const;
     float budgetHitRate() const;
     std::string overlayBit() const;
 
 private:
+    friend class EbServiceStore;
+
     static constexpr int N = 32;
     int m_us[N]{};
     bool m_hit[N]{};

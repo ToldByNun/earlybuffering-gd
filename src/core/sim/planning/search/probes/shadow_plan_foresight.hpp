@@ -3,14 +3,14 @@
 
 #include "../shadow_plan_context.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanForesight {
+class EbShadowPlanForesight {
 public:
-    static void probe(ShadowPlanContext& context);
+    static void probe(EbShadowPlanContext& context);
 
 private:
-    ShadowPlanForesight() = delete;
+    EbShadowPlanForesight() = delete;
 };
 
 #endif

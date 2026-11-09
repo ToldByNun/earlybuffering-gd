@@ -3,12 +3,12 @@
 #include "../shadow_simulator.hpp"
 #include <algorithm>
 
-ShadowSimulator::RunResult
-ShadowCandidateRunner::runOne(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
+EbShadowSimulator::RunResult
+EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
                               bool down, int delay, int limit, float deltaTime, float firstDt,
-                              ShadowSimulator::Model const& model, int releaseAfter,
-                              ThreatZone const* zone, int* tickBudgetLeft) {
-    ShadowSimulator::RunResult r;
+                              EbShadowSimulator::Model const& model, int releaseAfter,
+                              EbThreatZone const* zone, int* tickBudgetLeft) {
+    EbShadowSimulator::RunResult r;
     (void)limit;
     simulator.copyPlayerState(simulator.m_shadow, real);
     simulator.m_dead = false;
@@ -33,7 +33,7 @@ ShadowCandidateRunner::runOne(ShadowSimulator& simulator, PlayLayer* layer, Play
     int ballLandingTicks = 0;
     int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
 
-    auto finish = [&](ShadowSimulator::RunResult output) {
+    auto finish = [&](EbShadowSimulator::RunResult output) {
         output.activatedRing = simulator.m_activatedRing;
         output.ringCount = simulator.m_ringCount;
         output.endX = shadowPlayer->getPositionX();
@@ -181,12 +181,12 @@ ShadowCandidateRunner::runOne(ShadowSimulator& simulator, PlayLayer* layer, Play
     return finish(r);
 }
 
-ShadowSimulator::RunResult ShadowCandidateRunner::runTrajectoryOne(
-    ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down, int delay,
-    int limit, float deltaTime, float firstDt, ShadowSimulator::Model const& model,
-    int releaseAfter, ThreatZone const* zone, int* tickBudgetLeft) {
+EbShadowSimulator::RunResult EbShadowCandidateRunner::runTrajectoryOne(
+    EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down, int delay,
+    int limit, float deltaTime, float firstDt, EbShadowSimulator::Model const& model,
+    int releaseAfter, EbThreatZone const* zone, int* tickBudgetLeft) {
     // Lighter Live V2 path: same button timing as runOne, no delay-0 orb pre-scan.
-    ShadowSimulator::RunResult r;
+    EbShadowSimulator::RunResult r;
     (void)limit;
     if (!layer || !real || !simulator.m_shadow)
         return r;
@@ -209,7 +209,7 @@ ShadowSimulator::RunResult ShadowCandidateRunner::runTrajectoryOne(
     bool pastZone = false;
     int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
 
-    auto finish = [&](ShadowSimulator::RunResult output) {
+    auto finish = [&](EbShadowSimulator::RunResult output) {
         output.activatedRing = simulator.m_activatedRing;
         output.ringCount = simulator.m_ringCount;
         output.endX = shadowPlayer->getPositionX();
@@ -309,11 +309,11 @@ ShadowSimulator::RunResult ShadowCandidateRunner::runTrajectoryOne(
     return finish(r);
 }
 
-ShadowSimulator::RunResult
-ShadowCandidateRunner::runBaseline(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
+EbShadowSimulator::RunResult
+EbShadowCandidateRunner::runBaseline(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
                                    bool down, float deltaTime, float firstDt,
-                                   ShadowSimulator::Model const& model, int* tickBudgetLeft) {
-    ShadowSimulator::RunResult r;
+                                   EbShadowSimulator::Model const& model, int* tickBudgetLeft) {
+    EbShadowSimulator::RunResult r;
     simulator.copyPlayerState(simulator.m_shadow, real);
     simulator.m_dead = false;
     simulator.m_jumped = false;
@@ -354,11 +354,11 @@ ShadowCandidateRunner::runBaseline(ShadowSimulator& simulator, PlayLayer* layer,
     return r;
 }
 
-ShadowSimulator::OrbWindow
-ShadowCandidateRunner::scanOrbWindow(ShadowSimulator& simulator, PlayLayer* layer,
+EbShadowSimulator::OrbWindow
+EbShadowCandidateRunner::scanOrbWindow(EbShadowSimulator& simulator, PlayLayer* layer,
                                      PlayerObject* real, bool down, int scanTicks, float deltaTime,
                                      float firstDt, int* tickBudgetLeft, bool holdJump) {
-    ShadowSimulator::OrbWindow win;
+    EbShadowSimulator::OrbWindow win;
     if (!layer || !real || !simulator.m_shadow || scanTicks <= 0)
         return win;
 

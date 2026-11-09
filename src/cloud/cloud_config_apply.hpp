@@ -6,14 +6,14 @@
 
 // Validate pack body (size/sha), filtered ConfigBundle import, write active.json.
 // Does not show UI — caller runs PauseActionBridge::afterConfigApplied on success.
-class CloudConfigApply {
+class EbCloudConfigApply {
 public:
     class Result {
     public:
         bool ok = false;
         std::string id;
         std::string error;
-        ConfigBundle::ImportStats stats;
+        EbConfigBundle::ImportStats stats;
 
     private:
     };
@@ -24,12 +24,12 @@ public:
                                 std::string const& body);
 
     // Cloud apply always skips keybinds + dev-* keys.
-    static ConfigBundle::ApplyOptions cloudOptions();
+    static EbConfigBundle::ApplyOptions cloudOptions();
 
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigApply() = default;
+    EbCloudConfigApply() = default;
 };
 
 #endif

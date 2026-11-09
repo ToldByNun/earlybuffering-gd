@@ -8,7 +8,7 @@
 // Commit 10 — PrefixSim + two-pass / same-crash cut (ideas reimplemented; no upstream).
 // Pure search policy: shared-prefix early-death skip, same-deathTick stop,
 // mode-gated theories, two-pass full-score selection, jitter Top-2 only.
-class PrefixSim {
+class EbPrefixSim {
 public:
     static constexpr int kSameCrashStreakStop = 2;
     static constexpr int kJitterTopK = 2;
@@ -59,7 +59,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    PrefixSim() = delete;
+    EbPrefixSim() = delete;
 };
 
 #endif

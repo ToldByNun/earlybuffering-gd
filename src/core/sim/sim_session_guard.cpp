@@ -1,12 +1,12 @@
 #include "sim_session_guard.hpp"
 #include "shadow_simulator.hpp"
 
-SimSessionGuard::SimSessionGuard(ShadowSimulator& sim, PlayLayer* layer)
+EbSimSessionGuard::EbSimSessionGuard(EbShadowSimulator& sim, PlayLayer* layer)
     : m_sim(&sim), m_layer(layer) {
     this->m_sim->beginSession(this->m_layer);
 }
 
-SimSessionGuard::~SimSessionGuard() {
+EbSimSessionGuard::~EbSimSessionGuard() {
     if (!this->m_sim)
         return;
     this->m_sim->endSession(this->m_layer);
@@ -14,13 +14,13 @@ SimSessionGuard::~SimSessionGuard() {
     this->m_layer = nullptr;
 }
 
-SimSessionGuard::SimSessionGuard(SimSessionGuard&& other) noexcept
+EbSimSessionGuard::EbSimSessionGuard(EbSimSessionGuard&& other) noexcept
     : m_sim(other.m_sim), m_layer(other.m_layer) {
     other.m_sim = nullptr;
     other.m_layer = nullptr;
 }
 
-SimSessionGuard& SimSessionGuard::operator=(SimSessionGuard&& other) noexcept {
+EbSimSessionGuard& EbSimSessionGuard::operator=(EbSimSessionGuard&& other) noexcept {
     if (this == &other)
         return *this;
     if (this->m_sim) {

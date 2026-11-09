@@ -9,7 +9,7 @@
 // Lightweight section profiler for FPS / physics-tick spikes.
 // When enabled: times named scopes, keeps a ring of recent ticks, dumps spikes
 // to Geode log + save-dir file `earlybuffer-perf.log`.
-class PerfTrace {
+class EbPerfTrace {
 public:
     static constexpr int kMaxSectionsPerTick = 32;
     static constexpr int kRingTicks = 120;
@@ -30,7 +30,7 @@ public:
         bool m_active = false;
     };
 
-    static PerfTrace& get();
+    static EbPerfTrace& get();
 
     void setEnabled(bool on);
     bool enabled() const;
@@ -54,6 +54,8 @@ public:
     static std::string logPath();
 
 private:
+    friend class EbServiceStore;
+
     class SectionSample {
     public:
         char const* name = nullptr;
@@ -82,7 +84,7 @@ private:
     private:
     };
 
-    PerfTrace() = default;
+    EbPerfTrace() = default;
 
     void appendLine(std::string const& line);
     void dumpSpike(TickSample const& tick);

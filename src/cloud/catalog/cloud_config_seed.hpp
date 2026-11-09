@@ -1,13 +1,13 @@
 #ifndef CLOUD_CONFIG_SEED_HPP
 #define CLOUD_CONFIG_SEED_HPP
 
-class CloudConfigSeedEmbedded;
+class EbCloudConfigSeedEmbedded;
 
 #include <filesystem>
 #include <string>
 
 // Bundled offline catalog under Mod resources: cloud-seed/index.json + packs/.
-class CloudConfigSeed {
+class EbCloudConfigSeed {
 public:
     static std::filesystem::path rootDir();
     static std::filesystem::path indexPath();
@@ -20,7 +20,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigSeed() = default;
+    EbCloudConfigSeed() = default;
 };
 
 #include "../cloud_config_store.hpp"
@@ -29,14 +29,14 @@ private:
 #include <Geode/Geode.hpp>
 #include <fstream>
 
-class CloudConfigSeedEmbedded {
+class EbCloudConfigSeedEmbedded {
 public:
     static char const* indexJson();
 
     static char const* safeDefaultsPackJson();
 
 private:
-    CloudConfigSeedEmbedded() = default;
+    EbCloudConfigSeedEmbedded() = default;
 };
 
 #endif

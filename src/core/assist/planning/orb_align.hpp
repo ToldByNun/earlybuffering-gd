@@ -6,7 +6,7 @@
 // Commit 13 — Orb align / recheck / robust-arm helpers (pure; no PlayLayer).
 // Early press waits inside orb window; wrong-orb reject; robust ±1 before arm;
 // recheck late slide ≤+1 (never earlier).
-class OrbAlign {
+class EbOrbAlign {
 public:
     // Recheck may slide fire later by at most this many ticks (orb/toggle + non-orb).
     static constexpr int kRecheckMaxSlide = 1;
@@ -33,7 +33,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    OrbAlign() = delete;
+    EbOrbAlign() = delete;
 };
 
 #endif

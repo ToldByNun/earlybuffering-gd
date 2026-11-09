@@ -3,16 +3,16 @@
 
 #include "../assist_controller.hpp"
 
-class AssistInputRuntime {
+class EbAssistInputRuntime {
 public:
-    static void onPhysicsTick(AssistController& controller, PlayLayer* playLayer, float deltaTime);
-    static bool onHandleButton(AssistController& controller, GJBaseGameLayer* layer, bool down,
+    static void onPhysicsTick(EbAssistController& controller, PlayLayer* playLayer, float deltaTime);
+    static bool onHandleButton(EbAssistController& controller, GJBaseGameLayer* layer, bool down,
                                int button, bool player1);
-    static bool allowPushButton(AssistController& controller, PlayerObject* player,
+    static bool allowPushButton(EbAssistController& controller, PlayerObject* player,
                                 PlayerButton button);
 
 private:
-    AssistInputRuntime() = delete;
+    EbAssistInputRuntime() = delete;
 };
 
 #endif

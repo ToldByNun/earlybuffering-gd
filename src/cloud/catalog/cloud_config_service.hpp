@@ -6,7 +6,7 @@
 #include <string>
 
 // Facade: refresh catalog (primary → fallback), cache, seed/offline load, pack download.
-class CloudConfigService {
+class EbCloudConfigService {
 public:
     enum class CatalogSource { None, Network, DiskCache, Seed };
 
@@ -15,7 +15,7 @@ public:
         bool ok = false;
         bool busy = false;
         CatalogSource source = CatalogSource::None;
-        CloudConfigIndex::Catalog catalog;
+        EbCloudConfigIndex::Catalog catalog;
         std::string catalogUrl;
         std::string error;
         bool usedFallback = false;
@@ -39,7 +39,7 @@ public:
     using RefreshCallback = std::function<void(RefreshResult const&)>;
     using PackCallback = std::function<void(PackFetchResult const&)>;
 
-    static CloudConfigService& get();
+    static EbCloudConfigService& get();
 
     // Load disk cache, else bundled seed, into memory. No network.
     bool loadLocalCatalog(RefreshResult& out);
@@ -56,7 +56,7 @@ public:
     void cancel();
     bool isBusy() const;
 
-    CloudConfigIndex::Catalog const& catalog() const;
+    EbCloudConfigIndex::Catalog const& catalog() const;
     std::string const& catalogUrl() const;
     CatalogSource source() const;
 
@@ -66,11 +66,13 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigService();
-    ~CloudConfigService();
+    friend class EbServiceStore;
 
-    CloudConfigService(CloudConfigService const&) = delete;
-    CloudConfigService& operator=(CloudConfigService const&) = delete;
+    EbCloudConfigService();
+    ~EbCloudConfigService();
+
+    EbCloudConfigService(EbCloudConfigService const&) = delete;
+    EbCloudConfigService& operator=(EbCloudConfigService const&) = delete;
 
     class Impl;
     Impl* m_impl = nullptr;
@@ -85,19 +87,19 @@ private:
 #include <chrono>
 #include <utility>
 
-class CloudConfigServiceImplementation {
+class EbCloudConfigServiceImplementation {
 public:
     static std::string stripUrlQuery(std::string url);
     static std::string withCacheBust(std::string url);
 
 private:
-    CloudConfigServiceImplementation() = delete;
+    EbCloudConfigServiceImplementation() = delete;
 };
 
-class CloudConfigService::Impl {
+class EbCloudConfigService::Impl {
 public:
-    CloudConfigClient client;
-    CloudConfigIndex::Catalog catalog;
+    EbCloudConfigClient client;
+    EbCloudConfigIndex::Catalog catalog;
     std::string catalogUrl;
     CatalogSource source = CatalogSource::None;
     bool busy = false;

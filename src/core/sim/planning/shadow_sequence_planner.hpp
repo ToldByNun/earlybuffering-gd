@@ -5,14 +5,14 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowSequencePlanner {
+class EbShadowSequencePlanner {
 public:
-    static SimPlan planSequence(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
+    static EbSimPlan planSequence(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
                                 bool down, int limit, float deltaTime, float firstDt,
-                                PlanOptions const& options);
+                                EbPlanOptions const& options);
 
 private:
-    ShadowSequencePlanner() = delete;
+    EbShadowSequencePlanner() = delete;
 };
 
 #endif

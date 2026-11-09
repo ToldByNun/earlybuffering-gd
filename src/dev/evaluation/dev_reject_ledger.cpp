@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-char const* DevRejectLedger::statusId(Status state) {
+char const* EbDevRejectLedger::statusId(Status state) {
     switch (state) {
     case Status::Chosen:
         return "chosen";
@@ -19,7 +19,7 @@ char const* DevRejectLedger::statusId(Status state) {
     return "skipped";
 }
 
-bool DevRejectLedger::parseStatus(std::string const& s, Status& out) {
+bool EbDevRejectLedger::parseStatus(std::string const& s, Status& out) {
     if (s == "chosen") {
         out = Status::Chosen;
         return true;
@@ -39,7 +39,7 @@ bool DevRejectLedger::parseStatus(std::string const& s, Status& out) {
     return false;
 }
 
-char const* DevRejectLedger::rejectCodeId(RejectCode candidate) {
+char const* EbDevRejectLedger::rejectCodeId(RejectCode candidate) {
     switch (candidate) {
     case RejectCode::Chosen:
         return "chosen";
@@ -77,7 +77,7 @@ char const* DevRejectLedger::rejectCodeId(RejectCode candidate) {
     return "not-viable";
 }
 
-bool DevRejectLedger::parseRejectCode(std::string const& s, RejectCode& out) {
+bool EbDevRejectLedger::parseRejectCode(std::string const& s, RejectCode& out) {
     if (s == "chosen") {
         out = RejectCode::Chosen;
         return true;
@@ -145,7 +145,7 @@ bool DevRejectLedger::parseRejectCode(std::string const& s, RejectCode& out) {
     return false;
 }
 
-char const* DevRejectLedger::attributionId(Attribution firstValue) {
+char const* EbDevRejectLedger::attributionId(Attribution firstValue) {
     switch (firstValue) {
     case Attribution::ChosenMatchesBestSurviving:
         return "chosen-matches-best-surviving";
@@ -181,7 +181,7 @@ char const* DevRejectLedger::attributionId(Attribution firstValue) {
     return "gate-pass";
 }
 
-bool DevRejectLedger::parseAttribution(std::string const& s, Attribution& out) {
+bool EbDevRejectLedger::parseAttribution(std::string const& s, Attribution& out) {
     if (s == "chosen-matches-best-surviving") {
         out = Attribution::ChosenMatchesBestSurviving;
         return true;
@@ -245,14 +245,14 @@ bool DevRejectLedger::parseAttribution(std::string const& s, Attribution& out) {
     return false;
 }
 
-std::string DevRejectLedger::clampDetail(std::string text) {
+std::string EbDevRejectLedger::clampDetail(std::string text) {
     if (static_cast<int>(text.size()) > kMaxDetailLen) {
         text.resize(static_cast<size_t>(kMaxDetailLen));
     }
     return text;
 }
 
-DevRejectLedger::RejectCode DevRejectLedger::skipCode(EarlyExit early) {
+EbDevRejectLedger::RejectCode EbDevRejectLedger::skipCode(EarlyExit early) {
     switch (early) {
     case EarlyExit::Budget:
         return RejectCode::BudgetNotReached;
@@ -271,7 +271,7 @@ DevRejectLedger::RejectCode DevRejectLedger::skipCode(EarlyExit early) {
     return RejectCode::NotViable;
 }
 
-DevRejectLedger::RejectCode DevRejectLedger::classifyRejected(CandSnap const& snap,
+EbDevRejectLedger::RejectCode EbDevRejectLedger::classifyRejected(CandSnap const& snap,
                                                               CandSnap const* chosen,
                                                               BuildInput const& in, int delay) {
     if (snap.dualFailed)
@@ -321,7 +321,7 @@ DevRejectLedger::RejectCode DevRejectLedger::classifyRejected(CandSnap const& sn
     return RejectCode::NotViable;
 }
 
-DevRejectLedger::Ledger DevRejectLedger::build(BuildInput const& in) {
+EbDevRejectLedger::Ledger EbDevRejectLedger::build(BuildInput const& in) {
     Ledger out;
     if (in.limit < 0)
         return out;
@@ -424,11 +424,11 @@ DevRejectLedger::Ledger DevRejectLedger::build(BuildInput const& in) {
     return out;
 }
 
-std::vector<DevRejectLedger::AttributionNote>
-DevRejectLedger::buildAttribution(AttributionInput const& in) {
-    return DevAttribution::buildAttribution(in);
+std::vector<EbDevRejectLedger::AttributionNote>
+EbDevRejectLedger::buildAttribution(AttributionInput const& in) {
+    return EbDevAttribution::buildAttribution(in);
 }
 
-bool DevRejectLedger::selfCheck(std::string& report) {
-    return DevRejectChecks::selfCheck(report);
+bool EbDevRejectLedger::selfCheck(std::string& report) {
+    return EbDevRejectChecks::selfCheck(report);
 }

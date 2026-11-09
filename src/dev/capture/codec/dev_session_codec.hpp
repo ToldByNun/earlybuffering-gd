@@ -6,15 +6,15 @@
 
 #include "../dev_trace_store.hpp"
 
-class DevSessionCodec {
+class EbDevSessionCodec {
 public:
-    static matjson::Value sessionToJsonValue(DevSessionFile const& session);
-    static std::string sessionToJsonString(DevSessionFile const& session);
-    static bool sessionFromJsonString(std::string const& body, DevSessionFile& out,
+    static matjson::Value sessionToJsonValue(EbDevSessionFile const& session);
+    static std::string sessionToJsonString(EbDevSessionFile const& session);
+    static bool sessionFromJsonString(std::string const& body, EbDevSessionFile& out,
                                       std::string& err);
 
 private:
-    DevSessionCodec() = delete;
+    EbDevSessionCodec() = delete;
 };
 
 #endif

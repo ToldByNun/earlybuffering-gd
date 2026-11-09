@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "dev_trace_store.hpp"
 #include "../../config/stage_config.hpp"
 #include "codec/dev_event_codec.hpp"
@@ -17,12 +18,11 @@
 #include <utility>
 #include <vector>
 
-DevTraceStore& DevTraceStore::get() {
-    static DevTraceStore inst;
-    return inst;
+EbDevTraceStore& EbDevTraceStore::get() {
+    return EbClassManager::get().service<EbDevTraceStore>();
 }
 
-char const* DevTraceStore::kindId(DevEventKind kind) {
+char const* EbDevTraceStore::kindId(DevEventKind kind) {
     switch (kind) {
     case DevEventKind::PressObserved:
         return "pressObserved";
@@ -48,7 +48,7 @@ char const* DevTraceStore::kindId(DevEventKind kind) {
     return "pressObserved";
 }
 
-bool DevTraceStore::parseKind(std::string const& s, DevEventKind& out) {
+bool EbDevTraceStore::parseKind(std::string const& s, DevEventKind& out) {
     if (s == "pressObserved") {
         out = DevEventKind::PressObserved;
         return true;
@@ -92,7 +92,7 @@ bool DevTraceStore::parseKind(std::string const& s, DevEventKind& out) {
     return false;
 }
 
-char const* DevTraceStore::sourceId(DevEventSource source) {
+char const* EbDevTraceStore::sourceId(DevEventSource source) {
     switch (source) {
     case DevEventSource::Bake:
         return "bake";
@@ -102,7 +102,7 @@ char const* DevTraceStore::sourceId(DevEventSource source) {
     return "live";
 }
 
-bool DevTraceStore::parseSource(std::string const& s, DevEventSource& out) {
+bool EbDevTraceStore::parseSource(std::string const& s, DevEventSource& out) {
     if (s == "bake") {
         out = DevEventSource::Bake;
         return true;
@@ -114,72 +114,72 @@ bool DevTraceStore::parseSource(std::string const& s, DevEventSource& out) {
     return false;
 }
 
-bool DevTraceStore::validatePressChain(std::vector<DevDecisionEvent> const& events, int64_t pressId,
+bool EbDevTraceStore::validatePressChain(std::vector<EbDevDecisionEvent> const& events, int64_t pressId,
                                        std::string& err) {
-    return DevTraceValidation::validatePressChain(events, pressId, err);
+    return EbDevTraceValidation::validatePressChain(events, pressId, err);
 }
 
-matjson::Value DevTraceStoreImplementation::clockStampToJson(DevClockContract::Stamp const& st) {
-    return DevSnapshotCodec::clockStampToJson(st);
+matjson::Value EbDevTraceStoreImplementation::clockStampToJson(EbDevClockContract::Stamp const& st) {
+    return EbDevSnapshotCodec::clockStampToJson(st);
 }
 
-bool DevTraceStoreImplementation::clockStampFromJson(matjson::Value const& j,
-                                                     DevClockContract::Stamp& st,
+bool EbDevTraceStoreImplementation::clockStampFromJson(matjson::Value const& j,
+                                                     EbDevClockContract::Stamp& st,
                                                      std::string& err) {
-    return DevSnapshotCodec::clockStampFromJson(j, st, err);
+    return EbDevSnapshotCodec::clockStampFromJson(j, st, err);
 }
 
-matjson::Value DevTraceStoreImplementation::playerBlobToJson(DevPlayerBlob const& b) {
-    return DevSnapshotCodec::playerBlobToJson(b);
+matjson::Value EbDevTraceStoreImplementation::playerBlobToJson(EbDevPlayerBlob const& b) {
+    return EbDevSnapshotCodec::playerBlobToJson(b);
 }
 
-void DevTraceStoreImplementation::playerBlobFromJson(matjson::Value const& j, DevPlayerBlob& b) {
-    return DevSnapshotCodec::playerBlobFromJson(j, b);
+void EbDevTraceStoreImplementation::playerBlobFromJson(matjson::Value const& j, EbDevPlayerBlob& b) {
+    return EbDevSnapshotCodec::playerBlobFromJson(j, b);
 }
 
-matjson::Value DevTraceStoreImplementation::witnessToJson(DevLiveWitness const& w) {
-    return DevSnapshotCodec::witnessToJson(w);
+matjson::Value EbDevTraceStoreImplementation::witnessToJson(EbDevLiveWitness const& w) {
+    return EbDevSnapshotCodec::witnessToJson(w);
 }
 
-bool DevTraceStoreImplementation::witnessFromJson(matjson::Value const& j, DevLiveWitness& w,
+bool EbDevTraceStoreImplementation::witnessFromJson(matjson::Value const& j, EbDevLiveWitness& w,
                                                   std::string& err) {
-    return DevSnapshotCodec::witnessFromJson(j, w, err);
+    return EbDevSnapshotCodec::witnessFromJson(j, w, err);
 }
 
-matjson::Value DevTraceStoreImplementation::eventToJson(DevDecisionEvent const& e) {
-    return DevEventCodec::eventToJson(e);
+matjson::Value EbDevTraceStoreImplementation::eventToJson(EbDevDecisionEvent const& e) {
+    return EbDevEventCodec::eventToJson(e);
 }
 
-bool DevTraceStoreImplementation::eventFromJson(matjson::Value const& j, DevDecisionEvent& e,
+bool EbDevTraceStoreImplementation::eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e,
                                                 std::string& err) {
-    return DevEventCodec::eventFromJson(j, e, err);
+    return EbDevEventCodec::eventFromJson(j, e, err);
 }
 
-matjson::Value DevTraceStoreImplementation::sessionToJsonValue(DevSessionFile const& session) {
-    return DevSessionCodec::sessionToJsonValue(session);
+matjson::Value EbDevTraceStoreImplementation::sessionToJsonValue(EbDevSessionFile const& session) {
+    return EbDevSessionCodec::sessionToJsonValue(session);
 }
 
-std::string DevTraceStore::sessionToJsonString(DevSessionFile const& session) {
-    return DevSessionCodec::sessionToJsonString(session);
+std::string EbDevTraceStore::sessionToJsonString(EbDevSessionFile const& session) {
+    return EbDevSessionCodec::sessionToJsonString(session);
 }
 
-bool DevTraceStore::sessionFromJsonString(std::string const& body, DevSessionFile& out,
+bool EbDevTraceStore::sessionFromJsonString(std::string const& body, EbDevSessionFile& out,
                                           std::string& err) {
-    return DevSessionCodec::sessionFromJsonString(body, out, err);
+    return EbDevSessionCodec::sessionFromJsonString(body, out, err);
 }
 
-bool DevTraceStore::isOpen() const {
+bool EbDevTraceStore::isOpen() const {
     return this->m_open;
 }
 
-bool DevTraceStore::hasOpenAttempt() const {
+bool EbDevTraceStore::hasOpenAttempt() const {
     if (!(!this->m_open || this->m_session.attempts.empty())) {
         return !this->m_session.attempts.back().sealed;
     }
     return false;
 }
 
-std::filesystem::path DevTraceStore::tracesDir() const {
+std::filesystem::path EbDevTraceStore::tracesDir() const {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
         return mod->getSaveDir() / "devtraces";
@@ -187,13 +187,13 @@ std::filesystem::path DevTraceStore::tracesDir() const {
     return std::filesystem::path("devtraces");
 }
 
-std::filesystem::path DevTraceStore::sessionPath() const {
+std::filesystem::path EbDevTraceStore::sessionPath() const {
     auto id =
         this->m_session.sessionId.empty() ? std::string("unknown") : this->m_session.sessionId;
     return this->tracesDir() / ("session-" + id + ".json");
 }
 
-bool DevTraceStore::beginSession(std::string sessionId, int recordingsTarget) {
+bool EbDevTraceStore::beginSession(std::string sessionId, int recordingsTarget) {
     this->closeSession();
     if (sessionId.empty()) {
         auto const elapsedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -220,7 +220,7 @@ bool DevTraceStore::beginSession(std::string sessionId, int recordingsTarget) {
     return this->flush();
 }
 
-void DevTraceStore::setLevelMeta(std::string levelKey, std::string levelName, bool startPos,
+void EbDevTraceStore::setLevelMeta(std::string levelKey, std::string levelName, bool startPos,
                                  bool practice, std::string settingsFingerprint) {
     if (!this->m_open)
         return;
@@ -231,27 +231,27 @@ void DevTraceStore::setLevelMeta(std::string levelKey, std::string levelName, bo
     this->m_session.settingsFingerprint = std::move(settingsFingerprint);
 }
 
-void DevTraceStore::setModVersion(std::string modVersion) {
+void EbDevTraceStore::setModVersion(std::string modVersion) {
     if (!this->m_open)
         return;
     this->m_session.modVersion = std::move(modVersion);
 }
 
-std::string DevTraceStore::makeSettingsFingerprint() {
+std::string EbDevTraceStore::makeSettingsFingerprint() {
     return fmt::format(
         "stage={} mode={} pick={} eng={} ticks={}/{} unit={} safe={} orbs={} "
         "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={}",
-        StageConfig::stageLabel(StageConfig::fromSettings()),
-        StageConfig::assistModeName(StageConfig::assistMode()), StageConfig::assistPickName(),
-        StageConfig::assistEngineName(), StageConfig::ticksAll(), StageConfig::ticksWave(),
-        StageConfig::windowUnitFrames() ? "Frames" : "Ticks", StageConfig::safeMode() ? 1 : 0,
-        StageConfig::assistOrbs() ? 1 : 0, StageConfig::simBudgetUs(),
-        StageConfig::tickBudgetPerPress(), StageConfig::triggerBake() ? 1 : 0,
-        StageConfig::triggerBakeSkipDynamic() ? 1 : 0, StageConfig::autoTune() ? 1 : 0,
-        StageConfig::selfBake() ? 1 : 0);
+        EbStageConfig::stageLabel(EbStageConfig::fromSettings()),
+        EbStageConfig::assistModeName(EbStageConfig::assistMode()), EbStageConfig::assistPickName(),
+        EbStageConfig::assistEngineName(), EbStageConfig::ticksAll(), EbStageConfig::ticksWave(),
+        EbStageConfig::windowUnitFrames() ? "Frames" : "Ticks", EbStageConfig::safeMode() ? 1 : 0,
+        EbStageConfig::assistOrbs() ? 1 : 0, EbStageConfig::simBudgetUs(),
+        EbStageConfig::tickBudgetPerPress(), EbStageConfig::triggerBake() ? 1 : 0,
+        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTune() ? 1 : 0,
+        EbStageConfig::selfBake() ? 1 : 0);
 }
 
-bool DevTraceStore::beginAttempt(int startTick) {
+bool EbDevTraceStore::beginAttempt(int startTick) {
     if (!this->m_open)
         return false;
     if (this->hasOpenAttempt())
@@ -263,7 +263,7 @@ bool DevTraceStore::beginAttempt(int startTick) {
             nextId = existing.attemptId + 1;
     }
 
-    DevAttempt a;
+    EbDevAttempt a;
     a.attemptId = nextId;
     a.startTick = startTick;
     a.sealed = false;
@@ -273,18 +273,18 @@ bool DevTraceStore::beginAttempt(int startTick) {
     return true;
 }
 
-int64_t DevTraceStore::allocPressId() {
+int64_t EbDevTraceStore::allocPressId() {
     if (!(!this->m_open)) {
         return this->m_nextPressId++;
     }
     return 0;
 }
 
-int64_t DevTraceStore::nextEventId() {
+int64_t EbDevTraceStore::nextEventId() {
     return this->m_nextEventId++;
 }
 
-DevDecisionEvent* DevTraceStore::appendEvent(DevDecisionEvent event) {
+EbDevDecisionEvent* EbDevTraceStore::appendEvent(EbDevDecisionEvent event) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed)
         return nullptr;
@@ -304,7 +304,7 @@ DevDecisionEvent* DevTraceStore::appendEvent(DevDecisionEvent event) {
     return &attempt->events.back();
 }
 
-void DevTraceStore::trimRollingWindow() {
+void EbDevTraceStore::trimRollingWindow() {
     int const target = this->m_session.recordingsTarget;
     if (target < 1)
         return;
@@ -338,7 +338,7 @@ void DevTraceStore::trimRollingWindow() {
     this->m_session.recordingsDone = kept;
 }
 
-bool DevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget) {
+bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed)
         return false;
@@ -352,7 +352,7 @@ bool DevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget) {
     return this->flush();
 }
 
-bool DevTraceStore::writeAtomic(matjson::Value const& root) const {
+bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
     auto const directory = this->tracesDir();
     (void)geode::utils::file::createDirectoryAll(directory);
     auto const path = this->sessionPath();
@@ -385,14 +385,14 @@ bool DevTraceStore::writeAtomic(matjson::Value const& root) const {
     return !ec || std::filesystem::exists(path);
 }
 
-bool DevTraceStore::flush() {
+bool EbDevTraceStore::flush() {
     if (!(!this->m_open)) {
-        return this->writeAtomic(DevTraceStoreImplementation::sessionToJsonValue(this->m_session));
+        return this->writeAtomic(EbDevTraceStoreImplementation::sessionToJsonValue(this->m_session));
     }
     return false;
 }
 
-void DevTraceStore::closeSession() {
+void EbDevTraceStore::closeSession() {
     if (this->m_open && this->hasOpenAttempt()) {
         // Partial attempt kept with endReason quit-unsealed marker, then seal+flush.
         (void)this->sealAttempt("quit", false);
@@ -402,7 +402,7 @@ void DevTraceStore::closeSession() {
     this->m_open = false;
 }
 
-DevAttempt* DevTraceStore::currentAttempt() {
+EbDevAttempt* EbDevTraceStore::currentAttempt() {
     if (!this->m_open || this->m_session.attempts.empty())
         return nullptr;
     auto& a = this->m_session.attempts.back();
@@ -412,7 +412,7 @@ DevAttempt* DevTraceStore::currentAttempt() {
     return nullptr;
 }
 
-DevAttempt const* DevTraceStore::currentAttempt() const {
+EbDevAttempt const* EbDevTraceStore::currentAttempt() const {
     if (!this->m_open || this->m_session.attempts.empty())
         return nullptr;
     auto const& a = this->m_session.attempts.back();
@@ -422,12 +422,12 @@ DevAttempt const* DevTraceStore::currentAttempt() const {
     return nullptr;
 }
 
-DevDecisionEvent DevTraceStoreImplementation::makeEv(DevEventKind kind, int64_t eventId,
+EbDevDecisionEvent EbDevTraceStoreImplementation::makeEv(DevEventKind kind, int64_t eventId,
                                                      int64_t attemptId, int64_t pressId,
                                                      int64_t parent, int64_t planId) {
-    return DevTraceValidation::makeEv(kind, eventId, attemptId, pressId, parent, planId);
+    return EbDevTraceValidation::makeEv(kind, eventId, attemptId, pressId, parent, planId);
 }
 
-bool DevTraceStore::selfCheck(std::string& report) {
-    return DevTraceValidation::selfCheck(report);
+bool EbDevTraceStore::selfCheck(std::string& report) {
+    return EbDevTraceValidation::selfCheck(report);
 }

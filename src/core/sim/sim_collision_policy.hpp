@@ -12,7 +12,7 @@ enum class SimObjectAction { Include = 0, UnknownOnOverlap, Skip };
 // truncate / Pass (toggle pre-model, player-follow, dual). No Soft-Continue.
 enum class SimUnknownClass { Soft = 0, Hard };
 
-class SimCollisionPolicy {
+class EbSimCollisionPolicy {
 public:
     static bool isSpeedPortalId(int objectId);
     static SimObjectAction classify(GameObject* object);
@@ -29,7 +29,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    SimCollisionPolicy() = delete;
+    EbSimCollisionPolicy() = delete;
 };
 
 #endif

@@ -6,21 +6,21 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowFreezeEvaluator {
+class EbShadowFreezeEvaluator {
 public:
-    static void applyPlayerBlob(PlayerObject* destination, DevPlayerBlob const& blob);
-    static void applyEvalWorldRestore(ShadowSimulator& simulator, PlayLayer* layer,
-                                      DevLiveWitness const& witness, DevEvalRestore& restore);
-    static void finishEvalWorldRestore(ShadowSimulator& simulator, PlayLayer* layer);
-    static ShadowSimulator::EvalFromFreezeResult
-    evalDelayFromFreeze(ShadowSimulator& simulator, PlayLayer* layer, DevLiveWitness const& witness,
+    static void applyPlayerBlob(PlayerObject* destination, EbDevPlayerBlob const& blob);
+    static void applyEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer,
+                                      EbDevLiveWitness const& witness, EbDevEvalRestore& restore);
+    static void finishEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer);
+    static EbShadowSimulator::EvalFromFreezeResult
+    evalDelayFromFreeze(EbShadowSimulator& simulator, PlayLayer* layer, EbDevLiveWitness const& witness,
                         int delay, int horizonTicks, bool down, int* tickBudgetLeft);
-    static ShadowSimulator::EvalFromFreezeResult
-    replayActualFire(ShadowSimulator& simulator, PlayLayer* layer, DevLiveWitness const& witness,
+    static EbShadowSimulator::EvalFromFreezeResult
+    replayActualFire(EbShadowSimulator& simulator, PlayLayer* layer, EbDevLiveWitness const& witness,
                      int actualFireTickAbs, int horizonTicks, bool down, int* tickBudgetLeft);
 
 private:
-    ShadowFreezeEvaluator() = delete;
+    EbShadowFreezeEvaluator() = delete;
 };
 
 #endif

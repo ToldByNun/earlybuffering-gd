@@ -3,14 +3,14 @@
 
 #include "../shadow_plan_context.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanSelection {
+class EbShadowPlanSelection {
 public:
-    static bool choose(ShadowPlanContext& context);
+    static bool choose(EbShadowPlanContext& context);
 
 private:
-    ShadowPlanSelection() = delete;
+    EbShadowPlanSelection() = delete;
 };
 
 #endif

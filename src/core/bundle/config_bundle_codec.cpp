@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-void ConfigBundleCodec::trimInPlace(std::string& s) {
+void EbConfigBundleCodec::trimInPlace(std::string& s) {
     while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
         s.erase(s.begin());
     }
@@ -13,14 +13,14 @@ void ConfigBundleCodec::trimInPlace(std::string& s) {
     }
 }
 
-std::string ConfigBundleCodec::colorToHex(cocos2d::ccColor3B color) {
+std::string EbConfigBundleCodec::colorToHex(cocos2d::ccColor3B color) {
     char buf[8];
     std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", static_cast<unsigned>(color.r),
                   static_cast<unsigned>(color.g), static_cast<unsigned>(color.b));
     return std::string(buf);
 }
 
-int ConfigBundleCodec::hexNibble(char character) {
+int EbConfigBundleCodec::hexNibble(char character) {
     if (character >= '0' && character <= '9')
         return character - '0';
     if (character >= 'a' && character <= 'f')
@@ -31,7 +31,7 @@ int ConfigBundleCodec::hexNibble(char character) {
     return 10 + (character - 'A');
 }
 
-bool ConfigBundleCodec::hexToColor(std::string const& hex, cocos2d::ccColor3B& out) {
+bool EbConfigBundleCodec::hexToColor(std::string const& hex, cocos2d::ccColor3B& out) {
     std::string_view text = hex;
     if (!text.empty() && text.front() == '#') {
         text.remove_prefix(1);
@@ -41,7 +41,7 @@ bool ConfigBundleCodec::hexToColor(std::string const& hex, cocos2d::ccColor3B& o
     }
     int nibbles[6];
     for (int index = 0; index < 6; ++index) {
-        nibbles[index] = ConfigBundleCodec::hexNibble(text[static_cast<size_t>(index)]);
+        nibbles[index] = EbConfigBundleCodec::hexNibble(text[static_cast<size_t>(index)]);
         if (nibbles[index] < 0) {
             return false;
         }
@@ -52,7 +52,7 @@ bool ConfigBundleCodec::hexToColor(std::string const& hex, cocos2d::ccColor3B& o
     return true;
 }
 
-std::string ConfigBundleCodec::keybindsToString(std::vector<geode::Keybind> const& binds) {
+std::string EbConfigBundleCodec::keybindsToString(std::vector<geode::Keybind> const& binds) {
     if (binds.empty()) {
         return std::string();
     }
@@ -64,7 +64,7 @@ std::string ConfigBundleCodec::keybindsToString(std::vector<geode::Keybind> cons
     return output;
 }
 
-bool ConfigBundleCodec::stringToKeybinds(std::string const& text,
+bool EbConfigBundleCodec::stringToKeybinds(std::string const& text,
                                          std::vector<geode::Keybind>& out) {
     out.clear();
     std::string const& src = text;
@@ -77,7 +77,7 @@ bool ConfigBundleCodec::stringToKeybinds(std::string const& text,
         size_t const sep = src.find(" | ", start);
         std::string piece =
             (sep == std::string::npos) ? src.substr(start) : src.substr(start, sep - start);
-        ConfigBundleCodec::trimInPlace(piece);
+        EbConfigBundleCodec::trimInPlace(piece);
         if (!piece.empty()) {
             auto parsed = geode::Keybind::fromString(piece);
             if (parsed.isErr()) {
@@ -95,14 +95,14 @@ bool ConfigBundleCodec::stringToKeybinds(std::string const& text,
     return !out.empty();
 }
 
-bool ConfigBundleCodec::jsonToKeybinds(matjson::Value const& value,
+bool EbConfigBundleCodec::jsonToKeybinds(matjson::Value const& value,
                                        std::vector<geode::Keybind>& out) {
     out.clear();
 
     // Portable string form: "F6" or "Ctrl+Shift+D | Alt+F6"
     auto asStr = value.asString();
     if (asStr.isOk()) {
-        return ConfigBundleCodec::stringToKeybinds(std::string(asStr.unwrap()), out);
+        return EbConfigBundleCodec::stringToKeybinds(std::string(asStr.unwrap()), out);
     }
 
     // JSON array of strings (optional multi-bind form).
@@ -115,7 +115,7 @@ bool ConfigBundleCodec::jsonToKeybinds(matjson::Value const& value,
                 return false;
             }
             std::string text(piece.unwrap());
-            ConfigBundleCodec::trimInPlace(text);
+            EbConfigBundleCodec::trimInPlace(text);
             if (text.empty()) {
                 continue;
             }
@@ -131,7 +131,7 @@ bool ConfigBundleCodec::jsonToKeybinds(matjson::Value const& value,
     return false;
 }
 
-bool ConfigBundleCodec::selfCheck(std::string& report) {
+bool EbConfigBundleCodec::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -142,25 +142,25 @@ bool ConfigBundleCodec::selfCheck(std::string& report) {
     };
 
     cocos2d::ccColor3B const sample{0x7C, 0xFF, 0x4A};
-    std::string const hex = ConfigBundleCodec::colorToHex(sample);
+    std::string const hex = EbConfigBundleCodec::colorToHex(sample);
     expect(hex == "#7CFF4A", "color-to-hex");
 
     cocos2d::ccColor3B back{};
-    expect(ConfigBundleCodec::hexToColor(hex, back), "hex-to-color");
+    expect(EbConfigBundleCodec::hexToColor(hex, back), "hex-to-color");
     expect(back.r == sample.r && back.g == sample.g && back.b == sample.b, "roundtrip");
 
     cocos2d::ccColor3B lower{};
-    expect(ConfigBundleCodec::hexToColor("#7cff4a", lower), "hex-lower");
+    expect(EbConfigBundleCodec::hexToColor("#7cff4a", lower), "hex-lower");
     expect(lower.r == sample.r && lower.g == sample.g && lower.b == sample.b, "hex-lower-rgb");
 
     cocos2d::ccColor3B noHash{};
-    expect(ConfigBundleCodec::hexToColor("7CFF4A", noHash), "hex-no-hash");
+    expect(EbConfigBundleCodec::hexToColor("7CFF4A", noHash), "hex-no-hash");
     expect(noHash.r == sample.r, "hex-no-hash-r");
 
     cocos2d::ccColor3B junk{};
-    expect(!ConfigBundleCodec::hexToColor("#GG0000", junk), "hex-bad-digit");
-    expect(!ConfigBundleCodec::hexToColor("#FFF", junk), "hex-short");
-    expect(!ConfigBundleCodec::hexToColor("", junk), "hex-empty");
+    expect(!EbConfigBundleCodec::hexToColor("#GG0000", junk), "hex-bad-digit");
+    expect(!EbConfigBundleCodec::hexToColor("#FFF", junk), "hex-short");
+    expect(!EbConfigBundleCodec::hexToColor("", junk), "hex-empty");
 
     // Keybind string round-trip (Geode Keybind::fromString / toString).
     {
@@ -168,10 +168,10 @@ bool ConfigBundleCodec::selfCheck(std::string& report) {
         expect(one.isOk(), "kb-parse-f6");
         if (one.isOk()) {
             std::vector<geode::Keybind> binds{one.unwrap()};
-            std::string const text = ConfigBundleCodec::keybindsToString(binds);
+            std::string const text = EbConfigBundleCodec::keybindsToString(binds);
             expect(!text.empty(), "kb-to-string-nonempty");
             std::vector<geode::Keybind> backBinds;
-            expect(ConfigBundleCodec::stringToKeybinds(text, backBinds), "kb-from-string");
+            expect(EbConfigBundleCodec::stringToKeybinds(text, backBinds), "kb-from-string");
             expect(backBinds.size() == 1 && backBinds[0] == binds[0], "kb-roundtrip");
         }
 
@@ -181,22 +181,22 @@ bool ConfigBundleCodec::selfCheck(std::string& report) {
             geode::Keybind const kbA = one.unwrap();
             geode::Keybind const kbB = combo.unwrap();
             std::vector<geode::Keybind> multi{kbA, kbB};
-            std::string const joined = ConfigBundleCodec::keybindsToString(multi);
+            std::string const joined = EbConfigBundleCodec::keybindsToString(multi);
             expect(joined.find(" | ") != std::string::npos, "kb-multi-sep");
             std::vector<geode::Keybind> backMulti;
-            expect(ConfigBundleCodec::stringToKeybinds(joined, backMulti), "kb-multi-parse");
+            expect(EbConfigBundleCodec::stringToKeybinds(joined, backMulti), "kb-multi-parse");
             expect(backMulti.size() == 2, "kb-multi-count");
         }
 
         std::vector<geode::Keybind> emptyOut;
-        expect(!ConfigBundleCodec::stringToKeybinds("", emptyOut), "kb-empty-fail");
+        expect(!EbConfigBundleCodec::stringToKeybinds("", emptyOut), "kb-empty-fail");
         std::vector<geode::Keybind> bad;
-        expect(!ConfigBundleCodec::stringToKeybinds("NotARealKey!!!", bad), "kb-bad-fail");
+        expect(!EbConfigBundleCodec::stringToKeybinds("NotARealKey!!!", bad), "kb-bad-fail");
 
         auto arrParsed = matjson::parse(R"(["F6","Ctrl+Shift+D"])");
         if (arrParsed.isOk()) {
             std::vector<geode::Keybind> fromArr;
-            expect(ConfigBundleCodec::jsonToKeybinds(arrParsed.unwrap(), fromArr), "kb-json-array");
+            expect(EbConfigBundleCodec::jsonToKeybinds(arrParsed.unwrap(), fromArr), "kb-json-array");
             expect(fromArr.size() == 2, "kb-json-array-count");
         } else {
             expect(false, "kb-json-array-parse");
@@ -205,7 +205,7 @@ bool ConfigBundleCodec::selfCheck(std::string& report) {
         auto strParsed = matjson::parse(R"("Ctrl+Shift+M")");
         if (strParsed.isOk()) {
             std::vector<geode::Keybind> fromStr;
-            expect(ConfigBundleCodec::jsonToKeybinds(strParsed.unwrap(), fromStr),
+            expect(EbConfigBundleCodec::jsonToKeybinds(strParsed.unwrap(), fromStr),
                    "kb-json-string");
             expect(fromStr.size() == 1, "kb-json-string-count");
         } else {

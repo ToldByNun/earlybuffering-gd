@@ -9,18 +9,18 @@
 #include <cmath>
 #include <vector>
 
-ShadowSimulator::Model ShadowPlanPolicy::modelFor(PlayerObject* player, int limit, float capMul) {
-    ShadowSimulator::Model m;
+EbShadowSimulator::Model EbShadowPlanPolicy::modelFor(PlayerObject* player, int limit, float capMul) {
+    EbShadowSimulator::Model m;
     if (!player)
         return m;
-    auto const params = StageConfig::paramsFor(player);
+    auto const params = EbStageConfig::paramsFor(player);
     m.slack = std::max(0, params.slack);
 
     // Commit 15: planCap from AssistHorizon — long only when SimTrust OK.
-    bool const trustOk = SimTrust::get().okAt(player->getPositionX());
-    auto const kind = StageConfig::kindOf(player);
-    auto const caps = AssistHorizon::resolve(kind, trustOk, limit, capMul, params.cap,
-                                             StageConfig::lookAheadCap());
+    bool const trustOk = EbSimTrust::get().okAt(player->getPositionX());
+    auto const kind = EbStageConfig::kindOf(player);
+    auto const caps = EbAssistHorizon::resolve(kind, trustOk, limit, capMul, params.cap,
+                                             EbStageConfig::lookAheadCap());
     m.cap = caps.planCap;
 
     if (player->m_isDart) {
@@ -41,7 +41,7 @@ ShadowSimulator::Model ShadowPlanPolicy::modelFor(PlayerObject* player, int limi
     return m;
 }
 
-bool ShadowPlanPolicy::isHazardLike(GameObject* object) {
+bool EbShadowPlanPolicy::isHazardLike(GameObject* object) {
     if (!object)
         return false;
     switch (object->m_objectType) {
@@ -53,8 +53,8 @@ bool ShadowPlanPolicy::isHazardLike(GameObject* object) {
     }
 }
 
-ThreatZone ShadowPlanPolicy::buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj) {
-    ThreatZone z;
+EbThreatZone EbShadowPlanPolicy::buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj) {
+    EbThreatZone z;
     z.valid = true;
     z.startX = deathX - 20.f;
     z.endX = deathX + 20.f;
@@ -73,21 +73,21 @@ ThreatZone ShadowPlanPolicy::buildThreatZone(PlayLayer* layer, float deathX, Gam
     if (!children)
         return z;
 
-    class HazardSpan {
+    class EbHazardSpan {
     public:
         float lo = 0.f;
         float hi = 0.f;
 
     private:
     };
-    std::vector<HazardSpan> localHazards;
+    std::vector<EbHazardSpan> localHazards;
     localHazards.reserve(128);
     constexpr float kMaxClusterRadiusX = 800.f;
     float const winLo = z.startX - kMaxClusterRadiusX;
     float const winHi = z.endX + kMaxClusterRadiusX;
     for (unsigned index = 0; index < children->count(); ++index) {
         auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-        if (!ShadowSimulator::isHazardLike(object))
+        if (!EbShadowSimulator::isHazardLike(object))
             continue;
         float const x = object->getPositionX();
         if (x < winLo || x > winHi)
@@ -103,8 +103,8 @@ ThreatZone ShadowPlanPolicy::buildThreatZone(PlayLayer* layer, float deathX, Gam
     while (grew && guard++ < 32) {
         grew = false;
         for (auto const& h : localHazards) {
-            if (h.hi + ShadowSimulator::kClusterGapX < z.startX ||
-                h.lo - ShadowSimulator::kClusterGapX > z.endX)
+            if (h.hi + EbShadowSimulator::kClusterGapX < z.startX ||
+                h.lo - EbShadowSimulator::kClusterGapX > z.endX)
                 continue;
             if (h.lo < z.startX) {
                 z.startX = h.lo;
@@ -119,18 +119,18 @@ ThreatZone ShadowPlanPolicy::buildThreatZone(PlayLayer* layer, float deathX, Gam
     return z;
 }
 
-bool ShadowPlanPolicy::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit,
+bool EbShadowPlanPolicy::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit,
                                       float deltaTime) {
     if (!layer || !real || deltaTime <= 0.f)
         return false;
     int slack = 0;
     if (real) {
-        slack = StageConfig::paramsFor(real).slack;
+        slack = EbStageConfig::paramsFor(real).slack;
     }
-    return TravelForesight::hasOrbOrPadAhead(layer, real, limit, deltaTime, slack);
+    return EbTravelForesight::hasOrbOrPadAhead(layer, real, limit, deltaTime, slack);
 }
 
-bool ShadowPlanPolicy::spatialHazardProximity(PlayLayer* layer, PlayerObject* real,
+bool EbShadowPlanPolicy::spatialHazardProximity(PlayLayer* layer, PlayerObject* real,
                                               float proximityX) {
     if (!layer || !real || !layer->m_objectLayer || proximityX <= 0.f)
         return false;
@@ -145,7 +145,7 @@ bool ShadowPlanPolicy::spatialHazardProximity(PlayLayer* layer, PlayerObject* re
 
     for (unsigned index = 0; index < children->count(); ++index) {
         auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-        if (!ShadowSimulator::isHazardLike(object))
+        if (!EbShadowSimulator::isHazardLike(object))
             continue;
 
         float const objectX = object->getPositionX();
@@ -167,7 +167,7 @@ bool ShadowPlanPolicy::spatialHazardProximity(PlayLayer* layer, PlayerObject* re
     return false;
 }
 
-bool ShadowPlanPolicy::shouldWaveHazardProximityPass(bool isWave, bool nearHazard, bool noOrbTarget,
+bool EbShadowPlanPolicy::shouldWaveHazardProximityPass(bool isWave, bool nearHazard, bool noOrbTarget,
                                                      bool foresightOrbPad, bool pressDown) {
     // Release assist = delay the UP (keep holding). Never early-Pass that near hazards.
     if (!pressDown)
@@ -185,7 +185,7 @@ bool ShadowPlanPolicy::shouldWaveHazardProximityPass(bool isWave, bool nearHazar
     return false;
 }
 
-bool ShadowPlanPolicy::shouldWaveFutileDelayPass(bool isWave, bool orbIntent, int bestSurviveBin,
+bool EbShadowPlanPolicy::shouldWaveFutileDelayPass(bool isWave, bool orbIntent, int bestSurviveBin,
                                                  float bestEndXGain, bool foresightOrbPad,
                                                  bool pressDown) {
     if (!pressDown)
@@ -198,13 +198,13 @@ bool ShadowPlanPolicy::shouldWaveFutileDelayPass(bool isWave, bool orbIntent, in
         return false;
     if (bestSurviveBin > 0)
         return false;
-    if (!(bestEndXGain >= ShadowSimulator::kFutileEndXGain)) {
+    if (!(bestEndXGain >= EbShadowSimulator::kFutileEndXGain)) {
         return true;
     }
     return false;
 }
 
-bool ShadowPlanPolicy::deathLooksLikeAscent(float playerY, float deathY, bool upsideDown,
+bool EbShadowPlanPolicy::deathLooksLikeAscent(float playerY, float deathY, bool upsideDown,
                                             float marginY) {
     if (marginY < 0.f)
         marginY = 0.f;
@@ -215,7 +215,7 @@ bool ShadowPlanPolicy::deathLooksLikeAscent(float playerY, float deathY, bool up
     return deathY > playerY + marginY;
 }
 
-bool ShadowPlanPolicy::classifyIdleSafer(bool continuous, bool pressDown, bool baselineDied,
+bool EbShadowPlanPolicy::classifyIdleSafer(bool continuous, bool pressDown, bool baselineDied,
                                          int baselineDeathTick, float baselineDeathX, bool d0Died,
                                          int d0DeathTick, float d0DeathX) {
     if (!continuous || !pressDown)
@@ -235,7 +235,7 @@ bool ShadowPlanPolicy::classifyIdleSafer(bool continuous, bool pressDown, bool b
     return false;
 }
 
-bool ShadowPlanPolicy::classifyAscentUseful(bool continuous, bool pressDown, bool d0Viable,
+bool EbShadowPlanPolicy::classifyAscentUseful(bool continuous, bool pressDown, bool d0Viable,
                                             int d0SurviveBin, float d0EndX, bool laterViable,
                                             int laterSurviveBin, float laterEndX, bool laterAlive) {
     if (!continuous || !pressDown)
@@ -247,13 +247,13 @@ bool ShadowPlanPolicy::classifyAscentUseful(bool continuous, bool pressDown, boo
         return true;
     if (laterSurviveBin > d0SurviveBin)
         return true;
-    if (!(laterEndX > d0EndX + ShadowSimulator::kFutileEndXGain)) {
+    if (!(laterEndX > d0EndX + EbShadowSimulator::kFutileEndXGain)) {
         return false;
     }
     return true;
 }
 
-int ShadowPlanPolicy::pickPreferredRelease(int earliest, int latest, bool continuous) {
+int EbShadowPlanPolicy::pickPreferredRelease(int earliest, int latest, bool continuous) {
     if (earliest < 0)
         return -1;
     if (latest < earliest)
@@ -264,9 +264,9 @@ int ShadowPlanPolicy::pickPreferredRelease(int earliest, int latest, bool contin
     return earliest;
 }
 
-int ShadowPlanPolicy::autoRobustKHints(bool waveLike, bool isWave, float playerSpeed,
+int EbShadowPlanPolicy::autoRobustKHints(bool waveLike, bool isWave, float playerSpeed,
                                        float dtVariance, bool spamDense) {
-    int offset = ShadowSimulator::kWindowMarginK; // 1
+    int offset = EbShadowSimulator::kWindowMarginK; // 1
     if (waveLike)
         offset = 2;
     // Wave spam corridors: keep at least 2; at speed bump to 3 so ±1 neighbors
@@ -285,7 +285,7 @@ int ShadowPlanPolicy::autoRobustKHints(bool waveLike, bool isWave, float playerS
     return std::clamp(offset, 1, 3);
 }
 
-int ShadowPlanPolicy::autoRobustK(PlayerObject* real, float dtVariance, bool spamDense) {
+int EbShadowPlanPolicy::autoRobustK(PlayerObject* real, float dtVariance, bool spamDense) {
     bool waveLike = false;
     bool isWave = false;
     float speed = 1.f;
@@ -294,5 +294,5 @@ int ShadowPlanPolicy::autoRobustK(PlayerObject* real, float dtVariance, bool spa
         waveLike = real->m_isDart || real->m_isShip || real->m_isSwing;
         speed = real->m_playerSpeed;
     }
-    return ShadowSimulator::autoRobustKHints(waveLike, isWave, speed, dtVariance, spamDense);
+    return EbShadowSimulator::autoRobustKHints(waveLike, isWave, speed, dtVariance, spamDense);
 }

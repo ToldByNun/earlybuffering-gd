@@ -7,7 +7,7 @@
 
 class PlayerObject;
 
-class StageInfo {
+class EbStageInfo {
 public:
     bool enabled = true;
     int ticksAll = 4;
@@ -16,7 +16,7 @@ public:
 private:
 };
 
-class ModeParams {
+class EbModeParams {
 public:
     bool enabled = true;
     bool overwrite = false;
@@ -29,7 +29,7 @@ public:
 private:
 };
 
-class StageConfig {
+class EbStageConfig {
 public:
     enum class GameModeKind { Cube = 0, Ship, Ball, Ufo, Wave, Robot, Spider, Swing, Count };
 
@@ -42,7 +42,7 @@ public:
 
     static void refreshCache();
 
-    static StageInfo fromSettings();
+    static EbStageInfo fromSettings();
     static void toggleDebugLogging();
     // Toggle smart / per-level learning (bias, trust, capMul). Window ticks unchanged.
     static void toggleAutoTune();
@@ -174,19 +174,19 @@ public:
     // --- Per-mode ---
     static GameModeKind kindOf(PlayerObject* player);
     static char const* kindName(GameModeKind kind);
-    static ModeParams paramsFor(GameModeKind kind);
-    static ModeParams paramsFor(PlayerObject* player);
+    static EbModeParams paramsFor(GameModeKind kind);
+    static EbModeParams paramsFor(PlayerObject* player);
 
     // Overlay / fingerprint: "OFF" or "NA/NW" from Main Window values.
-    static std::string stageLabel(StageInfo const& info);
+    static std::string stageLabel(EbStageInfo const& info);
 
 private:
-    friend class StageSettingsCache;
+    friend class EbStageSettingsCache;
 };
 
-using GameModeKind = StageConfig::GameModeKind;
-using AssistMode = StageConfig::AssistMode;
-using AssistEngineKind = StageConfig::AssistEngineKind;
+using GameModeKind = EbStageConfig::GameModeKind;
+using AssistMode = EbStageConfig::AssistMode;
+using AssistEngineKind = EbStageConfig::AssistEngineKind;
 
 #include "../core/assist/assist_clock.hpp"
 #include "../core/platform/platform_limits.hpp"
@@ -197,7 +197,7 @@ using AssistEngineKind = StageConfig::AssistEngineKind;
 #include <cmath>
 #include <cstring>
 
-class ModeSettingKeys {
+class EbModeSettingKeys {
 public:
     char const* enable;
     char const* overwrite;
@@ -209,7 +209,7 @@ public:
 
 private:
 };
-class StageConfigImplementation {
+class EbStageConfigImplementation {
 public:
     static float defaultLatencyWeight(int modeIndex);
     static int clampInt(int value, int lo, int hi);
@@ -219,18 +219,18 @@ public:
     static float readFloat(geode::prelude::Mod* mod, char const* id, float fallback);
     static float round2(float value);
     static void loadAssistOffSlots(geode::prelude::Mod* mod,
-                                   std::vector<StageConfig::PercentRange>& out);
+                                   std::vector<EbStageConfig::PercentRange>& out);
     static void ensureCache();
 
 private:
-    friend class StageSettingsCache;
+    friend class EbStageSettingsCache;
 
-    friend class StageInfo;
-    friend class ModeParams;
-    friend class StageConfig;
-    friend class ModeSettingKeys;
+    friend class EbStageInfo;
+    friend class EbModeParams;
+    friend class EbStageConfig;
+    friend class EbModeSettingKeys;
 
-    inline static constexpr ModeSettingKeys MODE_IDS[] = {
+    inline static constexpr EbModeSettingKeys MODE_IDS[] = {
         {"cube-enable", "cube-overwrite", "cube-ticks", "cube-cap", "cube-slack", "cube-latency",
          "cube"},
         {"ship-enable", "ship-overwrite", "ship-ticks", "ship-cap", "ship-slack", "ship-latency",
@@ -247,8 +247,8 @@ private:
         {"swing-enable", "swing-overwrite", "swing-ticks", "swing-cap", "swing-slack",
          "swing-latency", "swing"},
     };
-    static StageInfo s_cachedStage;
-    static std::array<ModeParams, StageConfig::MODE_COUNT> s_cachedModes;
+    static EbStageInfo s_cachedStage;
+    static std::array<EbModeParams, EbStageConfig::MODE_COUNT> s_cachedModes;
     static bool s_cachedDebug;
     static bool s_cachedPerfTrace;
     static bool s_cachedLagProbe;
@@ -285,18 +285,18 @@ private:
     static bool s_cachedAssistStartposOnly;
     static int s_cachedAssistPercentMin;
     static int s_cachedAssistPercentMax;
-    static std::vector<StageConfig::PercentRange> s_cachedAssistDisableRanges;
+    static std::vector<EbStageConfig::PercentRange> s_cachedAssistDisableRanges;
     static bool s_cachedSaveFeedbackSound;
     static bool s_cachedSaveFeedbackColor;
     static bool s_cachedSaveFeedbackCounter;
-    static StageConfig::ColorRgb s_cachedSaveIconColor;
+    static EbStageConfig::ColorRgb s_cachedSaveIconColor;
     static int s_cachedSlack;
     static int s_cachedLookAhead;
     static bool s_cachedWindowUnitFrames;
     static bool s_cacheInitialized;
     static bool s_applying;
 
-    StageConfigImplementation() = delete;
+    EbStageConfigImplementation() = delete;
 };
 
 #endif

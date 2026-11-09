@@ -12,7 +12,7 @@ enum class PlanAction {
     Delay // wait `delay` ticks, then do it (assist only)
 };
 
-class ThreatZone {
+class EbThreatZone {
 public:
     float startX = 0.f;
     float endX = 0.f;
@@ -21,7 +21,7 @@ public:
 private:
 };
 
-class PlanOptions {
+class EbPlanOptions {
 public:
     float capMul = 1.f;
     int maxBranches = 4;
@@ -47,7 +47,7 @@ public:
     // true = assist-pick v1; false = v2 slot (AssistPickV2 TBD — currently v1 choose).
     bool legacyPick = false;
     // Live V2 sim backend (WU8). V1 effective = ShadowPlayer always.
-    StageConfig::AssistEngineKind assistEngine = StageConfig::AssistEngineKind::ShadowPlayer;
+    EbStageConfig::AssistEngineKind assistEngine = EbStageConfig::AssistEngineKind::ShadowPlayer;
     // Commit 11: PerfectAssistPolicy MustDelaySearch — skip PassNoThreat early exit.
     bool mustDelaySearch = false;
     // Live Delay-arm: only Class::Alive ghosts (soft Landing/Recoverable/LateCrash
@@ -55,12 +55,12 @@ public:
     bool requireAliveForDelay = false;
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
-    ThreatZone seedThreatZone{};
+    EbThreatZone seedThreatZone{};
 
 private:
 };
 
-class ActWindow {
+class EbActWindow {
 public:
     int dMin = -1;
     int dMax = -1;
@@ -71,7 +71,7 @@ public:
 private:
 };
 
-class SimPlan {
+class EbSimPlan {
 public:
     bool fixedFireTick = false;
     PlanAction action = PlanAction::Pass;
@@ -119,15 +119,15 @@ public:
     int planId = 0;
     int smartDepthUsed = 1;
     int smartCombosUsed = 0;
-    ThreatZone threatZone{};
+    EbThreatZone threatZone{};
     // Commit 12: one note per delay 0..limit after plan/planSequence entry.
-    std::vector<DevRejectLedger::CandNote> candNotes;
+    std::vector<EbDevRejectLedger::CandNote> candNotes;
     bool candNotesTruncated = false;
 
 private:
 };
 
-class InputEvent {
+class EbInputEvent {
 public:
     int tick = 0; // absolute attempt tick
     bool down = false;

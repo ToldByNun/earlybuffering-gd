@@ -4,7 +4,7 @@
 class PlayerObject;
 class PlayLayer;
 
-class AssistScopeGate {
+class EbAssistScopeGate {
 public:
     static bool isPlatformer(PlayerObject* player);
     static bool allowAssist(PlayLayer* layer, PlayerObject* player);

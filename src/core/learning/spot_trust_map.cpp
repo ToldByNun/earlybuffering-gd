@@ -1,23 +1,23 @@
+#include "../../app/class_manager.hpp"
 #include "spot_trust_map.hpp"
 #include <cmath>
 #include <fmt/format.h>
 
-SpotTrustMap& SpotTrustMap::get() {
-    static SpotTrustMap inst;
-    return inst;
+EbSpotTrustMap& EbSpotTrustMap::get() {
+    return EbClassManager::get().service<EbSpotTrustMap>();
 }
 
-int SpotTrustMap::spotBucket(float x) {
-    return static_cast<int>(std::floor(x / SpotTrustMap::kSpotSize));
+int EbSpotTrustMap::spotBucket(float x) {
+    return static_cast<int>(std::floor(x / EbSpotTrustMap::kSpotSize));
 }
 
-void SpotTrustMap::clear() {
+void EbSpotTrustMap::clear() {
     this->m_spots.clear();
 }
 
-void SpotTrustMap::markUntrusted(float x) {
-    int const center = SpotTrustMap::spotBucket(x);
-    for (int delay = -SpotTrustMap::kMarkBucketRadius; delay <= SpotTrustMap::kMarkBucketRadius;
+void EbSpotTrustMap::markUntrusted(float x) {
+    int const center = EbSpotTrustMap::spotBucket(x);
+    for (int delay = -EbSpotTrustMap::kMarkBucketRadius; delay <= EbSpotTrustMap::kMarkBucketRadius;
          ++delay) {
         auto& spot = this->m_spots[center + delay];
         ++spot.hits;
@@ -25,13 +25,13 @@ void SpotTrustMap::markUntrusted(float x) {
     }
 }
 
-bool SpotTrustMap::isUntrusted(float x) const {
-    int const secondValue = SpotTrustMap::spotBucket(x);
+bool EbSpotTrustMap::isUntrusted(float x) const {
+    int const secondValue = EbSpotTrustMap::spotBucket(x);
     return this->m_spots.find(secondValue) != this->m_spots.end();
 }
 
-void SpotTrustMap::noteGoodParity(float x) {
-    int const secondValue = SpotTrustMap::spotBucket(x);
+void EbSpotTrustMap::noteGoodParity(float x) {
+    int const secondValue = EbSpotTrustMap::spotBucket(x);
     auto it = this->m_spots.find(secondValue);
     if (it == this->m_spots.end())
         return;
@@ -42,7 +42,7 @@ void SpotTrustMap::noteGoodParity(float x) {
     }
 }
 
-bool SpotTrustMap::selfCheck(std::string& report) {
+bool EbSpotTrustMap::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -54,16 +54,16 @@ bool SpotTrustMap::selfCheck(std::string& report) {
         report += name;
     };
 
-    SpotTrustMap& map = SpotTrustMap::get();
+    EbSpotTrustMap& map = EbSpotTrustMap::get();
     map.clear();
     expect(!map.isUntrusted(100.f), "fresh-trusted");
     expect(map.untrustedCount() == 0, "fresh-empty");
 
     map.markUntrusted(100.f);
     expect(map.isUntrusted(100.f), "marked-center");
-    expect(map.isUntrusted(100.f + SpotTrustMap::kSpotSize * 0.5f), "marked-same-bucket");
+    expect(map.isUntrusted(100.f + EbSpotTrustMap::kSpotSize * 0.5f), "marked-same-bucket");
     // Neighbor bucket within mark radius.
-    expect(map.isUntrusted(100.f + SpotTrustMap::kSpotSize), "marked-neighbor");
+    expect(map.isUntrusted(100.f + EbSpotTrustMap::kSpotSize), "marked-neighbor");
     expect(map.untrustedCount() >= 1, "count-after-mark");
 
     map.noteGoodParity(100.f);
@@ -76,9 +76,9 @@ bool SpotTrustMap::selfCheck(std::string& report) {
     map.clear();
     expect(!map.isUntrusted(500.f), "clear-all");
 
-    expect(SpotTrustMap::spotBucket(0.f) == 0, "bucket-0");
-    expect(SpotTrustMap::spotBucket(89.f) == 0, "bucket-89");
-    expect(SpotTrustMap::spotBucket(90.f) == 1, "bucket-90");
+    expect(EbSpotTrustMap::spotBucket(0.f) == 0, "bucket-0");
+    expect(EbSpotTrustMap::spotBucket(89.f) == 0, "bucket-89");
+    expect(EbSpotTrustMap::spotBucket(90.f) == 1, "bucket-90");
 
     if (fails == 0) {
         report = "SpotTrustMap selfCheck OK";

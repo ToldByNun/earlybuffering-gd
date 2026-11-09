@@ -7,7 +7,7 @@
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../shadow_simulator.hpp"
 
-void ShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination, DevPlayerBlob const& blob) {
+void EbShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination, EbDevPlayerBlob const& blob) {
     if (!destination || !blob.present)
         return;
     destination->setPosition({blob.x, blob.y});
@@ -50,12 +50,12 @@ void ShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination, DevPlayer
     destination->m_maybeIsFalling = blob.maybeIsFalling;
     destination->m_maybeIsBoosted = blob.maybeIsBoosted;
     destination->m_isDead = false;
-    ShadowSimulator::hideGhost(destination);
+    EbShadowSimulator::hideGhost(destination);
 }
 
-void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, PlayLayer* layer,
-                                                  DevLiveWitness const& witness,
-                                                  DevEvalRestore& restore) {
+void EbShadowFreezeEvaluator::applyEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer,
+                                                  EbDevLiveWitness const& witness,
+                                                  EbDevEvalRestore& restore) {
     if (!layer)
         return;
 
@@ -67,12 +67,12 @@ void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, Pl
     // --- Dual ghost ---
     if (witness.dual.present && simulator.m_evalGhosts[1]) {
         simulator.applyPlayerBlob(simulator.m_evalGhosts[1], witness.dual);
-        DevEvalRestore::noteDualWritten(restore, witness.dual);
+        EbDevEvalRestore::noteDualWritten(restore, witness.dual);
     }
 
     // --- Orbs: set activated ID set + mark matching objects claimed ---
     {
-        bool const wantOrbs = DevLiveWitness::hasWorldDep(witness, DevWitnessCategory::Orbs);
+        bool const wantOrbs = EbDevLiveWitness::hasWorldDep(witness, DevWitnessCategory::Orbs);
         if (wantOrbs || !witness.orbIds.empty()) {
             layer->m_gameState.m_activatedObjectIDs.clear();
             auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
@@ -97,7 +97,7 @@ void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, Pl
                     break;
                 }
             }
-            DevEvalRestore::noteOrbsWritten(restore, witness.orbIds);
+            EbDevEvalRestore::noteOrbsWritten(restore, witness.orbIds);
         }
     }
 
@@ -106,8 +106,8 @@ void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, Pl
         simulator.captureTriggerTransforms(layer);
         int const tick =
             witness.triggerApplyTick >= 0 ? witness.triggerApplyTick : witness.clock.effectTick;
-        TriggerWorldStore::get().applyAtTick(layer, tick);
-        DevEvalRestore::noteTriggersSpooled(restore, witness.triggerStoreKey,
+        EbTriggerWorldStore::get().applyAtTick(layer, tick);
+        EbDevEvalRestore::noteTriggersSpooled(restore, witness.triggerStoreKey,
                                             witness.triggerStoreVersion, tick);
     }
 
@@ -138,7 +138,7 @@ void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, Pl
                     }
                 }
                 if (!already) {
-                    ShadowSimulator::SavedTransform st;
+                    EbShadowSimulator::SavedTransform st;
                     st.uniqueId = object->m_uniqueID;
                     st.obj = object;
                     st.x = object->getPositionX();
@@ -150,7 +150,7 @@ void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, Pl
                     simulator.m_savedTransforms.push_back(st);
                 }
 
-                TriggerPose tp;
+                EbTriggerPose tp;
                 tp.tick = 0;
                 tp.x = pose.x;
                 tp.y = pose.y;
@@ -158,17 +158,17 @@ void ShadowFreezeEvaluator::applyEvalWorldRestore(ShadowSimulator& simulator, Pl
                 tp.scaleX = pose.scaleX;
                 tp.scaleY = pose.scaleY;
                 tp.active = pose.active;
-                TriggerWorldStore::writePose(object, tp);
+                EbTriggerWorldStore::writePose(object, tp);
             }
         }
-        DevEvalRestore::noteMoversPosesWritten(restore, witness.moverPoses,
+        EbDevEvalRestore::noteMoversPosesWritten(restore, witness.moverPoses,
                                                witness.hasHazardDigest ? witness.hazardDigest : 0);
     } else if (witness.hasHazardDigest) {
-        DevEvalRestore::noteMoversDigestOnly(restore, witness.hazardDigest);
+        EbDevEvalRestore::noteMoversDigestOnly(restore, witness.hazardDigest);
     }
 }
 
-void ShadowFreezeEvaluator::finishEvalWorldRestore(ShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowFreezeEvaluator::finishEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer) {
     if (!layer) {
         simulator.m_saved.clear();
         simulator.m_savedTransforms.clear();
@@ -176,7 +176,7 @@ void ShadowFreezeEvaluator::finishEvalWorldRestore(ShadowSimulator& simulator, P
         return;
     }
     {
-        LagProbe::Scope const scope("eb.trigger.restore");
+        EbLagProbe::Scope const scope("eb.trigger.restore");
         simulator.restoreTriggerTransforms(layer);
     }
     for (auto const& s : simulator.m_saved) {
@@ -200,15 +200,15 @@ void ShadowFreezeEvaluator::finishEvalWorldRestore(ShadowSimulator& simulator, P
     simulator.m_savedActivatedIDs.clear();
 }
 
-ShadowSimulator::EvalFromFreezeResult
-ShadowFreezeEvaluator::evalDelayFromFreeze(ShadowSimulator& simulator, PlayLayer* layer,
-                                           DevLiveWitness const& witness, int delay,
+EbShadowSimulator::EvalFromFreezeResult
+EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayLayer* layer,
+                                           EbDevLiveWitness const& witness, int delay,
                                            int horizonTicks, bool down, int* tickBudgetLeft) {
-    ShadowSimulator::EvalFromFreezeResult out;
+    EbShadowSimulator::EvalFromFreezeResult out;
     out.evalSimPathId = DevSimPathId::EvalDelayFromFreeze;
     simulator.m_evalAbort = false;
 
-    if (!witness.valid || !witness.clock.valid || !DevClockContract::get().clockOk(witness.clock)) {
+    if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
         out.clockMismatch = true;
         return out;
     }
@@ -223,17 +223,17 @@ ShadowFreezeEvaluator::evalDelayFromFreeze(ShadowSimulator& simulator, PlayLayer
     if (horizonTicks < 0)
         horizonTicks = 0;
 
-    auto& clock = DevClockContract::get();
+    auto& clock = EbDevClockContract::get();
     auto steps = clock.stepSchedule(witness.clock, delay, horizonTicks);
     out.stepScheduleHash = clock.hashSteps(steps);
     if (steps.empty())
         return out;
 
-    out.restore = DevEvalRestore::beginFromWitness(witness, DevSimPathId::EvalDelayFromFreeze);
+    out.restore = EbDevEvalRestore::beginFromWitness(witness, DevSimPathId::EvalDelayFromFreeze);
 
     PlayerObject* ghost = simulator.m_evalGhosts[0];
     simulator.applyPlayerBlob(ghost, witness.player);
-    DevEvalRestore::notePlayerWritten(out.restore, witness.player);
+    EbDevEvalRestore::notePlayerWritten(out.restore, witness.player);
     simulator.applyEvalWorldRestore(layer, witness, out.restore);
 
     simulator.m_evalActive = ghost;
@@ -357,15 +357,15 @@ ShadowFreezeEvaluator::evalDelayFromFreeze(ShadowSimulator& simulator, PlayLayer
     return out;
 }
 
-ShadowSimulator::EvalFromFreezeResult
-ShadowFreezeEvaluator::replayActualFire(ShadowSimulator& simulator, PlayLayer* layer,
-                                        DevLiveWitness const& witness, int actualFireTickAbs,
+EbShadowSimulator::EvalFromFreezeResult
+EbShadowFreezeEvaluator::replayActualFire(EbShadowSimulator& simulator, PlayLayer* layer,
+                                        EbDevLiveWitness const& witness, int actualFireTickAbs,
                                         int horizonTicks, bool down, int* tickBudgetLeft) {
-    ShadowSimulator::EvalFromFreezeResult out;
+    EbShadowSimulator::EvalFromFreezeResult out;
     out.evalSimPathId = DevSimPathId::ReplayActualFire;
     simulator.m_evalAbort = false;
 
-    if (!witness.valid || !witness.clock.valid || !DevClockContract::get().clockOk(witness.clock)) {
+    if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
         out.clockMismatch = true;
         return out;
     }

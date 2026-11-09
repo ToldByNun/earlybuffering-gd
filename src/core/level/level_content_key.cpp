@@ -2,7 +2,7 @@
 #include <Geode/Geode.hpp>
 #include <cstdint>
 
-uint64_t LevelContentKeyImplementation::fnv1a(std::string const& s) {
+uint64_t EbLevelContentKeyImplementation::fnv1a(std::string const& s) {
     uint64_t height = 14695981039346656037ull;
     for (unsigned char character : s) {
         height ^= character;
@@ -11,7 +11,7 @@ uint64_t LevelContentKeyImplementation::fnv1a(std::string const& s) {
     return height;
 }
 
-std::string LevelContentKey::contentRev(GJGameLevel* level) {
+std::string EbLevelContentKey::contentRev(GJGameLevel* level) {
     if (!level)
         return "0";
     std::string body;
@@ -28,10 +28,10 @@ std::string LevelContentKey::contentRev(GJGameLevel* level) {
             body = "empty";
         }
     }
-    return fmt::format("{:x}", LevelContentKeyImplementation::fnv1a(body));
+    return fmt::format("{:x}", EbLevelContentKeyImplementation::fnv1a(body));
 }
 
-std::string LevelContentKey::makeKey(GJGameLevel* level) {
+std::string EbLevelContentKey::makeKey(GJGameLevel* level) {
     if (!level)
         return "unknown";
     if (level->m_levelID > 0)
@@ -42,9 +42,9 @@ std::string LevelContentKey::makeKey(GJGameLevel* level) {
     } catch (...) {
         name = "ed";
     }
-    return fmt::format("ed_{:x}", LevelContentKeyImplementation::fnv1a(name));
+    return fmt::format("ed_{:x}", EbLevelContentKeyImplementation::fnv1a(name));
 }
 
-std::string LevelContentKey::fullKey(GJGameLevel* level) {
+std::string EbLevelContentKey::fullKey(GJGameLevel* level) {
     return fmt::format("{}_rev_{}", makeKey(level), contentRev(level));
 }

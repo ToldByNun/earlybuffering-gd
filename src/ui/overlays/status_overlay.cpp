@@ -2,12 +2,12 @@
 #include "../../config/stage_config.hpp"
 #include "../../core/platform/platform_limits.hpp"
 
-cocos2d::CCLabelBMFont* StatusOverlay::s_label = nullptr;
+cocos2d::CCLabelBMFont* EbStatusOverlay::s_label = nullptr;
 
-std::string StatusOverlayImplementation::s_lastText;
-bool StatusOverlayImplementation::s_lastVisible = false;
+std::string EbStatusOverlayImplementation::s_lastText;
+bool EbStatusOverlayImplementation::s_lastVisible = false;
 
-void StatusOverlay::attach(PlayLayer* playLayer) {
+void EbStatusOverlay::attach(PlayLayer* playLayer) {
     detach();
     if (!playLayer)
         return;
@@ -26,28 +26,28 @@ void StatusOverlay::attach(PlayLayer* playLayer) {
     s_label->setID("earlybuffer-status-overlay"_spr);
 
     auto const winSize = geode::prelude::CCDirector::sharedDirector()->getWinSize();
-    auto& limits = PlatformLimits::get();
+    auto& limits = EbPlatformLimits::get();
     float const left = limits.overlayLeftInset();
     float const top = limits.overlayTopInset();
     s_label->setPosition({left, winSize.height - top});
 
-    StatusOverlayImplementation::s_lastText = "EarlyBuffer";
-    StatusOverlayImplementation::s_lastVisible = StageConfig::showOverlay();
-    s_label->setVisible(StatusOverlayImplementation::s_lastVisible);
+    EbStatusOverlayImplementation::s_lastText = "EarlyBuffer";
+    EbStatusOverlayImplementation::s_lastVisible = EbStageConfig::showOverlay();
+    s_label->setVisible(EbStatusOverlayImplementation::s_lastVisible);
 
     playLayer->addChild(s_label, 1000);
     s_label->retain();
 }
 
-void StatusOverlay::detach(bool layerDying) {
+void EbStatusOverlay::detach(bool layerDying) {
     if (!s_label) {
-        StatusOverlayImplementation::s_lastText.clear();
+        EbStatusOverlayImplementation::s_lastText.clear();
         return;
     }
     if (layerDying) {
         s_label->release();
         s_label = nullptr;
-        StatusOverlayImplementation::s_lastText.clear();
+        EbStatusOverlayImplementation::s_lastText.clear();
         return;
     }
     if (s_label->getParent()) {
@@ -55,29 +55,29 @@ void StatusOverlay::detach(bool layerDying) {
     }
     s_label->release();
     s_label = nullptr;
-    StatusOverlayImplementation::s_lastText.clear();
+    EbStatusOverlayImplementation::s_lastText.clear();
 }
 
-void StatusOverlay::update(std::string const& text) {
+void EbStatusOverlay::update(std::string const& text) {
     if (!s_label)
         return;
-    bool const vis = StageConfig::showOverlay();
-    if (vis != StatusOverlayImplementation::s_lastVisible) {
-        StatusOverlayImplementation::s_lastVisible = vis;
+    bool const vis = EbStageConfig::showOverlay();
+    if (vis != EbStatusOverlayImplementation::s_lastVisible) {
+        EbStatusOverlayImplementation::s_lastVisible = vis;
         s_label->setVisible(vis);
     }
-    if (vis && text != StatusOverlayImplementation::s_lastText) {
-        StatusOverlayImplementation::s_lastText = text;
+    if (vis && text != EbStatusOverlayImplementation::s_lastText) {
+        EbStatusOverlayImplementation::s_lastText = text;
         s_label->setString(text.c_str());
     }
 }
 
-void StatusOverlay::setVisible(bool visible) {
+void EbStatusOverlay::setVisible(bool visible) {
     if (!s_label)
         return;
-    bool const vis = visible && StageConfig::showOverlay();
-    if (vis != StatusOverlayImplementation::s_lastVisible) {
-        StatusOverlayImplementation::s_lastVisible = vis;
+    bool const vis = visible && EbStageConfig::showOverlay();
+    if (vis != EbStatusOverlayImplementation::s_lastVisible) {
+        EbStatusOverlayImplementation::s_lastVisible = vis;
         s_label->setVisible(vis);
     }
 }

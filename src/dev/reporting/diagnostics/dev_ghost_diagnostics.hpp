@@ -3,7 +3,7 @@
 
 #include <string>
 
-class DevGhostDiagnostics {
+class EbDevGhostDiagnostics {
 public:
     static void dumpVehicleFlags(std::ostringstream& o, char const* prefix, PlayerObject* player);
     static bool isHazardType(GameObject* object);
@@ -13,7 +13,7 @@ public:
     static std::string buildGhostHitbox();
 
 private:
-    DevGhostDiagnostics() = delete;
+    EbDevGhostDiagnostics() = delete;
 };
 
 #endif

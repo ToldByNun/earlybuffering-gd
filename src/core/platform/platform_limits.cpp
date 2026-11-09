@@ -1,13 +1,13 @@
+#include "../../app/class_manager.hpp"
 #include "platform_limits.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 
-PlatformLimits& PlatformLimits::get() {
-    static PlatformLimits inst;
-    return inst;
+EbPlatformLimits& EbPlatformLimits::get() {
+    return EbClassManager::get().service<EbPlatformLimits>();
 }
 
-bool PlatformLimits::isConstrainedDevice() {
+bool EbPlatformLimits::isConstrainedDevice() {
 #if defined(GEODE_IS_ANDROID) || defined(GEODE_IS_IOS)
     return true;
 #else
@@ -15,24 +15,24 @@ bool PlatformLimits::isConstrainedDevice() {
 #endif
 }
 
-bool PlatformLimits::allowLoadDiskSelfCheck() const {
+bool EbPlatformLimits::allowLoadDiskSelfCheck() const {
     (void)this;
-    return !PlatformLimits::isConstrainedDevice();
+    return !EbPlatformLimits::isConstrainedDevice();
 }
 
-int PlatformLimits::clampSimBudgetUs(int requestedUs) const {
+int EbPlatformLimits::clampSimBudgetUs(int requestedUs) const {
     (void)this;
     if (requestedUs <= 0)
         return requestedUs; // 0 = unlimited wall clock
-    if (PlatformLimits::isConstrainedDevice()) {
+    if (EbPlatformLimits::isConstrainedDevice()) {
         return std::min(requestedUs, kConstrainedMaxSimBudgetUs);
     }
     return requestedUs;
 }
 
-int PlatformLimits::clampTickBudget(int requestedTicks) const {
+int EbPlatformLimits::clampTickBudget(int requestedTicks) const {
     (void)this;
-    if (PlatformLimits::isConstrainedDevice()) {
+    if (EbPlatformLimits::isConstrainedDevice()) {
         if (requestedTicks <= 0)
             return kConstrainedMaxTickBudget;
         return std::min(requestedTicks, kConstrainedMaxTickBudget);
@@ -40,20 +40,20 @@ int PlatformLimits::clampTickBudget(int requestedTicks) const {
     return requestedTicks;
 }
 
-float PlatformLimits::overlayTopInset() const {
+float EbPlatformLimits::overlayTopInset() const {
     (void)this;
-    if (PlatformLimits::isConstrainedDevice()) {
+    if (EbPlatformLimits::isConstrainedDevice()) {
         return kConstrainedOverlayTopInset;
     }
     return kDefaultOverlayTopInset;
 }
 
-float PlatformLimits::overlayLeftInset() const {
+float EbPlatformLimits::overlayLeftInset() const {
     (void)this;
     return kDefaultOverlayLeftInset;
 }
 
-bool PlatformLimits::selfCheck(std::string& report) {
+bool EbPlatformLimits::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -63,12 +63,12 @@ bool PlatformLimits::selfCheck(std::string& report) {
         }
     };
 
-    auto& lim = PlatformLimits::get();
+    auto& lim = EbPlatformLimits::get();
     expect(lim.clampSimBudgetUs(0) == 0, "sim-unlimited");
     expect(lim.clampSimBudgetUs(500) == 500, "sim-below-cap");
     expect(lim.overlayLeftInset() == kDefaultOverlayLeftInset, "overlay-left");
 
-    bool const mobile = PlatformLimits::isConstrainedDevice();
+    bool const mobile = EbPlatformLimits::isConstrainedDevice();
 #if defined(GEODE_IS_ANDROID) || defined(GEODE_IS_IOS)
     expect(mobile, "constrained-compile-match");
 #else

@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "trigger_world_baker.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
@@ -16,38 +17,37 @@
 #include <string>
 #include <vector>
 
-TriggerWorldBaker& TriggerWorldBaker::get() {
-    static TriggerWorldBaker inst;
-    return inst;
+EbTriggerWorldBaker& EbTriggerWorldBaker::get() {
+    return EbClassManager::get().service<EbTriggerWorldBaker>();
 }
 
-TriggerWorldBaker::LivePose TriggerWorldBaker::poseFromObject(GameObject* object) {
-    return TriggerEffectBaker::poseFromObject(object);
+EbTriggerWorldBaker::LivePose EbTriggerWorldBaker::poseFromObject(GameObject* object) {
+    return EbTriggerEffectBaker::poseFromObject(object);
 }
 
-TriggerPose TriggerWorldBaker::toKey(int tick, LivePose const& live) {
-    return TriggerEffectBaker::toKey(tick, live);
+EbTriggerPose EbTriggerWorldBaker::toKey(int tick, LivePose const& live) {
+    return EbTriggerEffectBaker::toKey(tick, live);
 }
 
-void TriggerWorldBaker::pushKey(TriggerTrack& track, int tick, LivePose const& live) {
-    return TriggerEffectBaker::pushKey(track, tick, live);
+void EbTriggerWorldBaker::pushKey(EbTriggerTrack& track, int tick, LivePose const& live) {
+    return EbTriggerEffectBaker::pushKey(track, tick, live);
 }
 
-int TriggerWorldBaker::durationTicks(float durationSec, double tps) {
-    return TriggerEffectBaker::durationTicks(durationSec, tps);
+int EbTriggerWorldBaker::durationTicks(float durationSec, double tps) {
+    return EbTriggerEffectBaker::durationTicks(durationSec, tps);
 }
 
-bool TriggerWorldBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind) {
-    return TriggerEffectBaker::isFollowLikeStatic(effect, kind);
+bool EbTriggerWorldBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind) {
+    return EbTriggerEffectBaker::isFollowLikeStatic(effect, kind);
 }
 
-cocos2d::CCPoint TriggerWorldBaker::groupCenter(int groupId,
+cocos2d::CCPoint EbTriggerWorldBaker::groupCenter(int groupId,
                                                 std::vector<GameObject*> const& objects,
                                                 std::unordered_map<int, LivePose> const& live) {
-    return TriggerEffectBaker::groupCenter(groupId, objects, live);
+    return EbTriggerEffectBaker::groupCenter(groupId, objects, live);
 }
 
-void TriggerWorldBaker::clearJob() {
+void EbTriggerWorldBaker::clearJob() {
     this->m_layer = nullptr;
     this->m_phase = Phase::Idle;
     this->m_childIndex = 0;
@@ -74,7 +74,7 @@ void TriggerWorldBaker::clearJob() {
     this->m_tps = 240.0;
 }
 
-void TriggerWorldBaker::cancel() {
+void EbTriggerWorldBaker::cancel() {
     this->m_cancel = true;
     if (this->m_running) {
         this->finishCancel();
@@ -85,15 +85,15 @@ void TriggerWorldBaker::cancel() {
     this->clearJob();
 }
 
-void TriggerWorldBaker::finishCancel() {
+void EbTriggerWorldBaker::finishCancel() {
     this->m_running = false;
     this->m_progress = 0.f;
     this->m_status = "trigger-world: cancelled";
     this->clearJob();
-    AssistLog::debug("TRIGGER-WORLD: bake cancelled");
+    EbAssistLog::debug("TRIGGER-WORLD: bake cancelled");
 }
 
-void TriggerWorldBaker::finishOk() {
+void EbTriggerWorldBaker::finishOk() {
     this->m_running = false;
     this->m_progress = 1.f;
     this->m_lastBakedEffects = this->m_bakedEffects;
@@ -107,14 +107,14 @@ void TriggerWorldBaker::finishOk() {
     this->m_lastSectionExtras = this->m_sectionExtras;
     this->m_lastCollectIncomplete = this->m_collectIncomplete;
 
-    auto& store = TriggerWorldStore::get();
+    auto& store = EbTriggerWorldStore::get();
     size_t const tracks = store.trackCount();
     // Incomplete collect (0 children at init) must not poison disk cache.
     if (tracks == 0 && this->m_collectIncomplete) {
         store.clearDirty();
         store.discardCacheFile();
         this->m_status = "trigger-world: empty (collect incomplete — will retry)";
-        AssistLog::info("TRIGGER-WORLD: 0 tracks after incomplete collect — not caching; "
+        EbAssistLog::info("TRIGGER-WORLD: 0 tracks after incomplete collect — not caching; "
                         "kickIfStaleEmpty will retry");
         this->clearJob();
         return;
@@ -128,7 +128,7 @@ void TriggerWorldBaker::finishOk() {
                         this->m_lastBakedEffects, this->m_lastBakedStartTimed,
                         this->m_lastSkippedFollow, this->m_lastSkippedDynamic,
                         this->m_lastSkippedTouch, this->m_lastEffectCount, this->m_lastChildCount);
-        AssistLog::info(fmt::format(
+        EbAssistLog::info(fmt::format(
             "TRIGGER-WORLD: EMPTY after full collect — baked={} startTimed={} "
             "skip follow={} dynamic={} touch={} children={} effects={} sectionExtras={}",
             this->m_lastBakedEffects, this->m_lastBakedStartTimed, this->m_lastSkippedFollow,
@@ -139,7 +139,7 @@ void TriggerWorldBaker::finishOk() {
     }
 
     this->m_status = store.statusLine();
-    AssistLog::info(fmt::format(
+    EbAssistLog::info(fmt::format(
         "TRIGGER-WORLD: baked {} effects → {} tracks ({} ready) @ {:.0f} tps "
         "(startTimed={} skip follow={} dynamic={} touch={} children={} "
         "collectedEffects={} sectionExtras={} softcap={})",
@@ -149,60 +149,60 @@ void TriggerWorldBaker::finishOk() {
     this->clearJob();
 }
 
-std::string TriggerWorldBaker::statusLine() const {
+std::string EbTriggerWorldBaker::statusLine() const {
     if (this->m_running) {
         return fmt::format("trigger-world: building {:.0f}%", this->m_progress * 100.f);
     }
     if (!(!this->m_status.empty())) {
-        return TriggerWorldStore::get().statusLine();
+        return EbTriggerWorldStore::get().statusLine();
     }
     return this->m_status;
 }
 
-void TriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
+void EbTriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
     this->cancel();
     if (!layer || !layer->m_level) {
-        TriggerWorldStore::get().clear();
+        EbTriggerWorldStore::get().clear();
         return;
     }
-    if (!StageConfig::triggerBake()) {
-        TriggerWorldStore::get().clear();
+    if (!EbStageConfig::triggerBake()) {
+        EbTriggerWorldStore::get().clear();
         this->m_status.clear();
         return;
     }
 
     {
-        LagProbe::Scope const lagScope("eb.triggerBake.load");
-        TriggerWorldStore::get().loadForLevel(layer->m_level);
+        EbLagProbe::Scope const lagScope("eb.triggerBake.load");
+        EbTriggerWorldStore::get().loadForLevel(layer->m_level);
     }
 
-    if (TriggerWorldStore::get().hasTracks()) {
-        this->m_status = TriggerWorldStore::get().statusLine();
-        AssistLog::debug(fmt::format("TRIGGER-WORLD: cache hit ({})", this->m_status));
+    if (EbTriggerWorldStore::get().hasTracks()) {
+        this->m_status = EbTriggerWorldStore::get().statusLine();
+        EbAssistLog::debug(fmt::format("TRIGGER-WORLD: cache hit ({})", this->m_status));
         return;
     }
 
     this->start(layer);
 }
 
-void TriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
-    if (!layer || !StageConfig::triggerBake())
+void EbTriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
+    if (!layer || !EbStageConfig::triggerBake())
         return;
     if (this->m_running)
         return;
-    auto& store = TriggerWorldStore::get();
+    auto& store = EbTriggerWorldStore::get();
     if (!store.loaded() || store.hasTracks())
         return;
-    AssistLog::debug("TRIGGER-WORLD: resume build after empty cancel");
+    EbAssistLog::debug("TRIGGER-WORLD: resume build after empty cancel");
     this->start(layer);
 }
 
-void TriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
-    if (!layer || !StageConfig::triggerBake())
+void EbTriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
+    if (!layer || !EbStageConfig::triggerBake())
         return;
     if (this->m_running)
         return;
-    auto& store = TriggerWorldStore::get();
+    auto& store = EbTriggerWorldStore::get();
     if (!store.loaded() || store.hasTracks())
         return;
     size_t children = 0;
@@ -213,22 +213,22 @@ void TriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
     }
     if (children == 0 && layer->m_sections.empty())
         return;
-    AssistLog::info(
+    EbAssistLog::info(
         fmt::format("TRIGGER-WORLD: stale empty with {} objectLayer children — rebuild", children));
     this->start(layer);
 }
 
-bool TriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string& err) {
+bool EbTriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string& err) {
     err.clear();
     if (!layer) {
         err = "no PlayLayer for TW wait";
         return false;
     }
-    if (!StageConfig::triggerBake())
+    if (!EbStageConfig::triggerBake())
         return true;
 
     this->kickIfStaleEmpty(layer);
-    if (!this->m_running && !TriggerWorldStore::get().hasTracks()) {
+    if (!this->m_running && !EbTriggerWorldStore::get().hasTracks()) {
         this->resumeIfEmpty(layer);
     }
 
@@ -252,7 +252,7 @@ bool TriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string
         }
     }
 
-    auto& store = TriggerWorldStore::get();
+    auto& store = EbTriggerWorldStore::get();
     if (store.hasTracks())
         return true;
 
@@ -273,10 +273,10 @@ bool TriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::string
     return true;
 }
 
-bool TriggerWorldBaker::start(PlayLayer* layer) {
+bool EbTriggerWorldBaker::start(PlayLayer* layer) {
     if (!layer)
         return false;
-    if (!StageConfig::triggerBake())
+    if (!EbStageConfig::triggerBake())
         return false;
     if (this->m_running)
         return false;
@@ -289,16 +289,16 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
     this->m_layer = layer;
 
     // Author tracks in sim TPS (1/m_simDt), never warped wall TPS.
-    this->m_tps = AssistController::get().estimatedTps();
+    this->m_tps = EbAssistController::get().estimatedTps();
     if (this->m_tps < 60.0 || this->m_tps > 480.0) {
         this->m_tps = 240.0;
     }
 
     if (layer->m_level) {
-        this->m_levelKey = LevelProfile::makeKey(layer->m_level);
+        this->m_levelKey = EbLevelProfile::makeKey(layer->m_level);
     }
     if (this->m_levelKey.empty()) {
-        this->m_levelKey = TriggerWorldStore::get().data().levelKey;
+        this->m_levelKey = EbTriggerWorldStore::get().data().levelKey;
     }
 
     this->m_childCount = 0;
@@ -315,34 +315,34 @@ bool TriggerWorldBaker::start(PlayLayer* layer) {
     if (this->m_childCount == 0) {
         this->m_phase = Phase::WaitObjects;
         this->m_waitSlices = 0;
-        AssistLog::debug("TRIGGER-WORLD: bake queued — waiting for objectLayer");
+        EbAssistLog::debug("TRIGGER-WORLD: bake queued — waiting for objectLayer");
     } else {
         this->m_phase = Phase::Collect;
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("TRIGGER-WORLD: bake queued ({} children)", this->m_childCount));
     }
     return true;
 }
 
-void TriggerWorldBaker::publishPartial() {
-    TriggerWorldData data;
+void EbTriggerWorldBaker::publishPartial() {
+    EbTriggerWorldData data;
     data.levelKey = this->m_levelKey;
     data.tps = this->m_tps;
-    data.version = TriggerWorldStore::kFileVersion;
+    data.version = EbTriggerWorldStore::kFileVersion;
     data.tracks.reserve(this->m_tracks.size());
     for (auto& [id, track] : this->m_tracks) {
         (void)id;
         if (track.keys.empty())
             continue;
-        TriggerTrack copy = track;
+        EbTriggerTrack copy = track;
         std::sort(copy.keys.begin(), copy.keys.end(),
-                  [](TriggerPose const& a, TriggerPose const& b) { return a.tick < b.tick; });
+                  [](EbTriggerPose const& a, EbTriggerPose const& b) { return a.tick < b.tick; });
         data.tracks.push_back(std::move(copy));
     }
-    TriggerWorldStore::get().setData(std::move(data));
+    EbTriggerWorldStore::get().setData(std::move(data));
 }
 
-void TriggerWorldBaker::considerCollectedObject(GameObject* object) {
+void EbTriggerWorldBaker::considerCollectedObject(GameObject* object) {
     if (!object)
         return;
     if (geode::prelude::typeinfo_cast<PlayerObject*>(object))
@@ -358,18 +358,18 @@ void TriggerWorldBaker::considerCollectedObject(GameObject* object) {
     }
 }
 
-TriggerTrack* TriggerWorldBaker::ensureTrack(GameObject* object, TriggerKind kind) {
-    return TriggerEffectBaker::ensureTrack(*this, object, kind);
+EbTriggerTrack* EbTriggerWorldBaker::ensureTrack(GameObject* object, TriggerKind kind) {
+    return EbTriggerEffectBaker::ensureTrack(*this, object, kind);
 }
 
-std::vector<GameObject*> TriggerWorldBaker::objectsInGroup(int groupId) const {
-    return TriggerEffectBaker::objectsInGroup(*this, groupId);
+std::vector<GameObject*> EbTriggerWorldBaker::objectsInGroup(int groupId) const {
+    return EbTriggerEffectBaker::objectsInGroup(*this, groupId);
 }
 
-void TriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
-    return TriggerEffectBaker::bakeOneEffect(*this, effect);
+void EbTriggerWorldBaker::bakeOneEffect(EffectGameObject* effect) {
+    return EbTriggerEffectBaker::bakeOneEffect(*this, effect);
 }
 
-void TriggerWorldBaker::tickSlice() {
-    return TriggerBakeJob::tickSlice(*this);
+void EbTriggerWorldBaker::tickSlice() {
+    return EbTriggerBakeJob::tickSlice(*this);
 }

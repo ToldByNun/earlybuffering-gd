@@ -32,15 +32,15 @@
 // ---------------------------------------------------------------------------
 
 auto EbGJBaseGameLayer::handleButton(bool down, int button, bool isPlayer1) -> void {
-    if (GameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating())
         return; // never let anything poke the real input path mid-sim
-    if (AssistController::get().onHandleButton(this, down, button, isPlayer1)) {
+    if (EbAssistController::get().onHandleButton(this, down, button, isPlayer1)) {
         GJBaseGameLayer::handleButton(down, button, isPlayer1);
     }
 }
 
 auto EbGJBaseGameLayer::flipGravity(PlayerObject* player, bool flip, bool noEffects) -> void {
-    if (GameHookSimulationGuard::simulating()) {
+    if (EbGameHookSimulationGuard::simulating()) {
         // only touch the shadow, never camera / effects / game state
         if (player)
             player->flipGravity(flip, true);
@@ -50,46 +50,46 @@ auto EbGJBaseGameLayer::flipGravity(PlayerObject* player, bool flip, bool noEffe
 }
 
 auto EbGJBaseGameLayer::gameEventTriggered(GJGameEvent event, int material, int playerID) -> void {
-    if (GameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating())
         return;
     GJBaseGameLayer::gameEventTriggered(event, material, playerID);
 }
 
 auto EbGJBaseGameLayer::canBeActivatedByPlayer(PlayerObject* player, EffectGameObject* object)
     -> bool {
-    if (GameHookSimulationGuard::simulating()) {
+    if (EbGameHookSimulationGuard::simulating()) {
         // Only the shadow may "touch" orbs/pads. Real player must not be mutated mid-sim.
-        if (!ShadowSimulator::get().isShadow(player))
+        if (!EbShadowSimulator::get().isShadow(player))
             return false;
     }
     return GJBaseGameLayer::canBeActivatedByPlayer(player, object);
 }
 
 auto EbGJBaseGameLayer::playerTouchedRing(PlayerObject* player, RingObject* ring) -> void {
-    if (GameHookSimulationGuard::simulating()) {
-        auto& sim = ShadowSimulator::get();
+    if (EbGameHookSimulationGuard::simulating()) {
+        auto& sim = EbShadowSimulator::get();
         if (sim.isOrbScanning()) {
             sim.noteOrbOverlap();
             return;
         }
-        if (ring && TriggerClassify::isToggleOrbId(ring->m_objectID)) {
+        if (ring && EbTriggerClassify::isToggleOrbId(ring->m_objectID)) {
             if (!sim.isShadow(player))
                 return;
             auto* playLayer = geode::prelude::typeinfo_cast<PlayLayer*>(this);
-            OrbStackResolver::get().noteTouch(player, ring, false, sim.simAbsTick());
-            ToggleOrbSim::get().onToggleHit(playLayer, player, ring);
+            EbOrbStackResolver::get().noteTouch(player, ring, false, sim.simAbsTick());
+            EbToggleOrbSim::get().onToggleHit(playLayer, player, ring);
             // Stacked normal orb must also fire.
-            OrbStackResolver::get().fireStackedPartners(playLayer, player, ring);
+            EbOrbStackResolver::get().fireStackedPartners(playLayer, player, ring);
             return;
         }
         bool const beforeClaim = ring && (ring->m_claimTouch || ring->m_activated);
         sim.applyRingJump(player, ring);
         bool const afterClaim = ring && (ring->m_claimTouch || ring->m_activated);
-        OrbStackResolver::get().noteTouch(player, ring, !beforeClaim && afterClaim,
+        EbOrbStackResolver::get().noteTouch(player, ring, !beforeClaim && afterClaim,
                                           sim.simAbsTick());
         // Stacked toggle must also fire (whichever partner collision hit first).
         auto* playLayer = geode::prelude::typeinfo_cast<PlayLayer*>(this);
-        OrbStackResolver::get().fireStackedPartners(playLayer, player, ring);
+        EbOrbStackResolver::get().fireStackedPartners(playLayer, player, ring);
         return;
     }
     // Live: null-reject only — never invent a call. Half-restored / poisoned
@@ -101,16 +101,16 @@ auto EbGJBaseGameLayer::playerTouchedRing(PlayerObject* player, RingObject* ring
 
 auto EbGJBaseGameLayer::playerTouchedTrigger(PlayerObject* player, EffectGameObject* object)
     -> void {
-    if (GameHookSimulationGuard::simulating()) {
-        auto& sim = ShadowSimulator::get();
+    if (EbGameHookSimulationGuard::simulating()) {
+        auto& sim = EbShadowSimulator::get();
         if (!sim.isShadow(player) || !object)
             return;
         // Touch-toggle 1049: model group flip; other triggers stay blocked.
-        if (TriggerClassify::isToggleTriggerId(object->m_objectID) && object->m_isTouchTriggered) {
+        if (EbTriggerClassify::isToggleTriggerId(object->m_objectID) && object->m_isTouchTriggered) {
             auto* playLayer = geode::prelude::typeinfo_cast<PlayLayer*>(this);
-            ToggleOrbSim::get().onToggleHit(playLayer, player, object);
+            EbToggleOrbSim::get().onToggleHit(playLayer, player, object);
             // Stacked normal orb must also fire (same rule as 1594).
-            OrbStackResolver::get().fireStackedPartners(playLayer, player, object);
+            EbOrbStackResolver::get().fireStackedPartners(playLayer, player, object);
         }
         return;
     }
@@ -118,10 +118,10 @@ auto EbGJBaseGameLayer::playerTouchedTrigger(PlayerObject* player, EffectGameObj
 }
 
 auto EbGJBaseGameLayer::bumpPlayer(PlayerObject* player, EffectGameObject* object) -> void {
-    if (GameHookSimulationGuard::simulating()) {
-        if (!ShadowSimulator::get().isShadow(player) || !object)
+    if (EbGameHookSimulationGuard::simulating()) {
+        if (!EbShadowSimulator::get().isShadow(player) || !object)
             return;
-        ShadowSimulator::get().noteActivated(object);
+        EbShadowSimulator::get().noteActivated(object);
         GJBaseGameLayer::bumpPlayer(player, object);
         return;
     }
@@ -131,7 +131,7 @@ auto EbGJBaseGameLayer::bumpPlayer(PlayerObject* player, EffectGameObject* objec
 auto EbGJBaseGameLayer::spawnParticle(char const* plist, int zOrder,
                                       cocos2d::tCCPositionType positionType,
                                       cocos2d::CCPoint position) -> cocos2d::CCParticleSystemQuad* {
-    if (!(GameHookSimulationGuard::simulating())) {
+    if (!(EbGameHookSimulationGuard::simulating())) {
         return GJBaseGameLayer::spawnParticle(plist, zOrder, positionType, position);
     }
     return nullptr;
@@ -140,7 +140,7 @@ auto EbGJBaseGameLayer::spawnParticle(char const* plist, int zOrder,
 auto EbGJBaseGameLayer::createParticle(int objectType, char const* plistName, int tag,
                                        cocos2d::tCCPositionType positionType)
     -> cocos2d::CCParticleSystemQuad* {
-    if (!(GameHookSimulationGuard::simulating())) {
+    if (!(EbGameHookSimulationGuard::simulating())) {
         return GJBaseGameLayer::createParticle(objectType, plistName, tag, positionType);
     }
     return nullptr;
@@ -148,7 +148,7 @@ auto EbGJBaseGameLayer::createParticle(int objectType, char const* plistName, in
 
 auto EbGJBaseGameLayer::claimParticle(gd::string key, int zLayer)
     -> cocos2d::CCParticleSystemQuad* {
-    if (!(GameHookSimulationGuard::simulating())) {
+    if (!(EbGameHookSimulationGuard::simulating())) {
         return GJBaseGameLayer::claimParticle(key, zLayer);
     }
     return nullptr;
@@ -158,7 +158,7 @@ auto EbGJBaseGameLayer::createCustomParticle(gd::string const& key,
                                              cocos2d::ParticleStruct const& particleStruct,
                                              int minimum, bool dontAdd)
     -> cocos2d::CCParticleSystemQuad* {
-    if (!(GameHookSimulationGuard::simulating())) {
+    if (!(EbGameHookSimulationGuard::simulating())) {
         return GJBaseGameLayer::createCustomParticle(key, particleStruct, minimum, dontAdd);
     }
     return nullptr;
@@ -168,7 +168,7 @@ auto EbGJBaseGameLayer::claimCustomParticle(gd::string const& key,
                                             cocos2d::ParticleStruct const& particleStruct,
                                             int zLayer, int zOrder, int uiObject, bool dontAdd)
     -> cocos2d::CCParticleSystemQuad* {
-    if (!(GameHookSimulationGuard::simulating())) {
+    if (!(EbGameHookSimulationGuard::simulating())) {
         return GJBaseGameLayer::claimCustomParticle(key, particleStruct, zLayer, zOrder, uiObject,
                                                     dontAdd);
     }
@@ -177,14 +177,14 @@ auto EbGJBaseGameLayer::claimCustomParticle(gd::string const& key,
 
 auto EbGJBaseGameLayer::spawnParticleTrigger(int particleID, cocos2d::CCPoint position,
                                              float rotation, float scale) -> void {
-    if (GameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating())
         return;
     GJBaseGameLayer::spawnParticleTrigger(particleID, position, rotation, scale);
 }
 
 auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec,
                                               int objectsCount, float deltaTime) -> void {
-    auto& sim = ShadowSimulator::get();
+    auto& sim = EbShadowSimulator::get();
     if (!vec || objectsCount <= 0) {
         GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, deltaTime);
         return;
@@ -210,14 +210,14 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, gd::vector<G
             if (geode::prelude::typeinfo_cast<PlayerObject*>(object)) {
                 continue;
             }
-            switch (SimCollisionPolicy::classify(object)) {
+            switch (EbSimCollisionPolicy::classify(object)) {
             case SimObjectAction::Include:
                 extra.push_back(object);
                 break;
             case SimObjectAction::UnknownOnOverlap:
                 if (player && object->getObjectRect().intersectsRect(player->getObjectRect())) {
                     sim.noteUnknown(object);
-                    SimCollisionPolicy::noteLimitedSimOnce();
+                    EbSimCollisionPolicy::noteLimitedSimOnce();
                 }
                 break;
             case SimObjectAction::Skip:

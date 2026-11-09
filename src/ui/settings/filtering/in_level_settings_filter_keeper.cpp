@@ -12,27 +12,27 @@
 #include <fmt/format.h>
 #include <string>
 
-void InLevelSettingsFilterKeeper::attach(geode::prelude::CCNode* popup) {
+void EbInLevelSettingsFilterKeeper::attach(geode::prelude::CCNode* popup) {
     if (!popup)
         return;
     if (popup->getChildByID("earlybuffer-inlevel-settings-filter"_spr))
         return;
 
-    auto* keeper = SettingsFilterKeeperNode::create();
+    auto* keeper = EbSettingsFilterKeeperNode::create();
     if (!keeper)
         return;
     popup->addChild(keeper);
 }
 
-bool InLevelSettingsFilterKeeper::isOpen() {
-    return SettingsFilterKeeperNode::findOpen() != nullptr;
+bool EbInLevelSettingsFilterKeeper::isOpen() {
+    return EbSettingsFilterKeeperNode::findOpen() != nullptr;
 }
 
-void InLevelSettingsFilterKeeper::refreshOpen() {
+void EbInLevelSettingsFilterKeeper::refreshOpen() {
     // Action button rows refresh themselves via onTick.
 }
 
-void InLevelSettingsFilterKeeper::reloadAfterImport() {
+void EbInLevelSettingsFilterKeeper::reloadAfterImport() {
     auto* scene = geode::prelude::CCScene::get();
     if (!scene)
         return;
@@ -42,15 +42,15 @@ void InLevelSettingsFilterKeeper::reloadAfterImport() {
     std::string const ourId = mod->getID();
 
     SettingsCategory restoreCat = SettingsCategory::Main;
-    if (auto* open = SettingsFilterKeeperNode::findOpen()) {
+    if (auto* open = EbSettingsFilterKeeperNode::findOpen()) {
         restoreCat = open->m_category;
     }
 
-    geode::prelude::CCNode* popup = SettingsImportUiSync::findOurSettingsPopup(scene, ourId);
+    geode::prelude::CCNode* popup = EbSettingsImportUiSync::findOurSettingsPopup(scene, ourId);
     if (!popup)
         return;
 
-    SettingsImportUiSync::syncNodesFromStore(popup, ourId);
+    EbSettingsImportUiSync::syncNodesFromStore(popup, ourId);
 
     int const restoreI = static_cast<int>(restoreCat);
     // Rebuild next frame: import runs from a SettingNode button callback — do not
@@ -63,14 +63,14 @@ void InLevelSettingsFilterKeeper::reloadAfterImport() {
         if (!mod)
             return;
 
-        if (auto* popup = SettingsImportUiSync::findOurSettingsPopup(scene, mod->getID())) {
+        if (auto* popup = EbSettingsImportUiSync::findOurSettingsPopup(scene, mod->getID())) {
             popup->removeFromParentAndCleanup(true);
         }
         auto* fresh = geode::openSettingsPopup(mod, false);
         if (!fresh)
             return;
-        InLevelSettingsFilterKeeper::attach(fresh);
-        if (auto* keeper = SettingsFilterKeeperNode::findOpen()) {
+        EbInLevelSettingsFilterKeeper::attach(fresh);
+        if (auto* keeper = EbSettingsFilterKeeperNode::findOpen()) {
             auto const category = static_cast<SettingsCategory>(restoreI);
             if (category >= SettingsCategory::Main && category < SettingsCategory::Count) {
                 keeper->setCategory(category);
@@ -79,17 +79,17 @@ void InLevelSettingsFilterKeeper::reloadAfterImport() {
     });
 }
 
-void InLevelSettingsFilterKeeper::startWatchdog() {
-    auto& slot = SettingsTabWatchdogState::slot();
+void EbInLevelSettingsFilterKeeper::startWatchdog() {
+    auto& slot = EbSettingsTabWatchdogState::slot();
     if (!slot) {
-        slot = SettingsTabWatchdog::create();
+        slot = EbSettingsTabWatchdog::create();
     }
     if (!slot)
         return;
     auto* scene = geode::prelude::CCScene::get();
     if (!scene) {
         geode::prelude::Loader::get()->queueInMainThread(
-            [] { InLevelSettingsFilterKeeper::startWatchdog(); });
+            [] { EbInLevelSettingsFilterKeeper::startWatchdog(); });
         return;
     }
     slot->ensureOnScene();

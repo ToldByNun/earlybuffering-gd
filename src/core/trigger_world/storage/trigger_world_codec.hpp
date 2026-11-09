@@ -3,13 +3,13 @@
 
 #include "../trigger_world_store.hpp"
 
-class TriggerWorldCodec {
+class EbTriggerWorldCodec {
 public:
-    static geode::Result<> writeFile(TriggerWorldStore const& owner);
-    static geode::Result<> readFile(TriggerWorldStore& owner);
+    static geode::Result<> writeFile(EbTriggerWorldStore const& owner);
+    static geode::Result<> readFile(EbTriggerWorldStore& owner);
 
 private:
-    TriggerWorldCodec() = delete;
+    EbTriggerWorldCodec() = delete;
 };
 
 #endif

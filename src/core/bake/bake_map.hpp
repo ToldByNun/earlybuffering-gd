@@ -1,7 +1,7 @@
 #ifndef BAKE_MAP_HPP
 #define BAKE_MAP_HPP
 
-class ReplayJumpJob;
+class EbReplayJumpJob;
 
 #include "../../config/stage_config.hpp"
 #include "../replay/replay_import.hpp"
@@ -13,7 +13,7 @@ class ReplayJumpJob;
 #include <string>
 #include <vector>
 
-class BakedClick {
+class EbBakedClick {
 public:
     int nominalFrame = 0;
     int earliest = 0;
@@ -28,18 +28,18 @@ public:
 private:
 };
 
-class BakeMapData {
+class EbBakeMapData {
 public:
     std::string levelKey;
     std::string sourceReplay;
     double tps = 240.0;
     std::string method = "replay"; // "replay" | "brute" | "self"
-    std::vector<BakedClick> clicks;
+    std::vector<EbBakedClick> clicks;
 
 private:
 };
 
-class BakeProgress {
+class EbBakeProgress {
 public:
     std::atomic<int> done{0};
     std::atomic<int> total{0};
@@ -73,14 +73,14 @@ enum class BakeMethod {
     BruteForce // no replay: death-driven exhaustive click search
 };
 
-class BakeMap {
+class EbBakeMap {
 public:
     static constexpr float LOOKUP_X_TOL = 120.f;
 
     // Drawn bake-window half-width (matches BakePathVisualizer green/purple boxes).
     static float windowHalfW(int earliest, int latest);
 
-    static BakeMap& get();
+    static EbBakeMap& get();
 
     void clear();
     void loadForLevel(GJGameLevel* level);
@@ -89,20 +89,20 @@ public:
     bool loaded() const {
         return m_loaded;
     }
-    BakeMapData const& data() const {
+    EbBakeMapData const& data() const {
         return m_data;
     }
-    ImportedReplay const* pendingReplay() const {
+    EbImportedReplay const* pendingReplay() const {
         return m_hasReplay ? &m_replay : nullptr;
     }
 
-    void setPendingReplay(ImportedReplay replay);
+    void setPendingReplay(EbImportedReplay replay);
     void clearPendingReplay();
 
-    BakeProgress& progress() {
+    EbBakeProgress& progress() {
         return m_progress;
     }
-    BakeProgress const& progress() const {
+    EbBakeProgress const& progress() const {
         return m_progress;
     }
     bool isBaking() const {
@@ -117,12 +117,12 @@ public:
     // Prefer clicks whose mode matches preferMode within LOOKUP_X_TOL.
     // If none match, fall back to any mode (legacy maps / missing mode).
     // Pass preferMode=nullopt to skip the mode preference pass entirely.
-    BakedClick const* findNear(float playerX, int approxFrame, bool down, bool player2,
+    EbBakedClick const* findNear(float playerX, int approxFrame, bool down, bool player2,
                                std::optional<GameModeKind> preferMode = std::nullopt) const;
 
     // Next bake/self-bake clicks after playerX (same down/player2; prefer mode).
     // Sorted by ascending x. Used by smart bake-chain (planSequence).
-    std::vector<BakedClick const*> nextClicksAfter(float playerX, bool down, bool player2,
+    std::vector<EbBakedClick const*> nextClicksAfter(float playerX, bool down, bool player2,
                                                    std::optional<GameModeKind> preferMode,
                                                    int maxCount) const;
 
@@ -132,43 +132,45 @@ public:
     static constexpr float MERGE_X_TOL = 40.f;
     static constexpr int MERGE_FRAME_TOL = 30;
     static constexpr size_t kMaxMapClicks = 512;
-    int mergeSelfClicks(std::vector<BakedClick> const& incoming);
+    int mergeSelfClicks(std::vector<EbBakedClick> const& incoming);
 
     // Budgeted binary-search earliest/latest around each click (replay-style),
     // using a synthetic timeline from `clicks`. Stops when budgetSims or cancel.
     // Returns number of clicks whose window was expanded. In-place update.
-    int refineSelfWindows(PlayLayer* layer, int startSnapshotSlot, std::vector<BakedClick>& clicks,
+    int refineSelfWindows(PlayLayer* layer, int startSnapshotSlot, std::vector<EbBakedClick>& clicks,
                           int bakeRadius, int budgetSims, std::atomic<bool>* cancel = nullptr);
 
     std::string statusLine() const;
     std::string pauseStatusLine() const;
 
 private:
-    friend class BakeWindowIndex;
+    friend class EbServiceStore;
 
-    friend class BakeBruteGenerator;
+    friend class EbBakeWindowIndex;
 
-    friend class BakeReplayGenerator;
+    friend class EbBakeBruteGenerator;
 
-    BakeMap() = default;
+    friend class EbBakeReplayGenerator;
+
+    EbBakeMap() = default;
 
     geode::Result<> writeFile() const;
     geode::Result<> readFile();
 
     bool testShiftedClick(PlayLayer* layer, int startSnapshotSlot,
-                          std::vector<ReplayEvent> timeline, int eventIndex, int testFrame,
+                          std::vector<EbReplayEvent> timeline, int eventIndex, int testFrame,
                           int untilFrame, float deltaTime, int substeps = 1) const;
 
     geode::Result<int> bakeReplay(PlayLayer* layer, int startSnapshotSlot, int bakeRadius);
     geode::Result<int> bakeBrute(PlayLayer* layer, int startSnapshotSlot, int bakeRadius);
 
-    BakeMapData m_data;
-    ImportedReplay m_replay;
+    EbBakeMapData m_data;
+    EbImportedReplay m_replay;
     bool m_hasReplay = false;
     bool m_loaded = false;
     // Set by mergeSelfClicks; cleared by save(). Avoids disk I/O on death flush.
     mutable bool m_dirty = false;
-    BakeProgress m_progress;
+    EbBakeProgress m_progress;
     mutable std::mutex m_simMutex;
 };
 
@@ -177,25 +179,25 @@ private:
 #include <cmath>
 #include <limits>
 
-class BakeMapImplementation {
+class EbBakeMapImplementation {
 public:
     static std::filesystem::path bakesDir();
     static std::filesystem::path bakePath(std::string const& key);
-    static int nextJumpFrame(std::vector<ReplayEvent> const& ev, int fromIndex, bool player2);
+    static int nextJumpFrame(std::vector<EbReplayEvent> const& ev, int fromIndex, bool player2);
     static int resolveRadius(int bakeRadius, BakeMethod method);
-    static void ensureMinHoldTicks(std::vector<ReplayEvent>& ev, int minHold = 1);
+    static void ensureMinHoldTicks(std::vector<EbReplayEvent>& ev, int minHold = 1);
     static double resolveBakeTps(double srcTps, double liveTps);
     static int scaleBakeTicks(int ticks, double bakeTps);
-    static std::vector<ReplayEvent> prepareBakeTimeline(std::vector<ReplayEvent> const& src,
+    static std::vector<EbReplayEvent> prepareBakeTimeline(std::vector<EbReplayEvent> const& src,
                                                         double srcTps, double bakeTps,
                                                         bool forceSoloP1);
     static unsigned workerCount();
 
 private:
-    BakeMapImplementation() = delete;
+    EbBakeMapImplementation() = delete;
 };
 
-class ReplayJumpJob {
+class EbReplayJumpJob {
 public:
     int eventIndex = 0;
     int frame = 0;

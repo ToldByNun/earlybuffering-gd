@@ -3,18 +3,18 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowGhostLifecycle {
+class EbShadowGhostLifecycle {
 public:
-    static void attach(ShadowSimulator& simulator, PlayLayer* layer);
-    static void detach(ShadowSimulator& simulator, bool layerDying);
-    static bool isOwnedGhost(ShadowSimulator const& simulator, PlayerObject* player);
-    static void parkGhosts(ShadowSimulator& simulator);
-    static void beginSession(ShadowSimulator& simulator, PlayLayer* layer);
-    static void endSession(ShadowSimulator& simulator, PlayLayer* layer);
+    static void attach(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void detach(EbShadowSimulator& simulator, bool layerDying);
+    static bool isOwnedGhost(EbShadowSimulator const& simulator, PlayerObject* player);
+    static void parkGhosts(EbShadowSimulator& simulator);
+    static void beginSession(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void endSession(EbShadowSimulator& simulator, PlayLayer* layer);
     static void hideGhost(PlayerObject* player);
 
 private:
-    ShadowGhostLifecycle() = delete;
+    EbShadowGhostLifecycle() = delete;
 };
 
 #endif

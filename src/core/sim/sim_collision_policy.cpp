@@ -9,12 +9,12 @@
 #include <cstring>
 #include <fmt/format.h>
 
-bool SimCollisionPolicy::isSpeedPortalId(int objectId) {
+bool EbSimCollisionPolicy::isSpeedPortalId(int objectId) {
     return objectId == 200 || objectId == 201 || objectId == 202 || objectId == 203 ||
            objectId == 1334;
 }
 
-SimUnknownClass SimCollisionPolicy::unknownClassForType(int objectType) {
+SimUnknownClass EbSimCollisionPolicy::unknownClassForType(int objectType) {
     auto const tick = static_cast<GameObjectType>(objectType);
     switch (tick) {
     case GameObjectType::DualPortal:
@@ -25,7 +25,7 @@ SimUnknownClass SimCollisionPolicy::unknownClassForType(int objectType) {
     }
 }
 
-SimObjectAction SimCollisionPolicy::classifyObjectType(int objectType, int objectId) {
+SimObjectAction EbSimCollisionPolicy::classifyObjectType(int objectType, int objectId) {
     if (isSpeedPortalId(objectId))
         return SimObjectAction::Include;
 
@@ -88,17 +88,17 @@ SimObjectAction SimCollisionPolicy::classifyObjectType(int objectType, int objec
     }
 }
 
-SimObjectAction SimCollisionPolicy::classify(GameObject* object) {
+SimObjectAction EbSimCollisionPolicy::classify(GameObject* object) {
     if (!object)
         return SimObjectAction::Skip;
 
-    auto& sim = ShadowSimulator::get();
+    auto& sim = EbShadowSimulator::get();
     if (sim.isSimulating()) {
         // Toggle orb / touch-toggle: modeled flip → Include/Skip; else Hard Unknown
         // for live plan honesty. Offline bake trusts the current powered/visible
         // pose so a working macro is not aborted on every toggle-group solid.
         if (sim.isToggleTriggerTarget(object->m_uniqueID)) {
-            auto& toggle = ToggleOrbSim::get();
+            auto& toggle = EbToggleOrbSim::get();
             if (toggle.isModeled(object->m_uniqueID)) {
                 return toggle.isModeledActive(object->m_uniqueID) ? SimObjectAction::Include
                                                                   : SimObjectAction::Skip;
@@ -113,11 +113,11 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* object) {
             return SimObjectAction::UnknownOnOverlap;
         }
 
-        if (StageConfig::triggerBake()) {
+        if (EbStageConfig::triggerBake()) {
             // Ready static bake track + apply this sim tick → Include (active only).
             if (sim.triggerWorldAppliedThisTick()) {
-                auto const* track = TriggerWorldStore::get().findTrack(object->m_uniqueID);
-                if (track && track->ready && TriggerClassify::isStatic(track->kind)) {
+                auto const* track = EbTriggerWorldStore::get().findTrack(object->m_uniqueID);
+                if (track && track->ready && EbTriggerClassify::isStatic(track->kind)) {
                     // writePose(inactive) clears visibility/poweredOn — do not Include.
                     auto* effectObject = geode::prelude::typeinfo_cast<EnhancedGameObject*>(object);
                     if (!object->isVisible() || (effectObject && !effectObject->m_poweredOn)) {
@@ -132,7 +132,7 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* object) {
             // skip-dynamic off + cheap live probe applied → Include.
             // Offline bake: Skip (don't abort the whole macro on follow geometry).
             if (sim.isDynamicTriggerTarget(object->m_uniqueID)) {
-                if (!StageConfig::triggerBakeSkipDynamic() &&
+                if (!EbStageConfig::triggerBakeSkipDynamic() &&
                     sim.liveDynamicApplied(object->m_uniqueID)) {
                     return SimObjectAction::Include;
                 }
@@ -143,39 +143,39 @@ SimObjectAction SimCollisionPolicy::classify(GameObject* object) {
             }
         }
     }
-    return SimCollisionPolicy::classifyObjectType(static_cast<int>(object->m_objectType),
+    return EbSimCollisionPolicy::classifyObjectType(static_cast<int>(object->m_objectType),
                                                   object->m_objectID);
 }
 
-SimUnknownClass SimCollisionPolicy::unknownClass(GameObject* object) {
+SimUnknownClass EbSimCollisionPolicy::unknownClass(GameObject* object) {
     if (!object)
         return SimUnknownClass::Soft;
-    auto& sim = ShadowSimulator::get();
+    auto& sim = EbShadowSimulator::get();
     // Hard: honesty truncate / Pass — never soft-continue these.
     if (sim.isToggleTriggerTarget(object->m_uniqueID))
         return SimUnknownClass::Hard;
     if (!(sim.isDynamicTriggerTarget(object->m_uniqueID))) {
-        return SimCollisionPolicy::unknownClassForType(static_cast<int>(object->m_objectType));
+        return EbSimCollisionPolicy::unknownClassForType(static_cast<int>(object->m_objectType));
     }
     return SimUnknownClass::Hard;
 }
 
-char const* SimCollisionPolicy::unknownClassId(SimUnknownClass candidate) {
+char const* EbSimCollisionPolicy::unknownClassId(SimUnknownClass candidate) {
     return candidate == SimUnknownClass::Hard ? "hard" : "soft";
 }
 
-bool SimCollisionPolicy::noteLimitedSimOnce() {
+bool EbSimCollisionPolicy::noteLimitedSimOnce() {
     static bool warned = false;
     if (warned)
         return false;
     warned = true;
-    AssistLog::info("sim: limited (Hard Unknown only: toggle pre-model / follow-dynamic / dual; "
+    EbAssistLog::info("sim: limited (Hard Unknown only: toggle pre-model / follow-dynamic / dual; "
                     "Soft vehicle·mirror·teleport·modifier → Include since Commit 5; "
                     "ready static bake → include when active)");
     return true;
 }
 
-bool SimCollisionPolicy::selfCheck(std::string& report) {
+bool EbSimCollisionPolicy::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

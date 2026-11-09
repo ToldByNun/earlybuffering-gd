@@ -4,14 +4,14 @@
 #include <Geode/Geode.hpp>
 #include <chrono>
 
-ConfigBundle::ApplyOptions CloudConfigApply::cloudOptions() {
-    ConfigBundle::ApplyOptions opt{};
+EbConfigBundle::ApplyOptions EbCloudConfigApply::cloudOptions() {
+    EbConfigBundle::ApplyOptions opt{};
     opt.skipKeybinds = true;
     opt.skipDevKeys = true;
     return opt;
 }
 
-CloudConfigApply::Result CloudConfigApply::applyPackBody(std::string const& id,
+EbCloudConfigApply::Result EbCloudConfigApply::applyPackBody(std::string const& id,
                                                          std::string const& displayName,
                                                          std::string const& expectedSha256,
                                                          size_t expectedSize,
@@ -19,7 +19,7 @@ CloudConfigApply::Result CloudConfigApply::applyPackBody(std::string const& id,
     Result result{};
     result.id = id;
 
-    if (!CloudConfigStore::isValidPackId(id)) {
+    if (!EbCloudConfigStore::isValidPackId(id)) {
         result.error = "invalid pack id";
         return result;
     }
@@ -27,7 +27,7 @@ CloudConfigApply::Result CloudConfigApply::applyPackBody(std::string const& id,
         result.error = "pack body empty";
         return result;
     }
-    if (body.size() > CloudConfigStore::kMaxPackBytes) {
+    if (body.size() > EbCloudConfigStore::kMaxPackBytes) {
         result.error = "pack body too large";
         return result;
     }
@@ -41,23 +41,23 @@ CloudConfigApply::Result CloudConfigApply::applyPackBody(std::string const& id,
         result.error = "expected sha256 invalid";
         return result;
     }
-    auto const hex = CloudConfigSha256::hashHex(body);
+    auto const hex = EbCloudConfigSha256::hashHex(body);
     if (hex != expectedSha256) {
         result.error = "sha256 mismatch";
         std::string remErr;
-        (void)CloudConfigStore::get().removePack(id, remErr);
+        (void)EbCloudConfigStore::get().removePack(id, remErr);
         return result;
     }
 
-    auto const imported = ConfigBundle::importFromString(body, cloudOptions());
+    auto const imported = EbConfigBundle::importFromString(body, cloudOptions());
     if (imported.isErr()) {
         result.error = imported.unwrapErr().empty() ? "import failed" : imported.unwrapErr();
         return result;
     }
 
-    result.stats = ConfigBundle::lastImportStats();
+    result.stats = EbConfigBundle::lastImportStats();
 
-    CloudConfigStore::ActiveInfo active{};
+    EbCloudConfigStore::ActiveInfo active{};
     active.id = id;
     active.sha256 = expectedSha256;
     active.name = displayName.empty() ? id : displayName;
@@ -67,21 +67,21 @@ CloudConfigApply::Result CloudConfigApply::applyPackBody(std::string const& id,
     active.appliedAt = fmt::format("{}", secs);
 
     std::string writeErr;
-    (void)CloudConfigStore::get().ensureDirs(writeErr);
-    if (!CloudConfigStore::get().writeActive(active, writeErr)) {
+    (void)EbCloudConfigStore::get().ensureDirs(writeErr);
+    if (!EbCloudConfigStore::get().writeActive(active, writeErr)) {
         // Settings already applied — report soft failure detail but still ok.
         result.error = writeErr.empty() ? "active write failed" : writeErr;
     }
 
     // Cache pack bytes for offline reinstall.
     std::string packErr;
-    (void)CloudConfigStore::get().writePack(id, body, packErr);
+    (void)EbCloudConfigStore::get().writePack(id, body, packErr);
 
     result.ok = true;
     return result;
 }
 
-bool CloudConfigApply::selfCheck(std::string& report) {
+bool EbCloudConfigApply::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -102,7 +102,7 @@ bool CloudConfigApply::selfCheck(std::string& report) {
     expect(!empty.ok, "reject-empty");
 
     std::string body = R"({"version":2,"settings":{"safe-mode":true}})";
-    auto const realSha = CloudConfigSha256::hashHex(body);
+    auto const realSha = EbCloudConfigSha256::hashHex(body);
     Result badSha = applyPackBody("safe-defaults", "Safe", std::string(64, 'b'), body.size(), body);
     expect(!badSha.ok, "reject-bad-sha");
     expect(badSha.error.find("sha256") != std::string::npos, "bad-sha-msg");

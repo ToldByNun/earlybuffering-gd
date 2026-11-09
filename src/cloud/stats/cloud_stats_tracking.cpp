@@ -11,16 +11,16 @@
 #include <unordered_map>
 #include <unordered_set>
 
-void CloudStatsTracking::trackDownload(CloudConfigStats& owner, std::string const& packId,
-                                       CloudConfigStats::TrackCallback callback) {
-    CloudConfigStats::TrackResult early{};
+void EbCloudStatsTracking::trackDownload(EbCloudConfigStats& owner, std::string const& packId,
+                                       EbCloudConfigStats::TrackCallback callback) {
+    EbCloudConfigStats::TrackResult early{};
     if (!owner.m_impl) {
         early.error = "unavailable";
         if (callback)
             callback(early);
         return;
     }
-    if (!CloudConfigStore::isValidPackId(packId)) {
+    if (!EbCloudConfigStore::isValidPackId(packId)) {
         early.error = "invalid pack id";
         if (callback)
             callback(early);
@@ -53,14 +53,14 @@ void CloudStatsTracking::trackDownload(CloudConfigStats& owner, std::string cons
         return;
     }
 
-    CloudConfigStats::Impl* impl = owner.m_impl;
+    EbCloudConfigStats::Impl* impl = owner.m_impl;
     ++owner.m_impl->trackGen;
     std::string idCopy = packId;
 
     std::thread([&owner, impl, url, clientId, idCopy = std::move(idCopy),
                  callback = std::move(callback)]() mutable {
-        CloudConfigStats::TrackResult result =
-            CloudConfigStatsImplementation::postTrackSync(url, clientId, "download", idCopy, 0);
+        EbCloudConfigStats::TrackResult result =
+            EbCloudConfigStatsImplementation::postTrackSync(url, clientId, "download", idCopy, 0);
         geode::queueInMainThread([&owner, impl, idCopy = std::move(idCopy),
                                   callback = std::move(callback),
                                   result = std::move(result)]() mutable {
@@ -78,16 +78,16 @@ void CloudStatsTracking::trackDownload(CloudConfigStats& owner, std::string cons
     }).detach();
 }
 
-void CloudStatsTracking::trackRate(CloudConfigStats& owner, std::string const& packId, int stars,
-                                   CloudConfigStats::TrackCallback callback) {
-    CloudConfigStats::TrackResult early{};
+void EbCloudStatsTracking::trackRate(EbCloudConfigStats& owner, std::string const& packId, int stars,
+                                   EbCloudConfigStats::TrackCallback callback) {
+    EbCloudConfigStats::TrackResult early{};
     if (!owner.m_impl) {
         early.error = "unavailable";
         if (callback)
             callback(early);
         return;
     }
-    if (!CloudConfigStore::isValidPackId(packId)) {
+    if (!EbCloudConfigStore::isValidPackId(packId)) {
         early.error = "invalid pack id";
         if (callback)
             callback(early);
@@ -128,14 +128,14 @@ void CloudStatsTracking::trackRate(CloudConfigStats& owner, std::string const& p
         return;
     }
 
-    CloudConfigStats::Impl* impl = owner.m_impl;
+    EbCloudConfigStats::Impl* impl = owner.m_impl;
     ++owner.m_impl->trackGen;
     std::string idCopy = packId;
 
     std::thread([&owner, impl, url, clientId, idCopy = std::move(idCopy), stars,
                  callback = std::move(callback)]() mutable {
-        CloudConfigStats::TrackResult result =
-            CloudConfigStatsImplementation::postTrackSync(url, clientId, "rate", idCopy, stars);
+        EbCloudConfigStats::TrackResult result =
+            EbCloudConfigStatsImplementation::postTrackSync(url, clientId, "rate", idCopy, stars);
         geode::queueInMainThread([&owner, impl, idCopy = std::move(idCopy), stars,
                                   callback = std::move(callback),
                                   result = std::move(result)]() mutable {

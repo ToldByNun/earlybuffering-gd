@@ -5,14 +5,14 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowDelayVerifier {
+class EbShadowDelayVerifier {
 public:
-    static ShadowSimulator::VerifyDelayResult
-    verifyDelay(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
-                int delay, int limit, float deltaTime, float firstDt, PlanOptions const& options);
+    static EbShadowSimulator::VerifyDelayResult
+    verifyDelay(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
+                int delay, int limit, float deltaTime, float firstDt, EbPlanOptions const& options);
 
 private:
-    ShadowDelayVerifier() = delete;
+    EbShadowDelayVerifier() = delete;
 };
 
 #endif

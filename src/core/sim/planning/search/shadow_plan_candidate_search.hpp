@@ -3,14 +3,14 @@
 
 #include "shadow_plan_context.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanCandidateSearch {
+class EbShadowPlanCandidateSearch {
 public:
-    static void evaluate(ShadowPlanContext& context);
+    static void evaluate(EbShadowPlanContext& context);
 
 private:
-    ShadowPlanCandidateSearch() = delete;
+    EbShadowPlanCandidateSearch() = delete;
 };
 
 #endif

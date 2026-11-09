@@ -14,13 +14,13 @@ class EffectGameObject;
 
 // Builds static TriggerWorldStore tracks from spawn-timed Move/Rotate/Scale/Toggle.
 // Commit 7: budgeted tickSlice on enter (no hitch). cancel() drops in-flight work.
-class TriggerWorldBaker {
+class EbTriggerWorldBaker {
 public:
     static constexpr size_t kCollectPerSlice = 256;
     static constexpr size_t kEffectsPerSlice = 8;
     static constexpr int kBudgetUs = 750;
 
-    static TriggerWorldBaker& get();
+    static EbTriggerWorldBaker& get();
 
     // onLevelInit: load cache; queue budgeted build on miss. No-op if bake off.
     void loadOrBuild(PlayLayer* layer);
@@ -77,9 +77,11 @@ public:
     bool waitUntilReady(PlayLayer* layer, int wallMs, std::string& err);
 
 private:
-    friend class TriggerBakeJob;
+    friend class EbServiceStore;
 
-    friend class TriggerEffectBaker;
+    friend class EbTriggerBakeJob;
+
+    friend class EbTriggerEffectBaker;
 
     enum class Phase {
         Idle = 0,
@@ -105,7 +107,7 @@ private:
     private:
     };
 
-    TriggerWorldBaker() = default;
+    EbTriggerWorldBaker() = default;
 
     bool cancelled() const {
         return this->m_cancel;
@@ -116,13 +118,13 @@ private:
     void publishPartial();
     void bakeOneEffect(EffectGameObject* effect);
 
-    TriggerTrack* ensureTrack(GameObject* object, TriggerKind kind);
+    EbTriggerTrack* ensureTrack(GameObject* object, TriggerKind kind);
     std::vector<GameObject*> objectsInGroup(int groupId) const;
     void considerCollectedObject(GameObject* object);
 
     static LivePose poseFromObject(GameObject* object);
-    static TriggerPose toKey(int tick, LivePose const& live);
-    static void pushKey(TriggerTrack& track, int tick, LivePose const& live);
+    static EbTriggerPose toKey(int tick, LivePose const& live);
+    static void pushKey(EbTriggerTrack& track, int tick, LivePose const& live);
     static int durationTicks(float durationSec, double tps);
     static bool isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind);
     static cocos2d::CCPoint groupCenter(int groupId, std::vector<GameObject*> const& objects,
@@ -149,7 +151,7 @@ private:
     std::vector<EffectGameObject*> m_effects;
     std::unordered_set<int> m_seenIds;
     std::unordered_map<int, LivePose> m_live;
-    std::unordered_map<int, TriggerTrack> m_tracks;
+    std::unordered_map<int, EbTriggerTrack> m_tracks;
 
     size_t m_bakedEffects = 0;
     size_t m_bakedStartTimed = 0; // non-spawn static baked at t=0

@@ -9,9 +9,9 @@
 // Green = press. Purple = release, gated (wave/ship/swing/robot, else holdAssist).
 // Windows only — no path connector between clicks. Sibling to TrajectoryVisualizer;
 // no expensive resims; uses stored click.x.
-class BakePathVisualizer {
+class EbBakePathVisualizer {
 public:
-    static BakePathVisualizer& get();
+    static EbBakePathVisualizer& get();
 
     void attach(PlayLayer* layer);
     void detach(bool layerDying = false);
@@ -30,7 +30,9 @@ public:
     static bool releaseWindowMode(GameModeKind kind);
 
 private:
-    BakePathVisualizer() = default;
+    friend class EbServiceStore;
+
+    EbBakePathVisualizer() = default;
 
     void ensureNode(PlayLayer* layer);
     void rebuild(PlayLayer* layer);
@@ -61,7 +63,7 @@ private:
 #include <cmath>
 #include <vector>
 
-class BakePathVisualizerImplementation {
+class EbBakePathVisualizerImplementation {
 public:
     static geode::prelude::ccColor4F bakeGreen(float firstValue = 0.92f);
     static geode::prelude::ccColor4F bakeGreenDim(float firstValue = 0.35f);
@@ -70,7 +72,7 @@ public:
     static geode::prelude::ccColor4F bakeGone(float firstValue = 0.18f);
 
 private:
-    BakePathVisualizerImplementation() = delete;
+    EbBakePathVisualizerImplementation() = delete;
 };
 
 #endif

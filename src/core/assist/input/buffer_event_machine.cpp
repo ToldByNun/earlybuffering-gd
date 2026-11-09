@@ -1,6 +1,6 @@
 #include "buffer_event_machine.hpp"
 
-char const* BufferEventMachine::stateName(BufferSmState state) {
+char const* EbBufferEventMachine::stateName(BufferSmState state) {
     switch (state) {
     case BufferSmState::Idle:
         return "Idle";
@@ -14,7 +14,7 @@ char const* BufferEventMachine::stateName(BufferSmState state) {
     return "?";
 }
 
-bool BufferEventMachine::selfCheck() {
+bool EbBufferEventMachine::selfCheck() {
     // Logical transition smoke (no AssistController instance required).
     // Mirrors BufferedInput: Idle/Buffered ≈ Idle/ArmedPress; releaseSeen is a flag.
 

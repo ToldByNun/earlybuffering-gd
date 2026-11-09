@@ -10,7 +10,7 @@
 #include "shadow_plan_foresight.hpp"
 #include <algorithm>
 
-bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
+bool EbShadowPlanThreatProbe::evaluate(EbShadowPlanContext& context) {
     {
         auto c0 = context.evalDelay(0, -1);
         context.plan.firstDeathTick = c0.raw.died ? c0.raw.deathTick : -1;
@@ -37,7 +37,7 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
             c0.raw.died ? c0.raw.deathTick : -1, c0.raw.died ? c0.raw.deathX : c0.endX);
 
         // Live V2: LongForesight press-vs-idle over AssistHorizon (extend if press dies).
-        ShadowPlanForesight::probe(context);
+        EbShadowPlanForesight::probe(context);
 
         // No threat target: baseline survives and no orb/pad ahead.
         // G2: OpportunityProbe (foresight / mid+limit) may still force full search.
@@ -45,21 +45,21 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
         bool const noOrbTarget = !(context.orbAssist && (context.orbHint.found ||
                                                          context.spatialHint || c0.activatedRing));
         if (noThreat && noOrbTarget) {
-            OpportunityProbe::Sample baseSample{};
+            EbOpportunityProbe::Sample baseSample{};
             baseSample.activatedRing = c0.activatedRing;
             baseSample.diedBeforeAction = c0.diedBeforeAction;
             baseSample.surviveBin = c0.surviveBin;
             baseSample.endX = c0.endX;
 
-            OpportunityProbe::Sample probeSamples[2];
+            EbOpportunityProbe::Sample probeSamples[2];
             int probeCount = 0;
-            int const mid = OpportunityProbe::midDelay(context.limit);
+            int const mid = EbOpportunityProbe::midDelay(context.limit);
             auto runProbeDelay = [&](int delay) {
                 if (delay <= 0 || delay > context.limit)
                     return;
                 if (context.candReady[static_cast<size_t>(delay)])
                     return;
-                if (context.tickBudget < OpportunityProbe::kMinBudgetForProbe ||
+                if (context.tickBudget < EbOpportunityProbe::kMinBudgetForProbe ||
                     context.wallExceeded()) {
                     context.plan.budgetHit = true;
                     return;
@@ -99,7 +99,7 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
                 }
             }
 
-            bool searchFurther = OpportunityProbe::shouldSearchFurther(
+            bool searchFurther = EbOpportunityProbe::shouldSearchFurther(
                 context.spatialHint, context.orbHint.found, c0.activatedRing, baseSample,
                 probeSamples, probeCount);
             // Commit 11: trusted opportunity → MUST Delay-search (skip no-threat exit).
@@ -114,7 +114,7 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
                 // Wanted probes but could not afford any → PassBudget (C6 may Hold).
                 // Commit 11: PassBudget only when probe budget is exhausted (allowPassBudget).
                 if (context.plan.budgetHit && context.limit >= 1 && probeCount == 0 &&
-                    PerfectAssistPolicy::allowPassBudget(true, context.options.mustDelaySearch,
+                    EbPerfectAssistPolicy::allowPassBudget(true, context.options.mustDelaySearch,
                                                          false)) {
                     context.plan.reason = AssistReason::PassBudget;
                 } else {
@@ -125,19 +125,19 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
                 context.plan.threatCleared = true;
                 context.plan.jumpTick = c0.jumpTick;
                 context.plan.activatedRing = c0.activatedRing;
-                AssistLog::debug(fmt::format(
+                EbAssistLog::debug(fmt::format(
                     "PLAN id={} Pass no-threat verdict={} foresight={} probes={} "
                     "budgetHit={} mustSearch={} limit={}",
-                    context.plan.planId, AssistVerdict::name(context.plan.reason),
+                    context.plan.planId, EbAssistVerdict::name(context.plan.reason),
                     context.plan.foresightOrbPad ? 1 : 0, probeCount, context.plan.budgetHit,
                     context.options.mustDelaySearch ? 1 : 0, context.limit));
                 context.publishLedger(0, true,
                                       context.plan.budgetHit
-                                          ? DevRejectLedger::EarlyExit::Budget
-                                          : DevRejectLedger::EarlyExit::NoThreat);
+                                          ? EbDevRejectLedger::EarlyExit::Budget
+                                          : EbDevRejectLedger::EarlyExit::NoThreat);
                 return true;
             }
-            AssistLog::debug(fmt::format(
+            EbAssistLog::debug(fmt::format(
                 "PLAN id={} opportunity-probe search-further foresight={} probes={} orbWin={}",
                 context.plan.planId, context.plan.foresightOrbPad ? 1 : 0, probeCount,
                 context.orbHint.found ? 1 : 0));
@@ -149,8 +149,8 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
         // AFTER foresight: foresightOrbPad blocks this Pass (miss-assist orb).
         bool const isWave = context.real && context.real->m_isDart;
         float const proxX = std::clamp(static_cast<float>(context.limit + 4) * 5.5f,
-                                       ShadowSimulator::kHazardProximityXMin,
-                                       ShadowSimulator::kHazardProximityXMax);
+                                       EbShadowSimulator::kHazardProximityXMin,
+                                       EbShadowSimulator::kHazardProximityXMax);
         bool const nearHazard =
             isWave && context.simulator.spatialHazardProximity(context.layer, context.real, proxX);
         // Only suppress when d0 died (need to search for a living save).
@@ -166,11 +166,11 @@ bool ShadowPlanThreatProbe::evaluate(ShadowPlanContext& context) {
             context.plan.jumpTick = c0.jumpTick;
             context.plan.activatedRing = c0.activatedRing;
             context.plan.threatZone = context.zone;
-            AssistLog::debug(fmt::format(
+            EbAssistLog::debug(fmt::format(
                 "PLAN id={} Pass wave-hazard-proximity verdict={} prox={:.0f} zone={} budgetHit={}",
-                context.plan.planId, AssistVerdict::name(context.plan.reason), proxX,
+                context.plan.planId, EbAssistVerdict::name(context.plan.reason), proxX,
                 context.zone.valid, context.plan.budgetHit));
-            context.publishLedger(0, true, DevRejectLedger::EarlyExit::WaveProximity);
+            context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveProximity);
             return true;
         }
     }

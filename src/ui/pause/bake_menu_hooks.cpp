@@ -10,7 +10,7 @@
 
 // Resolve geode.node-ids PauseLayer menus (live under main-layer, not PauseLayer root).
 
-auto PauseMenuAttach::hostLayer(PauseLayer* self) -> geode::prelude::CCNode* {
+auto EbPauseMenuAttach::hostLayer(PauseLayer* self) -> geode::prelude::CCNode* {
     if (!self)
         return nullptr;
     if (auto* main = self->getChildByID("main-layer"))
@@ -18,7 +18,7 @@ auto PauseMenuAttach::hostLayer(PauseLayer* self) -> geode::prelude::CCNode* {
     return self;
 }
 
-auto PauseMenuAttach::rightButtonMenu(PauseLayer* self) -> geode::prelude::CCMenu* {
+auto EbPauseMenuAttach::rightButtonMenu(PauseLayer* self) -> geode::prelude::CCMenu* {
     if (!(!self)) {
         return geode::prelude::typeinfo_cast<geode::prelude::CCMenu*>(
             self->getChildByIDRecursive("right-button-menu"));
@@ -31,19 +31,19 @@ auto EbPauseLayer::customSetup() -> void {
 
     // Clean pause: EB opens Geode settings (category pages). Optional status lines only.
     // Bake / Assist action buttons live under EB → Bake / Assist — no side stacks.
-    bool const showStatus = StageConfig::showPauseBake();
-    bool const showHub = StageConfig::showPauseHub();
+    bool const showStatus = EbStageConfig::showPauseBake();
+    bool const showHub = EbStageConfig::showPauseHub();
     if (!showStatus && !showHub)
         return;
 
     // Already installed (idempotent). Still (re)schedule poll — prior early-return skipped it.
     if (this->getChildByIDRecursive("earlybuffer-pause-ui"_spr)) {
-        PauseActionBridge::refreshPauseLabels(this);
+        EbPauseActionBridge::refreshPauseLabels(this);
         this->schedule(schedule_selector(EbPauseLayer::onBakePoll), 0.15f);
         return;
     }
 
-    auto* host = PauseMenuAttach::hostLayer(this);
+    auto* host = EbPauseMenuAttach::hostLayer(this);
     if (!host)
         return;
 
@@ -63,14 +63,14 @@ auto EbPauseLayer::customSetup() -> void {
                 geode::prelude::CircleBaseSize::Small);
         }
         auto* buttonValue = geode::prelude::CCMenuItemExt::createSpriteExtra(
-            sprite, [](CCMenuItemSpriteExtra*) { PauseActionBridge::openHub(); });
+            sprite, [](CCMenuItemSpriteExtra*) { EbPauseActionBridge::openHub(); });
         buttonValue->setID("earlybuffer-settings-btn"_spr);
         buttonValue->setScale(0.85f);
 
-        if (auto* right = PauseMenuAttach::rightButtonMenu(this)) {
+        if (auto* right = EbPauseMenuAttach::rightButtonMenu(this)) {
             right->addChild(buttonValue);
             right->updateLayout();
-            AssistLog::debug("pause-ui: EB settings on right-button-menu");
+            EbAssistLog::debug("pause-ui: EB settings on right-button-menu");
         } else {
             auto* menu = geode::prelude::CCMenu::create();
             menu->setID("earlybuffer-settings-menu"_spr);
@@ -79,7 +79,7 @@ auto EbPauseLayer::customSetup() -> void {
             menu->setPosition({win.width - 12.f, win.height - 12.f});
             menu->addChild(buttonValue);
             host->addChild(menu, 1100);
-            AssistLog::debug("pause-ui: EB settings fallback top-right menu");
+            EbAssistLog::debug("pause-ui: EB settings fallback top-right menu");
         }
     }
 
@@ -113,12 +113,12 @@ auto EbPauseLayer::customSetup() -> void {
         host->addChild(status, 999);
     }
 
-    PauseActionBridge::refreshPauseLabels(this);
+    EbPauseActionBridge::refreshPauseLabels(this);
     this->schedule(schedule_selector(EbPauseLayer::onBakePoll), 0.15f);
 }
 
 auto EbPauseLayer::onBakePoll(float) -> void {
-    PauseActionBridge::refreshPauseLabels(this);
-    PauseActionBridge::refreshOpenSettings();
-    BakeScheduler::get().tickSlice();
+    EbPauseActionBridge::refreshPauseLabels(this);
+    EbPauseActionBridge::refreshOpenSettings();
+    EbBakeScheduler::get().tickSlice();
 }

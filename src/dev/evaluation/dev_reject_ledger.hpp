@@ -7,7 +7,7 @@
 #include <vector>
 
 // Per-delay reject ledger + attribution (Commit 12 / Vertrag D).
-class DevRejectLedger {
+class EbDevRejectLedger {
 public:
     static constexpr int kMaxCandNotes = 64;
     static constexpr int kMaxDetailLen = 120;
@@ -159,11 +159,11 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    friend class DevAttribution;
+    friend class EbDevAttribution;
 
-    friend class DevRejectChecks;
+    friend class EbDevRejectChecks;
 
-    DevRejectLedger() = delete;
+    EbDevRejectLedger() = delete;
 
     static RejectCode classifyRejected(CandSnap const& snap, CandSnap const* chosen,
                                        BuildInput const& in, int delay);

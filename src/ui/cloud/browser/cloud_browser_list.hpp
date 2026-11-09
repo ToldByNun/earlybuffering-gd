@@ -6,19 +6,19 @@
 
 #include "../cloud_config_popup.hpp"
 
-class CloudBrowserList {
+class EbCloudBrowserList {
 public:
-    static bool packMatchesSearch(CloudConfigPopup const& owner,
-                                  CloudConfigIndex::PackEntry const& e);
-    static char const* sortModeLabel(CloudConfigPopup const& owner);
-    static void updateSortLabel(CloudConfigPopup& owner);
-    static void onSortCycle(CloudConfigPopup& owner, geode::prelude::CCObject*);
-    static void applySort(CloudConfigPopup const& owner,
-                          std::vector<CloudConfigIndex::PackEntry const*>& rows);
-    static void rebuildList(CloudConfigPopup& owner);
+    static bool packMatchesSearch(EbCloudConfigPopup const& owner,
+                                  EbCloudConfigIndex::PackEntry const& e);
+    static char const* sortModeLabel(EbCloudConfigPopup const& owner);
+    static void updateSortLabel(EbCloudConfigPopup& owner);
+    static void onSortCycle(EbCloudConfigPopup& owner, geode::prelude::CCObject*);
+    static void applySort(EbCloudConfigPopup const& owner,
+                          std::vector<EbCloudConfigIndex::PackEntry const*>& rows);
+    static void rebuildList(EbCloudConfigPopup& owner);
 
 private:
-    CloudBrowserList() = delete;
+    EbCloudBrowserList() = delete;
 };
 
 #endif

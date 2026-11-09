@@ -1,13 +1,13 @@
 #ifndef IN_LEVEL_SETTINGS_FILTER_HPP
 #define IN_LEVEL_SETTINGS_FILTER_HPP
 
-class SettingsCategoryMap;
-class SettingsFilterWalk;
-class SettingsCategoryBar;
-class SettingsFilterKeeperNode;
-class SettingsImportUiSync;
-class SettingsTabWatchdog;
-class SettingsTabWatchdogState;
+class EbSettingsCategoryMap;
+class EbSettingsFilterWalk;
+class EbSettingsCategoryBar;
+class EbSettingsFilterKeeperNode;
+class EbSettingsImportUiSync;
+class EbSettingsTabWatchdog;
+class EbSettingsTabWatchdogState;
 
 #include <Geode/Geode.hpp>
 #include <string>
@@ -28,7 +28,7 @@ enum class SettingsCategory : int {
 
 // Filters Geode settings rows by SettingsCategory.
 // Non-matching rows are reparented out of the list (Geode search style); scroll Y preserved.
-class InLevelSettingsFilter {
+class EbInLevelSettingsFilter {
 public:
     static char const* categoryName(SettingsCategory category);
     // Exhaustive map. Unknown keys return SettingsCategory::Count (never Assist dump).
@@ -45,7 +45,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    InLevelSettingsFilter() = delete;
+    EbInLevelSettingsFilter() = delete;
 };
 
 // Attaches to every EarlyBuffer settings popup: category bar + live re-filter + Bake/Assist

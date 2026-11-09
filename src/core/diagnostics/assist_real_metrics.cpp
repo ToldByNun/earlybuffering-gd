@@ -1,14 +1,14 @@
+#include "../../app/class_manager.hpp"
 #include "assist_real_metrics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
-AssistRealMetrics& AssistRealMetrics::get() {
-    static AssistRealMetrics inst;
-    return inst;
+EbAssistRealMetrics& EbAssistRealMetrics::get() {
+    return EbClassManager::get().service<EbAssistRealMetrics>();
 }
 
-void AssistRealMetrics::resetSession() {
+void EbAssistRealMetrics::resetSession() {
     this->m_nOpp = 0;
     this->m_nTrustOpp = 0;
     this->m_arms = 0;
@@ -22,7 +22,7 @@ void AssistRealMetrics::resetSession() {
     this->m_levels.clear();
 }
 
-void AssistRealMetrics::setLevelKey(std::string key, bool dynamicLabelled) {
+void EbAssistRealMetrics::setLevelKey(std::string key, bool dynamicLabelled) {
     this->m_levelKey = std::move(key);
     if (this->m_levelKey.empty())
         return;
@@ -31,7 +31,7 @@ void AssistRealMetrics::setLevelKey(std::string key, bool dynamicLabelled) {
         acc.dynamicLabelled = true;
 }
 
-void AssistRealMetrics::noteOpportunity(bool trusted) {
+void EbAssistRealMetrics::noteOpportunity(bool trusted) {
     ++this->m_nOpp;
     if (trusted)
         ++this->m_nTrustOpp;
@@ -43,15 +43,15 @@ void AssistRealMetrics::noteOpportunity(bool trusted) {
     }
 }
 
-void AssistRealMetrics::noteArm() {
+void EbAssistRealMetrics::noteArm() {
     ++this->m_arms;
 }
 
-void AssistRealMetrics::noteDeathAfterFire() {
+void EbAssistRealMetrics::noteDeathAfterFire() {
     ++this->m_daf;
 }
 
-void AssistRealMetrics::noteParityProbe(bool drifted, float absDx, float absDy) {
+void EbAssistRealMetrics::noteParityProbe(bool drifted, float absDx, float absDy) {
     ++this->m_parityProbes;
     if (!drifted)
         ++this->m_parityOk;
@@ -65,53 +65,53 @@ void AssistRealMetrics::noteParityProbe(bool drifted, float absDx, float absDy) 
     }
 }
 
-float AssistRealMetrics::trustRate() const {
+float EbAssistRealMetrics::trustRate() const {
     int const delay = std::max(1, this->m_nOpp);
     return static_cast<float>(this->m_nTrustOpp) / static_cast<float>(delay);
 }
 
-float AssistRealMetrics::assistCov() const {
+float EbAssistRealMetrics::assistCov() const {
     int const delay = std::max(1, this->m_nTrustOpp);
     return static_cast<float>(this->m_arms) / static_cast<float>(delay);
 }
 
-float AssistRealMetrics::dafRate() const {
+float EbAssistRealMetrics::dafRate() const {
     int const delay = std::max(1, this->m_arms);
     return static_cast<float>(this->m_daf) / static_cast<float>(delay);
 }
 
-float AssistRealMetrics::parityOkRate() const {
+float EbAssistRealMetrics::parityOkRate() const {
     int const delay = std::max(1, this->m_parityProbes);
     return static_cast<float>(this->m_parityOk) / static_cast<float>(delay);
 }
 
-std::string AssistRealMetrics::reportLine(char const* corpusLabel) const {
+std::string EbAssistRealMetrics::reportLine(char const* corpusLabel) const {
     char const* corpus =
-        corpusLabel && corpusLabel[0] != '\0' ? corpusLabel : AssistContracts140::kCorpusLabel;
+        corpusLabel && corpusLabel[0] != '\0' ? corpusLabel : EbAssistContracts140::kCorpusLabel;
 
-    auto const ci = AssistContracts140::wilson95(this->m_daf, this->m_arms);
-    auto const g5 = AssistContracts140::gateG5Daf(this->m_daf, this->m_arms, corpus);
-    auto const g6 = AssistContracts140::gateG6Parity(this->m_parityOk, this->m_parityProbes);
-    auto const g7a = AssistContracts140::gateG7aAssistCov(this->m_arms, this->m_nTrustOpp);
+    auto const ci = EbAssistContracts140::wilson95(this->m_daf, this->m_arms);
+    auto const g5 = EbAssistContracts140::gateG5Daf(this->m_daf, this->m_arms, corpus);
+    auto const g6 = EbAssistContracts140::gateG6Parity(this->m_parityOk, this->m_parityProbes);
+    auto const g7a = EbAssistContracts140::gateG7aAssistCov(this->m_arms, this->m_nTrustOpp);
 
     // Per-level G7b: worst status among levels with enough opp (Fail > Inconclusive > Pass).
-    auto worst = AssistContracts140::GateStatus::Pass;
+    auto worst = EbAssistContracts140::GateStatus::Pass;
     int levelsChecked = 0;
     for (auto const& kv : this->m_levels) {
-        auto const state = AssistContracts140::gateG7bTrustRate(kv.second.nTrustOpp, kv.second.nOpp,
+        auto const state = EbAssistContracts140::gateG7bTrustRate(kv.second.nTrustOpp, kv.second.nOpp,
                                                                 kv.second.dynamicLabelled);
         ++levelsChecked;
-        if (state == AssistContracts140::GateStatus::Fail) {
+        if (state == EbAssistContracts140::GateStatus::Fail) {
             worst = state;
             break;
         }
-        if (state == AssistContracts140::GateStatus::Inconclusive &&
-            worst == AssistContracts140::GateStatus::Pass) {
+        if (state == EbAssistContracts140::GateStatus::Inconclusive &&
+            worst == EbAssistContracts140::GateStatus::Pass) {
             worst = state;
         }
     }
     if (levelsChecked == 0) {
-        worst = AssistContracts140::gateG7bTrustRate(this->m_nTrustOpp, this->m_nOpp, false);
+        worst = EbAssistContracts140::gateG7bTrustRate(this->m_nTrustOpp, this->m_nOpp, false);
     }
     return fmt::format("corpus={} A={} DAF={} DAFRate={:.4f} CI95=[{:.4f},{:.4f}] "
                        "ParityOK={}/{}={:.4f} AssistCov={:.4f} TrustRate={:.4f} "
@@ -120,13 +120,13 @@ std::string AssistRealMetrics::reportLine(char const* corpusLabel) const {
                        corpus, this->m_arms, this->m_daf, this->dafRate(), ci.lower, ci.upper,
                        this->m_parityOk, this->m_parityProbes, this->parityOkRate(),
                        this->assistCov(), this->trustRate(), this->m_nOpp, this->m_nTrustOpp,
-                       this->m_maxAbsDx, this->m_maxAbsDy, AssistContracts140::statusId(g5),
-                       AssistContracts140::statusId(g6), AssistContracts140::statusId(g7a),
-                       AssistContracts140::statusId(worst),
-                       AssistContracts140::isSoloCorpus(corpus) ? "solo" : "multi");
+                       this->m_maxAbsDx, this->m_maxAbsDy, EbAssistContracts140::statusId(g5),
+                       EbAssistContracts140::statusId(g6), EbAssistContracts140::statusId(g7a),
+                       EbAssistContracts140::statusId(worst),
+                       EbAssistContracts140::isSoloCorpus(corpus) ? "solo" : "multi");
 }
 
-std::string AssistRealMetrics::overlayBit() const {
+std::string EbAssistRealMetrics::overlayBit() const {
     if (this->m_arms <= 0 && this->m_parityProbes <= 0 && this->m_nOpp <= 0) {
         return {};
     }
@@ -135,7 +135,7 @@ std::string AssistRealMetrics::overlayBit() const {
                        this->m_parityProbes);
 }
 
-bool AssistRealMetrics::selfCheck(std::string& report) {
+bool EbAssistRealMetrics::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -147,7 +147,7 @@ bool AssistRealMetrics::selfCheck(std::string& report) {
         report += name;
     };
 
-    AssistRealMetrics& m = AssistRealMetrics::get();
+    EbAssistRealMetrics& m = EbAssistRealMetrics::get();
     m.resetSession();
     expect(m.nOpp() == 0 && m.arms() == 0, "fresh");
 

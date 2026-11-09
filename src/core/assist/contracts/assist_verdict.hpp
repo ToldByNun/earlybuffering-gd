@@ -63,7 +63,7 @@ enum class AssistReason {
     PassUnknown
 };
 
-class AssistVerdict {
+class EbAssistVerdict {
 public:
     // Stable debug / log token (never null).
     static char const* name(AssistReason reason);
@@ -84,7 +84,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistVerdict() = default;
+    EbAssistVerdict() = default;
 };
 
 #endif

@@ -6,7 +6,7 @@
 #include <vector>
 
 // Export current settings → outbox envelope + clipboard + public submit.
-class CloudConfigShare {
+class EbCloudConfigShare {
 public:
     static constexpr size_t kMaxTags = 16;
     static constexpr size_t kMaxTagLen = 32;
@@ -46,7 +46,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigShare() = default;
+    EbCloudConfigShare() = default;
 
     static std::string sanitizeTagToken(std::string const& raw);
     static std::string buildEnvelope(std::string const& suggestedId, std::string const& name,

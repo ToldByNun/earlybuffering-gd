@@ -5,7 +5,7 @@
 #include <cctype>
 #include <chrono>
 
-bool CloudConfigSubmitImplementation::parseHttpsHost(std::string const& url, std::string& hostOut) {
+bool EbCloudConfigSubmitImplementation::parseHttpsHost(std::string const& url, std::string& hostOut) {
     hostOut.clear();
     if (url.size() < 8 || url.compare(0, 8, "https://") != 0)
         return false;
@@ -23,7 +23,7 @@ bool CloudConfigSubmitImplementation::parseHttpsHost(std::string const& url, std
     return !hostOut.empty();
 }
 
-bool CloudConfigSubmitImplementation::hostAllowed(std::string const& host) {
+bool EbCloudConfigSubmitImplementation::hostAllowed(std::string const& host) {
     if (host == "eb-cloud-submit.toldbynun.workers.dev")
         return true;
     if (host == "earlybuffer-config.vercel.app")
@@ -38,27 +38,27 @@ bool CloudConfigSubmitImplementation::hostAllowed(std::string const& host) {
     return false;
 }
 
-char const* CloudConfigSubmit::defaultSubmitUrl() {
+char const* EbCloudConfigSubmit::defaultSubmitUrl() {
     return "https://earlybuffer-config.vercel.app/api/submit";
 }
 
-bool CloudConfigSubmit::readEnableSetting() {
+bool EbCloudConfigSubmit::readEnableSetting() {
     return true;
 }
 
-std::string CloudConfigSubmit::effectiveSubmitUrl() {
+std::string EbCloudConfigSubmit::effectiveSubmitUrl() {
     return defaultSubmitUrl();
 }
 
-bool CloudConfigSubmit::isAllowedSubmitUrl(std::string const& url) {
+bool EbCloudConfigSubmit::isAllowedSubmitUrl(std::string const& url) {
     std::string host;
-    if (!(!CloudConfigSubmitImplementation::parseHttpsHost(url, host))) {
-        return CloudConfigSubmitImplementation::hostAllowed(host);
+    if (!(!EbCloudConfigSubmitImplementation::parseHttpsHost(url, host))) {
+        return EbCloudConfigSubmitImplementation::hostAllowed(host);
     }
     return false;
 }
 
-CloudConfigSubmit::Result CloudConfigSubmit::submit(CloudConfigPublish::PackMeta const& meta,
+EbCloudConfigSubmit::Result EbCloudConfigSubmit::submit(EbCloudConfigPublish::PackMeta const& meta,
                                                     std::string const& bundleJson) {
     Result result{};
     result.attempted = true;
@@ -69,11 +69,11 @@ CloudConfigSubmit::Result CloudConfigSubmit::submit(CloudConfigPublish::PackMeta
         result.error = "submit disabled";
         return result;
     }
-    if (!CloudConfigStore::isValidPackId(meta.id)) {
+    if (!EbCloudConfigStore::isValidPackId(meta.id)) {
         result.error = "invalid pack id";
         return result;
     }
-    if (bundleJson.empty() || bundleJson.size() > CloudConfigStore::kMaxPackBytes) {
+    if (bundleJson.empty() || bundleJson.size() > EbCloudConfigStore::kMaxPackBytes) {
         result.error = "bundle size invalid";
         return result;
     }
@@ -156,7 +156,7 @@ CloudConfigSubmit::Result CloudConfigSubmit::submit(CloudConfigPublish::PackMeta
     return result;
 }
 
-bool CloudConfigSubmit::selfCheck(std::string& report) {
+bool EbCloudConfigSubmit::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -176,7 +176,7 @@ bool CloudConfigSubmit::selfCheck(std::string& report) {
     expect(!effectiveSubmitUrl().empty(), "effective-nonempty");
 
     // No network: disabled path / bad id.
-    CloudConfigPublish::PackMeta bad{};
+    EbCloudConfigPublish::PackMeta bad{};
     expect(!submit(bad, "{}").ok, "reject-bad-id");
 
     if (fails == 0) {

@@ -7,7 +7,7 @@
 #include <string>
 
 // GD-style alternating list row (comment/level-list look).
-class CloudConfigListCell : public cocos2d::CCNode {
+class EbCloudConfigListCell : public cocos2d::CCNode {
 public:
     using SelectCallback = std::function<void(std::string const& id)>;
 
@@ -23,7 +23,7 @@ public:
     private:
     };
 
-    static CloudConfigListCell* create(CloudConfigIndex::PackEntry const& entry, float width,
+    static EbCloudConfigListCell* create(EbCloudConfigIndex::PackEntry const& entry, float width,
                                        int index, bool selected, bool active, bool cached,
                                        bool updateAvailable, StatsBadge const& stats,
                                        SelectCallback onSelect);
@@ -33,7 +33,7 @@ public:
     }
 
 protected:
-    bool init(CloudConfigIndex::PackEntry const& entry, float width, int index, bool selected,
+    bool init(EbCloudConfigIndex::PackEntry const& entry, float width, int index, bool selected,
               bool active, bool cached, bool updateAvailable, StatsBadge const& stats,
               SelectCallback onSelect);
 
@@ -50,12 +50,12 @@ private:
 #include <cocos-ext.h>
 #include <fmt/format.h>
 
-class CloudConfigListCellImplementation {
+class EbCloudConfigListCellImplementation {
 public:
     static std::string formatDlBadge(int count);
 
 private:
-    CloudConfigListCellImplementation() = delete;
+    EbCloudConfigListCellImplementation() = delete;
 };
 
 #endif

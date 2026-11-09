@@ -6,11 +6,11 @@
 #include "../../simulation_plan.hpp"
 #include "../shadow_plan_context.hpp"
 
-bool ShadowPlanInputWindow::evaluate(ShadowPlanContext& context) {
+bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     if (context.inputWindow) {
         context.plan.fixedFireTick = true;
-        auto const complete = [&](ShadowSimulator::RunResult const& result) {
-            return MissAssistContracts::survivesObservation(
+        auto const complete = [&](EbShadowSimulator::RunResult const& result) {
+            return EbMissAssistContracts::survivesObservation(
                 result.died, result.unknown || result.unknownTrunc || result.toggleUnknown,
                 result.ticksRan, context.limit + context.model.cap, result.landedAfterAction);
         };
@@ -63,8 +63,8 @@ bool ShadowPlanInputWindow::evaluate(ShadowPlanContext& context) {
         if (context.plan.budgetHit)
             context.plan.reason = AssistReason::PassBudget;
         context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
-                              context.plan.budgetHit ? DevRejectLedger::EarlyExit::Budget
-                                                     : DevRejectLedger::EarlyExit::None);
+                              context.plan.budgetHit ? EbDevRejectLedger::EarlyExit::Budget
+                                                     : EbDevRejectLedger::EarlyExit::None);
         return true;
     }
 

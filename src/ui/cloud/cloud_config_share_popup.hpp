@@ -8,11 +8,11 @@
 #include <string>
 
 // Collect name / author / description / tags before outbox + submit.
-class CloudConfigSharePopup : public geode::Popup {
+class EbCloudConfigSharePopup : public geode::Popup {
 public:
     using ClosedCallback = std::function<void()>;
 
-    static CloudConfigSharePopup* create(ClosedCallback onClosed = {});
+    static EbCloudConfigSharePopup* create(ClosedCallback onClosed = {});
     static void open(ClosedCallback onClosed = {});
 
 protected:

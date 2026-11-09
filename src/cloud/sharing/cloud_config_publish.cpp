@@ -10,7 +10,7 @@
 #include <chrono>
 #include <ctime>
 
-bool CloudConfigPublishImplementation::httpGetJson(std::string const& url, std::string const& token,
+bool EbCloudConfigPublishImplementation::httpGetJson(std::string const& url, std::string const& token,
                                                    matjson::Value& out, int& code,
                                                    std::string& err) {
     out = matjson::Value();
@@ -19,7 +19,7 @@ bool CloudConfigPublishImplementation::httpGetJson(std::string const& url, std::
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudPublish/1");
-    req.timeout(std::chrono::seconds(CloudConfigPublishImplementation::kTimeoutSec));
+    req.timeout(std::chrono::seconds(EbCloudConfigPublishImplementation::kTimeoutSec));
     req.followRedirects(false);
     req.certVerification(true);
     req.header("Accept", "application/vnd.github+json");
@@ -57,7 +57,7 @@ bool CloudConfigPublishImplementation::httpGetJson(std::string const& url, std::
     return true;
 }
 
-bool CloudConfigPublishImplementation::httpPutJson(std::string const& url, std::string const& token,
+bool EbCloudConfigPublishImplementation::httpPutJson(std::string const& url, std::string const& token,
                                                    matjson::Value const& body, matjson::Value& out,
                                                    int& code, std::string& err) {
     out = matjson::Value();
@@ -66,7 +66,7 @@ bool CloudConfigPublishImplementation::httpPutJson(std::string const& url, std::
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudPublish/1");
-    req.timeout(std::chrono::seconds(CloudConfigPublishImplementation::kTimeoutSec));
+    req.timeout(std::chrono::seconds(EbCloudConfigPublishImplementation::kTimeoutSec));
     req.followRedirects(false);
     req.certVerification(true);
     req.header("Accept", "application/vnd.github+json");
@@ -98,11 +98,11 @@ bool CloudConfigPublishImplementation::httpPutJson(std::string const& url, std::
     return true;
 }
 
-std::string CloudConfigPublishImplementation::b64Encode(std::string const& raw) {
+std::string EbCloudConfigPublishImplementation::b64Encode(std::string const& raw) {
     return geode::utils::base64::encode(raw, geode::utils::base64::Base64Variant::Normal);
 }
 
-bool CloudConfigPublishImplementation::b64Decode(std::string const& b64, std::string& out,
+bool EbCloudConfigPublishImplementation::b64Decode(std::string const& b64, std::string& out,
                                                  std::string& err) {
     auto decoded =
         geode::utils::base64::decodeString(b64, geode::utils::base64::Base64Variant::Normal);
@@ -115,7 +115,7 @@ bool CloudConfigPublishImplementation::b64Decode(std::string const& b64, std::st
 }
 
 matjson::Value
-CloudConfigPublishImplementation::packEntryObject(CloudConfigPublish::PackMeta const& meta,
+EbCloudConfigPublishImplementation::packEntryObject(EbCloudConfigPublish::PackMeta const& meta,
                                                   std::string const& sha256, size_t size) {
     matjson::Value tags = matjson::Value::array();
     for (auto const& t : meta.tags)
@@ -137,7 +137,7 @@ CloudConfigPublishImplementation::packEntryObject(CloudConfigPublish::PackMeta c
     return valuePointer;
 }
 
-bool CloudConfigPublish::isValidRepoSlug(std::string const& slug) {
+bool EbCloudConfigPublish::isValidRepoSlug(std::string const& slug) {
     // owner/name — alnum, dash, underscore, dot
     auto const slash = slug.find('/');
     if (slash == std::string::npos || slash == 0 || slash + 1 >= slug.size())
@@ -154,11 +154,11 @@ bool CloudConfigPublish::isValidRepoSlug(std::string const& slug) {
     return true;
 }
 
-std::string CloudConfigPublish::contentsApiUrl(std::string const& repo, std::string const& path) {
+std::string EbCloudConfigPublish::contentsApiUrl(std::string const& repo, std::string const& path) {
     return fmt::format("https://api.github.com/repos/{}/contents/{}", repo, path);
 }
 
-std::string CloudConfigPublish::isoNowUtc() {
+std::string EbCloudConfigPublish::isoNowUtc() {
     using clock = std::chrono::system_clock;
     auto const timestamp = clock::to_time_t(clock::now());
     std::tm tm{};
@@ -172,24 +172,24 @@ std::string CloudConfigPublish::isoNowUtc() {
     return std::string(buf);
 }
 
-bool CloudConfigPublish::readEnableSetting() {
+bool EbCloudConfigPublish::readEnableSetting() {
     // No in-mod maintainer settings — public Share goes through Vercel submit.
     return false;
 }
 
-std::string CloudConfigPublish::readTokenSetting() {
+std::string EbCloudConfigPublish::readTokenSetting() {
     return {};
 }
 
-std::string CloudConfigPublish::readRepoSetting() {
-    return CloudConfigPublishImplementation::kDefaultRepo;
+std::string EbCloudConfigPublish::readRepoSetting() {
+    return EbCloudConfigPublishImplementation::kDefaultRepo;
 }
 
-bool CloudConfigPublish::isConfigured() {
+bool EbCloudConfigPublish::isConfigured() {
     return false;
 }
 
-CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaIn,
+EbCloudConfigPublish::Result EbCloudConfigPublish::publishPack(PackMeta const& metaIn,
                                                            std::string const& bundleJson) {
     Result result{};
     result.attempted = true;
@@ -209,11 +209,11 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
         result.error = "invalid cloud-publish-repo";
         return result;
     }
-    if (!CloudConfigStore::isValidPackId(metaIn.id)) {
+    if (!EbCloudConfigStore::isValidPackId(metaIn.id)) {
         result.error = "invalid pack id";
         return result;
     }
-    if (bundleJson.empty() || bundleJson.size() > CloudConfigStore::kMaxPackBytes) {
+    if (bundleJson.empty() || bundleJson.size() > EbCloudConfigStore::kMaxPackBytes) {
         result.error = "bundle size invalid";
         return result;
     }
@@ -226,7 +226,7 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
     PackMeta meta = metaIn;
     std::string const packRel = std::string("packs/") + meta.id + ".json";
     result.packPath = packRel;
-    std::string const sha256 = CloudConfigSha256::hashHex(bundleJson);
+    std::string const sha256 = EbCloudConfigSha256::hashHex(bundleJson);
     size_t const size = bundleJson.size();
 
     // --- PUT pack file ---
@@ -236,7 +236,7 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
         int code = 0;
         std::string err;
         std::string const packUrl = contentsApiUrl(result.repo, packRel);
-        if (CloudConfigPublishImplementation::httpGetJson(packUrl, token, existing, code, err)) {
+        if (EbCloudConfigPublishImplementation::httpGetJson(packUrl, token, existing, code, err)) {
             if (existing.contains("sha") && existing["sha"].isString()) {
                 packSha = existing["sha"].asString().unwrapOrDefault();
             }
@@ -247,8 +247,8 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
 
         matjson::Value putBody = matjson::Value::object();
         putBody["message"] = fmt::format("cloud: upsert pack {}", meta.id);
-        putBody["content"] = CloudConfigPublishImplementation::b64Encode(bundleJson);
-        putBody["branch"] = CloudConfigPublishImplementation::kBranch;
+        putBody["content"] = EbCloudConfigPublishImplementation::b64Encode(bundleJson);
+        putBody["branch"] = EbCloudConfigPublishImplementation::kBranch;
         if (!packSha.empty()) {
             putBody["sha"] = packSha;
             result.created = false;
@@ -257,7 +257,7 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
         }
 
         matjson::Value putRes;
-        if (!CloudConfigPublishImplementation::httpPutJson(packUrl, token, putBody, putRes, code,
+        if (!EbCloudConfigPublishImplementation::httpPutJson(packUrl, token, putBody, putRes, code,
                                                            err)) {
             result.error = std::string("pack PUT: ") + err;
             return result;
@@ -288,7 +288,7 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
         int code = 0;
         std::string err;
         std::string const indexUrl = contentsApiUrl(result.repo, "index.json");
-        if (CloudConfigPublishImplementation::httpGetJson(indexUrl, token, existing, code, err)) {
+        if (EbCloudConfigPublishImplementation::httpGetJson(indexUrl, token, existing, code, err)) {
             if (existing.contains("sha") && existing["sha"].isString()) {
                 indexSha = existing["sha"].asString().unwrapOrDefault();
             }
@@ -298,7 +298,7 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
                 auto b64 = existing["content"].asString().unwrapOrDefault();
                 // GitHub may insert newlines in base64.
                 b64.erase(std::remove(b64.begin(), b64.end(), '\n'), b64.end());
-                if (CloudConfigPublishImplementation::b64Decode(b64, decoded, decErr)) {
+                if (EbCloudConfigPublishImplementation::b64Decode(b64, decoded, decErr)) {
                     auto parsed = matjson::parse(decoded);
                     if (parsed.isOk())
                         indexRoot = parsed.unwrap();
@@ -320,7 +320,7 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
         }
 
         matjson::Value newEntry =
-            CloudConfigPublishImplementation::packEntryObject(meta, sha256, size);
+            EbCloudConfigPublishImplementation::packEntryObject(meta, sha256, size);
         bool replaced = false;
         matjson::Value next = matjson::Value::array();
         auto const arr = packsArr.asArray().unwrap();
@@ -339,9 +339,9 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
 
         // Validate before write.
         {
-            CloudConfigIndex::Catalog category{};
+            EbCloudConfigIndex::Catalog category{};
             std::string valErr;
-            if (!CloudConfigIndex::parse(indexRoot.dump(), category, valErr)) {
+            if (!EbCloudConfigIndex::parse(indexRoot.dump(), category, valErr)) {
                 result.error = std::string("index validate: ") + valErr;
                 return result;
             }
@@ -349,13 +349,13 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
 
         matjson::Value putBody = matjson::Value::object();
         putBody["message"] = fmt::format("cloud: index upsert {}", meta.id);
-        putBody["content"] = CloudConfigPublishImplementation::b64Encode(indexRoot.dump());
-        putBody["branch"] = CloudConfigPublishImplementation::kBranch;
+        putBody["content"] = EbCloudConfigPublishImplementation::b64Encode(indexRoot.dump());
+        putBody["branch"] = EbCloudConfigPublishImplementation::kBranch;
         if (!indexSha.empty())
             putBody["sha"] = indexSha;
 
         matjson::Value putRes;
-        if (!CloudConfigPublishImplementation::httpPutJson(indexUrl, token, putBody, putRes, code,
+        if (!EbCloudConfigPublishImplementation::httpPutJson(indexUrl, token, putBody, putRes, code,
                                                            err)) {
             result.error = std::string("index PUT: ") + err;
             return result;
@@ -365,12 +365,12 @@ CloudConfigPublish::Result CloudConfigPublish::publishPack(PackMeta const& metaI
     result.ok = true;
     if (result.commitUrl.empty()) {
         result.commitUrl = fmt::format("https://github.com/{}/blob/{}/{}", result.repo,
-                                       CloudConfigPublishImplementation::kBranch, packRel);
+                                       EbCloudConfigPublishImplementation::kBranch, packRel);
     }
     return result;
 }
 
-bool CloudConfigPublish::selfCheck(std::string& report) {
+bool EbCloudConfigPublish::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

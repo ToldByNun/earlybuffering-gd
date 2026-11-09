@@ -10,27 +10,27 @@
 #include <cmath>
 #include <vector>
 
-bool ShadowWorldDynamics::isDynamicTriggerTarget(ShadowSimulator const& simulator, int uniqueId) {
+bool EbShadowWorldDynamics::isDynamicTriggerTarget(EbShadowSimulator const& simulator, int uniqueId) {
     return simulator.m_dynamicTargetIds.find(uniqueId) != simulator.m_dynamicTargetIds.end();
 }
 
-bool ShadowWorldDynamics::isToggleTriggerTarget(ShadowSimulator const& simulator, int uniqueId) {
+bool EbShadowWorldDynamics::isToggleTriggerTarget(EbShadowSimulator const& simulator, int uniqueId) {
     return simulator.m_toggleTargetIds.find(uniqueId) != simulator.m_toggleTargetIds.end();
 }
 
-bool ShadowWorldDynamics::liveDynamicApplied(ShadowSimulator const& simulator, int uniqueId) {
+bool EbShadowWorldDynamics::liveDynamicApplied(EbShadowSimulator const& simulator, int uniqueId) {
     return simulator.m_liveDynamicAppliedIds.find(uniqueId) !=
            simulator.m_liveDynamicAppliedIds.end();
 }
 
-void ShadowWorldDynamics::noteUnknown(ShadowSimulator& simulator, GameObject* object) {
+void EbShadowWorldDynamics::noteUnknown(EbShadowSimulator& simulator, GameObject* object) {
     simulator.m_unknown = true;
     if (object && simulator.isToggleTriggerTarget(object->m_uniqueID)) {
         simulator.m_toggleUnknownHit = true;
     }
     if (!simulator.m_collectUnknownHist || !object)
         return;
-    bool const hard = SimCollisionPolicy::unknownClass(object) == SimUnknownClass::Hard;
+    bool const hard = EbSimCollisionPolicy::unknownClass(object) == SimUnknownClass::Hard;
     int const oid = object->m_objectID;
     auto& bin = simulator.m_unknownHistMap[oid];
     if (bin.count == 0) {
@@ -45,14 +45,14 @@ void ShadowWorldDynamics::noteUnknown(ShadowSimulator& simulator, GameObject* ob
     ++bin.count;
 }
 
-void ShadowWorldDynamics::applyLiveDynamicNear(ShadowSimulator& simulator, PlayLayer* layer,
+void EbShadowWorldDynamics::applyLiveDynamicNear(EbShadowSimulator& simulator, PlayLayer* layer,
                                                PlayerObject* ghost) {
     simulator.m_liveDynamicAppliedIds.clear();
     if (!layer || !ghost)
         return;
-    if (!StageConfig::triggerBake())
+    if (!EbStageConfig::triggerBake())
         return;
-    if (StageConfig::triggerBakeSkipDynamic())
+    if (EbStageConfig::triggerBakeSkipDynamic())
         return;
     // Dual follow is ambiguous (P1 vs P2) — leave Unknown.
     if (layer->m_gameState.m_isDualMode && layer->m_player2)
@@ -66,26 +66,26 @@ void ShadowWorldDynamics::applyLiveDynamicNear(ShadowSimulator& simulator, PlayL
     size_t applied = 0;
 
     for (auto& job : simulator.m_dynamicFollowJobs) {
-        if (applied >= ShadowSimulator::kMaxApplyPerTick)
+        if (applied >= EbShadowSimulator::kMaxApplyPerTick)
             break;
         auto* effect = job.effect;
         if (!effect || effect->m_uniqueID != job.effectUniqueId)
             continue;
 
         for (auto const& t : job.targets) {
-            if (applied >= ShadowSimulator::kMaxApplyPerTick)
+            if (applied >= EbShadowSimulator::kMaxApplyPerTick)
                 break;
             auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
                                                  std::chrono::steady_clock::now() - wall0)
                                                  .count();
-            if (elapsedMicroseconds >= ShadowSimulator::kApplyBudgetUs)
+            if (elapsedMicroseconds >= EbShadowSimulator::kApplyBudgetUs)
                 break;
 
             auto* object = t.obj;
             if (!object || object->m_uniqueID != t.uniqueId)
                 continue;
             // Prefer targets near the ghost; far follow targets stay Unknown.
-            if (std::fabs(object->getPositionX() - gx) > ShadowSimulator::kApplyMarginX)
+            if (std::fabs(object->getPositionX() - gx) > EbShadowSimulator::kApplyMarginX)
                 continue;
 
             float x = t.x;
@@ -97,7 +97,7 @@ void ShadowWorldDynamics::applyLiveDynamicNear(ShadowSimulator& simulator, PlayL
                 x = gx + job.offsetX;
             }
 
-            TriggerPose pose{};
+            EbTriggerPose pose{};
             pose.tick = simulator.m_simAbsTick >= 0 ? simulator.m_simAbsTick : 0;
             pose.x = x;
             pose.y = y;
@@ -105,7 +105,7 @@ void ShadowWorldDynamics::applyLiveDynamicNear(ShadowSimulator& simulator, PlayL
             pose.scaleX = t.scaleX;
             pose.scaleY = t.scaleY;
             pose.active = t.nodeVisible;
-            TriggerWorldStore::writePose(object, pose);
+            EbTriggerWorldStore::writePose(object, pose);
             for (auto const& st : simulator.m_savedTransforms) {
                 if (st.uniqueId == t.uniqueId) {
                     st.dirty = true;
@@ -118,35 +118,35 @@ void ShadowWorldDynamics::applyLiveDynamicNear(ShadowSimulator& simulator, PlayL
     }
 }
 
-void ShadowWorldDynamics::applyTriggerWorldAtTick(ShadowSimulator& simulator, PlayLayer* layer,
+void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator, PlayLayer* layer,
                                                   int absTick, PlayerObject* ghost) {
     simulator.m_triggerWorldAppliedThisTick = false;
     if (!layer || absTick < 0)
         return;
-    if (!StageConfig::triggerBake())
+    if (!EbStageConfig::triggerBake())
         return;
     if (simulator.m_savedTransforms.empty())
         return;
 
-    auto& store = TriggerWorldStore::get();
+    auto& store = EbTriggerWorldStore::get();
     if (!store.loaded() || !store.hasTracks())
         return;
 
-    LagProbe::Scope const lagScope("eb.trigger.apply");
+    EbLagProbe::Scope const lagScope("eb.trigger.apply");
 
     float const gx = ghost ? ghost->getPositionX() : 0.f;
-    class SimulationCandidate {
+    class EbTriggerApplyCandidate {
     public:
-        ShadowSimulator::SavedTransform const* st = nullptr;
+        EbShadowSimulator::SavedTransform const* st = nullptr;
         float dist = 0.f;
         // Named isNear — Windows headers define `near` as a macro.
         bool isNear = false;
 
     private:
     };
-    std::vector<SimulationCandidate> cands;
+    std::vector<EbTriggerApplyCandidate> cands;
     cands.reserve(128);
-    constexpr float kCullMarginX = ShadowSimulator::kApplyMarginX * 2.5f;
+    constexpr float kCullMarginX = EbShadowSimulator::kApplyMarginX * 2.5f;
     for (auto const& st : simulator.m_savedTransforms) {
         auto* object = st.obj;
         if (!object || object->m_uniqueID != st.uniqueId)
@@ -156,15 +156,15 @@ void ShadowWorldDynamics::applyTriggerWorldAtTick(ShadowSimulator& simulator, Pl
         float const dist = std::min(distNow, distBase);
         if (dist > kCullMarginX)
             continue;
-        SimulationCandidate c;
+        EbTriggerApplyCandidate c;
         c.st = &st;
         c.dist = dist;
-        c.isNear = dist <= ShadowSimulator::kApplyMarginX;
+        c.isNear = dist <= EbShadowSimulator::kApplyMarginX;
         cands.push_back(c);
     }
     // Near objects first, then closer far objects — skip remainder if budget/cap.
     std::sort(cands.begin(), cands.end(),
-              [](SimulationCandidate const& a, SimulationCandidate const& b) {
+              [](EbTriggerApplyCandidate const& a, EbTriggerApplyCandidate const& b) {
                   if (a.isNear != b.isNear)
                       return a.isNear && !b.isNear;
                   return a.dist < b.dist;
@@ -173,16 +173,16 @@ void ShadowWorldDynamics::applyTriggerWorldAtTick(ShadowSimulator& simulator, Pl
     auto const wall0 = std::chrono::steady_clock::now();
     size_t applied = 0;
     for (auto const& c : cands) {
-        if (applied >= ShadowSimulator::kMaxApplyPerTick)
+        if (applied >= EbShadowSimulator::kMaxApplyPerTick)
             break;
         auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
                                              std::chrono::steady_clock::now() - wall0)
                                              .count();
-        if (elapsedMicroseconds >= ShadowSimulator::kApplyBudgetUs)
+        if (elapsedMicroseconds >= EbShadowSimulator::kApplyBudgetUs)
             break;
 
         auto* object = c.st->obj;
-        TriggerPose pose{};
+        EbTriggerPose pose{};
         bool ok = false;
         if (simulator.m_poseRemapDt > 0.f) {
             ok = store.samplePose(c.st->uniqueId, absTick, simulator.m_poseRemapDt, pose);
@@ -191,7 +191,7 @@ void ShadowWorldDynamics::applyTriggerWorldAtTick(ShadowSimulator& simulator, Pl
         }
         if (!ok)
             continue;
-        TriggerWorldStore::writePose(object, pose);
+        EbTriggerWorldStore::writePose(object, pose);
         c.st->dirty = true;
         ++applied;
     }

@@ -1,8 +1,8 @@
 #ifndef DEV_REPORT_HPP
 #define DEV_REPORT_HPP
 
-class DevDecisionEvent;
-class DevAttempt;
+class EbDevDecisionEvent;
+class EbDevAttempt;
 
 #include "../evaluation/dev_eval_engine.hpp"
 #include "../evaluation/dev_objective.hpp"
@@ -10,7 +10,7 @@ class DevAttempt;
 #include <string>
 
 // Overlay line + last-report store (Commit 14). Field names are literal contract A.
-class DevReport {
+class EbDevReport {
 public:
     std::string recLine; // e.g. REC 3/10 or empty
     DevFidelity fidelity = DevFidelity::NotReproducible;
@@ -48,14 +48,14 @@ public:
 
     // Build from an eval grid result. Never writes ideal= unless idealEligible.
     // plannedDelay > 0 → accumulate AssistSimEstimate (secondary, not a ship gate).
-    static DevReport fromGrid(DevEvalEngine::GridReport const& grid, std::string recLine,
+    static EbDevReport fromGrid(EbDevEvalEngine::GridReport const& grid, std::string recLine,
                               int plannedDelay = -1);
 
     // Pure formatter used by fromGrid and selfCheck.
-    static std::string formatOverlayLine(DevReport const& r);
+    static std::string formatOverlayLine(EbDevReport const& r);
 
-    static void setLast(DevReport report);
-    static DevReport const& last();
+    static void setLast(EbDevReport report);
+    static EbDevReport const& last();
     static bool hasLast();
     static void clearLast();
 
@@ -72,22 +72,22 @@ private:
 #include <cstring>
 #include <fmt/format.h>
 
-class DevReportImplementation {
+class EbDevReportImplementation {
 public:
     static char const* fidShort(DevFidelity frame, bool approx);
-    static DevObjective::Kind objectiveKindFromConfig();
-    static DevDecisionEvent const* findPlanFinished(DevAttempt const& attempt);
-    static int limitFromPlanEvent(DevDecisionEvent const& e);
-    static bool runEvalOnPlanEvent(PlayLayer* layer, DevDecisionEvent const& planEv, DevReport& out,
+    static EbDevObjective::Kind objectiveKindFromConfig();
+    static EbDevDecisionEvent const* findPlanFinished(EbDevAttempt const& attempt);
+    static int limitFromPlanEvent(EbDevDecisionEvent const& e);
+    static bool runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisionEvent const& planEv, EbDevReport& out,
                                    std::string& err);
 
 private:
-    friend class DevReport;
+    friend class EbDevReport;
 
-    static DevReport s_lastReport;
+    static EbDevReport s_lastReport;
     static bool s_hasLastReport;
 
-    DevReportImplementation() = delete;
+    EbDevReportImplementation() = delete;
 };
 
 #endif

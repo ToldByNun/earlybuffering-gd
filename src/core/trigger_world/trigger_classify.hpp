@@ -25,7 +25,7 @@ enum class TriggerKind {
 };
 
 // Heuristic classifier for trigger bake (Commit 2).
-class TriggerClassify {
+class EbTriggerClassify {
 public:
     // Flat flag bundle so selfCheck / tests need no live PlayLayer objects.
     class MotionHints {
@@ -84,7 +84,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    TriggerClassify() = default;
+    EbTriggerClassify() = default;
 
     // True only when motion depends on the live player (not another group).
     static bool dependsOnLivePlayer(MotionHints const& hints);

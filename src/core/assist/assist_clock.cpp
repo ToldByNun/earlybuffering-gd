@@ -1,55 +1,55 @@
+#include "../../app/class_manager.hpp"
 #include "assist_clock.hpp"
 #include <cmath>
 #include <cstdlib>
 
-AssistClock& AssistClock::get() {
-    static AssistClock instance;
-    return instance;
+EbAssistClock& EbAssistClock::get() {
+    return EbClassManager::get().service<EbAssistClock>();
 }
 
-double AssistClock::simTpsFromDt(float simDt) const {
+double EbAssistClock::simTpsFromDt(float simDt) const {
     if (!(simDt <= 0.f)) {
         return 1.0 / static_cast<double>(simDt);
     }
-    return AssistClock::kNominalTps;
+    return EbAssistClock::kNominalTps;
 }
 
-double AssistClock::wallTpsFromDt(float lastDt) const {
+double EbAssistClock::wallTpsFromDt(float lastDt) const {
     if (!(lastDt <= 0.f)) {
         return 1.0 / static_cast<double>(lastDt);
     }
-    return AssistClock::kNominalTps;
+    return EbAssistClock::kNominalTps;
 }
 
-bool AssistClock::isSaneSimDt(float simDt) const {
+bool EbAssistClock::isSaneSimDt(float simDt) const {
     if (!(!std::isfinite(simDt))) {
-        return simDt >= AssistClock::kMinSaneSimDt && simDt <= AssistClock::kMaxSaneSimDt;
+        return simDt >= EbAssistClock::kMinSaneSimDt && simDt <= EbAssistClock::kMaxSaneSimDt;
     }
     return false;
 }
 
-float AssistClock::planSimDtOrNominal(float simDt, float timeWarp) const {
+float EbAssistClock::planSimDtOrNominal(float simDt, float timeWarp) const {
     float tw = timeWarp;
     if (tw <= 0.f)
         tw = 1.f;
     if (!this->isSaneSimDt(simDt)) {
-        return AssistClock::kNominalSimDt;
+        return EbAssistClock::kNominalSimDt;
     }
     double const tps = this->simTpsFromDt(simDt);
     // Extreme stuck hitch in *seconds* (e.g. multi-frame pause dump) — never plan with it.
     // Do NOT treat raw GD step 0.25 here; callers must gdStepToSeconds first.
     if (this->speedScaleSuspect(tw, tps) &&
-        (tps < AssistClock::kPlanSnapTpsLo || tps > AssistClock::kPlanSnapTpsHi)) {
-        return AssistClock::kNominalSimDt;
+        (tps < EbAssistClock::kPlanSnapTpsLo || tps > EbAssistClock::kPlanSnapTpsHi)) {
+        return EbAssistClock::kNominalSimDt;
     }
     return simDt;
 }
 
-int AssistClock::framesToTicks(int frames) {
+int EbAssistClock::framesToTicks(int frames) {
     if (frames <= 0)
         return 0;
     double const ticks =
-        static_cast<double>(frames) * (AssistClock::kNominalTps / AssistClock::kDisplayFps);
+        static_cast<double>(frames) * (EbAssistClock::kNominalTps / EbAssistClock::kDisplayFps);
     long long const rounded = static_cast<long long>(std::llround(ticks));
     if (rounded < 0)
         return 0;
@@ -59,11 +59,11 @@ int AssistClock::framesToTicks(int frames) {
     return 0x7fffffff;
 }
 
-int AssistClock::ticksToFrames(int ticks) {
+int EbAssistClock::ticksToFrames(int ticks) {
     if (ticks <= 0)
         return 0;
     double const frames =
-        static_cast<double>(ticks) * (AssistClock::kDisplayFps / AssistClock::kNominalTps);
+        static_cast<double>(ticks) * (EbAssistClock::kDisplayFps / EbAssistClock::kNominalTps);
     long long const rounded = static_cast<long long>(std::llround(frames));
     if (rounded < 0)
         return 0;
@@ -73,33 +73,33 @@ int AssistClock::ticksToFrames(int ticks) {
     return 0x7fffffff;
 }
 
-float AssistClock::gdStepToSeconds(float gdDt) {
+float EbAssistClock::gdStepToSeconds(float gdDt) {
     if (!(gdDt > 0.f) || !std::isfinite(gdDt))
         return 0.f;
     // GD step units are typically around kNominalGdStep (0.25). Real seconds
     // at 240 TPS are ~1/240. Anything above the seconds sane max is GD step.
-    if (gdDt > AssistClock::kMaxSaneSimDt) {
-        return gdDt / static_cast<float>(AssistClock::kDisplayFps);
+    if (gdDt > EbAssistClock::kMaxSaneSimDt) {
+        return gdDt / static_cast<float>(EbAssistClock::kDisplayFps);
     }
     return gdDt;
 }
 
-float AssistClock::secondsToGdStep(float secDt) {
+float EbAssistClock::secondsToGdStep(float secDt) {
     if (!(secDt > 0.f) || !std::isfinite(secDt)) {
-        return AssistClock::kNominalGdStep;
+        return EbAssistClock::kNominalGdStep;
     }
     // Seconds-domain planning quanta → GD PlayerObject::update step (1.2.1 contract).
-    if (secDt <= AssistClock::kMaxSaneSimDt * 2.f) {
-        return secDt * static_cast<float>(AssistClock::kDisplayFps);
+    if (secDt <= EbAssistClock::kMaxSaneSimDt * 2.f) {
+        return secDt * static_cast<float>(EbAssistClock::kDisplayFps);
     }
     return secDt;
 }
 
-int AssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) const {
+int EbAssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) const {
     if (liveAbsTick < 0)
         return 0;
     if (authorTps <= 0.0)
-        authorTps = AssistClock::kNominalTps;
+        authorTps = EbAssistClock::kNominalTps;
     if (liveSimDt <= 0.f) {
         return liveAbsTick;
     }
@@ -117,11 +117,11 @@ int AssistClock::remapTick(double authorTps, int liveAbsTick, float liveSimDt) c
     return 0x7fffffff;
 }
 
-int AssistClock::unmapTick(double authorTps, int authorTick, float liveSimDt) const {
+int EbAssistClock::unmapTick(double authorTps, int authorTick, float liveSimDt) const {
     if (authorTick < 0)
         return 0;
     if (authorTps <= 0.0)
-        authorTps = AssistClock::kNominalTps;
+        authorTps = EbAssistClock::kNominalTps;
     if (liveSimDt <= 0.f) {
         return authorTick;
     }
@@ -139,24 +139,24 @@ int AssistClock::unmapTick(double authorTps, int authorTick, float liveSimDt) co
     return 0x7fffffff;
 }
 
-bool AssistClock::speedScaleSuspect(float timeWarp, double simTps) const {
+bool EbAssistClock::speedScaleSuspect(float timeWarp, double simTps) const {
     float tw = timeWarp;
     if (tw <= 0.f)
         tw = 1.f;
-    if (std::fabs(tw - 1.f) > AssistClock::kWarpNearOne) {
+    if (std::fabs(tw - 1.f) > EbAssistClock::kWarpNearOne) {
         return false;
     }
     if (!std::isfinite(simTps) || simTps <= 0.0) {
         return false;
     }
-    return std::fabs(simTps - AssistClock::kNominalTps) > AssistClock::kSuspectAbsDelta;
+    return std::fabs(simTps - EbAssistClock::kNominalTps) > EbAssistClock::kSuspectAbsDelta;
 }
 
-bool AssistClock::noteSpeedScale(float timeWarp, double simTps, int attemptTick) {
+bool EbAssistClock::noteSpeedScale(float timeWarp, double simTps, int attemptTick) {
     bool const suspect = this->speedScaleSuspect(timeWarp, simTps);
     bool const edgeOn = suspect && !this->m_lastSuspect;
     bool const stickyPulse =
-        suspect && (attemptTick - this->m_lastSuspectLogTick) >= AssistClock::kSuspectLogEveryTicks;
+        suspect && (attemptTick - this->m_lastSuspectLogTick) >= EbAssistClock::kSuspectLogEveryTicks;
     this->m_lastSuspect = suspect;
     if (!edgeOn && !stickyPulse) {
         return false;
@@ -165,7 +165,7 @@ bool AssistClock::noteSpeedScale(float timeWarp, double simTps, int attemptTick)
     return true;
 }
 
-bool AssistClock::selfCheck(std::string& report) {
+bool EbAssistClock::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -177,34 +177,34 @@ bool AssistClock::selfCheck(std::string& report) {
         report += name;
     };
 
-    AssistClock& clock = AssistClock::get();
+    EbAssistClock& clock = EbAssistClock::get();
 
     expect(std::fabs(clock.simTpsFromDt(1.f / 240.f) - 240.0) < 0.01, "sim-tps-240");
-    expect(clock.simTpsFromDt(0.f) == AssistClock::kNominalTps, "sim-tps-zero");
-    expect(clock.simTpsFromDt(-1.f) == AssistClock::kNominalTps, "sim-tps-neg");
-    expect(clock.isSaneSimDt(AssistClock::kNominalSimDt), "sane-nominal");
+    expect(clock.simTpsFromDt(0.f) == EbAssistClock::kNominalTps, "sim-tps-zero");
+    expect(clock.simTpsFromDt(-1.f) == EbAssistClock::kNominalTps, "sim-tps-neg");
+    expect(clock.isSaneSimDt(EbAssistClock::kNominalSimDt), "sane-nominal");
     // Raw GD step 0.25 is insane *as seconds* — must convert before sanity.
-    expect(!clock.isSaneSimDt(AssistClock::kNominalGdStep), "sane-reject-raw-gd-step");
-    expect(std::fabs(clock.planSimDtOrNominal(AssistClock::kNominalGdStep, 1.f) -
-                     AssistClock::kNominalSimDt) < 1e-6f,
+    expect(!clock.isSaneSimDt(EbAssistClock::kNominalGdStep), "sane-reject-raw-gd-step");
+    expect(std::fabs(clock.planSimDtOrNominal(EbAssistClock::kNominalGdStep, 1.f) -
+                     EbAssistClock::kNominalSimDt) < 1e-6f,
            "plan-snap-raw-gd-step");
-    expect(std::fabs(AssistClock::kNominalGdStep - 0.25f) < 1e-6f, "nominal-gd-step-025");
-    expect(std::fabs(clock.planSimDtOrNominal(AssistClock::kNominalSimDt, 1.f) -
-                     AssistClock::kNominalSimDt) < 1e-6f,
+    expect(std::fabs(EbAssistClock::kNominalGdStep - 0.25f) < 1e-6f, "nominal-gd-step-025");
+    expect(std::fabs(clock.planSimDtOrNominal(EbAssistClock::kNominalSimDt, 1.f) -
+                     EbAssistClock::kNominalSimDt) < 1e-6f,
            "plan-keep-nominal");
-    expect(AssistClock::framesToTicks(1) == 4, "frames-1-to-4-ticks");
-    expect(AssistClock::framesToTicks(8) == 32, "frames-8-to-32-ticks");
-    expect(AssistClock::ticksToFrames(4) == 1, "ticks-4-to-1-frame");
-    expect(AssistClock::ticksToFrames(2) == 1 || AssistClock::ticksToFrames(2) == 0,
+    expect(EbAssistClock::framesToTicks(1) == 4, "frames-1-to-4-ticks");
+    expect(EbAssistClock::framesToTicks(8) == 32, "frames-8-to-32-ticks");
+    expect(EbAssistClock::ticksToFrames(4) == 1, "ticks-4-to-1-frame");
+    expect(EbAssistClock::ticksToFrames(2) == 1 || EbAssistClock::ticksToFrames(2) == 0,
            "ticks-2-round");
-    expect(std::fabs(AssistClock::gdStepToSeconds(AssistClock::kNominalGdStep) -
-                     AssistClock::kNominalSimDt) < 1e-6f,
+    expect(std::fabs(EbAssistClock::gdStepToSeconds(EbAssistClock::kNominalGdStep) -
+                     EbAssistClock::kNominalSimDt) < 1e-6f,
            "gd-step-025-to-sec");
-    expect(std::fabs(AssistClock::secondsToGdStep(AssistClock::kNominalSimDt) -
-                     AssistClock::kNominalGdStep) < 1e-6f,
+    expect(std::fabs(EbAssistClock::secondsToGdStep(EbAssistClock::kNominalSimDt) -
+                     EbAssistClock::kNominalGdStep) < 1e-6f,
            "sec-to-gd-step-025");
     // Round-trip: live GD hook dt must equal ghost update dt (v1.2.1 contract).
-    expect(std::fabs(AssistClock::secondsToGdStep(AssistClock::gdStepToSeconds(0.25f)) - 0.25f) <
+    expect(std::fabs(EbAssistClock::secondsToGdStep(EbAssistClock::gdStepToSeconds(0.25f)) - 0.25f) <
                1e-6f,
            "gd-step-roundtrip");
 
@@ -240,7 +240,7 @@ bool AssistClock::selfCheck(std::string& report) {
     expect(clock.noteSpeedScale(1.f, 120.0, 10), "note-edge-on");
     expect(clock.lastSuspect(), "note-sticky");
     expect(!clock.noteSpeedScale(1.f, 120.0, 11), "note-throttle");
-    expect(clock.noteSpeedScale(1.f, 120.0, 10 + AssistClock::kSuspectLogEveryTicks), "note-pulse");
+    expect(clock.noteSpeedScale(1.f, 120.0, 10 + EbAssistClock::kSuspectLogEveryTicks), "note-pulse");
     expect(!clock.noteSpeedScale(1.f, 240.0, 500), "note-clear-no-log");
     expect(!clock.lastSuspect(), "note-cleared");
 

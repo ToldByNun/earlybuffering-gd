@@ -3,14 +3,14 @@
 
 #include "../shadow_plan_context.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanThreatProbe {
+class EbShadowPlanThreatProbe {
 public:
-    static bool evaluate(ShadowPlanContext& context);
+    static bool evaluate(EbShadowPlanContext& context);
 
 private:
-    ShadowPlanThreatProbe() = delete;
+    EbShadowPlanThreatProbe() = delete;
 };
 
 #endif

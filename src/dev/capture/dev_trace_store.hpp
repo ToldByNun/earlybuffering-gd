@@ -28,7 +28,7 @@ enum class DevEventSource { Live = 0, Bake };
 
 // One traced decision step. Commit 3 covers identity + chain fields;
 // later commits fill clock/witness/eval payloads on the same struct.
-class DevDecisionEvent {
+class EbDevDecisionEvent {
 public:
     int64_t eventId = 0;
     int64_t attemptId = 0;
@@ -61,11 +61,11 @@ public:
 
     // Commit 6: clock stamp on planFinished (eval binds the same stamp).
     bool hasClockStamp = false;
-    DevClockContract::Stamp clockStamp{};
+    EbDevClockContract::Stamp clockStamp{};
 
     // Commit 7: live witness at plan time (no restore yet).
     bool hasWitness = false;
-    DevLiveWitness witness{};
+    EbDevLiveWitness witness{};
 
     // Commit 8: fidelity / claims (witness-gate at plan; full classify post-restore).
     bool hasFidelity = false;
@@ -73,17 +73,17 @@ public:
     bool claimsAllowed = false;
     bool approx = false;
     std::string evalSuppressedReason;
-    std::vector<DevDiffEntry> diffs;
+    std::vector<EbDevDiffEntry> diffs;
 
     // Commit 12: reject ledger + attribution on planFinished (gate-pass: empty notes).
-    std::vector<DevRejectLedger::CandNote> candNotes;
+    std::vector<EbDevRejectLedger::CandNote> candNotes;
     bool candNotesTruncated = false;
-    std::vector<DevRejectLedger::AttributionNote> attribution;
+    std::vector<EbDevRejectLedger::AttributionNote> attribution;
 
 private:
 };
 
-class DevAttempt {
+class EbDevAttempt {
 public:
     int64_t attemptId = 0;
     int startTick = 0;
@@ -91,12 +91,12 @@ public:
     bool sealed = false;
     // True when seal counted toward the rolling window (pressObserved / empty-count).
     bool counted = false;
-    std::vector<DevDecisionEvent> events;
+    std::vector<EbDevDecisionEvent> events;
 
 private:
 };
 
-class DevSessionFile {
+class EbDevSessionFile {
 public:
     int traceSchema = 1;
     std::string modVersion;
@@ -108,17 +108,17 @@ public:
     std::string settingsFingerprint;
     int recordingsTarget = 10;
     int recordingsDone = 0;
-    std::vector<DevAttempt> attempts;
+    std::vector<EbDevAttempt> attempts;
 
 private:
 };
 
 // In-memory + disk JSON for Dev Lab sessions. Atomic flush = temp + rename.
-class DevTraceStore {
+class EbDevTraceStore {
 public:
     static constexpr int kTraceSchema = 1;
 
-    static DevTraceStore& get();
+    static EbDevTraceStore& get();
 
     static char const* kindId(DevEventKind kind);
     static bool parseKind(std::string const& s, DevEventKind& out);
@@ -127,12 +127,12 @@ public:
 
     // Events for one pressId must form a parent chain (press parent=0).
     // Returns false and fills err on break / missing parent / id mismatch.
-    static bool validatePressChain(std::vector<DevDecisionEvent> const& events, int64_t pressId,
+    static bool validatePressChain(std::vector<EbDevDecisionEvent> const& events, int64_t pressId,
                                    std::string& err);
 
     // Serialize / parse without touching disk (selfCheck + later export).
-    static std::string sessionToJsonString(DevSessionFile const& session);
-    static bool sessionFromJsonString(std::string const& body, DevSessionFile& out,
+    static std::string sessionToJsonString(EbDevSessionFile const& session);
+    static bool sessionFromJsonString(std::string const& body, EbDevSessionFile& out,
                                       std::string& err);
 
     static bool selfCheck(std::string& report);
@@ -157,7 +157,7 @@ public:
 
     int64_t allocPressId();
     // Appends event; assigns eventId/attemptId if zero; cycleId defaults to pressId.
-    DevDecisionEvent* appendEvent(DevDecisionEvent event);
+    EbDevDecisionEvent* appendEvent(EbDevDecisionEvent event);
 
     // Seal current attempt, bump recordingsDone when it counts, rolling-trim, flush.
     // Never auto-stops the session — keeps only the last recordingsTarget counted attempts.
@@ -169,23 +169,25 @@ public:
     // Also drops sealed attempts that fall before the retained window.
     void trimRollingWindow();
 
-    DevSessionFile const& session() const {
+    EbDevSessionFile const& session() const {
         return this->m_session;
     }
-    DevAttempt* currentAttempt();
-    DevAttempt const* currentAttempt() const;
+    EbDevAttempt* currentAttempt();
+    EbDevAttempt const* currentAttempt() const;
 
 private:
-    friend class DevTraceValidation;
+    friend class EbServiceStore;
 
-    friend class DevSessionCodec;
+    friend class EbDevTraceValidation;
 
-    DevTraceStore() = default;
+    friend class EbDevSessionCodec;
+
+    EbDevTraceStore() = default;
 
     int64_t nextEventId();
     bool writeAtomic(matjson::Value const& root) const;
 
-    DevSessionFile m_session{};
+    EbDevSessionFile m_session{};
     bool m_open = false;
     int64_t m_nextPressId = 1;
     int64_t m_nextEventId = 1;
@@ -202,31 +204,31 @@ private:
 #include <unordered_map>
 #include <utility>
 
-class DevTraceStoreImplementation {
+class EbDevTraceStoreImplementation {
 public:
-    static matjson::Value clockStampToJson(DevClockContract::Stamp const& st);
-    static bool clockStampFromJson(matjson::Value const& j, DevClockContract::Stamp& st,
+    static matjson::Value clockStampToJson(EbDevClockContract::Stamp const& st);
+    static bool clockStampFromJson(matjson::Value const& j, EbDevClockContract::Stamp& st,
                                    std::string& err);
-    static matjson::Value playerBlobToJson(DevPlayerBlob const& b);
-    static void playerBlobFromJson(matjson::Value const& j, DevPlayerBlob& b);
-    static matjson::Value witnessToJson(DevLiveWitness const& w);
-    static bool witnessFromJson(matjson::Value const& j, DevLiveWitness& w, std::string& err);
-    static matjson::Value eventToJson(DevDecisionEvent const& e);
-    static bool eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::string& err);
-    static matjson::Value sessionToJsonValue(DevSessionFile const& session);
-    static DevDecisionEvent makeEv(DevEventKind kind, int64_t eventId, int64_t attemptId,
+    static matjson::Value playerBlobToJson(EbDevPlayerBlob const& b);
+    static void playerBlobFromJson(matjson::Value const& j, EbDevPlayerBlob& b);
+    static matjson::Value witnessToJson(EbDevLiveWitness const& w);
+    static bool witnessFromJson(matjson::Value const& j, EbDevLiveWitness& w, std::string& err);
+    static matjson::Value eventToJson(EbDevDecisionEvent const& e);
+    static bool eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e, std::string& err);
+    static matjson::Value sessionToJsonValue(EbDevSessionFile const& session);
+    static EbDevDecisionEvent makeEv(DevEventKind kind, int64_t eventId, int64_t attemptId,
                                    int64_t pressId, int64_t parent, int64_t planId);
 
 private:
-    friend class DevTraceValidation;
+    friend class EbDevTraceValidation;
 
-    friend class DevSessionCodec;
+    friend class EbDevSessionCodec;
 
-    friend class DevEventCodec;
+    friend class EbDevEventCodec;
 
-    friend class DevSnapshotCodec;
+    friend class EbDevSnapshotCodec;
 
-    DevTraceStoreImplementation() = delete;
+    EbDevTraceStoreImplementation() = delete;
 };
 
 #endif

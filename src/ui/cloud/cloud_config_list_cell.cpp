@@ -4,7 +4,7 @@
 #include <cocos-ext.h>
 #include <fmt/format.h>
 
-std::string CloudConfigListCellImplementation::formatDlBadge(int count) {
+std::string EbCloudConfigListCellImplementation::formatDlBadge(int count) {
     if (count >= 1000000)
         return fmt::format("{}M", count / 1000000);
     if (!(count >= 10000)) {
@@ -13,11 +13,11 @@ std::string CloudConfigListCellImplementation::formatDlBadge(int count) {
     return fmt::format("{}k", count / 1000);
 }
 
-CloudConfigListCell* CloudConfigListCell::create(CloudConfigIndex::PackEntry const& entry,
+EbCloudConfigListCell* EbCloudConfigListCell::create(EbCloudConfigIndex::PackEntry const& entry,
                                                  float width, int index, bool selected, bool active,
                                                  bool cached, bool updateAvailable,
                                                  StatsBadge const& stats, SelectCallback onSelect) {
-    auto* createdObject = new CloudConfigListCell();
+    auto* createdObject = new EbCloudConfigListCell();
     if (createdObject->init(entry, width, index, selected, active, cached, updateAvailable, stats,
                             std::move(onSelect))) {
         createdObject->autorelease();
@@ -27,7 +27,7 @@ CloudConfigListCell* CloudConfigListCell::create(CloudConfigIndex::PackEntry con
     return nullptr;
 }
 
-bool CloudConfigListCell::init(CloudConfigIndex::PackEntry const& entry, float width, int index,
+bool EbCloudConfigListCell::init(EbCloudConfigIndex::PackEntry const& entry, float width, int index,
                                bool selected, bool active, bool cached, bool updateAvailable,
                                StatsBadge const& stats, SelectCallback onSelect) {
     if (!geode::prelude::CCNode::init())
@@ -75,7 +75,7 @@ bool CloudConfigListCell::init(CloudConfigIndex::PackEntry const& entry, float w
     hitBg->setAnchorPoint({0.5f, 0.5f});
     hitBg->ignoreAnchorPointForPosition(false);
     auto* hit =
-        CCMenuItemSpriteExtra::create(hitBg, this, menu_selector(CloudConfigListCell::onClick));
+        CCMenuItemSpriteExtra::create(hitBg, this, menu_selector(EbCloudConfigListCell::onClick));
     hit->setContentSize({width, kHeight});
     hit->setID("cloud-cell-hit"_spr);
     menu->addChildAtPosition(hit, geode::Anchor::Center);
@@ -102,7 +102,7 @@ bool CloudConfigListCell::init(CloudConfigIndex::PackEntry const& entry, float w
     if (stats.show && (stats.downloads > 0 || stats.ratingCount > 0)) {
         std::string bits;
         if (stats.downloads > 0) {
-            bits += CloudConfigListCellImplementation::formatDlBadge(stats.downloads);
+            bits += EbCloudConfigListCellImplementation::formatDlBadge(stats.downloads);
             bits += "dl";
         }
         if (stats.ratingCount > 0) {
@@ -148,7 +148,7 @@ bool CloudConfigListCell::init(CloudConfigIndex::PackEntry const& entry, float w
     return true;
 }
 
-void CloudConfigListCell::onClick(geode::prelude::CCObject*) {
+void EbCloudConfigListCell::onClick(geode::prelude::CCObject*) {
     if (m_onSelect)
         m_onSelect(m_id);
 }

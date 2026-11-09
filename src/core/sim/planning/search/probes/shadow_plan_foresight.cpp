@@ -9,27 +9,27 @@
 #include "../shadow_plan_context.hpp"
 #include <algorithm>
 
-void ShadowPlanForesight::probe(ShadowPlanContext& context) {
+void EbShadowPlanForesight::probe(EbShadowPlanContext& context) {
     if (!context.options.legacyPick) {
-        int const h0 = std::max(LongForesight::kMinHorizon, context.scoreHorizon);
-        int const lookCap = StageConfig::lookAheadCap();
+        int const h0 = std::max(EbLongForesight::kMinHorizon, context.scoreHorizon);
+        int const lookCap = EbStageConfig::lookAheadCap();
         int const hMax = lookCap > 0 ? std::max(h0, lookCap)
-                                     : std::min(320, h0 + h0 / 2 + LongForesight::kExtendStep);
-        int const minBudget = h0 * 2 + OpportunityProbe::kMinBudgetForProbe;
+                                     : std::min(320, h0 + h0 / 2 + EbLongForesight::kExtendStep);
+        int const minBudget = h0 * 2 + EbOpportunityProbe::kMinBudgetForProbe;
 
-        auto pathFromRun = [](ShadowSimulator::RunResult const& rr) {
-            LongForesight::PathStats s;
+        auto pathFromRun = [](EbShadowSimulator::RunResult const& rr) {
+            EbLongForesight::PathStats s;
             s.died = rr.died;
             s.deathTick = rr.died ? rr.deathTick : -1;
             s.endX = rr.died ? rr.deathX : rr.endX;
-            s.surviveTicks = ShadowSurvivalRules::rankingSurviveTicks(rr);
+            s.surviveTicks = EbShadowSurvivalRules::rankingSurviveTicks(rr);
             return s;
         };
 
         // Trajectory: lightweight hold/coast (same button semantics as traj viz).
         // ShadowPlayer: full runOne(d0) + runBaseline at long cap.
         auto sampleLight = [&](bool holdJump, int horizon) {
-            LongForesight::PathStats s;
+            EbLongForesight::PathStats s;
             if (!context.layer || !context.real || !context.simulator.m_shadow || horizon <= 0)
                 return s;
             context.simulator.copyPlayerState(context.simulator.m_shadow, context.real);
@@ -68,15 +68,15 @@ void ShadowPlanForesight::probe(ShadowPlanContext& context) {
             return s;
         };
 
-        auto samplePair = [&](int horizon, LongForesight::PathStats& pressOut,
-                              LongForesight::PathStats& idleOut) {
-            if (context.options.assistEngine == StageConfig::AssistEngineKind::Trajectory) {
+        auto samplePair = [&](int horizon, EbLongForesight::PathStats& pressOut,
+                              EbLongForesight::PathStats& idleOut) {
+            if (context.options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
                 // down=press → action holds Jump; idle coasts. Release flips.
                 pressOut = sampleLight(context.down, horizon);
                 idleOut = sampleLight(!context.down, horizon);
                 return;
             }
-            ShadowSimulator::Model longModel = context.model; // inherits continuePastClear
+            EbShadowSimulator::Model longModel = context.model; // inherits continuePastClear
             longModel.cap = std::max(1, horizon);
             auto pressR = context.simulator.runOne(
                 context.layer, context.real, context.down, 0, context.limit, context.deltaTime,
@@ -92,27 +92,27 @@ void ShadowPlanForesight::probe(ShadowPlanContext& context) {
         };
 
         if (context.tickBudget >= minBudget && !context.wallExceeded()) {
-            LongForesight::Input lfIn;
+            EbLongForesight::Input lfIn;
             lfIn.horizon = h0;
             samplePair(h0, lfIn.press, lfIn.idle);
 
             int const h1 =
-                LongForesight::extendHorizon(h0, lfIn.press.died ? lfIn.press.deathTick : -1, hMax);
+                EbLongForesight::extendHorizon(h0, lfIn.press.died ? lfIn.press.deathTick : -1, hMax);
             if (h1 > h0 && context.tickBudget >= h1 * 2 && !context.wallExceeded()) {
                 lfIn.hasExtended = true;
                 lfIn.horizonExt = h1;
                 samplePair(h1, lfIn.pressExt, lfIn.idleExt);
             }
 
-            auto const lf = LongForesight::decide(lfIn);
+            auto const lf = EbLongForesight::decide(lfIn);
             // Only invent idleSafer / force search when idle still lives.
             if (lf.idleSafer)
                 context.plan.idleSafer = true;
             context.plan.longForesightNeedSearch = lf.needDelaySearch;
-            AssistLog::debug(fmt::format(
+            EbAssistLog::debug(fmt::format(
                 "PLAN id={} longForesight eng={} h={} ext={} "
                 "pressDie={} idleDie={} idleSafer={} needSearch={} bothDead={} budget={}",
-                context.plan.planId, StageConfig::assistEngineName(context.options.assistEngine),
+                context.plan.planId, EbStageConfig::assistEngineName(context.options.assistEngine),
                 lf.horizonUsed, lf.extended ? 1 : 0, lf.pressSurvived ? 0 : 1,
                 lf.idleSurvived ? 0 : 1, lf.idleSafer ? 1 : 0, lf.needDelaySearch ? 1 : 0,
                 lf.bothDead ? 1 : 0, context.tickBudget));

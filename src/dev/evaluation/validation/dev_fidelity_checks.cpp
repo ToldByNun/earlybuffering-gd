@@ -7,7 +7,7 @@
 #include <fmt/format.h>
 #include <string>
 
-bool DevFidelityChecks::selfCheck(std::string& report) {
+bool EbDevFidelityChecks::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -19,35 +19,35 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
         report += name;
     };
 
-    expect(std::strcmp(DevStateDiff::fidelityId(DevFidelity::Reproduced), "reproduced") == 0,
+    expect(std::strcmp(EbDevStateDiff::fidelityId(DevFidelity::Reproduced), "reproduced") == 0,
            "fid-id");
 
-    DevClassifyOptions opts;
+    EbDevClassifyOptions opts;
     opts.requireDeps = true;
     opts.freezeWorld = false;
     opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
 
     // --- Gate: missing player ---
     {
-        DevLiveWitness w;
+        EbDevLiveWitness w;
         w.valid = true;
-        w.clock = DevClockContract::get().makeStamp(5, false, false, 1.f / 240.f, 1.f / 240.f,
+        w.clock = EbDevClockContract::get().makeStamp(5, false, false, 1.f / 240.f, 1.f / 240.f,
                                                     1.f / 240.f, 1.f, DevSimPathId::Plan);
-        auto gameObject = DevStateDiff::classifyWitnessGate(w, opts);
+        auto gameObject = EbDevStateDiff::classifyWitnessGate(w, opts);
         expect(gameObject.fidelity == DevFidelity::NotReproducible, "gate-fid");
         expect(!gameObject.claimsAllowed, "gate-claims");
         expect(gameObject.evalSuppressedReason == "missingPlayer", "gate-reason");
     }
 
     // Build a solid witness.
-    DevLiveWitness wit;
+    EbDevLiveWitness wit;
     wit.valid = true;
-    wit.playerBlobSchema = DevLiveWitness::computePlayerBlobSchema();
+    wit.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();
     wit.player.present = true;
     wit.player.x = 100.f;
     wit.player.y = 50.f;
     wit.player.yVelocity = -1.f;
-    wit.clock = DevClockContract::get().makeStamp(20, true, false, 1.f / 240.f, 1.f / 480.f,
+    wit.clock = EbDevClockContract::get().makeStamp(20, true, false, 1.f / 240.f, 1.f / 480.f,
                                                   1.f / 240.f, 1.f, DevSimPathId::Plan);
     wit.worldDeps = {
         static_cast<int>(DevWitnessCategory::Player),
@@ -59,15 +59,15 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
     wit.categories.push_back(
         {DevWitnessCategory::CollisionFlags, DevWitnessStatus::Partial, 0, false});
 
-    auto gateOk = DevStateDiff::classifyWitnessGate(wit, opts);
+    auto gateOk = EbDevStateDiff::classifyWitnessGate(wit, opts);
     expect(gateOk.evalSuppressedReason.empty(), "gate-ok");
 
     // --- Reproduced: player+clock+flags restored ---
     {
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(wit, DevSimPathId::EvalDelayFromFreeze);
-        DevEvalRestore::notePlayerWritten(result, wit.player);
-        auto resultValue = DevStateDiff::classify(wit, result, opts);
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(wit, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, wit.player);
+        auto resultValue = EbDevStateDiff::classify(wit, result, opts);
         expect(resultValue.fidelity == DevFidelity::Reproduced, "repr-fid");
         expect(resultValue.claimsAllowed && !resultValue.approx, "repr-claims");
         expect(resultValue.evalSuppressedReason.empty(), "repr-reason");
@@ -75,12 +75,12 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
 
     // --- Player mismatch ---
     {
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(wit, DevSimPathId::EvalDelayFromFreeze);
-        DevPlayerBlob bad = wit.player;
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(wit, DevSimPathId::EvalDelayFromFreeze);
+        EbDevPlayerBlob bad = wit.player;
         bad.x = 999.f;
-        DevEvalRestore::notePlayerWritten(result, bad);
-        auto resultValue = DevStateDiff::classify(wit, result, opts);
+        EbDevEvalRestore::notePlayerWritten(result, bad);
+        auto resultValue = EbDevStateDiff::classify(wit, result, opts);
         expect(resultValue.fidelity == DevFidelity::NotReproducible, "mis-fid");
         expect(!resultValue.claimsAllowed, "mis-claims");
         expect(resultValue.evalSuppressedReason == "playerMismatch", "mis-reason");
@@ -88,7 +88,7 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
 
     // --- Movers digest soft → playerOnlyApproximated ---
     {
-        DevLiveWitness w2 = wit;
+        EbDevLiveWitness w2 = wit;
         w2.hasHazardDigest = true;
         w2.hazardDigest = 0xabc;
         w2.freezeWorld = false;
@@ -96,26 +96,26 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
         w2.categories.push_back(
             {DevWitnessCategory::Movers, DevWitnessStatus::DigestOnly, 0xabc, false});
 
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
-        DevEvalRestore::notePlayerWritten(result, w2.player);
-        DevEvalRestore::noteMoversDigestOnly(result, 0xabc);
-        auto resultValue = DevStateDiff::classify(w2, result, opts);
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
+        EbDevEvalRestore::noteMoversDigestOnly(result, 0xabc);
+        auto resultValue = EbDevStateDiff::classify(w2, result, opts);
         expect(resultValue.fidelity == DevFidelity::PlayerOnlyApproximated, "approx-fid");
         expect(resultValue.claimsAllowed && resultValue.approx, "approx-claims");
     }
 
     // --- Dual dep missing + requireDeps → notReproducible ---
     {
-        DevLiveWitness w2 = wit;
+        EbDevLiveWitness w2 = wit;
         w2.dual.present = true;
         w2.dual.x = 1.f;
         w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Dual));
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
-        DevEvalRestore::notePlayerWritten(result, w2.player);
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
         // dual not written
-        auto resultValue = DevStateDiff::classify(w2, result, opts);
+        auto resultValue = EbDevStateDiff::classify(w2, result, opts);
         expect(resultValue.fidelity == DevFidelity::NotReproducible, "dual-hard-fid");
         expect(!resultValue.claimsAllowed, "dual-hard-claims");
         expect(resultValue.evalSuppressedReason == "requireDeps", "dual-hard-reason");
@@ -123,38 +123,38 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
 
     // --- Dual dep missing + requireDeps off → approx ---
     {
-        DevClassifyOptions soft = opts;
+        EbDevClassifyOptions soft = opts;
         soft.requireDeps = false;
-        DevLiveWitness w2 = wit;
+        EbDevLiveWitness w2 = wit;
         w2.dual.present = true;
         w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Dual));
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
-        DevEvalRestore::notePlayerWritten(result, w2.player);
-        auto resultValue = DevStateDiff::classify(w2, result, soft);
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
+        auto resultValue = EbDevStateDiff::classify(w2, result, soft);
         expect(resultValue.fidelity == DevFidelity::PlayerOnlyApproximated, "dual-soft-fid");
         expect(resultValue.claimsAllowed && resultValue.approx, "dual-soft-claims");
     }
 
     // --- Wrong eval path ---
     {
-        DevEvalRestore result = DevEvalRestore::beginFromWitness(wit, DevSimPathId::Plan);
-        DevEvalRestore::notePlayerWritten(result, wit.player);
-        auto resultValue = DevStateDiff::classify(wit, result, opts);
+        EbDevEvalRestore result = EbDevEvalRestore::beginFromWitness(wit, DevSimPathId::Plan);
+        EbDevEvalRestore::notePlayerWritten(result, wit.player);
+        auto resultValue = EbDevStateDiff::classify(wit, result, opts);
         expect(resultValue.fidelity == DevFidelity::NotReproducible, "path-fid");
         expect(resultValue.evalSuppressedReason == "evalSimPath", "path-reason");
     }
 
     // --- Freeze-world poses + dual/orbs/triggers → reproduced ---
     {
-        DevClassifyOptions freeze = opts;
+        EbDevClassifyOptions freeze = opts;
         freeze.freezeWorld = true;
 
-        DevLiveWitness w2 = wit;
+        EbDevLiveWitness w2 = wit;
         w2.freezeWorld = true;
         w2.hasHazardDigest = true;
         w2.hazardDigest = 0x111;
-        DevObjectPose pose{};
+        EbDevObjectPose pose{};
         pose.uniqueId = 5;
         pose.x = 10.f;
         pose.y = 20.f;
@@ -177,15 +177,15 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
         w2.categories.push_back(
             {DevWitnessCategory::Triggers, DevWitnessStatus::Partial, 0, false});
 
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
-        DevEvalRestore::notePlayerWritten(result, w2.player);
-        DevEvalRestore::noteDualWritten(result, w2.dual);
-        DevEvalRestore::noteOrbsWritten(result, w2.orbIds);
-        DevEvalRestore::noteTriggersSpooled(result, w2.triggerStoreKey, w2.triggerStoreVersion,
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
+        EbDevEvalRestore::noteDualWritten(result, w2.dual);
+        EbDevEvalRestore::noteOrbsWritten(result, w2.orbIds);
+        EbDevEvalRestore::noteTriggersSpooled(result, w2.triggerStoreKey, w2.triggerStoreVersion,
                                             w2.triggerApplyTick);
-        DevEvalRestore::noteMoversPosesWritten(result, w2.moverPoses, w2.hazardDigest);
-        auto resultValue = DevStateDiff::classify(w2, result, freeze);
+        EbDevEvalRestore::noteMoversPosesWritten(result, w2.moverPoses, w2.hazardDigest);
+        auto resultValue = EbDevStateDiff::classify(w2, result, freeze);
         expect(resultValue.fidelity == DevFidelity::Reproduced, "freeze-repr-fid");
         expect(resultValue.claimsAllowed && !resultValue.approx, "freeze-repr-claims");
         expect(resultValue.evalSuppressedReason.empty(), "freeze-repr-reason");
@@ -193,20 +193,20 @@ bool DevFidelityChecks::selfCheck(std::string& report) {
 
     // --- Freeze-world without poses written → hard fail ---
     {
-        DevClassifyOptions freeze = opts;
+        EbDevClassifyOptions freeze = opts;
         freeze.freezeWorld = true;
-        DevLiveWitness w2 = wit;
+        EbDevLiveWitness w2 = wit;
         w2.freezeWorld = true;
         w2.hasHazardDigest = true;
         w2.hazardDigest = 0x222;
         w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Movers));
         w2.categories.push_back(
             {DevWitnessCategory::Movers, DevWitnessStatus::Restored, 0x222, false});
-        DevEvalRestore result =
-            DevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
-        DevEvalRestore::notePlayerWritten(result, w2.player);
-        DevEvalRestore::noteMoversDigestOnly(result, 0x222);
-        auto resultValue = DevStateDiff::classify(w2, result, freeze);
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
+        EbDevEvalRestore::noteMoversDigestOnly(result, 0x222);
+        auto resultValue = EbDevStateDiff::classify(w2, result, freeze);
         expect(resultValue.fidelity == DevFidelity::NotReproducible, "freeze-hard-fid");
         expect(!resultValue.claimsAllowed, "freeze-hard-claims");
     }

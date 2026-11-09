@@ -3,13 +3,13 @@
 
 #include "../bake_map.hpp"
 
-class BakeReplayGenerator {
+class EbBakeReplayGenerator {
 public:
-    static geode::Result<int> bakeReplay(BakeMap& owner, PlayLayer* layer, int startSnapshotSlot,
+    static geode::Result<int> bakeReplay(EbBakeMap& owner, PlayLayer* layer, int startSnapshotSlot,
                                          int bakeRadius);
 
 private:
-    BakeReplayGenerator() = delete;
+    EbBakeReplayGenerator() = delete;
 };
 
 #endif

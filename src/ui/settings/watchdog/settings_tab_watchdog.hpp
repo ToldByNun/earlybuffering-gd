@@ -10,7 +10,7 @@
 #include <fmt/format.h>
 #include <vector>
 
-class SettingsTabWatchdog : public geode::prelude::CCNode {
+class EbSettingsTabWatchdog : public geode::prelude::CCNode {
 public:
     static bool popupIsOurSettings(geode::prelude::CCNode* root);
 
@@ -24,17 +24,17 @@ public:
 
     bool initWatchdog();
 
-    static SettingsTabWatchdog* create();
+    static EbSettingsTabWatchdog* create();
 
 private:
 };
 
-class SettingsTabWatchdogState {
+class EbSettingsTabWatchdogState {
 public:
-    static geode::prelude::Ref<SettingsTabWatchdog>& slot();
+    static geode::prelude::Ref<EbSettingsTabWatchdog>& slot();
 
 private:
-    SettingsTabWatchdogState() = delete;
+    EbSettingsTabWatchdogState() = delete;
 };
 
 #endif

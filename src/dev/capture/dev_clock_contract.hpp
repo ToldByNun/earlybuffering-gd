@@ -17,15 +17,15 @@ enum class DevSimPathId {
 
 // Schema-versioned time basis shared by live planning and Dev eval.
 // Live and eval must call the same effectTick / stepSchedule — never fork.
-class DevClockContract {
+class EbDevClockContract {
 public:
     static constexpr int kSchema = 1;
     static constexpr char const* kTimeBasisPhysicsTick = "physicsTick";
 
     class Stamp {
     public:
-        int clockSchema = DevClockContract::kSchema;
-        std::string timeBasis = DevClockContract::kTimeBasisPhysicsTick;
+        int clockSchema = EbDevClockContract::kSchema;
+        std::string timeBasis = EbDevClockContract::kTimeBasisPhysicsTick;
         int attemptTick = 0;
         int effectTick = 0;
         float simDt = 0.f;
@@ -51,7 +51,7 @@ public:
         EffectTickMismatch
     };
 
-    static DevClockContract& get();
+    static EbDevClockContract& get();
 
     static char const* simPathId(DevSimPathId id);
     static bool parseSimPathId(std::string const& s, DevSimPathId& out);
@@ -86,7 +86,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevClockContract() = default;
+    friend class EbServiceStore;
+
+    EbDevClockContract() = default;
 };
 
 #endif

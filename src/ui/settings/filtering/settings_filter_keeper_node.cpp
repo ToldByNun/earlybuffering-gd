@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-auto SettingsFilterKeeperNode::setCategory(SettingsCategory category) -> void {
+auto EbSettingsFilterKeeperNode::setCategory(SettingsCategory category) -> void {
     auto const count = static_cast<int>(SettingsCategory::Count);
     auto index = static_cast<int>(category) % count;
     if (index < 0)
@@ -27,15 +27,15 @@ auto SettingsFilterKeeperNode::setCategory(SettingsCategory category) -> void {
         this->m_list->moveToTop();
 }
 
-auto SettingsFilterKeeperNode::cycle(int delta) -> void {
+auto EbSettingsFilterKeeperNode::cycle(int delta) -> void {
     this->setCategory(static_cast<SettingsCategory>(static_cast<int>(this->m_category) + delta));
 }
 
-auto SettingsFilterKeeperNode::layoutBar(geode::prelude::ScrollLayer* list,
-                                         SettingsCategoryBar* bar) -> void {
+auto EbSettingsFilterKeeperNode::layoutBar(geode::prelude::ScrollLayer* list,
+                                         EbSettingsCategoryBar* bar) -> void {
     if (!list || !bar)
         return;
-    constexpr float kBarH = SettingsCategoryBar::kBarH;
+    constexpr float kBarH = EbSettingsCategoryBar::kBarH;
     auto const size = list->getContentSize();
     // Geode can restore list height every frame — keep carving the tab strip out.
     if (size.height > this->m_listFullH)
@@ -59,8 +59,8 @@ auto SettingsFilterKeeperNode::layoutBar(geode::prelude::ScrollLayer* list,
     bar->setZOrder(list->getZOrder() + 20);
 }
 
-auto SettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) -> void {
-    if (!list || SettingsFilterWalk::isCategoryBarScroll(list))
+auto EbSettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) -> void {
+    if (!list || EbSettingsFilterWalk::isCategoryBarScroll(list))
         return;
 
     this->m_list = list;
@@ -72,7 +72,7 @@ auto SettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) -> v
         this->m_listFullH = list->getContentSize().height;
     }
 
-    if (auto* existing = geode::prelude::typeinfo_cast<SettingsCategoryBar*>(
+    if (auto* existing = geode::prelude::typeinfo_cast<EbSettingsCategoryBar*>(
             parent->getChildByID("earlybuffer-settings-category-bar"_spr))) {
         this->m_bar = existing;
         this->layoutBar(list, existing);
@@ -80,7 +80,7 @@ auto SettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) -> v
         return;
     }
 
-    constexpr float kBarH = SettingsCategoryBar::kBarH;
+    constexpr float kBarH = EbSettingsCategoryBar::kBarH;
     if (this->m_listFullH <= kBarH + 16.f) {
         if (!this->m_loggedShortList) {
             this->m_loggedShortList = true;
@@ -92,7 +92,7 @@ auto SettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) -> v
     }
 
     float const width = list->getContentSize().width;
-    auto* bar = SettingsCategoryBar::create(this, width);
+    auto* bar = EbSettingsCategoryBar::create(this, width);
     if (!bar)
         return;
 
@@ -102,16 +102,16 @@ auto SettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) -> v
     this->m_bar->setCategory(this->m_category);
 }
 
-auto SettingsFilterKeeperNode::absorbFromTree(geode::prelude::CCNode* popup) -> void {
+auto EbSettingsFilterKeeperNode::absorbFromTree(geode::prelude::CCNode* popup) -> void {
     if (!popup)
         return;
 
     std::vector<geode::prelude::SettingNodeV3*> found;
     geode::prelude::ScrollLayer* list = nullptr;
-    SettingsFilterWalk::collect(popup, found, list);
-    if (list && SettingsFilterWalk::scrollLooksLikeSettingsList(list)) {
+    EbSettingsFilterWalk::collect(popup, found, list);
+    if (list && EbSettingsFilterWalk::scrollLooksLikeSettingsList(list)) {
         // Never replace a good settings list with a shorter / chip-bar scroll.
-        if (!this->m_list || SettingsFilterWalk::isCategoryBarScroll(this->m_list) ||
+        if (!this->m_list || EbSettingsFilterWalk::isCategoryBarScroll(this->m_list) ||
             list->getContentSize().height >= this->m_list->getContentSize().height) {
             this->m_list = list;
         }
@@ -133,12 +133,12 @@ auto SettingsFilterKeeperNode::absorbFromTree(geode::prelude::CCNode* popup) -> 
     }
 }
 
-auto SettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
+auto EbSettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
                                         SettingsCategory category) -> bool {
     if (!sett)
         return false;
     if (auto setting = sett->getSetting()) {
-        return InLevelSettingsFilter::keepKey(setting->getKey(), category);
+        return EbInLevelSettingsFilter::keepKey(setting->getKey(), category);
     }
 
     // Unresolved custom ("Missing setting 'key'") — still map by key in the label
@@ -149,7 +149,7 @@ auto SettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
 
     std::string const text = label->getString();
     auto match = [&](char const* key) {
-        return text.find(key) != std::string::npos && InLevelSettingsFilter::keepKey(key, category);
+        return text.find(key) != std::string::npos && EbInLevelSettingsFilter::keepKey(key, category);
     };
     return match("import-bake-replay") || match("cycle-assist-mode") || match("bake-map-action") ||
            match("brute-bake-action") || match("cancel-bake-action") ||
@@ -157,7 +157,7 @@ auto SettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
            match("import-config-action") || match("browse-cloud-configs-action");
 }
 
-auto SettingsFilterKeeperNode::refilter(bool force) -> void {
+auto EbSettingsFilterKeeperNode::refilter(bool force) -> void {
     auto* popup = this->getParent();
     if (!popup)
         return;
@@ -165,7 +165,7 @@ auto SettingsFilterKeeperNode::refilter(bool force) -> void {
     this->absorbFromTree(popup);
     this->ensureBar(this->m_list);
     if (!this->m_list || !this->m_list->m_contentLayer ||
-        SettingsFilterWalk::isCategoryBarScroll(this->m_list)) {
+        EbSettingsFilterWalk::isCategoryBarScroll(this->m_list)) {
         return;
     }
     if (this->m_all.empty())
@@ -201,14 +201,14 @@ auto SettingsFilterKeeperNode::refilter(bool force) -> void {
     if (force && this->m_appliedCat != this->m_category) {
         this->m_list->moveToTop();
     } else {
-        content->setPositionY(InLevelSettingsFilter::preservedContentY(yBefore, hBefore, hAfter));
+        content->setPositionY(EbInLevelSettingsFilter::preservedContentY(yBefore, hBefore, hAfter));
     }
 
     this->m_appliedCat = this->m_category;
     this->m_lastChildCount = content->getChildrenCount();
 }
 
-auto SettingsFilterKeeperNode::initKeeper() -> bool {
+auto EbSettingsFilterKeeperNode::initKeeper() -> bool {
     if (!geode::prelude::CCNode::init())
         return false;
 
@@ -224,17 +224,17 @@ auto SettingsFilterKeeperNode::initKeeper() -> bool {
             });
             return geode::prelude::ListenerResult::Propagate;
         });
-    this->schedule(schedule_selector(SettingsFilterKeeperNode::onTick), 0.05f);
+    this->schedule(schedule_selector(EbSettingsFilterKeeperNode::onTick), 0.05f);
     this->refilter(true);
     return true;
 }
 
-auto SettingsFilterKeeperNode::onTick(float) -> void {
+auto EbSettingsFilterKeeperNode::onTick(float) -> void {
     this->refilter(false);
 }
 
-auto SettingsFilterKeeperNode::create() -> SettingsFilterKeeperNode* {
-    auto* createdObject = new SettingsFilterKeeperNode();
+auto EbSettingsFilterKeeperNode::create() -> EbSettingsFilterKeeperNode* {
+    auto* createdObject = new EbSettingsFilterKeeperNode();
     if (!createdObject || !createdObject->initKeeper()) {
         CC_SAFE_DELETE(createdObject);
         return nullptr;
@@ -243,10 +243,10 @@ auto SettingsFilterKeeperNode::create() -> SettingsFilterKeeperNode* {
     return createdObject;
 }
 
-auto SettingsFilterKeeperNode::findOpen() -> SettingsFilterKeeperNode* {
+auto EbSettingsFilterKeeperNode::findOpen() -> EbSettingsFilterKeeperNode* {
     auto* scene = geode::prelude::CCScene::get();
     if (!(!scene)) {
-        return geode::prelude::typeinfo_cast<SettingsFilterKeeperNode*>(
+        return geode::prelude::typeinfo_cast<EbSettingsFilterKeeperNode*>(
             scene->getChildByIDRecursive("earlybuffer-inlevel-settings-filter"_spr));
     }
     return nullptr;

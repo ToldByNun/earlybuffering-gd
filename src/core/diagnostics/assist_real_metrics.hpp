@@ -6,9 +6,9 @@
 #include <unordered_map>
 
 // Runtime counters for real (observed) assist contracts — never mix with simEstimate.
-class AssistRealMetrics {
+class EbAssistRealMetrics {
 public:
-    static AssistRealMetrics& get();
+    static EbAssistRealMetrics& get();
 
     void resetSession();
     void setLevelKey(std::string key, bool dynamicLabelled = false);
@@ -66,7 +66,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistRealMetrics() = default;
+    friend class EbServiceStore;
+
+    EbAssistRealMetrics() = default;
 
     class LevelAcc {
     public:

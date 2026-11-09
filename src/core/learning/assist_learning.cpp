@@ -3,10 +3,10 @@
 #include <cstdlib>
 #include <fmt/format.h>
 
-void AssistLearning::decaySpot(GameModeKind kind, float x) {
-    if (!StageConfig::autoTune())
+void EbAssistLearning::decaySpot(GameModeKind kind, float x) {
+    if (!EbStageConfig::autoTune())
         return;
-    auto& s = LevelProfile::get().spot(kind, x);
+    auto& s = EbLevelProfile::get().spot(kind, x);
     // Pull trust gently toward 0.5 so low-trust spots can recover via explore.
     s.trust = s.trust * 0.98f + 0.5f * 0.02f;
     // Light hist decay so abandoned spots forget stale click timing.
@@ -14,21 +14,21 @@ void AssistLearning::decaySpot(GameModeKind kind, float x) {
         w *= 0.99f;
 }
 
-bool AssistLearning::shouldExploreDespiteLowTrust(float trust) {
+bool EbAssistLearning::shouldExploreDespiteLowTrust(float trust) {
     if (!(trust >= 0.35f)) {
         return (std::rand() % 10) == 0;
     }
     return false;
 }
 
-bool AssistLearning::shouldExploreHistogram(int histN) {
+bool EbAssistLearning::shouldExploreHistogram(int histN) {
     if (!(histN >= 8)) {
         return (std::rand() % 5) == 0;
     }
     return false;
 }
 
-bool AssistLearning::histogramExploreEligible(GameModeKind kind, int histN, bool spamWouldPass,
+bool EbAssistLearning::histogramExploreEligible(GameModeKind kind, int histN, bool spamWouldPass,
                                               bool bakePreferActive, int diedAfterAssist) {
     if (histN >= 8)
         return false;
@@ -56,7 +56,7 @@ bool AssistLearning::histogramExploreEligible(GameModeKind kind, int histN, bool
     return false;
 }
 
-bool AssistLearning::allowHistogramExplore(GameModeKind kind, int histN, bool spamWouldPass,
+bool EbAssistLearning::allowHistogramExplore(GameModeKind kind, int histN, bool spamWouldPass,
                                            bool bakePreferActive, int diedAfterAssist) {
     if (!histogramExploreEligible(kind, histN, spamWouldPass, bakePreferActive, diedAfterAssist)) {
         return false;
@@ -64,12 +64,12 @@ bool AssistLearning::allowHistogramExplore(GameModeKind kind, int histN, bool sp
     return shouldExploreHistogram(histN);
 }
 
-bool AssistLearning::allowTrustUpFromAssistInject() {
+bool EbAssistLearning::allowTrustUpFromAssistInject() {
     // Never reinforce from own inject "saves".
     return false;
 }
 
-bool AssistLearning::exploreGateSelfCheck(std::string& report) {
+bool EbAssistLearning::exploreGateSelfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

@@ -8,7 +8,7 @@
 // Opportunity + Trust → MUST Delay-search. Named Pass for Untrust / Drift /
 // HardUnknown / TwEmpty / budget-no-survivor. Never soft-trust budgetHit Delay;
 // never invent auto-click / auto-release. InterveneGate = help-don't-hurt.
-class PerfectAssistPolicy {
+class EbPerfectAssistPolicy {
 public:
     class OpportunityInput {
     public:
@@ -65,7 +65,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    PerfectAssistPolicy() = delete;
+    EbPerfectAssistPolicy() = delete;
 };
 
 #endif

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-char const* DevStateDiff::fidelityId(DevFidelity frame) {
+char const* EbDevStateDiff::fidelityId(DevFidelity frame) {
     switch (frame) {
     case DevFidelity::Reproduced:
         return "reproduced";
@@ -20,7 +20,7 @@ char const* DevStateDiff::fidelityId(DevFidelity frame) {
     return "notReproducible";
 }
 
-bool DevStateDiff::parseFidelity(std::string const& s, DevFidelity& out) {
+bool EbDevStateDiff::parseFidelity(std::string const& s, DevFidelity& out) {
     if (s == "reproduced") {
         out = DevFidelity::Reproduced;
         return true;
@@ -36,7 +36,7 @@ bool DevStateDiff::parseFidelity(std::string const& s, DevFidelity& out) {
     return false;
 }
 
-char const* DevStateDiff::diffKindId(DevDiffKind offset) {
+char const* EbDevStateDiff::diffKindId(DevDiffKind offset) {
     switch (offset) {
     case DevDiffKind::Mismatch:
         return "mismatch";
@@ -48,10 +48,10 @@ char const* DevStateDiff::diffKindId(DevDiffKind offset) {
     return "mismatch";
 }
 
-void DevStateDiff::pushDiff(std::vector<DevDiffEntry>& diffs, DevWitnessCategory category,
+void EbDevStateDiff::pushDiff(std::vector<EbDevDiffEntry>& diffs, DevWitnessCategory category,
                             char const* field, std::string liveValue, std::string restoredValue,
                             DevDiffKind kind) {
-    DevDiffEntry e;
+    EbDevDiffEntry e;
     e.category = category;
     e.fieldOrObjectId = field ? field : "";
     e.liveValue = std::move(liveValue);
@@ -60,7 +60,7 @@ void DevStateDiff::pushDiff(std::vector<DevDiffEntry>& diffs, DevWitnessCategory
     diffs.push_back(std::move(e));
 }
 
-bool DevStateDiff::isHardFailDep(DevWitnessCategory candidate, DevClassifyOptions const& opts) {
+bool EbDevStateDiff::isHardFailDep(DevWitnessCategory candidate, EbDevClassifyOptions const& opts) {
     if (!opts.requireDeps)
         return false;
     switch (candidate) {
@@ -79,9 +79,9 @@ bool DevStateDiff::isHardFailDep(DevWitnessCategory candidate, DevClassifyOption
     return false;
 }
 
-bool DevStateDiff::playerBlobsEqual(DevPlayerBlob const& live, DevPlayerBlob const& restored,
+bool EbDevStateDiff::playerBlobsEqual(EbDevPlayerBlob const& live, EbDevPlayerBlob const& restored,
                                     DevWitnessCategory category,
-                                    std::vector<DevDiffEntry>* outDiffs) {
+                                    std::vector<EbDevDiffEntry>* outDiffs) {
     if (!live.present || !restored.present) {
         if (outDiffs) {
             pushDiff(*outDiffs, category, "present", live.present ? "1" : "0",
@@ -152,10 +152,10 @@ bool DevStateDiff::playerBlobsEqual(DevPlayerBlob const& live, DevPlayerBlob con
     return ok;
 }
 
-DevClassifyResult DevStateDiff::classifyWitnessGate(DevLiveWitness const& witness,
-                                                    DevClassifyOptions const& opts) {
+EbDevClassifyResult EbDevStateDiff::classifyWitnessGate(EbDevLiveWitness const& witness,
+                                                    EbDevClassifyOptions const& opts) {
     (void)opts;
-    DevClassifyResult out;
+    EbDevClassifyResult out;
     out.fidelity = DevFidelity::NotReproducible;
     out.claimsAllowed = false;
     out.approx = false;
@@ -165,14 +165,14 @@ DevClassifyResult DevStateDiff::classifyWitnessGate(DevLiveWitness const& witnes
         return out;
     }
     if (!witness.player.present ||
-        DevLiveWitness::categoryStatus(witness, DevWitnessCategory::Player) ==
+        EbDevLiveWitness::categoryStatus(witness, DevWitnessCategory::Player) ==
             DevWitnessStatus::Absent) {
         out.evalSuppressedReason = "missingPlayer";
         pushDiff(out.diffs, DevWitnessCategory::Player, "blob", "absent", "",
                  DevDiffKind::Unrestored);
         return out;
     }
-    uint64_t const expectSchema = DevLiveWitness::computePlayerBlobSchema();
+    uint64_t const expectSchema = EbDevLiveWitness::computePlayerBlobSchema();
     if (witness.playerBlobSchema != 0 && witness.playerBlobSchema != expectSchema) {
         out.evalSuppressedReason = "playerSchema";
         pushDiff(out.diffs, DevWitnessCategory::Player, "playerBlobSchema",
@@ -180,8 +180,8 @@ DevClassifyResult DevStateDiff::classifyWitnessGate(DevLiveWitness const& witnes
                  fmt::format("{:016x}", expectSchema), DevDiffKind::Mismatch);
         return out;
     }
-    if (!witness.clock.valid || !DevClockContract::get().clockOk(witness.clock) ||
-        DevLiveWitness::categoryStatus(witness, DevWitnessCategory::Clock) ==
+    if (!witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock) ||
+        EbDevLiveWitness::categoryStatus(witness, DevWitnessCategory::Clock) ==
             DevWitnessStatus::Absent) {
         out.evalSuppressedReason = "clock";
         pushDiff(out.diffs, DevWitnessCategory::Clock, "stamp", "bad", "", DevDiffKind::Unrestored);
@@ -196,13 +196,13 @@ DevClassifyResult DevStateDiff::classifyWitnessGate(DevLiveWitness const& witnes
     return out;
 }
 
-DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
-                                         DevEvalRestore const& restore,
-                                         DevClassifyOptions const& opts) {
-    DevClassifyResult out;
+EbDevClassifyResult EbDevStateDiff::classify(EbDevLiveWitness const& witness,
+                                         EbDevEvalRestore const& restore,
+                                         EbDevClassifyOptions const& opts) {
+    EbDevClassifyResult out;
 
     // Witness-level hard fails first.
-    DevClassifyResult gate = classifyWitnessGate(witness, opts);
+    EbDevClassifyResult gate = classifyWitnessGate(witness, opts);
     if (!gate.evalSuppressedReason.empty()) {
         return gate;
     }
@@ -226,8 +226,8 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
     }
 
     // Clock contract on restore stamp.
-    if (!restore.clock.valid || !DevClockContract::get().clockOk(restore.clock) ||
-        DevEvalRestore::categoryStatus(restore, DevWitnessCategory::Clock) !=
+    if (!restore.clock.valid || !EbDevClockContract::get().clockOk(restore.clock) ||
+        EbDevEvalRestore::categoryStatus(restore, DevWitnessCategory::Clock) !=
             DevWitnessStatus::Restored) {
         out.fidelity = DevFidelity::NotReproducible;
         out.claimsAllowed = false;
@@ -255,13 +255,13 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
         out.claimsAllowed = false;
         out.evalSuppressedReason = "evalSimPath";
         pushDiff(out.diffs, DevWitnessCategory::Clock, "evalSimPathId",
-                 DevClockContract::simPathId(opts.expectedEvalPath),
-                 DevClockContract::simPathId(restore.evalSimPathId), DevDiffKind::Mismatch);
+                 EbDevClockContract::simPathId(opts.expectedEvalPath),
+                 EbDevClockContract::simPathId(restore.evalSimPathId), DevDiffKind::Mismatch);
         return out;
     }
 
     // Player must be restored and match.
-    if (DevEvalRestore::categoryStatus(restore, DevWitnessCategory::Player) !=
+    if (EbDevEvalRestore::categoryStatus(restore, DevWitnessCategory::Player) !=
         DevWitnessStatus::Restored) {
         out.fidelity = DevFidelity::NotReproducible;
         out.claimsAllowed = false;
@@ -287,7 +287,7 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
             continue; // already verified
         }
 
-        DevWitnessStatus const state = DevEvalRestore::categoryStatus(restore, dep);
+        DevWitnessStatus const state = EbDevEvalRestore::categoryStatus(restore, dep);
 
         if (dep == DevWitnessCategory::Movers) {
             // Digest/hash alone never counts as Restored.
@@ -307,8 +307,8 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
                        state == DevWitnessStatus::Partial) {
                 allDepsRestored = false;
                 pushDiff(out.diffs, dep, "movers",
-                         DevLiveWitness::statusId(DevLiveWitness::categoryStatus(witness, dep)),
-                         DevLiveWitness::statusId(state),
+                         EbDevLiveWitness::statusId(EbDevLiveWitness::categoryStatus(witness, dep)),
+                         EbDevLiveWitness::statusId(state),
                          state == DevWitnessStatus::DigestOnly ? DevDiffKind::DigestOnly
                                                                : DevDiffKind::Unrestored);
                 if (isHardFailDep(dep, opts))
@@ -322,7 +322,7 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
         if (dep == DevWitnessCategory::Dual) {
             if (state != DevWitnessStatus::Restored) {
                 allDepsRestored = false;
-                pushDiff(out.diffs, dep, "blob", "witness", DevLiveWitness::statusId(state),
+                pushDiff(out.diffs, dep, "blob", "witness", EbDevLiveWitness::statusId(state),
                          DevDiffKind::Unrestored);
                 if (isHardFailDep(dep, opts))
                     hardFail = true;
@@ -340,7 +340,7 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
             if (state != DevWitnessStatus::Restored) {
                 allDepsRestored = false;
                 pushDiff(out.diffs, dep, "orbIds", fmt::format("{}", witness.orbIds.size()),
-                         DevLiveWitness::statusId(state), DevDiffKind::Unrestored);
+                         EbDevLiveWitness::statusId(state), DevDiffKind::Unrestored);
                 softFail = true; // orbs are soft under requireDeps
             } else if (witness.orbIds != restore.orbIds) {
                 allDepsRestored = false;
@@ -355,7 +355,7 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
             if (state != DevWitnessStatus::Restored) {
                 allDepsRestored = false;
                 pushDiff(out.diffs, dep, "spool", witness.triggerCanSpool ? "canSpool" : "noSpool",
-                         DevLiveWitness::statusId(state), DevDiffKind::Unrestored);
+                         EbDevLiveWitness::statusId(state), DevDiffKind::Unrestored);
                 if (isHardFailDep(dep, opts))
                     hardFail = true;
                 else
@@ -379,7 +379,7 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
 
         if (state != DevWitnessStatus::Restored) {
             allDepsRestored = false;
-            pushDiff(out.diffs, dep, "status", "restored", DevLiveWitness::statusId(state),
+            pushDiff(out.diffs, dep, "status", "restored", EbDevLiveWitness::statusId(state),
                      DevDiffKind::Unrestored);
             if (isHardFailDep(dep, opts))
                 hardFail = true;
@@ -422,6 +422,6 @@ DevClassifyResult DevStateDiff::classify(DevLiveWitness const& witness,
     return out;
 }
 
-bool DevStateDiff::selfCheck(std::string& report) {
-    return DevFidelityChecks::selfCheck(report);
+bool EbDevStateDiff::selfCheck(std::string& report) {
+    return EbDevFidelityChecks::selfCheck(report);
 }

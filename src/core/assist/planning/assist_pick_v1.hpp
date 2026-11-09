@@ -7,7 +7,7 @@
 // Frozen Live choose for assist-pick **v1** (former Legacy).
 // Pure over cand viability / ring activation — no PlayLayer / sim.
 // ShadowSimulator owns jitter; former New outcome-rank choose is deleted (WU7).
-class AssistPickV1 {
+class EbAssistPickV1 {
 public:
     class CandView {
     public:
@@ -46,7 +46,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    AssistPickV1() = default;
+    EbAssistPickV1() = default;
 
     static bool neighborRobust(CandView const* cands, int limit, int robustK, int delay,
                                bool needActivation);

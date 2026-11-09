@@ -3,7 +3,7 @@
 #include <cmath>
 #include <fmt/format.h>
 
-int AssistHorizon::applyMul(int base, float capMul) {
+int EbAssistHorizon::applyMul(int base, float capMul) {
     if (capMul < 0.25f)
         capMul = 0.25f;
     if (capMul > 3.f)
@@ -11,7 +11,7 @@ int AssistHorizon::applyMul(int base, float capMul) {
     return std::max(8, static_cast<int>(std::lround(static_cast<float>(base) * capMul)));
 }
 
-AssistHorizon::Caps AssistHorizon::shortCaps(GameModeKind mode, int limit) {
+EbAssistHorizon::Caps EbAssistHorizon::shortCaps(GameModeKind mode, int limit) {
     int const x = limit > 0 ? limit : 1;
     Caps c;
     switch (mode) {
@@ -50,7 +50,7 @@ AssistHorizon::Caps AssistHorizon::shortCaps(GameModeKind mode, int limit) {
     return c;
 }
 
-AssistHorizon::Caps AssistHorizon::longCaps(GameModeKind mode, int limit) {
+EbAssistHorizon::Caps EbAssistHorizon::longCaps(GameModeKind mode, int limit) {
     int const x = limit > 0 ? limit : 1;
     Caps c;
     switch (mode) {
@@ -86,7 +86,7 @@ AssistHorizon::Caps AssistHorizon::longCaps(GameModeKind mode, int limit) {
     return c;
 }
 
-AssistHorizon::Caps AssistHorizon::resolve(GameModeKind mode, bool trustOk, int limit, float capMul,
+EbAssistHorizon::Caps EbAssistHorizon::resolve(GameModeKind mode, bool trustOk, int limit, float capMul,
                                            int settingsCap, int lookAheadSetting) {
     Caps candidate = trustOk ? longCaps(mode, limit) : shortCaps(mode, limit);
     if (settingsCap > 0) {
@@ -115,7 +115,7 @@ AssistHorizon::Caps AssistHorizon::resolve(GameModeKind mode, bool trustOk, int 
     return candidate;
 }
 
-int AssistHorizon::minSurviveTicksForSuccess(int scoreHorizon, bool trustOk) {
+int EbAssistHorizon::minSurviveTicksForSuccess(int scoreHorizon, bool trustOk) {
     if (!trustOk)
         return 0; // short mode: threat-clear honesty alone
     int const height = std::max(8, scoreHorizon);
@@ -123,7 +123,7 @@ int AssistHorizon::minSurviveTicksForSuccess(int scoreHorizon, bool trustOk) {
     return std::max(48, height / 2);
 }
 
-bool AssistHorizon::longPathSuccessOk(int surviveTicks, bool died, bool survivalSafeForDelay,
+bool EbAssistHorizon::longPathSuccessOk(int surviveTicks, bool died, bool survivalSafeForDelay,
                                       int minSurvive) {
     if (minSurvive <= 0)
         return true;
@@ -134,7 +134,7 @@ bool AssistHorizon::longPathSuccessOk(int surviveTicks, bool died, bool survival
     return surviveTicks >= minSurvive;
 }
 
-bool AssistHorizon::selfCheck(std::string& report) {
+bool EbAssistHorizon::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

@@ -11,26 +11,26 @@
 #include <algorithm>
 #include <chrono>
 
-ShadowPlanContext::ShadowPlanContext(ShadowSimulator& simulator, PlayLayer* layer,
+EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer,
                                      PlayerObject* real, bool down, int limit, float deltaTime,
-                                     float firstDt, PlanOptions const& options, SimPlan& plan)
+                                     float firstDt, EbPlanOptions const& options, EbSimPlan& plan)
     : simulator(simulator), layer(layer), real(real), down(down), limit(limit),
       deltaTime(deltaTime), firstDt(firstDt), options(options), plan(plan),
-      model(ShadowSimulator::modelFor(real, limit, options.capMul)),
-      robustK(ShadowSurvivalRules::resolveRobustK(real, options)),
+      model(EbShadowSimulator::modelFor(real, limit, options.capMul)),
+      robustK(EbShadowSurvivalRules::resolveRobustK(real, options)),
       latencyWeight(std::max(0.f, options.latencyWeight)),
-      tickBudget(options.tickBudget > 0 ? options.tickBudget : ShadowSimulator::kDefaultTickBudget),
+      tickBudget(options.tickBudget > 0 ? options.tickBudget : EbShadowSimulator::kDefaultTickBudget),
       useTrajEngine(!options.legacyPick &&
-                    options.assistEngine == StageConfig::AssistEngineKind::Trajectory) {
+                    options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
     plan.trajectoryEngine = useTrajEngine;
     model.continuePastClear = options.requireAliveForDelay;
     plan.continuous = model.continuous;
-    if (StageConfig::assistVerifyAb())
+    if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;
     wall0 = std::chrono::steady_clock::now();
 }
 
-bool ShadowPlanContext::wallExceeded() const {
+bool EbShadowPlanContext::wallExceeded() const {
     if (options.budgetUs <= 0)
         return false;
     auto elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -39,7 +39,7 @@ bool ShadowPlanContext::wallExceeded() const {
     return elapsedMicroseconds >= options.budgetUs;
 }
 
-bool ShadowPlanContext::linkedDual() const {
+bool EbShadowPlanContext::linkedDual() const {
     if (!layer || !layer->m_player2 || !real)
         return false;
     if (!layer->m_gameState.m_isDualMode)
@@ -52,8 +52,8 @@ bool ShadowPlanContext::linkedDual() const {
     return real == layer->m_player1 || real == layer->m_player2;
 }
 
-ShadowSimulator::RunResult ShadowPlanContext::runEngine(PlayerObject* who, int delay,
-                                                        int releaseAfter, ThreatZone const* z) {
+EbShadowSimulator::RunResult EbShadowPlanContext::runEngine(PlayerObject* who, int delay,
+                                                        int releaseAfter, EbThreatZone const* z) {
     if (useTrajEngine) {
         return simulator.runTrajectoryOne(layer, who, down, delay, limit, deltaTime, firstDt, model,
                                           releaseAfter, z, &tickBudget);
@@ -62,9 +62,9 @@ ShadowSimulator::RunResult ShadowPlanContext::runEngine(PlayerObject* who, int d
                             z, &tickBudget);
 }
 
-void ShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
-                                      DevRejectLedger::EarlyExit early) {
-    DevRejectLedger::BuildInput in;
+void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
+                                      EbDevRejectLedger::EarlyExit early) {
+    EbDevRejectLedger::BuildInput in;
     in.limit = limit;
     in.chosenDelay = chosenDelay;
     in.doPass = doPassFlag;
@@ -74,7 +74,7 @@ void ShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
     in.actMax = ledgerActMax;
     in.legacyPick = options.legacyPick;
     in.earlyExit = early;
-    in.includeScores = DevConfig::recordCands();
+    in.includeScores = EbDevConfig::recordCands();
     in.snaps.assign(static_cast<size_t>(limit) + 1, {});
     for (int delay = 0; delay <= limit; ++delay) {
         if (!candReady[static_cast<size_t>(delay)])
@@ -93,7 +93,7 @@ void ShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         s.surviveBin = candidate.surviveBin;
         s.endX = candidate.endX;
     }
-    auto ledger = DevRejectLedger::build(in);
+    auto ledger = EbDevRejectLedger::build(in);
     for (auto& note : ledger.notes) {
         if (note.delay < 0 || note.delay > limit || !candReady[note.delay])
             continue;
@@ -106,8 +106,8 @@ void ShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
     plan.candNotesTruncated = ledger.truncated;
 }
 
-SimulationCandidate ShadowPlanContext::evalDelay(int delayValue, int releaseAfter) {
-    SimulationCandidate candidate;
+EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int releaseAfter) {
+    EbSimulationCandidate candidate;
     candidate.delay = delayValue;
     if (tickBudget <= 0 || wallExceeded()) {
         plan.budgetHit = true;
@@ -127,17 +127,17 @@ SimulationCandidate ShadowPlanContext::evalDelay(int delayValue, int releaseAfte
     candidate.endX = result.endX;
     candidate.deathX = result.deathX;
     candidate.jumpTick = result.jumped ? result.jumpTick : delayValue;
-    candidate.surviveTicks = ShadowSurvivalRules::rankingSurviveTicks(result);
-    candidate.surviveBin = ShadowSurvivalRules::surviveBinOf(candidate.surviveTicks);
+    candidate.surviveTicks = EbShadowSurvivalRules::rankingSurviveTicks(result);
+    candidate.surviveBin = EbShadowSurvivalRules::surviveBinOf(candidate.surviveTicks);
     candidate.requireHold = false; // set only if tap fails and hold-branch wins
     return candidate;
 }
 
-void ShadowPlanContext::finalizeViable(SimulationCandidate& candidate, int releaseAfter) {
-    candidate.clearsThreat = ShadowSurvivalRules::clearsThreatOf(candidate.raw, zone);
+void EbShadowPlanContext::finalizeViable(EbSimulationCandidate& candidate, int releaseAfter) {
+    candidate.clearsThreat = EbShadowSurvivalRules::clearsThreatOf(candidate.raw, zone);
     // clearsThreat + ModeSurvival (soft bake vs Live Delay-worthy Alive).
     candidate.viable =
-        ShadowSurvivalRules::runResultDelaySafe(candidate.raw, zone, model, real, requireAlive);
+        EbShadowSurvivalRules::runResultDelaySafe(candidate.raw, zone, model, real, requireAlive);
     // Trust-long — alive path must run far enough to see continue
     // (platform after jump). Budget-truncated short runs are not failed here.
     if (candidate.viable && minSurviveLong > 0) {
@@ -145,11 +145,11 @@ void ShadowPlanContext::finalizeViable(SimulationCandidate& candidate, int relea
                                candidate.raw.ticksRan < model.cap &&
                                candidate.raw.ticksRan < minSurviveLong;
         if (!truncated) {
-            auto const cls = ModeSurvival::classify(
-                ShadowSurvivalRules::survivalInputFrom(candidate.raw, zone, model, real));
-            bool const longSafe = requireAlive ? ModeSurvival::countsAsDelayWorthy(cls)
-                                               : ModeSurvival::countsAsSafeForDelay(cls);
-            if (!AssistHorizon::longPathSuccessOk(candidate.surviveTicks, candidate.raw.died,
+            auto const cls = EbModeSurvival::classify(
+                EbShadowSurvivalRules::survivalInputFrom(candidate.raw, zone, model, real));
+            bool const longSafe = requireAlive ? EbModeSurvival::countsAsDelayWorthy(cls)
+                                               : EbModeSurvival::countsAsSafeForDelay(cls);
+            if (!EbAssistHorizon::longPathSuccessOk(candidate.surviveTicks, candidate.raw.died,
                                                   longSafe, minSurviveLong)) {
                 candidate.viable = false;
             }
@@ -161,7 +161,7 @@ void ShadowPlanContext::finalizeViable(SimulationCandidate& candidate, int relea
         if (other && tickBudget > 0) {
             auto r2 = runEngine(other, candidate.delay, releaseAfter, zone.valid ? &zone : nullptr);
             simulator.resetCaptureForNextRun(layer);
-            if (!ShadowSurvivalRules::runResultDelaySafe(r2, zone, model, other, requireAlive)) {
+            if (!EbShadowSurvivalRules::runResultDelaySafe(r2, zone, model, other, requireAlive)) {
                 candidate.viable = false;
                 candidate.clearsThreat = false;
                 candidate.dualFailed = true;
@@ -170,7 +170,7 @@ void ShadowPlanContext::finalizeViable(SimulationCandidate& candidate, int relea
     }
 }
 
-bool ShadowPlanContext::jitterOk(int delay, int releaseAfter) {
+bool EbShadowPlanContext::jitterOk(int delay, int releaseAfter) {
     if (!options.robustJitter || delay < 0)
         return true;
     if (tickBudget <= 0 || wallExceeded())
@@ -180,7 +180,7 @@ bool ShadowPlanContext::jitterOk(int delay, int releaseAfter) {
         float jd = firstDt * state;
         if (jd <= 0.f || jd > deltaTime * 1.5f)
             jd = firstDt;
-        ShadowSimulator::RunResult result;
+        EbShadowSimulator::RunResult result;
         if (useTrajEngine) {
             result =
                 simulator.runTrajectoryOne(layer, real, down, delay, limit, deltaTime, jd, model,
@@ -190,7 +190,7 @@ bool ShadowPlanContext::jitterOk(int delay, int releaseAfter) {
                                       releaseAfter, zone.valid ? &zone : nullptr, &tickBudget);
         }
         simulator.resetCaptureForNextRun(layer);
-        if (!ShadowSurvivalRules::clearsThreatOf(result, zone) || result.diedBeforeAction)
+        if (!EbShadowSurvivalRules::clearsThreatOf(result, zone) || result.diedBeforeAction)
             return false;
     }
     return true;

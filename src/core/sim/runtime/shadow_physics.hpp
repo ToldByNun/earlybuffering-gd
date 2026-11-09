@@ -3,20 +3,20 @@
 
 #include "../shadow_simulator.hpp"
 
-class ShadowPhysics {
+class EbShadowPhysics {
 public:
-    static void markDead(ShadowSimulator& simulator, PlayerObject* player, GameObject* object);
-    static void noteJump(ShadowSimulator& simulator);
-    static void noteActivated(ShadowSimulator& simulator, GameObject* gobj);
-    static void noteOrbOverlap(ShadowSimulator& simulator);
-    static void applyRingJump(ShadowSimulator& simulator, PlayerObject* shadow, RingObject* ring);
-    static void stepPreCollide(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
+    static void markDead(EbShadowSimulator& simulator, PlayerObject* player, GameObject* object);
+    static void noteJump(EbShadowSimulator& simulator);
+    static void noteActivated(EbShadowSimulator& simulator, GameObject* gobj);
+    static void noteOrbOverlap(EbShadowSimulator& simulator);
+    static void applyRingJump(EbShadowSimulator& simulator, PlayerObject* shadow, RingObject* ring);
+    static void stepPreCollide(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
                                float deltaTime);
-    static void stepPhysics(ShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
+    static void stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
                             float stepDt, float deltaTime);
 
 private:
-    ShadowPhysics() = delete;
+    EbShadowPhysics() = delete;
 };
 
 #endif

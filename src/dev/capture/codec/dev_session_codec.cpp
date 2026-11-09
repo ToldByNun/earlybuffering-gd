@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-matjson::Value DevSessionCodec::sessionToJsonValue(DevSessionFile const& session) {
+matjson::Value EbDevSessionCodec::sessionToJsonValue(EbDevSessionFile const& session) {
     matjson::Value root = matjson::Value::object();
     root["traceSchema"] = session.traceSchema;
     root["modVersion"] = session.modVersion;
@@ -35,7 +35,7 @@ matjson::Value DevSessionCodec::sessionToJsonValue(DevSessionFile const& session
         std::vector<matjson::Value> evs;
         evs.reserve(a.events.size());
         for (auto const& e : a.events) {
-            evs.push_back(DevTraceStoreImplementation::eventToJson(e));
+            evs.push_back(EbDevTraceStoreImplementation::eventToJson(e));
         }
         aj["events"] = evs;
         attempts.push_back(std::move(aj));
@@ -44,11 +44,11 @@ matjson::Value DevSessionCodec::sessionToJsonValue(DevSessionFile const& session
     return root;
 }
 
-std::string DevSessionCodec::sessionToJsonString(DevSessionFile const& session) {
-    return DevTraceStoreImplementation::sessionToJsonValue(session).dump();
+std::string EbDevSessionCodec::sessionToJsonString(EbDevSessionFile const& session) {
+    return EbDevTraceStoreImplementation::sessionToJsonValue(session).dump();
 }
 
-bool DevSessionCodec::sessionFromJsonString(std::string const& body, DevSessionFile& out,
+bool EbDevSessionCodec::sessionFromJsonString(std::string const& body, EbDevSessionFile& out,
                                             std::string& err) {
     err.clear();
     out = {};
@@ -61,7 +61,7 @@ bool DevSessionCodec::sessionFromJsonString(std::string const& body, DevSessionF
     out.traceSchema = root.contains("traceSchema")
                           ? static_cast<int>(root["traceSchema"].asInt().unwrapOr(0))
                           : 0;
-    if (out.traceSchema != DevTraceStore::kTraceSchema) {
+    if (out.traceSchema != EbDevTraceStore::kTraceSchema) {
         err = "traceSchema";
         return false;
     }
@@ -89,7 +89,7 @@ bool DevSessionCodec::sessionFromJsonString(std::string const& body, DevSessionF
         return true;
     }
     for (auto const& aj : root["attempts"]) {
-        DevAttempt a;
+        EbDevAttempt a;
         a.attemptId = aj.contains("attemptId") ? aj["attemptId"].asInt().unwrapOr(0) : 0;
         a.startTick =
             aj.contains("startTick") ? static_cast<int>(aj["startTick"].asInt().unwrapOr(0)) : 0;
@@ -99,9 +99,9 @@ bool DevSessionCodec::sessionFromJsonString(std::string const& body, DevSessionF
         a.counted = aj.contains("counted") ? aj["counted"].asBool().unwrapOr(false) : false;
         if (aj.contains("events") && aj["events"].isArray()) {
             for (auto const& ej : aj["events"]) {
-                DevDecisionEvent e;
+                EbDevDecisionEvent e;
                 std::string eerr;
-                if (!DevTraceStoreImplementation::eventFromJson(ej, e, eerr)) {
+                if (!EbDevTraceStoreImplementation::eventFromJson(ej, e, eerr)) {
                     err = eerr.empty() ? "bad-event" : eerr;
                     return false;
                 }

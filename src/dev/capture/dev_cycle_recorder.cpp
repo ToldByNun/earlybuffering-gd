@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "dev_cycle_recorder.hpp"
 #include "../../core/platform/platform_limits.hpp"
 #include "../../debug/lag_probe.hpp"
@@ -10,27 +11,26 @@
 #include <filesystem>
 #include <fmt/format.h>
 
-DevCycleRecorder& DevCycleRecorder::get() {
-    static DevCycleRecorder inst;
-    return inst;
+EbDevCycleRecorder& EbDevCycleRecorder::get() {
+    return EbClassManager::get().service<EbDevCycleRecorder>();
 }
 
-bool DevCycleRecorder::isRecording() const {
-    if (!DevConfig::recordEnable())
+bool EbDevCycleRecorder::isRecording() const {
+    if (!EbDevConfig::recordEnable())
         return false;
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     return store.isOpen() && store.hasOpenAttempt();
 }
 
-bool DevCycleRecorder::canWriteActive() const {
+bool EbDevCycleRecorder::canWriteActive() const {
     return this->isRecording() && this->m_activePressId > 0;
 }
 
-void DevCycleRecorder::clearActive() {
+void EbDevCycleRecorder::clearActive() {
     this->m_activePressId = 0;
 }
 
-DevCycleRecorder::TrackedCycle* DevCycleRecorder::tracked(int64_t pressId) {
+EbDevCycleRecorder::TrackedCycle* EbDevCycleRecorder::tracked(int64_t pressId) {
     if (pressId <= 0)
         return nullptr;
     auto it = this->m_cycles.find(pressId);
@@ -40,22 +40,22 @@ DevCycleRecorder::TrackedCycle* DevCycleRecorder::tracked(int64_t pressId) {
     return nullptr;
 }
 
-DevCycleRecorder::TrackedCycle* DevCycleRecorder::ensureActiveTracked() {
+EbDevCycleRecorder::TrackedCycle* EbDevCycleRecorder::ensureActiveTracked() {
     return this->tracked(this->m_activePressId);
 }
 
-int64_t DevCycleRecorder::beginPress(int playerIndex, bool down, int effectTick, int pressTick,
+int64_t EbDevCycleRecorder::beginPress(int playerIndex, bool down, int effectTick, int pressTick,
                                      DevEventSource source) {
     this->clearActive();
     if (!this->isRecording())
         return 0;
 
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     int64_t const pressId = store.allocPressId();
     if (pressId <= 0)
         return 0;
 
-    DevDecisionEvent ev;
+    EbDevDecisionEvent ev;
     ev.kind = DevEventKind::PressObserved;
     ev.pressId = pressId;
     ev.cycleId = pressId;
@@ -82,7 +82,7 @@ int64_t DevCycleRecorder::beginPress(int playerIndex, bool down, int effectTick,
     return pressId;
 }
 
-DevDecisionEvent* DevCycleRecorder::appendTo(TrackedCycle& cycle, DevEventKind kind,
+EbDevDecisionEvent* EbDevCycleRecorder::appendTo(TrackedCycle& cycle, DevEventKind kind,
                                              int64_t parentEventId, int64_t planId,
                                              AssistReason reason, char const* where) {
     if (!this->isRecording())
@@ -90,7 +90,7 @@ DevDecisionEvent* DevCycleRecorder::appendTo(TrackedCycle& cycle, DevEventKind k
     if (parentEventId <= 0 && kind != DevEventKind::PressObserved)
         return nullptr;
 
-    DevDecisionEvent ev;
+    EbDevDecisionEvent ev;
     ev.kind = kind;
     ev.pressId = cycle.pressId;
     ev.cycleId = cycle.pressId;
@@ -102,12 +102,12 @@ DevDecisionEvent* DevCycleRecorder::appendTo(TrackedCycle& cycle, DevEventKind k
     ev.effectTick = cycle.effectTick;
     ev.pressTick = cycle.pressTick;
     if (reason != AssistReason::None || (where && where[0])) {
-        ev.assistReason = AssistVerdict::name(reason);
+        ev.assistReason = EbAssistVerdict::name(reason);
         if (where && where[0]) {
-            ev.assistReason = fmt::format("{}@{}", AssistVerdict::name(reason), where);
+            ev.assistReason = fmt::format("{}@{}", EbAssistVerdict::name(reason), where);
         }
     }
-    auto* written = DevTraceStore::get().appendEvent(ev);
+    auto* written = EbDevTraceStore::get().appendEvent(ev);
     if (!written)
         return nullptr;
     cycle.lastEventId = written->eventId;
@@ -116,7 +116,7 @@ DevDecisionEvent* DevCycleRecorder::appendTo(TrackedCycle& cycle, DevEventKind k
     return written;
 }
 
-void DevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
+void EbDevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive())
         return;
@@ -127,15 +127,15 @@ void DevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
     if (!width)
         return;
     // Gate-pass: empty candNotes; attribution is the full reason.
-    DevRejectLedger::AttributionInput attrIn;
+    EbDevRejectLedger::AttributionInput attrIn;
     attrIn.gatePass = true;
     attrIn.hasPlanFinished = false;
-    width->attribution = DevRejectLedger::buildAttribution(attrIn);
+    width->attribution = EbDevRejectLedger::buildAttribution(attrIn);
     cycle->hasGate = true;
 }
 
-void DevCycleRecorder::notePlanFinished(SimPlan const& plan, int effectTick, int limit,
-                                        DevClockContract::Stamp const& clock, PlayLayer* layer,
+void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick, int limit,
+                                        EbDevClockContract::Stamp const& clock, PlayLayer* layer,
                                         PlayerObject* player) {
     (void)limit;
     auto* cycle = this->ensureActiveTracked();
@@ -163,18 +163,18 @@ void DevCycleRecorder::notePlanFinished(SimPlan const& plan, int effectTick, int
     }
     // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
     bool const freezeOnRecord = true;
-    width->witness = DevLiveWitness::capture(layer, player, player2, plan,
+    width->witness = EbDevLiveWitness::capture(layer, player, player2, plan,
                                              width->hasClockStamp ? width->clockStamp : clock,
                                              effectTick, freezeOnRecord);
     width->hasWitness = width->witness.valid;
 
     // Commit 8: suppress claims early when the witness alone is notReproducible.
     if (width->hasWitness) {
-        DevClassifyOptions opts;
-        opts.requireDeps = DevConfig::evalRequireDeps();
+        EbDevClassifyOptions opts;
+        opts.requireDeps = EbDevConfig::evalRequireDeps();
         opts.freezeWorld = freezeOnRecord;
         opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
-        DevClassifyResult const gate = DevStateDiff::classifyWitnessGate(width->witness, opts);
+        EbDevClassifyResult const gate = EbDevStateDiff::classifyWitnessGate(width->witness, opts);
         if (!gate.evalSuppressedReason.empty()) {
             width->hasFidelity = true;
             width->fidelity = gate.fidelity;
@@ -189,25 +189,25 @@ void DevCycleRecorder::notePlanFinished(SimPlan const& plan, int effectTick, int
     width->candNotes = plan.candNotes;
     width->candNotesTruncated = plan.candNotesTruncated;
     {
-        DevRejectLedger::AttributionInput attrIn;
+        EbDevRejectLedger::AttributionInput attrIn;
         attrIn.hasPlanFinished = true;
         attrIn.plannedDelay = plan.delay;
         attrIn.notReproducible =
             width->hasFidelity && width->fidelity == DevFidelity::NotReproducible;
         attrIn.approx = width->hasFidelity && width->approx;
         attrIn.claimsAllowed = width->hasFidelity && width->claimsAllowed;
-        DevRejectLedger::Ledger led;
+        EbDevRejectLedger::Ledger led;
         led.notes = width->candNotes;
         led.truncated = width->candNotesTruncated;
         attrIn.ledger = &led;
-        width->attribution = DevRejectLedger::buildAttribution(attrIn);
+        width->attribution = EbDevRejectLedger::buildAttribution(attrIn);
     }
 
     cycle->planId = plan.planId;
     cycle->hasPlan = true;
 }
 
-void DevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool floored,
+void EbDevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool floored,
                                           bool verifyRefused) {
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive())
@@ -215,10 +215,10 @@ void DevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool
     if (!cycle->hasPlan)
         return;
 
-    auto* attempt = DevTraceStore::get().currentAttempt();
+    auto* attempt = EbDevTraceStore::get().currentAttempt();
     if (!attempt)
         return;
-    DevDecisionEvent* planEv = nullptr;
+    EbDevDecisionEvent* planEv = nullptr;
     for (auto& ev : attempt->events) {
         if (ev.pressId == cycle->pressId && ev.kind == DevEventKind::PlanFinished) {
             planEv = &ev;
@@ -229,7 +229,7 @@ void DevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool
 
     bool const nudged = finalDelay != plannedDelay && !floored && !verifyRefused;
     if (nudged || floored || verifyRefused) {
-        DevRejectLedger::AttributionInput attrIn;
+        EbDevRejectLedger::AttributionInput attrIn;
         attrIn.hasPlanFinished = true;
         attrIn.plannedDelay = plannedDelay;
         attrIn.learningNudged = nudged;
@@ -239,11 +239,11 @@ void DevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool
             planEv->hasFidelity && planEv->fidelity == DevFidelity::NotReproducible;
         attrIn.approx = planEv->hasFidelity && planEv->approx;
         attrIn.claimsAllowed = planEv->hasFidelity && planEv->claimsAllowed;
-        DevRejectLedger::Ledger led;
+        EbDevRejectLedger::Ledger led;
         led.notes = planEv->candNotes;
         led.truncated = planEv->candNotesTruncated;
         attrIn.ledger = &led;
-        auto extra = DevRejectLedger::buildAttribution(attrIn);
+        auto extra = EbDevRejectLedger::buildAttribution(attrIn);
         // Merge without duplicating codes already present.
         for (auto& a : extra) {
             bool dup = false;
@@ -260,12 +260,12 @@ void DevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool
             // Planner chosen stays; mark the final delay as learning-displaced
             // only when it was evaluated and not the planner pick.
             auto& note = planEv->candNotes[static_cast<size_t>(finalDelay)];
-            if (note.status != DevRejectLedger::Status::Chosen &&
-                note.rejectCode != DevRejectLedger::RejectCode::LearningDisplaced) {
-                if (note.status == DevRejectLedger::Status::Evaluated ||
-                    note.status == DevRejectLedger::Status::Rejected) {
-                    note.rejectCode = DevRejectLedger::RejectCode::LearningDisplaced;
-                    note.detail = DevRejectLedger::clampDetail(
+            if (note.status != EbDevRejectLedger::Status::Chosen &&
+                note.rejectCode != EbDevRejectLedger::RejectCode::LearningDisplaced) {
+                if (note.status == EbDevRejectLedger::Status::Evaluated ||
+                    note.status == EbDevRejectLedger::Status::Rejected) {
+                    note.rejectCode = EbDevRejectLedger::RejectCode::LearningDisplaced;
+                    note.detail = EbDevRejectLedger::clampDetail(
                         fmt::format("learn {}→{}", plannedDelay, finalDelay));
                 }
             }
@@ -273,7 +273,7 @@ void DevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool
     }
 }
 
-void DevCycleRecorder::notePassThrough(AssistReason reason, char const* where) {
+void EbDevCycleRecorder::notePassThrough(AssistReason reason, char const* where) {
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive())
         return;
@@ -285,7 +285,7 @@ void DevCycleRecorder::notePassThrough(AssistReason reason, char const* where) {
         cycle->hasPassThrough = true;
 }
 
-int64_t DevCycleRecorder::noteDelayArm(AssistReason reason, char const* where, int plannedDelay,
+int64_t EbDevCycleRecorder::noteDelayArm(AssistReason reason, char const* where, int plannedDelay,
                                        int plannedFireTick, int planId, DevEventSource source,
                                        DelayArmMeta meta) {
     auto* cycle = this->ensureActiveTracked();
@@ -326,7 +326,7 @@ int64_t DevCycleRecorder::noteDelayArm(AssistReason reason, char const* where, i
     return cycle->pressId;
 }
 
-void DevCycleRecorder::noteRecheck(int64_t pressId, int oldFireTick, int newFireTick,
+void EbDevCycleRecorder::noteRecheck(int64_t pressId, int oldFireTick, int newFireTick,
                                    char const* where) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
@@ -353,7 +353,7 @@ void DevCycleRecorder::noteRecheck(int64_t pressId, int oldFireTick, int newFire
         fmt::format("recheck:{}→{}@{}", oldFireTick, newFireTick, where ? where : "recheck");
 }
 
-void DevCycleRecorder::noteHus(int64_t pressId, AssistReason reason, char const* where,
+void EbDevCycleRecorder::noteHus(int64_t pressId, AssistReason reason, char const* where,
                                int fireTick) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
@@ -370,7 +370,7 @@ void DevCycleRecorder::noteHus(int64_t pressId, AssistReason reason, char const*
     width->plannedFireTick = fireTick;
 }
 
-void DevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
+void EbDevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
         return;
@@ -394,7 +394,7 @@ void DevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
     cycle->hasFire = true;
 }
 
-void DevCycleRecorder::noteHoldExtend(int64_t pressId, int holdExtendMax) {
+void EbDevCycleRecorder::noteHoldExtend(int64_t pressId, int holdExtendMax) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
         return;
@@ -403,10 +403,10 @@ void DevCycleRecorder::noteHoldExtend(int64_t pressId, int holdExtendMax) {
     cycle->holdExtendMax = holdExtendMax;
 }
 
-void DevCycleRecorder::noteCheckpoint(int attemptTick) {
+void EbDevCycleRecorder::noteCheckpoint(int attemptTick) {
     if (!this->isRecording())
         return;
-    DevDecisionEvent ev;
+    EbDevDecisionEvent ev;
     ev.kind = DevEventKind::Checkpoint;
     ev.pressId = 0;
     ev.cycleId = 0;
@@ -414,10 +414,10 @@ void DevCycleRecorder::noteCheckpoint(int attemptTick) {
     ev.effectTick = attemptTick;
     ev.pressTick = attemptTick;
     ev.assistReason = "checkpoint";
-    (void)DevTraceStore::get().appendEvent(ev);
+    (void)EbDevTraceStore::get().appendEvent(ev);
 }
 
-void DevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason, bool lived,
+void EbDevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason, bool lived,
                                                   int attemptTick) {
     if (!this->isRecording())
         return;
@@ -459,7 +459,7 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason, 
         if (!lived && cycle.hasArm && cycle.actualFireTick >= 0 && attemptTick >= 0) {
             width->deathAfterFire = true;
             width->ticksToDeath = std::max(0, attemptTick - cycle.actualFireTick);
-            LagProbe::get().mark(
+            EbLagProbe::get().mark(
                 "eb.assist.halluc",
                 fmt::format("press={} fire={} deathTick={} ticksToDeath={} recheckΔ={} holdExt={}",
                             cycle.pressId, cycle.actualFireTick, attemptTick, width->ticksToDeath,
@@ -469,24 +469,24 @@ void DevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason, 
     }
 }
 
-bool DevCycleRecorder::shouldCountAttempt() const {
-    if (DevConfig::countEmptyAttempts())
+bool EbDevCycleRecorder::shouldCountAttempt() const {
+    if (EbDevConfig::countEmptyAttempts())
         return true;
     for (auto const& pair : this->m_cycles) {
         if (pair.second.pressId > 0)
             return true;
     }
-    auto const* attempt = DevTraceStore::get().currentAttempt();
+    auto const* attempt = EbDevTraceStore::get().currentAttempt();
     if (!(!attempt)) {
         return !attempt->events.empty();
     }
     return false;
 }
 
-bool DevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool lived, int attemptTick) {
-    if (!DevConfig::recordEnable())
+bool EbDevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool lived, int attemptTick) {
+    if (!EbDevConfig::recordEnable())
         return false;
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen() || !store.hasOpenAttempt())
         return false;
 
@@ -497,10 +497,10 @@ bool DevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool lived
     return store.sealAttempt(std::move(endReason), count);
 }
 
-bool DevCycleRecorder::beginNewAttempt(int startTick) {
-    if (!DevConfig::recordEnable())
+bool EbDevCycleRecorder::beginNewAttempt(int startTick) {
+    if (!EbDevConfig::recordEnable())
         return false;
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen())
         return false;
     if (store.hasOpenAttempt())
@@ -510,10 +510,10 @@ bool DevCycleRecorder::beginNewAttempt(int startTick) {
     return store.beginAttempt(startTick);
 }
 
-void DevCycleRecorder::onAttemptReset(int startTick) {
-    if (!DevConfig::recordEnable())
+void EbDevCycleRecorder::onAttemptReset(int startTick) {
+    if (!EbDevConfig::recordEnable())
         return;
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen())
         return;
     if (store.hasOpenAttempt()) {
@@ -522,10 +522,10 @@ void DevCycleRecorder::onAttemptReset(int startTick) {
     (void)this->beginNewAttempt(startTick);
 }
 
-bool DevCycleRecorder::flushQuit() {
-    if (!DevConfig::recordEnable())
+bool EbDevCycleRecorder::flushQuit() {
+    if (!EbDevConfig::recordEnable())
         return false;
-    auto& store = DevTraceStore::get();
+    auto& store = EbDevTraceStore::get();
     if (!store.isOpen())
         return false;
     if (store.hasOpenAttempt()) {
@@ -538,7 +538,7 @@ bool DevCycleRecorder::flushQuit() {
     return store.flush();
 }
 
-bool DevCycleRecorder::selfCheck(std::string& report) {
+bool EbDevCycleRecorder::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -548,20 +548,20 @@ bool DevCycleRecorder::selfCheck(std::string& report) {
         }
     };
 
-    auto& rec = DevCycleRecorder::get();
+    auto& rec = EbDevCycleRecorder::get();
     rec.clearActive();
     rec.m_cycles.clear();
     expect(rec.activePressId() == 0, "clear-active");
 
     // Disk session open is skipped on constrained devices (Android/iOS).
-    if (PlatformLimits::get().allowLoadDiskSelfCheck()) {
-        auto& store = DevTraceStore::get();
+    if (EbPlatformLimits::get().allowLoadDiskSelfCheck()) {
+        auto& store = EbDevTraceStore::get();
         bool const opened = store.beginSession("cycle-selfcheck5", 2);
         expect(opened, "open-session");
         if (opened) {
             expect(store.beginAttempt(0), "begin-attempt");
             // Without recordEnable, beginPress no-ops — still exercise store chain.
-            expect(rec.beginPress(0, true, 10, 10) == 0 || DevConfig::recordEnable(), "begin-gate");
+            expect(rec.beginPress(0, true, 10, 10) == 0 || EbDevConfig::recordEnable(), "begin-gate");
             store.closeSession();
             auto path = store.tracesDir() / "session-cycle-selfcheck5.json";
             std::error_code ec;
@@ -569,7 +569,7 @@ bool DevCycleRecorder::selfCheck(std::string& report) {
         }
     }
 
-    expect(AssistVerdict::name(AssistReason::PassSpam) != nullptr, "verdict-name");
+    expect(EbAssistVerdict::name(AssistReason::PassSpam) != nullptr, "verdict-name");
 
     if (fails == 0)
         report = "DevCycleRecorder selfCheck OK";

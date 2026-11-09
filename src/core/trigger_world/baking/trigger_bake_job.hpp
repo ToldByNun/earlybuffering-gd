@@ -3,12 +3,12 @@
 
 #include "../trigger_world_baker.hpp"
 
-class TriggerBakeJob {
+class EbTriggerBakeJob {
 public:
-    static void tickSlice(TriggerWorldBaker& owner);
+    static void tickSlice(EbTriggerWorldBaker& owner);
 
 private:
-    TriggerBakeJob() = delete;
+    EbTriggerBakeJob() = delete;
 };
 
 #endif

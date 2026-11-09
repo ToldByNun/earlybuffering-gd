@@ -5,10 +5,10 @@
 #include <string>
 
 // Dev Lab session controller (Commit 13).
-class DevSession {
+class EbDevSession {
 public:
     enum class State { Idle = 0, Recording };
-    static DevSession& get();
+    static EbDevSession& get();
     State state() const {
         return this->m_state;
     }
@@ -24,7 +24,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevSession() = default;
+    friend class EbServiceStore;
+
+    EbDevSession() = default;
     State m_state = State::Idle;
 };
 #endif

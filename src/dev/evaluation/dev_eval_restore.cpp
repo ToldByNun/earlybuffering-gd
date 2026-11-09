@@ -2,7 +2,7 @@
 #include <cstring>
 #include <fmt/format.h>
 
-DevWitnessStatus DevEvalRestore::categoryStatus(DevEvalRestore const& r,
+DevWitnessStatus EbDevEvalRestore::categoryStatus(EbDevEvalRestore const& r,
                                                 DevWitnessCategory candidate) {
     for (auto const& e : r.categories) {
         if (e.category == candidate)
@@ -11,7 +11,7 @@ DevWitnessStatus DevEvalRestore::categoryStatus(DevEvalRestore const& r,
     return DevWitnessStatus::Absent;
 }
 
-void DevEvalRestore::setCategory(DevEvalRestore& r, DevWitnessCategory candidate,
+void EbDevEvalRestore::setCategory(EbDevEvalRestore& r, DevWitnessCategory candidate,
                                  DevWitnessStatus status, uint64_t digest) {
     for (auto& e : r.categories) {
         if (e.category == candidate) {
@@ -20,23 +20,23 @@ void DevEvalRestore::setCategory(DevEvalRestore& r, DevWitnessCategory candidate
             return;
         }
     }
-    DevWitnessCategoryEntry e;
+    EbDevWitnessCategoryEntry e;
     e.category = candidate;
     e.status = status;
     e.digest = digest;
     r.categories.push_back(e);
 }
 
-DevEvalRestore DevEvalRestore::beginFromWitness(DevLiveWitness const& witness,
+EbDevEvalRestore EbDevEvalRestore::beginFromWitness(EbDevLiveWitness const& witness,
                                                 DevSimPathId evalPath) {
-    DevEvalRestore r;
+    EbDevEvalRestore r;
     r.valid = true;
     r.playerBlobSchema = witness.playerBlobSchema;
     r.freezeWorld = witness.freezeWorld;
     r.evalSimPathId = evalPath;
     r.clock = witness.clock;
     // Clock is bound by contract — mark restored when stamp validates.
-    if (witness.clock.valid && DevClockContract::get().clockOk(r.clock)) {
+    if (witness.clock.valid && EbDevClockContract::get().clockOk(r.clock)) {
         setCategory(r, DevWitnessCategory::Clock, DevWitnessStatus::Restored);
     } else if (witness.clock.valid) {
         setCategory(r, DevWitnessCategory::Clock, DevWitnessStatus::Partial);
@@ -53,7 +53,7 @@ DevEvalRestore DevEvalRestore::beginFromWitness(DevLiveWitness const& witness,
     return r;
 }
 
-void DevEvalRestore::notePlayerWritten(DevEvalRestore& r, DevPlayerBlob const& blob) {
+void EbDevEvalRestore::notePlayerWritten(EbDevEvalRestore& r, EbDevPlayerBlob const& blob) {
     r.player = blob;
     setCategory(r, DevWitnessCategory::Player,
                 blob.present ? DevWitnessStatus::Restored : DevWitnessStatus::Absent);
@@ -62,19 +62,19 @@ void DevEvalRestore::notePlayerWritten(DevEvalRestore& r, DevPlayerBlob const& b
     }
 }
 
-void DevEvalRestore::noteDualWritten(DevEvalRestore& r, DevPlayerBlob const& blob) {
+void EbDevEvalRestore::noteDualWritten(EbDevEvalRestore& r, EbDevPlayerBlob const& blob) {
     r.dual = blob;
     setCategory(r, DevWitnessCategory::Dual,
                 blob.present ? DevWitnessStatus::Restored : DevWitnessStatus::Absent);
 }
 
-void DevEvalRestore::noteOrbsWritten(DevEvalRestore& r, std::vector<int> const& ids) {
+void EbDevEvalRestore::noteOrbsWritten(EbDevEvalRestore& r, std::vector<int> const& ids) {
     r.orbIds = ids;
     setCategory(r, DevWitnessCategory::Orbs,
                 ids.empty() ? DevWitnessStatus::Partial : DevWitnessStatus::Restored);
 }
 
-void DevEvalRestore::noteTriggersSpooled(DevEvalRestore& r, std::string const& storeKey,
+void EbDevEvalRestore::noteTriggersSpooled(EbDevEvalRestore& r, std::string const& storeKey,
                                          int storeVersion, int applyTick) {
     r.triggerStoreKey = storeKey;
     r.triggerStoreVersion = storeVersion;
@@ -83,24 +83,24 @@ void DevEvalRestore::noteTriggersSpooled(DevEvalRestore& r, std::string const& s
     setCategory(r, DevWitnessCategory::Triggers, DevWitnessStatus::Restored);
 }
 
-void DevEvalRestore::noteMoversDigestOnly(DevEvalRestore& r, uint64_t digest) {
+void EbDevEvalRestore::noteMoversDigestOnly(EbDevEvalRestore& r, uint64_t digest) {
     // Hashes must never become Restored.
     setCategory(r, DevWitnessCategory::Movers, DevWitnessStatus::DigestOnly, digest);
 }
 
-void DevEvalRestore::noteMoversPosesWritten(DevEvalRestore& r,
-                                            std::vector<DevObjectPose> const& poses,
+void EbDevEvalRestore::noteMoversPosesWritten(EbDevEvalRestore& r,
+                                            std::vector<EbDevObjectPose> const& poses,
                                             uint64_t digest) {
     r.moverPoses = poses;
     // Poses are restorable — upgrade beyond DigestOnly. Digest kept for drift.
     setCategory(r, DevWitnessCategory::Movers, DevWitnessStatus::Restored, digest);
 }
 
-void DevEvalRestore::noteCollisionFlagsPartial(DevEvalRestore& r) {
+void EbDevEvalRestore::noteCollisionFlagsPartial(EbDevEvalRestore& r) {
     setCategory(r, DevWitnessCategory::CollisionFlags, DevWitnessStatus::Partial);
 }
 
-bool DevEvalRestore::selfCheck(std::string& report) {
+bool EbDevEvalRestore::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -112,15 +112,15 @@ bool DevEvalRestore::selfCheck(std::string& report) {
         report += name;
     };
 
-    DevLiveWitness w;
+    EbDevLiveWitness w;
     w.valid = true;
-    w.playerBlobSchema = DevLiveWitness::computePlayerBlobSchema();
-    w.clock = DevClockContract::get().makeStamp(10, false, false, 1.f / 240.f, 1.f / 240.f,
+    w.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();
+    w.clock = EbDevClockContract::get().makeStamp(10, false, false, 1.f / 240.f, 1.f / 240.f,
                                                 1.f / 240.f, 1.f, DevSimPathId::Plan);
     w.player.present = true;
     w.player.x = 12.f;
 
-    DevEvalRestore result = beginFromWitness(w, DevSimPathId::EvalDelayFromFreeze);
+    EbDevEvalRestore result = beginFromWitness(w, DevSimPathId::EvalDelayFromFreeze);
     expect(result.valid, "begin-valid");
     expect(categoryStatus(result, DevWitnessCategory::Clock) == DevWitnessStatus::Restored,
            "begin-clock");
@@ -139,7 +139,7 @@ bool DevEvalRestore::selfCheck(std::string& report) {
     expect(categoryStatus(result, DevWitnessCategory::Movers) == DevWitnessStatus::DigestOnly,
            "movers-digest");
 
-    DevObjectPose pose{};
+    EbDevObjectPose pose{};
     pose.uniqueId = 42;
     pose.x = 1.f;
     pose.y = 2.f;

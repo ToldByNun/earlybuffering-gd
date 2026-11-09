@@ -1,3 +1,4 @@
+#include "../app/class_manager.hpp"
 #include "lag_probe.hpp"
 #include "assist_log.hpp"
 #include <Geode/Geode.hpp>
@@ -5,36 +6,35 @@
 #include <fmt/format.h>
 #include <fstream>
 
-LagProbe& LagProbe::get() {
-    static LagProbe inst;
-    return inst;
+EbLagProbe& EbLagProbe::get() {
+    return EbClassManager::get().service<EbLagProbe>();
 }
 
-bool LagProbe::isHybridStandaloneName(char const* name) {
+bool EbLagProbe::isHybridStandaloneName(char const* name) {
     if (!(!name)) {
         return std::strncmp(name, "eb.hybrid.", 10) == 0;
     }
     return false;
 }
 
-LagProbe::Scope::Scope(char const* name, std::string detail) {
+EbLagProbe::Scope::Scope(char const* name, std::string detail) {
     this->m_name = name;
     this->m_detail = std::move(detail);
-    if (!LagProbe::get().enabled() || !name)
+    if (!EbLagProbe::get().enabled() || !name)
         return;
-    if (LagProbe::get().episodeOpen()) {
+    if (EbLagProbe::get().episodeOpen()) {
         this->m_active = true;
-        LagProbe::get().begin(name, this->m_detail);
+        EbLagProbe::get().begin(name, this->m_detail);
         return;
     }
     // Hybrid press scopes: log without a death/reset episode.
-    if (LagProbe::isHybridStandaloneName(name)) {
+    if (EbLagProbe::isHybridStandaloneName(name)) {
         this->m_standalone = true;
         this->m_standaloneStart = std::chrono::steady_clock::now();
     }
 }
 
-LagProbe::Scope::Scope(Scope&& other) noexcept
+EbLagProbe::Scope::Scope(Scope&& other) noexcept
     : m_name(other.m_name), m_detail(std::move(other.m_detail)), m_active(other.m_active),
       m_standalone(other.m_standalone), m_standaloneStart(other.m_standaloneStart) {
     other.m_name = nullptr;
@@ -42,17 +42,17 @@ LagProbe::Scope::Scope(Scope&& other) noexcept
     other.m_standalone = false;
 }
 
-LagProbe::Scope& LagProbe::Scope::operator=(Scope&& other) noexcept {
+EbLagProbe::Scope& EbLagProbe::Scope::operator=(Scope&& other) noexcept {
     if (this == &other)
         return *this;
     if (this->m_active)
-        LagProbe::get().end(this->m_name);
+        EbLagProbe::get().end(this->m_name);
     else if (this->m_standalone) {
         double const elapsedMicroseconds =
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
                                     std::chrono::steady_clock::now() - this->m_standaloneStart)
                                     .count());
-        LagProbe::get().noteStandalone(this->m_name, elapsedMicroseconds / 1000.0, this->m_detail);
+        EbLagProbe::get().noteStandalone(this->m_name, elapsedMicroseconds / 1000.0, this->m_detail);
     }
     this->m_name = other.m_name;
     this->m_detail = std::move(other.m_detail);
@@ -65,9 +65,9 @@ LagProbe::Scope& LagProbe::Scope::operator=(Scope&& other) noexcept {
     return *this;
 }
 
-LagProbe::Scope::~Scope() {
+EbLagProbe::Scope::~Scope() {
     if (this->m_active) {
-        LagProbe::get().end(this->m_name);
+        EbLagProbe::get().end(this->m_name);
         return;
     }
     if (!this->m_standalone || !this->m_name)
@@ -76,14 +76,14 @@ LagProbe::Scope::~Scope() {
         static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::steady_clock::now() - this->m_standaloneStart)
                                 .count());
-    LagProbe::get().noteStandalone(this->m_name, elapsedMicroseconds / 1000.0, this->m_detail);
+    EbLagProbe::get().noteStandalone(this->m_name, elapsedMicroseconds / 1000.0, this->m_detail);
 }
 
-bool LagProbe::enabled() const {
+bool EbLagProbe::enabled() const {
     return this->m_enabled;
 }
 
-void LagProbe::setEnabled(bool on) {
+void EbLagProbe::setEnabled(bool on) {
     if (this->m_enabled == on)
         return;
     this->m_enabled = on;
@@ -91,16 +91,16 @@ void LagProbe::setEnabled(bool on) {
         this->reset();
         this->writeLegend();
         this->flush();
-        AssistLog::info(fmt::format("LagProbe ON → {}", logPath()));
+        EbAssistLog::info(fmt::format("LagProbe ON → {}", logPath()));
         return;
     }
     if (this->m_episodeOpen)
         this->endEpisode();
     this->flush();
-    AssistLog::info("LagProbe OFF");
+    EbAssistLog::info("LagProbe OFF");
 }
 
-std::string LagProbe::logPath() {
+std::string EbLagProbe::logPath() {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
         return (mod->getSaveDir() / "earlybuffer-lagprobe.log").string();
@@ -108,7 +108,7 @@ std::string LagProbe::logPath() {
     return {};
 }
 
-void LagProbe::reset() {
+void EbLagProbe::reset() {
     this->m_episodeOpen = false;
     this->m_episodeName = nullptr;
     this->m_depth = 0;
@@ -116,7 +116,7 @@ void LagProbe::reset() {
     this->m_pendingLines = 0;
 }
 
-void LagProbe::writeToFile(std::string const& text) {
+void EbLagProbe::writeToFile(std::string const& text) {
     if (text.empty())
         return;
     auto const path = logPath();
@@ -130,7 +130,7 @@ void LagProbe::writeToFile(std::string const& text) {
         out << '\n';
 }
 
-void LagProbe::appendLine(std::string const& line) {
+void EbLagProbe::appendLine(std::string const& line) {
     this->m_pending += line;
     this->m_pending.push_back('\n');
     ++this->m_pendingLines;
@@ -142,7 +142,7 @@ void LagProbe::appendLine(std::string const& line) {
     }
 }
 
-void LagProbe::flush() {
+void EbLagProbe::flush() {
     if (!this->m_pending.empty()) {
         this->writeToFile(this->m_pending);
         this->m_pending.clear();
@@ -150,7 +150,7 @@ void LagProbe::flush() {
     }
 }
 
-void LagProbe::writeLegend() {
+void EbLagProbe::writeLegend() {
     this->appendLine("================================================================");
     this->appendLine("EarlyBuffer LagProbe — death / reset / checkpoint timings");
     this->appendLine(fmt::format("file: {}", logPath()));
@@ -213,7 +213,7 @@ void LagProbe::writeLegend() {
     this->appendLine("================================================================");
 }
 
-void LagProbe::noteStandalone(char const* name, double elapsedMilliseconds, std::string detail) {
+void EbLagProbe::noteStandalone(char const* name, double elapsedMilliseconds, std::string detail) {
     if (!this->m_enabled || !name)
         return;
     if (detail.empty()) {
@@ -228,7 +228,7 @@ void LagProbe::noteStandalone(char const* name, double elapsedMilliseconds, std:
     }
 }
 
-double LagProbe::msSinceEpisode() const {
+double EbLagProbe::msSinceEpisode() const {
     if (!(!this->m_episodeOpen)) {
         return std::chrono::duration_cast<std::chrono::microseconds>(
                    std::chrono::steady_clock::now() - this->m_episodeStart)
@@ -238,12 +238,12 @@ double LagProbe::msSinceEpisode() const {
     return 0.0;
 }
 
-std::string LagProbe::indent() const {
+std::string EbLagProbe::indent() const {
     // depth 0 → two spaces under episode; nested scopes add two each.
     return std::string(static_cast<size_t>(2 + this->m_depth * 2), ' ');
 }
 
-void LagProbe::beginEpisode(char const* name, std::string detail) {
+void EbLagProbe::beginEpisode(char const* name, std::string detail) {
     if (!this->m_enabled || !name)
         return;
     if (this->m_episodeOpen)
@@ -261,7 +261,7 @@ void LagProbe::beginEpisode(char const* name, std::string detail) {
     }
 }
 
-void LagProbe::endEpisode() {
+void EbLagProbe::endEpisode() {
     if (!this->m_enabled || !this->m_episodeOpen)
         return;
 
@@ -279,7 +279,7 @@ void LagProbe::endEpisode() {
     this->flush();
 }
 
-void LagProbe::begin(char const* name, std::string detail) {
+void EbLagProbe::begin(char const* name, std::string detail) {
     if (!this->m_enabled || !this->m_episodeOpen || !name)
         return;
     if (this->m_depth >= kMaxDepth)
@@ -298,7 +298,7 @@ void LagProbe::begin(char const* name, std::string detail) {
     ++this->m_depth;
 }
 
-void LagProbe::end(char const* name) {
+void EbLagProbe::end(char const* name) {
     if (!this->m_enabled || !this->m_episodeOpen || this->m_depth <= 0)
         return;
 
@@ -318,7 +318,7 @@ void LagProbe::end(char const* name) {
                                  elapsedMicroseconds / 1000.0));
 }
 
-void LagProbe::mark(char const* name, std::string detail) {
+void EbLagProbe::mark(char const* name, std::string detail) {
     if (!this->m_enabled || !this->m_episodeOpen || !name)
         return;
     if (detail.empty()) {

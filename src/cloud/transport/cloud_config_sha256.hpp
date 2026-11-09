@@ -1,7 +1,7 @@
 #ifndef CLOUD_CONFIG_SHA256_HPP
 #define CLOUD_CONFIG_SHA256_HPP
 
-class CloudConfigSha256Core;
+class EbCloudConfigSha256Core;
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +9,7 @@ class CloudConfigSha256Core;
 #include <string_view>
 
 // Portable SHA-256 → lowercase hex (64 chars). No external crypto dep.
-class CloudConfigSha256 {
+class EbCloudConfigSha256 {
 public:
     static std::string hashHex(std::string_view bytes);
     static std::string hashHex(void const* data, size_t length);
@@ -18,15 +18,15 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigSha256() = default;
+    EbCloudConfigSha256() = default;
 };
 
 #include <array>
 #include <cstring>
 
-class CloudConfigSha256Core {
+class EbCloudConfigSha256Core {
 public:
-    CloudConfigSha256Core();
+    EbCloudConfigSha256Core();
 
     void reset();
 

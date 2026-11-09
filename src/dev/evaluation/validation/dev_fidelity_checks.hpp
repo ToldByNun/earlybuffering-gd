@@ -3,12 +3,12 @@
 
 #include <string>
 
-class DevFidelityChecks {
+class EbDevFidelityChecks {
 public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevFidelityChecks() = delete;
+    EbDevFidelityChecks() = delete;
 };
 
 #endif

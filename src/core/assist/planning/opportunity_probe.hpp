@@ -5,7 +5,7 @@
 
 // G2 gate before Pass no-threat: foresight or cheap mid/limit probes may
 // force a full delay search even when d0 survives with no threat zone.
-class OpportunityProbe {
+class EbOpportunityProbe {
 public:
     // Same endX gain idea as wave futile (ShadowSimulator::kFutileEndXGain).
     static constexpr float kEndXGain = 8.f;
@@ -48,7 +48,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    OpportunityProbe() = default;
+    EbOpportunityProbe() = default;
 };
 
 #endif

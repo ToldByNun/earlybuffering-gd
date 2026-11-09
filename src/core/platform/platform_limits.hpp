@@ -6,9 +6,9 @@
 // Platform ceilings / load-path policy.
 // Constrained devices = Android + iOS (not Windows, not macOS): tighter planner
 // budgets, taller overlay inset, no disk PlanGold on mod load.
-class PlatformLimits {
+class EbPlatformLimits {
 public:
-    static PlatformLimits& get();
+    static EbPlatformLimits& get();
 
     // Android and iOS. macOS / Windows → false (passthrough budgets).
     static bool isConstrainedDevice();
@@ -30,7 +30,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    PlatformLimits() = default;
+    friend class EbServiceStore;
+
+    EbPlatformLimits() = default;
 
     // Same numeric ceilings as the prior Android-only policy.
     static constexpr int kConstrainedMaxSimBudgetUs = 2000;

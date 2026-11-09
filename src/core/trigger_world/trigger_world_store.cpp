@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "trigger_world_store.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../assist/assist_clock.hpp"
@@ -12,24 +13,23 @@
 #include <string>
 #include <vector>
 
-TriggerWorldStore& TriggerWorldStore::get() {
-    static TriggerWorldStore inst;
-    return inst;
+EbTriggerWorldStore& EbTriggerWorldStore::get() {
+    return EbClassManager::get().service<EbTriggerWorldStore>();
 }
 
-std::filesystem::path TriggerWorldStore::triggersDir() {
+std::filesystem::path EbTriggerWorldStore::triggersDir() {
     return geode::prelude::Mod::get()->getSaveDir() / "triggers";
 }
 
-std::filesystem::path TriggerWorldStore::triggerPath(std::string const& key) {
-    return TriggerWorldStore::triggersDir() / (key + ".json");
+std::filesystem::path EbTriggerWorldStore::triggerPath(std::string const& key) {
+    return EbTriggerWorldStore::triggersDir() / (key + ".json");
 }
 
-char const* TriggerWorldStore::kindToString(TriggerKind kind) {
-    return TriggerClassify::kindName(kind);
+char const* EbTriggerWorldStore::kindToString(TriggerKind kind) {
+    return EbTriggerClassify::kindName(kind);
 }
 
-TriggerKind TriggerWorldStore::kindFromString(std::string const& name) {
+TriggerKind EbTriggerWorldStore::kindFromString(std::string const& name) {
     if (name == "StaticMove")
         return TriggerKind::StaticMove;
     if (name == "StaticRotate")
@@ -48,10 +48,10 @@ TriggerKind TriggerWorldStore::kindFromString(std::string const& name) {
     return TriggerKind::DynamicOther;
 }
 
-void TriggerWorldStore::decimateKeys(std::vector<TriggerPose>& keys, size_t maxKeep) {
+void EbTriggerWorldStore::decimateKeys(std::vector<EbTriggerPose>& keys, size_t maxKeep) {
     if (keys.size() <= maxKeep || maxKeep < 2)
         return;
-    std::vector<TriggerPose> out;
+    std::vector<EbTriggerPose> out;
     out.reserve(maxKeep);
     out.push_back(keys.front());
     size_t const midSlots = maxKeep - 2;
@@ -72,7 +72,7 @@ void TriggerWorldStore::decimateKeys(std::vector<TriggerPose>& keys, size_t maxK
     keys = std::move(out);
 }
 
-TriggerWorldStore::ClampResult TriggerWorldStore::clampData(TriggerWorldData& data) {
+EbTriggerWorldStore::ClampResult EbTriggerWorldStore::clampData(EbTriggerWorldData& data) {
     ClampResult r;
     if (data.tracks.size() >= kSoftMaxTracks) {
         r.softTracks = true;
@@ -87,23 +87,23 @@ TriggerWorldStore::ClampResult TriggerWorldStore::clampData(TriggerWorldData& da
         }
         if (track.keys.size() > kHardMaxKeysPerTrack) {
             r.hardKeys = true;
-            TriggerWorldStore::decimateKeys(track.keys, kHardMaxKeysPerTrack);
+            EbTriggerWorldStore::decimateKeys(track.keys, kHardMaxKeysPerTrack);
         }
     }
     return r;
 }
 
-void TriggerWorldStore::noteSoftcap(char const* where) {
+void EbTriggerWorldStore::noteSoftcap(char const* where) {
     this->m_softcapHit = true;
     if (this->m_softcapLogged)
         return;
     this->m_softcapLogged = true;
-    AssistLog::info(fmt::format("TRIGGER-WORLD: softcap ({}) tracks≤{} keys/track≤{} — refusing "
+    EbAssistLog::info(fmt::format("TRIGGER-WORLD: softcap ({}) tracks≤{} keys/track≤{} — refusing "
                                 "further growth; no silent drop under soft",
                                 where ? where : "?", kSoftMaxTracks, kSoftMaxKeysPerTrack));
 }
 
-void TriggerWorldStore::clear() {
+void EbTriggerWorldStore::clear() {
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
@@ -111,7 +111,7 @@ void TriggerWorldStore::clear() {
     this->m_softcapLogged = false;
 }
 
-void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
+void EbTriggerWorldStore::loadForLevel(GJGameLevel* level) {
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
@@ -120,7 +120,7 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
     if (!level)
         return;
 
-    this->m_data.levelKey = LevelProfile::makeKey(level);
+    this->m_data.levelKey = EbLevelProfile::makeKey(level);
     this->m_data.version = kFileVersion;
     this->m_loaded = true;
 
@@ -128,23 +128,23 @@ void TriggerWorldStore::loadForLevel(GJGameLevel* level) {
     if (result.isOk()) {
         // Commit 4: empty on-disk cache is a miss (init raced → poisoned file).
         if (this->m_data.tracks.empty()) {
-            AssistLog::info(
+            EbAssistLog::info(
                 fmt::format("TRIGGER-WORLD: empty cache for {} — treat as miss (rebuild)",
                             this->m_data.levelKey));
             this->discardCacheFile();
             this->m_dirty = false;
             return;
         }
-        AssistLog::debug(fmt::format("TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
+        EbAssistLog::debug(fmt::format("TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
                                      this->m_data.levelKey, this->m_data.tracks.size(),
                                      this->readyTrackCount()));
         return;
     }
-    AssistLog::debug(fmt::format("TRIGGER-WORLD: no cache for {} ({})", this->m_data.levelKey,
+    EbAssistLog::debug(fmt::format("TRIGGER-WORLD: no cache for {} ({})", this->m_data.levelKey,
                                  result.unwrapErr()));
 }
 
-void TriggerWorldStore::save() const {
+void EbTriggerWorldStore::save() const {
     if (!this->m_loaded || this->m_data.levelKey.empty())
         return;
     if (!this->m_dirty)
@@ -153,20 +153,20 @@ void TriggerWorldStore::save() const {
     auto result = this->writeFile();
     if (result.isOk()) {
         this->m_dirty = false;
-        AssistLog::debug(fmt::format("TRIGGER-WORLD: saved {} ({} tracks)", this->m_data.levelKey,
+        EbAssistLog::debug(fmt::format("TRIGGER-WORLD: saved {} ({} tracks)", this->m_data.levelKey,
                                      this->m_data.tracks.size()));
         return;
     }
-    AssistLog::debug(fmt::format("TRIGGER-WORLD: save failed: {}", result.unwrapErr()));
+    EbAssistLog::debug(fmt::format("TRIGGER-WORLD: save failed: {}", result.unwrapErr()));
 }
 
-void TriggerWorldStore::setData(TriggerWorldData data) {
-    auto const clamp = TriggerWorldStore::clampData(data);
+void EbTriggerWorldStore::setData(EbTriggerWorldData data) {
+    auto const clamp = EbTriggerWorldStore::clampData(data);
     if (clamp.softTracks || clamp.softKeys) {
         this->noteSoftcap(clamp.hardTracks || clamp.hardKeys ? "hard-clamp" : "setData");
     }
     if (clamp.hardTracks || clamp.hardKeys) {
-        AssistLog::info(fmt::format(
+        EbAssistLog::info(fmt::format(
             "TRIGGER-WORLD: HARD truncate tracks={} keysHit={} (hard tracks≤{} keys≤{})",
             clamp.hardTracks ? 1 : 0, clamp.hardKeys ? 1 : 0, kHardMaxTracks,
             kHardMaxKeysPerTrack));
@@ -180,23 +180,23 @@ void TriggerWorldStore::setData(TriggerWorldData data) {
     this->m_dirty = true;
 }
 
-void TriggerWorldStore::discardCacheFile() const {
+void EbTriggerWorldStore::discardCacheFile() const {
     if (this->m_data.levelKey.empty())
         return;
-    auto const path = TriggerWorldStore::triggerPath(this->m_data.levelKey);
+    auto const path = EbTriggerWorldStore::triggerPath(this->m_data.levelKey);
     std::error_code ec;
     if (!std::filesystem::exists(path, ec))
         return;
     std::filesystem::remove(path, ec);
     if (ec) {
-        AssistLog::debug(fmt::format("TRIGGER-WORLD: discard cache failed: {}", ec.message()));
+        EbAssistLog::debug(fmt::format("TRIGGER-WORLD: discard cache failed: {}", ec.message()));
         return;
     }
-    AssistLog::info(
+    EbAssistLog::info(
         fmt::format("TRIGGER-WORLD: discarded empty/stale cache {}", path.filename().string()));
 }
 
-TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {
+EbTriggerTrack const* EbTriggerWorldStore::findTrack(int uniqueId) const {
     for (auto const& track : this->m_data.tracks) {
         if (track.uniqueId == uniqueId)
             return &track;
@@ -204,7 +204,7 @@ TriggerTrack const* TriggerWorldStore::findTrack(int uniqueId) const {
     return nullptr;
 }
 
-size_t TriggerWorldStore::readyTrackCount() const {
+size_t EbTriggerWorldStore::readyTrackCount() const {
     size_t count = 0;
     for (auto const& track : this->m_data.tracks) {
         if (track.ready && !track.keys.empty())
@@ -213,18 +213,18 @@ size_t TriggerWorldStore::readyTrackCount() const {
     return count;
 }
 
-int TriggerWorldStore::remapLiveTick(int liveAbsTick) const {
-    return this->remapLiveTick(liveAbsTick, AssistController::get().simDt());
+int EbTriggerWorldStore::remapLiveTick(int liveAbsTick) const {
+    return this->remapLiveTick(liveAbsTick, EbAssistController::get().simDt());
 }
 
-int TriggerWorldStore::remapLiveTick(int liveAbsTick, float liveSimDt) const {
+int EbTriggerWorldStore::remapLiveTick(int liveAbsTick, float liveSimDt) const {
     double tps = this->m_data.tps;
     if (tps <= 0.0)
-        tps = AssistClock::kNominalTps;
-    return AssistClock::get().remapTick(tps, liveAbsTick, liveSimDt);
+        tps = EbAssistClock::kNominalTps;
+    return EbAssistClock::get().remapTick(tps, liveAbsTick, liveSimDt);
 }
 
-bool TriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick, TriggerPose& out) const {
+bool EbTriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick, EbTriggerPose& out) const {
     auto const* track = this->findTrack(uniqueId);
     if (!track || !track->ready || track->keys.empty())
         return false;
@@ -240,7 +240,7 @@ bool TriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick, Trigg
     }
 
     // Last key with tick <= storeTick (hold). Linear lerp optional later.
-    TriggerPose const* best = &keys.front();
+    EbTriggerPose const* best = &keys.front();
     for (auto const& key : keys) {
         if (key.tick > storeTick)
             break;
@@ -250,17 +250,17 @@ bool TriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick, Trigg
     return true;
 }
 
-bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, float liveSimDt,
-                                   TriggerPose& out) const {
+bool EbTriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, float liveSimDt,
+                                   EbTriggerPose& out) const {
     int const storeTick = this->remapLiveTick(liveAbsTick, liveSimDt);
     return this->samplePoseAtStoreTick(uniqueId, storeTick, out);
 }
 
-bool TriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, TriggerPose& out) const {
-    return this->samplePose(uniqueId, liveAbsTick, AssistController::get().simDt(), out);
+bool EbTriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, EbTriggerPose& out) const {
+    return this->samplePose(uniqueId, liveAbsTick, EbAssistController::get().simDt(), out);
 }
 
-void TriggerWorldStore::writePose(GameObject* object, TriggerPose const& pose) {
+void EbTriggerWorldStore::writePose(GameObject* object, EbTriggerPose const& pose) {
     if (!object)
         return;
     auto* effectObject = geode::prelude::typeinfo_cast<EnhancedGameObject*>(object);
@@ -287,7 +287,7 @@ void TriggerWorldStore::writePose(GameObject* object, TriggerPose const& pose) {
     object->setScaleY(pose.scaleY);
 }
 
-int TriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
+int EbTriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
     if (!layer || !this->m_loaded || this->m_data.tracks.empty())
         return 0;
     if (!layer->m_objectLayer)
@@ -303,10 +303,10 @@ int TriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
     for (auto const& track : this->m_data.tracks) {
         if (!track.ready || track.keys.empty())
             continue;
-        if (!TriggerClassify::isStatic(track.kind))
+        if (!EbTriggerClassify::isStatic(track.kind))
             continue;
 
-        TriggerPose pose{};
+        EbTriggerPose pose{};
         if (!this->samplePose(track.uniqueId, absTick, pose))
             continue;
 
@@ -324,13 +324,13 @@ int TriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
         if (!object)
             continue;
 
-        TriggerWorldStore::writePose(object, pose);
+        EbTriggerWorldStore::writePose(object, pose);
         ++applied;
     }
     return applied;
 }
 
-std::string TriggerWorldStore::statusLine() const {
+std::string EbTriggerWorldStore::statusLine() const {
     if (!this->m_loaded)
         return "trigger-world: off";
     if (this->m_data.tracks.empty()) {
@@ -344,14 +344,14 @@ std::string TriggerWorldStore::statusLine() const {
                        this->m_data.tracks.size(), this->m_data.tps);
 }
 
-bool TriggerWorldStore::selfCheck(std::string& report) {
-    return TriggerWorldChecks::selfCheck(report);
+bool EbTriggerWorldStore::selfCheck(std::string& report) {
+    return EbTriggerWorldChecks::selfCheck(report);
 }
 
-geode::Result<> TriggerWorldStore::writeFile() const {
-    return TriggerWorldCodec::writeFile(*this);
+geode::Result<> EbTriggerWorldStore::writeFile() const {
+    return EbTriggerWorldCodec::writeFile(*this);
 }
 
-geode::Result<> TriggerWorldStore::readFile() {
-    return TriggerWorldCodec::readFile(*this);
+geode::Result<> EbTriggerWorldStore::readFile() {
+    return EbTriggerWorldCodec::readFile(*this);
 }

@@ -6,7 +6,7 @@
 
 // Public share path: POST pack to a submit Worker (no client secret).
 // The Worker holds the GitHub token and writes/PRs into earlybuffer-configs.
-class CloudConfigSubmit {
+class EbCloudConfigSubmit {
 public:
     class Result {
     public:
@@ -29,12 +29,12 @@ public:
     static bool isAllowedSubmitUrl(std::string const& url);
 
     // POST JSON body with pack meta + bare bundle. Sync (share confirm waits).
-    static Result submit(CloudConfigPublish::PackMeta const& meta, std::string const& bundleJson);
+    static Result submit(EbCloudConfigPublish::PackMeta const& meta, std::string const& bundleJson);
 
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigSubmit() = default;
+    EbCloudConfigSubmit() = default;
 };
 
 #include "../cloud_config_store.hpp"
@@ -43,13 +43,13 @@ private:
 #include <cctype>
 #include <chrono>
 
-class CloudConfigSubmitImplementation {
+class EbCloudConfigSubmitImplementation {
 public:
     static bool parseHttpsHost(std::string const& url, std::string& hostOut);
     static bool hostAllowed(std::string const& host);
 
 private:
-    CloudConfigSubmitImplementation() = delete;
+    EbCloudConfigSubmitImplementation() = delete;
 };
 
 #endif

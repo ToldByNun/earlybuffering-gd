@@ -3,7 +3,7 @@
 
 #include <string>
 
-class PauseConfigActions {
+class EbPauseConfigActions {
 public:
     static void exportConfig();
     static void importConfig();
@@ -11,7 +11,7 @@ public:
     static void afterConfigApplied(std::string const& successMsg);
 
 private:
-    PauseConfigActions() = delete;
+    EbPauseConfigActions() = delete;
 };
 
 #endif

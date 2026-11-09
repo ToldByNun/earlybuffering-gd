@@ -6,7 +6,7 @@
 #include <vector>
 
 // Parsed / validated cloud catalog index.json (schema 1).
-class CloudConfigIndex {
+class EbCloudConfigIndex {
 public:
     static constexpr int kSchema = 1;
 
@@ -46,7 +46,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigIndex() = default;
+    EbCloudConfigIndex() = default;
 
     static bool validatePack(PackEntry const& p, std::string& err);
     static bool isLowerHexSha256(std::string const& hex);

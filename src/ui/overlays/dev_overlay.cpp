@@ -3,31 +3,31 @@
 #include "../../dev/dev_session.hpp"
 #include "../../dev/reporting/dev_report.hpp"
 
-bool DevOverlay::shouldShow() {
-    if (!(!DevConfig::overlay())) {
-        return DevSession::get().isRecording() || DevReport::hasLast();
+bool EbDevOverlay::shouldShow() {
+    if (!(!EbDevConfig::overlay())) {
+        return EbDevSession::get().isRecording() || EbDevReport::hasLast();
     }
     return false;
 }
 
-std::string DevOverlay::line() {
+std::string EbDevOverlay::line() {
     if (!shouldShow())
         return {};
 
-    if (DevReport::hasLast()) {
-        auto const& r = DevReport::last();
+    if (EbDevReport::hasLast()) {
+        auto const& r = EbDevReport::last();
         // Prefer full report line (includes REC when set at eval time).
         // Refresh REC prefix if session is still rolling.
-        if (DevSession::get().isRecording()) {
-            DevReport copy = r;
-            copy.recLine = DevSession::get().statusLine();
-            return DevReport::formatOverlayLine(copy);
+        if (EbDevSession::get().isRecording()) {
+            EbDevReport copy = r;
+            copy.recLine = EbDevSession::get().statusLine();
+            return EbDevReport::formatOverlayLine(copy);
         }
         return r.overlayLine;
     }
 
-    if (DevSession::get().isRecording()) {
-        return DevSession::get().statusLine();
+    if (EbDevSession::get().isRecording()) {
+        return EbDevSession::get().statusLine();
     }
     return {};
 }

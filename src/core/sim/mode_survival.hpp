@@ -6,7 +6,7 @@
 // Commit 9 — Lethal vs recoverable vs landing (ideas reimplemented; no upstream code).
 // Pure classifiers: cube/ball landing, wave recoverable / flip probes, ship-like recover,
 // narrow overlap-ignore, late-crash-after-clear. ParityGate: ascent alone ≠ Landing.
-class ModeSurvival {
+class EbModeSurvival {
 public:
     enum class Class {
         Alive = 0,
@@ -77,7 +77,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    ModeSurvival() = delete;
+    EbModeSurvival() = delete;
 };
 
 #endif

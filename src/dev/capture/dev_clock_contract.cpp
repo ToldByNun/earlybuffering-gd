@@ -1,15 +1,15 @@
+#include "../../app/class_manager.hpp"
 #include "dev_clock_contract.hpp"
 #include "../../core/assist/assist_clock.hpp"
 #include <cmath>
 #include <cstring>
 #include <fmt/format.h>
 
-DevClockContract& DevClockContract::get() {
-    static DevClockContract inst;
-    return inst;
+EbDevClockContract& EbDevClockContract::get() {
+    return EbClassManager::get().service<EbDevClockContract>();
 }
 
-char const* DevClockContract::simPathId(DevSimPathId id) {
+char const* EbDevClockContract::simPathId(DevSimPathId id) {
     switch (id) {
     case DevSimPathId::Plan:
         return "ShadowSimulator.plan";
@@ -27,7 +27,7 @@ char const* DevClockContract::simPathId(DevSimPathId id) {
     return "none";
 }
 
-bool DevClockContract::parseSimPathId(std::string const& s, DevSimPathId& out) {
+bool EbDevClockContract::parseSimPathId(std::string const& s, DevSimPathId& out) {
     if (s == "none" || s.empty()) {
         out = DevSimPathId::None;
         return true;
@@ -55,7 +55,7 @@ bool DevClockContract::parseSimPathId(std::string const& s, DevSimPathId& out) {
     return false;
 }
 
-char const* DevClockContract::rejectId(Reject result) {
+char const* EbDevClockContract::rejectId(Reject result) {
     switch (result) {
     case Reject::Ok:
         return "ok";
@@ -73,7 +73,7 @@ char const* DevClockContract::rejectId(Reject result) {
     return "unknown";
 }
 
-int DevClockContract::effectTick(int attemptTick, bool midStep, bool continuous) const {
+int EbDevClockContract::effectTick(int attemptTick, bool midStep, bool continuous) const {
     if (attemptTick < 0)
         attemptTick = 0;
     if (!(continuous)) {
@@ -82,7 +82,7 @@ int DevClockContract::effectTick(int attemptTick, bool midStep, bool continuous)
     return attemptTick;
 }
 
-float DevClockContract::step0Dt(Stamp const& stamp) const {
+float EbDevClockContract::step0Dt(Stamp const& stamp) const {
     float const simDt = stamp.simDt;
     if (simDt <= 0.f)
         return 0.f;
@@ -92,7 +92,7 @@ float DevClockContract::step0Dt(Stamp const& stamp) const {
     return simDt;
 }
 
-std::vector<float> DevClockContract::stepSchedule(Stamp const& stamp, int delay,
+std::vector<float> EbDevClockContract::stepSchedule(Stamp const& stamp, int delay,
                                                   int horizonTicks) const {
     std::vector<float> steps;
     if (delay < 0)
@@ -115,7 +115,7 @@ std::vector<float> DevClockContract::stepSchedule(Stamp const& stamp, int delay,
     return steps;
 }
 
-uint64_t DevClockContract::hashSteps(std::vector<float> const& steps) const {
+uint64_t EbDevClockContract::hashSteps(std::vector<float> const& steps) const {
     uint64_t height = 14695981039346656037ull;
     auto mix = [&](uint64_t value) {
         height ^= value;
@@ -131,9 +131,9 @@ uint64_t DevClockContract::hashSteps(std::vector<float> const& steps) const {
     return height;
 }
 
-uint64_t DevClockContract::stepScheduleHash() const {
+uint64_t EbDevClockContract::stepScheduleHash() const {
     // Reference table — must stay in sync with selfCheck cases.
-    class Row {
+    class EbClockScheduleRow {
     public:
         bool midStep;
         float firstDt;
@@ -143,7 +143,7 @@ uint64_t DevClockContract::stepScheduleHash() const {
 
     private:
     };
-    Row const rows[] = {
+    EbClockScheduleRow const rows[] = {
         {false, 1.f / 240.f, 1.f / 240.f, 0, 4},
         {false, 1.f / 240.f, 1.f / 240.f, 2, 8},
         {true, 1.f / 480.f, 1.f / 240.f, 0, 4},
@@ -158,7 +158,7 @@ uint64_t DevClockContract::stepScheduleHash() const {
         height ^= value;
         height *= 1099511628211ull;
     };
-    mix(static_cast<uint64_t>(DevClockContract::kSchema));
+    mix(static_cast<uint64_t>(EbDevClockContract::kSchema));
     for (auto const& row : rows) {
         Stamp st;
         st.simDt = row.simDt;
@@ -178,12 +178,12 @@ uint64_t DevClockContract::stepScheduleHash() const {
     return height;
 }
 
-DevClockContract::Stamp DevClockContract::makeStamp(int attemptTick, bool midStep, bool continuous,
+EbDevClockContract::Stamp EbDevClockContract::makeStamp(int attemptTick, bool midStep, bool continuous,
                                                     float simDt, float firstDt, float wallDt,
                                                     float timeWarp, DevSimPathId livePath) const {
     Stamp st;
-    st.clockSchema = DevClockContract::kSchema;
-    st.timeBasis = DevClockContract::kTimeBasisPhysicsTick;
+    st.clockSchema = EbDevClockContract::kSchema;
+    st.timeBasis = EbDevClockContract::kTimeBasisPhysicsTick;
     st.attemptTick = attemptTick < 0 ? 0 : attemptTick;
     st.midStep = midStep;
     st.continuous = continuous;
@@ -191,19 +191,19 @@ DevClockContract::Stamp DevClockContract::makeStamp(int attemptTick, bool midSte
     st.firstDt = firstDt;
     st.wallDt = wallDt;
     st.timeWarp = timeWarp > 0.f ? timeWarp : 1.f;
-    st.simTps = AssistClock::get().simTpsFromDt(simDt);
-    st.speedScaleSuspect = AssistClock::get().speedScaleSuspect(st.timeWarp, st.simTps);
+    st.simTps = EbAssistClock::get().simTpsFromDt(simDt);
+    st.speedScaleSuspect = EbAssistClock::get().speedScaleSuspect(st.timeWarp, st.simTps);
     st.effectTick = this->effectTick(st.attemptTick, midStep, continuous);
     st.liveSimPathId = livePath;
     st.valid = true;
     return st;
 }
 
-DevClockContract::Reject DevClockContract::validate(Stamp const& stamp) const {
-    if (stamp.clockSchema != DevClockContract::kSchema) {
+EbDevClockContract::Reject EbDevClockContract::validate(Stamp const& stamp) const {
+    if (stamp.clockSchema != EbDevClockContract::kSchema) {
         return Reject::UnknownSchema;
     }
-    if (stamp.timeBasis != DevClockContract::kTimeBasisPhysicsTick) {
+    if (stamp.timeBasis != EbDevClockContract::kTimeBasisPhysicsTick) {
         return Reject::BadTimeBasis;
     }
     if (!(stamp.simDt > 0.f) || !std::isfinite(stamp.simDt)) {
@@ -222,7 +222,7 @@ DevClockContract::Reject DevClockContract::validate(Stamp const& stamp) const {
     return Reject::Ok;
 }
 
-bool DevClockContract::selfCheck(std::string& report) {
+bool EbDevClockContract::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -234,7 +234,7 @@ bool DevClockContract::selfCheck(std::string& report) {
         report += name;
     };
 
-    DevClockContract& clock = DevClockContract::get();
+    EbDevClockContract& clock = EbDevClockContract::get();
 
     expect(clock.effectTick(10, true, false) == 10, "eff-discrete-mid");
     expect(clock.effectTick(10, false, false) == 11, "eff-discrete-between");

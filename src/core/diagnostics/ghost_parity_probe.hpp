@@ -9,7 +9,7 @@
 // Anchors live in reserved ShadowSimulator parity snapshot slots so plan()
 // captures cannot clobber them. ε is frozen in AssistContracts140 — remeasure
 // only in a new mod version (AssistRealMetrics tracks max|dxy| for that).
-class GhostParityProbe {
+class EbGhostParityProbe {
 public:
     static constexpr int kPoseCap = 240;
     static constexpr int kHorizonTicks = 48;
@@ -20,7 +20,7 @@ public:
     static constexpr float kDefaultEpsY = 12.f;
     static constexpr int kMaxProbeUs = 900;
 
-    static GhostParityProbe& get();
+    static EbGhostParityProbe& get();
 
     void resetAttempt();
     void onLevelQuit();
@@ -50,7 +50,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    GhostParityProbe() = default;
+    friend class EbServiceStore;
+
+    EbGhostParityProbe() = default;
 
     class PoseSample {
     public:

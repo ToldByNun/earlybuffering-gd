@@ -1,3 +1,4 @@
+#include "../app/class_manager.hpp"
 #include "perf_trace.hpp"
 #include "../config/stage_config.hpp"
 #include "assist_log.hpp"
@@ -6,30 +7,29 @@
 #include <fmt/format.h>
 #include <fstream>
 
-PerfTrace& PerfTrace::get() {
-    static PerfTrace inst;
-    return inst;
+EbPerfTrace& EbPerfTrace::get() {
+    return EbClassManager::get().service<EbPerfTrace>();
 }
 
-PerfTrace::Scope::Scope(char const* name) {
+EbPerfTrace::Scope::Scope(char const* name) {
     this->m_name = name;
-    if (!PerfTrace::get().enabled())
+    if (!EbPerfTrace::get().enabled())
         return;
     this->m_active = true;
-    PerfTrace::get().begin(name);
+    EbPerfTrace::get().begin(name);
 }
 
-PerfTrace::Scope::~Scope() {
+EbPerfTrace::Scope::~Scope() {
     if (!this->m_active)
         return;
-    PerfTrace::get().end(this->m_name);
+    EbPerfTrace::get().end(this->m_name);
 }
 
-bool PerfTrace::enabled() const {
+bool EbPerfTrace::enabled() const {
     return this->m_enabled;
 }
 
-void PerfTrace::setEnabled(bool on) {
+void EbPerfTrace::setEnabled(bool on) {
     if (this->m_enabled == on)
         return;
     this->m_enabled = on;
@@ -39,14 +39,14 @@ void PerfTrace::setEnabled(bool on) {
             "=== PerfTrace ON spike>{}us hotSection>{}us ===", static_cast<long long>(kSpikeUs),
             static_cast<long long>(kHotSectionUs)));
         this->flush("enable");
-        AssistLog::info(fmt::format("PerfTrace ON → {}", logPath()));
+        EbAssistLog::info(fmt::format("PerfTrace ON → {}", logPath()));
         return;
     }
     this->flush("disable");
-    AssistLog::info("PerfTrace OFF");
+    EbAssistLog::info("PerfTrace OFF");
 }
 
-std::string PerfTrace::logPath() {
+std::string EbPerfTrace::logPath() {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
         return (mod->getSaveDir() / "earlybuffer-perf.log").string();
@@ -54,7 +54,7 @@ std::string PerfTrace::logPath() {
     return {};
 }
 
-void PerfTrace::reset() {
+void EbPerfTrace::reset() {
     this->m_tickOpen = false;
     this->m_ticksSinceSummary = 0;
     this->m_spikeCount = 0;
@@ -67,7 +67,7 @@ void PerfTrace::reset() {
     this->m_current = {};
 }
 
-void PerfTrace::writeToFile(std::string const& text) {
+void EbPerfTrace::writeToFile(std::string const& text) {
     if (text.empty())
         return;
     auto const path = logPath();
@@ -81,7 +81,7 @@ void PerfTrace::writeToFile(std::string const& text) {
         out << '\n';
 }
 
-void PerfTrace::appendLine(std::string const& line) {
+void EbPerfTrace::appendLine(std::string const& line) {
     this->m_pending += line;
     this->m_pending.push_back('\n');
     ++this->m_pendingLines;
@@ -93,7 +93,7 @@ void PerfTrace::appendLine(std::string const& line) {
     }
 }
 
-void PerfTrace::flush(char const* reason) {
+void EbPerfTrace::flush(char const* reason) {
     if (!this->m_pending.empty()) {
         this->writeToFile(this->m_pending);
         this->m_pending.clear();
@@ -104,7 +104,7 @@ void PerfTrace::flush(char const* reason) {
     }
 }
 
-void PerfTrace::note(char const* event, std::string const& detail) {
+void EbPerfTrace::note(char const* event, std::string const& detail) {
     if (!this->m_enabled || !event)
         return;
     if (detail.empty()) {
@@ -114,7 +114,7 @@ void PerfTrace::note(char const* event, std::string const& detail) {
     this->appendLine(fmt::format("NOTE {} | {}", event, detail));
 }
 
-void PerfTrace::beginTick(int attemptTick, float deltaTime) {
+void EbPerfTrace::beginTick(int attemptTick, float deltaTime) {
     if (!this->m_enabled)
         return;
 
@@ -142,7 +142,7 @@ void PerfTrace::beginTick(int attemptTick, float deltaTime) {
     }
 }
 
-void PerfTrace::begin(char const* section) {
+void EbPerfTrace::begin(char const* section) {
     if (!this->m_enabled || !section)
         return;
 
@@ -161,7 +161,7 @@ void PerfTrace::begin(char const* section) {
     ++this->m_stackDepth;
 }
 
-void PerfTrace::end(char const* section) {
+void EbPerfTrace::end(char const* section) {
     if (!this->m_enabled || !section)
         return;
 
@@ -180,7 +180,7 @@ void PerfTrace::end(char const* section) {
         // sub-5ms plan/evacuate noise — AssistLog::info every click hitchs FPS.
         constexpr int64_t kOrphanConsoleUs = 5000;
         if (elapsedMicroseconds >= kOrphanConsoleUs) {
-            AssistLog::info(line);
+            EbAssistLog::info(line);
         }
         return;
     }
@@ -205,7 +205,7 @@ void PerfTrace::end(char const* section) {
     }
 }
 
-void PerfTrace::dumpSpike(TickSample const& tick) {
+void EbPerfTrace::dumpSpike(TickSample const& tick) {
     ++this->m_spikeCount;
 
     std::string parts;
@@ -221,14 +221,14 @@ void PerfTrace::dumpSpike(TickSample const& tick) {
                     this->m_spikeCount, tick.attemptTick, tick.totalUs / 1000.0,
                     tick.gapUs / 1000.0, tick.dt, parts.empty() ? " (no sections)" : parts);
     this->appendLine(line);
-    AssistLog::info(line);
+    EbAssistLog::info(line);
     // Batch to disk — sync flush on every spike hitch (saveSound ~4ms + flush).
     if ((this->m_spikeCount % 8) == 0 || this->m_pendingLines >= 80) {
         this->flush("spike");
     }
 }
 
-void PerfTrace::dumpPeriodicSummary() {
+void EbPerfTrace::dumpPeriodicSummary() {
     if (this->m_ringCount <= 0)
         return;
 
@@ -238,7 +238,7 @@ void PerfTrace::dumpPeriodicSummary() {
     int64_t maxGap = 0;
     int count = this->m_ringCount;
 
-    class Agg {
+    class EbAgg {
     public:
         char const* name = nullptr;
         int64_t sum = 0;
@@ -247,7 +247,7 @@ void PerfTrace::dumpPeriodicSummary() {
 
     private:
     };
-    Agg aggs[kMaxSectionsPerTick]{};
+    EbAgg aggs[kMaxSectionsPerTick]{};
     int aggCount = 0;
 
     for (int index = 0; index < count; ++index) {
@@ -305,14 +305,14 @@ void PerfTrace::dumpPeriodicSummary() {
                     (sumGap / std::max(1, count)) / 1000.0, maxGap / 1000.0, this->m_spikeCount,
                     parts.empty() ? " (none)" : parts);
     this->appendLine(line);
-    AssistLog::info(line);
+    EbAssistLog::info(line);
     // Summary every ~120 ticks; flush only when buffer is chunky.
     if (this->m_pendingLines >= 40) {
         this->flush("summary");
     }
 }
 
-void PerfTrace::endTick() {
+void EbPerfTrace::endTick() {
     if (!this->m_enabled || !this->m_tickOpen)
         return;
     this->m_tickOpen = false;

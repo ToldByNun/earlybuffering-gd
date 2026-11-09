@@ -1,3 +1,4 @@
+#include "../app/class_manager.hpp"
 #include "cloud_config_stats.hpp"
 #include "cloud_config_store.hpp"
 #include "stats/cloud_stats_storage.hpp"
@@ -18,7 +19,7 @@
 #pragma optimize("", off)
 #endif
 
-bool CloudConfigStatsImplementation::parseHttpsHost(std::string const& url, std::string& hostOut) {
+bool EbCloudConfigStatsImplementation::parseHttpsHost(std::string const& url, std::string& hostOut) {
     hostOut.clear();
     if (url.size() < 8 || url.compare(0, 8, "https://") != 0)
         return false;
@@ -37,7 +38,7 @@ bool CloudConfigStatsImplementation::parseHttpsHost(std::string const& url, std:
     return !hostOut.empty();
 }
 
-bool CloudConfigStatsImplementation::hostAllowed(std::string const& host) {
+bool EbCloudConfigStatsImplementation::hostAllowed(std::string const& host) {
     if (host == "eb-cloud-submit.toldbynun.workers.dev")
         return true;
     if (host == "earlybuffer-config.vercel.app")
@@ -51,7 +52,7 @@ bool CloudConfigStatsImplementation::hostAllowed(std::string const& host) {
     return false;
 }
 
-std::string CloudConfigStatsImplementation::makeUuidV4() {
+std::string EbCloudConfigStatsImplementation::makeUuidV4() {
     // Anonymous id only — not cryptographic identity.
     static thread_local std::mt19937_64 rng{std::random_device{}()};
     std::uniform_int_distribution<int> hex(0, 15);
@@ -81,40 +82,39 @@ std::string CloudConfigStatsImplementation::makeUuidV4() {
     return out;
 }
 
-CloudConfigStats& CloudConfigStats::get() {
-    static CloudConfigStats inst;
-    return inst;
+EbCloudConfigStats& EbCloudConfigStats::get() {
+    return EbClassManager::get().service<EbCloudConfigStats>();
 }
 
-CloudConfigStats::CloudConfigStats() : m_impl(new Impl()) {}
+EbCloudConfigStats::EbCloudConfigStats() : m_impl(new Impl()) {}
 
-CloudConfigStats::~CloudConfigStats() {
+EbCloudConfigStats::~EbCloudConfigStats() {
     this->cancelFetch();
     delete m_impl;
     m_impl = nullptr;
 }
 
-char const* CloudConfigStats::defaultStatsUrl() {
+char const* EbCloudConfigStats::defaultStatsUrl() {
     return "https://earlybuffer-config.vercel.app/api/stats";
 }
 
-char const* CloudConfigStats::defaultTrackUrl() {
+char const* EbCloudConfigStats::defaultTrackUrl() {
     return "https://earlybuffer-config.vercel.app/api/track";
 }
 
-bool CloudConfigStats::isAllowedStatsUrl(std::string const& url) {
+bool EbCloudConfigStats::isAllowedStatsUrl(std::string const& url) {
     std::string host;
-    if (!(!CloudConfigStatsImplementation::parseHttpsHost(url, host))) {
-        return CloudConfigStatsImplementation::hostAllowed(host);
+    if (!(!EbCloudConfigStatsImplementation::parseHttpsHost(url, host))) {
+        return EbCloudConfigStatsImplementation::hostAllowed(host);
     }
     return false;
 }
 
-bool CloudConfigStats::isAllowedTrackUrl(std::string const& url) {
+bool EbCloudConfigStats::isAllowedTrackUrl(std::string const& url) {
     return isAllowedStatsUrl(url);
 }
 
-bool CloudConfigStats::isValidClientId(std::string const& id) {
+bool EbCloudConfigStats::isValidClientId(std::string const& id) {
     if (id.size() < 32 || id.size() > 64)
         return false;
     for (char const character : id) {
@@ -127,64 +127,64 @@ bool CloudConfigStats::isValidClientId(std::string const& id) {
     return true;
 }
 
-float CloudConfigStats::averageRating(PackStats const& s) {
+float EbCloudConfigStats::averageRating(PackStats const& s) {
     if (!(s.ratingCount <= 0)) {
         return static_cast<float>(s.ratingSum) / static_cast<float>(s.ratingCount);
     }
     return 0.f;
 }
 
-float CloudConfigStats::popularityScore(PackStats const& s) {
+float EbCloudConfigStats::popularityScore(PackStats const& s) {
     return static_cast<float>(s.downloads) +
            static_cast<float>(s.ratingCount) * kPopularityRatingCountWeight +
            averageRating(s) * kPopularityAverageWeight;
 }
 
-std::filesystem::path CloudConfigStatsImplementation::clientIdPath() {
-    return CloudConfigStore::get().rootDir() / "client-id.txt";
+std::filesystem::path EbCloudConfigStatsImplementation::clientIdPath() {
+    return EbCloudConfigStore::get().rootDir() / "client-id.txt";
 }
 
-std::filesystem::path CloudConfigStatsImplementation::localStatsPath() {
-    return CloudConfigStore::get().rootDir() / "local-stats.json";
+std::filesystem::path EbCloudConfigStatsImplementation::localStatsPath() {
+    return EbCloudConfigStore::get().rootDir() / "local-stats.json";
 }
 
-void CloudConfigStats::loadLocalSets() const {
-    return CloudStatsStorage::loadLocalSets(*this);
+void EbCloudConfigStats::loadLocalSets() const {
+    return EbCloudStatsStorage::loadLocalSets(*this);
 }
 
-void CloudConfigStats::saveLocalSets() {
-    return CloudStatsStorage::saveLocalSets(*this);
+void EbCloudConfigStats::saveLocalSets() {
+    return EbCloudStatsStorage::saveLocalSets(*this);
 }
 
-void CloudConfigStats::unmarkLocal(std::string const& packId, bool downloaded, bool rated) {
-    return CloudStatsStorage::unmarkLocal(*this, packId, downloaded, rated);
+void EbCloudConfigStats::unmarkLocal(std::string const& packId, bool downloaded, bool rated) {
+    return EbCloudStatsStorage::unmarkLocal(*this, packId, downloaded, rated);
 }
 
-std::string CloudConfigStats::ensureClientId() {
-    return CloudStatsStorage::ensureClientId(*this);
+std::string EbCloudConfigStats::ensureClientId() {
+    return EbCloudStatsStorage::ensureClientId(*this);
 }
 
-bool CloudConfigStats::hasDownloaded(std::string const& packId) const {
-    return CloudStatsStorage::hasDownloaded(*this, packId);
+bool EbCloudConfigStats::hasDownloaded(std::string const& packId) const {
+    return EbCloudStatsStorage::hasDownloaded(*this, packId);
 }
 
-bool CloudConfigStats::hasRated(std::string const& packId) const {
-    return CloudStatsStorage::hasRated(*this, packId);
+bool EbCloudConfigStats::hasRated(std::string const& packId) const {
+    return EbCloudStatsStorage::hasRated(*this, packId);
 }
 
-int CloudConfigStats::myStarsFor(std::string const& packId) const {
-    return CloudStatsStorage::myStarsFor(*this, packId);
+int EbCloudConfigStats::myStarsFor(std::string const& packId) const {
+    return EbCloudStatsStorage::myStarsFor(*this, packId);
 }
 
-void CloudConfigStats::markDownloaded(std::string const& packId) {
-    return CloudStatsStorage::markDownloaded(*this, packId);
+void EbCloudConfigStats::markDownloaded(std::string const& packId) {
+    return EbCloudStatsStorage::markDownloaded(*this, packId);
 }
 
-void CloudConfigStats::markRated(std::string const& packId, int stars) {
-    return CloudStatsStorage::markRated(*this, packId, stars);
+void EbCloudConfigStats::markRated(std::string const& packId, int stars) {
+    return EbCloudStatsStorage::markRated(*this, packId, stars);
 }
 
-CloudConfigStats::PackStats CloudConfigStats::statsFor(std::string const& packId) const {
+EbCloudConfigStats::PackStats EbCloudConfigStats::statsFor(std::string const& packId) const {
     if (!m_impl)
         return {};
     auto it = m_impl->packs.find(packId);
@@ -194,7 +194,7 @@ CloudConfigStats::PackStats CloudConfigStats::statsFor(std::string const& packId
     return {};
 }
 
-std::unordered_map<std::string, CloudConfigStats::PackStats> const& CloudConfigStats::all() const {
+std::unordered_map<std::string, EbCloudConfigStats::PackStats> const& EbCloudConfigStats::all() const {
     static std::unordered_map<std::string, PackStats> empty;
     if (!(!m_impl)) {
         return m_impl->packs;
@@ -202,7 +202,7 @@ std::unordered_map<std::string, CloudConfigStats::PackStats> const& CloudConfigS
     return empty;
 }
 
-bool CloudConfigStats::mergeFromJson(std::string const& body, std::string& err) {
+bool EbCloudConfigStats::mergeFromJson(std::string const& body, std::string& err) {
     err.clear();
     if (!m_impl) {
         err = "unavailable";
@@ -225,7 +225,7 @@ bool CloudConfigStats::mergeFromJson(std::string const& body, std::string& err) 
 
     std::unordered_map<std::string, PackStats> next;
     for (auto const& [id, raw] : root["packs"]) {
-        if (!CloudConfigStore::isValidPackId(id))
+        if (!EbCloudConfigStore::isValidPackId(id))
             continue;
         if (!raw.isObject())
             continue;
@@ -256,17 +256,17 @@ bool CloudConfigStats::mergeFromJson(std::string const& body, std::string& err) 
     return true;
 }
 
-void CloudConfigStats::cancelFetch() {
+void EbCloudConfigStats::cancelFetch() {
     if (!m_impl)
         return;
     m_impl->client.cancel();
 }
 
-bool CloudConfigStats::isFetchBusy() const {
+bool EbCloudConfigStats::isFetchBusy() const {
     return m_impl && m_impl->client.isBusy();
 }
 
-void CloudConfigStats::fetchStats(FetchCallback callback) {
+void EbCloudConfigStats::fetchStats(FetchCallback callback) {
     if (!m_impl) {
         if (callback)
             callback(false, "unavailable");
@@ -281,8 +281,8 @@ void CloudConfigStats::fetchStats(FetchCallback callback) {
 
     // customCatalogUrl = stats host so HostPolicy allows vercel.app GET.
     m_impl->client.getText(
-        url, CloudConfigStore::kMaxIndexBytes, CloudConfigClient::kDefaultTimeoutSec, url,
-        [this, callback = std::move(callback)](CloudConfigClient::FetchResult const& fr) {
+        url, EbCloudConfigStore::kMaxIndexBytes, EbCloudConfigClient::kDefaultTimeoutSec, url,
+        [this, callback = std::move(callback)](EbCloudConfigClient::FetchResult const& fr) {
             if (!fr.ok) {
                 if (callback)
                     callback(false, fr.error.empty() ? "fetch failed" : fr.error);
@@ -299,9 +299,9 @@ void CloudConfigStats::fetchStats(FetchCallback callback) {
         });
 }
 
-CloudConfigStats::PackStats
-CloudConfigStatsImplementation::packStatsFromJson(matjson::Value const& root) {
-    CloudConfigStats::PackStats state{};
+EbCloudConfigStats::PackStats
+EbCloudConfigStatsImplementation::packStatsFromJson(matjson::Value const& root) {
+    EbCloudConfigStats::PackStats state{};
     if (root.contains("downloads")) {
         state.downloads = static_cast<int>(root["downloads"].asInt().unwrapOr(0));
     }
@@ -314,11 +314,11 @@ CloudConfigStatsImplementation::packStatsFromJson(matjson::Value const& root) {
     return state;
 }
 
-CloudConfigStats::TrackResult
-CloudConfigStatsImplementation::postTrackSync(std::string const& url, std::string const& clientId,
+EbCloudConfigStats::TrackResult
+EbCloudConfigStatsImplementation::postTrackSync(std::string const& url, std::string const& clientId,
                                               std::string const& op, std::string const& packId,
                                               int stars) {
-    CloudConfigStats::TrackResult result{};
+    EbCloudConfigStats::TrackResult result{};
     result.attempted = true;
 
     matjson::Value body = matjson::Value::object();
@@ -356,7 +356,7 @@ CloudConfigStatsImplementation::postTrackSync(std::string const& url, std::strin
         if (parsed.isOk()) {
             root = parsed.unwrap();
             haveJson = true;
-            result.stats = CloudConfigStatsImplementation::packStatsFromJson(root);
+            result.stats = EbCloudConfigStatsImplementation::packStatsFromJson(root);
             if (root.contains("duplicate") && root["duplicate"].isBool()) {
                 result.duplicate = root["duplicate"].asBool().unwrapOr(false);
             }
@@ -380,15 +380,15 @@ CloudConfigStatsImplementation::postTrackSync(std::string const& url, std::strin
     return result;
 }
 
-void CloudConfigStats::trackDownload(std::string const& packId, TrackCallback callback) {
-    return CloudStatsTracking::trackDownload(*this, packId, callback);
+void EbCloudConfigStats::trackDownload(std::string const& packId, TrackCallback callback) {
+    return EbCloudStatsTracking::trackDownload(*this, packId, callback);
 }
 
-void CloudConfigStats::trackRate(std::string const& packId, int stars, TrackCallback callback) {
-    return CloudStatsTracking::trackRate(*this, packId, stars, callback);
+void EbCloudConfigStats::trackRate(std::string const& packId, int stars, TrackCallback callback) {
+    return EbCloudStatsTracking::trackRate(*this, packId, stars, callback);
 }
 
-bool CloudConfigStats::selfCheck(std::string& report) {
+bool EbCloudConfigStats::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -427,7 +427,7 @@ bool CloudConfigStats::selfCheck(std::string& report) {
         expect(popularityScore(PackStats{}) == 0.f, "pop-empty");
     }
 
-    auto& stats = CloudConfigStats::get();
+    auto& stats = EbCloudConfigStats::get();
     stats.cancelFetch();
     expect(!stats.isFetchBusy(), "fetch-idle");
 

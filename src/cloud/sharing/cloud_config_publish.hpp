@@ -6,7 +6,7 @@
 
 // Optional maintainer publish: GitHub Contents API → earlybuffer-configs.
 // Requires local PAT setting (never bundled / never exported). No anonymous upload.
-class CloudConfigPublish {
+class EbCloudConfigPublish {
 public:
     class Result {
     public:
@@ -48,7 +48,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigPublish() = default;
+    EbCloudConfigPublish() = default;
 
     static bool isValidRepoSlug(std::string const& slug);
     static std::string contentsApiUrl(std::string const& repo, std::string const& path);
@@ -66,7 +66,7 @@ private:
 #include <chrono>
 #include <ctime>
 
-class CloudConfigPublishImplementation {
+class EbCloudConfigPublishImplementation {
 public:
     static bool httpGetJson(std::string const& url, std::string const& token, matjson::Value& out,
                             int& code, std::string& err);
@@ -75,17 +75,17 @@ public:
                             std::string& err);
     static std::string b64Encode(std::string const& raw);
     static bool b64Decode(std::string const& b64, std::string& out, std::string& err);
-    static matjson::Value packEntryObject(CloudConfigPublish::PackMeta const& meta,
+    static matjson::Value packEntryObject(EbCloudConfigPublish::PackMeta const& meta,
                                           std::string const& sha256, size_t size);
 
 private:
-    friend class CloudConfigPublish;
+    friend class EbCloudConfigPublish;
 
     inline static constexpr char const* kDefaultRepo = "ToldByNun/earlybuffer-configs";
     inline static constexpr char const* kBranch = "main";
     inline static constexpr int kTimeoutSec = 25;
 
-    CloudConfigPublishImplementation() = delete;
+    EbCloudConfigPublishImplementation() = delete;
 };
 
 #endif

@@ -12,7 +12,7 @@ int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& inp
         int const deathTick = input.deathTicks[delay];
         bool const diedInWindow = deathTick < horizon;
         int const ticksRan = std::min(deathTick + 1, horizon);
-        if (MissAssistContracts::survivesObservation(diedInWindow, false, ticksRan, horizon,
+        if (EbMissAssistContracts::survivesObservation(diedInWindow, false, ticksRan, horizon,
                                                      false)) {
             return delay;
         }
@@ -29,7 +29,7 @@ int WaveInputWindowRegressionTests::run() {
         {151, {62, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 10, 10}, 0},
     };
     int failures = 0;
-    int const horizon = 12 + MissAssistContracts::continuousLookAhead(12);
+    int const horizon = 12 + EbMissAssistContracts::continuousLookAhead(12);
     for (auto const& input : inputs) {
         int const chosen = chooseRecordedDelay(input, horizon);
         if (chosen != input.expectedDelay || chooseRecordedDelay(input, 96) != -1) {
@@ -38,11 +38,11 @@ int WaveInputWindowRegressionTests::run() {
         }
     }
     // Budget-truncated and unknown paths must not become saving candidates.
-    failures += MissAssistContracts::survivesObservation(false, false, 23, 24, false);
-    failures += MissAssistContracts::survivesObservation(false, true, 24, 24, false);
-    failures += MissAssistContracts::survivesObservation(true, false, 24, 24, true);
-    failures += MissAssistContracts::continuousLookAhead(4) != 4;
-    failures += MissAssistContracts::continuousLookAhead(0) != 1;
+    failures += EbMissAssistContracts::survivesObservation(false, false, 23, 24, false);
+    failures += EbMissAssistContracts::survivesObservation(false, true, 24, 24, false);
+    failures += EbMissAssistContracts::survivesObservation(true, false, 24, 24, true);
+    failures += EbMissAssistContracts::continuousLookAhead(4) != 4;
+    failures += EbMissAssistContracts::continuousLookAhead(0) != 1;
     std::cout << "Wave recorded-input regression: " << failures << " failures\n";
     return failures ? 1 : 0;
 }

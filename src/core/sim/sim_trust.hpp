@@ -6,9 +6,9 @@
 
 // Attempt + spot trust gate for PerfectAssist (Commit 1 subset).
 // Later commits add TW-ready / hard-unknown flags without changing callers.
-class SimTrust {
+class EbSimTrust {
 public:
-    static SimTrust& get();
+    static EbSimTrust& get();
 
     void resetAttempt();
     void onLevelQuit();
@@ -30,7 +30,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    SimTrust() = default;
+    friend class EbServiceStore;
+
+    EbSimTrust() = default;
 
     bool m_parityDrift = false;
 };

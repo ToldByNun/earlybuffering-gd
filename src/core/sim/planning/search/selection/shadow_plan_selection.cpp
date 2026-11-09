@@ -16,7 +16,7 @@
 #include <cmath>
 #include <vector>
 
-bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
+bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
     bool anyActivation = false;
     for (auto const& candidate : context.cands) {
         if (candidate.activatedRing)
@@ -81,11 +81,11 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
             context.plan.jumpTick = context.cands[0].jumpTick;
             context.plan.activatedRing = context.cands[0].activatedRing;
             context.plan.threatZone = context.zone;
-            AssistLog::debug(fmt::format(
+            EbAssistLog::debug(fmt::format(
                 "PLAN id={} Pass wave-futile-delay verdict={} bin={} gain={:.1f} budgetHit={}",
-                context.plan.planId, AssistVerdict::name(context.plan.reason), bestBin, bestGain,
+                context.plan.planId, EbAssistVerdict::name(context.plan.reason), bestBin, bestGain,
                 context.plan.budgetHit));
-            context.publishLedger(0, true, DevRejectLedger::EarlyExit::WaveFutile);
+            context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveFutile);
             return true;
         }
     }
@@ -120,7 +120,7 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
             int const releaseAfter = context.cands[static_cast<size_t>(pick)].requireHold ? 40 : -1;
             if (!context.options.robustJitter)
                 return pick;
-            if (!PrefixSim::jitterAttemptAllowed(attempts, PrefixSim::kJitterTopK)) {
+            if (!EbPrefixSim::jitterAttemptAllowed(attempts, EbPrefixSim::kJitterTopK)) {
                 // Top-2 already failed jitter — stop (do not burn the pool).
                 return -1;
             }
@@ -153,9 +153,9 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
 
     // Live choose: v1 = AssistPickV1 (latest-robust); v2 = AssistPickV2 (foresight-first).
     bool const usePickV2 = !context.options.legacyPick;
-    std::vector<AssistPickV1::CandView> pickViewsV1(
+    std::vector<EbAssistPickV1::CandView> pickViewsV1(
         static_cast<size_t>(std::max(0, context.limit)) + 1u);
-    std::vector<AssistPickV2::CandView> pickViewsV2(
+    std::vector<EbAssistPickV2::CandView> pickViewsV2(
         static_cast<size_t>(std::max(0, context.limit)) + 1u);
     auto syncPickViews = [&]() {
         for (int delay = 0; delay <= context.limit; ++delay) {
@@ -179,19 +179,19 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
     auto pickEarliestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         syncPickViews();
         if (usePickV2) {
-            return AssistPickV2::pickEarliestRobust(pickViewsV2.data(), context.limit,
+            return EbAssistPickV2::pickEarliestRobust(pickViewsV2.data(), context.limit,
                                                     context.robustK, pool, needActivation);
         }
-        return AssistPickV1::pickEarliestRobust(pickViewsV1.data(), context.limit, context.robustK,
+        return EbAssistPickV1::pickEarliestRobust(pickViewsV1.data(), context.limit, context.robustK,
                                                 pool, needActivation);
     };
     auto pickLatestRobust = [&](std::vector<int> const& pool, bool needActivation) -> int {
         syncPickViews();
         if (usePickV2) {
-            return AssistPickV2::pickLatestRobust(pickViewsV2.data(), context.limit,
+            return EbAssistPickV2::pickLatestRobust(pickViewsV2.data(), context.limit,
                                                   context.robustK, pool, needActivation);
         }
-        return AssistPickV1::pickLatestRobust(pickViewsV1.data(), context.limit, context.robustK,
+        return EbAssistPickV1::pickLatestRobust(pickViewsV1.data(), context.limit, context.robustK,
                                               pool, needActivation);
     };
     auto applyChosenMeta = [&](int pick) {
@@ -230,15 +230,15 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
         }
     } else if (usePickV2) {
         // V2 foresight-first (Hybrid bake wins never reach this Live path).
-        AssistPickV2::Context ctx;
+        EbAssistPickV2::Context ctx;
         ctx.idleSafer = context.plan.idleSafer;
         ctx.ascentUseful = context.plan.ascentUseful;
         ctx.longForesightNeedSearch = context.plan.longForesightNeedSearch;
         ctx.latencyWeight = context.latencyWeight;
 
-        auto runV2Choose = [&]() -> AssistPickV2::Result {
+        auto runV2Choose = [&]() -> EbAssistPickV2::Result {
             syncPickViews();
-            return AssistPickV2::choose(pickViewsV2.data(), context.limit, context.robustK, false,
+            return EbAssistPickV2::choose(pickViewsV2.data(), context.limit, context.robustK, false,
                                         -1, -1, ctx);
         };
 
@@ -263,7 +263,7 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
                 context.plan.nowIsSafe = true;
             }
         }
-        AssistLog::debug(fmt::format(
+        EbAssistLog::debug(fmt::format(
             "PLAN id={} pickV2 foresight chosen={} pass={} idleSafer={} lfSearch={} ascent={}",
             context.plan.planId, context.chosen, context.doPass ? 1 : 0,
             context.plan.idleSafer ? 1 : 0, context.plan.longForesightNeedSearch ? 1 : 0,
@@ -304,7 +304,7 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
             if (ch.toggleUnknown || (ch.unknownTrunc && context.hadToggleTargets)) {
                 context.sawToggleUnknown = true;
             }
-            AssistLog::debug(
+            EbAssistLog::debug(
                 fmt::format("PLAN id={} reject lethal/unknown Delay +{} → Pass toggleUnk={}",
                             context.plan.planId, context.chosen, context.sawToggleUnknown ? 1 : 0));
             context.chosen = -1;
@@ -316,13 +316,13 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
         // Commit 11: never soft-trust budgetHit into Delay via partial actMin.
         if (context.plan.budgetHit && actMin >= 0 && actMin <= context.limit &&
             context.cands[static_cast<size_t>(actMin)].viable &&
-            PerfectAssistPolicy::allowArmDelay(true, context.plan.budgetHit,
+            EbPerfectAssistPolicy::allowArmDelay(true, context.plan.budgetHit,
                                                /*softTrustPartial=*/true)) {
             context.chosen = actMin;
             context.doPass = false;
             applyChosenMeta(context.chosen);
             context.plan.requireOrb = true;
-            AssistLog::debug(fmt::format("PLAN id={} budget-partial actMin={} pick={}",
+            EbAssistLog::debug(fmt::format("PLAN id={} budget-partial actMin={} pick={}",
                                          context.plan.planId, actMin, context.chosen));
         }
     }
@@ -344,18 +344,18 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
                 bool improves = !d0Ok;
                 if (d0Ok) {
                     improves = fc.surviveBin > context.cands[0].surviveBin ||
-                               fc.endX > context.cands[0].endX + ShadowSimulator::kFutileEndXGain;
+                               fc.endX > context.cands[0].endX + EbShadowSimulator::kFutileEndXGain;
                 }
-                if (PerfectAssistPolicy::interveneOk(d0Ok, true, improves)) {
+                if (EbPerfectAssistPolicy::interveneOk(d0Ok, true, improves)) {
                     context.chosen = forced;
                     context.doPass = false;
                     applyChosenMeta(context.chosen);
-                    AssistLog::debug(
+                    EbAssistLog::debug(
                         fmt::format("PLAN id={} idleSafer+ascent → Delay +{} (was Pass/hopeless)",
                                     context.plan.planId, context.chosen));
                 }
             } else {
-                AssistLog::debug(fmt::format("PLAN id={} idleSafer+ascent skip — no Alive later "
+                EbAssistLog::debug(fmt::format("PLAN id={} idleSafer+ascent skip — no Alive later "
                                              "(forced={} viable={} died={})",
                                              context.plan.planId, forced, fc.viable ? 1 : 0,
                                              fc.raw.died ? 1 : 0));
@@ -377,8 +377,8 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
     }
 
     // assist-verify=ab formerly coin-flipped Legacy vs New; now logs active pick.
-    if (StageConfig::assistVerifyAb()) {
-        AssistLog::debug(fmt::format("VERIFY id={} ab-noop pick={} chosen={} doPass={}",
+    if (EbStageConfig::assistVerifyAb()) {
+        EbAssistLog::debug(fmt::format("VERIFY id={} ab-noop pick={} chosen={} doPass={}",
                                      context.plan.planId, usePickV2 ? "v2" : "v1", context.chosen,
                                      context.doPass ? 1 : 0));
     }
@@ -400,8 +400,8 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
             latest = base.releaseAfter;
         }
 
-        for (int rel : ShadowSurvivalRules::HOLD_PROBE_RELEASES) {
-            if (tried >= ShadowSurvivalRules::HOLD_PROBE_MAX)
+        for (int rel : EbShadowSurvivalRules::HOLD_PROBE_RELEASES) {
+            if (tried >= EbShadowSurvivalRules::HOLD_PROBE_MAX)
                 break;
             if (context.tickBudget <= 0 || context.wallExceeded())
                 break;
@@ -414,12 +414,12 @@ bool ShadowPlanSelection::choose(ShadowPlanContext& context) {
             ++context.plan.candidatesTried;
 
             // Hold branch — same Delay-viable rule (soft bake vs Live Alive-only).
-            if (!ShadowSurvivalRules::runResultDelaySafe(result, context.zone, context.model,
+            if (!EbShadowSurvivalRules::runResultDelaySafe(result, context.zone, context.model,
                                                          context.real, context.requireAlive))
                 continue;
 
-            int const sTicks = ShadowSurvivalRules::rankingSurviveTicks(result);
-            int const sBin = ShadowSurvivalRules::surviveBinOf(sTicks);
+            int const sTicks = EbShadowSurvivalRules::rankingSurviveTicks(result);
+            int const sBin = EbShadowSurvivalRules::surviveBinOf(sTicks);
             if (earliest < 0 || rel < earliest)
                 earliest = rel;
             if (latest < 0 || rel > latest)

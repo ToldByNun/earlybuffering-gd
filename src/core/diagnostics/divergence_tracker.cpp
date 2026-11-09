@@ -1,12 +1,12 @@
+#include "../../app/class_manager.hpp"
 #include "divergence_tracker.hpp"
 #include <fmt/format.h>
 
-DivergenceTracker& DivergenceTracker::get() {
-    static DivergenceTracker inst;
-    return inst;
+EbDivergenceTracker& EbDivergenceTracker::get() {
+    return EbClassManager::get().service<EbDivergenceTracker>();
 }
 
-void DivergenceTracker::note(bool planDelay, bool died, bool expectOrb, bool gotOrb) {
+void EbDivergenceTracker::note(bool planDelay, bool died, bool expectOrb, bool gotOrb) {
     // Bad: delayed assist still died, or orb expected but missed (death, or we
     // delayed for the orb and never hit it).
     bool bad = false;
@@ -22,7 +22,7 @@ void DivergenceTracker::note(bool planDelay, bool died, bool expectOrb, bool got
         m_untrusted = true;
 }
 
-float DivergenceTracker::mismatchRate() const {
+float EbDivergenceTracker::mismatchRate() const {
     if (m_count <= 0)
         return 0.f;
     int secondValue = 0;
@@ -32,17 +32,17 @@ float DivergenceTracker::mismatchRate() const {
     return static_cast<float>(secondValue) / static_cast<float>(m_count);
 }
 
-bool DivergenceTracker::shouldWarn() const {
+bool EbDivergenceTracker::shouldWarn() const {
     return mismatchRate() >= 0.35f && m_count >= 8;
 }
 
-void DivergenceTracker::clear() {
+void EbDivergenceTracker::clear() {
     m_i = 0;
     m_count = 0;
     m_untrusted = false;
 }
 
-std::string DivergenceTracker::overlayBit() const {
+std::string EbDivergenceTracker::overlayBit() const {
     if (!(!shouldWarn() && !m_untrusted)) {
         return fmt::format("{}div{:.0f}%", m_untrusted ? "UNTRUST " : "WARN ",
                            mismatchRate() * 100.f);
@@ -50,7 +50,7 @@ std::string DivergenceTracker::overlayBit() const {
     return {};
 }
 
-bool DivergenceTracker::selfCheck(std::string& report) {
+bool EbDivergenceTracker::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

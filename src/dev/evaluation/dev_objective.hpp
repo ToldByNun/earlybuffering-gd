@@ -7,7 +7,7 @@
 #include <vector>
 
 // Pure objective functions over eval samples (Vertrag A). No PlayLayer.
-class DevObjective {
+class EbDevObjective {
 public:
     static constexpr int kSchema = 1;
 
@@ -98,7 +98,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    DevObjective() = delete;
+    EbDevObjective() = delete;
 
     static void applyClaimsGate(Result& r, Meta const& meta);
     static void fillIdealGate(Result& r, Meta const& meta, Kind kind, bool clearSetNonEmpty);

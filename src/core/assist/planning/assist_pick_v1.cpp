@@ -1,7 +1,7 @@
 #include "assist_pick_v1.hpp"
 #include <algorithm>
 
-bool AssistPickV1::neighborRobust(CandView const* cands, int limit, int robustK, int delay,
+bool EbAssistPickV1::neighborRobust(CandView const* cands, int limit, int robustK, int delay,
                                   bool needActivation) {
     if (!cands || delay < 0 || delay > limit)
         return false;
@@ -23,7 +23,7 @@ bool AssistPickV1::neighborRobust(CandView const* cands, int limit, int robustK,
     return true;
 }
 
-int AssistPickV1::pickEarliestRobust(CandView const* cands, int limit, int robustK,
+int EbAssistPickV1::pickEarliestRobust(CandView const* cands, int limit, int robustK,
                                      std::vector<int> const& pool, bool needActivation) {
     if (!cands || pool.empty() || limit < 0)
         return -1;
@@ -49,7 +49,7 @@ int AssistPickV1::pickEarliestRobust(CandView const* cands, int limit, int robus
     return -1;
 }
 
-int AssistPickV1::pickLatestRobust(CandView const* cands, int limit, int robustK,
+int EbAssistPickV1::pickLatestRobust(CandView const* cands, int limit, int robustK,
                                    std::vector<int> const& pool, bool needActivation) {
     if (!cands || pool.empty() || limit < 0)
         return -1;
@@ -76,7 +76,7 @@ int AssistPickV1::pickLatestRobust(CandView const* cands, int limit, int robustK
     return -1;
 }
 
-AssistPickV1::Result AssistPickV1::choose(CandView const* cands, int limit, int robustK,
+EbAssistPickV1::Result EbAssistPickV1::choose(CandView const* cands, int limit, int robustK,
                                           bool orbIntent, int actMin, int actMax) {
     Result output{};
     if (!cands || limit < 0)
@@ -121,7 +121,7 @@ AssistPickV1::Result AssistPickV1::choose(CandView const* cands, int limit, int 
     return output;
 }
 
-bool AssistPickV1::selfCheck(std::string& report) {
+bool EbAssistPickV1::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

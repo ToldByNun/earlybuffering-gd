@@ -3,16 +3,16 @@
 #include "../sim/shadow_simulator.hpp"
 #include <algorithm>
 
-BakeVerifier::Result BakeVerifier::verify(PlayLayer* layer, PlayerObject* player, bool down,
+EbBakeVerifier::Result EbBakeVerifier::verify(PlayLayer* layer, PlayerObject* player, bool down,
                                           int delayTicks, int limit, float deltaTime, float firstDt,
-                                          PressSimBudget* shared) {
+                                          EbPressSimBudget* shared) {
     Result out;
     if (!layer || !player || limit < 0 || deltaTime <= 0.f)
         return out;
 
-    PlanOptions opts;
-    int const fullTick = StageConfig::tickBudgetPerPress();
-    int const fullUs = StageConfig::simBudgetUs();
+    EbPlanOptions opts;
+    int const fullTick = EbStageConfig::tickBudgetPerPress();
+    int const fullUs = EbStageConfig::simBudgetUs();
     // One candidate + optional linked dual — keep a modest tick slice.
     constexpr int kVerifyTickCap = 1200;
 
@@ -32,7 +32,7 @@ BakeVerifier::Result BakeVerifier::verify(PlayLayer* layer, PlayerObject* player
         opts.tickBudget = fullTick > 0 ? std::min(fullTick, kVerifyTickCap) : kVerifyTickCap;
     }
 
-    auto const result = ShadowSimulator::get().verifyDelay(
+    auto const result = EbShadowSimulator::get().verifyDelay(
         layer, player, down, std::max(0, delayTicks), limit, deltaTime, firstDt, opts);
     out.ok = result.ok;
     out.clearsThreat = result.clearsThreat;

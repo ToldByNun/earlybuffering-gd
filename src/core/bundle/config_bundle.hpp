@@ -1,10 +1,10 @@
 #ifndef CONFIG_BUNDLE_HPP
 #define CONFIG_BUNDLE_HPP
 
-class ConfigBundleImportState;
-class ConfigBundleExportState;
-class ConfigBundleApplyGuard;
-class ConfigBundleApplyHelpers;
+class EbConfigBundleImportState;
+class EbConfigBundleExportState;
+class EbConfigBundleApplyGuard;
+class EbConfigBundleApplyHelpers;
 
 #include <Geode/Geode.hpp>
 #include <filesystem>
@@ -12,7 +12,7 @@ class ConfigBundleApplyHelpers;
 
 // Portable settings JSON. v2 = { "version": 2, "settings": { ... } }.
 // Import also accepts v1 flat root (legacy keys at top level).
-class ConfigBundle {
+class EbConfigBundle {
 public:
     static constexpr int kFormatVersion = 2;
 
@@ -61,7 +61,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    ConfigBundle() = default;
+    EbConfigBundle() = default;
 };
 
 #include "../../config/stage_config.hpp"
@@ -73,30 +73,30 @@ private:
 #include <system_error>
 #include <vector>
 
-class ConfigBundleImportState {
+class EbConfigBundleImportState {
 public:
-    static ConfigBundle::ImportStats& stats();
+    static EbConfigBundle::ImportStats& stats();
 
 private:
-    ConfigBundleImportState() = default;
+    EbConfigBundleImportState() = default;
 };
 
-class ConfigBundleExportState {
+class EbConfigBundleExportState {
 public:
-    static ConfigBundle::ExportStats& stats();
+    static EbConfigBundle::ExportStats& stats();
 
 private:
-    ConfigBundleExportState() = default;
+    EbConfigBundleExportState() = default;
 };
 
-class ConfigBundleApplyGuard {
+class EbConfigBundleApplyGuard {
 public:
-    ConfigBundleApplyGuard();
+    EbConfigBundleApplyGuard();
 
-    ~ConfigBundleApplyGuard();
+    ~EbConfigBundleApplyGuard();
 
-    ConfigBundleApplyGuard(ConfigBundleApplyGuard const&) = delete;
-    ConfigBundleApplyGuard& operator=(ConfigBundleApplyGuard const&) = delete;
+    EbConfigBundleApplyGuard(EbConfigBundleApplyGuard const&) = delete;
+    EbConfigBundleApplyGuard& operator=(EbConfigBundleApplyGuard const&) = delete;
 
     void release();
 
@@ -104,18 +104,18 @@ private:
     bool m_active = false;
 };
 
-class ConfigBundleApplyHelpers {
+class EbConfigBundleApplyHelpers {
 public:
     static bool isDevKey(char const* key);
 
-    static bool shouldSkip(ConfigBundleKeys::Entry const& entry,
-                           ConfigBundle::ApplyOptions const& opt);
+    static bool shouldSkip(EbConfigBundleKeys::Entry const& entry,
+                           EbConfigBundle::ApplyOptions const& opt);
 
-    static bool applyOneSetting(geode::prelude::Mod* mod, ConfigBundleKeys::Entry const& entry,
+    static bool applyOneSetting(geode::prelude::Mod* mod, EbConfigBundleKeys::Entry const& entry,
                                 matjson::Value const& value, int& applied, int& skipped);
 
 private:
-    ConfigBundleApplyHelpers() = default;
+    EbConfigBundleApplyHelpers() = default;
 };
 
 #endif

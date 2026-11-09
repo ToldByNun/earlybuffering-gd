@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* layer,
+geode::Result<int> EbBakeReplayGenerator::bakeReplay(EbBakeMap& owner, PlayLayer* layer,
                                                    int startSnapshotSlot, int bakeRadius) {
     if (!layer)
         return geode::Err("No PlayLayer");
@@ -27,29 +27,29 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
     if (startSnapshotSlot < 0)
         return geode::Err("No start snapshot (reset once, then bake)");
 
-    bakeRadius = BakeMapImplementation::resolveRadius(bakeRadius, BakeMethod::Replay);
+    bakeRadius = EbBakeMapImplementation::resolveRadius(bakeRadius, BakeMethod::Replay);
 
     // World must match start snapshot: bake right after reset, not mid-run.
     // Mid-level orb claims / toggles make the ghost die immediately at start.
-    int const attemptTick = AssistController::get().attemptTick();
+    int const attemptTick = EbAssistController::get().attemptTick();
     if (attemptTick > 60) {
-        AssistLog::info(fmt::format("BAKE warn: attemptTick={} — prefer reset→pause→bake (mid-run "
+        EbAssistLog::info(fmt::format("BAKE warn: attemptTick={} — prefer reset→pause→bake (mid-run "
                                     "world pollutes orbs/toggles)",
                                     attemptTick));
     }
     // Commit 4: never validate while TW is still building / stale-empty.
-    if (StageConfig::triggerBake()) {
+    if (EbStageConfig::triggerBake()) {
         owner.m_progress.setStatus("waiting Trigger World…");
         std::string twErr;
-        if (!TriggerWorldBaker::get().waitUntilReady(layer, 45000, twErr)) {
+        if (!EbTriggerWorldBaker::get().waitUntilReady(layer, 45000, twErr)) {
             return geode::Err(twErr.empty() ? "Trigger World not ready for bake" : twErr);
         }
-        auto& tw = TriggerWorldStore::get();
-        AssistLog::info(fmt::format("BAKE: TW ready tracks={} ready={} softcap={} ({})",
+        auto& tw = EbTriggerWorldStore::get();
+        EbAssistLog::info(fmt::format("BAKE: TW ready tracks={} ready={} softcap={} ({})",
                                     tw.trackCount(), tw.readyTrackCount(), tw.softcapHit() ? 1 : 0,
-                                    TriggerWorldBaker::get().statusLine()));
+                                    EbTriggerWorldBaker::get().statusLine()));
         if (tw.softcapHit()) {
-            AssistLog::info(fmt::format(
+            EbAssistLog::info(fmt::format(
                 "BAKE warn: Trigger World softcap ({} tracks) — movers may be incomplete",
                 tw.trackCount()));
         }
@@ -57,21 +57,21 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
 
     // Mild FPS (60/360) → resample onto live ~240. Physics-bypass (1000–3000)
     // stays 1:1 at author TPS so the ghost matches the bot quantum exactly.
-    double const srcTps = owner.m_replay.tps > 0.0 ? owner.m_replay.tps : AssistClock::kNominalTps;
-    double const liveTps = AssistController::get().estimatedTps();
-    double const tps = BakeMapImplementation::resolveBakeTps(srcTps, liveTps);
+    double const srcTps = owner.m_replay.tps > 0.0 ? owner.m_replay.tps : EbAssistClock::kNominalTps;
+    double const liveTps = EbAssistController::get().estimatedTps();
+    double const tps = EbBakeMapImplementation::resolveBakeTps(srcTps, liveTps);
     float const deltaTime = static_cast<float>(1.0 / tps);
-    bakeRadius = BakeMapImplementation::scaleBakeTicks(bakeRadius, tps);
+    bakeRadius = EbBakeMapImplementation::scaleBakeTicks(bakeRadius, tps);
 
-    std::vector<ReplayEvent> event =
-        BakeMapImplementation::prepareBakeTimeline(owner.m_replay.events, srcTps, tps, true);
-    AssistLog::info(fmt::format("BAKE replay: timeline {} events @ {:.0f}←{:.0f} tps radius={} "
+    std::vector<EbReplayEvent> event =
+        EbBakeMapImplementation::prepareBakeTimeline(owner.m_replay.events, srcTps, tps, true);
+    EbAssistLog::info(fmt::format("BAKE replay: timeline {} events @ {:.0f}←{:.0f} tps radius={} "
                                 "(validate 1:1 then expand windows)",
                                 event.size(), tps, srcTps, bakeRadius));
 
-    BakeMapData out;
+    EbBakeMapData out;
     out.levelKey = owner.m_data.levelKey.empty() && layer->m_level
-                       ? LevelProfile::makeKey(layer->m_level)
+                       ? EbLevelProfile::makeKey(layer->m_level)
                        : owner.m_data.levelKey;
     if (out.levelKey.empty())
         out.levelKey = "unknown";
@@ -79,9 +79,9 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
     out.tps = tps;
     out.method = "replay";
 
-    bool const doRelease = StageConfig::assistRelease();
+    bool const doRelease = EbStageConfig::assistRelease();
 
-    std::vector<ReplayJumpJob> jobs;
+    std::vector<EbReplayJumpJob> jobs;
     for (int index = 0; index < static_cast<int>(event.size()); ++index) {
         auto const& e = event[static_cast<size_t>(index)];
         if (e.button != 1)
@@ -89,14 +89,14 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
         if (!e.down && !doRelease)
             continue;
         int F = e.frame;
-        int next = BakeMapImplementation::nextJumpFrame(event, index, e.player2);
-        int horizon = ShadowSimulator::modelFor(layer->m_player1, StageConfig::ticksAll()).cap;
+        int next = EbBakeMapImplementation::nextJumpFrame(event, index, e.player2);
+        int horizon = EbShadowSimulator::modelFor(layer->m_player1, EbStageConfig::ticksAll()).cap;
         if (horizon <= 0)
-            horizon = std::max(16, StageConfig::ticksAll() * 4);
-        horizon = BakeMapImplementation::scaleBakeTicks(horizon, tps);
+            horizon = std::max(16, EbStageConfig::ticksAll() * 4);
+        horizon = EbBakeMapImplementation::scaleBakeTicks(horizon, tps);
         int until = next > 0 ? std::min(next, F + horizon) : F + horizon;
         until = std::max(until, F + 1);
-        jobs.push_back(ReplayJumpJob{index, F, e.down, e.player2, until});
+        jobs.push_back(EbReplayJumpJob{index, F, e.down, e.player2, until});
     }
     if (jobs.empty()) {
         return geode::Err("Replay has no Jump events to bake (import a macro with clicks)");
@@ -113,7 +113,7 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
     owner.m_progress.done = 0;
     owner.m_progress.setStatus(
         fmt::format("validate macro 1:1 · {}f @ {:.0f} tps", lastFrame, tps));
-    AssistLog::info(
+    EbAssistLog::info(
         fmt::format("BAKE replay: validate 0..{} then expand {} clicks, radius {} @ {:.0f} tps",
                     lastFrame, jobs.size(), bakeRadius, tps));
 
@@ -121,39 +121,39 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
     // (portal Include must not retune noise).
     {
         std::string portalDetail;
-        if (!Tg2BakeFixture::bakeOfflinePortalsIncludeOk(portalDetail)) {
+        if (!EbTg2BakeFixture::bakeOfflinePortalsIncludeOk(portalDetail)) {
             return geode::Err(
                 fmt::format("Bake portal policy failed ({}) — Soft portals must Include",
                             portalDetail.empty() ? "?" : portalDetail));
         }
         std::string parityDetail;
-        AssistContracts140::applyLockedEps();
-        if (!Tg2BakeFixture::parityGateOk(parityDetail)) {
+        EbAssistContracts140::applyLockedEps();
+        if (!EbTg2BakeFixture::parityGateOk(parityDetail)) {
             return geode::Err(
                 fmt::format("Bake parity gate failed ({}) — ε LOCK required before validate",
                             parityDetail.empty() ? "?" : parityDetail));
         }
-        AssistLog::debug("BAKE: parity gate OK (eps locked; Soft portals Include)");
+        EbAssistLog::debug("BAKE: parity gate OK (eps locked; Soft portals Include)");
     }
 
     // Start pose (StartPos / normal). Snapshot X tells Hybrid parts where bake begins.
     bool const startPosAttempt = layer->m_isTestMode;
     float startX = 0.f;
-    if (auto* snap = ShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
+    if (auto* snap = EbShadowSimulator::get().snapshotSlot(startSnapshotSlot)) {
         startX = snap->getPositionX();
     }
-    AssistLog::info(fmt::format(
+    EbAssistLog::info(fmt::format(
         "BAKE: startPose startPos={} startX={:.1f} attemptTick={} twTracks={}",
-        startPosAttempt ? 1 : 0, startX, attemptTick, TriggerWorldStore::get().trackCount()));
+        startPosAttempt ? 1 : 0, startX, attemptTick, EbTriggerWorldStore::get().trackCount()));
 
     // ── Validate 1:1 from start snapshot. Death ≠ hard fail: keep the
     // surviving prefix (Hybrid often only needs a StartPos part, not the
     // whole macro). Only frame-0 (no prefix) still errors.
-    ShadowSimulator::BakeRunResult validate;
+    EbShadowSimulator::BakeRunResult validate;
     {
         std::lock_guard lock(owner.m_simMutex);
         int lastLogged = -1;
-        validate = ShadowSimulator::get().runBakeTimeline(
+        validate = EbShadowSimulator::get().runBakeTimeline(
             layer, startSnapshotSlot, event, deltaTime, lastFrame, -1, true, false, true, 1,
             [&](int frame) -> bool {
                 if (owner.m_progress.cancel.load())
@@ -185,11 +185,11 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
             if (playerTwo < playerOne)
                 droppedP2 = playerTwo;
         }
-        auto const top3 = DevDiagDump::formatUnknownTop3(validate.unknownHist);
-        int const twTracks = TriggerWorldStore::get().trackCount();
-        auto const residual = Tg2BakeFixture::formatResidual(
+        auto const top3 = EbDevDiagDump::formatUnknownTop3(validate.unknownHist);
+        int const twTracks = EbTriggerWorldStore::get().trackCount();
+        auto const residual = EbTg2BakeFixture::formatResidual(
             twTracks, validate.deathFrame, validate.deathObjId, validate.deathObjType);
-        AssistLog::info(
+        EbAssistLog::info(
             fmt::format("BAKE: macro dies in sim @ frame {} deathX={:.1f} deathY={:.1f} "
                         "objId={} objType={} gameId={} twTracks={} droppedP2={} "
                         "unknownTop3=[{}] soft={} hard={} residual={} startPos={} startX={:.1f}",
@@ -200,8 +200,8 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
         {
             std::filesystem::path diagDir;
             std::string diagErr;
-            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
-                AssistLog::info(
+            if (EbDevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                EbAssistLog::info(
                     fmt::format("BAKE: validate death — wrote diag {}", diagDir.string()));
             }
         }
@@ -233,13 +233,13 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
         partialCut = cut;
         int const before = static_cast<int>(jobs.size());
         jobs.erase(std::remove_if(jobs.begin(), jobs.end(),
-                                  [cut](ReplayJumpJob const& j) { return j.frame >= cut; }),
+                                  [cut](EbReplayJumpJob const& j) { return j.frame >= cut; }),
                    jobs.end());
         for (auto& j : jobs) {
             if (j.until > cut)
                 j.until = cut;
         }
-        AssistLog::info(
+        EbAssistLog::info(
             fmt::format("BAKE: partial prefix — died @{} keeping {}/{} clicks before cut "
                         "(Hybrid parts; not whole-macro)",
                         cut, jobs.size(), before));
@@ -256,10 +256,10 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
     owner.m_progress.setStatus(
         fmt::format("expand windows · {} clicks · radius {}", jobs.size(), bakeRadius));
     if (partialCut >= 0) {
-        AssistLog::info(fmt::format("BAKE: expanding {} click windows (partial cut @{})",
+        EbAssistLog::info(fmt::format("BAKE: expanding {} click windows (partial cut @{})",
                                     jobs.size(), partialCut));
     } else {
-        AssistLog::info(
+        EbAssistLog::info(
             fmt::format("BAKE: validate OK through frame {} — expanding {} click windows",
                         lastFrame, jobs.size()));
     }
@@ -270,7 +270,7 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
             return geode::Err("Bake cancelled");
 
         std::lock_guard lock(owner.m_simMutex);
-        auto sample = ShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, event,
+        auto sample = EbShadowSimulator::get().runBakeTimeline(layer, startSnapshotSlot, event,
                                                              deltaTime, job.frame, job.frame);
         float x = sample.sampled ? sample.xAtSample : 0.f;
         auto mode = sample.sampled ? sample.modeAtSample : GameModeKind::Cube;
@@ -278,7 +278,7 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
         // Nominal already survived full validate — still re-check shift window.
         if (!owner.testShiftedClick(layer, startSnapshotSlot, event, job.eventIndex, job.frame,
                                     job.until, deltaTime)) {
-            AssistLog::debug(fmt::format("BAKE: skip click @{} (shift re-check died)", job.frame));
+            EbAssistLog::debug(fmt::format("BAKE: skip click @{} (shift re-check died)", job.frame));
             owner.m_progress.done.fetch_add(1);
             continue;
         }
@@ -309,7 +309,7 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
         }
         int latest = lowerBound;
 
-        BakedClick c;
+        EbBakedClick c;
         c.nominalFrame = job.frame;
         c.earliest = earliest;
         c.latest = latest;
@@ -328,7 +328,7 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
     }
 
     int const nClicks = static_cast<int>(out.clicks.size());
-    AssistLog::info(fmt::format("BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} "
+    EbAssistLog::info(fmt::format("BAKE done clicks={} jobs={} lastFrame={} tps={:.0f} source={} "
                                 "partialCut={} startPos={} (replay)",
                                 nClicks, jobs.size(), lastFrame, tps, out.sourceReplay, partialCut,
                                 startPosAttempt ? 1 : 0));
@@ -337,8 +337,8 @@ geode::Result<int> BakeReplayGenerator::bakeReplay(BakeMap& owner, PlayLayer* la
         {
             std::filesystem::path diagDir;
             std::string diagErr;
-            if (DevDiagDump::dumpBakeFail(diagDir, diagErr)) {
-                AssistLog::info(
+            if (EbDevDiagDump::dumpBakeFail(diagDir, diagErr)) {
+                EbAssistLog::info(
                     fmt::format("BAKE: 0 windows after validate — diag {}", diagDir.string()));
             }
         }

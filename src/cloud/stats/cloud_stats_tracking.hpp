@@ -5,15 +5,15 @@
 
 #include "../cloud_config_stats.hpp"
 
-class CloudStatsTracking {
+class EbCloudStatsTracking {
 public:
-    static void trackDownload(CloudConfigStats& owner, std::string const& packId,
-                              CloudConfigStats::TrackCallback callback);
-    static void trackRate(CloudConfigStats& owner, std::string const& packId, int stars,
-                          CloudConfigStats::TrackCallback callback);
+    static void trackDownload(EbCloudConfigStats& owner, std::string const& packId,
+                              EbCloudConfigStats::TrackCallback callback);
+    static void trackRate(EbCloudConfigStats& owner, std::string const& packId, int stars,
+                          EbCloudConfigStats::TrackCallback callback);
 
 private:
-    CloudStatsTracking() = delete;
+    EbCloudStatsTracking() = delete;
 };
 
 #endif

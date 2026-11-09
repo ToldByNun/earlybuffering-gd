@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
+matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     matjson::Value otherIndex = matjson::Value::object();
     otherIndex["eventId"] = e.eventId;
     otherIndex["attemptId"] = e.attemptId;
@@ -23,8 +23,8 @@ matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
     otherIndex["parentEventId"] = e.parentEventId;
     otherIndex["playerIndex"] = e.playerIndex;
     otherIndex["down"] = e.down;
-    otherIndex["source"] = DevTraceStore::sourceId(e.source);
-    otherIndex["kind"] = DevTraceStore::kindId(e.kind);
+    otherIndex["source"] = EbDevTraceStore::sourceId(e.source);
+    otherIndex["kind"] = EbDevTraceStore::kindId(e.kind);
     otherIndex["effectTick"] = e.effectTick;
     otherIndex["pressTick"] = e.pressTick;
     otherIndex["plannedDelay"] = e.plannedDelay;
@@ -44,13 +44,13 @@ matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
         otherIndex["liveVsEvalMismatch"] = e.liveVsEvalMismatch;
     }
     if (e.hasClockStamp && e.clockStamp.valid) {
-        otherIndex["clock"] = DevTraceStoreImplementation::clockStampToJson(e.clockStamp);
+        otherIndex["clock"] = EbDevTraceStoreImplementation::clockStampToJson(e.clockStamp);
     }
     if (e.hasWitness && e.witness.valid) {
-        otherIndex["witness"] = DevTraceStoreImplementation::witnessToJson(e.witness);
+        otherIndex["witness"] = EbDevTraceStoreImplementation::witnessToJson(e.witness);
     }
     if (e.hasFidelity) {
-        otherIndex["fidelity"] = DevStateDiff::fidelityId(e.fidelity);
+        otherIndex["fidelity"] = EbDevStateDiff::fidelityId(e.fidelity);
         otherIndex["claimsAllowed"] = e.claimsAllowed;
         otherIndex["approx"] = e.approx;
         if (!e.evalSuppressedReason.empty()) {
@@ -61,11 +61,11 @@ matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
             dj.reserve(e.diffs.size());
             for (auto const& d : e.diffs) {
                 matjson::Value item = matjson::Value::object();
-                item["category"] = DevLiveWitness::categoryId(d.category);
+                item["category"] = EbDevLiveWitness::categoryId(d.category);
                 item["fieldOrObjectId"] = d.fieldOrObjectId;
                 item["liveValue"] = d.liveValue;
                 item["restoredValue"] = d.restoredValue;
-                item["kind"] = DevStateDiff::diffKindId(d.kind);
+                item["kind"] = EbDevStateDiff::diffKindId(d.kind);
                 dj.push_back(item);
             }
             otherIndex["diffs"] = dj;
@@ -77,8 +77,8 @@ matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
         for (auto const& n : e.candNotes) {
             matjson::Value nj = matjson::Value::object();
             nj["delay"] = n.delay;
-            nj["status"] = DevRejectLedger::statusId(n.status);
-            nj["rejectCode"] = DevRejectLedger::rejectCodeId(n.rejectCode);
+            nj["status"] = EbDevRejectLedger::statusId(n.status);
+            nj["rejectCode"] = EbDevRejectLedger::rejectCodeId(n.rejectCode);
             if (!n.detail.empty())
                 nj["detail"] = n.detail;
             if (n.hasScores) {
@@ -99,7 +99,7 @@ matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
         attrs.reserve(e.attribution.size());
         for (auto const& a : e.attribution) {
             matjson::Value aj = matjson::Value::object();
-            aj["code"] = DevRejectLedger::attributionId(a.code);
+            aj["code"] = EbDevRejectLedger::attributionId(a.code);
             if (!a.detail.empty())
                 aj["detail"] = a.detail;
             attrs.push_back(aj);
@@ -109,7 +109,7 @@ matjson::Value DevEventCodec::eventToJson(DevDecisionEvent const& e) {
     return otherIndex;
 }
 
-bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, std::string& err) {
+bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e, std::string& err) {
     e = {};
     e.eventId = j.contains("eventId") ? j["eventId"].asInt().unwrapOr(0) : 0;
     e.attemptId = j.contains("attemptId") ? j["attemptId"].asInt().unwrapOr(0) : 0;
@@ -122,12 +122,12 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
     e.down = j.contains("down") ? j["down"].asBool().unwrapOr(true) : true;
     auto sourceValue =
         j.contains("source") ? std::string(j["source"].asString().unwrapOr("live")) : "live";
-    if (!DevTraceStore::parseSource(sourceValue, e.source)) {
+    if (!EbDevTraceStore::parseSource(sourceValue, e.source)) {
         err = "bad-source";
         return false;
     }
     auto kind = j.contains("kind") ? std::string(j["kind"].asString().unwrapOr("")) : "";
-    if (!DevTraceStore::parseKind(kind, e.kind)) {
+    if (!EbDevTraceStore::parseKind(kind, e.kind)) {
         err = "bad-kind";
         return false;
     }
@@ -173,7 +173,7 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
     }
     if (j.contains("clock")) {
         std::string clockErr;
-        if (!DevTraceStoreImplementation::clockStampFromJson(j["clock"], e.clockStamp, clockErr)) {
+        if (!EbDevTraceStoreImplementation::clockStampFromJson(j["clock"], e.clockStamp, clockErr)) {
             err = clockErr.empty() ? "bad-clock" : clockErr;
             return false;
         }
@@ -181,7 +181,7 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
     }
     if (j.contains("witness")) {
         std::string witnessErr;
-        if (!DevTraceStoreImplementation::witnessFromJson(j["witness"], e.witness, witnessErr)) {
+        if (!EbDevTraceStoreImplementation::witnessFromJson(j["witness"], e.witness, witnessErr)) {
             err = witnessErr.empty() ? "bad-witness" : witnessErr;
             return false;
         }
@@ -190,7 +190,7 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
     if (j.contains("fidelity")) {
         e.hasFidelity = true;
         auto fid = std::string(j["fidelity"].asString().unwrapOr(""));
-        if (!DevStateDiff::parseFidelity(fid, e.fidelity)) {
+        if (!EbDevStateDiff::parseFidelity(fid, e.fidelity)) {
             err = "bad-fidelity";
             return false;
         }
@@ -202,9 +202,9 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
         }
         if (j.contains("diffs") && j["diffs"].isArray()) {
             for (auto const& item : j["diffs"].asArray().unwrap()) {
-                DevDiffEntry d;
+                EbDevDiffEntry d;
                 auto categoryValue = std::string(item["category"].asString().unwrapOr(""));
-                if (!DevLiveWitness::parseCategory(categoryValue, d.category)) {
+                if (!EbDevLiveWitness::parseCategory(categoryValue, d.category)) {
                     err = "bad-diff-category";
                     return false;
                 }
@@ -224,15 +224,15 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
     }
     if (j.contains("candNotes") && j["candNotes"].isArray()) {
         for (auto const& nj : j["candNotes"].asArray().unwrap()) {
-            DevRejectLedger::CandNote n;
+            EbDevRejectLedger::CandNote n;
             n.delay = static_cast<int>(nj["delay"].asInt().unwrapOr(0));
             auto state = std::string(nj["status"].asString().unwrapOr("skipped"));
             auto rc = std::string(nj["rejectCode"].asString().unwrapOr("not-viable"));
-            if (!DevRejectLedger::parseStatus(state, n.status)) {
+            if (!EbDevRejectLedger::parseStatus(state, n.status)) {
                 err = "bad-cand-status";
                 return false;
             }
-            if (!DevRejectLedger::parseRejectCode(rc, n.rejectCode)) {
+            if (!EbDevRejectLedger::parseRejectCode(rc, n.rejectCode)) {
                 err = "bad-reject-code";
                 return false;
             }
@@ -256,9 +256,9 @@ bool DevEventCodec::eventFromJson(matjson::Value const& j, DevDecisionEvent& e, 
         j.contains("candNotesTruncated") ? j["candNotesTruncated"].asBool().unwrapOr(false) : false;
     if (j.contains("attribution") && j["attribution"].isArray()) {
         for (auto const& aj : j["attribution"].asArray().unwrap()) {
-            DevRejectLedger::AttributionNote a;
+            EbDevRejectLedger::AttributionNote a;
             auto code = std::string(aj["code"].asString().unwrapOr(""));
-            if (!DevRejectLedger::parseAttribution(code, a.code)) {
+            if (!EbDevRejectLedger::parseAttribution(code, a.code)) {
                 err = "bad-attribution";
                 return false;
             }

@@ -5,7 +5,7 @@
 #include "../../simulation_plan.hpp"
 #include "../shadow_plan_context.hpp"
 
-void ShadowPlanResult::publish(ShadowPlanContext& context) {
+void EbShadowPlanResult::publish(EbShadowPlanContext& context) {
     if (context.chosen < 0) {
         context.plan.action = PlanAction::Pass;
         context.plan.toggleUnknown = context.sawToggleUnknown;
@@ -15,15 +15,15 @@ void ShadowPlanResult::publish(ShadowPlanContext& context) {
                 ? AssistReason::PassToggleUnknown
                 : (context.plan.budgetHit ? AssistReason::PassBudget : AssistReason::PassHopeless);
         context.plan.delay = 0;
-        AssistLog::debug(fmt::format(
+        EbAssistLog::debug(fmt::format(
             "PLAN id={} Pass verdict={} limit={} budgetHit={} toggleUnk={} orbIntent={}",
-            context.plan.planId, AssistVerdict::name(context.plan.reason), context.limit,
+            context.plan.planId, EbAssistVerdict::name(context.plan.reason), context.limit,
             context.plan.budgetHit, context.sawToggleUnknown ? 1 : 0, context.orbIntent));
-        DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
+        EbDevRejectLedger::EarlyExit early = EbDevRejectLedger::EarlyExit::None;
         if (context.plan.budgetHit)
-            early = DevRejectLedger::EarlyExit::Budget;
+            early = EbDevRejectLedger::EarlyExit::Budget;
         else if (context.ledgerPreferEarlyExit)
-            early = DevRejectLedger::EarlyExit::PreferBand;
+            early = EbDevRejectLedger::EarlyExit::PreferBand;
         context.publishLedger(0, true, early);
         return;
     }
@@ -70,7 +70,7 @@ void ShadowPlanResult::publish(ShadowPlanContext& context) {
         } else {
             context.plan.action = PlanAction::Delay;
             context.plan.reason =
-                AssistVerdict::inferDelayReason(context.plan.activatedRing || winCand.activatedRing,
+                EbAssistVerdict::inferDelayReason(context.plan.activatedRing || winCand.activatedRing,
                                                 context.plan.requireOrb, context.hasPrefer);
             context.plan.delay = context.chosen;
             context.plan.jumpTick = winCand.jumpTick;
@@ -146,12 +146,12 @@ void ShadowPlanResult::publish(ShadowPlanContext& context) {
         context.plan.requireHold = false;
         if (context.plan.toggleUnknown) {
             context.plan.reason = AssistReason::PassToggleUnknown;
-            AssistLog::debug(
+            EbAssistLog::debug(
                 fmt::format("PLAN id={} refuse Delay → pass-toggle-unknown", context.plan.planId));
         } else {
             // Commit 11: Hard Unknown → named Pass.
             context.plan.reason = AssistReason::PassHardUnknown;
-            AssistLog::debug(
+            EbAssistLog::debug(
                 fmt::format("PLAN id={} refuse Delay → pass-hard-unknown", context.plan.planId));
         }
     }
@@ -160,7 +160,7 @@ void ShadowPlanResult::publish(ShadowPlanContext& context) {
     // Soft-trust partial pick is blocked above (budget-partial + softTrustPartial).
 
     if (context.plan.action == PlanAction::Delay && context.plan.reason == AssistReason::None) {
-        context.plan.reason = AssistVerdict::inferDelayReason(
+        context.plan.reason = EbAssistVerdict::inferDelayReason(
             context.plan.activatedRing, context.plan.requireOrb, context.hasPrefer);
     }
     if (context.plan.action == PlanAction::Pass && context.plan.reason == AssistReason::None) {
@@ -169,11 +169,11 @@ void ShadowPlanResult::publish(ShadowPlanContext& context) {
 
     bool const orbIntentOut =
         context.plan.requireOrb || context.plan.activatedRing || context.plan.usedOrbWindow;
-    AssistLog::debug(fmt::format(
+    EbAssistLog::debug(fmt::format(
         "PLAN id={} {} verdict={} delay={} orbIntent={} foresight={} idleSafer={} ascent={} eng={} "
         "ring={} useful={} hold={} rel=[{},{}]@{} scan={} dMin={} dMax={} tried={} budgetLeft={}",
         context.plan.planId, context.plan.action == PlanAction::Pass ? "Pass" : "Delay",
-        AssistVerdict::name(context.plan.reason), context.plan.delay, orbIntentOut ? 1 : 0,
+        EbAssistVerdict::name(context.plan.reason), context.plan.delay, orbIntentOut ? 1 : 0,
         context.plan.foresightOrbPad ? 1 : 0, context.plan.idleSafer ? 1 : 0,
         context.plan.ascentUseful ? 1 : 0,
         context.plan.trajectoryEngine ? "Trajectory" : "ShadowPlayer", context.plan.activatedRing,
@@ -181,11 +181,11 @@ void ShadowPlanResult::publish(ShadowPlanContext& context) {
         context.plan.releaseLatest, context.plan.releaseAfter, context.plan.holdScanTried,
         context.plan.dMin, context.plan.dMax, context.plan.candidatesTried, context.tickBudget));
     {
-        DevRejectLedger::EarlyExit early = DevRejectLedger::EarlyExit::None;
+        EbDevRejectLedger::EarlyExit early = EbDevRejectLedger::EarlyExit::None;
         if (context.plan.budgetHit)
-            early = DevRejectLedger::EarlyExit::Budget;
+            early = EbDevRejectLedger::EarlyExit::Budget;
         else if (context.ledgerPreferEarlyExit)
-            early = DevRejectLedger::EarlyExit::PreferBand;
+            early = EbDevRejectLedger::EarlyExit::PreferBand;
         bool const pass = (context.plan.action == PlanAction::Pass);
         context.publishLedger(pass ? 0 : context.plan.delay, pass, early);
     }

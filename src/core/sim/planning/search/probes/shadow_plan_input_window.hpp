@@ -3,14 +3,14 @@
 
 #include "../shadow_plan_context.hpp"
 
-class ShadowPlanContext;
+class EbShadowPlanContext;
 
-class ShadowPlanInputWindow {
+class EbShadowPlanInputWindow {
 public:
-    static bool evaluate(ShadowPlanContext& context);
+    static bool evaluate(EbShadowPlanContext& context);
 
 private:
-    ShadowPlanInputWindow() = delete;
+    EbShadowPlanInputWindow() = delete;
 };
 
 #endif

@@ -4,22 +4,22 @@
 #include <fmt/format.h>
 #include <unordered_set>
 
-DevEvalEngine::Report DevEvalEngine::finishReport(DevLiveWitness const& witness,
-                                                  ShadowSimulator::EvalFromFreezeResult const& raw,
+EbDevEvalEngine::Report EbDevEvalEngine::finishReport(EbDevLiveWitness const& witness,
+                                                  EbShadowSimulator::EvalFromFreezeResult const& raw,
                                                   int delay, int primaryHorizon, int tailTicks,
-                                                  DevClassifyOptions options,
+                                                  EbDevClassifyOptions options,
                                                   DevSimPathId expectedPath) {
     Report rep;
-    rep.timeBasis = DevClockContract::kTimeBasisPhysicsTick;
-    rep.clockSchema = DevClockContract::kSchema;
-    rep.liveSimPathId = DevClockContract::simPathId(witness.clock.liveSimPathId);
-    rep.evalSimPathId = DevClockContract::simPathId(raw.evalSimPathId);
+    rep.timeBasis = EbDevClockContract::kTimeBasisPhysicsTick;
+    rep.clockSchema = EbDevClockContract::kSchema;
+    rep.liveSimPathId = EbDevClockContract::simPathId(witness.clock.liveSimPathId);
+    rep.evalSimPathId = EbDevClockContract::simPathId(raw.evalSimPathId);
     rep.stepScheduleHash = raw.stepScheduleHash;
     rep.clockMismatch = raw.clockMismatch;
     rep.restore = raw.restore;
     rep.ran = raw.ran;
 
-    DevObjective::classifyPrimaryAndTail(rep.sample, delay, primaryHorizon, tailTicks, raw.died,
+    EbDevObjective::classifyPrimaryAndTail(rep.sample, delay, primaryHorizon, tailTicks, raw.died,
                                          raw.deathTick, raw.endX, raw.unknown, raw.budgetHit,
                                          raw.aborted, raw.ticksRan);
 
@@ -33,14 +33,14 @@ DevEvalEngine::Report DevEvalEngine::finishReport(DevLiveWitness const& witness,
         return rep;
     }
 
-    DevClassifyResult gate = DevStateDiff::classifyWitnessGate(witness, options);
+    EbDevClassifyResult gate = EbDevStateDiff::classifyWitnessGate(witness, options);
     if (!gate.evalSuppressedReason.empty()) {
         rep.fidelity = gate;
         return rep;
     }
 
     if (raw.ran && raw.restore.valid) {
-        rep.fidelity = DevStateDiff::classify(witness, raw.restore, options);
+        rep.fidelity = EbDevStateDiff::classify(witness, raw.restore, options);
     } else {
         rep.fidelity.fidelity = DevFidelity::NotReproducible;
         rep.fidelity.claimsAllowed = false;
@@ -49,23 +49,23 @@ DevEvalEngine::Report DevEvalEngine::finishReport(DevLiveWitness const& witness,
     return rep;
 }
 
-DevEvalEngine::Report DevEvalEngine::evalDelay(PlayLayer* layer, DevLiveWitness const& witness,
+EbDevEvalEngine::Report EbDevEvalEngine::evalDelay(PlayLayer* layer, EbDevLiveWitness const& witness,
                                                int delay, int horizonTicks, bool down,
-                                               DevClassifyOptions const& opts,
+                                               EbDevClassifyOptions const& opts,
                                                int* tickBudgetLeft) {
     // horizonTicks here is the schedule horizon after action (primary only).
-    auto rawData = ShadowSimulator::get().evalDelayFromFreeze(layer, witness, delay, horizonTicks,
+    auto rawData = EbShadowSimulator::get().evalDelayFromFreeze(layer, witness, delay, horizonTicks,
                                                               down, tickBudgetLeft);
     return finishReport(witness, rawData, delay, horizonTicks,
                         /*tailTicks*/ 0, opts, DevSimPathId::EvalDelayFromFreeze);
 }
 
-DevEvalEngine::Report DevEvalEngine::replayActualFire(PlayLayer* layer,
-                                                      DevLiveWitness const& witness,
+EbDevEvalEngine::Report EbDevEvalEngine::replayActualFire(PlayLayer* layer,
+                                                      EbDevLiveWitness const& witness,
                                                       int actualFireTickAbs, int horizonTicks,
-                                                      bool down, DevClassifyOptions const& opts,
+                                                      bool down, EbDevClassifyOptions const& opts,
                                                       int* tickBudgetLeft) {
-    auto rawData = ShadowSimulator::get().replayActualFire(layer, witness, actualFireTickAbs,
+    auto rawData = EbShadowSimulator::get().replayActualFire(layer, witness, actualFireTickAbs,
                                                            horizonTicks, down, tickBudgetLeft);
     int delay = actualFireTickAbs - witness.clock.effectTick;
     if (delay < 0)
@@ -74,7 +74,7 @@ DevEvalEngine::Report DevEvalEngine::replayActualFire(PlayLayer* layer,
                         /*tailTicks*/ 0, opts, DevSimPathId::ReplayActualFire);
 }
 
-std::vector<int> DevEvalEngine::buildGridDelays(DevConfig::EvalGrid grid, int limit,
+std::vector<int> EbDevEvalEngine::buildGridDelays(EbDevConfig::EvalGrid grid, int limit,
                                                 int plannedDelay, int robustK) {
     if (limit < 0)
         limit = 0;
@@ -86,11 +86,11 @@ std::vector<int> DevEvalEngine::buildGridDelays(DevConfig::EvalGrid grid, int li
     };
 
     switch (grid) {
-    case DevConfig::EvalGrid::Full:
+    case EbDevConfig::EvalGrid::Full:
         for (int delay = 0; delay <= limit; ++delay)
             add(delay);
         break;
-    case DevConfig::EvalGrid::Sparse: {
+    case EbDevConfig::EvalGrid::Sparse: {
         add(0);
         add(limit / 2);
         add(limit);
@@ -99,7 +99,7 @@ std::vector<int> DevEvalEngine::buildGridDelays(DevConfig::EvalGrid grid, int li
             add(delay);
         break;
     }
-    case DevConfig::EvalGrid::Band: {
+    case EbDevConfig::EvalGrid::Band: {
         add(0);
         add(plannedDelay);
         int const offset = std::max(0, robustK);
@@ -115,28 +115,28 @@ std::vector<int> DevEvalEngine::buildGridDelays(DevConfig::EvalGrid grid, int li
     return output;
 }
 
-DevEvalEngine::GridReport
-DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool down, int limit,
+EbDevEvalEngine::GridReport
+EbDevEvalEngine::evalGrid(PlayLayer* layer, EbDevLiveWitness const& witness, bool down, int limit,
                         int plannedDelay, int robustK, int horizonTicks, int tailTicks,
-                        DevConfig::EvalGrid grid, DevObjective::Kind objective,
-                        DevClassifyOptions const& opts, float latencyWeight, int* tickBudgetLeft) {
+                        EbDevConfig::EvalGrid grid, EbDevObjective::Kind objective,
+                        EbDevClassifyOptions const& opts, float latencyWeight, int* tickBudgetLeft) {
     GridReport gr;
-    gr.timeBasis = DevClockContract::kTimeBasisPhysicsTick;
-    gr.clockSchema = DevClockContract::kSchema;
-    gr.liveSimPathId = DevClockContract::simPathId(witness.clock.liveSimPathId);
-    gr.evalSimPathId = DevClockContract::simPathId(DevSimPathId::EvalDelayFromFreeze);
+    gr.timeBasis = EbDevClockContract::kTimeBasisPhysicsTick;
+    gr.clockSchema = EbDevClockContract::kSchema;
+    gr.liveSimPathId = EbDevClockContract::simPathId(witness.clock.liveSimPathId);
+    gr.evalSimPathId = EbDevClockContract::simPathId(DevSimPathId::EvalDelayFromFreeze);
     gr.grid = grid;
     gr.horizonTicks = horizonTicks;
     gr.tailTicks = tailTicks;
     gr.limit = limit;
-    gr.objectivePartial = (grid != DevConfig::EvalGrid::Full);
+    gr.objectivePartial = (grid != EbDevConfig::EvalGrid::Full);
 
-    if (!witness.valid || !witness.clock.valid || !DevClockContract::get().clockOk(witness.clock)) {
+    if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
         gr.clockMismatch = true;
         gr.fidelity.fidelity = DevFidelity::NotReproducible;
         gr.fidelity.claimsAllowed = false;
         gr.fidelity.evalSuppressedReason = "clockMismatch";
-        DevObjective::Meta meta;
+        EbDevObjective::Meta meta;
         meta.claimsAllowed = false;
         meta.fidelity = DevFidelity::NotReproducible;
         meta.clockOk = false;
@@ -144,7 +144,7 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
         meta.objectivePartial = true;
         meta.horizonTicks = horizonTicks;
         meta.tailTicks = tailTicks;
-        gr.objective = DevObjective::evaluate(objective, gr.samples, meta);
+        gr.objective = EbDevObjective::evaluate(objective, gr.samples, meta);
         return gr;
     }
 
@@ -153,11 +153,11 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
     bool anyRan = false;
     bool tailsComplete = true;
 
-    ShadowSimulator::get().clearEvalAbort();
+    EbShadowSimulator::get().clearEvalAbort();
     for (int delay : delays) {
-        if (ShadowSimulator::get().evalAbortRequested())
+        if (EbShadowSimulator::get().evalAbortRequested())
             break;
-        auto rawData = ShadowSimulator::get().evalDelayFromFreeze(
+        auto rawData = EbShadowSimulator::get().evalDelayFromFreeze(
             layer, witness, delay, schedHorizon, down, tickBudgetLeft);
         if (rawData.clockMismatch) {
             gr.clockMismatch = true;
@@ -170,8 +170,8 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
             gr.stepScheduleHash = rawData.stepScheduleHash;
         }
 
-        DevObjective::Sample sample;
-        DevObjective::classifyPrimaryAndTail(sample, delay, horizonTicks, tailTicks, rawData.died,
+        EbDevObjective::Sample sample;
+        EbDevObjective::classifyPrimaryAndTail(sample, delay, horizonTicks, tailTicks, rawData.died,
                                              rawData.deathTick, rawData.endX, rawData.unknown,
                                              rawData.budgetHit, rawData.aborted, rawData.ticksRan);
         if (sample.survivedPrimary && tailTicks > 0 && !sample.tailComplete) {
@@ -193,13 +193,13 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
         gr.fidelity.claimsAllowed = false;
         gr.fidelity.evalSuppressedReason = "clockMismatch";
     } else {
-        DevClassifyResult gate = DevStateDiff::classifyWitnessGate(witness, opts);
+        EbDevClassifyResult gate = EbDevStateDiff::classifyWitnessGate(witness, opts);
         if (!gate.evalSuppressedReason.empty()) {
             gr.fidelity = gate;
         } else if (anyRan && gr.restore.valid) {
-            DevClassifyOptions outputStream = opts;
+            EbDevClassifyOptions outputStream = opts;
             outputStream.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
-            gr.fidelity = DevStateDiff::classify(witness, gr.restore, outputStream);
+            gr.fidelity = EbDevStateDiff::classify(witness, gr.restore, outputStream);
         } else {
             gr.fidelity.fidelity = DevFidelity::NotReproducible;
             gr.fidelity.claimsAllowed = false;
@@ -207,7 +207,7 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
         }
     }
 
-    bool const gridFull = (grid == DevConfig::EvalGrid::Full) &&
+    bool const gridFull = (grid == EbDevConfig::EvalGrid::Full) &&
                           static_cast<int>(delays.size()) == (limit + 1) && !gr.objectivePartial;
     for (auto const& s : gr.samples) {
         if (s.budgetHit) {
@@ -215,10 +215,10 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
         }
     }
 
-    DevObjective::Meta meta;
+    EbDevObjective::Meta meta;
     meta.fidelity = gr.fidelity.fidelity;
     meta.claimsAllowed = gr.fidelity.claimsAllowed;
-    meta.clockOk = !gr.clockMismatch && DevClockContract::get().clockOk(witness.clock);
+    meta.clockOk = !gr.clockMismatch && EbDevClockContract::get().clockOk(witness.clock);
     meta.gridFull = gridFull && !gr.objectivePartial;
     meta.tailsComplete = tailsComplete;
     meta.horizonTicks = horizonTicks;
@@ -226,11 +226,11 @@ DevEvalEngine::evalGrid(PlayLayer* layer, DevLiveWitness const& witness, bool do
     meta.latencyWeight = latencyWeight;
     meta.objectivePartial = gr.objectivePartial;
 
-    gr.objective = DevObjective::evaluate(objective, gr.samples, meta);
+    gr.objective = EbDevObjective::evaluate(objective, gr.samples, meta);
     return gr;
 }
 
-bool DevEvalEngine::selfCheck(std::string& report) {
+bool EbDevEvalEngine::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -242,19 +242,19 @@ bool DevEvalEngine::selfCheck(std::string& report) {
         report += name;
     };
 
-    DevClassifyOptions opts;
+    EbDevClassifyOptions opts;
     opts.requireDeps = true;
     opts.freezeWorld = false;
     opts.expectedEvalPath = DevSimPathId::EvalDelayFromFreeze;
 
     // Clock mismatch → notReproducible / clockMismatch.
     {
-        DevLiveWitness w;
+        EbDevLiveWitness w;
         w.valid = true;
         w.player.present = true;
         w.player.x = 1.f;
-        w.playerBlobSchema = DevLiveWitness::computePlayerBlobSchema();
-        w.clock = DevClockContract::get().makeStamp(10, false, false, 1.f / 240.f, 1.f / 240.f,
+        w.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();
+        w.clock = EbDevClockContract::get().makeStamp(10, false, false, 1.f / 240.f, 1.f / 240.f,
                                                     1.f / 240.f, 1.f, DevSimPathId::Plan);
         w.clock.effectTick = 999;
         w.clock.valid = true;
@@ -267,21 +267,21 @@ bool DevEvalEngine::selfCheck(std::string& report) {
         expect(report.clockMismatch, "clock-mismatch-flag");
         expect(report.fidelity.fidelity == DevFidelity::NotReproducible, "clock-mismatch-fid");
         expect(report.fidelity.evalSuppressedReason == "clockMismatch", "clock-mismatch-reason");
-        expect(report.timeBasis == DevClockContract::kTimeBasisPhysicsTick, "time-basis");
-        expect(report.clockSchema == DevClockContract::kSchema, "clock-schema");
+        expect(report.timeBasis == EbDevClockContract::kTimeBasisPhysicsTick, "time-basis");
+        expect(report.clockSchema == EbDevClockContract::kSchema, "clock-schema");
     }
 
     // Grid delay builders.
     {
-        auto full = buildGridDelays(DevConfig::EvalGrid::Full, 4, 2, 1);
+        auto full = buildGridDelays(EbDevConfig::EvalGrid::Full, 4, 2, 1);
         expect(full.size() == 5, "grid-full-n");
-        auto band = buildGridDelays(DevConfig::EvalGrid::Band, 10, 5, 2);
+        auto band = buildGridDelays(EbDevConfig::EvalGrid::Band, 10, 5, 2);
         expect(std::find(band.begin(), band.end(), 0) != band.end() &&
                    std::find(band.begin(), band.end(), 5) != band.end() &&
                    std::find(band.begin(), band.end(), 3) != band.end() &&
                    std::find(band.begin(), band.end(), 7) != band.end(),
                "grid-band");
-        auto sparse = buildGridDelays(DevConfig::EvalGrid::Sparse, 10, 4, 1);
+        auto sparse = buildGridDelays(EbDevConfig::EvalGrid::Sparse, 10, 4, 1);
         expect(std::find(sparse.begin(), sparse.end(), 0) != sparse.end() &&
                    std::find(sparse.begin(), sparse.end(), 10) != sparse.end(),
                "grid-sparse");
@@ -289,14 +289,14 @@ bool DevEvalEngine::selfCheck(std::string& report) {
 
     // Objective integration via evalGrid with empty layer (no samples run → suppressed).
     {
-        DevLiveWitness w;
+        EbDevLiveWitness w;
         w.valid = true;
         w.player.present = true;
-        w.playerBlobSchema = DevLiveWitness::computePlayerBlobSchema();
-        w.clock = DevClockContract::get().makeStamp(3, false, false, 1.f / 240.f, 1.f / 240.f,
+        w.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();
+        w.clock = EbDevClockContract::get().makeStamp(3, false, false, 1.f / 240.f, 1.f / 240.f,
                                                     1.f / 240.f, 1.f, DevSimPathId::Plan);
-        auto gr = evalGrid(nullptr, w, true, 3, 1, 1, 8, 8, DevConfig::EvalGrid::Band,
-                           DevObjective::Kind::SurviveThenEndX, opts, 0.25f, nullptr);
+        auto gr = evalGrid(nullptr, w, true, 3, 1, 1, 8, 8, EbDevConfig::EvalGrid::Band,
+                           EbDevObjective::Kind::SurviveThenEndX, opts, 0.25f, nullptr);
         expect(gr.objectivePartial, "grid-partial-band");
         expect(gr.objective.objectiveId == std::string("survive_then_endx_v1"), "grid-obj-id");
         // No ghosts → samples empty / not claimsAllowed.
@@ -305,19 +305,19 @@ bool DevEvalEngine::selfCheck(std::string& report) {
 
     // abort clears on eval entry.
     {
-        ShadowSimulator::get().abortEval();
-        expect(ShadowSimulator::get().evalAbortRequested(), "abort-set");
-        DevLiveWitness w;
+        EbShadowSimulator::get().abortEval();
+        expect(EbShadowSimulator::get().evalAbortRequested(), "abort-set");
+        EbDevLiveWitness w;
         w.valid = true;
         w.player.present = true;
-        w.playerBlobSchema = DevLiveWitness::computePlayerBlobSchema();
-        w.clock = DevClockContract::get().makeStamp(1, false, false, 1.f / 240.f, 1.f / 240.f,
+        w.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();
+        w.clock = EbDevClockContract::get().makeStamp(1, false, false, 1.f / 240.f, 1.f / 240.f,
                                                     1.f / 240.f, 1.f, DevSimPathId::Plan);
-        (void)ShadowSimulator::get().evalDelayFromFreeze(nullptr, w, 0, 1, true, nullptr);
-        expect(!ShadowSimulator::get().evalAbortRequested(), "abort-cleared");
+        (void)EbShadowSimulator::get().evalDelayFromFreeze(nullptr, w, 0, 1, true, nullptr);
+        expect(!EbShadowSimulator::get().evalAbortRequested(), "abort-cleared");
     }
 
-    expect(std::strcmp(DevClockContract::simPathId(DevSimPathId::EvalDelayFromFreeze),
+    expect(std::strcmp(EbDevClockContract::simPathId(DevSimPathId::EvalDelayFromFreeze),
                        "ShadowSimulator.evalDelayFromFreeze") == 0,
            "path-const");
 

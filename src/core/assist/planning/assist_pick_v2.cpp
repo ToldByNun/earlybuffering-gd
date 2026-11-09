@@ -3,11 +3,11 @@
 #include <cmath>
 #include <fmt/format.h>
 
-bool AssistPickV2::isDelayWorthy(CandView const& c) {
+bool EbAssistPickV2::isDelayWorthy(CandView const& c) {
     return c.viable && !c.died;
 }
 
-bool AssistPickV2::neighborRobust(CandView const* cands, int limit, int robustK, int delay,
+bool EbAssistPickV2::neighborRobust(CandView const* cands, int limit, int robustK, int delay,
                                   bool needActivation) {
     if (!cands || delay < 0 || delay > limit)
         return false;
@@ -29,7 +29,7 @@ bool AssistPickV2::neighborRobust(CandView const* cands, int limit, int robustK,
     return true;
 }
 
-bool AssistPickV2::foresightBetter(CandView const& a, int delayA, CandView const& b, int delayB,
+bool EbAssistPickV2::foresightBetter(CandView const& a, int delayA, CandView const& b, int delayB,
                                    float latencyWeight) {
     if (a.orbUseful != b.orbUseful)
         return a.orbUseful;
@@ -47,7 +47,7 @@ bool AssistPickV2::foresightBetter(CandView const& a, int delayA, CandView const
     return scoreA > scoreB;
 }
 
-int AssistPickV2::pickEarliestRobust(CandView const* cands, int limit, int robustK,
+int EbAssistPickV2::pickEarliestRobust(CandView const* cands, int limit, int robustK,
                                      std::vector<int> const& pool, bool needActivation) {
     if (!cands || pool.empty() || limit < 0)
         return -1;
@@ -73,7 +73,7 @@ int AssistPickV2::pickEarliestRobust(CandView const* cands, int limit, int robus
     return -1;
 }
 
-int AssistPickV2::pickLatestRobust(CandView const* cands, int limit, int robustK,
+int EbAssistPickV2::pickLatestRobust(CandView const* cands, int limit, int robustK,
                                    std::vector<int> const& pool, bool needActivation) {
     if (!cands || pool.empty() || limit < 0)
         return -1;
@@ -100,7 +100,7 @@ int AssistPickV2::pickLatestRobust(CandView const* cands, int limit, int robustK
     return -1;
 }
 
-int AssistPickV2::pickBestForesight(CandView const* cands, int limit, int robustK,
+int EbAssistPickV2::pickBestForesight(CandView const* cands, int limit, int robustK,
                                     std::vector<int> const& pool, bool needActivation,
                                     float latencyWeight) {
     if (!cands || pool.empty() || limit < 0)
@@ -136,7 +136,7 @@ int AssistPickV2::pickBestForesight(CandView const* cands, int limit, int robust
     return bestAny;
 }
 
-AssistPickV2::Result AssistPickV2::choose(CandView const* cands, int limit, int robustK,
+EbAssistPickV2::Result EbAssistPickV2::choose(CandView const* cands, int limit, int robustK,
                                           bool orbIntent, int actMin, int actMax,
                                           Context const& ctx) {
     Result output{};
@@ -240,7 +240,7 @@ AssistPickV2::Result AssistPickV2::choose(CandView const* cands, int limit, int 
     return output;
 }
 
-bool AssistPickV2::selfCheck(std::string& report) {
+bool EbAssistPickV2::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

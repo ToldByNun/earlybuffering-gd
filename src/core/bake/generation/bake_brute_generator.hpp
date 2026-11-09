@@ -3,13 +3,13 @@
 
 #include "../bake_map.hpp"
 
-class BakeBruteGenerator {
+class EbBakeBruteGenerator {
 public:
-    static geode::Result<int> bakeBrute(BakeMap& owner, PlayLayer* layer, int startSnapshotSlot,
+    static geode::Result<int> bakeBrute(EbBakeMap& owner, PlayLayer* layer, int startSnapshotSlot,
                                         int bakeRadius);
 
 private:
-    BakeBruteGenerator() = delete;
+    EbBakeBruteGenerator() = delete;
 };
 
 #endif

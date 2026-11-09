@@ -3,7 +3,7 @@
 
 #include <string>
 
-class DevStateDiagnostics {
+class EbDevStateDiagnostics {
 public:
     static std::string buildSettings();
     static std::string buildClockAssist();
@@ -12,7 +12,7 @@ public:
     static std::string buildTriggerWorld();
 
 private:
-    DevStateDiagnostics() = delete;
+    EbDevStateDiagnostics() = delete;
 };
 
 #endif

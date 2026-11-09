@@ -2,14 +2,14 @@
 #include <algorithm>
 #include <fmt/format.h>
 
-bool PrefixSim::shouldSkipAfterPrefixDeath(int delay, int prefixDeathTick) {
+bool EbPrefixSim::shouldSkipAfterPrefixDeath(int delay, int prefixDeathTick) {
     if (!(prefixDeathTick < 0)) {
         return delay > prefixDeathTick;
     }
     return false;
 }
 
-int PrefixSim::mergePrefixDeathTick(int current, int deathTick, bool diedBeforeAction) {
+int EbPrefixSim::mergePrefixDeathTick(int current, int deathTick, bool diedBeforeAction) {
     if (!diedBeforeAction || deathTick < 0)
         return current;
     if (!(current < 0)) {
@@ -18,7 +18,7 @@ int PrefixSim::mergePrefixDeathTick(int current, int deathTick, bool diedBeforeA
     return deathTick;
 }
 
-int PrefixSim::updateSameCrashStreak(int streak, int prevDeathTick, int currDeathTick,
+int EbPrefixSim::updateSameCrashStreak(int streak, int prevDeathTick, int currDeathTick,
                                      bool currDied, bool diedBeforeAction) {
     // Prefix / pre-action deaths are handled by skip — not same-crash.
     if (!currDied || diedBeforeAction || currDeathTick < 0)
@@ -29,33 +29,33 @@ int PrefixSim::updateSameCrashStreak(int streak, int prevDeathTick, int currDeat
     return 1;
 }
 
-bool PrefixSim::sameCrashShouldStop(int streak) {
-    return streak >= PrefixSim::kSameCrashStreakStop;
+bool EbPrefixSim::sameCrashShouldStop(int streak) {
+    return streak >= EbPrefixSim::kSameCrashStreakStop;
 }
 
-bool PrefixSim::allowWaveTurnTheory(bool isWave) {
+bool EbPrefixSim::allowWaveTurnTheory(bool isWave) {
     return isWave;
 }
 
-bool PrefixSim::allowShipRecoverTheory(bool isShipLike) {
+bool EbPrefixSim::allowShipRecoverTheory(bool isShipLike) {
     return isShipLike;
 }
 
-bool PrefixSim::allowHoldBranchTheory(bool continuous, bool isRobot, bool isWave, bool isShipLike) {
+bool EbPrefixSim::allowHoldBranchTheory(bool continuous, bool isRobot, bool isWave, bool isShipLike) {
     if (isRobot)
         return true;
     if (!continuous)
         return false;
     // Mode-gated: wave → WaveTurn path; ship-like → recover; other continuous OK.
     if (isWave)
-        return PrefixSim::allowWaveTurnTheory(true);
+        return EbPrefixSim::allowWaveTurnTheory(true);
     if (!(isShipLike)) {
         return true;
     }
-    return PrefixSim::allowShipRecoverTheory(true);
+    return EbPrefixSim::allowShipRecoverTheory(true);
 }
 
-std::vector<int> PrefixSim::rankViableByOutcome(QuickSample const* samples, int sampleCount) {
+std::vector<int> EbPrefixSim::rankViableByOutcome(QuickSample const* samples, int sampleCount) {
     std::vector<int> idx;
     if (!samples || sampleCount <= 0)
         return idx;
@@ -81,7 +81,7 @@ std::vector<int> PrefixSim::rankViableByOutcome(QuickSample const* samples, int 
     return delays;
 }
 
-std::vector<int> PrefixSim::delaysForFullScore(QuickSample const* samples, int sampleCount,
+std::vector<int> EbPrefixSim::delaysForFullScore(QuickSample const* samples, int sampleCount,
                                                int maxFull) {
     std::vector<int> out;
     if (!samples || sampleCount <= 0 || maxFull <= 0)
@@ -124,14 +124,14 @@ std::vector<int> PrefixSim::delaysForFullScore(QuickSample const* samples, int s
     return out;
 }
 
-bool PrefixSim::jitterAttemptAllowed(int attemptIndex, int topK) {
+bool EbPrefixSim::jitterAttemptAllowed(int attemptIndex, int topK) {
     if (!(topK <= 0)) {
         return attemptIndex >= 0 && attemptIndex < topK;
     }
     return false;
 }
 
-bool PrefixSim::selfCheck(std::string& report) {
+bool EbPrefixSim::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {

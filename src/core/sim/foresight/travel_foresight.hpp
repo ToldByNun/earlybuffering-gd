@@ -5,7 +5,7 @@
 #include <string>
 
 // Dt-/speed-aware look-ahead for orbs and jump pads (miss-assist foresight).
-class TravelForesight {
+class EbTravelForesight {
 public:
     // Calibrated so 1x @ 240 TPS ≈ legacy (limit+8)*5.5 at typical windows.
     static constexpr float kBasePxPerTickAt1x = 5.5f;
@@ -42,7 +42,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    TravelForesight() = default;
+    EbTravelForesight() = default;
 };
 
 #endif

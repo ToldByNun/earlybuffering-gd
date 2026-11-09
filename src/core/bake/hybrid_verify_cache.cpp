@@ -1,25 +1,25 @@
+#include "../../app/class_manager.hpp"
 #include "hybrid_verify_cache.hpp"
 #include <cmath>
 
-HybridVerifyCache& HybridVerifyCache::get() {
-    static HybridVerifyCache inst;
-    return inst;
+EbHybridVerifyCache& EbHybridVerifyCache::get() {
+    return EbClassManager::get().service<EbHybridVerifyCache>();
 }
 
-bool HybridVerifyCache::keyEqual(Key const& a, Key const& b) {
+bool EbHybridVerifyCache::keyEqual(Key const& a, Key const& b) {
     return a.nominalFrame == b.nominalFrame && a.earliest == b.earliest && a.latest == b.latest &&
            a.delayTicks == b.delayTicks && a.limit == b.limit && a.down == b.down &&
            a.player2 == b.player2 && a.mode == b.mode;
 }
 
-void HybridVerifyCache::clearAttempt() {
+void EbHybridVerifyCache::clearAttempt() {
     for (int index = 0; index < kMaxEntries; ++index) {
         this->m_entries[index] = {};
     }
     this->m_next = 0;
 }
 
-bool HybridVerifyCache::tryGet(Key const& key, float playerX, BakeVerifier::Result& out) const {
+bool EbHybridVerifyCache::tryGet(Key const& key, float playerX, EbBakeVerifier::Result& out) const {
     for (int index = 0; index < kMaxEntries; ++index) {
         auto const& e = this->m_entries[index];
         if (!e.valid)
@@ -34,7 +34,7 @@ bool HybridVerifyCache::tryGet(Key const& key, float playerX, BakeVerifier::Resu
     return false;
 }
 
-void HybridVerifyCache::put(Key const& key, float playerX, BakeVerifier::Result const& result) {
+void EbHybridVerifyCache::put(Key const& key, float playerX, EbBakeVerifier::Result const& result) {
     // Budget exhaustion is press-envelope-local — do not memoize as bake truth.
     if (result.budgetHit)
         return;

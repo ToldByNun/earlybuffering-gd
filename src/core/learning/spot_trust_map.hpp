@@ -6,13 +6,13 @@
 
 // Spots where GhostParityProbe saw drift stay untrusted across attempts
 // until cleared (good parity window or level quit / reset learn).
-class SpotTrustMap {
+class EbSpotTrustMap {
 public:
     static constexpr float kSpotSize = 90.f;
     // Mark covers neighboring buckets so a mover corridor stays cold.
     static constexpr int kMarkBucketRadius = 1;
 
-    static SpotTrustMap& get();
+    static EbSpotTrustMap& get();
 
     void clear();
     void markUntrusted(float x);
@@ -27,7 +27,9 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    SpotTrustMap() = default;
+    friend class EbServiceStore;
+
+    EbSpotTrustMap() = default;
 
     class Spot {
     public:

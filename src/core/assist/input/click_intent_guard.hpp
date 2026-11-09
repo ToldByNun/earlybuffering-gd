@@ -7,9 +7,9 @@
 // Detects dense / rhythmic click spam (esp. wave corridors) so assist can Pass
 // instead of buffering taps that have no real threat target.
 // Orb/pad ahead or a nearby bake window → do not Pass (allow assist).
-class ClickIntentGuard {
+class EbClickIntentGuard {
 public:
-    static ClickIntentGuard& get();
+    static EbClickIntentGuard& get();
 
     void reset();
 
@@ -34,7 +34,9 @@ public:
     static float spamMaxMeanGap(GameModeKind mode);
 
 private:
-    ClickIntentGuard() = default;
+    friend class EbServiceStore;
+
+    EbClickIntentGuard() = default;
 
     static constexpr int kRing = 12;
 

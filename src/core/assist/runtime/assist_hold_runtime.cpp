@@ -16,14 +16,14 @@
 #include "../contracts/miss_assist_contracts.hpp"
 #include <algorithm>
 
-bool AssistHoldRuntime::armHoldUntilSafe(AssistController& controller, PlayLayer* playLayer,
+bool EbAssistHoldRuntime::armHoldUntilSafe(EbAssistController& controller, PlayLayer* playLayer,
                                          PlayerObject* player, bool player1, int effectTick,
-                                         int limit, SimPlan const& plan, bool down) {
+                                         int limit, EbSimPlan const& plan, bool down) {
     (void)playLayer;
     if (!player || limit <= 0)
         return true; // fall through vanilla
     // Commit 13: HUS nur Trust.
-    if (!SimTrust::get().okAt(player->getPositionX()))
+    if (!EbSimTrust::get().okAt(player->getPositionX()))
         return true;
 
     int const eta = controller.holdUntilSafeEtaTicks(plan, limit);
@@ -38,7 +38,7 @@ bool AssistHoldRuntime::armHoldUntilSafe(AssistController& controller, PlayLayer
     controller.m_buffer.expectedJumpTick = controller.m_buffer.fireTick;
     controller.m_buffer.continuous = plan.continuous;
     controller.m_buffer.decisionX = player->getPositionX();
-    controller.m_buffer.mode = StageConfig::kindOf(player);
+    controller.m_buffer.mode = EbStageConfig::kindOf(player);
     controller.m_buffer.requireOrb = plan.requireOrb || plan.foresightOrbPad || plan.usedOrbWindow;
     controller.m_buffer.requireHold = plan.requireHold;
     controller.m_buffer.releaseAfter = plan.releaseAfter;
@@ -56,17 +56,17 @@ bool AssistHoldRuntime::armHoldUntilSafe(AssistController& controller, PlayLayer
     controller.m_outcomePlanDelay = eta > 0;
     controller.m_outcomeExpectOrb = controller.m_buffer.requireOrb;
     {
-        DevCycleRecorder::DelayArmMeta meta{};
+        EbDevCycleRecorder::DelayArmMeta meta{};
         meta.armVerifyOk = true;
         meta.budgetHitAtArm = plan.budgetHit;
-        controller.m_buffer.devPressId = DevCycleRecorder::get().noteDelayArm(
+        controller.m_buffer.devPressId = EbDevCycleRecorder::get().noteDelayArm(
             AssistReason::HoldPending, "hus-arm", eta, controller.m_buffer.fireTick, plan.planId,
             DevEventSource::Live, meta);
     }
     controller.noteVerdict(AssistReason::HoldPending, "hus-arm");
     if (eta > 0)
-        AssistRealMetrics::get().noteArm();
-    AssistLog::debug(fmt::format(
+        EbAssistRealMetrics::get().noteArm();
+    EbAssistLog::debug(fmt::format(
         "HOLD-UNTIL-SAFE arm {} eta={} limit={} foresight={} orbWin={} budgetHit={} id={}",
         down ? "press" : "release", eta, limit, plan.foresightOrbPad ? 1 : 0,
         plan.usedOrbWindow ? 1 : 0, plan.budgetHit ? 1 : 0, plan.planId));
@@ -75,7 +75,7 @@ bool AssistHoldRuntime::armHoldUntilSafe(AssistController& controller, PlayLayer
     return false; // swallow
 }
 
-void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLayer* playLayer,
+void EbAssistHoldRuntime::tickHoldUntilSafe(EbAssistController& controller, PlayLayer* playLayer,
                                           PlayerObject* player) {
     if (!playLayer || !player)
         return;
@@ -87,9 +87,9 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
         return;
 
     // Commit 13: trust lost mid-HUS → Pass (drop soft hold, no inject).
-    if (!SimTrust::get().okAt(player->getPositionX())) {
-        AssistLog::debug("HOLD-UNTIL-SAFE abort (trust lost) → Pass");
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::PassUntrust,
+    if (!EbSimTrust::get().okAt(player->getPositionX())) {
+        EbAssistLog::debug("HOLD-UNTIL-SAFE abort (trust lost) → Pass");
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::PassUntrust,
                                         "hus-trust-lost", controller.m_attemptTick);
         controller.noteVerdict(AssistReason::PassUntrust, "hus-trust-lost");
         controller.clearBuffer();
@@ -101,10 +101,10 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
 
     // Never wait past the window — fire at deadline.
     if (remaining <= 0 || controller.m_attemptTick >= deadline) {
-        AssistLog::debug(fmt::format("HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={})",
+        EbAssistLog::debug(fmt::format("HOLD-UNTIL-SAFE deadline fire @{} (press={} limit={})",
                                      controller.m_attemptTick, controller.m_buffer.pressTick,
                                      controller.m_buffer.limit));
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
                                         "hus-deadline", controller.m_attemptTick);
         controller.m_buffer.holdUntilSafe = false;
         controller.m_buffer.fireTick = controller.m_attemptTick;
@@ -115,20 +115,20 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
     int const remLimit = std::max(1, remaining);
     float const x = player->getPositionX();
     // Cheap foresight edge (no full plan) so cadence can wake on orb/pad enter/leave.
-    int const slack = StageConfig::deathSlack();
+    int const slack = EbStageConfig::deathSlack();
     bool const foresightNow =
-        StageConfig::assistOrbs() &&
-        TravelForesight::hasOrbOrPadAhead(playLayer, player, remLimit, controller.m_simDt, slack);
+        EbStageConfig::assistOrbs() &&
+        EbTravelForesight::hasOrbOrPadAhead(playLayer, player, remLimit, controller.m_simDt, slack);
 
     if (!controller.shouldReplanHoldUntilSafe(controller.m_attemptTick,
                                               controller.m_buffer.husLastReplanTick, x,
                                               controller.m_buffer.husLastReplanX, foresightNow,
                                               controller.m_buffer.husLastForesight, remaining)) {
         controller.m_buffer.fireTick = deadline;
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
                                         "hus-skip", controller.m_buffer.fireTick);
         controller.noteVerdict(AssistReason::HoldPending, "hus-skip");
-        LagProbe::get().mark("hus.replan.skip",
+        EbLagProbe::get().mark("hus.replan.skip",
                              fmt::format("t={} rem={}", controller.m_attemptTick, remaining));
         return;
     }
@@ -138,33 +138,33 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
     // this guards any future mid-step call site.
     if (controller.m_inRealUpdate) {
         controller.m_buffer.fireTick = deadline;
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
                                         "hus-defer-mid-update", controller.m_buffer.fireTick);
         controller.noteVerdict(AssistReason::HoldPending, "hus-defer-mid-update");
-        LagProbe::get().mark("hus.replan.defer",
+        EbLagProbe::get().mark("hus.replan.defer",
                              fmt::format("t={} rem={}", controller.m_attemptTick, remaining));
         return;
     }
 
-    LagProbe::Scope const husScope(
+    EbLagProbe::Scope const husScope(
         "eb.hus.replan", fmt::format("rem={} foresight={}", remaining, foresightNow ? 1 : 0));
 
-    PlanOptions opts;
-    opts.budgetUs = StageConfig::husReplanBudgetUs();
-    opts.tickBudget = StageConfig::husReplanTickBudget();
+    EbPlanOptions opts;
+    opts.budgetUs = EbStageConfig::husReplanBudgetUs();
+    opts.tickBudget = EbStageConfig::husReplanTickBudget();
     opts.capMul =
-        StageConfig::autoTune() ? LevelProfile::get().capMul(controller.m_buffer.mode) : 1.f;
+        EbStageConfig::autoTune() ? EbLevelProfile::get().capMul(controller.m_buffer.mode) : 1.f;
     opts.maxBranches = 2;
     opts.smartDepth = 1;
-    opts.legacyPick = StageConfig::assistPickLegacy();
-    opts.assistEngine = StageConfig::effectiveAssistEngine();
+    opts.legacyPick = EbStageConfig::assistPickLegacy();
+    opts.assistEngine = EbStageConfig::effectiveAssistEngine();
     opts.attemptStartTick = controller.m_attemptTick;
     opts.requireAliveForDelay = true;
-    AssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
+    EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                           true);
 
     bool const husDown = controller.m_buffer.down;
-    auto re = ShadowSimulator::get().plan(playLayer, player, husDown, remLimit, controller.m_simDt,
+    auto re = EbShadowSimulator::get().plan(playLayer, player, husDown, remLimit, controller.m_simDt,
                                           controller.m_simDt, opts);
 
     controller.m_buffer.husLastReplanTick = controller.m_attemptTick;
@@ -172,7 +172,7 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
     controller.m_buffer.husLastForesight = foresightNow || re.foresightOrbPad || re.usedOrbWindow;
 
     if (re.action == PlanAction::Delay && re.delay > 0) {
-        int delay = MissAssistContracts::clampDelayToWindow(re.delay, remLimit);
+        int delay = EbMissAssistContracts::clampDelayToWindow(re.delay, remLimit);
         if (delay < 1)
             delay = 1;
         int const jumpRel = re.jumpTick > 0 ? re.jumpTick : delay;
@@ -189,7 +189,7 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
         }
 
         controller.m_buffer.fireTick = proposed;
-        controller.m_buffer.planDelay = MissAssistContracts::clampDelayToWindow(
+        controller.m_buffer.planDelay = EbMissAssistContracts::clampDelayToWindow(
             controller.m_attemptTick - controller.m_buffer.pressTick + delay,
             controller.m_buffer.limit);
         controller.m_buffer.expectedJumpTick = controller.m_attemptTick + jumpRel;
@@ -204,13 +204,13 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
             controller.m_buffer.dMax = re.dMax;
         controller.m_buffer.holdUntilSafe = false; // hard Delay confirmed
         AssistReason delayReason = re.reason;
-        if (!AssistVerdict::isDelay(delayReason)) {
-            delayReason = AssistVerdict::inferDelayReason(re.activatedRing, re.requireOrb, false);
+        if (!EbAssistVerdict::isDelay(delayReason)) {
+            delayReason = EbAssistVerdict::inferDelayReason(re.activatedRing, re.requireOrb, false);
         }
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, delayReason, "hus-confirm",
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, delayReason, "hus-confirm",
                                         controller.m_buffer.fireTick);
         controller.noteVerdict(delayReason, "hus-confirm");
-        AssistLog::debug(fmt::format("HOLD-UNTIL-SAFE confirm Delay +{} fire={} deadline={}", delay,
+        EbAssistLog::debug(fmt::format("HOLD-UNTIL-SAFE confirm Delay +{} fire={} deadline={}", delay,
                                      controller.m_buffer.fireTick, deadline));
         return;
     }
@@ -221,8 +221,8 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
                          re.reason == AssistReason::PassD0Safe ||
                          (re.action == PlanAction::Pass && re.nowIsSafe && clearOpp);
     if (safeNow) {
-        AssistLog::debug(fmt::format("HOLD-UNTIL-SAFE flush Pass now @{} reason={}",
-                                     controller.m_attemptTick, AssistVerdict::name(re.reason)));
+        EbAssistLog::debug(fmt::format("HOLD-UNTIL-SAFE flush Pass now @{} reason={}",
+                                     controller.m_attemptTick, EbAssistVerdict::name(re.reason)));
         controller.m_buffer.holdUntilSafe = false;
         controller.m_buffer.fireTick = controller.m_attemptTick;
         controller.fireBuffered(playLayer, player, false);
@@ -233,15 +233,15 @@ void AssistHoldRuntime::tickHoldUntilSafe(AssistController& controller, PlayLaye
     // PassBudget on HUS does not drop the click — window-cap fire later.
     controller.m_buffer.fireTick = deadline;
     if (re.budgetHit || re.reason == AssistReason::PassBudget) {
-        LagProbe::get().mark("hus.replan.budget",
+        EbLagProbe::get().mark("hus.replan.budget",
                              fmt::format("t={} rem={}", controller.m_attemptTick, remaining));
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
                                         "hus-budget", controller.m_buffer.fireTick);
         controller.noteVerdict(AssistReason::HoldPending, "hus-budget");
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("HOLD-UNTIL-SAFE budget exhaust → deadline={} (never hang)", deadline));
     } else {
-        DevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
+        EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,
                                         "hus-wait", controller.m_buffer.fireTick);
         controller.noteVerdict(AssistReason::HoldPending, "hus-wait");
     }

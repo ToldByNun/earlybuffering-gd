@@ -6,18 +6,18 @@
 #include <Geode/Geode.hpp>
 #include <string>
 
-class DevSnapshotCodec {
+class EbDevSnapshotCodec {
 public:
-    static matjson::Value clockStampToJson(DevClockContract::Stamp const& st);
-    static bool clockStampFromJson(matjson::Value const& j, DevClockContract::Stamp& st,
+    static matjson::Value clockStampToJson(EbDevClockContract::Stamp const& st);
+    static bool clockStampFromJson(matjson::Value const& j, EbDevClockContract::Stamp& st,
                                    std::string& err);
-    static matjson::Value playerBlobToJson(DevPlayerBlob const& b);
-    static void playerBlobFromJson(matjson::Value const& j, DevPlayerBlob& b);
-    static matjson::Value witnessToJson(DevLiveWitness const& w);
-    static bool witnessFromJson(matjson::Value const& j, DevLiveWitness& w, std::string& err);
+    static matjson::Value playerBlobToJson(EbDevPlayerBlob const& b);
+    static void playerBlobFromJson(matjson::Value const& j, EbDevPlayerBlob& b);
+    static matjson::Value witnessToJson(EbDevLiveWitness const& w);
+    static bool witnessFromJson(matjson::Value const& j, EbDevLiveWitness& w, std::string& err);
 
 private:
-    DevSnapshotCodec() = delete;
+    EbDevSnapshotCodec() = delete;
 };
 
 #endif

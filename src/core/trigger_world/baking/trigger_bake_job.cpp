@@ -8,7 +8,7 @@
 #include <chrono>
 #include <fmt/format.h>
 
-void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
+void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
     if (!owner.m_running)
         return;
     if (owner.m_cancel) {
@@ -16,15 +16,15 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
         return;
     }
 
-    PerfTrace::Scope const scope("triggerBake.slice");
-    LagProbe::Scope const lagScope("eb.triggerBake.build");
+    EbPerfTrace::Scope const scope("triggerBake.slice");
+    EbLagProbe::Scope const lagScope("eb.triggerBake.build");
 
     auto const wall0 = std::chrono::steady_clock::now();
     auto budgetHit = [&]() -> bool {
         auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
                                              std::chrono::steady_clock::now() - wall0)
                                              .count();
-        return elapsedMicroseconds >= TriggerWorldBaker::kBudgetUs;
+        return elapsedMicroseconds >= EbTriggerWorldBaker::kBudgetUs;
     };
 
     while (!budgetHit()) {
@@ -33,7 +33,7 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             return;
         }
 
-        if (owner.m_phase == TriggerWorldBaker::Phase::WaitObjects) {
+        if (owner.m_phase == EbTriggerWorldBaker::Phase::WaitObjects) {
             auto* layer = owner.m_layer;
             size_t children = 0;
             if (layer && layer->m_objectLayer) {
@@ -46,7 +46,7 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             owner.m_progress =
                 0.02f *
                 std::min(1.f, static_cast<float>(owner.m_waitSlices) /
-                                  static_cast<float>(TriggerWorldBaker::kMaxWaitObjectSlices));
+                                  static_cast<float>(EbTriggerWorldBaker::kMaxWaitObjectSlices));
             if (children > 0 || hasSections) {
                 owner.m_childCount = children;
                 owner.m_childIndex = 0;
@@ -57,26 +57,26 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
                     owner.m_objects.reserve(children);
                     owner.m_effects.reserve(256);
                 }
-                owner.m_phase = TriggerWorldBaker::Phase::Collect;
-                AssistLog::debug(
+                owner.m_phase = EbTriggerWorldBaker::Phase::Collect;
+                EbAssistLog::debug(
                     fmt::format("TRIGGER-WORLD: objects ready ({} children) after {} wait slices",
                                 children, owner.m_waitSlices));
                 continue;
             }
-            if (owner.m_waitSlices >= TriggerWorldBaker::kMaxWaitObjectSlices) {
+            if (owner.m_waitSlices >= EbTriggerWorldBaker::kMaxWaitObjectSlices) {
                 owner.m_collectIncomplete = true;
-                owner.m_phase = TriggerWorldBaker::Phase::Commit;
-                AssistLog::info(
+                owner.m_phase = EbTriggerWorldBaker::Phase::Commit;
+                EbAssistLog::info(
                     "TRIGGER-WORLD: WaitObjects timed out — committing incomplete empty");
                 continue;
             }
             break; // yield slice; try next physics tick
         }
 
-        if (owner.m_phase == TriggerWorldBaker::Phase::Collect) {
+        if (owner.m_phase == EbTriggerWorldBaker::Phase::Collect) {
             auto* layer = owner.m_layer;
             if (!layer || !layer->m_objectLayer) {
-                owner.m_phase = TriggerWorldBaker::Phase::CollectSections;
+                owner.m_phase = EbTriggerWorldBaker::Phase::CollectSections;
                 owner.m_secOuter = 0;
                 owner.m_secInner = 0;
                 owner.m_secSlot = 0;
@@ -84,7 +84,7 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             }
             auto* children = layer->m_objectLayer->getChildren();
             if (!children) {
-                owner.m_phase = TriggerWorldBaker::Phase::CollectSections;
+                owner.m_phase = EbTriggerWorldBaker::Phase::CollectSections;
                 owner.m_secOuter = 0;
                 owner.m_secInner = 0;
                 owner.m_secSlot = 0;
@@ -94,7 +94,7 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             // Collect must finish every child across slices (no skip on budget).
             size_t count = 0;
             while (owner.m_childIndex < owner.m_childCount &&
-                   count < TriggerWorldBaker::kCollectPerSlice && !budgetHit()) {
+                   count < EbTriggerWorldBaker::kCollectPerSlice && !budgetHit()) {
                 auto* object = geode::prelude::typeinfo_cast<GameObject*>(
                     children->objectAtIndex(static_cast<unsigned>(owner.m_childIndex)));
                 ++owner.m_childIndex;
@@ -109,7 +109,7 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             owner.m_progress = 0.12f * collectFrac;
 
             if (owner.m_childIndex >= owner.m_childCount) {
-                owner.m_phase = TriggerWorldBaker::Phase::CollectSections;
+                owner.m_phase = EbTriggerWorldBaker::Phase::CollectSections;
                 owner.m_secOuter = 0;
                 owner.m_secInner = 0;
                 owner.m_secSlot = 0;
@@ -117,22 +117,22 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             continue;
         }
 
-        if (owner.m_phase == TriggerWorldBaker::Phase::CollectSections) {
+        if (owner.m_phase == EbTriggerWorldBaker::Phase::CollectSections) {
             auto* layer = owner.m_layer;
             if (!layer) {
-                owner.m_phase = TriggerWorldBaker::Phase::Bake;
+                owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
                 owner.m_effectIndex = 0;
                 continue;
             }
 
             auto& sections = layer->m_sections;
             size_t count = 0;
-            while (count < TriggerWorldBaker::kCollectPerSlice && !budgetHit()) {
+            while (count < EbTriggerWorldBaker::kCollectPerSlice && !budgetHit()) {
                 if (owner.m_secOuter >= sections.size()) {
-                    owner.m_phase = TriggerWorldBaker::Phase::Bake;
+                    owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
                     owner.m_effectIndex = 0;
                     if (owner.m_sectionExtras > 0) {
-                        AssistLog::debug(fmt::format(
+                        EbAssistLog::debug(fmt::format(
                             "TRIGGER-WORLD: section collect +{} objects (total objs={} effects={})",
                             owner.m_sectionExtras, owner.m_objects.size(), owner.m_effects.size()));
                     }
@@ -169,10 +169,10 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             continue;
         }
 
-        if (owner.m_phase == TriggerWorldBaker::Phase::Bake) {
+        if (owner.m_phase == EbTriggerWorldBaker::Phase::Bake) {
             size_t count = 0;
             while (owner.m_effectIndex < owner.m_effects.size() &&
-                   count < TriggerWorldBaker::kEffectsPerSlice && !budgetHit()) {
+                   count < EbTriggerWorldBaker::kEffectsPerSlice && !budgetHit()) {
                 owner.bakeOneEffect(owner.m_effects[owner.m_effectIndex]);
                 ++owner.m_effectIndex;
                 ++count;
@@ -189,14 +189,14 @@ void TriggerBakeJob::tickSlice(TriggerWorldBaker& owner) {
             }
 
             if (owner.m_effectIndex >= owner.m_effects.size()) {
-                owner.m_phase = TriggerWorldBaker::Phase::Commit;
+                owner.m_phase = EbTriggerWorldBaker::Phase::Commit;
             }
             continue;
         }
 
-        if (owner.m_phase == TriggerWorldBaker::Phase::Commit) {
+        if (owner.m_phase == EbTriggerWorldBaker::Phase::Commit) {
             owner.publishPartial();
-            owner.m_phase = TriggerWorldBaker::Phase::Idle;
+            owner.m_phase = EbTriggerWorldBaker::Phase::Idle;
             owner.finishOk();
             return;
         }

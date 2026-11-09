@@ -7,7 +7,7 @@
 #include <cctype>
 #include <unordered_set>
 
-std::string CloudConfigShare::discordCommunityUrl() {
+std::string EbCloudConfigShare::discordCommunityUrl() {
     static char const* kFallback = "https://discord.gg/QJuTDkmPcf";
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
@@ -19,7 +19,7 @@ std::string CloudConfigShare::discordCommunityUrl() {
     return kFallback;
 }
 
-std::string CloudConfigShare::suggestId(std::string const& nameHint) {
+std::string EbCloudConfigShare::suggestId(std::string const& nameHint) {
     std::string out;
     out.reserve(32);
     for (char const character : nameHint) {
@@ -30,7 +30,7 @@ std::string CloudConfigShare::suggestId(std::string const& nameHint) {
             if (!out.empty() && out.back() != '-')
                 out.push_back('-');
         }
-        if (out.size() >= CloudConfigStore::kMaxIdLen)
+        if (out.size() >= EbCloudConfigStore::kMaxIdLen)
             break;
     }
     while (!out.empty() && out.front() == '-')
@@ -39,12 +39,12 @@ std::string CloudConfigShare::suggestId(std::string const& nameHint) {
         out.pop_back();
     if (out.empty())
         out = "shared-config";
-    if (!CloudConfigStore::isValidPackId(out))
+    if (!EbCloudConfigStore::isValidPackId(out))
         out = "shared-config";
     return out;
 }
 
-std::string CloudConfigShare::sanitizeTagToken(std::string const& raw) {
+std::string EbCloudConfigShare::sanitizeTagToken(std::string const& raw) {
     std::string out;
     out.reserve(raw.size());
     for (char const character : raw) {
@@ -67,7 +67,7 @@ std::string CloudConfigShare::sanitizeTagToken(std::string const& raw) {
     return out;
 }
 
-std::vector<std::string> CloudConfigShare::parseTags(std::string const& raw) {
+std::vector<std::string> EbCloudConfigShare::parseTags(std::string const& raw) {
     std::vector<std::string> out;
     std::unordered_set<std::string> seen;
     std::string token;
@@ -100,7 +100,7 @@ std::vector<std::string> CloudConfigShare::parseTags(std::string const& raw) {
     return out;
 }
 
-std::string CloudConfigShare::buildEnvelope(std::string const& suggestedId, std::string const& name,
+std::string EbCloudConfigShare::buildEnvelope(std::string const& suggestedId, std::string const& name,
                                             std::string const& author,
                                             std::string const& description,
                                             std::vector<std::string> const& tags,
@@ -126,7 +126,7 @@ std::string CloudConfigShare::buildEnvelope(std::string const& suggestedId, std:
     return root.dump();
 }
 
-std::string CloudConfigShare::buildClipboardText(std::string const& suggestedId,
+std::string EbCloudConfigShare::buildClipboardText(std::string const& suggestedId,
                                                  std::filesystem::path const& outboxPath,
                                                  std::string const& envelopeJson) {
     return fmt::format("EarlyBuffer cloud config share\n"
@@ -138,14 +138,14 @@ std::string CloudConfigShare::buildClipboardText(std::string const& suggestedId,
                        suggestedId, outboxPath.string(), discordCommunityUrl(), envelopeJson);
 }
 
-CloudConfigShare::Result CloudConfigShare::shareCurrent(std::string const& nameHint,
+EbCloudConfigShare::Result EbCloudConfigShare::shareCurrent(std::string const& nameHint,
                                                         std::string const& author,
                                                         std::string const& description,
                                                         std::vector<std::string> const& tagsIn) {
     Result result{};
 
     std::string bundleJson;
-    auto const exported = ConfigBundle::exportToString(bundleJson);
+    auto const exported = EbConfigBundle::exportToString(bundleJson);
     if (exported.isErr()) {
         result.error = exported.unwrapErr().empty() ? "export failed" : exported.unwrapErr();
         return result;
@@ -168,11 +168,11 @@ CloudConfigShare::Result CloudConfigShare::shareCurrent(std::string const& nameH
         buildEnvelope(result.suggestedId, name, author, description, result.tags, bundleJson);
 
     std::string writeErr;
-    if (!CloudConfigStore::get().ensureDirs(writeErr)) {
+    if (!EbCloudConfigStore::get().ensureDirs(writeErr)) {
         result.error = writeErr.empty() ? "ensureDirs failed" : writeErr;
         return result;
     }
-    if (!CloudConfigStore::get().writeOutbox(result.suggestedId, result.envelopeJson,
+    if (!EbCloudConfigStore::get().writeOutbox(result.suggestedId, result.envelopeJson,
                                              result.outboxPath, writeErr)) {
         result.error = writeErr.empty() ? "outbox write failed" : writeErr;
         return result;
@@ -183,7 +183,7 @@ CloudConfigShare::Result CloudConfigShare::shareCurrent(std::string const& nameH
     result.clipboardOk = geode::utils::clipboard::write(result.clipboardText);
     result.ok = true;
 
-    CloudConfigPublish::PackMeta meta{};
+    EbCloudConfigPublish::PackMeta meta{};
     meta.id = result.suggestedId;
     meta.name = name;
     meta.author = author;
@@ -192,7 +192,7 @@ CloudConfigShare::Result CloudConfigShare::shareCurrent(std::string const& nameH
     meta.minModVersion = "1.4.1";
     meta.bundleVersion = 2;
 
-    auto const sub = CloudConfigSubmit::submit(meta, bundleJson);
+    auto const sub = EbCloudConfigSubmit::submit(meta, bundleJson);
     result.publishAttempted = sub.attempted;
     result.published = sub.ok;
     result.publishUrl = sub.prOrCommitUrl;
@@ -201,7 +201,7 @@ CloudConfigShare::Result CloudConfigShare::shareCurrent(std::string const& nameH
     return result;
 }
 
-bool CloudConfigShare::selfCheck(std::string& report) {
+bool EbCloudConfigShare::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -213,7 +213,7 @@ bool CloudConfigShare::selfCheck(std::string& report) {
 
     expect(suggestId("") == "shared-config", "id-empty");
     expect(suggestId("My Cool Pack!") == "my-cool-pack", "id-sanitize");
-    expect(CloudConfigStore::isValidPackId(suggestId("Hello")), "id-valid");
+    expect(EbCloudConfigStore::isValidPackId(suggestId("Hello")), "id-valid");
 
     auto const emptyTags = parseTags("");
     expect(emptyTags.size() == 1 && emptyTags[0] == "shared", "tags-empty");

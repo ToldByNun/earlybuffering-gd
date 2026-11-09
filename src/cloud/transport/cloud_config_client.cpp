@@ -9,10 +9,10 @@
 #pragma optimize("", off)
 #endif
 
-CloudConfigClient::FetchResult
-CloudConfigClientImplementation::cloudConfigFetchSync(std::string const& url, size_t limit,
+EbCloudConfigClient::FetchResult
+EbCloudConfigClientImplementation::cloudConfigFetchSync(std::string const& url, size_t limit,
                                                       int timeoutSec) {
-    CloudConfigClient::FetchResult result{};
+    EbCloudConfigClient::FetchResult result{};
     result.urlUsed = url;
 
     geode::utils::web::WebRequest req;
@@ -65,26 +65,26 @@ CloudConfigClientImplementation::cloudConfigFetchSync(std::string const& url, si
     return result;
 }
 
-CloudConfigClient::CloudConfigClient() : m_impl(new Impl()) {}
+EbCloudConfigClient::EbCloudConfigClient() : m_impl(new Impl()) {}
 
-CloudConfigClient::~CloudConfigClient() {
+EbCloudConfigClient::~EbCloudConfigClient() {
     this->cancel();
     delete m_impl;
     m_impl = nullptr;
 }
 
-void CloudConfigClient::cancel() {
+void EbCloudConfigClient::cancel() {
     if (!m_impl)
         return;
     ++m_impl->gen;
     m_impl->busy = false;
 }
 
-bool CloudConfigClient::isBusy() const {
+bool EbCloudConfigClient::isBusy() const {
     return m_impl && m_impl->busy;
 }
 
-void CloudConfigClient::getText(std::string const& url, size_t maxBytes, int timeoutSec,
+void EbCloudConfigClient::getText(std::string const& url, size_t maxBytes, int timeoutSec,
                                 std::string const& customCatalogUrl, Callback callback) {
     FetchResult early{};
     early.urlUsed = url;
@@ -101,7 +101,7 @@ void CloudConfigClient::getText(std::string const& url, size_t maxBytes, int tim
             callback(early);
         return;
     }
-    if (!CloudConfigHostPolicy::isAllowedUrl(url, customCatalogUrl)) {
+    if (!EbCloudConfigHostPolicy::isAllowedUrl(url, customCatalogUrl)) {
         early.error = "url not allowed";
         if (callback)
             callback(early);
@@ -123,7 +123,7 @@ void CloudConfigClient::getText(std::string const& url, size_t maxBytes, int tim
     std::thread([impl, generation, limit, tick, urlCopy = std::move(urlCopy),
                  callback = std::move(callback)]() mutable {
         FetchResult result =
-            CloudConfigClientImplementation::cloudConfigFetchSync(urlCopy, limit, tick);
+            EbCloudConfigClientImplementation::cloudConfigFetchSync(urlCopy, limit, tick);
         geode::queueInMainThread([impl, generation, callback = std::move(callback),
                                   result = std::move(result)]() mutable {
             if (!impl || generation != impl->gen) {
@@ -136,7 +136,7 @@ void CloudConfigClient::getText(std::string const& url, size_t maxBytes, int tim
     }).detach();
 }
 
-bool CloudConfigClient::selfCheck(std::string& report) {
+bool EbCloudConfigClient::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -146,7 +146,7 @@ bool CloudConfigClient::selfCheck(std::string& report) {
         }
     };
 
-    CloudConfigClient client;
+    EbCloudConfigClient client;
     expect(!client.isBusy(), "idle");
     client.cancel();
     expect(!client.isBusy(), "cancel-idle");

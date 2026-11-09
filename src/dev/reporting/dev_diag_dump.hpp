@@ -9,7 +9,7 @@
 
 // Writes a timestamped folder of diagnostic text logs under mod save dir /diag/.
 // Covers settings, clock, replay, BakeMap, Trigger World, bake probe, self-checks.
-class DevDiagDump {
+class EbDevDiagDump {
 public:
     // Full dump (Dev tab). Returns folder path; errMsg on failure.
     static bool dumpAll(std::filesystem::path& outDir, std::string& errMsg);
@@ -19,17 +19,17 @@ public:
 
     // Pure helpers (PlanGold + BakeMap validate Err).
     static int deathTraceUntil(int deathFrame, int lastEventFrame);
-    static std::string formatUnknownTop3(std::vector<ShadowSimulator::UnknownHistBin> const& hist);
+    static std::string formatUnknownTop3(std::vector<EbShadowSimulator::UnknownHistBin> const& hist);
     static bool selfCheck(std::string& report);
 
 private:
-    friend class DevStateDiagnostics;
+    friend class EbDevStateDiagnostics;
 
-    friend class DevBakeDiagnostics;
+    friend class EbDevBakeDiagnostics;
 
-    friend class DevGhostDiagnostics;
+    friend class EbDevGhostDiagnostics;
 
-    DevDiagDump() = default;
+    EbDevDiagDump() = default;
 
     static std::filesystem::path makeStampDir(char const* prefix, std::string& errMsg);
     static bool writeFile(std::filesystem::path const& dir, char const* name,
@@ -66,7 +66,7 @@ private:
     // Shared: prepare remapped timeline for probe/trace (empty on error → msg in outErr).
     static bool prepareBakeEvents(PlayLayer*& outLayer, int& outSlot, float& outDt,
                                   double& outSrcTps, double& outBakeTps,
-                                  std::vector<ReplayEvent>& outEv, std::string& outErr,
+                                  std::vector<EbReplayEvent>& outEv, std::string& outErr,
                                   int* outSubsteps = nullptr, BakePrepStats* outStats = nullptr);
 };
 
@@ -79,12 +79,12 @@ private:
 #include <limits>
 #include <sstream>
 
-class DevDiagDumpImplementation {
+class EbDevDiagDumpImplementation {
 public:
     static std::string stampNow();
     static bool writeTextFile(std::filesystem::path const& path, std::string const& body);
     static char const* boolStr(bool value);
-    static std::string settingValueLine(ConfigBundleKeys::Entry const& e);
+    static std::string settingValueLine(EbConfigBundleKeys::Entry const& e);
     static void dumpVehicleFlags(std::ostringstream& o, char const* prefix, PlayerObject* player);
     static bool isHazardType(GameObject* object);
     static void dumpRectLine(std::ostringstream& o, char const* name, PlayerObject* player);
@@ -92,9 +92,9 @@ public:
                                    std::ostringstream& detail, int maxDetail);
 
 private:
-    friend class DevGhostDiagnostics;
+    friend class EbDevGhostDiagnostics;
 
-    DevDiagDumpImplementation() = delete;
+    EbDevDiagDumpImplementation() = delete;
 };
 
 #endif

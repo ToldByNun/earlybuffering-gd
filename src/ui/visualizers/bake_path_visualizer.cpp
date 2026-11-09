@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "bake_path_visualizer.hpp"
 #include "../../core/assist/assist_clock.hpp"
 #include "../../core/assist/assist_controller.hpp"
@@ -8,38 +9,37 @@
 #include <cmath>
 #include <vector>
 
-geode::prelude::ccColor4F BakePathVisualizerImplementation::bakeGreen(float firstValue) {
+geode::prelude::ccColor4F EbBakePathVisualizerImplementation::bakeGreen(float firstValue) {
     return {0.12f, 0.92f, 0.38f, firstValue};
 }
 
-geode::prelude::ccColor4F BakePathVisualizerImplementation::bakeGreenDim(float firstValue) {
+geode::prelude::ccColor4F EbBakePathVisualizerImplementation::bakeGreenDim(float firstValue) {
     return {0.10f, 0.75f, 0.32f, firstValue};
 }
 
-geode::prelude::ccColor4F BakePathVisualizerImplementation::bakePurple(float firstValue) {
+geode::prelude::ccColor4F EbBakePathVisualizerImplementation::bakePurple(float firstValue) {
     return {0.72f, 0.28f, 0.95f, firstValue};
 }
 
-geode::prelude::ccColor4F BakePathVisualizerImplementation::bakePurpleDim(float firstValue) {
+geode::prelude::ccColor4F EbBakePathVisualizerImplementation::bakePurpleDim(float firstValue) {
     return {0.55f, 0.18f, 0.78f, firstValue};
 }
 
 // Past-latest: faint so the box does not invite a late press.
-geode::prelude::ccColor4F BakePathVisualizerImplementation::bakeGone(float firstValue) {
+geode::prelude::ccColor4F EbBakePathVisualizerImplementation::bakeGone(float firstValue) {
     return {0.45f, 0.45f, 0.48f, firstValue};
 }
 
-bool BakePathVisualizer::releaseWindowMode(GameModeKind kind) {
+bool EbBakePathVisualizer::releaseWindowMode(GameModeKind kind) {
     // Single source of truth: AssistController release gate (WU3).
-    return AssistController::releaseAssistModeKind(kind);
+    return EbAssistController::releaseAssistModeKind(kind);
 }
 
-BakePathVisualizer& BakePathVisualizer::get() {
-    static BakePathVisualizer inst;
-    return inst;
+EbBakePathVisualizer& EbBakePathVisualizer::get() {
+    return EbClassManager::get().service<EbBakePathVisualizer>();
 }
 
-void BakePathVisualizer::setEnabled(bool on) {
+void EbBakePathVisualizer::setEnabled(bool on) {
     this->m_enabled = on;
     if (!on) {
         this->m_ticksSinceRebuild = 0;
@@ -47,17 +47,17 @@ void BakePathVisualizer::setEnabled(bool on) {
     }
 }
 
-std::string BakePathVisualizer::statusHint() const {
+std::string EbBakePathVisualizer::statusHint() const {
     if (!this->m_enabled)
         return {};
-    auto& bake = BakeMap::get();
+    auto& bake = EbBakeMap::get();
     if (!(!bake.loaded() || bake.data().clicks.empty())) {
         return fmt::format("bake-viz P={} R={}", this->m_drawnPress, this->m_drawnRelease);
     }
     return "bake-viz empty";
 }
 
-void BakePathVisualizer::attach(PlayLayer* layer) {
+void EbBakePathVisualizer::attach(PlayLayer* layer) {
     this->ensureNode(layer);
     this->m_ticksSinceRebuild = 999;
     this->m_lastRebuildX = -1e9f;
@@ -65,7 +65,7 @@ void BakePathVisualizer::attach(PlayLayer* layer) {
     this->m_lastApproxFrame = -1;
 }
 
-void BakePathVisualizer::detach(bool layerDying) {
+void EbBakePathVisualizer::detach(bool layerDying) {
     this->m_enabled = false;
     this->m_ticksSinceRebuild = 0;
     this->m_drawnPress = 0;
@@ -84,14 +84,14 @@ void BakePathVisualizer::detach(bool layerDying) {
     this->m_node = nullptr;
 }
 
-void BakePathVisualizer::clear() {
+void EbBakePathVisualizer::clear() {
     if (this->m_node && this->m_node->getParent())
         this->m_node->clear();
     this->m_drawnPress = 0;
     this->m_drawnRelease = 0;
 }
 
-void BakePathVisualizer::ensureNode(PlayLayer* layer) {
+void EbBakePathVisualizer::ensureNode(PlayLayer* layer) {
     if (!layer)
         return;
     if (this->m_node && this->m_node->getParent())
@@ -114,10 +114,10 @@ void BakePathVisualizer::ensureNode(PlayLayer* layer) {
     this->m_node->retain();
 }
 
-void BakePathVisualizer::onPhysicsTick(PlayLayer* layer, float) {
+void EbBakePathVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     if (!this->m_enabled || !layer || !this->m_node)
         return;
-    if (ShadowSimulator::get().isSimulating())
+    if (EbShadowSimulator::get().isSimulating())
         return;
     if (!layer->m_objectLayer)
         return;
@@ -133,13 +133,13 @@ void BakePathVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     this->rebuild(layer);
 }
 
-void BakePathVisualizer::rebuild(PlayLayer* layer) {
-    PerfTrace::Scope const scope("bakePathRebuild");
+void EbBakePathVisualizer::rebuild(PlayLayer* layer) {
+    EbPerfTrace::Scope const scope("bakePathRebuild");
     if (!this->m_enabled || !this->m_node || !layer || !layer->m_player1)
         return;
     if (!this->m_node->getParent())
         return;
-    if (ShadowSimulator::get().isSimulating())
+    if (EbShadowSimulator::get().isSimulating())
         return;
 
     auto* player = layer->m_player1;
@@ -150,7 +150,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         return;
     }
 
-    auto& bake = BakeMap::get();
+    auto& bake = EbBakeMap::get();
     if (!bake.loaded() || bake.data().clicks.empty()) {
         this->m_node->clear();
         this->m_drawnPress = 0;
@@ -160,18 +160,18 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
 
     float const playerX = player->getPositionX();
     float const playerY = player->getPositionY();
-    auto const liveMode = StageConfig::kindOf(player);
+    auto const liveMode = EbStageConfig::kindOf(player);
     bool const showAllReleases = releaseWindowMode(liveMode);
     int const nClicks = static_cast<int>(bake.data().clicks.size());
 
-    double const tps = bake.data().tps > 0.0 ? bake.data().tps : AssistClock::kNominalTps;
-    float simDt = AssistController::get().estimatedTps() > 1.0
-                      ? static_cast<float>(1.0 / AssistController::get().estimatedTps())
-                      : AssistClock::kNominalSimDt;
+    double const tps = bake.data().tps > 0.0 ? bake.data().tps : EbAssistClock::kNominalTps;
+    float simDt = EbAssistController::get().estimatedTps() > 1.0
+                      ? static_cast<float>(1.0 / EbAssistController::get().estimatedTps())
+                      : EbAssistClock::kNominalSimDt;
     // Prefer live simDt when assist has one.
     // (estimatedTps is the stable overlay clock; identity at 240.)
     int const approxFrame =
-        AssistClock::get().remapTick(tps, AssistController::get().attemptTick(), simDt);
+        EbAssistClock::get().remapTick(tps, EbAssistController::get().attemptTick(), simDt);
 
     if (std::fabs(playerX - this->m_lastRebuildX) < 4.f && nClicks == this->m_lastClickCount &&
         liveMode == this->m_lastMode && std::abs(approxFrame - this->m_lastApproxFrame) < 4 &&
@@ -185,7 +185,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
 
     // Collect P1 clicks near the player, keep closest N, draw left→right.
     // (Avoid identifier `near` — Win32 headers define it as a macro.)
-    class Mark {
+    class EbMark {
     public:
         float x = 0.f;
         int earliest = 0;
@@ -195,7 +195,7 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
 
     private:
     };
-    std::vector<Mark> marks;
+    std::vector<EbMark> marks;
     marks.reserve(64);
     for (auto const& c : bake.data().clicks) {
         if (c.player2)
@@ -206,23 +206,23 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         if (approxFrame > c.latest + 2)
             continue;
         if (c.down) {
-            marks.push_back(Mark{c.x, c.earliest, c.latest, c.nominalFrame, true});
+            marks.push_back(EbMark{c.x, c.earliest, c.latest, c.nominalFrame, true});
             continue;
         }
         // Purple release: always in wave/ship/swing/robot; else dash/hold tag only.
         if (!showAllReleases && !c.holdAssist)
             continue;
-        marks.push_back(Mark{c.x, c.earliest, c.latest, c.nominalFrame, false});
+        marks.push_back(EbMark{c.x, c.earliest, c.latest, c.nominalFrame, false});
     }
     if (marks.size() > kMaxMarkers) {
         std::nth_element(marks.begin(), marks.begin() + static_cast<std::ptrdiff_t>(kMaxMarkers),
-                         marks.end(), [playerX](Mark const& firstValue, Mark const& b) {
+                         marks.end(), [playerX](EbMark const& firstValue, EbMark const& b) {
                              return std::fabs(firstValue.x - playerX) < std::fabs(b.x - playerX);
                          });
         marks.resize(kMaxMarkers);
     }
     std::sort(marks.begin(), marks.end(),
-              [](Mark const& firstValue, Mark const& b) { return firstValue.x < b.x; });
+              [](EbMark const& firstValue, EbMark const& b) { return firstValue.x < b.x; });
 
     this->m_node->clear();
     this->m_drawnPress = 0;
@@ -253,28 +253,28 @@ void BakePathVisualizer::rebuild(PlayLayer* layer) {
         geode::prelude::ccColor4F mid;
         geode::prelude::ccColor4F edge;
         if (pastLatest) {
-            stroke = BakePathVisualizerImplementation::bakeGone(0.35f);
-            fill = BakePathVisualizerImplementation::bakeGone(0.10f);
-            mid = BakePathVisualizerImplementation::bakeGone(0.40f);
-            edge = BakePathVisualizerImplementation::bakeGone(0.25f);
+            stroke = EbBakePathVisualizerImplementation::bakeGone(0.35f);
+            fill = EbBakePathVisualizerImplementation::bakeGone(0.10f);
+            mid = EbBakePathVisualizerImplementation::bakeGone(0.40f);
+            edge = EbBakePathVisualizerImplementation::bakeGone(0.25f);
         } else if (isPress) {
             float const firstValue = pastNominal ? 0.55f : 0.95f;
-            stroke = BakePathVisualizerImplementation::bakeGreen(firstValue);
-            fill = BakePathVisualizerImplementation::bakeGreenDim(pastNominal ? 0.14f : 0.28f);
-            mid = BakePathVisualizerImplementation::bakeGreen(pastNominal ? 0.50f : 0.85f);
-            edge = BakePathVisualizerImplementation::bakeGreen(pastNominal ? 0.40f : 0.7f);
+            stroke = EbBakePathVisualizerImplementation::bakeGreen(firstValue);
+            fill = EbBakePathVisualizerImplementation::bakeGreenDim(pastNominal ? 0.14f : 0.28f);
+            mid = EbBakePathVisualizerImplementation::bakeGreen(pastNominal ? 0.50f : 0.85f);
+            edge = EbBakePathVisualizerImplementation::bakeGreen(pastNominal ? 0.40f : 0.7f);
         } else {
             float const firstValue = pastNominal ? 0.55f : 0.95f;
-            stroke = BakePathVisualizerImplementation::bakePurple(firstValue);
-            fill = BakePathVisualizerImplementation::bakePurpleDim(pastNominal ? 0.14f : 0.28f);
-            mid = BakePathVisualizerImplementation::bakePurple(pastNominal ? 0.50f : 0.85f);
-            edge = BakePathVisualizerImplementation::bakePurple(pastNominal ? 0.40f : 0.7f);
+            stroke = EbBakePathVisualizerImplementation::bakePurple(firstValue);
+            fill = EbBakePathVisualizerImplementation::bakePurpleDim(pastNominal ? 0.14f : 0.28f);
+            mid = EbBakePathVisualizerImplementation::bakePurple(pastNominal ? 0.50f : 0.85f);
+            edge = EbBakePathVisualizerImplementation::bakePurple(pastNominal ? 0.40f : 0.7f);
         }
 
         // Asymmetric band: earliest ← nominal → latest in world X (not a fat square).
         float leftW = static_cast<float>((std::max)(0, m.nominal - m.earliest)) * pxPerFrame;
         float rightW = static_cast<float>((std::max)(0, m.latest - m.nominal)) * pxPerFrame;
-        float const cap = BakeMap::windowHalfW(m.earliest, m.latest);
+        float const cap = EbBakeMap::windowHalfW(m.earliest, m.latest);
         leftW = (std::clamp)(leftW, 2.f, cap);
         rightW = (std::clamp)(rightW, 2.f, cap);
         // Once past nominal, shrink the trailing (late) edge so it stops looking valid.

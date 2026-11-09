@@ -3,12 +3,12 @@
 
 #include "../assist_controller.hpp"
 
-class AssistOverlay {
+class EbAssistOverlay {
 public:
-    static void updateOverlay(AssistController& controller);
+    static void updateOverlay(EbAssistController& controller);
 
 private:
-    AssistOverlay() = delete;
+    EbAssistOverlay() = delete;
 };
 
 #endif

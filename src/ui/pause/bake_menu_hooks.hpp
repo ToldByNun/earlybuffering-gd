@@ -1,7 +1,7 @@
 #ifndef BAKE_MENU_HOOKS_HPP
 #define BAKE_MENU_HOOKS_HPP
 
-class PauseMenuAttach;
+class EbPauseMenuAttach;
 
 #include "../../config/stage_config.hpp"
 #include "../../core/bake/bake_scheduler.hpp"
@@ -12,7 +12,7 @@ class PauseMenuAttach;
 #include <Geode/ui/BasedButtonSprite.hpp>
 #include <Geode/utils/cocos.hpp>
 
-class PauseMenuAttach {
+class EbPauseMenuAttach {
 public:
     static geode::prelude::CCNode* hostLayer(PauseLayer* self);
 

@@ -7,7 +7,7 @@
 // Attempt-scoped memo for Hybrid BakeVerifier results.
 // Key = bake window fields + delay (no bake-vector pointers).
 // Cleared on reset / death. X drift invalidates a hit.
-class HybridVerifyCache {
+class EbHybridVerifyCache {
 public:
     class Key {
     public:
@@ -23,18 +23,20 @@ public:
     private:
     };
 
-    static HybridVerifyCache& get();
+    static EbHybridVerifyCache& get();
 
     void clearAttempt();
 
     // True if a matching entry exists and |playerX − stored| ≤ kXTol.
-    bool tryGet(Key const& key, float playerX, BakeVerifier::Result& out) const;
+    bool tryGet(Key const& key, float playerX, EbBakeVerifier::Result& out) const;
 
     // Stores result for this attempt. Skip budgetHit (envelope differs each press).
-    void put(Key const& key, float playerX, BakeVerifier::Result const& result);
+    void put(Key const& key, float playerX, EbBakeVerifier::Result const& result);
 
 private:
-    HybridVerifyCache() = default;
+    friend class EbServiceStore;
+
+    EbHybridVerifyCache() = default;
 
     static constexpr float kXTol = 8.f;
     static constexpr int kMaxEntries = 8;
@@ -46,7 +48,7 @@ private:
         bool valid = false;
         Key key{};
         float playerX = 0.f;
-        BakeVerifier::Result result{};
+        EbBakeVerifier::Result result{};
 
     private:
     };

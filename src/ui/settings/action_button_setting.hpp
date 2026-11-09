@@ -8,7 +8,7 @@ class ButtonSprite;
 class CCMenuItemSpriteExtra;
 
 // Geode custom setting: same row chrome as bool (label + i), button on the right.
-class ActionButtonSettingV3 : public geode::SettingV3 {
+class EbActionButtonSettingV3 : public geode::SettingV3 {
 public:
     static geode::Result<std::shared_ptr<geode::SettingV3>>
     parse(std::string key, std::string modID, matjson::Value const& json);
@@ -29,7 +29,7 @@ private:
 
 // Call from $execute and $on_mod(Loaded) — createSettings only fills types registered in time.
 
-class ActionButtonSettingNodeV3 : public geode::SettingNodeV3 {
+class EbActionButtonSettingNodeV3 : public geode::SettingNodeV3 {
 public:
     bool hasUncommittedChanges() const override {
         return false;
@@ -38,11 +38,11 @@ public:
         return false;
     }
 
-    static ActionButtonSettingNodeV3* create(std::shared_ptr<ActionButtonSettingV3> setting,
+    static EbActionButtonSettingNodeV3* create(std::shared_ptr<EbActionButtonSettingV3> setting,
                                              float width);
 
 protected:
-    bool init(std::shared_ptr<ActionButtonSettingV3> setting, float width);
+    bool init(std::shared_ptr<EbActionButtonSettingV3> setting, float width);
     void updateState(cocos2d::CCNode* invoker) override;
     void onCommit() override {}
     void onResetToDefault() override {}
@@ -68,7 +68,7 @@ private:
 #include <algorithm>
 #include <fmt/format.h>
 
-class ActionButtonSettingImplementation {
+class EbActionButtonSettingImplementation {
 public:
     static std::string truncateLabel(std::string text, size_t maxChars);
     static std::string dynamicButtonLabel(std::string const& key, std::string const& fallback);
@@ -80,13 +80,13 @@ public:
                                    ButtonSprite* sprite);
 
 private:
-    friend class ActionButtonSettingV3;
-    friend class ActionButtonSettingNodeV3;
+    friend class EbActionButtonSettingV3;
+    friend class EbActionButtonSettingNodeV3;
 
     inline static constexpr float kActionBtnMaxW = 88.f;
     inline static constexpr float kActionBtnScale = 0.4f;
 
-    ActionButtonSettingImplementation() = delete;
+    EbActionButtonSettingImplementation() = delete;
 };
 
 #endif

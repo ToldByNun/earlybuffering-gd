@@ -9,7 +9,7 @@ class PlayerObject;
 // Shared wall/tick remainder for one Hybrid press: bake verify draws first
 // (leaving a Live reserve), Live fallthrough uses what is left.
 // usLeft==0 with usUnlimited=false means exhausted — NOT PlanOptions unlimited.
-class PressSimBudget {
+class EbPressSimBudget {
 public:
     int tickLeft = 0;
     int usLeft = 0;
@@ -24,21 +24,21 @@ constexpr int kHybridLiveReserveTicks = 800;
 
 // One-press Hybrid fallthrough reuse: copy window fields (no bake-vector ptrs)
 // + verify threat zone. Cleared each press; null/empty on missing-bake path.
-class HybridPressReuse {
+class EbHybridPressReuse {
 public:
     bool hasWindow = false;
     int earliest = 0; // bake frames
     int latest = 0;
     int nominalFrame = 0;
     double bakeTps = 240.0;
-    ThreatZone verifyThreat{};
+    EbThreatZone verifyThreat{};
 
 private:
 };
 
 // Live re-check of a BakeMap delay before Hybrid/Replay/Brute uses it.
 // One runOne: must clearThreat and not die before the action.
-class BakeVerifier {
+class EbBakeVerifier {
 public:
     class Result {
     public:
@@ -48,7 +48,7 @@ public:
         bool budgetHit = false;
         int ticksSpent = 0;
         int usSpent = 0;
-        ThreatZone threatZone{};
+        EbThreatZone threatZone{};
 
     private:
     };
@@ -58,7 +58,7 @@ public:
     // and deduct spent. nullptr (Replay/Brute): independent caps as before.
     static Result verify(PlayLayer* layer, PlayerObject* player, bool down, int delayTicks,
                          int limit, float deltaTime, float firstDt,
-                         PressSimBudget* shared = nullptr);
+                         EbPressSimBudget* shared = nullptr);
 
 private:
 };

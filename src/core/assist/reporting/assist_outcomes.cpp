@@ -22,7 +22,7 @@
 #include <cstdlib>
 #include <string>
 
-void AssistOutcomes::noteRealJump(AssistController& controller, PlayerObject* player) {
+void EbAssistOutcomes::noteRealJump(EbAssistController& controller, PlayerObject* player) {
     if (controller.m_buffer.state != BufferState::FiredHolding)
         return;
     auto* playLayer = PlayLayer::get();
@@ -33,16 +33,16 @@ void AssistOutcomes::noteRealJump(AssistController& controller, PlayerObject* pl
         controller.m_buffer.jumpSeen = true;
 }
 
-void AssistOutcomes::recordDecision(AssistController& controller, PlayLayer* playLayer,
-                                    PlayerObject* player, bool down, SimPlan const& plan,
+void EbAssistOutcomes::recordDecision(EbAssistController& controller, PlayLayer* playLayer,
+                                    PlayerObject* player, bool down, EbSimPlan const& plan,
                                     int effectTick, int appliedDelay, int limit) {
     if (!playLayer || !player)
         return;
 
-    DecisionEntry e;
+    EbDecisionEntry e;
     e.tick = effectTick;
     e.x = player->getPositionX();
-    e.mode = StageConfig::kindOf(player);
+    e.mode = EbStageConfig::kindOf(player);
     e.down = down;
     e.delay = appliedDelay;
     e.limit = limit;
@@ -50,19 +50,19 @@ void AssistOutcomes::recordDecision(AssistController& controller, PlayLayer* pla
     e.action = appliedDelay > 0 ? PlanAction::Delay : plan.action;
     e.nowIsSafe = plan.nowIsSafe;
     e.assisted = appliedDelay > 0;
-    e.horizon = ShadowSimulator::modelFor(player, limit, LevelProfile::get().capMul(e.mode)).cap;
-    e.snapshotSlot = ShadowSimulator::get().captureSnapshot(player);
+    e.horizon = EbShadowSimulator::modelFor(player, limit, EbLevelProfile::get().capMul(e.mode)).cap;
+    e.snapshotSlot = EbShadowSimulator::get().captureSnapshot(player);
     // Seed timeline with the planned action at fire tick.
     int const fire = effectTick + appliedDelay;
-    e.timeline.push_back(InputEvent{fire, down});
+    e.timeline.push_back(EbInputEvent{fire, down});
     controller.m_log.push(std::move(e));
 }
 
-void AssistOutcomes::tickLearning(AssistController& controller, PlayLayer* playLayer,
+void EbAssistOutcomes::tickLearning(EbAssistController& controller, PlayLayer* playLayer,
                                   PlayerObject* player) {
-    if (!StageConfig::autoTune() || !playLayer || !player)
+    if (!EbStageConfig::autoTune() || !playLayer || !player)
         return;
-    auto& profile = LevelProfile::get();
+    auto& profile = EbLevelProfile::get();
     if (!profile.loaded())
         return;
 
@@ -91,10 +91,10 @@ void AssistOutcomes::tickLearning(AssistController& controller, PlayLayer* playL
     }
 }
 
-void AssistOutcomes::runPostmortem(AssistController& controller, PlayLayer* playLayer,
-                                   PlayerObject* player, GameObject* object, DecisionEntry& dec) {
-    auto& profile = LevelProfile::get();
-    auto& sim = ShadowSimulator::get();
+void EbAssistOutcomes::runPostmortem(EbAssistController& controller, PlayLayer* playLayer,
+                                   PlayerObject* player, GameObject* object, EbDecisionEntry& dec) {
+    auto& profile = EbLevelProfile::get();
+    auto& sim = EbShadowSimulator::get();
 
     int const age = controller.m_attemptTick - dec.tick;
     // destroyPlayer hot path — keep this to ONE short replay. Extra d±1 probes
@@ -125,7 +125,7 @@ void AssistOutcomes::runPostmortem(AssistController& controller, PlayLayer* play
     dec.resolved = true;
 }
 
-void AssistOutcomes::beginOutcome(AssistController& controller, SimPlan const& plan,
+void EbAssistOutcomes::beginOutcome(EbAssistController& controller, EbSimPlan const& plan,
                                   int effectTick) {
     controller.m_outcomePending = true;
     controller.m_outcomePlanId = plan.planId;
@@ -135,7 +135,7 @@ void AssistOutcomes::beginOutcome(AssistController& controller, SimPlan const& p
     controller.m_outcomeStartX = controller.m_lastPlayerX;
 }
 
-void AssistOutcomes::pollOutcome(AssistController& controller, PlayLayer* playLayer) {
+void EbAssistOutcomes::pollOutcome(EbAssistController& controller, PlayLayer* playLayer) {
     if (!controller.m_outcomePending || !playLayer)
         return;
     auto* player = controller.m_outcomePlayer1 ? playLayer->m_player1 : playLayer->m_player2;
@@ -144,102 +144,102 @@ void AssistOutcomes::pollOutcome(AssistController& controller, PlayLayer* playLa
         return;
     }
     if (player->m_isDead) {
-        AssistLog::debug(fmt::format("OUTCOME id={} death x={:.1f} orbExpect={} delay={}",
+        EbAssistLog::debug(fmt::format("OUTCOME id={} death x={:.1f} orbExpect={} delay={}",
                                      controller.m_outcomePlanId, player->getPositionX(),
                                      controller.m_outcomeExpectOrb, controller.m_outcomePlanDelay));
-        DivergenceTracker::get().note(controller.m_outcomePlanDelay, true,
+        EbDivergenceTracker::get().note(controller.m_outcomePlanDelay, true,
                                       controller.m_outcomeExpectOrb, false);
         controller.m_outcomePending = false;
         return;
     }
     if (controller.m_attemptTick >= controller.m_outcomeUntil) {
         bool const orbHit = player->m_hasEverHitRing || player->m_touchedRing;
-        AssistLog::debug(fmt::format("OUTCOME id={} alive dx={:.1f} orb={} expect={} delay={}",
+        EbAssistLog::debug(fmt::format("OUTCOME id={} alive dx={:.1f} orb={} expect={} delay={}",
                                      controller.m_outcomePlanId,
                                      player->getPositionX() - controller.m_outcomeStartX, orbHit,
                                      controller.m_outcomeExpectOrb, controller.m_outcomePlanDelay));
-        DivergenceTracker::get().note(controller.m_outcomePlanDelay, false,
+        EbDivergenceTracker::get().note(controller.m_outcomePlanDelay, false,
                                       controller.m_outcomeExpectOrb, orbHit);
         controller.m_outcomePending = false;
     }
 }
 
-void AssistOutcomes::logPlan(AssistController& controller, SimPlan const& plan, char const* kind) {
+void EbAssistOutcomes::logPlan(EbAssistController& controller, EbSimPlan const& plan, char const* kind) {
     bool const orbIntent = plan.requireOrb || plan.activatedRing || plan.usedOrbWindow;
-    AssistLog::debug(fmt::format(
+    EbAssistLog::debug(fmt::format(
         "PLAN id={} kind={} action={} verdict={} delay={} orbIntent={} foresight={} eng={} "
         "requireOrb={} hold={} dMin={} dMax={} budgetHit={}",
         plan.planId, kind, plan.action == PlanAction::Pass ? "Pass" : "Delay",
-        AssistVerdict::name(plan.reason), plan.delay, orbIntent ? 1 : 0,
+        EbAssistVerdict::name(plan.reason), plan.delay, orbIntent ? 1 : 0,
         plan.foresightOrbPad ? 1 : 0, plan.trajectoryEngine ? "Trajectory" : "ShadowPlayer",
         plan.requireOrb, plan.requireHold, plan.dMin, plan.dMax, plan.budgetHit));
 }
 
-void AssistOutcomes::noteVerdict(AssistController& controller, AssistReason reason,
+void EbAssistOutcomes::noteVerdict(EbAssistController& controller, AssistReason reason,
                                  char const* where) {
     controller.m_lastVerdict = reason;
-    AssistLog::debug(fmt::format("VERDICT {} where={} overlay={}", AssistVerdict::name(reason),
-                                 where ? where : "?", AssistVerdict::overlayBit(reason)));
+    EbAssistLog::debug(fmt::format("VERDICT {} where={} overlay={}", EbAssistVerdict::name(reason),
+                                 where ? where : "?", EbAssistVerdict::overlayBit(reason)));
 }
 
-void AssistOutcomes::onRealDeath(AssistController& controller, PlayLayer* playLayer,
+void EbAssistOutcomes::onRealDeath(EbAssistController& controller, PlayLayer* playLayer,
                                  PlayerObject* player, GameObject* object) {
     if (!playLayer || !player)
         return;
-    if (ShadowSimulator::get().isSimulating())
+    if (EbShadowSimulator::get().isSimulating())
         return;
-    if (ShadowSimulator::get().isOwnedGhost(player))
+    if (EbShadowSimulator::get().isOwnedGhost(player))
         return;
     (void)object;
 
-    LagProbe::Scope const deathScope("eb.onRealDeath");
-    HybridVerifyCache::get().clearAttempt();
+    EbLagProbe::Scope const deathScope("eb.onRealDeath");
+    EbHybridVerifyCache::get().clearAttempt();
 
     // destroyPlayer hot path — no physics replays, no disk, no bake merge.
     // GD physics is main-thread only; "multithread" death work is not viable.
     // Heavy learning/bake runs on resetAttempt (next attempt), not here.
     // Drop in-flight trigger-world slices (no flush); partial store may remain.
-    TriggerWorldBaker::get().cancel();
+    EbTriggerWorldBaker::get().cancel();
     if (controller.m_dafWatch) {
-        AssistRealMetrics::get().noteDeathAfterFire();
+        EbAssistRealMetrics::get().noteDeathAfterFire();
         controller.m_dafWatch = false;
     }
     if (controller.m_outcomePending) {
-        LagProbe::Scope const state("eb.outcomeNote");
-        DivergenceTracker::get().note(controller.m_outcomePlanDelay, true,
+        EbLagProbe::Scope const state("eb.outcomeNote");
+        EbDivergenceTracker::get().note(controller.m_outcomePlanDelay, true,
                                       controller.m_outcomeExpectOrb, false);
         controller.m_outcomePending = false;
     }
 
     // Seal Dev attempt on death (outcomes + flush). Next attempt opens on reset.
     {
-        LagProbe::Scope const state("eb.devSealDeath");
-        DevCycleRecorder::get().sealAttemptWithOutcomes("death", false, controller.m_attemptTick);
+        EbLagProbe::Scope const state("eb.devSealDeath");
+        EbDevCycleRecorder::get().sealAttemptWithOutcomes("death", false, controller.m_attemptTick);
     }
-    if (DevConfig::evalOnDeath() && DevCycleRecorder::get().isRecording()) {
+    if (EbDevConfig::evalOnDeath() && EbDevCycleRecorder::get().isRecording()) {
         std::string evalErr;
-        if (DevReport::evalLastAttempt(evalErr)) {
+        if (EbDevReport::evalLastAttempt(evalErr)) {
             controller.updateOverlay();
         } else if (!evalErr.empty()) {
-            AssistLog::debug(fmt::format("Dev Lab eval-on-death: {}", evalErr));
+            EbAssistLog::debug(fmt::format("Dev Lab eval-on-death: {}", evalErr));
         }
     }
 
-    if (StageConfig::autoTune() && LevelProfile::get().loaded()) {
+    if (EbStageConfig::autoTune() && EbLevelProfile::get().loaded()) {
         if (auto* dec = controller.m_log.findForDeath(controller.m_attemptTick)) {
-            LagProbe::Scope const state(
+            EbLagProbe::Scope const state(
                 "eb.learnDeath",
                 fmt::format("assisted={} delay={} x={:.1f}", dec->assisted, dec->delay, dec->x));
             // Bookkeeping only — no ShadowSimulator::replay (was hitching deaths).
-            LevelProfile::get().noteDiedAfterAssist(dec->mode, dec->x);
+            EbLevelProfile::get().noteDiedAfterAssist(dec->mode, dec->x);
             if (!dec->assisted) {
-                LevelProfile::get().noteEarliness(dec->mode, dec->x, 0, "death pass");
+                EbLevelProfile::get().noteEarliness(dec->mode, dec->x, 0, "death pass");
             }
             dec->resolved = true;
         }
         {
-            LagProbe::Scope const state("eb.maybeAutosave");
-            LevelProfile::get().maybeAutosave();
+            EbLagProbe::Scope const state("eb.maybeAutosave");
+            EbLevelProfile::get().maybeAutosave();
         }
     }
 
@@ -252,11 +252,11 @@ void AssistOutcomes::onRealDeath(AssistController& controller, PlayLayer* playLa
     controller.m_pendingReleaseMaxExtend = 0;
     controller.m_pendingReleaseTick = 0;
     {
-        LagProbe::Scope const state("eb.saveCounterClear");
-        SaveFrameCounter::get().clear();
+        EbLagProbe::Scope const state("eb.saveCounterClear");
+        EbSaveFrameCounter::get().clear();
     }
     {
-        LagProbe::Scope const state("eb.syncButtons");
+        EbLagProbe::Scope const state("eb.syncButtons");
         controller.syncButtonState(playLayer);
     }
 }

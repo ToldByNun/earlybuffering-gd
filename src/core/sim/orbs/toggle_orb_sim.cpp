@@ -1,15 +1,15 @@
+#include "../../../app/class_manager.hpp"
 #include "toggle_orb_sim.hpp"
 #include "../../../debug/assist_log.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
 #include "orb_stack_resolver.hpp"
 #include <fmt/format.h>
 
-ToggleOrbSim& ToggleOrbSim::get() {
-    static ToggleOrbSim s;
-    return s;
+EbToggleOrbSim& EbToggleOrbSim::get() {
+    return EbClassManager::get().service<EbToggleOrbSim>();
 }
 
-void ToggleOrbSim::applyCollisionActive(GameObject* object, bool active) {
+void EbToggleOrbSim::applyCollisionActive(GameObject* object, bool active) {
     if (!object)
         return;
     auto* effectObject = geode::prelude::typeinfo_cast<EnhancedGameObject*>(object);
@@ -29,7 +29,7 @@ void ToggleOrbSim::applyCollisionActive(GameObject* object, bool active) {
     }
 }
 
-void ToggleOrbSim::captureCollision(GameObject* object, CollisionSnap& out) {
+void EbToggleOrbSim::captureCollision(GameObject* object, CollisionSnap& out) {
     out = {};
     if (!object)
         return;
@@ -49,7 +49,7 @@ void ToggleOrbSim::captureCollision(GameObject* object, CollisionSnap& out) {
     }
 }
 
-void ToggleOrbSim::restoreCollision(CollisionSnap const& snap) {
+void EbToggleOrbSim::restoreCollision(CollisionSnap const& snap) {
     if (!snap.obj)
         return;
     snap.obj->m_isActivated = snap.isActivated;
@@ -67,25 +67,25 @@ void ToggleOrbSim::restoreCollision(CollisionSnap const& snap) {
     }
 }
 
-void ToggleOrbSim::begin() {
+void EbToggleOrbSim::begin() {
     // Drop tracking only — callers must restore() first if snaps are dirty.
     this->m_snaps.clear();
     this->m_modeledActive.clear();
     this->m_claimedEffects.clear();
 }
 
-void ToggleOrbSim::restore() {
+void EbToggleOrbSim::restore() {
     for (auto it = this->m_snaps.rbegin(); it != this->m_snaps.rend(); ++it) {
-        ToggleOrbSim::restoreCollision(*it);
+        EbToggleOrbSim::restoreCollision(*it);
     }
     this->begin();
 }
 
-bool ToggleOrbSim::isModeled(int uniqueId) const {
+bool EbToggleOrbSim::isModeled(int uniqueId) const {
     return this->m_modeledActive.find(uniqueId) != this->m_modeledActive.end();
 }
 
-bool ToggleOrbSim::isModeledActive(int uniqueId) const {
+bool EbToggleOrbSim::isModeledActive(int uniqueId) const {
     auto it = this->m_modeledActive.find(uniqueId);
     if (!(it == this->m_modeledActive.end())) {
         return it->second;
@@ -93,7 +93,7 @@ bool ToggleOrbSim::isModeledActive(int uniqueId) const {
     return false;
 }
 
-bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObject* hit) {
+bool EbToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObject* hit) {
     if (!layer || !shadow || !hit)
         return false;
     if (this->m_claimedEffects.size() >= kMaxClaimedEffects)
@@ -104,12 +104,12 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
         return false;
 
     int const oid = hit->m_objectID;
-    bool const toggleOrb = TriggerClassify::isToggleOrbId(oid);
+    bool const toggleOrb = EbTriggerClassify::isToggleOrbId(oid);
 
     // Effect fields (group / activate / touch) live on EffectGameObject.
     auto* effect = geode::prelude::typeinfo_cast<EffectGameObject*>(hit);
     bool const touchToggle =
-        effect && TriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered;
+        effect && EbTriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered;
     if (!toggleOrb && !touchToggle)
         return false;
 
@@ -119,7 +119,7 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
         if (auto* ring = geode::prelude::typeinfo_cast<RingObject*>(hit)) {
             if (!this->isModeled(effectId)) {
                 CollisionSnap orbSnap;
-                ToggleOrbSim::captureCollision(ring, orbSnap);
+                EbToggleOrbSim::captureCollision(ring, orbSnap);
                 this->m_snaps.push_back(orbSnap);
                 this->m_modeledActive[effectId] = true;
             }
@@ -155,8 +155,8 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
             continue;
 
         // Commit 7 (a): never flip jump/dash rings (or ε-near rings) — stack keeps boost.
-        if (OrbStackResolver::shouldSkipToggleFlip(object, hit)) {
-            OrbStackResolver::get().noteFlipSkipped();
+        if (EbOrbStackResolver::shouldSkipToggleFlip(object, hit)) {
+            EbOrbStackResolver::get().noteFlipSkipped();
             continue;
         }
 
@@ -165,7 +165,7 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
             continue;
 
         CollisionSnap snap;
-        ToggleOrbSim::captureCollision(object, snap);
+        EbToggleOrbSim::captureCollision(object, snap);
 
         bool wantActive = false;
         if (toggleOrb) {
@@ -180,7 +180,7 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
         }
         snap.wantActive = wantActive;
 
-        ToggleOrbSim::applyCollisionActive(object, wantActive);
+        EbToggleOrbSim::applyCollisionActive(object, wantActive);
         this->m_snaps.push_back(snap);
         this->m_modeledActive[object->m_uniqueID] = wantActive;
         ++flipped;
@@ -192,7 +192,7 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
     if (auto* ring = geode::prelude::typeinfo_cast<RingObject*>(hit)) {
         if (!this->isModeled(effectId)) {
             CollisionSnap orbSnap;
-            ToggleOrbSim::captureCollision(ring, orbSnap);
+            EbToggleOrbSim::captureCollision(ring, orbSnap);
             orbSnap.wantActive = true;
             this->m_snaps.push_back(orbSnap);
             this->m_modeledActive[effectId] = true;
@@ -203,14 +203,14 @@ bool ToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObjec
     }
 
     if (flipped > 0) {
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("toggle-orb-sim: flip group={} members={} orb={} touch={} effect={}",
                         groupId, flipped, toggleOrb ? 1 : 0, touchToggle ? 1 : 0, effectId));
     }
     return flipped > 0;
 }
 
-bool ToggleOrbSim::selfCheck(std::string& report) {
+bool EbToggleOrbSim::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -223,13 +223,13 @@ bool ToggleOrbSim::selfCheck(std::string& report) {
     };
 
     // Null-safe helpers.
-    ToggleOrbSim::applyCollisionActive(nullptr, false);
+    EbToggleOrbSim::applyCollisionActive(nullptr, false);
     CollisionSnap nullSnap;
-    ToggleOrbSim::captureCollision(nullptr, nullSnap);
-    ToggleOrbSim::restoreCollision(nullSnap);
+    EbToggleOrbSim::captureCollision(nullptr, nullSnap);
+    EbToggleOrbSim::restoreCollision(nullSnap);
     expect(nullSnap.obj == nullptr, "null-capture");
 
-    auto& sim = ToggleOrbSim::get();
+    auto& sim = EbToggleOrbSim::get();
     sim.restore();
     expect(!sim.isModeled(1), "fresh-not-modeled");
     expect(!sim.isModeledActive(1), "fresh-not-active");

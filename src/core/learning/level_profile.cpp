@@ -1,3 +1,4 @@
+#include "../../app/class_manager.hpp"
 #include "level_profile.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../level/level_content_key.hpp"
@@ -8,35 +9,34 @@
 #include <cmath>
 #include <fstream>
 
-float LevelProfileImplementation::clamp01f(float value, float lowerBound, float upperBound) {
+float EbLevelProfileImplementation::clamp01f(float value, float lowerBound, float upperBound) {
     return std::max(lowerBound, std::min(upperBound, value));
 }
 
-std::filesystem::path LevelProfileImplementation::levelsDir() {
+std::filesystem::path EbLevelProfileImplementation::levelsDir() {
     return geode::prelude::Mod::get()->getSaveDir() / "levels";
 }
 
-std::filesystem::path LevelProfileImplementation::profilePath(std::string const& key) {
-    return LevelProfileImplementation::levelsDir() / (key + ".json");
+std::filesystem::path EbLevelProfileImplementation::profilePath(std::string const& key) {
+    return EbLevelProfileImplementation::levelsDir() / (key + ".json");
 }
 
-LevelProfile& LevelProfile::get() {
-    static LevelProfile inst;
-    return inst;
+EbLevelProfile& EbLevelProfile::get() {
+    return EbClassManager::get().service<EbLevelProfile>();
 }
 
-int LevelProfile::spotBucket(float x) {
+int EbLevelProfile::spotBucket(float x) {
     if (!(!std::isfinite(x))) {
         return static_cast<int>(std::floor(x / SPOT_SIZE)) * static_cast<int>(SPOT_SIZE);
     }
     return 0;
 }
 
-std::string LevelProfile::makeKey(GJGameLevel* level) {
-    return LevelContentKey::fullKey(level);
+std::string EbLevelProfile::makeKey(GJGameLevel* level) {
+    return EbLevelContentKey::fullKey(level);
 }
 
-void LevelProfile::clear() {
+void EbLevelProfile::clear() {
     m_key.clear();
     m_loaded = false;
     m_dirty = false;
@@ -47,34 +47,34 @@ void LevelProfile::clear() {
     }
 }
 
-int LevelProfile::spotCount() const {
+int EbLevelProfile::spotCount() const {
     int count = 0;
     for (auto const& m : m_modes)
         count += static_cast<int>(m.spots.size());
     return count;
 }
 
-ModeLearn& LevelProfile::mode(GameModeKind kind) {
+EbModeLearn& EbLevelProfile::mode(GameModeKind kind) {
     int index = static_cast<int>(kind);
-    if (index < 0 || index >= StageConfig::MODE_COUNT)
+    if (index < 0 || index >= EbStageConfig::MODE_COUNT)
         index = 0;
     return m_modes[index];
 }
 
-ModeLearn const* LevelProfile::tryMode(GameModeKind kind) const {
+EbModeLearn const* EbLevelProfile::tryMode(GameModeKind kind) const {
     int index = static_cast<int>(kind);
-    if (!(index < 0 || index >= StageConfig::MODE_COUNT)) {
+    if (!(index < 0 || index >= EbStageConfig::MODE_COUNT)) {
         return &m_modes[index];
     }
     return nullptr;
 }
 
-SpotStats& LevelProfile::spot(GameModeKind kind, float x) {
+EbSpotStats& EbLevelProfile::spot(GameModeKind kind, float x) {
     int const bucket = spotBucket(x);
     return mode(kind).spots[bucket];
 }
 
-SpotStats const* LevelProfile::trySpot(GameModeKind kind, float x) const {
+EbSpotStats const* EbLevelProfile::trySpot(GameModeKind kind, float x) const {
     auto* m = tryMode(kind);
     if (!m)
         return nullptr;
@@ -85,23 +85,23 @@ SpotStats const* LevelProfile::trySpot(GameModeKind kind, float x) const {
     return nullptr;
 }
 
-float LevelProfile::capMul(GameModeKind kind) const {
+float EbLevelProfile::capMul(GameModeKind kind) const {
     auto* m = tryMode(kind);
     return m ? m->capMul : 1.f;
 }
 
-void LevelProfile::setCapMul(GameModeKind kind, float multiplier) {
-    mode(kind).capMul = LevelProfileImplementation::clamp01f(multiplier, 0.5f, 2.f);
+void EbLevelProfile::setCapMul(GameModeKind kind, float multiplier) {
+    mode(kind).capMul = EbLevelProfileImplementation::clamp01f(multiplier, 0.5f, 2.f);
     m_dirty = true;
 }
 
-SpotStats LevelProfile::overlaySpot(GameModeKind kind, float x) const {
+EbSpotStats EbLevelProfile::overlaySpot(GameModeKind kind, float x) const {
     if (auto* s = trySpot(kind, x))
         return *s;
     return {};
 }
 
-void LevelProfile::recomputeCapMul(GameModeKind kind) {
+void EbLevelProfile::recomputeCapMul(GameModeKind kind) {
     auto& m = mode(kind);
     if (m.spots.empty()) {
         m.capMul = 1.f;
@@ -116,42 +116,42 @@ void LevelProfile::recomputeCapMul(GameModeKind kind) {
     // Many false "you'll die" predictions → shorten horizon.
     float rate = static_cast<float>(pess) / static_cast<float>(total);
     if (rate > 0.25f)
-        m.capMul = LevelProfileImplementation::clamp01f(0.6f, 0.5f, 2.f);
+        m.capMul = EbLevelProfileImplementation::clamp01f(0.6f, 0.5f, 2.f);
     else if (rate < 0.05f && total >= 20)
-        m.capMul = LevelProfileImplementation::clamp01f(1.2f, 0.5f, 2.f);
+        m.capMul = EbLevelProfileImplementation::clamp01f(1.2f, 0.5f, 2.f);
     else
-        m.capMul = LevelProfileImplementation::clamp01f(m.capMul, 0.5f, 2.f);
+        m.capMul = EbLevelProfileImplementation::clamp01f(m.capMul, 0.5f, 2.f);
 }
 
-void LevelProfile::noteBias(GameModeKind kind, float x, float delta, char const* reason) {
+void EbLevelProfile::noteBias(GameModeKind kind, float x, float delta, char const* reason) {
     auto& s = spot(kind, x);
-    s.bias = LevelProfileImplementation::clamp01f(s.bias + delta, -2.f, 2.f);
+    s.bias = EbLevelProfileImplementation::clamp01f(s.bias + delta, -2.f, 2.f);
     s.n += 1;
     m_dirty = true;
-    AssistLog::debug(fmt::format("LEARN: spot {} bias {:+.1f} ({})", spotBucket(x), s.bias,
+    EbAssistLog::debug(fmt::format("LEARN: spot {} bias {:+.1f} ({})", spotBucket(x), s.bias,
                                  reason ? reason : ""));
 }
 
-void LevelProfile::noteTrust(GameModeKind kind, float x, float factor, char const* reason) {
+void EbLevelProfile::noteTrust(GameModeKind kind, float x, float factor, char const* reason) {
     auto& s = spot(kind, x);
-    s.trust = LevelProfileImplementation::clamp01f(s.trust * factor, 0.f, 1.f);
+    s.trust = EbLevelProfileImplementation::clamp01f(s.trust * factor, 0.f, 1.f);
     s.n += 1;
     m_dirty = true;
-    AssistLog::debug(fmt::format("LEARN: spot {} trust {:.2f} ({})", spotBucket(x), s.trust,
+    EbAssistLog::debug(fmt::format("LEARN: spot {} trust {:.2f} ({})", spotBucket(x), s.trust,
                                  reason ? reason : ""));
 }
 
-void LevelProfile::noteTrustUp(GameModeKind kind, float x, float amount, char const* reason) {
+void EbLevelProfile::noteTrustUp(GameModeKind kind, float x, float amount, char const* reason) {
     auto& s = spot(kind, x);
-    s.trust = LevelProfileImplementation::clamp01f(s.trust + amount, 0.f, 1.f);
+    s.trust = EbLevelProfileImplementation::clamp01f(s.trust + amount, 0.f, 1.f);
     m_dirty = true;
     if (reason) {
-        AssistLog::debug(
+        EbAssistLog::debug(
             fmt::format("LEARN: spot {} trust {:.2f} ({})", spotBucket(x), s.trust, reason));
     }
 }
 
-void LevelProfile::notePessimism(GameModeKind kind, float x) {
+void EbLevelProfile::notePessimism(GameModeKind kind, float x) {
     auto& s = spot(kind, x);
     s.pessimism += 1;
     s.n += 1;
@@ -161,38 +161,38 @@ void LevelProfile::notePessimism(GameModeKind kind, float x) {
     }
     recomputeCapMul(kind);
     m_dirty = true;
-    AssistLog::debug(fmt::format("LEARN: spot {} pessimism {} (sim said die, lived)", spotBucket(x),
+    EbAssistLog::debug(fmt::format("LEARN: spot {} pessimism {} (sim said die, lived)", spotBucket(x),
                                  s.pessimism));
 }
 
-void LevelProfile::noteSaved(GameModeKind kind, float x) {
+void EbLevelProfile::noteSaved(GameModeKind kind, float x) {
     auto& s = spot(kind, x);
     s.saved += 1;
     // Never reinforce trust from assist-inject "saves" (self-reinforcing loop).
-    if (AssistLearning::allowTrustUpFromAssistInject()) {
+    if (EbAssistLearning::allowTrustUpFromAssistInject()) {
         noteTrustUp(kind, x, 0.1f, "survived horizon");
     }
 }
 
-void LevelProfile::noteDiedAfterAssist(GameModeKind kind, float x) {
+void EbLevelProfile::noteDiedAfterAssist(GameModeKind kind, float x) {
     auto& s = spot(kind, x);
     s.diedAfterAssist += 1;
     s.n += 1;
     m_dirty = true;
 }
 
-void LevelProfile::noteEarliness(GameModeKind kind, float x, int offset, char const* reason) {
+void EbLevelProfile::noteEarliness(GameModeKind kind, float x, int offset, char const* reason) {
     auto& s = spot(kind, x);
-    int const clamped = std::max(-SpotStats::HIST_RADIUS, std::min(SpotStats::HIST_RADIUS, offset));
-    int const bin = clamped + SpotStats::HIST_RADIUS;
+    int const clamped = std::max(-EbSpotStats::HIST_RADIUS, std::min(EbSpotStats::HIST_RADIUS, offset));
+    int const bin = clamped + EbSpotStats::HIST_RADIUS;
     s.earlyHist[static_cast<size_t>(bin)] += 1.f;
     s.histN += 1;
     m_dirty = true;
-    AssistLog::debug(fmt::format("LEARN: spot {} earliness {:+d} histN={} ({})", spotBucket(x),
+    EbAssistLog::debug(fmt::format("LEARN: spot {} earliness {:+d} histN={} ({})", spotBucket(x),
                                  clamped, s.histN, reason ? reason : ""));
 }
 
-int LevelProfile::preferredDelayOffset(GameModeKind kind, float x) const {
+int EbLevelProfile::preferredDelayOffset(GameModeKind kind, float x) const {
     auto const* state = trySpot(kind, x);
     if (!state || state->histN < 3) {
         if (!state)
@@ -202,19 +202,19 @@ int LevelProfile::preferredDelayOffset(GameModeKind kind, float x) const {
             return static_cast<int>(std::lround(state->bias));
         return static_cast<int>(std::lround(state->bias));
     }
-    int bestBin = SpotStats::HIST_RADIUS;
+    int bestBin = EbSpotStats::HIST_RADIUS;
     float bestW = -1.f;
-    for (int index = 0; index < SpotStats::HIST_BINS; ++index) {
+    for (int index = 0; index < EbSpotStats::HIST_BINS; ++index) {
         float const width = state->earlyHist[static_cast<size_t>(index)] + 1.f; // Laplace
         if (width > bestW) {
             bestW = width;
             bestBin = index;
         }
     }
-    return bestBin - SpotStats::HIST_RADIUS;
+    return bestBin - EbSpotStats::HIST_RADIUS;
 }
 
-void LevelProfile::decayHistograms() {
+void EbLevelProfile::decayHistograms() {
     for (auto& m : m_modes) {
         for (auto& [_, s] : m.spots) {
             for (float& w : s.earlyHist)
@@ -224,7 +224,7 @@ void LevelProfile::decayHistograms() {
     m_dirty = true;
 }
 
-void LevelProfile::maybeAutosave() {
+void EbLevelProfile::maybeAutosave() {
     ++m_deathsSinceSave;
     if (m_deathsSinceSave >= 5) {
         m_deathsSinceSave = 0;
@@ -234,19 +234,19 @@ void LevelProfile::maybeAutosave() {
     }
 }
 
-void LevelProfile::loadForLevel(GJGameLevel* level) {
+void EbLevelProfile::loadForLevel(GJGameLevel* level) {
     clear();
     m_key = makeKey(level);
     m_loaded = true;
     auto result = readFile();
     if (result.isErr()) {
-        AssistLog::debug(fmt::format("LEARN: no profile for {} (fresh)", m_key));
+        EbAssistLog::debug(fmt::format("LEARN: no profile for {} (fresh)", m_key));
     } else {
-        AssistLog::debug(fmt::format("LEARN: loaded {} ({} spots)", m_key, spotCount()));
+        EbAssistLog::debug(fmt::format("LEARN: loaded {} ({} spots)", m_key, spotCount()));
     }
 }
 
-void LevelProfile::resetCurrent() {
+void EbLevelProfile::resetCurrent() {
     if (!m_loaded)
         return;
     for (auto& m : m_modes) {
@@ -255,10 +255,10 @@ void LevelProfile::resetCurrent() {
     }
     m_dirty = true;
     save();
-    AssistLog::info(fmt::format("LEARN: reset profile {}", m_key));
+    EbAssistLog::info(fmt::format("LEARN: reset profile {}", m_key));
 }
 
-void LevelProfile::save() {
+void EbLevelProfile::save() {
     if (!m_loaded || m_key.empty())
         return;
     if (!m_dirty)
@@ -266,14 +266,14 @@ void LevelProfile::save() {
     auto result = writeFile();
     if (result.isOk()) {
         m_dirty = false;
-        AssistLog::debug(fmt::format("LEARN: profile saved ({} spots)", spotCount()));
+        EbAssistLog::debug(fmt::format("LEARN: profile saved ({} spots)", spotCount()));
     } else {
-        AssistLog::debug(fmt::format("LEARN: save failed: {}", result.unwrapErr()));
+        EbAssistLog::debug(fmt::format("LEARN: save failed: {}", result.unwrapErr()));
     }
 }
 
-geode::Result<> LevelProfile::writeFile() const {
-    auto directory = LevelProfileImplementation::levelsDir();
+geode::Result<> EbLevelProfile::writeFile() const {
+    auto directory = EbLevelProfileImplementation::levelsDir();
     (void)geode::utils::file::createDirectoryAll(directory);
 
     matjson::Value root = matjson::Value::object();
@@ -281,7 +281,7 @@ geode::Result<> LevelProfile::writeFile() const {
     root["version"] = 1;
 
     matjson::Value modes = matjson::Value::object();
-    for (int index = 0; index < StageConfig::MODE_COUNT; ++index) {
+    for (int index = 0; index < EbStageConfig::MODE_COUNT; ++index) {
         auto const kind = static_cast<GameModeKind>(index);
         auto const& m = m_modes[index];
         if (m.spots.empty() && std::abs(m.capMul - 1.f) < 0.01f)
@@ -301,7 +301,7 @@ geode::Result<> LevelProfile::writeFile() const {
             sj["histN"] = s.histN;
             if (s.histN > 0) {
                 std::vector<matjson::Value> hist;
-                hist.reserve(SpotStats::HIST_BINS);
+                hist.reserve(EbSpotStats::HIST_BINS);
                 for (float width : s.earlyHist)
                     hist.push_back(width);
                 sj["earlyHist"] = hist;
@@ -309,16 +309,16 @@ geode::Result<> LevelProfile::writeFile() const {
             spots[std::to_string(bucket)] = sj;
         }
         mj["spots"] = spots;
-        modes[StageConfig::kindName(kind)] = mj;
+        modes[EbStageConfig::kindName(kind)] = mj;
     }
     root["modes"] = modes;
 
-    auto path = LevelProfileImplementation::profilePath(m_key);
+    auto path = EbLevelProfileImplementation::profilePath(m_key);
     return geode::utils::file::writeToJson(path, root);
 }
 
-geode::Result<> LevelProfile::readFile() {
-    auto path = LevelProfileImplementation::profilePath(m_key);
+geode::Result<> EbLevelProfile::readFile() {
+    auto path = EbLevelProfileImplementation::profilePath(m_key);
     auto result = geode::utils::file::readJson(path);
     if (result.isErr())
         return geode::Err(result.unwrapErr());
@@ -328,14 +328,14 @@ geode::Result<> LevelProfile::readFile() {
         return geode::Ok();
 
     auto& modes = root["modes"];
-    for (int index = 0; index < StageConfig::MODE_COUNT; ++index) {
-        auto const* name = StageConfig::kindName(static_cast<GameModeKind>(index));
+    for (int index = 0; index < EbStageConfig::MODE_COUNT; ++index) {
+        auto const* name = EbStageConfig::kindName(static_cast<GameModeKind>(index));
         if (!modes.contains(name))
             continue;
         auto& mj = modes[name];
         auto& m = m_modes[index];
         if (mj.contains("capMul")) {
-            m.capMul = LevelProfileImplementation::clamp01f(
+            m.capMul = EbLevelProfileImplementation::clamp01f(
                 static_cast<float>(mj["capMul"].asDouble().unwrapOr(1.0)), 0.5f, 2.f);
         }
         if (mj.contains("spots") && mj["spots"].isObject()) {
@@ -346,12 +346,12 @@ geode::Result<> LevelProfile::readFile() {
                 } catch (...) {
                     continue;
                 }
-                SpotStats s;
+                EbSpotStats s;
                 if (sj.contains("bias"))
-                    s.bias = LevelProfileImplementation::clamp01f(
+                    s.bias = EbLevelProfileImplementation::clamp01f(
                         static_cast<float>(sj["bias"].asDouble().unwrapOr(0.0)), -2.f, 2.f);
                 if (sj.contains("trust"))
-                    s.trust = LevelProfileImplementation::clamp01f(
+                    s.trust = EbLevelProfileImplementation::clamp01f(
                         static_cast<float>(sj["trust"].asDouble().unwrapOr(1.0)), 0.f, 1.f);
                 if (sj.contains("pessimism"))
                     s.pessimism = static_cast<int>(sj["pessimism"].asInt().unwrapOr(0));
@@ -366,7 +366,7 @@ geode::Result<> LevelProfile::readFile() {
                 if (sj.contains("earlyHist") && sj["earlyHist"].isArray()) {
                     size_t bi = 0;
                     for (auto const& cell : sj["earlyHist"]) {
-                        if (bi >= SpotStats::HIST_BINS)
+                        if (bi >= EbSpotStats::HIST_BINS)
                             break;
                         s.earlyHist[bi] = static_cast<float>(cell.asDouble().unwrapOr(0.0));
                         ++bi;

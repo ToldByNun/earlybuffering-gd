@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <fmt/format.h>
 
-std::string ActionButtonSettingImplementation::truncateLabel(std::string text, size_t maxChars) {
+std::string EbActionButtonSettingImplementation::truncateLabel(std::string text, size_t maxChars) {
     if (text.size() <= maxChars)
         return text;
     if (!(maxChars <= 3)) {
@@ -20,22 +20,22 @@ std::string ActionButtonSettingImplementation::truncateLabel(std::string text, s
     return text.substr(0, maxChars);
 }
 
-std::string ActionButtonSettingImplementation::dynamicButtonLabel(std::string const& key,
+std::string EbActionButtonSettingImplementation::dynamicButtonLabel(std::string const& key,
                                                                   std::string const& fallback) {
     if (key == "import-bake-replay") {
-        if (auto const* r = BakeMap::get().pendingReplay()) {
-            return ActionButtonSettingImplementation::truncateLabel(r->sourceName, 14);
+        if (auto const* r = EbBakeMap::get().pendingReplay()) {
+            return EbActionButtonSettingImplementation::truncateLabel(r->sourceName, 14);
         }
     }
     if (key == "cycle-assist-mode") {
-        return ActionButtonSettingImplementation::truncateLabel(
-            StageConfig::assistModeName(StageConfig::assistMode()), 12);
+        return EbActionButtonSettingImplementation::truncateLabel(
+            EbStageConfig::assistModeName(EbStageConfig::assistMode()), 12);
     }
     return fallback;
 }
 
-bool ActionButtonSettingImplementation::actionShouldEnable(std::string const& key) {
-    bool const busy = BakeMap::get().isBaking() || BakeScheduler::get().running();
+bool EbActionButtonSettingImplementation::actionShouldEnable(std::string const& key) {
+    bool const busy = EbBakeMap::get().isBaking() || EbBakeScheduler::get().running();
     if (key == "bake-map-action" || key == "brute-bake-action" || key == "import-bake-replay") {
         return !busy;
     }
@@ -45,80 +45,80 @@ bool ActionButtonSettingImplementation::actionShouldEnable(std::string const& ke
     return true;
 }
 
-void ActionButtonSettingImplementation::fireSettingAction(std::string const& key) {
+void EbActionButtonSettingImplementation::fireSettingAction(std::string const& key) {
     if (key == "import-bake-replay") {
-        PauseActionBridge::importReplay();
+        EbPauseActionBridge::importReplay();
         return;
     }
     if (key == "bake-map-action") {
-        PauseActionBridge::startBake(false);
+        EbPauseActionBridge::startBake(false);
         return;
     }
     if (key == "brute-bake-action") {
-        PauseActionBridge::startBake(true);
+        EbPauseActionBridge::startBake(true);
         return;
     }
     if (key == "cancel-bake-action") {
-        PauseActionBridge::cancelBake();
+        EbPauseActionBridge::cancelBake();
         return;
     }
     if (key == "cycle-assist-mode") {
-        PauseActionBridge::cycleAssistMode();
+        EbPauseActionBridge::cycleAssistMode();
         return;
     }
     if (key == "reset-learn-action") {
-        PauseActionBridge::resetLearning();
+        EbPauseActionBridge::resetLearning();
         return;
     }
     if (key == "export-config-action") {
-        PauseActionBridge::exportConfig();
+        EbPauseActionBridge::exportConfig();
         return;
     }
     if (key == "browse-cloud-configs-action") {
-        PauseActionBridge::openCloudConfigs();
+        EbPauseActionBridge::openCloudConfigs();
         return;
     }
     if (key == "import-config-action") {
-        PauseActionBridge::importConfig();
+        EbPauseActionBridge::importConfig();
         return;
     }
     if (key == "dev-start-record-action") {
-        PauseActionBridge::devStartRecord();
+        EbPauseActionBridge::devStartRecord();
         return;
     }
     if (key == "dev-stop-record-action") {
-        PauseActionBridge::devStopRecord();
+        EbPauseActionBridge::devStopRecord();
         return;
     }
     if (key == "dev-eval-last-action") {
-        PauseActionBridge::devEvalLast();
+        EbPauseActionBridge::devEvalLast();
         return;
     }
     if (key == "dev-eval-session-action") {
-        PauseActionBridge::devEvalSession();
+        EbPauseActionBridge::devEvalSession();
         return;
     }
     if (key == "dev-export-session-action") {
-        PauseActionBridge::devExportSession();
+        EbPauseActionBridge::devExportSession();
         return;
     }
     if (key == "dev-clear-traces-action") {
-        PauseActionBridge::devClearTraces();
+        EbPauseActionBridge::devClearTraces();
         return;
     }
     if (key == "dev-copy-report-action") {
-        PauseActionBridge::devCopyReport();
+        EbPauseActionBridge::devCopyReport();
         return;
     }
     if (key == "dev-dump-diag-action") {
-        PauseActionBridge::devDumpDiag();
+        EbPauseActionBridge::devDumpDiag();
         return;
     }
 }
 
 geode::Result<std::shared_ptr<geode::prelude::SettingV3>>
-ActionButtonSettingV3::parse(std::string key, std::string modID, matjson::Value const& json) {
-    auto result = std::make_shared<ActionButtonSettingV3>();
+EbActionButtonSettingV3::parse(std::string key, std::string modID, matjson::Value const& json) {
+    auto result = std::make_shared<EbActionButtonSettingV3>();
     auto root = geode::prelude::checkJson(json, "ActionButtonSettingV3");
     // Same pattern as Geode docs button example (avoid parseBaseProperties / requires-restart).
     result->init(key, modID, root);
@@ -129,55 +129,55 @@ ActionButtonSettingV3::parse(std::string key, std::string modID, matjson::Value 
     return root.ok(std::static_pointer_cast<geode::prelude::SettingV3>(result));
 }
 
-void ActionButtonSettingImplementation::registerActionButtonSettingType() {
+void EbActionButtonSettingImplementation::registerActionButtonSettingType() {
     static bool s_done = false;
     if (s_done)
         return;
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return;
-    auto result = mod->registerCustomSettingType("eb-action", &ActionButtonSettingV3::parse);
+    auto result = mod->registerCustomSettingType("eb-action", &EbActionButtonSettingV3::parse);
     if (!result) {
         geode::log::error("EarlyBuffer: eb-action register failed: {}", result.unwrapErr());
-        AssistLog::info(fmt::format("WARN eb-action register: {}", result.unwrapErr()));
+        EbAssistLog::info(fmt::format("WARN eb-action register: {}", result.unwrapErr()));
         return;
     }
     s_done = true;
     if (mod->getSetting("import-bake-replay")) {
-        AssistLog::info("eb-action settings OK (import-bake-replay resolved)");
+        EbAssistLog::info("eb-action settings OK (import-bake-replay resolved)");
     } else {
-        AssistLog::info("WARN eb-action: import-bake-replay still unresolved after register");
+        EbAssistLog::info("WARN eb-action: import-bake-replay still unresolved after register");
     }
 }
 
-bool ActionButtonSettingV3::load(matjson::Value const&) {
+bool EbActionButtonSettingV3::load(matjson::Value const&) {
     return true;
 }
 
-bool ActionButtonSettingV3::save(matjson::Value&) const {
+bool EbActionButtonSettingV3::save(matjson::Value&) const {
     return true;
 }
 
-bool ActionButtonSettingV3::isDefaultValue() const {
+bool EbActionButtonSettingV3::isDefaultValue() const {
     return true;
 }
 
-void ActionButtonSettingV3::reset() {}
+void EbActionButtonSettingV3::reset() {}
 
-geode::prelude::SettingNodeV3* ActionButtonSettingV3::createNode(float width) {
-    return ActionButtonSettingNodeV3::create(
-        std::static_pointer_cast<ActionButtonSettingV3>(shared_from_this()), width);
+geode::prelude::SettingNodeV3* EbActionButtonSettingV3::createNode(float width) {
+    return EbActionButtonSettingNodeV3::create(
+        std::static_pointer_cast<EbActionButtonSettingV3>(shared_from_this()), width);
 }
 
 // Cap button width so long filenames don't eat the label column.
 
-void ActionButtonSettingImplementation::fitActionButtonSprite(ButtonSprite* sprite) {
+void EbActionButtonSettingImplementation::fitActionButtonSprite(ButtonSprite* sprite) {
     if (!sprite)
         return;
-    sprite->setScale(ActionButtonSettingImplementation::kActionBtnScale);
+    sprite->setScale(EbActionButtonSettingImplementation::kActionBtnScale);
     float const sprW = sprite->getContentSize().width * sprite->getScale();
-    if (sprW > ActionButtonSettingImplementation::kActionBtnMaxW && sprW > 0.f) {
-        sprite->setScale(ActionButtonSettingImplementation::kActionBtnMaxW /
+    if (sprW > EbActionButtonSettingImplementation::kActionBtnMaxW && sprW > 0.f) {
+        sprite->setScale(EbActionButtonSettingImplementation::kActionBtnMaxW /
                          sprite->getContentSize().width);
     }
 }
@@ -185,12 +185,12 @@ void ActionButtonSettingImplementation::fitActionButtonSprite(ButtonSprite* spri
 // Mirror BoolSettingNodeV3: shrink button-menu, place control at geode::Anchor::Right with
 // half-width offset so the visual right edge sits flush (default center anchor).
 // Do NOT touch the button's contentSize/anchorPoint — that desyncs the ButtonSprite.
-void ActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCMenu* menu,
+void EbActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCMenu* menu,
                                                            CCMenuItemSpriteExtra* button,
                                                            ButtonSprite* sprite) {
     if (!menu || !button || !sprite)
         return;
-    ActionButtonSettingImplementation::fitActionButtonSprite(sprite);
+    EbActionButtonSettingImplementation::fitActionButtonSprite(sprite);
     float const btnW = sprite->getContentSize().width * sprite->getScale();
     // Same flush as checkboxes (menu already at row Right, ccp(-10,0)).
     menu->setContentWidth(std::max(btnW + 4.f, 24.f));
@@ -209,51 +209,51 @@ void ActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCMen
     menu->updateLayout();
 }
 
-bool ActionButtonSettingNodeV3::init(std::shared_ptr<ActionButtonSettingV3> setting, float width) {
+bool EbActionButtonSettingNodeV3::init(std::shared_ptr<EbActionButtonSettingV3> setting, float width) {
     if (!geode::prelude::SettingNodeV3::init(setting, width))
         return false;
 
     auto* menu = this->getButtonMenu();
-    auto const initial = ActionButtonSettingImplementation::dynamicButtonLabel(
+    auto const initial = EbActionButtonSettingImplementation::dynamicButtonLabel(
         setting->getKey(), setting->buttonText());
     this->m_shownLabel = initial;
     this->m_buttonSprite =
         ButtonSprite::create(initial.c_str(), "bigFont.fnt", "GJ_button_01.png", 0.8f);
     this->m_button = CCMenuItemSpriteExtra::create(
-        this->m_buttonSprite, this, menu_selector(ActionButtonSettingNodeV3::onButton));
-    ActionButtonSettingImplementation::layoutActionButton(menu, this->m_button,
+        this->m_buttonSprite, this, menu_selector(EbActionButtonSettingNodeV3::onButton));
+    EbActionButtonSettingImplementation::layoutActionButton(menu, this->m_button,
                                                           this->m_buttonSprite);
 
-    this->schedule(schedule_selector(ActionButtonSettingNodeV3::onTick), 0.2f);
+    this->schedule(schedule_selector(EbActionButtonSettingNodeV3::onTick), 0.2f);
     this->updateState(nullptr);
     return true;
 }
 
-void ActionButtonSettingNodeV3::refreshLabel() {
-    auto setting = std::static_pointer_cast<ActionButtonSettingV3>(this->getSetting());
+void EbActionButtonSettingNodeV3::refreshLabel() {
+    auto setting = std::static_pointer_cast<EbActionButtonSettingV3>(this->getSetting());
     if (!setting)
         return;
     if (!this->m_buttonSprite || !this->m_button || !this->getButtonMenu())
         return;
 
-    auto const next = ActionButtonSettingImplementation::dynamicButtonLabel(setting->getKey(),
+    auto const next = EbActionButtonSettingImplementation::dynamicButtonLabel(setting->getKey(),
                                                                             setting->buttonText());
     if (next == this->m_shownLabel)
         return;
 
     this->m_shownLabel = next;
     this->m_buttonSprite->setString(next.c_str());
-    ActionButtonSettingImplementation::layoutActionButton(this->getButtonMenu(), this->m_button,
+    EbActionButtonSettingImplementation::layoutActionButton(this->getButtonMenu(), this->m_button,
                                                           this->m_buttonSprite);
 }
 
-void ActionButtonSettingNodeV3::updateState(geode::prelude::CCNode* invoker) {
+void EbActionButtonSettingNodeV3::updateState(geode::prelude::CCNode* invoker) {
     geode::prelude::SettingNodeV3::updateState(invoker);
     this->refreshLabel();
 
     auto setting = this->getSetting();
     bool const enable = setting && setting->shouldEnable() &&
-                        ActionButtonSettingImplementation::actionShouldEnable(setting->getKey());
+                        EbActionButtonSettingImplementation::actionShouldEnable(setting->getKey());
 
     if (this->m_button)
         this->m_button->setEnabled(enable);
@@ -266,7 +266,7 @@ void ActionButtonSettingNodeV3::updateState(geode::prelude::CCNode* invoker) {
     this->m_buttonSprite->setColor(enable ? geode::prelude::ccWHITE : geode::prelude::ccGRAY);
 }
 
-void ActionButtonSettingNodeV3::onTick(float) {
+void EbActionButtonSettingNodeV3::onTick(float) {
     this->refreshLabel();
 
     auto setting = this->getSetting();
@@ -274,7 +274,7 @@ void ActionButtonSettingNodeV3::onTick(float) {
         return;
 
     bool const enable = setting->shouldEnable() &&
-                        ActionButtonSettingImplementation::actionShouldEnable(setting->getKey());
+                        EbActionButtonSettingImplementation::actionShouldEnable(setting->getKey());
     this->m_button->setEnabled(enable);
     if (!this->m_buttonSprite)
         return;
@@ -283,19 +283,19 @@ void ActionButtonSettingNodeV3::onTick(float) {
     this->m_buttonSprite->setColor(enable ? geode::prelude::ccWHITE : geode::prelude::ccGRAY);
 }
 
-void ActionButtonSettingNodeV3::onButton(geode::prelude::CCObject*) {
+void EbActionButtonSettingNodeV3::onButton(geode::prelude::CCObject*) {
     auto setting = this->getSetting();
     if (!setting)
         return;
 
-    ActionButtonSettingImplementation::fireSettingAction(setting->getKey());
+    EbActionButtonSettingImplementation::fireSettingAction(setting->getKey());
     this->refreshLabel();
     this->updateState(nullptr);
 }
 
-ActionButtonSettingNodeV3*
-ActionButtonSettingNodeV3::create(std::shared_ptr<ActionButtonSettingV3> setting, float width) {
-    auto* createdObject = new ActionButtonSettingNodeV3();
+EbActionButtonSettingNodeV3*
+EbActionButtonSettingNodeV3::create(std::shared_ptr<EbActionButtonSettingV3> setting, float width) {
+    auto* createdObject = new EbActionButtonSettingNodeV3();
     if (!createdObject || !createdObject->init(setting, width)) {
         CC_SAFE_DELETE(createdObject);
         return nullptr;
@@ -305,5 +305,5 @@ ActionButtonSettingNodeV3::create(std::shared_ptr<ActionButtonSettingV3> setting
 }
 
 $execute {
-    ActionButtonSettingImplementation::registerActionButtonSettingType();
+    EbActionButtonSettingImplementation::registerActionButtonSettingType();
 }

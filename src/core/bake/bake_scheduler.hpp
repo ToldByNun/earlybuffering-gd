@@ -2,9 +2,9 @@
 #define BAKE_SCHEDULER_HPP
 #include "bake_map.hpp"
 class PlayLayer;
-class BakeScheduler {
+class EbBakeScheduler {
 public:
-    static BakeScheduler& get();
+    static EbBakeScheduler& get();
     bool start(PlayLayer* layer, int startSlot, int radius, BakeMethod method);
     void cancel();
     bool running() const;
@@ -12,6 +12,8 @@ public:
     void markFinished();
 
 private:
+    friend class EbServiceStore;
+
     bool m_running = false;
 };
 #endif

@@ -1,60 +1,60 @@
+#include "../../app/class_manager.hpp"
 #include "sim_trust.hpp"
 #include "../learning/spot_trust_map.hpp"
 #include <fmt/format.h>
 
-SimTrust& SimTrust::get() {
-    static SimTrust inst;
-    return inst;
+EbSimTrust& EbSimTrust::get() {
+    return EbClassManager::get().service<EbSimTrust>();
 }
 
-void SimTrust::resetAttempt() {
+void EbSimTrust::resetAttempt() {
     this->m_parityDrift = false;
 }
 
-void SimTrust::onLevelQuit() {
+void EbSimTrust::onLevelQuit() {
     this->m_parityDrift = false;
-    SpotTrustMap::get().clear();
+    EbSpotTrustMap::get().clear();
 }
 
-void SimTrust::noteParityDrift() {
+void EbSimTrust::noteParityDrift() {
     this->m_parityDrift = true;
 }
 
-void SimTrust::clearParityDrift() {
+void EbSimTrust::clearParityDrift() {
     this->m_parityDrift = false;
 }
 
-bool SimTrust::okAt(float x) const {
+bool EbSimTrust::okAt(float x) const {
     if (this->m_parityDrift)
         return false;
-    if (!(SpotTrustMap::get().isUntrusted(x))) {
+    if (!(EbSpotTrustMap::get().isUntrusted(x))) {
         return true;
     }
     return false;
 }
 
-bool SimTrust::forcePassReason(float x, AssistReason& outReason) const {
+bool EbSimTrust::forcePassReason(float x, AssistReason& outReason) const {
     if (this->m_parityDrift) {
         outReason = AssistReason::PassParityDrift;
         return true;
     }
-    if (SpotTrustMap::get().isUntrusted(x)) {
+    if (EbSpotTrustMap::get().isUntrusted(x)) {
         outReason = AssistReason::PassSpotUntrusted;
         return true;
     }
     return false;
 }
 
-char const* SimTrust::overlayBit() const {
+char const* EbSimTrust::overlayBit() const {
     if (this->m_parityDrift)
         return "trust=0 parity";
-    if (!(SpotTrustMap::get().untrustedCount() > 0)) {
+    if (!(EbSpotTrustMap::get().untrustedCount() > 0)) {
         return "trust=1";
     }
     return "trust=spot";
 }
 
-bool SimTrust::selfCheck(std::string& report) {
+bool EbSimTrust::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
@@ -66,8 +66,8 @@ bool SimTrust::selfCheck(std::string& report) {
         report += name;
     };
 
-    SpotTrustMap::get().clear();
-    SimTrust& trust = SimTrust::get();
+    EbSpotTrustMap::get().clear();
+    EbSimTrust& trust = EbSimTrust::get();
     trust.resetAttempt();
     expect(trust.okAt(0.f), "fresh-ok");
     AssistReason reason = AssistReason::None;
@@ -79,7 +79,7 @@ bool SimTrust::selfCheck(std::string& report) {
     expect(reason == AssistReason::PassParityDrift, "drift-reason");
 
     trust.clearParityDrift();
-    SpotTrustMap::get().markUntrusted(200.f);
+    EbSpotTrustMap::get().markUntrusted(200.f);
     expect(!trust.okAt(200.f), "spot-blocks");
     expect(trust.forcePassReason(200.f, reason), "spot-force");
     expect(reason == AssistReason::PassSpotUntrusted, "spot-reason");

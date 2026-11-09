@@ -1,7 +1,7 @@
 #ifndef PAUSE_DEV_ACTIONS_HPP
 #define PAUSE_DEV_ACTIONS_HPP
 
-class PauseDevActions {
+class EbPauseDevActions {
 public:
     static void stubDevAction(char const* name);
     static void devStartRecord();
@@ -14,7 +14,7 @@ public:
     static void devCopyReport();
 
 private:
-    PauseDevActions() = delete;
+    EbPauseDevActions() = delete;
 };
 
 #endif

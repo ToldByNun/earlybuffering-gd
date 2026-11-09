@@ -7,19 +7,19 @@
 
 #include "../dev_diag_dump.hpp"
 
-class DevBakeDiagnostics {
+class EbDevBakeDiagnostics {
 public:
     static bool prepareBakeEvents(PlayLayer*& outLayer, int& outSlot, float& outDt,
                                   double& outSrcTps, double& outBakeTps,
-                                  std::vector<ReplayEvent>& outEv, std::string& outErr,
-                                  int* outSubsteps, DevDiagDump::BakePrepStats* outStats);
+                                  std::vector<EbReplayEvent>& outEv, std::string& outErr,
+                                  int* outSubsteps, EbDevDiagDump::BakePrepStats* outStats);
     static std::string buildReplayRemap();
     static std::string buildBakeProbe(int maxJobs);
     static std::string buildBakeFrameTrace();
     static std::string buildUnknownHistogram();
 
 private:
-    DevBakeDiagnostics() = delete;
+    EbDevBakeDiagnostics() = delete;
 };
 
 #endif

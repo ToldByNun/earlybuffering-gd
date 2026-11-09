@@ -6,7 +6,7 @@
 #include <string>
 
 // Async HTTPS GET (Geode WebRequest getSync on a worker). Cancel drops late callbacks.
-class CloudConfigClient {
+class EbCloudConfigClient {
 public:
     static constexpr int kDefaultTimeoutSec = 20;
 
@@ -24,11 +24,11 @@ public:
 
     using Callback = std::function<void(FetchResult const&)>;
 
-    CloudConfigClient();
-    ~CloudConfigClient();
+    EbCloudConfigClient();
+    ~EbCloudConfigClient();
 
-    CloudConfigClient(CloudConfigClient const&) = delete;
-    CloudConfigClient& operator=(CloudConfigClient const&) = delete;
+    EbCloudConfigClient(EbCloudConfigClient const&) = delete;
+    EbCloudConfigClient& operator=(EbCloudConfigClient const&) = delete;
 
     // Starts a GET. Cancels any in-flight request first.
     // maxBytes: reject oversized bodies after download.
@@ -53,16 +53,16 @@ private:
 #include <chrono>
 #include <thread>
 
-class CloudConfigClientImplementation {
+class EbCloudConfigClientImplementation {
 public:
-    static CloudConfigClient::FetchResult cloudConfigFetchSync(std::string const& url, size_t limit,
+    static EbCloudConfigClient::FetchResult cloudConfigFetchSync(std::string const& url, size_t limit,
                                                                int timeoutSec);
 
 private:
-    CloudConfigClientImplementation() = delete;
+    EbCloudConfigClientImplementation() = delete;
 };
 
-class CloudConfigClient::Impl {
+class EbCloudConfigClient::Impl {
 public:
     uint64_t gen = 0;
     bool busy = false;

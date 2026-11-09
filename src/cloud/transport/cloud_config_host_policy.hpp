@@ -4,7 +4,7 @@
 #include <string>
 
 // Default catalog URLs, HTTPS allowlist, relative pack path → absolute URL.
-class CloudConfigHostPolicy {
+class EbCloudConfigHostPolicy {
 public:
     // Built-in catalog (jsDelivr primary, GitHub raw fallback).
     static char const* defaultIndexUrl();
@@ -24,7 +24,7 @@ public:
     static bool selfCheck(std::string& report);
 
 private:
-    CloudConfigHostPolicy() = default;
+    EbCloudConfigHostPolicy() = default;
 
     static bool parseHttpsUrl(std::string const& url, std::string& hostOut, std::string& pathOut,
                               std::string& err);

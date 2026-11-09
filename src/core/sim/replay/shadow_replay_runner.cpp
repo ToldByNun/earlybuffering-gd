@@ -7,12 +7,12 @@
 #include <algorithm>
 #include <vector>
 
-ShadowSimulator::ReplayResult ShadowReplayRunner::replay(ShadowSimulator& simulator,
+EbShadowSimulator::ReplayResult EbShadowReplayRunner::replay(EbShadowSimulator& simulator,
                                                          PlayLayer* layer, int slot, int startTick,
-                                                         std::vector<InputEvent> const& timeline,
+                                                         std::vector<EbInputEvent> const& timeline,
                                                          float deltaTime, int maxTicks,
                                                          bool shiftActionBy, int actionShift) {
-    ShadowSimulator::ReplayResult out;
+    EbShadowSimulator::ReplayResult out;
     auto* snap = simulator.snapshotSlot(slot);
     if (!layer || !snap || !simulator.m_shadow || deltaTime <= 0.f || maxTicks <= 0)
         return out;
@@ -27,7 +27,7 @@ ShadowSimulator::ReplayResult ShadowReplayRunner::replay(ShadowSimulator& simula
 
     auto* shadowPlayer = simulator.m_shadow;
     // Build a shifted timeline view: each event tick += actionShift if requested.
-    auto effectiveTick = [&](InputEvent const& ev) {
+    auto effectiveTick = [&](EbInputEvent const& ev) {
         if (!shiftActionBy)
             return ev.tick;
         return ev.tick + actionShift;
@@ -46,7 +46,7 @@ ShadowSimulator::ReplayResult ShadowReplayRunner::replay(ShadowSimulator& simula
     simulator.m_simTickBase = std::max(0, startTick);
     simulator.m_simAbsTick = -1;
     {
-        SimSessionGuard session(*(&simulator), layer);
+        EbSimSessionGuard session(*(&simulator), layer);
 
         for (int tick = 0; tick < maxTicks; ++tick) {
             int const absTick = startTick + tick;
@@ -80,11 +80,11 @@ ShadowSimulator::ReplayResult ShadowReplayRunner::replay(ShadowSimulator& simula
     return out;
 }
 
-ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
-    ShadowSimulator& simulator, PlayLayer* layer, int slot, std::vector<ReplayEvent> const& events,
+EbShadowSimulator::BakeRunResult EbShadowReplayRunner::runBakeTimeline(
+    EbShadowSimulator& simulator, PlayLayer* layer, int slot, std::vector<EbReplayEvent> const& events,
     float deltaTime, int untilFrame, int sampleFrame, bool applyP2ToShadow, bool traceFrames,
     bool parkReals, int substeps, std::function<bool(int frame)> onFrame) {
-    ShadowSimulator::BakeRunResult out;
+    EbShadowSimulator::BakeRunResult out;
     auto* snap = simulator.snapshotSlot(slot);
     if (!layer || !snap || !simulator.m_shadow || deltaTime <= 0.f || untilFrame < 0)
         return out;
@@ -128,7 +128,7 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
         out.frames.reserve(static_cast<size_t>(std::min(untilFrame, 2048)) + 2);
     }
 
-    auto applyEv = [&](ReplayEvent const& ev) {
+    auto applyEv = [&](EbReplayEvent const& ev) {
         if (ev.player2 && !applyP2ToShadow)
             return;
         auto buttonValue = PlayerButton::Jump;
@@ -147,15 +147,15 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
     simulator.m_poseRemapDt = deltaTime; // TW remap must match bake physics, not live hitch dt
     simulator.m_bakeOffline = true;
     {
-        SimSessionGuard session(*(&simulator), layer);
+        EbSimSessionGuard session(*(&simulator), layer);
 
         for (int frame = 0; frame <= untilFrame; ++frame) {
             simulator.m_simAbsTick = frame;
 
             // Clickbots often put press+release on the SAME frame. Apply downs
             // BEFORE physics so the tick is held; releases AFTER the step.
-            std::vector<ReplayEvent const*> downs;
-            std::vector<ReplayEvent const*> ups;
+            std::vector<EbReplayEvent const*> downs;
+            std::vector<EbReplayEvent const*> ups;
             while (nextEv < events.size() && events[nextEv].frame == frame) {
                 auto const& ev = events[nextEv];
                 if (!ev.player2 || applyP2ToShadow) {
@@ -173,7 +173,7 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
 
             if (sampleFrame >= 0 && frame == sampleFrame) {
                 out.xAtSample = shadowPlayer->getPositionX();
-                out.modeAtSample = StageConfig::kindOf(shadowPlayer);
+                out.modeAtSample = EbStageConfig::kindOf(shadowPlayer);
                 out.dashingAtSample = shadowPlayer->m_isDashing;
                 out.sampled = true;
             }
@@ -203,7 +203,7 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
 
             int const evThis = static_cast<int>(downs.size() + ups.size());
             if (traceFrames) {
-                ShadowSimulator::BakeFrameTrace tr;
+                EbShadowSimulator::BakeFrameTrace tr;
                 tr.frame = frame;
                 tr.x = shadowPlayer->getPositionX();
                 tr.y = shadowPlayer->getPositionY();
@@ -213,7 +213,7 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
                 tr.unknown = simulator.m_unknown;
                 tr.twApplied = simulator.m_triggerWorldAppliedThisTick;
                 tr.eventsApplied = evThis;
-                tr.mode = static_cast<int>(StageConfig::kindOf(shadowPlayer));
+                tr.mode = static_cast<int>(EbStageConfig::kindOf(shadowPlayer));
                 if (simulator.m_dead && simulator.m_deathObject) {
                     tr.deathObjId = simulator.m_deathObject->m_uniqueID;
                     tr.deathObjType = static_cast<int>(simulator.m_deathObject->m_objectType);
@@ -254,7 +254,7 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
     }
     std::sort(
         out.unknownHist.begin(), out.unknownHist.end(),
-        [](ShadowSimulator::UnknownHistBin const& a, ShadowSimulator::UnknownHistBin const& b) {
+        [](EbShadowSimulator::UnknownHistBin const& a, EbShadowSimulator::UnknownHistBin const& b) {
             if (a.count != b.count)
                 return a.count > b.count;
             return a.objectId < b.objectId;
@@ -270,11 +270,11 @@ ShadowSimulator::BakeRunResult ShadowReplayRunner::runBakeTimeline(
     return out;
 }
 
-ShadowSimulator::PathSample ShadowReplayRunner::samplePath(ShadowSimulator& simulator,
+EbShadowSimulator::PathSample EbShadowReplayRunner::samplePath(EbShadowSimulator& simulator,
                                                            PlayLayer* layer, int slot,
-                                                           std::vector<ReplayEvent> const& events,
+                                                           std::vector<EbReplayEvent> const& events,
                                                            float deltaTime, int untilFrame) {
-    ShadowSimulator::PathSample out;
+    EbShadowSimulator::PathSample out;
     auto* snap = simulator.snapshotSlot(slot);
     if (!layer || !snap || !simulator.m_shadow || deltaTime <= 0.f || untilFrame < 0)
         return out;
@@ -289,7 +289,7 @@ ShadowSimulator::PathSample ShadowReplayRunner::samplePath(ShadowSimulator& simu
     size_t nextEv = 0;
     out.points.reserve(static_cast<size_t>(untilFrame) + 2);
 
-    auto applyEv = [&](ReplayEvent const& ev) {
+    auto applyEv = [&](EbReplayEvent const& ev) {
         auto buttonValue = PlayerButton::Jump;
         if (ev.button == 2)
             buttonValue = PlayerButton::Left;
@@ -305,7 +305,7 @@ ShadowSimulator::PathSample ShadowReplayRunner::samplePath(ShadowSimulator& simu
     simulator.m_simAbsTick = -1;
     simulator.m_poseRemapDt = deltaTime;
     {
-        SimSessionGuard session(*(&simulator), layer);
+        EbSimSessionGuard session(*(&simulator), layer);
 
         out.points.push_back(shadowPlayer->getPosition());
         for (int frame = 0; frame <= untilFrame; ++frame) {

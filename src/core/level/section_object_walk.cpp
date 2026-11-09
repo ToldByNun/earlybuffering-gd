@@ -2,7 +2,7 @@
 #include <Geode/Geode.hpp>
 #include <fmt/format.h>
 
-bool SectionObjectWalk::pointerLooksLive(void const* valuePointer) {
+bool EbSectionObjectWalk::pointerLooksLive(void const* valuePointer) {
     if (!valuePointer)
         return false;
     auto const addr = reinterpret_cast<uintptr_t>(valuePointer);
@@ -18,7 +18,7 @@ bool SectionObjectWalk::pointerLooksLive(void const* valuePointer) {
     return false;
 }
 
-GameObject* SectionObjectWalk::asGameObject(void* rawData) {
+GameObject* EbSectionObjectWalk::asGameObject(void* rawData) {
     if (!pointerLooksLive(rawData))
         return nullptr;
     // void* is not polymorphic — cast through CCObject* then typeinfo_cast.
@@ -27,7 +27,7 @@ GameObject* SectionObjectWalk::asGameObject(void* rawData) {
     return geode::prelude::typeinfo_cast<GameObject*>(asCc);
 }
 
-int SectionObjectWalk::forEachInSections(GJBaseGameLayer* layer,
+int EbSectionObjectWalk::forEachInSections(GJBaseGameLayer* layer,
                                          std::function<void(GameObject*)> const& visit) {
     if (!layer || !visit)
         return 0;
@@ -61,7 +61,7 @@ int SectionObjectWalk::forEachInSections(GJBaseGameLayer* layer,
     return count;
 }
 
-bool SectionObjectWalk::selfCheck(std::string& report) {
+bool EbSectionObjectWalk::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
     auto expect = [&](bool ok, char const* name) {
