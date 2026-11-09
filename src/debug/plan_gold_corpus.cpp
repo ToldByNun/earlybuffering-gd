@@ -18,6 +18,14 @@
 #include "../core/diagnostics/assist_real_metrics.hpp"
 #include "../core/diagnostics/assist_sim_estimate.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
+#include "../core/diagnostics/sim_tick_cost_meter.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_budget_controller.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_candidate_slot.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_decision_gate.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_parity_policy.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_plan_search.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_prediction_scheduler.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_resume_runner.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/fixtures/real_corpus_fixtures.hpp"
 #include "../core/fixtures/tg2_bake_fixture.hpp"
@@ -171,6 +179,23 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbAssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe");
     std::string divReport;
     expect(EbDivergenceTracker::selfCheck(divReport), "divergence-clear");
+    std::string simTickReport;
+    expect(EbSimTickCostMeter::selfCheck(simTickReport), "sim-tick-cost-meter");
+    std::string adaptiveSlotReport;
+    expect(EbAdaptiveCandidateSlot::selfCheck(adaptiveSlotReport), "adaptive-candidate-slot");
+    std::string adaptiveResumeReport;
+    expect(EbAdaptiveResumeRunner::selfCheck(adaptiveResumeReport), "adaptive-resume-runner");
+    std::string adaptiveBudgetReport;
+    expect(EbAdaptiveBudgetController::selfCheck(adaptiveBudgetReport), "adaptive-budget-controller");
+    std::string adaptivePlanSearchReport;
+    expect(EbAdaptivePlanSearch::selfCheck(adaptivePlanSearchReport), "adaptive-plan-search");
+    std::string adaptiveSchedulerReport;
+    expect(EbAdaptivePredictionScheduler::selfCheck(adaptiveSchedulerReport),
+           "adaptive-prediction-scheduler");
+    std::string adaptiveGateReport;
+    expect(EbAdaptiveDecisionGate::selfCheck(adaptiveGateReport), "adaptive-decision-gate");
+    std::string adaptiveParityReport;
+    expect(EbAdaptiveParityPolicy::selfCheck(adaptiveParityReport), "adaptive-parity-policy");
     std::string devConfigReport;
     expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;

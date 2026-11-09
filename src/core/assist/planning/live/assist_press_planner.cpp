@@ -9,6 +9,7 @@
 #include "../../../../dev/dev_config.hpp"
 #include "../../../bake/bake_verifier.hpp"
 #include "../../../diagnostics/assist_perf_stats.hpp"
+#include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../diagnostics/assist_real_metrics.hpp"
 #include "../../../diagnostics/divergence_tracker.hpp"
 #include "../../../learning/assist_learning.hpp"
@@ -255,6 +256,15 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.smartDepth = EbStageConfig::smartDepth();
     opts.smartCombos = EbStageConfig::smartCombos();
     opts.smartHorizon = EbStageConfig::smartHorizon();
+    // Adaptive Prediction Planner (AP0–AP6): plan() → AdaptivePlanSearch when on.
+    opts.adaptivePlan = EbStageConfig::adaptivePlan();
+    opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicks();
+    opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantum();
+    opts.adaptiveReservePct = EbStageConfig::adaptiveReservePct();
+    // Adaptive screen+verify needs a usable soft wall; raise floor (never
+    // override unlimited 0, never lower a higher user setting).
+    if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
+        opts.budgetUs = 4000;
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();
@@ -293,6 +303,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
+    // Classic coverage proxy until Adaptive reports real fully-verified counts.
+    int const fullyVerified = plan.budgetHit ? 0 : std::max(0, plan.candidatesTried);
+    EbSimTickCostMeter::get().notePlanOutcome(plan.budgetHit, plan.candidatesTried, fullyVerified);
 
     controller.logPlan(plan, "press");
     controller.m_outcomePlayer1 = player1;

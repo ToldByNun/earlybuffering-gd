@@ -21,11 +21,19 @@ public:
 private:
 };
 
+// Three hard limits stay strictly separated (Adaptive Prediction Planner):
+//   1) Max Assist Ticks  — caller `limit` / ModeParams.ticks / fire deadline.
+//      PlanOptions must never raise that window or invent extra real clicks.
+//   2) Prediction Horizon — AssistHorizon / model.cap / scoreHorizon (capMul).
+//      Adaptive may stop early inside the horizon; never raise it via budget.
+//   3) Dynamic Plan Tick Budget — tickBudget + budgetUs (ceilings from settings).
+//      Adaptive may redistribute / early-stop inside these; never treat leftover
+//      CPU as permission to grow Max Assist or Prediction Horizon.
 class EbPlanOptions {
 public:
     float capMul = 1.f;
     int maxBranches = 4;
-    int budgetUs = 1500;   // soft cap; tick budget is primary
+    int budgetUs = 4000;   // soft cap; tick budget is primary
     int tickBudget = 4000; // physics ticks per plan() call
     int smartDepth = 1;
     int smartCombos = 48;
@@ -56,6 +64,13 @@ public:
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     EbThreatZone seedThreatZone{};
+    // Adaptive Prediction Planner (AP0 contracts; search path lands in later APs).
+    // When false, callers keep classic ShadowPlanSearch. Adaptive must not raise
+    // Max Assist or Prediction Horizon from these knobs — only subdivide tickBudget.
+    bool adaptivePlan = false;
+    int adaptiveScreenTicks = 24;   // Phase A/B short quantum per candidate
+    int adaptiveVerifyQuantum = 16; // Phase C extend grant size
+    int adaptiveReservePct = 15;    // Phase D / tie reserve of Dynamic Plan Tick Budget
 
 private:
 };
@@ -123,6 +138,12 @@ public:
     // Commit 12: one note per delay 0..limit after plan/planSequence entry.
     std::vector<EbDevRejectLedger::CandNote> candNotes;
     bool candNotesTruncated = false;
+    // Adaptive Prediction Planner shell (AP4+). Classic plans leave these false/0.
+    bool adaptiveShell = false;       // Adaptive A/B/C ran under adaptive-plan
+    bool adaptiveFellThrough = false; // needed DecisionGate/classic (until AP6 owns Delay)
+    int adaptiveScreenedCount = 0;    // delays that received a screen quantum
+    int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
+    int adaptiveVerifyGrants = 0;     // Phase C verify quanta granted
 
 private:
 };

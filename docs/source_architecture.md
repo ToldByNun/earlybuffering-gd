@@ -94,3 +94,14 @@ compiler. For example, with MinGW from the repository root:
 g++ -std=c++23 tools/test_wave_input_window.cpp src/core/assist/contracts/miss_assist_contracts.cpp src/core/assist/contracts/assist_verdict.cpp -o build/test_wave_input_window.exe
 ./build/test_wave_input_window.exe
 ```
+
+Adaptive fallthrough / Gate parity (no Geode) — locks the `simUs=0` Hopeless
+regression and soft-wall `PassBudget` classic fallthrough:
+
+```powershell
+g++ -std=c++23 tools/test_adaptive_parity_smoke.cpp src/core/sim/planning/search/adaptive/adaptive_parity_policy.cpp src/core/assist/contracts/assist_verdict.cpp -o build/test_adaptive_parity_smoke.exe
+./build/test_adaptive_parity_smoke.exe
+```
+
+Full Adaptive Gate / Budget / Scheduler / PlanSearch selfChecks also run inside
+`PlanGoldCorpus` on mod load (desktop) and via Dev diag dump.

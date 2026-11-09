@@ -161,6 +161,10 @@ void EbModuleBindings::registerSettings() {
     watchInt("smart-horizon");
     watchInt("robust-k");
     watchBool("robust-jitter");
+    watchBool("adaptive-plan");
+    watchInt("adaptive-screen-ticks");
+    watchInt("adaptive-verify-quantum");
+    watchInt("adaptive-reserve-pct");
 
     geode::prelude::listenForSettingChanges<std::string>(
         "assist-mode", [](std::string) { EbModuleBindings::onAnySetting(); });

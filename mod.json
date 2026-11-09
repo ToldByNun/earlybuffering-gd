@@ -416,8 +416,8 @@
 		"sim-budget-us": {
 			"type": "int",
 			"name": "Sim Budget (µs)",
-			"description": "Soft time cap per click for the planner (microseconds). 1500 ≈ 1.5ms. Higher = more thorough search, more CPU hitch risk. Lower = snappier but may Pass sooner. 0 = no wall-clock limit (tick budget still applies).",
-			"default": 1500,
+			"description": "Soft time cap per click for the planner (microseconds). 4000 ≈ 4ms. Higher = more thorough search, more CPU hitch risk. Lower = snappier but may Pass sooner (Adaptive often needs ≥4000). 0 = no wall-clock limit (tick budget still applies).",
+			"default": 4000,
 			"min": 0,
 			"max": 10000
 		},
@@ -483,6 +483,41 @@
 			"name": "Robust firstDt Jitter",
 			"description": "Before locking a Delay, re-check with slightly shorter/longer first frame time (±3%). On = rejects fragile timings (extra sims, safer under unstable FPS). Off = fewer sims, default.",
 			"default": false
+		},
+		"title-adaptive": {
+			"type": "title",
+			"name": "Adaptive Prediction (Live)",
+			"description": "Contracts for the Adaptive Prediction Planner. Max Assist ticks, Prediction Horizon (look-ahead), and Dynamic Plan Tick Budget stay separate — Adaptive only redistributes sim work inside the tick/time ceilings and never invents extra real clicks. Search path lands in later builds; settings are wired now."
+		},
+		"adaptive-plan": {
+			"type": "bool",
+			"name": "Adaptive Plan",
+			"description": "Prefer Adaptive Prediction Planner on Live presses when available. Off = classic equal-walk search. Does not raise Max Assist or look-ahead; only changes how tick-budget is spent. Until Adaptive search ships, both paths still use classic plan().",
+			"default": true
+		},
+		"adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Adaptive Screen Ticks",
+			"description": "Short simulation quantum for Adaptive Phase A/B (baseline + candidate screening) per delay. Higher = fewer false culls, more CPU. Lower = cheaper screen. Clamped inside tick-budget; never raises Max Assist or look-ahead.",
+			"default": 24,
+			"min": 8,
+			"max": 64
+		},
+		"adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Adaptive Verify Quantum",
+			"description": "How many extra physics ticks Adaptive Phase C grants a promising candidate per step. Higher = deeper verification per grant. Lower = finer budget splitting across candidates.",
+			"default": 16,
+			"min": 8,
+			"max": 64
+		},
+		"adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Adaptive Reserve %",
+			"description": "Percent of Dynamic Plan Tick Budget held for Phase D ties / unclear cases (0–40). Higher = more late re-checks when two delays look similar. Does not grow Max Assist or look-ahead.",
+			"default": 15,
+			"min": 0,
+			"max": 40
 		},
 		"title-learning": {
 			"type": "title",

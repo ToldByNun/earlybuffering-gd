@@ -158,6 +158,14 @@ public:
     // Re-check top cand with firstDt ±3% before committing Delay.
     static bool robustJitter();
 
+    // --- Adaptive Prediction Planner (Live; classic search until Adaptive ships) ---
+    // Does not raise Max Assist ticks or Prediction Horizon — only subdivides
+    // Dynamic Plan Tick Budget (tick-budget / sim-budget-us ceilings).
+    static bool adaptivePlan();
+    static int adaptiveScreenTicks();
+    static int adaptiveVerifyQuantum();
+    static int adaptiveReservePct();
+
     // --- Learning ---
     static bool autoTune();
     // Self-bake: practice default; optional normal-mode; budgeted window refine.
@@ -279,6 +287,10 @@ private:
     static int s_cachedSmartHorizon;
     static int s_cachedRobustK;
     static bool s_cachedRobustJitter;
+    static bool s_cachedAdaptivePlan;
+    static int s_cachedAdaptiveScreenTicks;
+    static int s_cachedAdaptiveVerifyQuantum;
+    static int s_cachedAdaptiveReservePct;
     static std::string s_cachedAssistVerify;
     static int s_cachedTickBudget;
     static bool s_cachedAssistOnlyPractice;
