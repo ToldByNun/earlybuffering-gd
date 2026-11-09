@@ -27,6 +27,7 @@ public:
     bool terminalDied = false;
     bool terminalUnknown = false;
     bool terminalAliveCap = false;
+    int verifyGrants = 0; // Phase C quanta granted (scheduler fairness)
     // Autonomous survival (no hypothetical follow-ups). Recoverability filled in AP8.
     int autonomousSurviveTicks = 0;
     bool autonomousAlive = false;
