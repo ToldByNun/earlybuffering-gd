@@ -386,8 +386,39 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         noteStats(stats);
         EbPlanOptions classicOpts = options;
         classicOpts.adaptivePlan = false;
-        return EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime, firstDt,
-                                       classicOpts);
+        // Share the same press envelope. Restarting a full tick/µs budget here
+        // made Adaptive+classic cost up to ~2× sim-budget-us per click on Dynamic.
+        classicOpts.tickBudget = std::max(0, sharedTicks);
+        if (options.budgetUs > 0) {
+            auto const elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                                     std::chrono::steady_clock::now() - wall0)
+                                     .count();
+            int const remUs = options.budgetUs - static_cast<int>(elapsed);
+            if (remUs <= 0) {
+                if (classicOpts.tickBudget <= 0) {
+                    EbSimPlan out = plan;
+                    out.action = PlanAction::Pass;
+                    out.reason = AssistReason::PassBudget;
+                    out.budgetHit = true;
+                    out.adaptiveFellThrough = true;
+                    out.adaptiveShell = true;
+                    return out;
+                }
+                // Wall spent but ticks remain: keep a 1µs soft wall so classic
+                // cannot run unbounded (budgetUs<=0 means unlimited).
+                classicOpts.budgetUs = 1;
+            } else {
+                classicOpts.budgetUs = remUs;
+            }
+        }
+        auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
+                                                     firstDt, classicOpts);
+        classicPlan.adaptiveShell = true;
+        classicPlan.adaptiveFellThrough = true;
+        classicPlan.adaptiveScreenedCount = plan.adaptiveScreenedCount;
+        classicPlan.adaptiveSurvivors = plan.adaptiveSurvivors;
+        classicPlan.adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
+        return classicPlan;
     };
 
     if (fallClassic)

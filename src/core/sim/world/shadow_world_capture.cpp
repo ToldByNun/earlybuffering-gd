@@ -2,6 +2,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
+#include "../../../level/section_object_walk.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../orbs/orb_stack_resolver.hpp"
@@ -67,20 +68,8 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
     }
     // Secondary: section lists often hold objects children miss (same as TW baker).
     // Without this, bake at spawn can get tw=false → toggled spikes stay lethal.
-    {
-        auto& sections = layer->m_sections;
-        for (auto* mid : sections) {
-            if (!mid)
-                continue;
-            for (auto* inner : *mid) {
-                if (!inner)
-                    continue;
-                for (auto* rawData : *inner) {
-                    consider(geode::prelude::typeinfo_cast<GameObject*>(rawData));
-                }
-            }
-        }
-    }
+    // Poison-safe: never raw typeinfo_cast on m_sections (AV read @ -1).
+    EbSectionObjectWalk::forEachInSections(layer, consider);
 }
 
 void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer) {

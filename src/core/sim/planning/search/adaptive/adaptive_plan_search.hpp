@@ -9,7 +9,8 @@
 // !adaptivePlan → classic ShadowPlanSearch.
 // A/B screen → C verify → D DecisionGate (honesty).
 // Soft wall (budgetUs) runs from plan start. Adaptive Delay / proven PassD0Safe
-// stick; any other Adaptive Pass falls through to classic.
+// stick; any other Adaptive Pass falls through to classic with the *remaining*
+// wall/ticks (never a fresh full press budget — that doubled Dynamic hitches).
 class EbAdaptivePlanSearch {
 public:
     static EbSimPlan run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
