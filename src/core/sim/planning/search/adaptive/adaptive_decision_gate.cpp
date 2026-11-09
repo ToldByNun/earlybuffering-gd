@@ -160,7 +160,13 @@ EbAdaptiveDecisionGate::Result EbAdaptiveDecisionGate::decide(Input const& in) {
     }
 
     if (best < 0) {
-        // No Delay-worthy progress and d0 not horizon/zone proven.
+        // Alive but not horizon/zone-proven ≠ hopeless. With unlimited soft wall
+        // Adaptive used to emit PassHopeless here and skip classic fallthrough,
+        // killing Assist on every press. Treat as incomplete → PassBudget.
+        if (isDelayWorthy(d0) && !d0.terminalDied) {
+            out.reason = AssistReason::PassBudget;
+            return out;
+        }
         out.reason = in.budgetHitIncomplete ? AssistReason::PassBudget : AssistReason::PassHopeless;
         return out;
     }
@@ -316,7 +322,8 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     expect(hasHazardProgress(proof, d0dead, 96, 24), "min-proof-vs-dead-d0");
     expect(!hasHazardProgress(proof, d0dead, 96, 32), "min-proof-below-floor");
 
-    // budgetHit + screen-only Alive d0 → PassBudget (not PassD0Safe).
+    // Screen-only Alive d0 → PassBudget (not PassD0Safe / not Hopeless), even
+    // without budgetHitIncomplete — classic fallthrough must still run.
     for (int delay = 0; delay <= 4; ++delay) {
         cands[delay].terminalDied = false;
         cands[delay].autonomousAlive = true;
@@ -326,11 +333,127 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
         cands[delay].deathTick = -1;
     }
     Input screenSafeIn = deadIn;
-    screenSafeIn.budgetHitIncomplete = true;
+    screenSafeIn.budgetHitIncomplete = false;
     screenSafeIn.screenProofTicks = 24;
     auto const screenSafeOut = decide(screenSafeIn);
     expect(screenSafeOut.reason == AssistReason::PassBudget, "screen-alive-budget");
     expect(screenSafeOut.action == PlanAction::Pass, "screen-alive-pass");
+
+    screenSafeIn.budgetHitIncomplete = true;
+    expect(decide(screenSafeIn).reason == AssistReason::PassBudget, "screen-alive-budget-hit");
+
+    // --- Live session parity smokes (DevTrace regressions) ---
+
+    // simUs=0: unproven Alive must never be Hopeless (blocked classic fallthrough).
+    for (int delay = 0; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].autonomousAlive = true;
+        cands[delay].ticksSimulated = 24;
+        cands[delay].endX = 100.f + static_cast<float>(delay);
+    }
+    Input infiniteWallIn = deadIn;
+    infiniteWallIn.budgetHitIncomplete = false;
+    infiniteWallIn.screenProofTicks = 24;
+    infiniteWallIn.modelCap = 84;
+    auto const infiniteOut = decide(infiniteWallIn);
+    expect(infiniteOut.reason == AssistReason::PassBudget, "infinite-wall-unproven-budget");
+    expect(infiniteOut.reason != AssistReason::PassHopeless, "infinite-wall-not-hopeless");
+    expect(infiniteOut.reason != AssistReason::PassD0Safe, "infinite-wall-not-d0safe");
+    expect(infiniteOut.action == PlanAction::Pass, "infinite-wall-pass");
+
+    // Hard click: dying d0 + Alive delay past deathTick → Delay (even without zone).
+    for (int delay = 0; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].terminalDied = true;
+        cands[delay].deathTick = 8;
+        cands[delay].ticksSimulated = 9;
+        cands[delay].endX = 50.f;
+    }
+    cands[2].terminalDied = false;
+    cands[2].autonomousAlive = true;
+    cands[2].deathTick = -1;
+    cands[2].ticksSimulated = 24;
+    cands[2].autonomousSurviveTicks = 24;
+    cands[2].endX = 180.f;
+    Input hardClickIn = deadIn;
+    hardClickIn.robustK = 0;
+    hardClickIn.screenProofTicks = 24;
+    hardClickIn.modelCap = 84;
+    auto const hardOut = decide(hardClickIn);
+    expect(hardOut.action == PlanAction::Delay, "hard-click-delay");
+    expect(hardOut.delay == 2, "hard-click-d2");
+    expect(hasHazardProgress(cands[2], cands[0], 84, 24), "hard-click-progress");
+
+    // Same-crash soft deaths (different deathTick inflation) → Hopeless, not Delay.
+    for (int delay = 0; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].terminalDied = true;
+        cands[delay].deathTick = 10 + delay;
+        cands[delay].ticksSimulated = 11 + delay;
+        cands[delay].autonomousSurviveTicks = 11 + delay;
+        cands[delay].endX = 50.f + 10.f * static_cast<float>(delay);
+    }
+    Input softDeadIn = deadIn;
+    softDeadIn.budgetHitIncomplete = false;
+    auto const softDeadOut = decide(softDeadIn);
+    expect(softDeadOut.action == PlanAction::Pass, "soft-dead-pass");
+    expect(softDeadOut.reason == AssistReason::PassHopeless, "soft-dead-hopeless");
+
+    // Zone-cleared Alive at short ticks still Delay-worthy vs dead d0.
+    cands[0] = CandView{};
+    cands[0].screened = true;
+    cands[0].terminalDied = true;
+    cands[0].deathTick = 4;
+    cands[0].ticksSimulated = 5;
+    cands[1] = CandView{};
+    cands[1].screened = true;
+    cands[1].autonomousAlive = true;
+    cands[1].ticksSimulated = 12;
+    cands[1].zoneCleared = true;
+    cands[1].endX = 160.f;
+    for (int delay = 2; delay <= 4; ++delay)
+        cands[delay] = cands[0];
+    Input zoneIn = deadIn;
+    zoneIn.robustK = 0;
+    auto const zoneOut = decide(zoneIn);
+    expect(zoneOut.action == PlanAction::Delay && zoneOut.delay == 1, "zone-clear-delay");
+
+    // Horizon-proven d0 beats later shallow Alive delays for PassD0Safe.
+    cands[0] = CandView{};
+    cands[0].screened = true;
+    cands[0].autonomousAlive = true;
+    cands[0].ticksSimulated = 84;
+    cands[0].terminalAliveCap = true;
+    cands[0].endX = 200.f;
+    cands[3] = CandView{};
+    cands[3].screened = true;
+    cands[3].autonomousAlive = true;
+    cands[3].ticksSimulated = 40;
+    cands[3].zoneCleared = true;
+    cands[3].endX = 220.f;
+    for (int delay = 1; delay <= 4; ++delay) {
+        if (delay == 3)
+            continue;
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].terminalDied = true;
+        cands[delay].deathTick = 5;
+        cands[delay].ticksSimulated = 6;
+    }
+    Input provenD0In = deadIn;
+    provenD0In.modelCap = 84;
+    provenD0In.robustK = 0;
+    // d0 alone at horizon (no later hazard-progress) → PassD0Safe.
+    cands[3].terminalDied = true;
+    cands[3].autonomousAlive = false;
+    cands[3].zoneCleared = false;
+    cands[3].ticksSimulated = 6;
+    cands[3].deathTick = 5;
+    expect(decide(provenD0In).reason == AssistReason::PassD0Safe, "proven-d0-alone");
+    expect(decide(provenD0In).action == PlanAction::Pass, "proven-d0-pass");
 
     if (fails == 0)
         report = "AdaptiveDecisionGate OK";

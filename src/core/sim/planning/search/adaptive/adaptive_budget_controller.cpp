@@ -144,6 +144,19 @@ bool EbAdaptiveBudgetController::selfCheck(std::string& report) {
     expect(wall.allowedTicks == wall.screenTicks + wall.verifyTicks + wall.reserveTicks,
            "wall-split-sum");
 
+    // Unlimited soft wall (sim-budget-us=0) still keeps full hard ticks.
+    auto const unlimited = plan(2500, 0, 200.f, 24, 16, 15);
+    expect(unlimited.budgetUs == 0, "unlimited-us");
+    expect(unlimited.allowedTicks == EbPlatformLimits::get().clampTickBudget(2500),
+           "unlimited-ticks");
+    expect(unlimited.suggestedTicksFromWall == 0, "unlimited-no-suggest");
+
+    // Expensive EMA must not collapse ticks under a tight wall.
+    auto const expensive = plan(2500, 3000, 150.f, 24, 16, 15);
+    expect(expensive.allowedTicks == EbPlatformLimits::get().clampTickBudget(2500),
+           "expensive-no-shrink");
+    expect(expensive.suggestedTicksFromWall == 20, "expensive-suggest");
+
     // Tiny EMA ignored for suggestion; hard ticks unchanged.
     auto const tiny = plan(500, 10000, 0.01f, 24, 16, 10);
     expect(tiny.allowedTicks == EbPlatformLimits::get().clampTickBudget(500), "tiny-ema-ignore");

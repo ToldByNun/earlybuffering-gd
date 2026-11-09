@@ -8,8 +8,8 @@
 // Adaptive Prediction Planner entry (AP4–AP6).
 // !adaptivePlan → classic ShadowPlanSearch.
 // A/B screen → C verify → D DecisionGate (honesty).
-// Soft wall (budgetUs) does not abort Max Assist screen; incomplete screen /
-// Gate PassBudget with no survivors falls through to classic.
+// Soft wall (budgetUs) runs from plan start. Adaptive Delay / proven PassD0Safe
+// stick; any other Adaptive Pass falls through to classic.
 class EbAdaptivePlanSearch {
 public:
     static EbSimPlan run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,

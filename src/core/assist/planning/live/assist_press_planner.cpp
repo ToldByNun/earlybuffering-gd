@@ -261,6 +261,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicks();
     opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantum();
     opts.adaptiveReservePct = EbStageConfig::adaptiveReservePct();
+    // Adaptive screen+verify needs a usable soft wall; raise floor (never
+    // override unlimited 0, never lower a higher user setting).
+    if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
+        opts.budgetUs = 4000;
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();

@@ -416,8 +416,8 @@
 		"sim-budget-us": {
 			"type": "int",
 			"name": "Sim Budget (µs)",
-			"description": "Soft time cap per click for the planner (microseconds). 1500 ≈ 1.5ms. Higher = more thorough search, more CPU hitch risk. Lower = snappier but may Pass sooner. 0 = no wall-clock limit (tick budget still applies).",
-			"default": 1500,
+			"description": "Soft time cap per click for the planner (microseconds). 4000 ≈ 4ms. Higher = more thorough search, more CPU hitch risk. Lower = snappier but may Pass sooner (Adaptive often needs ≥4000). 0 = no wall-clock limit (tick budget still applies).",
+			"default": 4000,
 			"min": 0,
 			"max": 10000
 		},

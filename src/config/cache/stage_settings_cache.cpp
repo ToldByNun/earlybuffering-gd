@@ -57,7 +57,7 @@ void EbStageSettingsCache::refreshCache() {
     EbStageConfigImplementation::s_cachedTriggerBakeSkipDynamic =
         EbStageConfigImplementation::readBool(mod, "trigger-bake-skip-dynamic", true);
     EbStageConfigImplementation::s_cachedSimBudgetUs = EbStageConfigImplementation::clampInt(
-        EbStageConfigImplementation::readInt(mod, "sim-budget-us", 1500), 0, 10000);
+        EbStageConfigImplementation::readInt(mod, "sim-budget-us", 4000), 0, 10000);
     EbStageConfigImplementation::s_cachedBakeRadius = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "bake-radius", 0), 0, 128);
     EbStageConfigImplementation::s_cachedCpsLimit = EbStageConfigImplementation::clampInt(

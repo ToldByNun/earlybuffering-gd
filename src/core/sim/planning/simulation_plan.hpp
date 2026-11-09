@@ -33,7 +33,7 @@ class EbPlanOptions {
 public:
     float capMul = 1.f;
     int maxBranches = 4;
-    int budgetUs = 1500;   // soft cap; tick budget is primary
+    int budgetUs = 4000;   // soft cap; tick budget is primary
     int tickBudget = 4000; // physics ticks per plan() call
     int smartDepth = 1;
     int smartCombos = 48;

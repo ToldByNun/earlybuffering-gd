@@ -2,6 +2,7 @@
 #include "adaptive_budget_controller.hpp"
 #include "adaptive_candidate_slot.hpp"
 #include "adaptive_decision_gate.hpp"
+#include "adaptive_parity_policy.hpp"
 #include "adaptive_prediction_scheduler.hpp"
 #include "adaptive_resume_runner.hpp"
 #include "../../../../../config/stage_config.hpp"
@@ -158,12 +159,14 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     {
         EbSimSessionGuard session(simulator, layer);
 
-        // Soft wall must NOT abort Phase A/B: Max Assist delays need one screen
-        // quantum each or Assist starves under tight sim-budget-us (e.g. 3000µs).
-        // Hard tick / phase buckets still bound screen spend.
+        // Soft wall runs from plan start (same as classic) — screen + verify.
         auto runScreenDelay = [&](int delay) {
             if (delay < 0 || delay > limit)
                 return;
+            if (wallExceeded()) {
+                plan.budgetHit = true;
+                return;
+            }
             if (envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen) <= 0 ||
                 sharedTicks <= 0) {
                 plan.budgetHit = true;
@@ -246,15 +249,15 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         survivors = countSurvivors(slots, limit);
 
-        if (hopelessScreen(slots, limit, screened, survivors)) {
-            earlyPass = true;
-            earlyReason = AssistReason::PassHopeless;
-        } else if (screened <= 0 ||
-                   (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
-            // Incomplete screen with a dying d0 — classic still evaluates partial
-            // candidates; Adaptive must not PassBudget the press away.
+        // Soft-wall incomplete screen: prefer classic before declaring hopeless
+        // from only a couple same-crash samples.
+        if (screened <= 0 ||
+            (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
             fallClassic = true;
             plan.budgetHit = true;
+        } else if (hopelessScreen(slots, limit, screened, survivors)) {
+            earlyPass = true;
+            earlyReason = AssistReason::PassHopeless;
         } else if (survivors > 0) {
             // Phase C — adaptive verification (resume-extend within one active delay).
             int activeDelay = -1;
@@ -378,14 +381,20 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     plan.adaptiveSurvivors = survivors;
     plan.adaptiveVerifyGrants = verifyGrants;
 
-    if (fallClassic) {
+    auto runClassicFallthrough = [&]() -> EbSimPlan {
         plan.adaptiveFellThrough = true;
         noteStats(stats);
         EbPlanOptions classicOpts = options;
         classicOpts.adaptivePlan = false;
         return EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime, firstDt,
                                        classicOpts);
-    }
+    };
+
+    if (fallClassic)
+        return runClassicFallthrough();
+
+    if (earlyPass && EbAdaptiveParityPolicy::shouldFallThroughEarlyPass(earlyReason))
+        return runClassicFallthrough();
 
     if (earlyPass) {
         plan.action = PlanAction::Pass;
@@ -430,17 +439,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     plan.activatedRing = plan.activatedRing || gate.activatedRing;
     plan.adaptiveFellThrough = false;
 
-    // Gate PassBudget = Adaptive could not prove Delay or d0-safe (often soft
-    // wall after screen-Alive d0). Classic may still arm from partial eval —
-    // do not require d0.terminalDied (that starved Assist on the hard click).
-    if (gate.action == PlanAction::Pass && gate.reason == AssistReason::PassBudget) {
-        plan.adaptiveFellThrough = true;
-        noteStats(stats);
-        EbPlanOptions classicOpts = options;
-        classicOpts.adaptivePlan = false;
-        return EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime, firstDt,
-                                       classicOpts);
-    }
+    if (EbAdaptiveParityPolicy::shouldFallThroughGate(gate.action == PlanAction::Delay,
+                                                      gate.reason))
+        return runClassicFallthrough();
 
     if (gate.action == PlanAction::Delay && gate.delay > 0) {
         plan.viableDelays.clear();
@@ -503,10 +504,39 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
     slots[2].autonomousAlive = true;
     expect(!hopelessScreen(slots, 4, 5, 1), "hopeless-no-surv");
 
+    // Incomplete same-crash sample (<2 compared) must not look hopeless.
+    std::vector<EbAdaptiveCandidateSlot> partial(2);
+    partial[0].bindDelay(0);
+    partial[0].screened = true;
+    partial[0].terminalDied = true;
+    partial[0].deathTick = 3;
+    partial[0].ticksSimulated = 4;
+    partial[1].bindDelay(1);
+    partial[1].screened = true;
+    partial[1].terminalDied = true;
+    partial[1].deathTick = 3;
+    partial[1].ticksSimulated = 4;
+    expect(hopelessScreen(partial, 1, 2, 0), "hopeless-two-same");
+    expect(!hopelessScreen(partial, 1, 0, 0), "hopeless-need-screened");
+
+    std::string policyReport;
+    expect(EbAdaptiveParityPolicy::selfCheck(policyReport), "parity-policy");
     std::string schedReport;
     expect(EbAdaptivePredictionScheduler::selfCheck(schedReport), "scheduler");
     std::string gateReport;
     expect(EbAdaptiveDecisionGate::selfCheck(gateReport), "decision-gate");
+    std::string budgetReport;
+    expect(EbAdaptiveBudgetController::selfCheck(budgetReport), "budget");
+
+    // Overlay pass bit after early-pass stats.
+    ShellStats passStats;
+    passStats.used = true;
+    passStats.screened = 3;
+    passStats.survivors = 0;
+    passStats.verifyGrants = 0;
+    passStats.earlyPass = true;
+    noteStats(passStats);
+    expect(overlayBit().find("pass") != std::string::npos, "overlay-pass");
 
     EbPlanOptions off;
     off.adaptivePlan = false;

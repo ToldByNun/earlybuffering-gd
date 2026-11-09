@@ -22,6 +22,7 @@
 #include "../core/sim/planning/search/adaptive/adaptive_budget_controller.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_candidate_slot.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_decision_gate.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_parity_policy.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_prediction_scheduler.hpp"
 #include "../core/sim/planning/search/adaptive/adaptive_resume_runner.hpp"
@@ -193,6 +194,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
            "adaptive-prediction-scheduler");
     std::string adaptiveGateReport;
     expect(EbAdaptiveDecisionGate::selfCheck(adaptiveGateReport), "adaptive-decision-gate");
+    std::string adaptiveParityReport;
+    expect(EbAdaptiveParityPolicy::selfCheck(adaptiveParityReport), "adaptive-parity-policy");
     std::string devConfigReport;
     expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;

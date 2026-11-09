@@ -30,7 +30,7 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Adaptive budget (AP3):** `EbAdaptiveBudgetController::plan` uses `tick-budget` (platform-clamped) as the hard Dynamic Plan Tick allowance and splits into screen / verify / reserve (`adaptive-reserve-pct`, screen share 30% of the non-reserve pool). `sim-budget-us` stays a soft runtime wall (plus EMA suggestion for diagnostics) — it must not shrink hard ticks (that starved Live into PassBudget). Quanta: `adaptive-screen-ticks` / `adaptive-verify-quantum`.
 
-**Adaptive planner (AP4–AP6):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) does not abort Max Assist screen. `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0 / screen quantum only vs dying d0). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Gate `PassBudget` (unproven under soft wall / short screen) falls through to classic. Overlay: `adap … ver=K dN|pass|gate`.
+**Adaptive planner (AP4–AP6):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start (same as classic). `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0 / screen quantum only vs dying d0). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`). Alive-but-unproven d0 is `PassBudget`, not Hopeless. Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
 
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
@@ -255,7 +255,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| sim-budget-us | int | 1500 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
+| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. Adaptive Live floor 4000 when set &gt;0. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
 | tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first + Live reserve). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp ≤2000 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |
@@ -471,7 +471,7 @@ HUS replan refuses to nest a full `plan()` while `PlayerObject::update` is in pr
 
 ## Constants
 
-clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=1500. HUS replan every 3 ticks / ΔX≥8 / foresight edge / rem≤2; caps `husReplanBudgetUs` / `husReplanTickBudget`. Platformer: assist off.
+clusterGapX=50, windowMarginK=1, tickBudget=4000, sim-budget-us=4000. HUS replan every 3 ticks / ΔX≥8 / foresight edge / rem≤2; caps `husReplanBudgetUs` / `husReplanTickBudget`. Platformer: assist off.
 
 ## Miss-assist contracts
 
