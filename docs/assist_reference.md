@@ -26,6 +26,8 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **SimTickCostMeter (AP1):** each shadow `stepPhysics` records wall µs into a rolling EMA + σ; Live press plans also note budget-hit rate and a classic fully-verified proxy (`tried` when `!budgetHit`, else 0). Overlay bit `simTick …` beside `plan …us`. Measure-only — does not raise Max Assist, look-ahead, or tick-budget.
 
+**Adaptive resume (AP2):** `EbAdaptiveCandidateSlot` + `EbAdaptiveResumeRunner::runQuantum` capture the ghost into the rotating snapshot ring after each short quantum so Phase C can extend without replaying 0..T. Checkpoint is valid only until `resetCaptureForNextRun` / world restore — then `invalidateCheckpoint()` (metrics kept). PlanGold: contiguous `16+16` merge ≡ 32-tick summary.
+
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
 **Hybrid reuse:** `tryBakeAssist` copies findNear window fields into `HybridPressReuse` (no bake-vector pointers) and, on verify fail, the verify `threatZone`. Live uses the copy for near-bake / prefer-band (when verify did not reject) and seeds `PlanOptions.seedThreatZone` so `plan()` skips `buildThreatZone`. Missing / no-window → empty reuse.
