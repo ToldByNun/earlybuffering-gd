@@ -18,6 +18,7 @@
 #include "../core/diagnostics/assist_real_metrics.hpp"
 #include "../core/diagnostics/assist_sim_estimate.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
+#include "../core/diagnostics/sim_tick_cost_meter.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/fixtures/real_corpus_fixtures.hpp"
 #include "../core/fixtures/tg2_bake_fixture.hpp"
@@ -171,6 +172,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbAssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe");
     std::string divReport;
     expect(EbDivergenceTracker::selfCheck(divReport), "divergence-clear");
+    std::string simTickReport;
+    expect(EbSimTickCostMeter::selfCheck(simTickReport), "sim-tick-cost-meter");
     std::string devConfigReport;
     expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;
