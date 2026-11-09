@@ -12,12 +12,10 @@
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/utils/file.hpp>
 #include <Geode/utils/general.hpp>
-#include <commdlg.h>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <system_error>
-#include <windows.h>
 
 void EbPauseDevActions::stubDevAction(char const* name) {
     EbAssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
