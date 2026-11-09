@@ -6,6 +6,7 @@
 #include "evaluation/shadow_candidate_runner.hpp"
 #include "evaluation/shadow_delay_verifier.hpp"
 #include "evaluation/shadow_freeze_evaluator.hpp"
+#include "planning/search/adaptive/adaptive_plan_search.hpp"
 #include "planning/search/shadow_plan_search.hpp"
 #include "planning/shadow_plan_policy.hpp"
 #include "planning/shadow_sequence_planner.hpp"
@@ -311,8 +312,8 @@ EbShadowSimulator::verifyDelay(PlayLayer* layer, PlayerObject* real, bool down, 
 }
 
 EbSimPlan EbShadowSimulator::plan(PlayLayer* layer, PlayerObject* real, bool down, int limit,
-                              float deltaTime, float firstDt, EbPlanOptions const& options) {
-    return EbShadowPlanSearch::run(*this, layer, real, down, limit, deltaTime, firstDt, options);
+                                float deltaTime, float firstDt, EbPlanOptions const& options) {
+    return EbAdaptivePlanSearch::run(*this, layer, real, down, limit, deltaTime, firstDt, options);
 }
 
 EbSimPlan EbShadowSimulator::planSequence(PlayLayer* layer, PlayerObject* real, bool down, int limit,

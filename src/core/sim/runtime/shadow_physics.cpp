@@ -1,6 +1,8 @@
 #include "shadow_physics.hpp"
 #include "../../assist/assist_clock.hpp"
+#include "../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../shadow_simulator.hpp"
+#include <chrono>
 
 void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* player, GameObject* object) {
     // Active sim body (live shadow or eval ghost) drives m_dead.
@@ -123,6 +125,7 @@ void EbShadowPhysics::stepPreCollide(EbShadowSimulator& simulator, PlayLayer* la
 
 void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
                                 float stepDt, float deltaTime) {
+    auto const tickStart = std::chrono::steady_clock::now();
     simulator.m_triggerWorldAppliedThisTick = false;
     simulator.m_liveDynamicAppliedIds.clear();
     if (simulator.m_simAbsTick >= 0) {
@@ -139,9 +142,15 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
     simulator.hideGhost(state);
     state->update(gdStepDt);
     simulator.hideGhost(state);
-    if (simulator.m_dead)
-        return;
-    simulator.clearCollisionLogs(state);
-    layer->checkCollisions(state, gdColDt, false);
-    simulator.hideGhost(state);
+    if (!simulator.m_dead) {
+        simulator.clearCollisionLogs(state);
+        layer->checkCollisions(state, gdColDt, false);
+        simulator.hideGhost(state);
+    }
+    // AP1 measure-only: feed Adaptive BudgetController (does not change search).
+    int const us = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() -
+                                                              tickStart)
+            .count());
+    EbSimTickCostMeter::get().notePhysicsTick(us);
 }
