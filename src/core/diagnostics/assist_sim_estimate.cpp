@@ -1,0 +1,166 @@
+#include "../../app/class_manager.hpp"
+#include "assist_sim_estimate.hpp"
+#include <algorithm>
+#include <cmath>
+#include <fmt/format.h>
+
+EbAssistSimEstimate& EbAssistSimEstimate::get() {
+    return EbClassManager::get().service<EbAssistSimEstimate>();
+}
+
+void EbAssistSimEstimate::resetSession() {
+    this->m_prev = 0;
+    this->m_caused = 0;
+    this->m_neutral = 0;
+    this->m_inconclusive = 0;
+    this->m_evalArms = 0;
+}
+
+char const* EbAssistSimEstimate::netClassId(NetClass candidate) {
+    switch (candidate) {
+    case NetClass::Neutral:
+        return "neutral";
+    case NetClass::Prev:
+        return "prev";
+    case NetClass::Caused:
+        return "caused";
+    case NetClass::Inconclusive:
+        return "inconclusive";
+    }
+    return "neutral";
+}
+
+EbAssistSimEstimate::NetClass EbAssistSimEstimate::classifyArm(bool d0SurvivedPrimary,
+                                                           bool d0Inconclusive,
+                                                           bool delaySurvivedPrimary,
+                                                           bool delayInconclusive,
+                                                           int plannedDelay) {
+    if (plannedDelay <= 0)
+        return NetClass::Neutral;
+    if (d0Inconclusive || delayInconclusive)
+        return NetClass::Inconclusive;
+    if (delaySurvivedPrimary && !d0SurvivedPrimary)
+        return NetClass::Prev;
+    if (!(!delaySurvivedPrimary && d0SurvivedPrimary)) {
+        return NetClass::Neutral;
+    }
+    return NetClass::Caused;
+}
+
+EbAssistSimEstimate::NetClass
+EbAssistSimEstimate::classifyFromSamples(std::vector<SampleView> const& samples, int plannedDelay) {
+    if (plannedDelay <= 0)
+        return NetClass::Neutral;
+    SampleView const* d0 = nullptr;
+    SampleView const* arm = nullptr;
+    for (auto const& s : samples) {
+        if (s.delay == 0)
+            d0 = &s;
+        if (s.delay == plannedDelay)
+            arm = &s;
+    }
+    if (!(!d0 || !arm)) {
+        return classifyArm(d0->survivedPrimary, d0->inconclusive, arm->survivedPrimary,
+                           arm->inconclusive, plannedDelay);
+    }
+    return NetClass::Inconclusive;
+}
+
+void EbAssistSimEstimate::noteEval(NetClass candidate, bool claimsAllowed) {
+    if (!claimsAllowed) {
+        ++this->m_inconclusive;
+        return;
+    }
+    ++this->m_evalArms;
+    switch (candidate) {
+    case NetClass::Prev:
+        ++this->m_prev;
+        break;
+    case NetClass::Caused:
+        ++this->m_caused;
+        break;
+    case NetClass::Inconclusive:
+        ++this->m_inconclusive;
+        break;
+    case NetClass::Neutral:
+        ++this->m_neutral;
+        break;
+    }
+}
+
+float EbAssistSimEstimate::harmRateSim() const {
+    int const delay = std::max(1, this->m_evalArms);
+    return static_cast<float>(this->m_caused) / static_cast<float>(delay);
+}
+
+std::string EbAssistSimEstimate::reportLine() const {
+    return fmt::format("simEstimate Prev={} Caused={} Net={} HarmRate_sim={:.4f} "
+                       "evalArms={} neutral={} inconclusive={} (G10 diagnostic only)",
+                       this->m_prev, this->m_caused, this->net(), this->harmRateSim(),
+                       this->m_evalArms, this->m_neutral, this->m_inconclusive);
+}
+
+std::string EbAssistSimEstimate::overlayBit() const {
+    if (!(this->m_evalArms <= 0 && this->m_inconclusive <= 0)) {
+        return fmt::format("simEst net=+{}/-{} harm={:.0f}%", this->m_prev, this->m_caused,
+                           this->harmRateSim() * 100.f);
+    }
+    return {};
+}
+
+bool EbAssistSimEstimate::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok)
+            return;
+        ++fails;
+        if (!report.empty())
+            report += "; ";
+        report += name;
+    };
+
+    expect(classifyArm(false, false, true, false, 4) == NetClass::Prev, "prev");
+    expect(classifyArm(true, false, false, false, 4) == NetClass::Caused, "caused");
+    expect(classifyArm(true, false, true, false, 4) == NetClass::Neutral, "both-survive");
+    expect(classifyArm(false, false, false, false, 4) == NetClass::Neutral, "both-die");
+    expect(classifyArm(false, true, true, false, 4) == NetClass::Inconclusive, "d0-unk");
+    expect(classifyArm(false, false, true, false, 0) == NetClass::Neutral, "no-arm");
+
+    std::vector<SampleView> samples = {{0, false, false}, {3, true, false}, {5, false, true}};
+    expect(classifyFromSamples(samples, 3) == NetClass::Prev, "from-prev");
+    expect(classifyFromSamples(samples, 5) == NetClass::Inconclusive, "from-inc");
+    expect(classifyFromSamples(samples, 9) == NetClass::Inconclusive, "miss");
+
+    EbAssistSimEstimate& m = EbAssistSimEstimate::get();
+    m.resetSession();
+    m.noteEval(NetClass::Prev, true);
+    m.noteEval(NetClass::Prev, true);
+    m.noteEval(NetClass::Caused, true);
+    m.noteEval(NetClass::Neutral, true);
+    m.noteEval(NetClass::Prev, false); // claims denied → inconclusive bucket
+    expect(m.prev() == 2 && m.caused() == 1 && m.net() == 1, "acc");
+    expect(m.evalArms() == 4, "eval-arms");
+    expect(m.inconclusive() == 1, "claims-deny");
+    expect(std::fabs(m.harmRateSim() - 0.25f) < 1e-4f, "harm");
+
+    auto const line = m.reportLine();
+    expect(line.find("simEstimate") != std::string::npos, "tag");
+    expect(line.find("G10") != std::string::npos, "g10");
+    auto const bit = m.overlayBit();
+    expect(bit.find("simEst") != std::string::npos, "overlay");
+
+    // G10: never claim ship Pass/Fail tokens.
+    expect(line.find("G5=") == std::string::npos, "no-ship-g5");
+    expect(line.find("PASS") == std::string::npos, "no-pass");
+
+    m.resetSession();
+    expect(m.prev() == 0 && m.evalArms() == 0, "reset");
+
+    if (fails == 0) {
+        report = "AssistSimEstimate selfCheck OK";
+        return true;
+    }
+    report = fmt::format("AssistSimEstimate selfCheck {} fails: {}", fails, report);
+    return false;
+}

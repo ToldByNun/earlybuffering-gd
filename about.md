@@ -1,5 +1,7 @@
 # PLEASE READ THIS
 
+Version **1.4.3** adds Cloud Configs. Open **Settings → Assist → Assist Actions → Cloud Configs**, below Import Config, to browse, install, rate and share community settings. See [Cloud Configs](docs/cloud_configs.md).
+
 EarlyBuffer was written with a lot of AI-assisted drafting.
 
 **That does not mean it was dumped unreviewed.**
@@ -19,7 +21,7 @@ You jump a little soon — the mod holds that press and lands it on the first ph
 
 You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you. It only decides *when* a press you already made is allowed to land — inside the windows and modes you set.
 
-> **v1.4.1** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
+> **v1.4.3** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
 
 ---
 
@@ -41,9 +43,16 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 
 ---
 
-## Assist type
+## Pick Mode (assist-pick)
 
-Locked to **v1 + ShadowPlayer**: if delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest). Full ghost `runOne` physics only — no pick-v2 / Trajectory engine. Never waits past your Limit (G1 window-cap).
+| Mode | Behavior |
+|------|----------|
+| **v1** (default) | If delay 0 is already safe → Pass now; else **latest** ±k-robust viable (orb band still earliest activation). |
+| **v2** | Reserved (currently same as v1). Former New outcome-rank choose removed. |
+
+Neither mode waits past your Limit (G1 window-cap). Old configs with `Legacy` / `New` still load.
+
+**Assist Engine** (`assist-engine`, Live V2): **ShadowPlayer** (full ghost, default) vs **Trajectory** (`samplePath`). Pick **v1** always uses ShadowPlayer.
 
 ---
 

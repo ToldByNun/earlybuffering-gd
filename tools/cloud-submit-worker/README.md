@@ -1,5 +1,7 @@
 # eb-cloud-submit Worker
 
+This service supports Cloud Configs in EarlyBuffer **v1.4.3**. The in-game entry is Settings → Assist → Assist Actions → Cloud Configs, below Import Config. See [the cloud system documentation](../../docs/cloud_configs.md) for the currently configured endpoints.
+
 Public Share endpoint for EarlyBuffer. **GitHub token stays in Cloudflare Secrets** — never in the mod package.
 
 ## Why

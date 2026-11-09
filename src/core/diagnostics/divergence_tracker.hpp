@@ -1,0 +1,26 @@
+#ifndef DIVERGENCE_TRACKER_HPP
+#define DIVERGENCE_TRACKER_HPP
+#include <string>
+class EbDivergenceTracker {
+public:
+    static EbDivergenceTracker& get();
+    void note(bool planDelay, bool died, bool expectOrb, bool gotOrb);
+    float mismatchRate() const;
+    bool shouldWarn() const;
+    bool simUntrusted() const {
+        return m_untrusted;
+    }
+    void clear();
+    std::string overlayBit() const;
+    static bool selfCheck(std::string& report);
+
+private:
+    friend class EbServiceStore;
+
+    static constexpr int N = 48;
+    bool m_bad[N]{};
+    int m_i = 0;
+    int m_count = 0;
+    bool m_untrusted = false;
+};
+#endif

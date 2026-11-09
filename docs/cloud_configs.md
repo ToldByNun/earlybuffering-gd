@@ -1,5 +1,7 @@
 # Cloud configs
 
+Release **v1.4.3** includes this system. Open **EarlyBuffer Settings → Assist → Assist Actions → Cloud Configs**, directly below Import Config. Restart GD after installing a new package to load its settings definitions.
+
 EarlyBuffer browses the public catalog **`ToldByNun/earlybuffer-configs`** and can Share packs into it. There are **no player-facing cloud URL/token settings** — catalog, submit, and stats URLs are built into the mod. The GitHub token lives only in Vercel env vars.
 
 ## In-game

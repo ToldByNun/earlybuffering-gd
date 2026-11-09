@@ -1,0 +1,17 @@
+{
+  "EbAssistController": ["EbAssistClock", "EbDevClockContract", "EbShadowSimulator", "EbLevelProfile", "EbBakeMap", "EbTriggerWorldBaker", "EbDevCycleRecorder"],
+  "EbShadowSimulator": ["EbAssistClock", "EbToggleOrbSim", "EbOrbStackResolver"],
+  "EbSimTrust": ["EbSpotTrustMap"],
+  "EbGhostParityProbe": ["EbShadowSimulator", "EbSimTrust"],
+  "EbBakeMap": ["EbLevelProfile"],
+  "EbBakeScheduler": ["EbBakeMap", "EbShadowSimulator"],
+  "EbSelfBakeRecorder": ["EbBakeMap", "EbLevelProfile", "EbShadowSimulator"],
+  "EbTriggerWorldBaker": ["EbTriggerWorldStore"],
+  "EbDevCycleRecorder": ["EbDevClockContract", "EbDevTraceStore"],
+  "EbDevTraceStore": ["EbDevClockContract", "EbPlatformLimits"],
+  "EbDevSession": ["EbDevTraceStore", "EbDevCycleRecorder"],
+  "EbCloudConfigService": ["EbCloudConfigStore"],
+  "EbCloudConfigStats": ["EbCloudConfigStore"],
+  "EbTrajectoryVisualizer": ["EbShadowSimulator"],
+  "EbBakePathVisualizer": ["EbBakeMap"]
+}

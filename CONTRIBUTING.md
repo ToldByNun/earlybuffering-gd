@@ -1,5 +1,7 @@
 # Contributing
 
+For v1.4.3 Cloud Config changes, verify the Settings → Assist entry, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md).
+
 Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) development / authorship notes: direction and review are human-led; AI may assist drafting. Prefer small, testable PRs.
 
 **Scope note:** **v1.2.1** targets **GD 2.2081** only (last line for that game build). Work for newer GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
@@ -12,10 +14,13 @@ Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) dev
 
 ## Project layout
 
+See [Source architecture](docs/source_architecture.md) for the full directory
+structure and placement rules, including subdivisions of cloud, dev and UI.
+
 | Path | Role |
 |------|------|
 | `src/config/` | `StageConfig` — settings cache / presets |
-| `src/core/` | Planner, bake, trigger world, scope gate, learning, buffer |
+| `src/core/` | Domain modules; see [Source architecture](docs/source_architecture.md) |
 | `src/hooks/` | `$modify` game hooks |
 | `src/ui/` | Overlay, pause hub, trajectory, save feedback |
 | `src/debug/` | Assist log, LagProbe, PerfTrace, PlanGoldCorpus |
@@ -26,7 +31,7 @@ Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) dev
 
 1. Add the entry under `settings` in `mod.json` (prefer `bool` / `int` / `float` / `string`+`one-of`).
 2. Cache it in `StageConfig::refreshCache()` and expose a getter.
-3. `listenForSettingChanges<…>` in `src/main.cpp`.
+3. `listenForSettingChanges<…>` in `src/early_buffer_module.cpp`.
 4. Document the key in `docs/assist_reference.md` and mention it in `changelog.md` if user-facing.
 5. Wire behavior in the smallest core/hook file that owns the concern.
 
@@ -49,7 +54,10 @@ Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) dev
 
 ## Code style
 
-- Match neighboring files (Geode prelude, class-only headers with `#ifndef` guards).
+- Follow [AGENTS.md](AGENTS.md) for class layout, early returns and variable naming.
+- Use paired `snake_case.hpp` / `snake_case.cpp` files with include guards.
+- Use explicit dependency qualification and class members for project helpers and state.
+- Format with `.clang-format` and run `python tools/check_cpp_style.py`.
 - Avoid committing `build/`, `build_*.txt`, or local save dumps.
 
 ## License

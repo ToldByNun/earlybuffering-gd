@@ -1,0 +1,40 @@
+#ifndef SIM_TRUST_HPP
+#define SIM_TRUST_HPP
+
+#include "../assist/contracts/assist_verdict.hpp"
+#include <string>
+
+// Attempt + spot trust gate for PerfectAssist (Commit 1 subset).
+// Later commits add TW-ready / hard-unknown flags without changing callers.
+class EbSimTrust {
+public:
+    static EbSimTrust& get();
+
+    void resetAttempt();
+    void onLevelQuit();
+
+    void noteParityDrift();
+    void clearParityDrift();
+    bool parityDrift() const {
+        return this->m_parityDrift;
+    }
+
+    // True when assist may Delay-search at world X (Commit 1: parity + spot).
+    bool okAt(float x) const;
+
+    // If assist must Pass, sets reason (PassParityDrift / PassSpotUntrusted).
+    bool forcePassReason(float x, AssistReason& outReason) const;
+
+    char const* overlayBit() const;
+
+    static bool selfCheck(std::string& report);
+
+private:
+    friend class EbServiceStore;
+
+    EbSimTrust() = default;
+
+    bool m_parityDrift = false;
+};
+
+#endif

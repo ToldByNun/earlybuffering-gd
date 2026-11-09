@@ -8,10 +8,40 @@ else()
 endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(earlybuffer VERSION 1.4.1)
+project(earlybuffer VERSION 1.4.3)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
+
+# Generated class catalog (eb_class_catalog.hpp + service dependency TU).
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(EB_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(EB_CLASS_CATALOG "${EB_GENERATED_DIR}/eb_class_catalog.hpp")
+set(EB_SERVICE_DEPS "${EB_GENERATED_DIR}/eb_service_dependencies.cpp")
+file(MAKE_DIRECTORY "${EB_GENERATED_DIR}")
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_class_registry.py"
+        --root "${CMAKE_CURRENT_SOURCE_DIR}"
+        --output "${EB_GENERATED_DIR}"
+    RESULT_VARIABLE EB_CATALOG_RESULT
+)
+if (NOT EB_CATALOG_RESULT EQUAL 0)
+    message(FATAL_ERROR "EarlyBuffer: class catalog generation failed")
+endif()
+add_custom_target(earlybuffer_class_catalog
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_class_registry.py"
+        --root "${CMAKE_CURRENT_SOURCE_DIR}"
+        --output "${EB_GENERATED_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    BYPRODUCTS "${EB_CLASS_CATALOG}" "${EB_SERVICE_DEPS}"
+    COMMENT "EarlyBuffer: generate class catalog"
+    VERBATIM
+)
+add_dependencies(${PROJECT_NAME} earlybuffer_class_catalog)
+target_include_directories(${PROJECT_NAME} PRIVATE "${EB_GENERATED_DIR}")
+target_sources(${PROJECT_NAME} PRIVATE "${EB_SERVICE_DEPS}")
 
 if (NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
@@ -37,10 +67,11 @@ endif()
 
 # MSVC batch-compiles TUs and can ICE on some Geode/arc headers; one TU per cl.exe.
 if (MSVC)
-    set(CMAKE_VS_NO_COMPILE_BATCHING ON)
+    target_compile_options(${PROJECT_NAME} PRIVATE /we4715)
     set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_UseMultiToolTask false)
     set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_CL_MPCount 1)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY VS_GLOBAL_EnableClServerMode false)
+else()
+    target_compile_options(${PROJECT_NAME} PRIVATE -Werror=return-type)
 endif()
 
 # GeodeBindings GeneratedSource.cpp uses FMOD_* types without including fmod.h.

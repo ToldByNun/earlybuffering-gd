@@ -1,5 +1,7 @@
 # eb-cloud-submit (Vercel)
 
+This service supports Cloud Configs in EarlyBuffer **v1.4.3**. The in-game entry is Settings → Assist → Assist Actions → Cloud Configs, below Import Config. See [the cloud system documentation](../../docs/cloud_configs.md) for the currently configured endpoints.
+
 Public endpoints for EarlyBuffer cloud configs (Share submit + download/rating stats). The GitHub token stays in Vercel Environment Variables — **never** in the mod package or player settings.
 
 In-game wiring: [`docs/cloud_configs.md`](../../docs/cloud_configs.md).
@@ -51,10 +53,18 @@ Rules:
 ```bash
 cd tools/cloud-submit-vercel
 vercel login
-vercel
+vercel link --yes --project earlybuffer-config
 vercel env add GITHUB_TOKEN
-vercel --prod
+vercel deploy --prod
 ```
+
+Deploy from this service directory. The repository root builds the mod and does
+not expose the service's `api/` functions. A successful Vercel deployment alone
+does not verify that the endpoints exist. Before release, inspect the deployment
+for `api/submit`, `api/stats` and `api/track`. A public GET to `/api/stats` should
+return JSON with HTTP 200. A public GET to `/api/submit` should return HTTP 405
+with `POST only`, confirming that the submit handler is present. HTTP 404 means
+the API has not been deployed to that address.
 
 Optional env: `REPO=ToldByNun/earlybuffer-configs`, `BRANCH=main`.
 

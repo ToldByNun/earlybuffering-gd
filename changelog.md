@@ -1,64 +1,15 @@
 # Changelog
 
-## v1.4.1
+## v1.4.3
 
-**Cloud Configs browser** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+- Adds Cloud Configs below Import Config in Settings → Assist → Assist Actions.
+- Catalog search, sorting, installation, sharing, download counts and star ratings.
+- Preserves keybinds and developer settings during cloud installation.
+- Includes cached packs and bundled offline defaults.
+- Retains the working assist implementation from the current development baseline.
+- Updates release, installation and network/privacy documentation.
+- Local Windows build uses `geode build`. Other platform packages require their platform builds and checks.
 
-- **Cloud Configs UI** — Assist → Cloud Configs: search, detail, Install; **Sort** (Default / Downloads / Rating / Popular / Name); **Refresh** inset from top-right; Share… collects name|author, description, and tags → outbox + clipboard. No player-facing cloud URL/token settings.
-- **Downloads + ratings** — list/detail badges from `/api/stats`; Install tracks one download per anonymous `clientId`; 1–5 star rate with re-rate (count unchanged). Counters in repo `stats.json` via Vercel `/api/track`.
-- **Public Share submit** — Share… POSTs to built-in `earlybuffer-config.vercel.app` (GitHub token **only** on Vercel; see `tools/cloud-submit-vercel/`).
-- **Catalog pipeline** — fixed `ToldByNun/earlybuffer-configs` (jsDelivr + GitHub raw), disk cache + seed, cache-busting Refresh; `CloudConfigApply` skips keybinds + `dev-*`.
-- **ConfigBundle** — portable key count **124**; Assist category map **166** (Cloud Configs action only).
-- **Docs** — `docs/cloud_configs.md`, Vercel README (stats/track/submit).
-
-## Hotfix on v1.4.0
-
-- **ConfigBundle string I/O** — `exportToString` / `importFromString` plus `ApplyOptions` (skip keybinds / `dev-*`); path import/export wrap the string path; Assist Import still applies everything; shared `PauseActionBridge::afterConfigApplied` for post-apply UI sync; portable key count **123** (later 126 in v1.4.1).
-- **Cloud config store** — `saveDir/cloud-configs/` (index cache, packs, active, meta, outbox) via `CloudConfigStore` + `SaveDropPaths::cloudConfigsDir`; created on load with the other drop folders.
-- **Cloud catalog primitives** — `CloudConfigHostPolicy` (jsDelivr + GitHub raw allowlist), `CloudConfigSha256`, `CloudConfigIndex` (schema-1 validate), bundled offline `resources/cloud-seed/` (`safe-defaults` pack).
-- **Live look-ahead vs Delay** — `minSurviveTicksForSuccess` never demands more ticks than `scoreHorizon` (look-ahead-cap=14 used to keep minSurvive at 48 while planCap≤14 → every plan PassHopeless). Config-bundle / in-level filter no longer expect removed assist-pick / assist-engine keys.
-- **Boot crash selfCheck** — after dropping assist-pick/engine, SettingsCategoryMap `kCount` stayed 166 and ConfigBundleKeys stayed 125 → null table slots → `strcmp` AV on load; counts are 164/123 and lookups skip null keys.
-- **Single assist type** — Live plan is **v1 + ShadowPlayer** only; Pick Mode v2 and Assist Engine Trajectory settings removed (imports still accept old keys as v1/ShadowPlayer).
-- **Vehicle jump fidelity** — cube skips unnecessary `switchedToMode` so ground/jump buffer stay; ship/ball/ufo/wave/robot/spider/swing still rebuild then re-seat ground, robot/spider jump, ship boost, wave slide, dash, and ring/pad state so Delay is not jump-noop PassHopeless after portals.
-- **Bake frame-0 spawn / TW** — BakeSpawnProbe detects lethal overlaps on the start snap; bake auto-builds Trigger World for that session when overlaps exist even if the setting is off; frame-0 errors name killer uid/pos/TW (no false parityGate blame).
-- **Bake frame-0 spawn grace** — ignore deaths from hazards already overlapping the start snap for ticks 0–4, and keep ignoring those same ids while the ghost AABB still intersects them (hard cap 64) so a spawn-centered spike is walked clear instead of dying at frame 5; BakeSpawnProbe ignores player/proxy solids and only forces TW for real hazards; sparse wave macros get an explicit re-export hint.
-- **Live ghost ground re-seat** — after `switchedToMode` / player art rebuild, restore ground, slope, jump buffer, dash, and lock flags from the real player so cube `pushButton` can jump again (Alive-only Delay was starving on identical coast deaths).
-- **Live PassNoThreat foresight** — OpportunityProbe treats wait-window `diedBeforeAction` as must-search; adds a short `nearDelay` probe; Live also forces search on idleSafer / baseline death / dash-or-ring coast so PassNoThreat cannot skip a later death.
-- **Bake-fail diag AV** — `SectionObjectWalk` rejects slots whose vtable qword is poison (`0xFFF…`) before `typeinfo_cast`, so bakefail ghost-hitbox dump no longer AVs reading `@ 0xFFFFFFFFFFFFFFFF`.
-- **TW empty false fail** — “Trigger World empty after build (effects=N)” no longer blocks bake when those effects are only pulse/spawn/camera; hard-fail only if real static movers were seen but produced 0 tracks.
-- **Bake expand vs 1:1 death** — validate may die; window expand no longer requires immortality past that death — a shifted click is OK if it dies at/after the 1:1 death frame (earliest/latest binary search).
-- **Bake all macro clicks** — 1:1 death no longer drops later Jump jobs; expand runs every event, ghosting through deaths before that click so post-divergence frames still get windows.
-- **Bake Radius = fixed window** — replay bake stores ±Bake Radius around every reachable click (equal length); no more asymmetric binary-search shrink. Unreachable clicks (sim never reaches that frame) are skipped and counted in the bake log.
-
-## v1.4.0
-
-**Escape honesty, portal-stack crash fix, assist cost attribution** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
-
-### Live Delay honesty
-- **Delay-worthy** = `ModeSurvival` **Alive** only for Live arm (`requireAliveForDelay`). Soft Landing / Recoverable / LateCrash stay bake-verify soft-safe, never invent Live Delay.
-- AssistPickV2: `died` / Delay-worthy gate; both-dead and soft-died → hopeless (`chosen=-1`), never force Delay.
-- LongForesight: `needDelaySearch` / LF `idleSafer` only when idle still lives; both-dead → no Delay-search force.
-- Continuous: `ascentUseful` needs a later Alive cand; idleSafer+ascent post-pick force-Delay only with Alive later.
-- Overlay / logs: `PASS no-escape` when PassHopeless/Budget without escape; PlanGold fixtures for soft vs worthy, LF both-dead, PickV2, HUS bare arm.
-
-### Soft Hold-Until-Safe
-- Setting **`disable-hus` default on** (HUS never arms unless you turn it off).
-- When HUS is enabled: arm only with orb foresight / Alive `viableDelays`; deadline without orb → **`HUS drop`** (clear buffer, no inject).
-
-### Trajectory draw
-- HOLD/coast sample **until death**, hard max **960** (`TrajDrawHorizon`); v2 yellow preds stay on short scoreHorizon; dark-green only among Alive preds.
-
-### Portal-stack crash
-- Live assist sims **truncate** Soft vehicle/mirror/teleport/enter portals (`softPortalLiveTruncate`); bakeOffline still Includes them.
-- Block Soft-portal `activatedByPlayer` during live sim; poison-safe section walks (`SectionObjectWalk`) + collision candidate filter (AV read @ `0xFFF…` after stacked portals).
-
-### Main-thread cost (no quality cut)
-- **`AssistSpikeWatch`**: last press/release/HUS section breakdown on overlay (`plan.lf` / `plan.cands` / `plan.holdProbe` / `plan.twApply`, traj/parity/tw scopes).
-- **`TravelForesightCache`**: same-tick foresight cone reuse (press gate + spatial + HUS).
-- LongForesight reuses d0/baseline when `pathCoversHorizon`; OpportunityProbe skips mid/limit when search is already forced; linked dual skips dead P2.
-
-### Docs / packaging
-- `docs/assist_reference.md` Escape honesty + Guarantees / playtest rows; README / about / support → **v1.4.0**.
 
 ## v1.3.2
 

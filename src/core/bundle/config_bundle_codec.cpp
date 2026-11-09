@@ -1,0 +1,222 @@
+#include "config_bundle_codec.hpp"
+#include <cstdint>
+#include <cstdio>
+#include <string>
+#include <string_view>
+
+void EbConfigBundleCodec::trimInPlace(std::string& s) {
+    while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
+        s.erase(s.begin());
+    }
+    while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
+        s.pop_back();
+    }
+}
+
+std::string EbConfigBundleCodec::colorToHex(cocos2d::ccColor3B color) {
+    char buf[8];
+    std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", static_cast<unsigned>(color.r),
+                  static_cast<unsigned>(color.g), static_cast<unsigned>(color.b));
+    return std::string(buf);
+}
+
+int EbConfigBundleCodec::hexNibble(char character) {
+    if (character >= '0' && character <= '9')
+        return character - '0';
+    if (character >= 'a' && character <= 'f')
+        return 10 + (character - 'a');
+    if (!(character >= 'A' && character <= 'F')) {
+        return -1;
+    }
+    return 10 + (character - 'A');
+}
+
+bool EbConfigBundleCodec::hexToColor(std::string const& hex, cocos2d::ccColor3B& out) {
+    std::string_view text = hex;
+    if (!text.empty() && text.front() == '#') {
+        text.remove_prefix(1);
+    }
+    if (text.size() != 6) {
+        return false;
+    }
+    int nibbles[6];
+    for (int index = 0; index < 6; ++index) {
+        nibbles[index] = EbConfigBundleCodec::hexNibble(text[static_cast<size_t>(index)]);
+        if (nibbles[index] < 0) {
+            return false;
+        }
+    }
+    out.r = static_cast<uint8_t>((nibbles[0] << 4) | nibbles[1]);
+    out.g = static_cast<uint8_t>((nibbles[2] << 4) | nibbles[3]);
+    out.b = static_cast<uint8_t>((nibbles[4] << 4) | nibbles[5]);
+    return true;
+}
+
+std::string EbConfigBundleCodec::keybindsToString(std::vector<geode::Keybind> const& binds) {
+    if (binds.empty()) {
+        return std::string();
+    }
+    std::string output = binds.front().toString();
+    for (size_t index = 1; index < binds.size(); ++index) {
+        output += " | ";
+        output += binds[index].toString();
+    }
+    return output;
+}
+
+bool EbConfigBundleCodec::stringToKeybinds(std::string const& text,
+                                         std::vector<geode::Keybind>& out) {
+    out.clear();
+    std::string const& src = text;
+    if (src.empty()) {
+        return false;
+    }
+
+    size_t start = 0;
+    while (start <= src.size()) {
+        size_t const sep = src.find(" | ", start);
+        std::string piece =
+            (sep == std::string::npos) ? src.substr(start) : src.substr(start, sep - start);
+        EbConfigBundleCodec::trimInPlace(piece);
+        if (!piece.empty()) {
+            auto parsed = geode::Keybind::fromString(piece);
+            if (parsed.isErr()) {
+                out.clear();
+                return false;
+            }
+            out.push_back(parsed.unwrap());
+        }
+        if (sep == std::string::npos) {
+            break;
+        }
+        start = sep + 3;
+    }
+
+    return !out.empty();
+}
+
+bool EbConfigBundleCodec::jsonToKeybinds(matjson::Value const& value,
+                                       std::vector<geode::Keybind>& out) {
+    out.clear();
+
+    // Portable string form: "F6" or "Ctrl+Shift+D | Alt+F6"
+    auto asStr = value.asString();
+    if (asStr.isOk()) {
+        return EbConfigBundleCodec::stringToKeybinds(std::string(asStr.unwrap()), out);
+    }
+
+    // JSON array of strings (optional multi-bind form).
+    if (value.isArray()) {
+        auto const& arr = value.asArray().unwrap();
+        for (auto const& item : arr) {
+            auto piece = item.asString();
+            if (piece.isErr()) {
+                out.clear();
+                return false;
+            }
+            std::string text(piece.unwrap());
+            EbConfigBundleCodec::trimInPlace(text);
+            if (text.empty()) {
+                continue;
+            }
+            auto parsed = geode::Keybind::fromString(text);
+            if (parsed.isErr()) {
+                out.clear();
+                return false;
+            }
+            out.push_back(parsed.unwrap());
+        }
+        return !out.empty();
+    }
+    return false;
+}
+
+bool EbConfigBundleCodec::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (!ok) {
+            ++fails;
+            report += std::string("FAIL ") + name + "; ";
+        }
+    };
+
+    cocos2d::ccColor3B const sample{0x7C, 0xFF, 0x4A};
+    std::string const hex = EbConfigBundleCodec::colorToHex(sample);
+    expect(hex == "#7CFF4A", "color-to-hex");
+
+    cocos2d::ccColor3B back{};
+    expect(EbConfigBundleCodec::hexToColor(hex, back), "hex-to-color");
+    expect(back.r == sample.r && back.g == sample.g && back.b == sample.b, "roundtrip");
+
+    cocos2d::ccColor3B lower{};
+    expect(EbConfigBundleCodec::hexToColor("#7cff4a", lower), "hex-lower");
+    expect(lower.r == sample.r && lower.g == sample.g && lower.b == sample.b, "hex-lower-rgb");
+
+    cocos2d::ccColor3B noHash{};
+    expect(EbConfigBundleCodec::hexToColor("7CFF4A", noHash), "hex-no-hash");
+    expect(noHash.r == sample.r, "hex-no-hash-r");
+
+    cocos2d::ccColor3B junk{};
+    expect(!EbConfigBundleCodec::hexToColor("#GG0000", junk), "hex-bad-digit");
+    expect(!EbConfigBundleCodec::hexToColor("#FFF", junk), "hex-short");
+    expect(!EbConfigBundleCodec::hexToColor("", junk), "hex-empty");
+
+    // Keybind string round-trip (Geode Keybind::fromString / toString).
+    {
+        auto one = geode::Keybind::fromString("F6");
+        expect(one.isOk(), "kb-parse-f6");
+        if (one.isOk()) {
+            std::vector<geode::Keybind> binds{one.unwrap()};
+            std::string const text = EbConfigBundleCodec::keybindsToString(binds);
+            expect(!text.empty(), "kb-to-string-nonempty");
+            std::vector<geode::Keybind> backBinds;
+            expect(EbConfigBundleCodec::stringToKeybinds(text, backBinds), "kb-from-string");
+            expect(backBinds.size() == 1 && backBinds[0] == binds[0], "kb-roundtrip");
+        }
+
+        auto combo = geode::Keybind::fromString("Ctrl+Shift+D");
+        expect(combo.isOk(), "kb-parse-combo");
+        if (combo.isOk() && one.isOk()) {
+            geode::Keybind const kbA = one.unwrap();
+            geode::Keybind const kbB = combo.unwrap();
+            std::vector<geode::Keybind> multi{kbA, kbB};
+            std::string const joined = EbConfigBundleCodec::keybindsToString(multi);
+            expect(joined.find(" | ") != std::string::npos, "kb-multi-sep");
+            std::vector<geode::Keybind> backMulti;
+            expect(EbConfigBundleCodec::stringToKeybinds(joined, backMulti), "kb-multi-parse");
+            expect(backMulti.size() == 2, "kb-multi-count");
+        }
+
+        std::vector<geode::Keybind> emptyOut;
+        expect(!EbConfigBundleCodec::stringToKeybinds("", emptyOut), "kb-empty-fail");
+        std::vector<geode::Keybind> bad;
+        expect(!EbConfigBundleCodec::stringToKeybinds("NotARealKey!!!", bad), "kb-bad-fail");
+
+        auto arrParsed = matjson::parse(R"(["F6","Ctrl+Shift+D"])");
+        if (arrParsed.isOk()) {
+            std::vector<geode::Keybind> fromArr;
+            expect(EbConfigBundleCodec::jsonToKeybinds(arrParsed.unwrap(), fromArr), "kb-json-array");
+            expect(fromArr.size() == 2, "kb-json-array-count");
+        } else {
+            expect(false, "kb-json-array-parse");
+        }
+
+        auto strParsed = matjson::parse(R"("Ctrl+Shift+M")");
+        if (strParsed.isOk()) {
+            std::vector<geode::Keybind> fromStr;
+            expect(EbConfigBundleCodec::jsonToKeybinds(strParsed.unwrap(), fromStr),
+                   "kb-json-string");
+            expect(fromStr.size() == 1, "kb-json-string-count");
+        } else {
+            expect(false, "kb-json-string-parse");
+        }
+    }
+
+    if (fails == 0) {
+        report = "ConfigBundleCodec selfCheck OK";
+        return true;
+    }
+    report = std::string("ConfigBundleCodec selfCheck fails: ") + report;
+    return false;
+}

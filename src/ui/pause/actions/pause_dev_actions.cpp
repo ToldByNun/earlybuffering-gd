@@ -1,0 +1,210 @@
+#include "pause_dev_actions.hpp"
+#include "../../../core/assist/assist_controller.hpp"
+#include "../../../core/platform/save_drop_paths.hpp"
+#include "../../../debug/assist_log.hpp"
+#include "../../../dev/capture/dev_trace_store.hpp"
+#include "../../../dev/dev_config.hpp"
+#include "../../../dev/dev_session.hpp"
+#include "../../../dev/reporting/dev_diag_dump.hpp"
+#include "../../../dev/reporting/dev_report.hpp"
+#include "../pause_action_bridge.hpp"
+#include <Geode/Geode.hpp>
+#include <Geode/ui/GeodeUI.hpp>
+#include <Geode/utils/file.hpp>
+#include <Geode/utils/general.hpp>
+#include <commdlg.h>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <system_error>
+#include <windows.h>
+
+void EbPauseDevActions::stubDevAction(char const* name) {
+    EbAssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
+                                name ? name : "?"));
+}
+
+void EbPauseDevActions::devStartRecord() {
+    if (!EbDevConfig::recordEnable()) {
+        EbAssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
+        FLAlertLayer::create("EarlyBuffer Dev",
+                             "Turn on Dev Record Enable first, then Start Recording.", "OK")
+            ->show();
+        return;
+    }
+    if (!EbDevSession::get().start()) {
+        FLAlertLayer::create("EarlyBuffer Dev", "Could not start Dev Lab recording session.", "OK")
+            ->show();
+        return;
+    }
+    auto const& s = EbDevTraceStore::get().session();
+    auto const startMsg =
+        fmt::format("Recording started (rolling last {}).\nSession {}\nDoes not auto-stop.",
+                    s.recordingsTarget, s.sessionId);
+    FLAlertLayer::create("EarlyBuffer Dev", startMsg.c_str(), "OK")->show();
+}
+
+void EbPauseDevActions::devStopRecord() {
+    if (!EbDevSession::get().isRecording() && !EbDevTraceStore::get().isOpen()) {
+        EbAssistLog::info("Dev Lab: no open session to stop");
+        FLAlertLayer::create("EarlyBuffer Dev", "No session is recording.", "OK")->show();
+        return;
+    }
+    auto const path = EbDevSession::get().sessionPath();
+    EbDevSession::get().stop();
+    auto const stopMsg = path.empty() ? std::string("Recording stopped.")
+                                      : fmt::format("Recording stopped.\n{}", path.string());
+    FLAlertLayer::create("EarlyBuffer Dev", stopMsg.c_str(), "OK")->show();
+}
+
+void EbPauseDevActions::devEvalLast() {
+    std::string err;
+    if (!EbDevReport::evalLastAttempt(err)) {
+        EbAssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
+        FLAlertLayer::create("EarlyBuffer Dev",
+                             err.empty() ? "Eval Last Attempt failed." : err.c_str(), "OK")
+            ->show();
+        return;
+    }
+    EbAssistController::get().updateOverlay();
+    auto const& r = EbDevReport::last();
+    EbAssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
+    FLAlertLayer::create("EarlyBuffer Dev",
+                         r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str(), "OK")
+        ->show();
+}
+
+void EbPauseDevActions::devEvalSession() {
+    std::string err;
+    int count = 0;
+    if (!EbDevReport::evalSession(err, &count)) {
+        EbAssistLog::info(fmt::format("Dev Lab: Eval Session failed: {}", err));
+        FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Eval Session failed." : err.c_str(),
+                             "OK")
+            ->show();
+        return;
+    }
+    EbAssistController::get().updateOverlay();
+    auto const& r = EbDevReport::last();
+    auto const message = fmt::format("Evaluated {} attempt(s).\n{}", count, r.overlayLine);
+    EbAssistLog::info(fmt::format("Dev Lab: Eval Session → {}", message));
+    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+}
+
+void EbPauseDevActions::devExportSession() {
+    auto& store = EbDevTraceStore::get();
+    if (!store.isOpen()) {
+        EbAssistLog::info("Dev Lab: no open session to export");
+        FLAlertLayer::create("EarlyBuffer Dev", "No open Dev session. Start Recording first.", "OK")
+            ->show();
+        return;
+    }
+    (void)store.flush();
+    auto const path = store.sessionPath();
+    EbAssistLog::info(fmt::format("Dev Lab: session export path {}", path.string()));
+    bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(path);
+    auto const message =
+        fmt::format("Session JSON:\n"
+                    "{}\n"
+                    "{}\n\n"
+                    "Attempts kept: {}/{} (rolling)",
+                    path.string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
+                    store.session().recordingsDone, store.session().recordingsTarget);
+    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+}
+
+void EbPauseDevActions::devClearTraces() {
+    int const count = EbDevSession::get().clearTraces();
+    auto const message = fmt::format("Cleared {} session file(s) under devtraces/.", count);
+    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+}
+
+void EbPauseDevActions::devDumpDiag() {
+    std::filesystem::path dir;
+    std::string err;
+    if (!EbDevDiagDump::dumpAll(dir, err)) {
+        EbAssistLog::info(fmt::format("DIAG dump failed: {}", err));
+        FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Diag dump failed." : err.c_str(),
+                             "OK")
+            ->show();
+        return;
+    }
+    bool const clipOk = geode::utils::clipboard::write(dir.string());
+    auto const message =
+        fmt::format("Wrote diagnostic bundle:\n{}\n\n"
+                    "Includes settings, clock, replay, BakeMap, Trigger World,\n"
+                    "bake probe (first clicks vs sim death), self-checks.\n\n"
+                    "{}",
+                    dir.string(), clipOk ? "Path copied to clipboard." : "Clipboard copy failed.");
+    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+}
+
+void EbPauseDevActions::devCopyReport() {
+    if (!EbDevReport::hasLast()) {
+        FLAlertLayer::create("EarlyBuffer Dev",
+                             "No Dev report yet. Run Eval Last / Eval Session first.", "OK")
+            ->show();
+        return;
+    }
+    auto const& r = EbDevReport::last();
+    // Clipboard / file = same overlay field string (contract A names only).
+    std::string const text =
+        r.overlayLine.empty() ? EbDevReport::formatOverlayLine(r) : r.overlayLine;
+
+    auto& drops = EbSaveDropPaths::get();
+    std::string dirErr;
+    bool fileOk = false;
+    std::string fileErr;
+    auto const path = drops.reportPath();
+    if (!drops.ensureDirs(dirErr)) {
+        fileErr = dirErr.empty() ? "could not create save folder" : dirErr;
+    } else {
+        auto const written = geode::utils::file::writeString(path, text);
+        if (written.isOk()) {
+            fileOk = true;
+        } else {
+            fileErr = written.unwrapErr();
+            if (fileErr.empty())
+                fileErr = "write failed";
+        }
+    }
+
+    // Clipboard: report text + full path (do not overwrite report with path-only).
+    std::string clipPayload = text;
+    if (fileOk) {
+        clipPayload += fmt::format("\n\n---\nSaved path:\n{}", path.string());
+    }
+    bool const clipOk = geode::utils::clipboard::write(clipPayload);
+
+    EbAssistLog::info(fmt::format("Dev Lab: copy report clip={} file={} → {}", clipOk ? "ok" : "fail",
+                                fileOk ? path.string() : fileErr, text));
+
+    std::string msg;
+    if (clipOk && fileOk) {
+        msg = fmt::format("Report (+ path) copied to clipboard and saved to:\n"
+                          "{}\n"
+                          "{}\n\n"
+                          "{}",
+                          path.string(), EbPauseActionBridgeDetail::pathClipboardNote(true), text);
+#ifndef GEODE_IS_WINDOWS
+        msg += fmt::format("\n\n{}", EbPauseActionBridgeDetail::mobileTransferHint());
+#endif
+    } else if (fileOk && !clipOk) {
+        msg = fmt::format("Clipboard failed; saved to:\n"
+                          "{}\n"
+                          "{}\n\n"
+                          "{}",
+                          path.string(), EbPauseActionBridgeDetail::pathClipboardNote(false), text);
+#ifndef GEODE_IS_WINDOWS
+        msg += fmt::format("\n\n{}", EbPauseActionBridgeDetail::mobileTransferHint());
+#endif
+    } else if (clipOk && !fileOk) {
+        msg = fmt::format("Report copied to clipboard.\nFile save failed: {}\n\n{}", fileErr, text);
+    } else {
+        msg = fmt::format("Copy failed (clipboard and file).\n"
+                          "File: {}\n\n"
+                          "{}",
+                          fileErr, text);
+    }
+    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
+}

@@ -8,9 +8,9 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.4.1",
+	"version": "v1.4.3",
 	"developer": "Audesign",
-	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick (v1 + ShadowPlayer). Miss-assist / Pass-verdict overlay. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -56,8 +56,7 @@
 				"Live",
 				"Replay",
 				"Hybrid",
-				"BruteForce",
-				"Route"
+				"BruteForce"
 			],
 			"default": "Live"
 		},
@@ -325,7 +324,7 @@
 		"title-assist-actions": {
 			"type": "title",
 			"name": "Assist Actions",
-			"description": "Quick actions for learning reset, local config files, and cloud configs."
+			"description": "Quick actions for learning reset and config files."
 		},
 		"reset-learn-action": {
 			"type": "custom:eb-action",
@@ -348,13 +347,13 @@
 		"browse-cloud-configs-action": {
 			"type": "custom:eb-action",
 			"name": "Cloud Configs",
-			"description": "Browse and install community settings packs from ToldByNun/earlybuffer-configs. Share… submits to the catalog via the built-in Vercel endpoint (no token in the mod).",
+			"description": "Browse, install and share community settings packs.",
 			"button-text": "cloud"
 		},
 		"title-algorithm": {
 			"type": "title",
 			"name": "Algorithm",
-			"description": "How the planner decides delays: click-rate limits, CPU budgets, press/release (pick is fixed v1 + ShadowPlayer). Smart multi-jump is the next section. Bake Radius lives under Bake."
+			"description": "How the planner decides delays: pick mode, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section. Bake Radius lives under Bake."
 		},
 		"death-slack": {
 			"type": "int",
@@ -372,23 +371,25 @@
 			"min": 0,
 			"max": 240
 		},
-		"route-corridor": {
+		"assist-pick": {
 			"type": "string",
-			"name": "Route Corridor",
-			"one-of": ["Strict", "Normal", "Loose"],
-			"default": "Normal"
+			"name": "Pick Mode",
+			"description": "How Live/Hybrid picks a delay inside your tick window. v1 (default) = if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). v2 is reserved for a future pick (currently same as v1 — former New outcome-rank choose removed). Never waits past your Limit. Old Legacy/New values still load as v1/v2.",
+			"one-of": [
+				"v1",
+				"v2"
+			],
+			"default": "v1"
 		},
-		"route-off-route": {
-			"type": "float",
-			"name": "Route Off-Route",
-			"default": 28.0,
-			"min": 8.0,
-			"max": 160.0
-		},
-		"route-live-fallback": {
-			"type": "bool",
-			"name": "Route Live Fallback",
-			"default": false
+		"assist-engine": {
+			"type": "string",
+			"name": "Assist Engine (Live V2)",
+			"description": "Which physics backend Live V2 may use for foresight. ShadowPlayer = full ghost PlayerObject (runOne) — default, matches v1. Trajectory = lighter samplePath foresight (V2 only; optional Shadow verify before arm comes later). Pick v1 always uses ShadowPlayer regardless of this setting.",
+			"one-of": [
+				"ShadowPlayer",
+				"Trajectory"
+			],
+			"default": "ShadowPlayer"
 		},
 		"cps-limit": {
 			"type": "int",
@@ -410,12 +411,6 @@
 			"type": "bool",
 			"name": "Orb Assist",
 			"description": "On = planner prefers delays that hit a needed orb when one matters. Off = only hazard/threat logic (orbs ignored for timing). On helps orb sections; off if orb logic feels wrong on a level.",
-			"default": true
-		},
-		"disable-hus": {
-			"type": "bool",
-			"name": "Disable Soft Hold (HUS)",
-			"description": "On (default) = Soft Hold-Until-Safe never arms. Off = HUS may soft-hold when orb foresight or an Alive delay escape exists — never deadline-injects without that escape.",
 			"default": true
 		},
 		"sim-budget-us": {
@@ -571,12 +566,6 @@
 			"description": "Builds click-timing windows from the imported replay (import a replay first). Safe to cancel mid-bake.",
 			"button-text": "bake"
 		},
-		"record-route-action": {
-			"type": "custom:eb-action",
-			"name": "Record Route",
-			"description": "Record the next attempt from its start and save its path for Route assist when the level completes. Play the replay in your bot. Press again to cancel.",
-			"button-text": "record"
-		},
 		"brute-bake-action": {
 			"type": "custom:eb-action",
 			"name": "Brute Bake",
@@ -589,22 +578,10 @@
 			"description": "Stops an in-progress bake. Only active while baking.",
 			"button-text": "cancel"
 		},
-		"clear-level-cache-action": {
-			"type": "custom:eb-action",
-			"name": "Clear This Level Cache",
-			"description": "Deletes EarlyBuffer's on-disk cache for the current level (all start-position shards: clicks, route, meta). Does not change settings or legacy bakes/ until you re-bake. Learning profile reset is a separate button.",
-			"button-text": "clear lvl"
-		},
-		"clear-all-level-caches-action": {
-			"type": "custom:eb-action",
-			"name": "Clear All Level Caches",
-			"description": "Deletes the entire level-cache folder under the mod save dir. Re-bake or replay import rebuilds what you need. Soft cap is 256 MB with LRU eviction while saving.",
-			"button-text": "clear all"
-		},
 		"bake-radius": {
 			"type": "int",
 			"name": "Bake Radius",
-			"description": "Half-width of each baked click window in frames: earliest = nominal − radius, latest = nominal + radius (same length for every click). 0 = automatic from Default Window ticks. Assist aims near earliest so you can press early and still survive.",
+			"description": "When baking, how many frames each click may shift while searching a window. 0 = automatic. Higher = wider searched windows (more bake time). Lower = tighter/faster bake, may miss some timings.",
 			"default": 0,
 			"min": 0,
 			"max": 128
@@ -1269,12 +1246,6 @@
 			"name": "Copy Last Dev Report",
 			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
 			"button-text": "copy"
-		},
-		"dev-visualize-bake-action": {
-			"type": "custom:eb-action",
-			"name": "Visualize Bake",
-			"description": "Runs the imported replay with EarlyBuffer's own bake ghost and opens a trace preview. The marker moves through the same simulated poses. A red marker names the first ghost contact.",
-			"button-text": "visualize"
 		},
 		"title-dev-diag": {
 			"type": "title",

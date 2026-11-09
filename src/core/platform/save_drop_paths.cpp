@@ -1,0 +1,192 @@
+#include "../../app/class_manager.hpp"
+#include "save_drop_paths.hpp"
+#include <Geode/Geode.hpp>
+#include <Geode/utils/file.hpp>
+#include <algorithm>
+#include <cctype>
+#include <system_error>
+
+EbSaveDropPaths& EbSaveDropPaths::get() {
+    return EbClassManager::get().service<EbSaveDropPaths>();
+}
+
+std::filesystem::path EbSaveDropPaths::rootDir() const {
+    auto* mod = geode::prelude::Mod::get();
+    if (!(!mod)) {
+        return mod->getSaveDir();
+    }
+    return std::filesystem::path("earlybuffer-save");
+}
+
+std::filesystem::path EbSaveDropPaths::replayDropDir() const {
+    return this->rootDir() / "replay-drop";
+}
+
+std::filesystem::path EbSaveDropPaths::configPath() const {
+    return this->rootDir() / "earlybuffer-config.json";
+}
+
+std::filesystem::path EbSaveDropPaths::reportPath() const {
+    return this->rootDir() / "earlybuffer-dev-report.txt";
+}
+
+std::filesystem::path EbSaveDropPaths::cloudConfigsDir() const {
+    return this->rootDir() / "cloud-configs";
+}
+
+bool EbSaveDropPaths::ensureDirs(std::string& err) const {
+    err.clear();
+    auto const root = this->rootDir();
+    auto const replay = this->replayDropDir();
+    auto const cloud = this->cloudConfigsDir();
+    auto const cloudPacks = cloud / "packs";
+    auto const cloudOutbox = cloud / "outbox";
+
+    auto rootRes = geode::utils::file::createDirectoryAll(root);
+    if (rootRes.isErr()) {
+        err = fmt::format("cannot create save dir {}: {}", root.string(), rootRes.unwrapErr());
+        return false;
+    }
+    auto replayRes = geode::utils::file::createDirectoryAll(replay);
+    if (replayRes.isErr()) {
+        err = fmt::format("cannot create replay drop dir {}: {}", replay.string(),
+                          replayRes.unwrapErr());
+        return false;
+    }
+    auto cloudRes = geode::utils::file::createDirectoryAll(cloud);
+    if (cloudRes.isErr()) {
+        err = fmt::format("cannot create cloud-configs dir {}: {}", cloud.string(),
+                          cloudRes.unwrapErr());
+        return false;
+    }
+    auto packsRes = geode::utils::file::createDirectoryAll(cloudPacks);
+    if (packsRes.isErr()) {
+        err = fmt::format("cannot create cloud packs dir {}: {}", cloudPacks.string(),
+                          packsRes.unwrapErr());
+        return false;
+    }
+    auto outboxRes = geode::utils::file::createDirectoryAll(cloudOutbox);
+    if (outboxRes.isErr()) {
+        err = fmt::format("cannot create cloud outbox dir {}: {}", cloudOutbox.string(),
+                          outboxRes.unwrapErr());
+        return false;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::is_directory(root, ec) || ec) {
+        err = fmt::format("save dir missing or not a directory: {}", root.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(replay, ec) || ec) {
+        err = fmt::format("replay drop dir missing or not a directory: {}", replay.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(cloud, ec) || ec) {
+        err = fmt::format("cloud-configs missing or not a directory: {}", cloud.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(cloudPacks, ec) || ec) {
+        err = fmt::format("cloud packs missing or not a directory: {}", cloudPacks.string());
+        return false;
+    }
+    if (!std::filesystem::is_directory(cloudOutbox, ec) || ec) {
+        err = fmt::format("cloud outbox missing or not a directory: {}", cloudOutbox.string());
+        return false;
+    }
+    return true;
+}
+
+bool EbSaveDropPaths::isReplayExtension(std::filesystem::path const& path) {
+    auto ext = path.extension().string();
+    for (char& c : ext) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return ext == ".gdr" || ext == ".gdr2" || ext == ".mhr" || ext == ".json" || ext == ".slc";
+}
+
+std::vector<std::filesystem::path> EbSaveDropPaths::listReplayCandidates() const {
+    std::vector<std::filesystem::path> out;
+    auto const directory = this->replayDropDir();
+    std::error_code ec;
+    if (!std::filesystem::is_directory(directory, ec) || ec) {
+        return out;
+    }
+
+    for (auto const& entry : std::filesystem::directory_iterator(directory, ec)) {
+        if (ec)
+            break;
+        if (!entry.is_regular_file(ec) || ec)
+            continue;
+        auto const path = entry.path();
+        if (!EbSaveDropPaths::isReplayExtension(path))
+            continue;
+        // Skip zero-byte placeholders.
+        auto const size = entry.file_size(ec);
+        if (ec || size == 0)
+            continue;
+        out.push_back(path);
+    }
+
+    std::sort(out.begin(), out.end(), [](auto const& a, auto const& b) {
+        std::error_code eca;
+        std::error_code ecb;
+        auto const ta = std::filesystem::last_write_time(a, eca);
+        auto const tb = std::filesystem::last_write_time(b, ecb);
+        if (eca || ecb)
+            return a.filename().string() > b.filename().string();
+        if (ta != tb)
+            return ta > tb; // newest first
+        return a.filename().string() > b.filename().string();
+    });
+    return out;
+}
+
+bool EbSaveDropPaths::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (!ok) {
+            ++fails;
+            report += std::string("FAIL ") + name + "; ";
+        }
+    };
+
+    auto& paths = EbSaveDropPaths::get();
+    auto const root = paths.rootDir();
+    auto const replay = paths.replayDropDir();
+    auto const config = paths.configPath();
+    auto const reportFile = paths.reportPath();
+    auto const cloud = paths.cloudConfigsDir();
+
+    expect(!root.empty(), "root-nonempty");
+    expect(replay.filename() == "replay-drop", "replay-dir-name");
+    expect(replay.parent_path() == root, "replay-under-root");
+    expect(config.filename() == "earlybuffer-config.json", "config-name");
+    expect(config.parent_path() == root, "config-under-root");
+    expect(reportFile.filename() == "earlybuffer-dev-report.txt", "report-name");
+    expect(reportFile.parent_path() == root, "report-under-root");
+    expect(cloud.filename() == "cloud-configs", "cloud-dir-name");
+    expect(cloud.parent_path() == root, "cloud-under-root");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.gdr")), "ext-gdr");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.GDR2")), "ext-gdr2-case");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.mhr")), "ext-mhr");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.json")), "ext-json");
+    expect(EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.slc")), "ext-slc");
+    expect(!EbSaveDropPaths::isReplayExtension(std::filesystem::path("x.txt")), "ext-reject-txt");
+
+    // When Mod is live, ensureDirs must succeed (Geode save dir is writable).
+    if (geode::prelude::Mod::get()) {
+        std::string err;
+        expect(paths.ensureDirs(err), "ensure-dirs");
+        if (!err.empty() && fails > 0) {
+            report += err + "; ";
+        }
+    }
+
+    if (fails == 0) {
+        report = "SaveDropPaths selfCheck OK";
+        return true;
+    }
+    report = std::string("SaveDropPaths selfCheck fails: ") + report;
+    return false;
+}

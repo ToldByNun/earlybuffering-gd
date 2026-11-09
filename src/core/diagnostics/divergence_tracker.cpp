@@ -1,0 +1,89 @@
+#include "../../app/class_manager.hpp"
+#include "divergence_tracker.hpp"
+#include <fmt/format.h>
+
+EbDivergenceTracker& EbDivergenceTracker::get() {
+    return EbClassManager::get().service<EbDivergenceTracker>();
+}
+
+void EbDivergenceTracker::note(bool planDelay, bool died, bool expectOrb, bool gotOrb) {
+    // Bad: delayed assist still died, or orb expected but missed (death, or we
+    // delayed for the orb and never hit it).
+    bool bad = false;
+    if (planDelay && died)
+        bad = true;
+    if (expectOrb && !gotOrb && (died || planDelay))
+        bad = true;
+    m_bad[m_i] = bad;
+    m_i = (m_i + 1) % N;
+    if (m_count < N)
+        ++m_count;
+    if (mismatchRate() >= 0.45f && m_count >= 12)
+        m_untrusted = true;
+}
+
+float EbDivergenceTracker::mismatchRate() const {
+    if (m_count <= 0)
+        return 0.f;
+    int secondValue = 0;
+    for (int index = 0; index < m_count; ++index)
+        if (m_bad[index])
+            ++secondValue;
+    return static_cast<float>(secondValue) / static_cast<float>(m_count);
+}
+
+bool EbDivergenceTracker::shouldWarn() const {
+    return mismatchRate() >= 0.35f && m_count >= 8;
+}
+
+void EbDivergenceTracker::clear() {
+    m_i = 0;
+    m_count = 0;
+    m_untrusted = false;
+}
+
+std::string EbDivergenceTracker::overlayBit() const {
+    if (!(!shouldWarn() && !m_untrusted)) {
+        return fmt::format("{}div{:.0f}%", m_untrusted ? "UNTRUST " : "WARN ",
+                           mismatchRate() * 100.f);
+    }
+    return {};
+}
+
+bool EbDivergenceTracker::selfCheck(std::string& report) {
+    report.clear();
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (ok)
+            return;
+        ++fails;
+        if (!report.empty())
+            report += "; ";
+        report += name;
+    };
+
+    auto& d = get();
+    d.clear();
+    expect(!d.simUntrusted(), "fresh-clear");
+    expect(d.mismatchRate() == 0.f, "fresh-rate");
+    expect(!d.shouldWarn(), "fresh-warn");
+
+    // 12 delayed deaths → UNTRUST (≥45% / n≥12).
+    for (int index = 0; index < 12; ++index) {
+        d.note(true, true, false, false);
+    }
+    expect(d.simUntrusted(), "untrust-after-12");
+    expect(d.shouldWarn(), "warn-after-12");
+
+    d.clear();
+    expect(!d.simUntrusted(), "clear-resets-untrust");
+    expect(d.mismatchRate() == 0.f, "clear-resets-rate");
+    expect(!d.shouldWarn(), "clear-resets-warn");
+
+    if (fails == 0) {
+        report = "DivergenceTracker selfCheck OK";
+        return true;
+    }
+    report = fmt::format("DivergenceTracker {} fails: {}", fails, report);
+    return false;
+}
