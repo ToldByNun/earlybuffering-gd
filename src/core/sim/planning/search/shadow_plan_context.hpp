@@ -61,6 +61,9 @@ private:
     int ledgerActMax = -1;
     bool ledgerOrbIntent = false;
     bool ledgerPreferEarlyExit = false;
+    bool ledgerSameCrashExit = false;
+    bool ledgerEarliestSafeExit = false;
+    EbDevRejectLedger::EarlyExit ledgerEarlyExit() const;
     int minSurviveLong = 0;
     bool requireAlive = false;
     int scoreHorizon = 0;

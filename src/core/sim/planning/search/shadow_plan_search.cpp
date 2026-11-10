@@ -155,4 +155,6 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     context.ledgerActMax = -1;
     context.ledgerOrbIntent = false;
     context.ledgerPreferEarlyExit = false;
+    context.ledgerSameCrashExit = false;
+    context.ledgerEarliestSafeExit = false;
 }

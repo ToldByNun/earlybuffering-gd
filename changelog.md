@@ -13,6 +13,11 @@
 - Touch movers and follow-like static targets that TW cannot bake are registered as Hard Unknown (no more frozen editor-pose “safe” Delays).
 - Live Delay proof adds post-horizon prove-out ticks so a death on the frame after hitCap is not armed as Safe.
 
+### Ledger honesty + tiny Max Assist windows
+- CandNotes no longer label same-crash / continuous earliest-safe cuts as fake `skip=not-viable` — codes are `same-crash-cut` and `earliest-safe-exit`.
+- Discrete input-window (cube/ball) ranks the full delay band by survive_then_endx; continuous still earliest-safe.
+- `robustK` is clamped to the Max Assist window (`limit=1` → k=0) so a 1-tick cube Delay no longer needs a viable d0 neighbor to arm.
+
 ## v1.5.0
 
 **Adaptive Prediction Planner (Live) + assist honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

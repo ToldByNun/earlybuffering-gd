@@ -30,7 +30,9 @@ public:
         UnknownTrunc,
         LegacyEarlierKept,
         VerifyFailed,
-        LearningDisplaced
+        LearningDisplaced,
+        SameCrashCut,
+        EarliestSafeExit
     };
 
     enum class Attribution {
@@ -68,7 +70,16 @@ public:
     private:
     };
 
-    enum class EarlyExit { None = 0, Budget, PreferBand, WaveProximity, NoThreat, WaveFutile };
+    enum class EarlyExit {
+        None = 0,
+        Budget,
+        PreferBand,
+        WaveProximity,
+        NoThreat,
+        WaveFutile,
+        SameCrash,
+        EarliestSafe
+    };
 
     class BuildInput {
     public:

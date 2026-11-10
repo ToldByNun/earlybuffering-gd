@@ -490,7 +490,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     gateIn.cands = views.data();
     gateIn.limit = limit;
     gateIn.modelCap = model.cap;
-    gateIn.robustK = EbShadowSurvivalRules::resolveRobustK(real, options);
+    gateIn.robustK = EbShadowSurvivalRules::clampRobustKToWindow(
+        EbShadowSurvivalRules::resolveRobustK(real, options), limit);
     gateIn.latencyWeight = std::max(0.f, options.latencyWeight);
     gateIn.mustDelaySearch = options.mustDelaySearch;
     gateIn.budgetHitIncomplete = plan.budgetHit || plan.unknown;

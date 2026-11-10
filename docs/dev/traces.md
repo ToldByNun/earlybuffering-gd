@@ -30,7 +30,17 @@ REC 5/10 | fid=reproduced | bestSurv=5 | bestEval=5 obj=survive_then_endx_v1 | �
 | `obj` | Usually `survive_then_endx_v1` |
 | `harm` / `net` | Counterfactual estimate vs live arm |
 
-If Live armed `d=2` but `bestSurv=5`, check whether Live **skipped** later delays (`skip=not-viable` with empty detail = often unevaluated, not actually simulated).
+If Live armed `d=2` but `bestSurv=5`, check whether Live **skipped** later delays. Honest skip codes:
+
+| `rejectCode` | Meaning |
+|---|---|
+| `budget-not-reached` | Wall/tick budget cut the search |
+| `prefer-band-early-exit` | Bake prefer ±k done |
+| `same-crash-cut` | Same deathTick across delays → stop |
+| `earliest-safe-exit` | Continuous input-window took first safe |
+| `not-viable` | Really rejected **or** legacy opaque skip |
+
+Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1.
 
 ## Lag / perf
 

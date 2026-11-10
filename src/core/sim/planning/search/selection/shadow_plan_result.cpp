@@ -19,12 +19,7 @@ void EbShadowPlanResult::publish(EbShadowPlanContext& context) {
             "PLAN id={} Pass verdict={} limit={} budgetHit={} toggleUnk={} orbIntent={}",
             context.plan.planId, EbAssistVerdict::name(context.plan.reason), context.limit,
             context.plan.budgetHit, context.sawToggleUnknown ? 1 : 0, context.orbIntent));
-        EbDevRejectLedger::EarlyExit early = EbDevRejectLedger::EarlyExit::None;
-        if (context.plan.budgetHit)
-            early = EbDevRejectLedger::EarlyExit::Budget;
-        else if (context.ledgerPreferEarlyExit)
-            early = EbDevRejectLedger::EarlyExit::PreferBand;
-        context.publishLedger(0, true, early);
+        context.publishLedger(0, true, context.ledgerEarlyExit());
         return;
     }
 
@@ -181,13 +176,8 @@ void EbShadowPlanResult::publish(EbShadowPlanContext& context) {
         context.plan.releaseLatest, context.plan.releaseAfter, context.plan.holdScanTried,
         context.plan.dMin, context.plan.dMax, context.plan.candidatesTried, context.tickBudget));
     {
-        EbDevRejectLedger::EarlyExit early = EbDevRejectLedger::EarlyExit::None;
-        if (context.plan.budgetHit)
-            early = EbDevRejectLedger::EarlyExit::Budget;
-        else if (context.ledgerPreferEarlyExit)
-            early = EbDevRejectLedger::EarlyExit::PreferBand;
         bool const pass = (context.plan.action == PlanAction::Pass);
-        context.publishLedger(pass ? 0 : context.plan.delay, pass, early);
+        context.publishLedger(pass ? 0 : context.plan.delay, pass, context.ledgerEarlyExit());
     }
     return;
 }

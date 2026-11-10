@@ -30,9 +30,22 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
         model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
     }
     plan.continuous = model.continuous;
+    robustK = EbShadowSurvivalRules::clampRobustKToWindow(robustK, limit);
     if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;
     wall0 = std::chrono::steady_clock::now();
+}
+
+EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
+    if (plan.budgetHit)
+        return EbDevRejectLedger::EarlyExit::Budget;
+    if (ledgerPreferEarlyExit)
+        return EbDevRejectLedger::EarlyExit::PreferBand;
+    if (ledgerSameCrashExit)
+        return EbDevRejectLedger::EarlyExit::SameCrash;
+    if (ledgerEarliestSafeExit)
+        return EbDevRejectLedger::EarlyExit::EarliestSafe;
+    return EbDevRejectLedger::EarlyExit::None;
 }
 
 bool EbShadowPlanContext::wallExceeded() const {

@@ -29,6 +29,9 @@ public:
                                    bool requireAliveForDelay = false);
     static bool exitSurvivedHonest(bool died, bool unknown);
     static int resolveRobustK(PlayerObject* real, EbPlanOptions const& options);
+    // ±k must fit the Max Assist window. limit=1 + k=1 made Delay@1 require
+    // viable d0 — so cube with a 1-tick window almost never armed a Delay.
+    static int clampRobustKToWindow(int robustK, int limit);
 
 private:
     friend class EbShadowPlanInputWindow;

@@ -179,6 +179,7 @@ void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
         }
         if (EbPrefixSim::sameCrashShouldStop(sameCrashStreak)) {
             sameCrashStopped = true;
+            context.ledgerSameCrashExit = true;
             EbAssistLog::debug(fmt::format("PLAN id={} same-crash stop deathTick={} after delay={}",
                                          context.plan.planId, candidate.raw.deathTick, delayValue));
             break;

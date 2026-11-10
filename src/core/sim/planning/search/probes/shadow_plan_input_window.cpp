@@ -99,8 +99,10 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
         considerSafe(delayValue, candidate);
         // Continuous: stop at earliest observation-safe delay.
-        if (continuous && bestDelay >= 0)
+        if (continuous && bestDelay >= 0) {
+            context.ledgerEarliestSafeExit = true;
             break;
+        }
     }
 
     if (bestDelay >= 0) {
@@ -123,7 +125,6 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.plan.reason = AssistReason::PassBudget;
 
     context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
-                          context.plan.budgetHit ? EbDevRejectLedger::EarlyExit::Budget
-                                                 : EbDevRejectLedger::EarlyExit::None);
+                          context.ledgerEarlyExit());
     return true;
 }
