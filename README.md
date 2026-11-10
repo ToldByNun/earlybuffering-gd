@@ -1,12 +1,16 @@
 # EarlyBuffer
 
-## Cloud Configs
-
-Open **Settings → Assist → Assist Actions → Cloud Configs**, directly below **Import Config**. Browse and search community packs, sort by popularity or rating, and install settings. Keybinds and developer settings are preserved. Share submits your pack for review. Cached packs and bundled defaults support offline use. Installing a config can change your assist settings. See [Cloud Configs](docs/cloud_configs.md) for endpoints and network behavior.
+> **Docs (players + developers):** https://ToldByNun.github.io/earlybuffering-gd/  
+> Local preview: `npm install` → `npm run docs:dev`  
+> Install, features, settings, problems, how it works, and the **Dev** section live there. **Not on the Geode Index** — install from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases).
 
 **Click early. Still live.**
 
 Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBuffer holds the press and fires on the first physics tick a shadow sim still calls safe. Assist, not autoplayer. No late-forgiveness (it does not rewind time for late clicks).
+
+## Cloud Configs
+
+Open **Settings → Assist → Assist Actions → Cloud Configs**, directly below **Import Config**. Browse and search community packs, sort by popularity or rating, and install settings. Keybinds and developer settings are preserved. Share submits your pack for review. Cached packs and bundled defaults support offline use. Installing a config can change your assist settings. See [Cloud Configs](docs/cloud_configs.md) for endpoints and network behavior.
 
 | | |
 |---|---|
@@ -33,9 +37,11 @@ Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_refe
 
 ## Install
 
+> **Not on the Geode Index** (banned). Install from GitHub only.
+
 1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
-2. Install from the **Geode Index**, or download the **v1.5.0** `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
-3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (Geode will prompt).
+2. Download the `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
+3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (that dependency can still come from the Index).
 
 **Mobile (Android + iOS):** same save-dir I/O (`replay-drop/`, `earlybuffer-config.json`) and constrained planner budgets — details and device smoke checklists in [`INSTALL.md`](INSTALL.md).
 
