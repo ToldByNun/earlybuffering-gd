@@ -343,11 +343,6 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                     break;
                 }
 
-                int const peakTicks = slot.ticksSimulated;
-                bool const peakAlive = slot.autonomousAlive;
-                bool const peakZone = slot.zoneCleared;
-                float const peakEndX = slot.endX;
-
                 int const ticksBefore = sharedTicks;
                 EbThreatZone const* zonePtr = threatZone.valid ? &threatZone : nullptr;
                 EbAdaptiveResumeRunner::runQuantum(simulator, layer, real, down, limit, deltaTime,
@@ -362,18 +357,6 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 ++verifyGrants;
                 ++plan.candidatesTried;
                 slot.screened = true;
-
-                // Keep the best Alive proof across screen + verify segments.
-                if (peakAlive && slot.autonomousAlive) {
-                    if (peakTicks > slot.ticksSimulated) {
-                        slot.ticksSimulated = peakTicks;
-                        slot.autonomousSurviveTicks =
-                            std::max(slot.autonomousSurviveTicks, peakTicks);
-                    }
-                    slot.zoneCleared = slot.zoneCleared || peakZone;
-                    if (peakEndX > slot.endX)
-                        slot.endX = peakEndX;
-                }
 
                 // Keep world hot for resume-extend of the same delay.
                 if (slot.terminalDied || slot.terminalUnknown || !slot.hasCheckpoint()) {
