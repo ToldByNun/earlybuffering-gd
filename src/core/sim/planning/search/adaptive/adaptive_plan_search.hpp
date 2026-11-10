@@ -11,6 +11,9 @@
 // Soft wall (budgetUs) runs from plan start. Adaptive Delay / proven PassD0Safe
 // stick; any other Adaptive Pass falls through to classic with the *remaining*
 // wall/ticks (never a fresh full press budget — that doubled Dynamic hitches).
+// Fallthrough seeds terminal/horizon Adaptive outcomes into classic so deaths
+// already paid for are not re-simulated. Phase C rebuilds past screen depth on
+// the first cold grant, then resume-extends from the kept checkpoint.
 class EbAdaptivePlanSearch {
 public:
     static EbSimPlan run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,

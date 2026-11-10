@@ -12,11 +12,19 @@
 
 bool EbShadowPlanThreatProbe::evaluate(EbShadowPlanContext& context) {
     {
-        auto c0 = context.evalDelay(0, -1);
+        EbSimulationCandidate c0;
+        if (context.limit >= 0 && context.candReady[0]) {
+            // Adaptive/Hybrid seed — do not re-sim d0.
+            c0 = context.cands[0];
+        } else {
+            c0 = context.evalDelay(0, -1);
+            context.cands[0] = c0;
+            context.candReady[0] = 1;
+        }
         context.plan.firstDeathTick = c0.raw.died ? c0.raw.deathTick : -1;
         context.plan.firstDeathObject = c0.raw.deathObject;
         if (c0.raw.died) {
-            // Hybrid verify already clustered this zone — reuse (skip rebuild).
+            // Hybrid/Adaptive already clustered this zone — reuse (skip rebuild).
             if (context.options.seedThreatZone.valid) {
                 context.zone = context.options.seedThreatZone;
             } else {
@@ -24,10 +32,20 @@ bool EbShadowPlanThreatProbe::evaluate(EbShadowPlanContext& context) {
                                                                  c0.raw.deathObject);
             }
             context.plan.threatZone = context.zone;
+        } else if (context.options.seedThreatZone.valid) {
+            context.zone = context.options.seedThreatZone;
+            context.plan.threatZone = context.zone;
         }
         context.finalizeViable(c0, -1);
         context.cands[0] = c0;
         context.candReady[0] = 1;
+
+        // Finalize other Adaptive seeds now that zone is known.
+        for (int delay = 1; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            context.finalizeViable(context.cands[static_cast<size_t>(delay)], -1);
+        }
 
         // Continuous: idle (baseline coast) safer than d0 action → miss-assist may Delay.
         // For release, baseline = keep holding, d0 = UP now — same compare (enable always).

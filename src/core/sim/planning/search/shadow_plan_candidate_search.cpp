@@ -81,10 +81,22 @@ void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
     };
 
     // Commit 10 PrefixSim: shared-prefix early-death + same-crash cut.
-    int prefixDeathTick = -1;
+    // Adaptive fallthrough may already know the idle-death tick.
+    int prefixDeathTick = context.options.seedPrefixDeathTick;
     int sameCrashStreak = 0;
     int sameCrashPrevTick = -1;
     bool sameCrashStopped = false;
+    if (prefixDeathTick < 0) {
+        for (int delay = 0; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            auto const& seeded = context.cands[static_cast<size_t>(delay)];
+            if (!seeded.diedBeforeAction)
+                continue;
+            prefixDeathTick = EbPrefixSim::mergePrefixDeathTick(
+                prefixDeathTick, seeded.raw.deathTick, true);
+        }
+    }
 
     bool const isWaveMode = context.real && context.real->m_isDart;
     bool const isShipLike = context.real && (context.real->m_isShip || context.real->m_isBird ||

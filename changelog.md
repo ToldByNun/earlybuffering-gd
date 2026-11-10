@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.1-dev
+
+### Dynamic / Adaptive throughput (no budget cuts)
+- Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).
+- Adaptive→classic fallthrough seeds terminal / horizon-proven delay results + threat zone + prefix-death tick so classic skips re-sim of finished Adaptive work. Partial Alive screens stay unseeded (classic still proves them).
+
 ## v1.5.0
 
 **Adaptive Prediction Planner (Live) + assist honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

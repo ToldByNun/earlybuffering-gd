@@ -139,6 +139,18 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     context.cands.resize(static_cast<size_t>(context.limit) + 1);
     context.candReady.assign(static_cast<size_t>(context.limit) + 1, 0);
 
+    // Adaptive fallthrough seeds: place terminal/horizon results before probes
+    // so threat/candidate search skip re-sim. finalizeViable runs after zone.
+    for (auto const& seeded : context.options.seedCandidates) {
+        if (seeded.delay < 0 || seeded.delay > context.limit)
+            continue;
+        size_t const index = static_cast<size_t>(seeded.delay);
+        context.cands[index] = seeded;
+        context.candReady[index] = 1;
+        if (seeded.toggleUnknown || (seeded.unknownTrunc && context.hadToggleTargets))
+            context.sawToggleUnknown = true;
+    }
+
     context.ledgerActMin = -1;
     context.ledgerActMax = -1;
     context.ledgerOrbIntent = false;
