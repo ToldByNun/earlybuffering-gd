@@ -216,8 +216,17 @@ bool EbDevTraceStore::beginSession(std::string sessionId, int recordingsTarget) 
     }
     this->m_nextPressId = 1;
     this->m_nextEventId = 1;
+    this->m_resourceStats.reset();
     this->m_open = true;
+    this->sampleResources();
     return this->flush();
+}
+
+void EbDevTraceStore::sampleResources() {
+    if (!this->m_open)
+        return;
+    (void)this->m_resourceStats.noteSample();
+    this->m_session.resourceStats = this->m_resourceStats.snapshot();
 }
 
 void EbDevTraceStore::setLevelMeta(std::string levelKey, std::string levelName, bool startPos,
@@ -300,7 +309,11 @@ EbDevDecisionEvent* EbDevTraceStore::appendEvent(EbDevDecisionEvent event) {
     if (event.cycleId <= 0) {
         event.cycleId = event.pressId;
     }
+    // Plan time is the usual Dynamic hitch window — sample RAM/CPU there.
+    bool const sampleNow = event.kind == DevEventKind::PlanFinished;
     attempt->events.push_back(std::move(event));
+    if (sampleNow)
+        this->sampleResources();
     return &attempt->events.back();
 }
 
@@ -349,6 +362,7 @@ bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget)
         ++this->m_session.recordingsDone;
         this->trimRollingWindow();
     }
+    this->sampleResources();
     return this->flush();
 }
 

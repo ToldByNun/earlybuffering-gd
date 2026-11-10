@@ -8,6 +8,10 @@
 
 class EbShadowSurvivalRules {
 public:
+    // Extra ticks past Prediction Horizon when Live requires Alive for Delay.
+    // Catches deaths on the tick after the wall (Dump-SP / startpos class).
+    static constexpr int kPostCapProveTicks = 8;
+
     static int surviveBinOf(int ticks);
     static int rankingSurviveTicks(EbShadowSimulator::RunResult const& r);
     static bool clearsThreatOf(EbShadowSimulator::RunResult const& r, EbThreatZone const& zone);

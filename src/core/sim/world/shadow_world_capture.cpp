@@ -4,6 +4,7 @@
 #include "../../../debug/perf_trace.hpp"
 #include "../../../level/section_object_walk.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
+#include "../../trigger_world/trigger_world_baker.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../orbs/orb_stack_resolver.hpp"
 #include "../orbs/toggle_orb_sim.hpp"
@@ -287,6 +288,64 @@ void EbShadowWorldCapture::beginCapture(EbShadowSimulator& simulator, PlayLayer*
     simulator.captureTriggerTransforms(layer);
     simulator.captureDynamicFollows(layer);
     simulator.captureToggleUnknownTargets(layer);
+    captureUnmodeledMotionTargets(simulator, layer);
+}
+
+void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simulator,
+                                                         PlayLayer* layer) {
+    if (!layer || !EbStageConfig::triggerBake())
+        return;
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    if (!children)
+        return;
+
+    static constexpr size_t kMaxUnmodeledTargets = 8192;
+    std::vector<GameObject*> solids;
+    solids.reserve(static_cast<size_t>(children->count()));
+    for (unsigned index = 0; index < children->count(); ++index) {
+        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
+            continue;
+        solids.push_back(object);
+    }
+
+    for (unsigned index = 0; index < children->count(); ++index) {
+        if (simulator.m_dynamicTargetIds.size() >= kMaxUnmodeledTargets)
+            return;
+        auto* effect =
+            geode::prelude::typeinfo_cast<EffectGameObject*>(children->objectAtIndex(index));
+        if (!effect || effect->m_targetGroupID <= 0)
+            continue;
+
+        TriggerKind const kind = EbTriggerClassify::classify(effect);
+        // Already handled by captureDynamicFollows / captureToggleUnknownTargets.
+        if (kind == TriggerKind::DynamicFollow)
+            continue;
+        if (EbTriggerClassify::isToggleOrbId(effect->m_objectID))
+            continue;
+        if (EbTriggerClassify::isToggleTriggerId(effect->m_objectID) && effect->m_isTouchTriggered)
+            continue;
+
+        bool const touchMover =
+            effect->m_isTouchTriggered &&
+            (kind == TriggerKind::DynamicOther || kind == TriggerKind::StaticMove ||
+             kind == TriggerKind::StaticRotate || kind == TriggerKind::StaticScale);
+        bool const followLikeStatic =
+            kind == TriggerKind::StaticMove && EbTriggerWorldBaker::isFollowLikeStatic(effect, kind);
+        if (!touchMover && !followLikeStatic)
+            continue;
+
+        int const groupId = effect->m_targetGroupID;
+        for (auto* object : solids) {
+            if (simulator.m_dynamicTargetIds.size() >= kMaxUnmodeledTargets)
+                return;
+            if (!object || object == effect)
+                continue;
+            if (!object->belongsToGroup(groupId))
+                continue;
+            simulator.m_dynamicTargetIds.insert(object->m_uniqueID);
+        }
+    }
 }
 
 void EbShadowWorldCapture::resetCaptureForNextRun(EbShadowSimulator& simulator, PlayLayer* layer) {

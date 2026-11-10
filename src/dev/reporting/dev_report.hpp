@@ -38,6 +38,9 @@ public:
     bool liveVsEvalMismatch = false;
     int livePlannedDelay = -1;
 
+    // Session process RAM/CPU min-max (empty when no open/loaded session stats).
+    std::string resourceBit;
+
     // Commit 12: counterfactual Prev/Caused class for this eval (simEstimate / G10).
     int plannedDelay = -1;
     char const* simNetClass = "neutral"; // prev|caused|neutral|inconclusive

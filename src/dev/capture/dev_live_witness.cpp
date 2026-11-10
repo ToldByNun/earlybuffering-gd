@@ -416,6 +416,7 @@ EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* playe
         w.triggerSkipFollow = static_cast<int>(baker.lastSkippedFollow());
         w.triggerSkipDynamic = static_cast<int>(baker.lastSkippedDynamic());
         w.triggerSkipNonSpawn = static_cast<int>(baker.lastSkippedNonSpawn());
+        w.triggerSkipTouch = static_cast<int>(baker.lastSkippedTouch());
         w.triggerCanSpool = tw.loaded() && tw.hasTracks() && tw.readyTrackCount() > 0;
         if (w.triggerCanSpool) {
             setCategory(w, DevWitnessCategory::Triggers, DevWitnessStatus::Partial);

@@ -34,7 +34,7 @@ bool EbAdaptiveDecisionGate::isProvenSafe(CandView const& cand, int modelCap) {
     if (!isDelayWorthy(cand))
         return false;
     int const cap = std::max(1, modelCap);
-    // Screen-quantum Alive ≠ safe. Only horizon/cap or cleared threat.
+    // Screen-quantum Alive ≠ safe. Horizon/cap or cleared threat (d0 Pass path).
     if (cand.ticksSimulated >= cap || cand.terminalAliveCap)
         return true;
     if (cand.zoneCleared)
@@ -47,12 +47,10 @@ bool EbAdaptiveDecisionGate::hasHazardProgress(CandView const& cand, CandView co
     if (!isDelayWorthy(cand))
         return false;
     int const cap = std::max(1, modelCap);
-    // Reached configured prediction horizon while still Alive.
-    if (cand.ticksSimulated >= cap || cand.terminalAliveCap)
-        return true;
     // Cleared the clustered threat and remained Alive.
     if (cand.zoneCleared)
         return true;
+    // Horizon wall alone is not progress — need past-d0 survival or zone clear.
     // Survived past the obstacle that killed d0 (still Alive — not a later soft death).
     if (d0.terminalDied && d0.deathTick >= 0 && cand.ticksSimulated > d0.deathTick + 1)
         return true;

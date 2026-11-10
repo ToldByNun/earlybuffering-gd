@@ -4,6 +4,7 @@
 #include "../../core/sim/shadow_simulator.hpp"
 #include "../../debug/lag_probe.hpp"
 #include "../capture/dev_trace_store.hpp"
+#include "../diagnostics/dev_resource_stats.hpp"
 #include "../dev_config.hpp"
 #include "../dev_session.hpp"
 #include <Geode/Geode.hpp>
@@ -114,11 +115,27 @@ bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisi
         rec = EbDevSession::get().statusLine();
     }
     out = EbDevReport::fromGrid(grid, std::move(rec), planEv.plannedDelay);
+    if (EbDevTraceStore::get().isOpen()) {
+        auto const& rs = EbDevTraceStore::get().session().resourceStats;
+        out.resourceBit = EbDevResourceStats::formatCompact(rs);
+    }
     if (out.valid && planEv.plannedDelay > 0 &&
         (!out.hasBestSurviving || out.bestSurvivingDelay < 0)) {
         out.liveVsEvalMismatch = true;
         out.livePlannedDelay = planEv.plannedDelay;
+    }
+    if (out.valid) {
         out.overlayLine = EbDevReport::formatOverlayLine(out);
+        if (!out.jsonLine.empty()) {
+            auto parsed = matjson::parse(out.jsonLine);
+            if (parsed.isOk()) {
+                auto root = parsed.unwrap();
+                root["overlay"] = out.overlayLine;
+                if (!out.resourceBit.empty())
+                    root["resourceBit"] = out.resourceBit;
+                out.jsonLine = root.dump(0);
+            }
+        }
     }
     return out.valid;
 }
@@ -240,6 +257,7 @@ std::string EbDevReport::formatOverlayLine(EbDevReport const& r) {
         if (r.liveVsEvalMismatch) {
             append(fmt::format("mismatch liveDelay={}", r.livePlannedDelay));
         }
+        append(r.resourceBit);
         // Never emit ideal= when claims suppressed / not eligible.
         return line;
     }
@@ -274,6 +292,7 @@ std::string EbDevReport::formatOverlayLine(EbDevReport const& r) {
                            r.simNetClass ? r.simNetClass : "neutral", r.simPrev, r.simCaused,
                            r.simHarmRate * 100.f));
     }
+    append(r.resourceBit);
     return line;
 }
 
@@ -411,6 +430,9 @@ bool EbDevReport::selfCheck(std::string& report) {
         expect(line.find("obj=survive_then_endx_v1") != std::string::npos, "obj");
         expect(line.find("fid=reproduced") != std::string::npos, "fid");
         expect(line.find("(died)") == std::string::npos, "no-died-tag-when-surv");
+        result.resourceBit = "ram=100.0-200.0MB cpu=10.0-50.0%";
+        auto withRes = formatOverlayLine(result);
+        expect(withRes.find("ram=100.0-200.0MB") != std::string::npos, "resource-bit");
     }
 
     // No survivor → bestEval labeled (died).

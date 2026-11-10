@@ -126,6 +126,7 @@ public:
     int triggerSkipFollow = 0;
     int triggerSkipDynamic = 0;
     int triggerSkipNonSpawn = 0;
+    int triggerSkipTouch = 0;
     uint64_t playerBlobSchema = 0;
     uint64_t hazardDigest = 0;
     bool hasHazardDigest = false;

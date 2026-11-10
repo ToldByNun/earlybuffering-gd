@@ -49,6 +49,7 @@
 #include "../dev/capture/dev_cycle_recorder.hpp"
 #include "../dev/capture/dev_live_witness.hpp"
 #include "../dev/capture/dev_trace_store.hpp"
+#include "../dev/diagnostics/dev_resource_stats.hpp"
 #include "../dev/dev_config.hpp"
 #include "../dev/dev_session.hpp"
 #include "../dev/evaluation/dev_eval_engine.hpp"
@@ -200,6 +201,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;
     expect(EbDevTraceStore::selfCheck(devTraceReport), "dev-trace-store");
+    std::string devResourceReport;
+    expect(EbDevResourceStats::selfCheck(devResourceReport), "dev-resource-stats");
     std::string devCycleReport;
     expect(EbDevCycleRecorder::selfCheck(devCycleReport), "dev-cycle-recorder");
     // Synthetic gold: earliest robust policy — no midpoint

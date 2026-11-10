@@ -139,6 +139,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             model.cap = std::min(model.cap, std::max(1, 96 - limit));
         }
     }
+    if (options.requireAliveForDelay && model.cap > 0) {
+        model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
+    }
 
     std::vector<EbAdaptiveCandidateSlot> slots(static_cast<size_t>(limit) + 1);
     int screened = 0;

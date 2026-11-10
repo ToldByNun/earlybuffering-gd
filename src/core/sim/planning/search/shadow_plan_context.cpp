@@ -24,6 +24,11 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
                     options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
     plan.trajectoryEngine = useTrajEngine;
     model.continuePastClear = options.requireAliveForDelay;
+    // Live Delay proof: run a few ticks past the nominal horizon so a death on
+    // the next frame after hitCap is not declared Safe (session Dump-SP class).
+    if (options.requireAliveForDelay && model.cap > 0) {
+        model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
+    }
     plan.continuous = model.continuous;
     if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;

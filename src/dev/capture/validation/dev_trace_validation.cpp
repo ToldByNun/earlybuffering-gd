@@ -263,6 +263,15 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     sess.sessionId = "selfcheck";
     sess.recordingsTarget = 10;
     sess.recordingsDone = 1;
+    sess.resourceStats.valid = true;
+    sess.resourceStats.sampleCount = 3;
+    sess.resourceStats.ramMbMin = 100.0;
+    sess.resourceStats.ramMbMax = 200.0;
+    sess.resourceStats.ramMbLast = 150.0;
+    sess.resourceStats.hasCpu = true;
+    sess.resourceStats.cpuPctMin = 5.0;
+    sess.resourceStats.cpuPctMax = 40.0;
+    sess.resourceStats.cpuPctLast = 12.0;
     EbDevAttempt att;
     att.attemptId = 1;
     att.startTick = 0;
@@ -278,6 +287,9 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     expect(EbDevTraceStore::sessionFromJsonString(body, back, jerr), "json-parse-ok");
     expect(back.traceSchema == EbDevTraceStore::kTraceSchema, "json-schema");
     expect(back.sessionId == "selfcheck", "json-sessionId");
+    expect(back.resourceStats.valid, "json-resource-valid");
+    expect(back.resourceStats.sampleCount == 3, "json-resource-count");
+    expect(back.resourceStats.hasCpu, "json-resource-cpu");
     expect(back.attempts.size() == 1, "json-attempts");
     expect(back.attempts[0].events.size() == 5, "json-events");
     expect(back.attempts[0].events[0].pressId == 10, "json-pressId");

@@ -22,6 +22,19 @@ matjson::Value EbDevSessionCodec::sessionToJsonValue(EbDevSessionFile const& ses
     root["settingsFingerprint"] = session.settingsFingerprint;
     root["recordingsTarget"] = session.recordingsTarget;
     root["recordingsDone"] = session.recordingsDone;
+    if (session.resourceStats.valid && session.resourceStats.sampleCount > 0) {
+        matjson::Value rs = matjson::Value::object();
+        rs["sampleCount"] = session.resourceStats.sampleCount;
+        rs["ramMbMin"] = session.resourceStats.ramMbMin;
+        rs["ramMbMax"] = session.resourceStats.ramMbMax;
+        rs["ramMbLast"] = session.resourceStats.ramMbLast;
+        if (session.resourceStats.hasCpu) {
+            rs["cpuPctMin"] = session.resourceStats.cpuPctMin;
+            rs["cpuPctMax"] = session.resourceStats.cpuPctMax;
+            rs["cpuPctLast"] = session.resourceStats.cpuPctLast;
+        }
+        root["resourceStats"] = rs;
+    }
 
     std::vector<matjson::Value> attempts;
     attempts.reserve(session.attempts.size());
@@ -84,6 +97,29 @@ bool EbDevSessionCodec::sessionFromJsonString(std::string const& body, EbDevSess
     out.recordingsDone = root.contains("recordingsDone")
                              ? static_cast<int>(root["recordingsDone"].asInt().unwrapOr(0))
                              : 0;
+    out.resourceStats = {};
+    if (root.contains("resourceStats") && root["resourceStats"].isObject()) {
+        auto const& rs = root["resourceStats"];
+        out.resourceStats.sampleCount =
+            rs.contains("sampleCount") ? static_cast<int>(rs["sampleCount"].asInt().unwrapOr(0))
+                                       : 0;
+        out.resourceStats.ramMbMin =
+            rs.contains("ramMbMin") ? rs["ramMbMin"].asDouble().unwrapOr(0.0) : 0.0;
+        out.resourceStats.ramMbMax =
+            rs.contains("ramMbMax") ? rs["ramMbMax"].asDouble().unwrapOr(0.0) : 0.0;
+        out.resourceStats.ramMbLast =
+            rs.contains("ramMbLast") ? rs["ramMbLast"].asDouble().unwrapOr(0.0) : 0.0;
+        if (rs.contains("cpuPctMin") || rs.contains("cpuPctMax") || rs.contains("cpuPctLast")) {
+            out.resourceStats.hasCpu = true;
+            out.resourceStats.cpuPctMin =
+                rs.contains("cpuPctMin") ? rs["cpuPctMin"].asDouble().unwrapOr(0.0) : 0.0;
+            out.resourceStats.cpuPctMax =
+                rs.contains("cpuPctMax") ? rs["cpuPctMax"].asDouble().unwrapOr(0.0) : 0.0;
+            out.resourceStats.cpuPctLast =
+                rs.contains("cpuPctLast") ? rs["cpuPctLast"].asDouble().unwrapOr(0.0) : 0.0;
+        }
+        out.resourceStats.valid = out.resourceStats.sampleCount > 0;
+    }
 
     if (!root.contains("attempts") || !root["attempts"].isArray()) {
         return true;
