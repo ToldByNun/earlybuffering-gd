@@ -12,10 +12,15 @@ public:
     static EbDesktopMenuSidebarSmoke& get();
 
 #if defined(EB_DESKTOP_IMGUI)
-    // Draw the animated wave into the sidebar rect. cornerFlags selects which
+    // Draw the animated wave into a rounded rect. cornerFlags selects which
     // corners stay rounded (docked shell uses left-only).
+    // outsideColor punches corner remask; 0 = shell bg().
     void paint(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max, float rounding,
-               float timeSeconds, ImDrawFlags cornerFlags = ImDrawFlags_RoundCornersLeft);
+               float timeSeconds, ImDrawFlags cornerFlags = ImDrawFlags_RoundCornersLeft,
+               ImU32 outsideColor = 0);
+
+    // Single wave sample (same math as the sidebar shader) — for solid widget fills.
+    static ImU32 sampleColor(float timeSeconds, float px = 0.5f, float py = 0.5f);
 #endif
 
 private:

@@ -4,6 +4,7 @@
 
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_sidebar_smoke.hpp"
 #include "../desktop_menu_theme.hpp"
 #include <imgui.h>
 #include <algorithm>
@@ -83,10 +84,13 @@ public:
             drawList->AddRect(boxMin, boxMax, EbDesktopMenuTheme::toU32(stroke), kBoxRounding, 0,
                               EbDesktopMenuTheme::outlineThickness());
         } else if (*value) {
-            ImU32 const fill = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::accent());
-            drawList->AddRectFilled(boxMin, boxMax, fill, kBoxRounding);
+            // Same wave as the sidebar — not flat accent.
+            ImU32 const outside = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::panel());
+            EbDesktopMenuSidebarSmoke::get().paint(drawList, boxMin, boxMax, kBoxRounding,
+                                                   static_cast<float>(ImGui::GetTime()),
+                                                   ImDrawFlags_RoundCornersAll, outside);
             if (hovered) {
-                EbDesktopMenuTheme::drawAccentGlow(drawList, boxMin, boxMax, kBoxRounding, 0.55f);
+                EbDesktopMenuTheme::drawAccentGlow(drawList, boxMin, boxMax, kBoxRounding, 0.45f);
             }
             drawCheckMark(drawList, boxMin, kBoxSize, IM_COL32(255, 255, 255, 255));
         } else {

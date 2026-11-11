@@ -2,6 +2,7 @@
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
+#include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_section_card.hpp"
 
@@ -139,12 +140,20 @@ public:
         char sectionId[64];
         std::snprintf(sectionId, sizeof(sectionId), "smoke-%s", name);
         if (EbSectionCard::begin(sectionId, "SECTION")) {
-            // AP8 checkbox smoke (image 2): live bind + disabled dim row.
+            // Checkbox smoke (image 2): live bind + disabled dim row.
             EbCheckbox::drawSetting("enabled", "Enabled");
             static bool s_smokeLocal = true;
             EbCheckbox::draw("smoke-local", "Checkbox", &s_smokeLocal);
             static bool s_smokeDisabled = false;
             EbCheckbox::draw("smoke-disabled", "Checkbox disabled", &s_smokeDisabled, false);
+
+            ImGui::Dummy(ImVec2(0.0f, 8.0f));
+            // AP9 button smoke — wave pill + row chrome + real eb-action.
+            EbButton::draw("smoke-primary", "Primary", true, EbButton::Style::Primary);
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            EbButton::draw("smoke-row", "Row button", true, EbButton::Style::Row);
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            EbButton::drawAction("cycle-assist-mode", "Mode", EbButton::Style::Primary);
         }
         EbSectionCard::end();
 

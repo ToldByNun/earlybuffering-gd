@@ -91,8 +91,14 @@ EbDesktopMenuSidebarSmoke& EbDesktopMenuSidebarSmoke::get() {
     return instance;
 }
 
+ImU32 EbDesktopMenuSidebarSmoke::sampleColor(float timeSeconds, float px, float py) {
+    float const wave = EbDesktopMenuSidebarSmokeMath::waveAt(px, py, 1.0f, 1.0f, timeSeconds);
+    return EbDesktopMenuSidebarSmokeMath::colorFromWave(wave);
+}
+
 void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max,
-                                      float rounding, float timeSeconds, ImDrawFlags cornerFlags) {
+                                      float rounding, float timeSeconds, ImDrawFlags cornerFlags,
+                                      ImU32 outsideColor) {
     if (!drawList) {
         return;
     }
@@ -103,10 +109,15 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
         return;
     }
 
-    ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
-    ImU32 const outside = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::bg());
+    // pillRounding() is 999 — clamp so remask corner discs cannot flood the shell.
+    float const maxRounding = (width < height ? width : height) * 0.5f;
+    float const clampedRounding = rounding > maxRounding ? maxRounding : rounding;
 
-    drawList->AddRectFilled(min, max, base, rounding, cornerFlags);
+    ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
+    ImU32 const outside =
+        outsideColor != 0 ? outsideColor : EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::bg());
+
+    drawList->AddRectFilled(min, max, base, clampedRounding, cornerFlags);
 
     constexpr int kCols = 12;
     constexpr int kRows = 32;
@@ -129,7 +140,7 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     }
     ImGui::PopClipRect();
 
-    EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(drawList, min, max, rounding, outside,
+    EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(drawList, min, max, clampedRounding, outside,
                                                         timeSeconds, cornerFlags);
 }
 
