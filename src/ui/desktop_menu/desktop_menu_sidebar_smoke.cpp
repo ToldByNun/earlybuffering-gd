@@ -119,14 +119,36 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
 
     drawList->AddRectFilled(min, max, base, clampedRounding, cornerFlags);
 
-    constexpr int kCols = 12;
-    constexpr int kRows = 32;
-    float const cellW = width / static_cast<float>(kCols);
-    float const cellH = height / static_cast<float>(kRows);
+    // Dense grid on the sidebar; keep cells chunky on small pills so the last
+    // row is not a sub-pixel strip that clips into a flat edge + hairline.
+    int cols = 12;
+    int rows = 32;
+    if (height < 72.0f) {
+        rows = static_cast<int>(height * 0.5f);
+        if (rows < 6) {
+            rows = 6;
+        }
+        if (rows > 16) {
+            rows = 16;
+        }
+    }
+    if (width < 120.0f) {
+        cols = static_cast<int>(width / 3.0f);
+        if (cols < 6) {
+            cols = 6;
+        }
+        if (cols > 12) {
+            cols = 12;
+        }
+    }
+    float const cellW = width / static_cast<float>(cols);
+    float const cellH = height / static_cast<float>(rows);
 
-    ImGui::PushClipRect(min, max, true);
-    for (int row = 0; row < kRows; ++row) {
-        for (int col = 0; col < kCols; ++col) {
+    // ImGui clip Max is exclusive — +1 so the bottom/right pill edge is filled
+    // (otherwise small wave pills get a flat cut + purple hairline below).
+    ImGui::PushClipRect(min, ImVec2(max.x + 1.0f, max.y + 1.0f), true);
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
             float const px = (static_cast<float>(col) + 0.5f) * cellW;
             float const py = (static_cast<float>(row) + 0.5f) * cellH;
             float const wave =
@@ -134,7 +156,8 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
             ImU32 const color = EbDesktopMenuSidebarSmokeMath::colorFromWave(wave);
             ImVec2 const cellMin(min.x + static_cast<float>(col) * cellW,
                                  min.y + static_cast<float>(row) * cellH);
-            ImVec2 const cellMax(cellMin.x + cellW + 0.5f, cellMin.y + cellH + 0.5f);
+            // Slight overlap hides seams; outer clip + remask keep the pill edge clean.
+            ImVec2 const cellMax(cellMin.x + cellW + 0.75f, cellMin.y + cellH + 0.75f);
             drawList->AddRectFilled(cellMin, cellMax, color);
         }
     }

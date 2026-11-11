@@ -5,6 +5,7 @@
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_combo_box.hpp"
+#include "widgets/eb_dropdown.hpp"
 #include "widgets/eb_section_card.hpp"
 #include "widgets/eb_slider.hpp"
 
@@ -161,12 +162,10 @@ public:
             EbCheckbox::draw("smoke-disabled", "Checkbox disabled", &s_smokeDisabled, false);
 
             ImGui::Dummy(ImVec2(0.0f, 8.0f));
-            // Button smoke — wave pill + row chrome + real eb-action.
-            EbButton::draw("smoke-primary", "Primary", true, EbButton::Style::Primary);
+            // Button smoke — full-width row chrome only (+ real eb-action).
+            EbButton::draw("smoke-row", "Row button");
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            EbButton::draw("smoke-row", "Row button", true, EbButton::Style::Row);
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            EbButton::drawAction("cycle-assist-mode", "Mode", EbButton::Style::Primary);
+            EbButton::drawAction("cycle-assist-mode", "Mode");
 
             ImGui::Dummy(ImVec2(0.0f, 10.0f));
             // Slider smoke — wave fill + white knob; int setting + float local + px.
@@ -183,6 +182,21 @@ public:
                 EbComboBox::drawSetting("assist-mode", "Assist Mode", modeOpts, 4);
                 char const* unitOpts[] = {"Ticks", "Frames"};
                 EbComboBox::drawSetting("window-unit", "Window Unit", unitOpts, 2);
+            }
+
+            ImGui::Dummy(ImVec2(0.0f, 12.0f));
+            // AP12 dropdown smoke — full-width field + longer scrollable list.
+            {
+                char const* objectiveOpts[] = {"survive_then_endx_v1", "planner_mirror_v1",
+                                               "horizon_clear_v1"};
+                char const* objectiveLabels[] = {"Survive then EndX", "Planner Mirror",
+                                                 "Horizon Clear"};
+                EbDropdown::drawSetting("dev-objective", "Dev Objective", objectiveOpts, 3,
+                                        objectiveLabels);
+                static int s_smokeDrop = 2;
+                char const* longOpts[] = {"Alpha",  "Bravo", "Charlie", "Delta", "Echo",
+                                          "Foxtrot", "Golf",  "Hotel",   "India", "Juliet"};
+                EbDropdown::draw("smoke-long-drop", "Long List", longOpts, 10, &s_smokeDrop);
             }
         }
         EbSectionCard::end();
