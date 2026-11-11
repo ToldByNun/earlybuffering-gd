@@ -444,9 +444,13 @@ Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` / `playerD
 Death to an owned ghost as the killer object is swallowed. Real-player deaths are swallowed while
 `m_simulating` (anticheat on real players still passes). During sim, `collisionCheckObjects` runs
 only for the shadow (filter via a **persistent** scratch `gd::vector`, never a stack temporary — iOS ABI).
-Live collision lists strip owned ghosts. `SimSessionGuard` RAII always `restoreCapture` + clears
-`m_simulating` / `m_applyingRing` and parks owned ghosts (shadow + eval off-level; snapshots scrub+hide)
-after each plan/bake/traj session so live `playerTouchedRing` never sees half-restored claim flags.
+Live collision lists strip owned ghosts. Ghost `collidedWithObjectInternal` clears `m_isDead`; sim
+sessions clear `m_hitboxesOnDeath` and hide debug draw. After a swallowed ghost death,
+`suppressDeathHitboxes` + `postUpdate` (Last) keeps `m_debugDrawNode` hidden while real P1 is alive
+(Mega Hack / OpenHack can latch hitboxes on any `destroyPlayer` call). `SimSessionGuard` RAII always
+`restoreCapture` + clears `m_simulating` / `m_applyingRing` and parks owned ghosts (shadow + eval
+off-level; snapshots scrub+hide) after each plan/bake/traj session so live `playerTouchedRing`
+never sees half-restored claim flags.
 Ring restore uses `typeinfo_cast<RingObject*>`; `m_activatedObjectIDs` is always restored.
 Ghost `update` is no-op unless actively stepping. Before `resetLevel` / checkpoint load:
 `evacuateGhosts` pulls all owned ghosts out of section vectors (avoids `sortSectionVector` AV)

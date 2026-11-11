@@ -60,14 +60,38 @@ auto EbPlayerObject::ringJump(RingObject* ring, bool skipCheck) -> void {
     PlayerObject::ringJump(ring, skipCheck);
 }
 
+auto EbPlayerObject::collidedWithObjectInternal(float deltaTime, GameObject* object,
+                                                  cocos2d::CCRect rect, bool skipCheck) -> bool {
+    auto& sim = EbShadowSimulator::get();
+    if (!sim.isOwnedGhost(this))
+        return PlayerObject::collidedWithObjectInternal(deltaTime, object, rect, skipCheck);
+
+    bool const result =
+        PlayerObject::collidedWithObjectInternal(deltaTime, object, rect, skipCheck);
+    // Vanilla may latch m_isDead and call destroyPlayer inside Parent. Keep the
+    // ghost "alive" for menus; simulator.m_dead holds sim truth (markDead from
+    // destroyPlayer swallow, or here if destroyPlayer never ran).
+    if (this->m_isDead) {
+        if (sim.isSimulating())
+            sim.markDead(this, object);
+        else
+            sim.noteGhostDeathHitboxSuppress();
+        this->m_isDead = false;
+    }
+    return result;
+}
+
 auto EbPlayerObject::playerDestroyed(bool noEffects) -> void {
     // Ghosts must never run the vanilla destroyed path (death FX / fail state).
     if (EbShadowSimulator::get().isOwnedGhost(this)) {
         this->m_isDead = false;
         return;
     }
-    if (EbGameHookSimulationGuard::simulating())
+    if (EbGameHookSimulationGuard::simulating()) {
+        // Do not leave the real icon latched dead mid-sim (QOL keys off P1).
+        this->m_isDead = false;
         return;
+    }
     PlayerObject::playerDestroyed(noEffects);
 }
 

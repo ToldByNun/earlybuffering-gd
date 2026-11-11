@@ -23,6 +23,7 @@ auto EbPlayLayer::resetLevel() -> void {
     EbLagProbe::get().beginEpisode("resetLevel", fmt::format("attemptTickWas={} practice={}",
                                                            EbAssistController::get().attemptTick(),
                                                            this->m_isPracticeMode));
+    EbShadowSimulator::get().clearDeathHitboxSuppress();
     EbClassManager::get().beforeLevelReset(this);
     {
         EbLagProbe::Scope const state("vanilla.PlayLayer::resetLevel");
@@ -47,13 +48,18 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
     if (sim.isOwnedGhost(player)) {
         if (sim.isSimulating()) {
             sim.markDead(player, object);
+        } else {
+            sim.noteGhostDeathHitboxSuppress();
         }
         // Even if not simulating (stale collide): never look "dead" to menus.
         if (player)
             player->m_isDead = false;
-        // Do not call PlayLayer::destroyPlayer — other mods' death hooks (hitbox
-        // overlays) must not observe shadow deaths. Priority::First helps us
-        // run before those hooks when they also modify this function.
+        // Real icons must stay "alive" for MH Hitboxes::destroyPlayer which
+        // checks m_player1->m_isDead after Parent returns (when MH runs first).
+        sim.clearContaminatedRealDeathFlags(this);
+        // Do not call PlayLayer::destroyPlayer — Geode hooks after us never run.
+        // Standalone MH trampolines that wrap the whole chain still get a call;
+        // suppressDeathHitboxes + postUpdate Last hides their false latch.
         return;
     }
 
@@ -80,6 +86,9 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
         return;
     }
 
+    // Real death — allow hitbox-on-death menus again.
+    sim.clearDeathHitboxSuppress();
+
     if (object != m_anticheatSpike) {
         auto const mode = player ? EbStageConfig::kindName(EbStageConfig::kindOf(player)) : "?";
         EbLagProbe::get().beginEpisode(
@@ -97,6 +106,22 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
         return;
     }
     PlayLayer::destroyPlayer(player, object);
+}
+
+auto EbPlayLayer::postUpdate(float deltaTime) -> void {
+    PlayLayer::postUpdate(deltaTime);
+    auto& sim = EbShadowSimulator::get();
+    // Mega Hack / OpenHack: Hitboxes::destroyPlayer may latch s_isDead on any
+    // destroyPlayer call (including ghosts), then postUpdate re-shows
+    // m_debugDrawNode while the real icon is still alive. Undo that.
+    if (!sim.suppressDeathHitboxes())
+        return;
+    if (!this->m_player1 || this->m_player1->m_isDead)
+        return;
+    if (this->m_isDebugDrawEnabled && this->m_isPracticeMode)
+        return;
+    if (this->m_debugDrawNode)
+        this->m_debugDrawNode->setVisible(false);
 }
 
 auto EbPlayLayer::playEndAnimationToPos(cocos2d::CCPoint position) -> void {

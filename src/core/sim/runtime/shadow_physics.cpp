@@ -14,8 +14,10 @@ void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* playe
     // Sim death is tracked on the simulator — never leave the ghost's m_isDead
     // latched. Mega Hack / QOL "hitboxes on death" poll PlayerObject::m_isDead
     // (or latch on destroyPlayer); a dead-looking shadow would flash overlays.
-    if (player && simulator.isOwnedGhost(player))
+    if (player && simulator.isOwnedGhost(player)) {
         player->m_isDead = false;
+        simulator.noteGhostDeathHitboxSuppress();
+    }
 }
 
 void EbShadowPhysics::noteJump(EbShadowSimulator& simulator) {

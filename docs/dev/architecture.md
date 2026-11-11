@@ -52,3 +52,4 @@ Markers other mods can use to ignore them:
 - Runtime: `EbShadowSimulator::isOwnedGhost(player)`
 
 Sim death is `simulator.m_dead` — ghosts must not stay `m_isDead` (breaks Mega Hack / QOL “hitboxes on death”).
+Mega Hack / OpenHack may latch an internal `s_isDead` on **any** `destroyPlayer` (even swallowed); EarlyBuffer sets `suppressDeathHitboxes` and force-hides `m_debugDrawNode` in `postUpdate` while real P1 is alive.

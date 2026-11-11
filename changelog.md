@@ -25,8 +25,10 @@
 
 ### Shadow ghosts vs hitbox-on-death menus
 - Owned ghosts no longer leave `m_isDead` latched after sim collisions; death stays on `simulator.m_dead` only.
-- `PlayLayer::destroyPlayer` / `PlayerObject::playerDestroyed` keep Priority-first swallow so Mega Hack / QOL death-hitbox hooks do not observe shadow deaths.
-- Ghosts tagged with user-object `audesign.earlybuffer/sim-ghost` (+ node ids `earlybuffer-shadow-*`) for cooperative ignore.
+- `PlayLayer::destroyPlayer` uses `Priority::Stub` swallow; `collidedWithObjectInternal` clears ghost deaths too.
+- Sim sessions force `m_hitboxesOnDeath=false` and hide `m_debugDrawNode`; restore after. Real P1/P2 death flags restored if sim contaminated them.
+- After a ghost death swallow, `postUpdate` (Last) keeps `m_debugDrawNode` hidden while the real icon is alive — undoes Mega Hack / OpenHack `s_isDead` latches that fire on any `destroyPlayer` call.
+- Suppress clears on real death / `resetLevel`. Ghosts tagged `audesign.earlybuffer/sim-ghost` (+ node ids) for cooperative ignore.
 
 ## v1.5.0
 

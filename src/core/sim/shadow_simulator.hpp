@@ -74,6 +74,26 @@ public:
     }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* player) const;
+    // Mega Hack / OpenHack "hitboxes on death" may latch on any destroyPlayer
+    // (even after we swallow). While set, force-hide debug draw if P1 is alive.
+    bool suppressDeathHitboxes() const {
+        return m_suppressDeathHitboxes;
+    }
+    void noteGhostDeathHitboxSuppress() {
+        m_suppressDeathHitboxes = true;
+    }
+    void clearDeathHitboxSuppress() {
+        m_suppressDeathHitboxes = false;
+    }
+    // While simulating, keep real icons looking alive unless they were already dead.
+    void clearContaminatedRealDeathFlags(PlayLayer* layer) {
+        if (!layer || !m_simulating)
+            return;
+        if (layer->m_player1 && !m_savedP1Dead)
+            layer->m_player1->m_isDead = false;
+        if (layer->m_player2 && !m_savedP2Dead)
+            layer->m_player2->m_isDead = false;
+    }
     PlayerObject* shadow() const {
         return m_shadow;
     }
@@ -541,6 +561,12 @@ private:
     bool m_applyingRing = false;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;
+    // Set when a ghost destroyPlayer was swallowed; cleared on real death / reset.
+    bool m_suppressDeathHitboxes = false;
+    // Restored in endSession so sim never leaves vanilla death-hitbox mode stuck.
+    bool m_savedHitboxesOnDeath = false;
+    bool m_savedP1Dead = false;
+    bool m_savedP2Dead = false;
     bool m_dead = false;
     bool m_jumped = false;
     bool m_unknown = false;
