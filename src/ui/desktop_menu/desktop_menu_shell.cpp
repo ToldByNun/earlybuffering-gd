@@ -5,6 +5,7 @@
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_section_card.hpp"
+#include "widgets/eb_slider.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -148,12 +149,20 @@ public:
             EbCheckbox::draw("smoke-disabled", "Checkbox disabled", &s_smokeDisabled, false);
 
             ImGui::Dummy(ImVec2(0.0f, 8.0f));
-            // AP9 button smoke — wave pill + row chrome + real eb-action.
+            // Button smoke — wave pill + row chrome + real eb-action.
             EbButton::draw("smoke-primary", "Primary", true, EbButton::Style::Primary);
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
             EbButton::draw("smoke-row", "Row button", true, EbButton::Style::Row);
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
             EbButton::drawAction("cycle-assist-mode", "Mode", EbButton::Style::Primary);
+
+            ImGui::Dummy(ImVec2(0.0f, 10.0f));
+            // AP10 slider smoke — wave fill + white knob; int setting + float local + px.
+            EbSlider::drawIntSetting("ticks-all", "Window (Default)", 0, 48);
+            static float s_smokeFloat = 5.0f;
+            EbSlider::drawFloat("smoke-float", "Slider 1", &s_smokeFloat, 0.0f, 10.0f, 1, "F");
+            static int s_smokePx = 12;
+            EbSlider::drawInt("smoke-px", "Slider px", &s_smokePx, 0, 64, "px");
         }
         EbSectionCard::end();
 
