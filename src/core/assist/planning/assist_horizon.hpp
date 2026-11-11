@@ -23,6 +23,11 @@ public:
     static Caps resolve(GameModeKind mode, bool trustOk, int limit, float capMul,
                         int settingsCap = 0, int lookAheadSetting = 0);
 
+    // Continuous Live IW look-ahead (AP3a): max(local steering window,
+    // short AssistHorizon planCap). Wave short planCap is ≥32. Does not add
+    // kPostCapProveTicks — callers append that when requireAlive.
+    static int continuousInputWindowCap(GameModeKind mode, int limit, float capMul = 1.f);
+
     // Min survive ticks before an alive cand counts as Delay-success under trust-long.
     // Short trust keeps today's low bar (bin0 can still clear via threat).
     static int minSurviveTicksForSuccess(int scoreHorizon, bool trustOk);

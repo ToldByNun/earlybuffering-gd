@@ -8,6 +8,7 @@
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
+#include "../../../../assist/planning/assist_horizon.hpp"
 #include "../../../prefix_sim.hpp"
 #include "../../../sim_session_guard.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -135,7 +136,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
     if (inputWindow && EbStageConfig::paramsFor(real).cap == 0 && EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {
-            model.cap = std::max(1, limit);
+            // AP3a: same Wave/ship floor as classic continuous IW.
+            model.cap = EbAssistHorizon::continuousInputWindowCap(
+                EbStageConfig::kindOf(real), limit, options.capMul);
         } else {
             model.cap = std::min(model.cap, std::max(1, 96 - limit));
         }

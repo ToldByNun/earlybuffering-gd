@@ -3,9 +3,10 @@
 
 #include <string>
 
-// 1.5.1 AP0/AP1 — pure Live plan contracts (no PlayLayer).
-// Hitch / remUs / peak-death tables are wired (AP1). Landed-rank + orb-under-IW
-// stay current-vs-intended until AP2–AP3. selfCheck locks both tables.
+// 1.5.1 AP0/AP1/AP3a — pure Live plan contracts (no PlayLayer).
+// Hitch / remUs / peak-death / Wave horizon floor are wired. Landed-rank +
+// orb-under-IW + Wave help-only stay current-vs-intended until AP2/AP3b.
+// selfCheck locks both tables.
 class EbLivePlanContracts {
 public:
     // Soft wall hitch ceiling when user sets sim-budget-us=0 (µs).
@@ -14,6 +15,8 @@ public:
     static constexpr int kFallthroughRemUsFloor = 2000;
     // Matches EbShadowSimulator::kFutileEndXGain — landed noise / tie band.
     static constexpr float kLandedScoreEps = 8.f;
+    // Continuous IW Wave short planCap floor (matches AssistHorizon::shortCaps).
+    static constexpr int kWaveHorizonFloor = 32;
 
     // --- Soft wall / hitch -------------------------------------------------
 
@@ -46,6 +49,15 @@ public:
                                     bool diedAfterAction);
     // Contract: leftovers must be Skipped (peak-death-cut), never fake-dead clones.
     static bool peakDeathMarksSkippedNotDead();
+
+    // --- Continuous IW horizon (Wave / ship / swing) -----------------------
+
+    // Current Live IW overwrite: cap = continuousLookAhead(limit) only (=limit).
+    static int currentContinuousIwCap(int continuousLookAhead);
+    // AssistHorizon Wave short planCap base (before mul/lookAhead clamp).
+    static int waveShortPlanCap(int limit);
+    // Intended AP3a: max(local look-ahead, short AssistHorizon planCap).
+    static int intendedContinuousIwCap(int continuousLookAhead, int shortAssistHorizonPlanCap);
 
     // --- Orbs under input-window -------------------------------------------
 

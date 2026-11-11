@@ -42,8 +42,10 @@ Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` 
 | Soft wall `simUs=0` | **AP1:** classic + Adaptive → 8ms hitch ceiling |
 | Fallthrough remUs | **AP1:** floor 2000µs when ticks remain |
 | Peak-death stop | **AP1:** `skip=peak-death-cut` only (no fake-dead) |
-| Landed rank | Later only if score gain >8px → **AP2:** Eval-aligned any improve; tie → earlier |
+| Wave continuous IW cap | **AP3a:** `max(lookAhead, short AssistHorizon)`; Wave ≥32 |
+| Landed rank | Later only if score gain >8px → **AP2 (skipped for now):** Eval-aligned |
 | Orbs under IW | `scanOrbWindow` skipped → **AP3:** spatial hint + budget-capped scan; DelayOrb handoff |
+| Wave help-only / prox | **AP3b:** d0 Alive → Pass; proximity/futile on IW |
 
 Live press always takes input-window (`requireAliveForDelay`) — G1 AssistPick orb band is bypassed until AP3.
 

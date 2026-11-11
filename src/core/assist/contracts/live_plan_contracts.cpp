@@ -1,4 +1,5 @@
 #include "live_plan_contracts.hpp"
+#include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
@@ -63,6 +64,22 @@ bool EbLivePlanContracts::peakDeathMarksSkippedNotDead() {
     return true;
 }
 
+int EbLivePlanContracts::currentContinuousIwCap(int continuousLookAhead) {
+    return continuousLookAhead > 0 ? continuousLookAhead : 1;
+}
+
+int EbLivePlanContracts::waveShortPlanCap(int limit) {
+    int const x = limit > 0 ? limit : 1;
+    return std::max(kWaveHorizonFloor, x + 16);
+}
+
+int EbLivePlanContracts::intendedContinuousIwCap(int continuousLookAhead,
+                                                 int shortAssistHorizonPlanCap) {
+    int const look = continuousLookAhead > 0 ? continuousLookAhead : 1;
+    int const plan = shortAssistHorizonPlanCap > 0 ? shortAssistHorizonPlanCap : 1;
+    return std::max(look, plan);
+}
+
 bool EbLivePlanContracts::currentOrbWindowScanRuns(bool assistOrbs, bool inputWindow) {
     return assistOrbs && !inputWindow;
 }
@@ -122,6 +139,13 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(!peakDeathShouldStop(true, false, false, true), "peak-need-survivor");
     expect(!peakDeathShouldStop(false, false, true, true), "peak-need-iw");
     expect(peakDeathMarksSkippedNotDead(), "peak-skip-not-dead");
+
+    expect(kWaveHorizonFloor == 32, "wave-horizon-floor");
+    expect(waveShortPlanCap(8) == std::max(32, 8 + 16), "wave-short-plan");
+    expect(waveShortPlanCap(20) == 36, "wave-short-plan-grow");
+    expect(currentContinuousIwCap(12) == 12, "cur-iw-cap-limit");
+    expect(intendedContinuousIwCap(12, waveShortPlanCap(12)) == 32, "int-iw-cap-floor");
+    expect(intendedContinuousIwCap(40, waveShortPlanCap(24)) == 40, "int-iw-cap-look-wins");
 
     expect(currentOrbWindowScanRuns(true, false), "orb-scan-classic");
     expect(!currentOrbWindowScanRuns(true, true), "orb-scan-iw-skipped-today");

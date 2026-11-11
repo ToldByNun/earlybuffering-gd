@@ -21,7 +21,7 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 `src/debug/plan_gold_corpus.cpp` — synthetic planner gold cases. Extend when Pass/Delay contracts change.
 
-1.5.1 AP0/AP1: `live-plan-contracts` + `live-hitch-ceiling` (`EbLivePlanContracts`) — hitch ceiling / remUs floor wired; landed ranking + orb-under-IW still current vs intended until AP2–AP3.
+1.5.1 AP0/AP1/AP3a: `live-plan-contracts` + `live-hitch-ceiling` + `wave-horizon-floor` — hitch / remUs / Wave IW ≥32 wired; landed ranking + orb-under-IW + Wave help-only still current vs intended until AP2/AP3b.
 
 ## Adaptive smoke
 
@@ -38,3 +38,12 @@ npm run docs:build
 ## Wave regression
 
 Required when changing or refactoring input planning (`AGENTS.md`).
+
+```bash
+g++ -std=c++23 tools/test_wave_input_window.cpp \
+  src/core/assist/contracts/miss_assist_contracts.cpp \
+  src/core/assist/contracts/assist_verdict.cpp \
+  -o build/test_wave_input_window.exe
+```
+
+AP3a uses horizon `limit + max(lookAhead, Wave short planCap≥32) + proveTicks`. Recorded rows 88/114 expect Pass under the floor; legacy short-horizon dual assert still locks earliest-safe d=2/d=4.

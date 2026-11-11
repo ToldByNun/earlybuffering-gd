@@ -5,8 +5,8 @@
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../assist/contracts/assist_verdict.hpp"
-#include "../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
+#include "../shadow_survival_rules.hpp"
 #include "../../../assist/planning/opportunity_probe.hpp"
 #include "../../shadow_simulator.hpp"
 #include "../../sim_session_guard.hpp"
@@ -84,13 +84,17 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         context.options.requireAliveForDelay && (context.down || continuousControl);
     context.model.stopAtBallLanding = context.inputWindow && context.real->m_isBall &&
                                       !context.useTrajEngine && !context.linkedDual();
-    // Continuous steering is local to the input window: a single held direction
-    // cannot cover the later turns of a corridor. Discrete modes retain the
-    // existing 96-tick maximum. Explicit horizon settings take precedence.
+    // Continuous IW: max(local look-ahead, short AssistHorizon planCap) so Wave
+    // keeps ≥32 ticks (AP3a) instead of bare limit. Discrete retain 96-tick max.
+    // Explicit mode/look-ahead settings take precedence. Prove ticks follow.
     if (context.inputWindow && EbStageConfig::paramsFor(context.real).cap == 0 &&
         EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {
-            context.model.cap = EbMissAssistContracts::continuousLookAhead(context.limit);
+            auto const kind = EbStageConfig::kindOf(context.real);
+            context.model.cap = EbAssistHorizon::continuousInputWindowCap(
+                kind, context.limit, context.options.capMul);
+            if (context.options.requireAliveForDelay && context.model.cap > 0)
+                context.model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
         } else {
             context.model.cap = std::min(context.model.cap, std::max(1, 96 - context.limit));
         }

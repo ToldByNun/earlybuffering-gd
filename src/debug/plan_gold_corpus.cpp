@@ -179,6 +179,12 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
                EbLivePlanContracts::kFallthroughRemUsFloor,
            "live-hitch-ceiling-remus");
+    // 1.5.1 AP3a: Wave continuous IW floor (≥32), not bare Max Assist limit.
+    expect(EbLivePlanContracts::kWaveHorizonFloor == 32 &&
+               EbLivePlanContracts::intendedContinuousIwCap(
+                   12, EbLivePlanContracts::waveShortPlanCap(12)) == 32 &&
+               EbAssistHorizon::continuousInputWindowCap(GameModeKind::Wave, 12, 1.f) == 32,
+           "wave-horizon-floor");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;

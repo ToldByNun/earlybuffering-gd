@@ -2,6 +2,11 @@
 
 ## v1.5.1-dev
 
+### AP3a — Wave horizon floor
+- Continuous Live IW / Adaptive no longer overwrite look-ahead with bare Max Assist limit.
+- Cap = `max(continuousLookAhead, short AssistHorizon planCap)`; Wave short floor **32** ticks (`EbLivePlanContracts::kWaveHorizonFloor`).
+- `kPostCapProveTicks` still appended after the floor. PlanGold: `wave-horizon-floor`. Wave regression retargeted + legacy short-horizon dual assert.
+
 ### AP1 — Hitch (small levels)
 - Live `sim-budget-us=0` → **8000µs** hitch ceiling for classic **and** Adaptive (`EbLivePlanContracts::intendedLiveBudgetUs`).
 - Adaptive→classic fallthrough uses remUs floor **2000µs** when the wall is spent but ticks remain (was `budgetUs=1`).
