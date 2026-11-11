@@ -52,21 +52,31 @@ void EbDesktopMenu::install() {
                 return;
             }
             EbDesktopMenuShell::draw();
+            if (!EbDesktopMenuShell::shouldKeepVisible()) {
+                ImGuiCocos::get().setVisible(false);
+            }
         });
     // Closed until keybind / pause hub opens it.
     ImGuiCocos::get().setVisible(false);
+    EbDesktopMenuShell::requestOpen(false);
 }
 
 bool EbDesktopMenu::isOpen() {
-    return ImGuiCocos::get().isVisible();
+    return EbDesktopMenuShell::wantsOpen() || EbDesktopMenuShell::shouldKeepVisible();
 }
 
 void EbDesktopMenu::setOpen(bool open) {
-    ImGuiCocos::get().setVisible(open);
+    if (open) {
+        ImGuiCocos::get().setVisible(true);
+    }
+    EbDesktopMenuShell::requestOpen(open);
+    if (!open && !EbDesktopMenuShell::shouldKeepVisible()) {
+        ImGuiCocos::get().setVisible(false);
+    }
 }
 
 void EbDesktopMenu::toggle() {
-    ImGuiCocos::get().toggle();
+    setOpen(!EbDesktopMenuShell::wantsOpen());
 }
 
 #else

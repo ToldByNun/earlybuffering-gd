@@ -11,6 +11,11 @@ public:
     static SettingsCategory activeCategory();
     static void setActiveCategory(SettingsCategory category);
 
+    // Open/close animation — keep ImGui visible until the close ease finishes.
+    static void requestOpen(bool open);
+    static bool wantsOpen();
+    static bool shouldKeepVisible();
+
     // Cocos mouse-wheel delta while the menu is open (content host consumes it).
     static void addWheelDelta(float deltaY);
     static float takeWheelDelta();

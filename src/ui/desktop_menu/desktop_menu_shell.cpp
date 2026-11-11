@@ -15,6 +15,8 @@
 
 #include <Geode/Geode.hpp>
 #include <imgui.h>
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -30,6 +32,34 @@ public:
         return delta;
     }
 
+    static bool& wantOpen() {
+        static bool value = false;
+        return value;
+    }
+
+    // Displayed open amount (0..1). Exponentially approaches wantOpen — reversing
+    // mid-animation stays continuous (no ease hitch / pos snap).
+    static float& openVisual() {
+        static float value = 0.0f;
+        return value;
+    }
+
+    // 1 = settled tab content. Dips on switch, eases back — interrupt-safe.
+    static float& tabVisual() {
+        static float value = 1.0f;
+        return value;
+    }
+
+    static int& tabDir() {
+        static int value = 1;
+        return value;
+    }
+
+    static bool& tabResetScroll() {
+        static bool value = false;
+        return value;
+    }
+
     static constexpr float kSidebarWidth = 196.0f;
     static constexpr float kMenuWidth = 900.0f;
     static constexpr float kMenuHeight = 560.0f;
@@ -37,8 +67,86 @@ public:
     static constexpr float kContentPadX = 28.0f;
     static constexpr float kContentPadY = 24.0f;
 
+    static constexpr float kOpenTau = 0.11f;   // ~settle in ~0.35s
+    static constexpr float kCloseTau = 0.09f;  // ~settle in ~0.28s
+    static constexpr float kTabTau = 0.10f;    // ~settle in ~0.30s
+    static constexpr float kOpenSlidePx = 14.0f;
+    static constexpr float kTabSlidePx = 16.0f;
+    static constexpr float kTabDip = 0.62f; // don't hard-reset to 0 on re-click
+
 private:
     EbDesktopMenuShellState() = delete;
+};
+
+class EbDesktopMenuShellAnim {
+public:
+    static float clampf(float value, float lo, float hi) {
+        if (value < lo) {
+            return lo;
+        }
+        if (value > hi) {
+            return hi;
+        }
+        return value;
+    }
+
+    static float approach(float current, float target, float tau, float deltaTime) {
+        if (tau <= 0.0001f) {
+            return target;
+        }
+        float const dt = clampf(deltaTime, 0.0f, 1.0f / 20.0f);
+        float const blend = 1.0f - std::exp(-dt / tau);
+        float const next = current + (target - current) * blend;
+        if (std::fabs(target - next) < 0.0008f) {
+            return target;
+        }
+        return next;
+    }
+
+    static void updateOpen(float deltaTime) {
+        float const target = EbDesktopMenuShellState::wantOpen() ? 1.0f : 0.0f;
+        float const tau = EbDesktopMenuShellState::wantOpen() ? EbDesktopMenuShellState::kOpenTau
+                                                             : EbDesktopMenuShellState::kCloseTau;
+        float& visual = EbDesktopMenuShellState::openVisual();
+        visual = approach(visual, target, tau, deltaTime);
+        // Exponential ease never quite hits 0 — without a finish snap the shell
+        // lingered nearly-invisible for a beat before ImGui finally hid.
+        if (!EbDesktopMenuShellState::wantOpen() && visual < 0.04f) {
+            visual = 0.0f;
+        }
+        if (EbDesktopMenuShellState::wantOpen() && visual > 0.985f) {
+            visual = 1.0f;
+        }
+    }
+
+    static void updateTab(float deltaTime) {
+        EbDesktopMenuShellState::tabVisual() =
+            approach(EbDesktopMenuShellState::tabVisual(), 1.0f, EbDesktopMenuShellState::kTabTau,
+                     deltaTime);
+    }
+
+    static void beginTabSwitch(SettingsCategory next) {
+        SettingsCategory const prev = EbDesktopMenuShellState::active();
+        if (next == prev || next == SettingsCategory::Count) {
+            return;
+        }
+        int const from = static_cast<int>(prev);
+        int const to = static_cast<int>(next);
+        EbDesktopMenuShellState::tabDir() = to >= from ? 1 : -1;
+        // Soft dip from wherever we are — no snap back to a full slide.
+        float& tab = EbDesktopMenuShellState::tabVisual();
+        if (tab > EbDesktopMenuShellState::kTabDip) {
+            tab = EbDesktopMenuShellState::kTabDip;
+        } else {
+            tab = (std::max)(0.35f, tab * 0.85f);
+        }
+        EbDesktopMenuShellState::tabResetScroll() = true;
+        EbDesktopMenuShellState::active() = next;
+        EbDesktopMenuShellState::wheelDelta() = 0.0f;
+    }
+
+private:
+    EbDesktopMenuShellAnim() = delete;
 };
 
 class EbDesktopMenuShellDraw {
@@ -119,7 +227,7 @@ public:
         for (SettingsCategory category : settingsTabs) {
             bool const selected = EbDesktopMenuShellState::active() == category;
             if (navTab(EbInLevelSettingsFilter::categoryName(category), selected, tabWidth)) {
-                EbDesktopMenuShellState::active() = category;
+                EbDesktopMenuShellAnim::beginTabSwitch(category);
             }
         }
 
@@ -128,15 +236,17 @@ public:
             bool const selected = EbDesktopMenuShellState::active() == SettingsCategory::Dev;
             if (navTab(EbInLevelSettingsFilter::categoryName(SettingsCategory::Dev), selected,
                        tabWidth)) {
-                EbDesktopMenuShellState::active() = SettingsCategory::Dev;
+                EbDesktopMenuShellAnim::beginTabSwitch(SettingsCategory::Dev);
             }
         }
 
         ImGui::EndGroup();
     }
 
-    static void drawContentBody(ImVec2 const& origin, float width, float height) {
-        ImGui::SetCursorScreenPos(origin);
+    static void drawContentBody(ImVec2 const& origin, float width, float height, float tabAlpha,
+                                float tabSlideX) {
+        ImGui::SetCursorScreenPos(ImVec2(origin.x + tabSlideX, origin.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * tabAlpha);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             ImVec2(EbDesktopMenuShellState::kContentPadX,
                                    EbDesktopMenuShellState::kContentPadY));
@@ -148,6 +258,11 @@ public:
         ImGui::BeginChild("##eb-shell-tab", ImVec2(width, height),
                           ImGuiChildFlags_AlwaysUseWindowPadding,
                           ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
+
+        if (EbDesktopMenuShellState::tabResetScroll()) {
+            ImGui::SetScrollY(0.0f);
+            EbDesktopMenuShellState::tabResetScroll() = false;
+        }
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         char const* name = EbInLevelSettingsFilter::categoryName(active);
@@ -221,7 +336,7 @@ public:
         ImVec2 const mouse = ImGui::GetIO().MousePos;
         bool const overTab = mouse.x >= origin.x && mouse.x < origin.x + width &&
                              mouse.y >= origin.y && mouse.y < origin.y + height;
-        if (wheel != 0.0f && overTab) {
+        if (wheel != 0.0f && overTab && EbDesktopMenuShellState::tabVisual() >= 0.97f) {
             float const step = ImGui::GetTextLineHeightWithSpacing();
             float next = ImGui::GetScrollY() + wheel * step;
             float const maxY = ImGui::GetScrollMaxY();
@@ -235,17 +350,31 @@ public:
         }
 
         ImGui::EndChild();
-        ImGui::PopStyleVar(3);
+        ImGui::PopStyleVar(4);
     }
 
     static void frame() {
+        float const deltaTime = (std::max)(0.0f, ImGui::GetIO().DeltaTime);
+        EbDesktopMenuShellAnim::updateOpen(deltaTime);
+        EbDesktopMenuShellAnim::updateTab(deltaTime);
+
+        float const openE = EbDesktopMenuShellState::openVisual();
+        if (openE <= 0.001f && !EbDesktopMenuShellState::wantOpen()) {
+            return;
+        }
+
         ImGuiIO const& io = ImGui::GetIO();
+        ImVec2 const center(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+        float const slideY = (1.0f - openE) * EbDesktopMenuShellState::kOpenSlidePx;
+
         ImGui::SetNextWindowSize(
             ImVec2(EbDesktopMenuShellState::kMenuWidth, EbDesktopMenuShellState::kMenuHeight),
-            ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
-                                ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+            ImGuiCond_Always);
+        // Always anchored — avoids Appearing/Always flips that jumped on spam-toggle.
+        ImGui::SetNextWindowPos(ImVec2(center.x, center.y + slideY), ImGuiCond_Always,
+                                ImVec2(0.5f, 0.5f));
 
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, openE);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -253,11 +382,16 @@ public:
 
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
                                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground |
-                                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+                                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+                                 ImGuiWindowFlags_NoMove;
+        // Block input until mostly open / while closing.
+        if (openE < 0.98f || !EbDesktopMenuShellState::wantOpen()) {
+            flags |= ImGuiWindowFlags_NoInputs;
+        }
         if (!ImGui::Begin("##eb-desktop-shell", nullptr, flags)) {
             ImGui::End();
             ImGui::PopStyleColor();
-            ImGui::PopStyleVar(3);
+            ImGui::PopStyleVar(4);
             return;
         }
 
@@ -278,11 +412,19 @@ public:
                                                ImDrawFlags_RoundCornersLeft);
 
         drawSidebarNav(sideMin, sideW);
-        drawContentBody(ImVec2(winPos.x + sideW, winPos.y), winSize.x - sideW, winSize.y);
+
+        float const tabE = EbDesktopMenuShellState::tabVisual();
+        float const tabSlide =
+            (1.0f - tabE) * static_cast<float>(EbDesktopMenuShellState::tabDir()) *
+            EbDesktopMenuShellState::kTabSlidePx;
+        // Soft fade — stays readable on interrupt (dip floors around kTabDip).
+        float const tabAlpha = 0.55f + 0.45f * tabE;
+        drawContentBody(ImVec2(winPos.x + sideW, winPos.y), winSize.x - sideW, winSize.y, tabAlpha,
+                        tabSlide);
 
         ImGui::End();
         ImGui::PopStyleColor();
-        ImGui::PopStyleVar(3);
+        ImGui::PopStyleVar(4);
     }
 
 private:
@@ -294,10 +436,19 @@ SettingsCategory EbDesktopMenuShell::activeCategory() {
 }
 
 void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
-    if (category == SettingsCategory::Count) {
-        return;
-    }
-    EbDesktopMenuShellState::active() = category;
+    EbDesktopMenuShellAnim::beginTabSwitch(category);
+}
+
+void EbDesktopMenuShell::requestOpen(bool open) {
+    EbDesktopMenuShellState::wantOpen() = open;
+}
+
+bool EbDesktopMenuShell::wantsOpen() {
+    return EbDesktopMenuShellState::wantOpen();
+}
+
+bool EbDesktopMenuShell::shouldKeepVisible() {
+    return EbDesktopMenuShellState::wantOpen() || EbDesktopMenuShellState::openVisual() > 0.001f;
 }
 
 void EbDesktopMenuShell::addWheelDelta(float deltaY) {
@@ -322,6 +473,16 @@ SettingsCategory EbDesktopMenuShell::activeCategory() {
 
 void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
     (void)category;
+}
+
+void EbDesktopMenuShell::requestOpen(bool) {}
+
+bool EbDesktopMenuShell::wantsOpen() {
+    return false;
+}
+
+bool EbDesktopMenuShell::shouldKeepVisible() {
+    return false;
 }
 
 void EbDesktopMenuShell::addWheelDelta(float) {}
