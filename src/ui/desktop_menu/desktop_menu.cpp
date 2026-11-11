@@ -1,4 +1,5 @@
 #include "desktop_menu.hpp"
+#include "desktop_menu_theme.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -21,17 +22,28 @@ bool EbDesktopMenu::useImGuiShell() {
 void EbDesktopMenu::install() {
     ImGuiCocos::get()
         .setup([] {
-            // Theme + fonts land in later APs.
+            EbDesktopMenuTheme::apply();
+            // Fonts land in AP5.
         })
         .draw([] {
             if (!ImGuiCocos::get().isVisible()) {
                 return;
             }
-            // AP1/AP2 stub only — shell / widgets arrive in later APs.
-            ImGui::SetNextWindowSize(ImVec2(320.0f, 160.0f), ImGuiCond_FirstUseEver);
+            // AP3 stub — shell / widgets arrive in later APs.
+            ImGui::SetNextWindowSize(ImVec2(360.0f, 200.0f), ImGuiCond_FirstUseEver);
             if (ImGui::Begin("EarlyBuffer Desktop Menu", nullptr)) {
-                ImGui::TextUnformatted("ImGuiCocos desktop gate OK (AP2 stub)");
-                ImGui::TextUnformatted("Classic fallback: Main → Classic Settings Menu");
+                ImGui::TextUnformatted("Theme tokens applied (AP3)");
+                ImGui::TextColored(EbDesktopMenuTheme::muted(),
+                                   "Classic fallback: Main → Classic Settings Menu");
+                ImGui::Spacing();
+                ImVec2 const btnMin = ImGui::GetCursorScreenPos();
+                float const btnW = ImGui::GetContentRegionAvail().x;
+                float const btnH = ImGui::GetFrameHeight();
+                EbDesktopMenuTheme::drawAccentGlow(
+                    ImGui::GetWindowDrawList(), btnMin, ImVec2(btnMin.x + btnW, btnMin.y + btnH),
+                    EbDesktopMenuTheme::frameRounding(), 0.85f);
+                if (ImGui::Button("Accent sample", ImVec2(-1.0f, 0.0f))) {
+                }
             }
             ImGui::End();
         });
