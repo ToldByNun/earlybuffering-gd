@@ -10,6 +10,8 @@ public:
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayerObject::pushButton", geode::prelude::Priority::First);
         (void)self.setHookPriority("PlayerObject::update", geode::prelude::Priority::First);
+        // Swallow before death-FX / hitbox-on-death menus that hook this.
+        (void)self.setHookPriority("PlayerObject::playerDestroyed", -10000000);
     }
 
     bool pushButton(PlayerButton button);

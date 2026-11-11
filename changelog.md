@@ -23,6 +23,11 @@
 - TW / live-dynamic apply skips `writePose` when the sampled pose matches the last write (hold keys no longer rewrite Cocos every tick).
 - Ghost mute runs once per session / `copyPlayerState`, not 3× inside each physics tick.
 
+### Shadow ghosts vs hitbox-on-death menus
+- Owned ghosts no longer leave `m_isDead` latched after sim collisions; death stays on `simulator.m_dead` only.
+- `PlayLayer::destroyPlayer` / `PlayerObject::playerDestroyed` keep Priority-first swallow so Mega Hack / QOL death-hitbox hooks do not observe shadow deaths.
+- Ghosts tagged with user-object `audesign.earlybuffer/sim-ghost` (+ node ids `earlybuffer-shadow-*`) for cooperative ignore.
+
 ## v1.5.0
 
 **Adaptive Prediction Planner (Live) + assist honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

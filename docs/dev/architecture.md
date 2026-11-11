@@ -40,3 +40,15 @@ From `AGENTS.md`:
 | Settings UI labels | `mod.json` + `StageConfig` |
 | Session JSON / report line | `src/dev/` |
 | Overlay text | `src/ui/overlays/` |
+
+## Ghosts vs other mods
+
+Shadow / snapshot / eval bodies are real `PlayerObject`s on `objectLayer` (needed for collision). They are **not** `m_player1` / `m_player2`.
+
+Markers other mods can use to ignore them:
+
+- Node id prefix: `earlybuffer-shadow-`, `earlybuffer-snapshot-`, `earlybuffer-eval-`
+- User object key: `audesign.earlybuffer/sim-ghost` (CCBool true)
+- Runtime: `EbShadowSimulator::isOwnedGhost(player)`
+
+Sim death is `simulator.m_dead` — ghosts must not stay `m_isDead` (breaks Mega Hack / QOL “hitboxes on death”).

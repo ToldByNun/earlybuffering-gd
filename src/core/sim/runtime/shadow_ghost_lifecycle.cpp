@@ -13,6 +13,10 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
             return nullptr;
         player->setPosition({0.f, 105.f});
         player->setID(id);
+        // Explicit marker for other mods (hitbox overlays, etc.): ignore these
+        // PlayerObjects — they are sim ghosts, not the real icon.
+        player->setUserObject("audesign.earlybuffer/sim-ghost"_spr,
+                              cocos2d::CCBool::create(true));
         // objectLayer owns the node (addChild retain). Do NOT extra-retain —
         // release-on-quit while still parented / double-free in ~PlayerObject
         // during setNextScene was the quit AV (CCObject::release).

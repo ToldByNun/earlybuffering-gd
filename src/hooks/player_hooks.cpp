@@ -62,8 +62,10 @@ auto EbPlayerObject::ringJump(RingObject* ring, bool skipCheck) -> void {
 
 auto EbPlayerObject::playerDestroyed(bool noEffects) -> void {
     // Ghosts must never run the vanilla destroyed path (death FX / fail state).
-    if (EbShadowSimulator::get().isOwnedGhost(this))
+    if (EbShadowSimulator::get().isOwnedGhost(this)) {
+        this->m_isDead = false;
         return;
+    }
     if (EbGameHookSimulationGuard::simulating())
         return;
     PlayerObject::playerDestroyed(noEffects);

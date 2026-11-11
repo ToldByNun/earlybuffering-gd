@@ -11,6 +11,11 @@ void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* playe
         simulator.m_dead = true;
         simulator.m_deathObject = object;
     }
+    // Sim death is tracked on the simulator — never leave the ghost's m_isDead
+    // latched. Mega Hack / QOL "hitboxes on death" poll PlayerObject::m_isDead
+    // (or latch on destroyPlayer); a dead-looking shadow would flash overlays.
+    if (player && simulator.isOwnedGhost(player))
+        player->m_isDead = false;
 }
 
 void EbShadowPhysics::noteJump(EbShadowSimulator& simulator) {
@@ -120,6 +125,10 @@ void EbShadowPhysics::stepPreCollide(EbShadowSimulator& simulator, PlayLayer* la
     // Ghost muted once in copyPlayerState / beginSession — not every collide.
     simulator.clearCollisionLogs(state);
     layer->checkCollisions(state, gdDt, false);
+    // Vanilla may latch m_isDead before destroyPlayer; keep ghosts "alive"
+    // for hitbox-on-death menus while simulator.m_dead holds the truth.
+    if (state && simulator.isOwnedGhost(state) && state->m_isDead)
+        state->m_isDead = false;
 }
 
 void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
@@ -144,6 +153,8 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
         simulator.clearCollisionLogs(state);
         layer->checkCollisions(state, gdColDt, false);
     }
+    if (state && simulator.isOwnedGhost(state) && state->m_isDead)
+        state->m_isDead = false;
     // AP1 measure-only: feed Adaptive BudgetController (does not change search).
     int const us = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() -

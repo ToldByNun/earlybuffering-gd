@@ -48,6 +48,12 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
         if (sim.isSimulating()) {
             sim.markDead(player, object);
         }
+        // Even if not simulating (stale collide): never look "dead" to menus.
+        if (player)
+            player->m_isDead = false;
+        // Do not call PlayLayer::destroyPlayer — other mods' death hooks (hitbox
+        // overlays) must not observe shadow deaths. Priority::First helps us
+        // run before those hooks when they also modify this function.
         return;
     }
 

@@ -9,7 +9,9 @@
 class $modify(EbPlayLayer, PlayLayer) {
 public:
     static void onModify(auto& self) {
-        (void)self.setHookPriority("PlayLayer::destroyPlayer", geode::prelude::Priority::First);
+        // Before Mega Hack / QOL "hitboxes on death" hooks that latch on any
+        // destroyPlayer. First alone can tie; use a strongly-negative priority.
+        (void)self.setHookPriority("PlayLayer::destroyPlayer", -10000000);
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer);
