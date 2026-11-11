@@ -15,13 +15,13 @@ Open **Settings → Assist → Assist Actions → Cloud Configs**, directly belo
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.5.0** |
+| Version | **1.5.1** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`; iOS needs `.ios.dylib`) |
 | License | [MIT](LICENSE) |
 | Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
 
-> **Last 2.2081 line.** **v1.5.0** still targets Geometry Dash **2.2081** only (Adaptive Prediction Planner, Cloud Configs, queued hold / toggle-orb honesty, bake fidelity, iOS signed dylib). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
+> **Last 2.2081 line.** **v1.5.1** still targets Geometry Dash **2.2081** only (Live hitch / Wave IW / orbs-under-IW, Adaptive Prediction Planner, Cloud Configs). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
 
 ## What it does
 
@@ -74,7 +74,7 @@ Hotkeys are configurable (defaults include Ctrl+Shift+M assist mode, Ctrl+Shift+
 
 ## Development status
 
-EarlyBuffer **1.5.0** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
+EarlyBuffer **1.5.1** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
 
 ## Authorship and AI use
 
@@ -93,7 +93,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.5.0** Adaptive Prediction Planner; **v1.4.3** Cloud Configs; **v1.3.2** assist honesty / bake / iOS harden (still GD **2.2081** only).
+- **Changelog:** see [`changelog.md`](changelog.md) — **v1.5.1** Live hitch / Wave / orbs-under-IW; **v1.5.0** Adaptive Prediction Planner; **v1.4.3** Cloud Configs (still GD **2.2081** only).
 
 ## Credits
 
