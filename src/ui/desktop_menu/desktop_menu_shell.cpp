@@ -2,6 +2,7 @@
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
+#include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_section_card.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
@@ -138,11 +139,12 @@ public:
         char sectionId[64];
         std::snprintf(sectionId, sizeof(sectionId), "smoke-%s", name);
         if (EbSectionCard::begin(sectionId, "SECTION")) {
-            EbDesktopMenuFonts::pushUi();
-            ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
-            ImGui::TextWrapped("Section body for \"%s\". Rows bind in later APs.", name);
-            ImGui::PopStyleColor();
-            EbDesktopMenuFonts::pop();
+            // AP8 checkbox smoke (image 2): live bind + disabled dim row.
+            EbCheckbox::drawSetting("enabled", "Enabled");
+            static bool s_smokeLocal = true;
+            EbCheckbox::draw("smoke-local", "Checkbox", &s_smokeLocal);
+            static bool s_smokeDisabled = false;
+            EbCheckbox::draw("smoke-disabled", "Checkbox disabled", &s_smokeDisabled, false);
         }
         EbSectionCard::end();
 
