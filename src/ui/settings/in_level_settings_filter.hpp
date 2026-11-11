@@ -12,15 +12,16 @@ class EbSettingsTabWatchdogState;
 #include <Geode/Geode.hpp>
 #include <string>
 
-// Categories for the Geode ModSettingsPopup chip / segment bar.
-// Ingame folded into Main; Scope is its own page. Count stays 8.
+// Categories for the Geode ModSettingsPopup chip / segment bar + desktop shell.
+// Smart folded into Main; Scope folded into Assist; UI chrome on its own tab.
 enum class SettingsCategory : int {
     Main = 0,
-    Scope,
     Assist,
+    Learn,
     Bake,
     Modes,
     Visual,
+    UI,
     Keys,
     Dev,
     Count

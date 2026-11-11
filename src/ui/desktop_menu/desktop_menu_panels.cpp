@@ -41,21 +41,26 @@ public:
         }
         EbSectionCard::end();
 
-        if (EbSectionCard::begin("main-ui", "UI & Diagnostics")) {
-            EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
-            EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
-            EbCheckbox::drawSetting("show-pause-bake", "Pause Status Lines");
-            EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
-            gap();
-            EbCheckbox::drawSetting("debug-logging", "Debug Logging");
-            EbCheckbox::drawSetting("perf-trace", "Perf Trace");
-            EbCheckbox::drawSetting("lag-probe", "Lag Probe");
+        if (EbSectionCard::begin("main-smart", "Smart Prediction")) {
+            EbSlider::drawIntSetting("smart-depth", "Smart Depth", 1, 3);
+            EbSlider::drawIntSetting("smart-combos", "Smart Combos", 8, 256);
+            EbSlider::drawIntSetting("smart-horizon", "Smart Horizon", 0, 320);
+            EbSlider::drawIntSetting("robust-k", "Robust Window (±k)", 0, 3);
+            EbCheckbox::drawSetting("robust-jitter", "Robust firstDt Jitter");
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("main-adaptive", "Adaptive Prediction")) {
+            EbCheckbox::drawSetting("adaptive-plan", "Adaptive Plan");
+            EbSlider::drawIntSetting("adaptive-screen-ticks", "Screen Ticks", 8, 64);
+            EbSlider::drawIntSetting("adaptive-verify-quantum", "Verify Quantum", 8, 64);
+            EbSlider::drawIntSetting("adaptive-reserve-pct", "Reserve %", 0, 40, "%");
         }
         EbSectionCard::end();
     }
 
-    static void drawScope() {
-        if (EbSectionCard::begin("scope-where", "Where Assist Runs")) {
+    static void drawAssist() {
+        if (EbSectionCard::begin("assist-where", "Where Assist Runs")) {
             EbCheckbox::drawSetting("assist-only-practice", "Only in Practice");
             EbCheckbox::drawSetting("assist-startpos-only", "Only from Start Pos / Test");
             EbSlider::drawIntSetting("assist-percent-min", "Percent Min", 0, 100, "%");
@@ -63,8 +68,7 @@ public:
         }
         EbSectionCard::end();
 
-        if (EbSectionCard::begin("scope-off", "Assist Off Ranges")) {
-            // -1 disables a bound; pair From/To for up to six ranges.
+        if (EbSectionCard::begin("assist-off", "Assist Off Ranges")) {
             EbSlider::drawFloatSetting("assist-off-1-from", "Range 1 From", -1.0f, 100.0f, 1, "%");
             EbSlider::drawFloatSetting("assist-off-1-to", "Range 1 To", -1.0f, 100.0f, 1, "%");
             gap();
@@ -82,19 +86,6 @@ public:
             gap();
             EbSlider::drawFloatSetting("assist-off-6-from", "Range 6 From", -1.0f, 100.0f, 1, "%");
             EbSlider::drawFloatSetting("assist-off-6-to", "Range 6 To", -1.0f, 100.0f, 1, "%");
-        }
-        EbSectionCard::end();
-    }
-
-    static void drawAssist() {
-        if (EbSectionCard::begin("assist-actions", "Actions")) {
-            EbButton::drawAction("reset-learn-action", "Reset Learning");
-            gap();
-            EbButton::drawAction("export-config-action", "Export Config");
-            gap();
-            EbButton::drawAction("import-config-action", "Import Config");
-            gap();
-            EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
         }
         EbSectionCard::end();
 
@@ -119,25 +110,10 @@ public:
             EbCheckbox::drawSetting("assist-release", "Assist Releases");
         }
         EbSectionCard::end();
+    }
 
-        if (EbSectionCard::begin("assist-smart", "Smart Prediction")) {
-            EbSlider::drawIntSetting("smart-depth", "Smart Depth", 1, 3);
-            EbSlider::drawIntSetting("smart-combos", "Smart Combos", 8, 256);
-            EbSlider::drawIntSetting("smart-horizon", "Smart Horizon", 0, 320);
-            EbSlider::drawIntSetting("robust-k", "Robust Window (±k)", 0, 3);
-            EbCheckbox::drawSetting("robust-jitter", "Robust firstDt Jitter");
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("assist-adaptive", "Adaptive Prediction")) {
-            EbCheckbox::drawSetting("adaptive-plan", "Adaptive Plan");
-            EbSlider::drawIntSetting("adaptive-screen-ticks", "Screen Ticks", 8, 64);
-            EbSlider::drawIntSetting("adaptive-verify-quantum", "Verify Quantum", 8, 64);
-            EbSlider::drawIntSetting("adaptive-reserve-pct", "Reserve %", 0, 40, "%");
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("assist-learning", "Learning")) {
+    static void drawLearn() {
+        if (EbSectionCard::begin("learn-toggles", "Learning")) {
             EbCheckbox::drawSetting("auto-tune", "Auto-Tune Per Level");
             EbCheckbox::drawSetting("self-bake", "Self-Bake (Practice)");
             EbCheckbox::drawSetting("self-bake-normal", "Self-Bake in Normal");
@@ -145,15 +121,14 @@ public:
         }
         EbSectionCard::end();
 
-        if (EbSectionCard::begin("assist-triggers", "Trigger World")) {
-            EbCheckbox::drawSetting("trigger-bake", "Trigger World Bake");
-            EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
-            {
-                char const* verifyOpts[] = {"off", "ab"};
-                char const* verifyLabels[] = {"Off", "A/B"};
-                EbDropdown::drawSetting("assist-verify", "Assist Verify", verifyOpts, 2,
-                                        verifyLabels);
-            }
+        if (EbSectionCard::begin("learn-actions", "Config")) {
+            EbButton::drawAction("reset-learn-action", "Reset Learning");
+            gap();
+            EbButton::drawAction("export-config-action", "Export Config");
+            gap();
+            EbButton::drawAction("import-config-action", "Import Config");
+            gap();
+            EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
         }
         EbSectionCard::end();
     }
@@ -171,6 +146,18 @@ public:
             EbButton::drawAction("cancel-bake-action", "Cancel Bake");
             gap();
             EbSlider::drawIntSetting("bake-radius", "Bake Radius", 0, 128);
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("bake-triggers", "Trigger World")) {
+            EbCheckbox::drawSetting("trigger-bake", "Trigger World Bake");
+            EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
+            {
+                char const* verifyOpts[] = {"off", "ab"};
+                char const* verifyLabels[] = {"Off", "A/B"};
+                EbDropdown::drawSetting("assist-verify", "Assist Verify", verifyOpts, 2,
+                                        verifyLabels);
+            }
         }
         EbSectionCard::end();
     }
@@ -192,7 +179,6 @@ public:
         std::snprintf(slackKey, sizeof(slackKey), "%s-slack", prefix);
         std::snprintf(latencyKey, sizeof(latencyKey), "%s-latency", prefix);
 
-        // Short labels — the icon bar already names the active gamemode.
         EbCheckbox::drawSetting(enableKey, "Enable");
         EbCheckbox::drawSetting(overwriteKey, "Overwrite");
         EbSlider::drawIntSetting(ticksKey, "Window", 0, 32);
@@ -233,6 +219,23 @@ public:
             EbCheckbox::drawSetting("save-feedback-color", "Feedback Color Flash");
             EbCheckbox::drawSetting("save-feedback-counter", "Feedback Counter");
             EbColorPicker::drawSetting("save-icon-color", "Save Icon Color");
+        }
+        EbSectionCard::end();
+    }
+
+    static void drawUI() {
+        if (EbSectionCard::begin("ui-chrome", "Interface")) {
+            EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
+            EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
+            EbCheckbox::drawSetting("show-pause-bake", "Pause Status Lines");
+            EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("ui-diag", "Diagnostics")) {
+            EbCheckbox::drawSetting("debug-logging", "Debug Logging");
+            EbCheckbox::drawSetting("perf-trace", "Perf Trace");
+            EbCheckbox::drawSetting("lag-probe", "Lag Probe");
         }
         EbSectionCard::end();
     }
@@ -317,11 +320,11 @@ void EbDesktopMenuPanels::draw(SettingsCategory category) {
     case SettingsCategory::Main:
         EbDesktopMenuPanelsDraw::drawMain();
         break;
-    case SettingsCategory::Scope:
-        EbDesktopMenuPanelsDraw::drawScope();
-        break;
     case SettingsCategory::Assist:
         EbDesktopMenuPanelsDraw::drawAssist();
+        break;
+    case SettingsCategory::Learn:
+        EbDesktopMenuPanelsDraw::drawLearn();
         break;
     case SettingsCategory::Bake:
         EbDesktopMenuPanelsDraw::drawBake();
@@ -331,6 +334,9 @@ void EbDesktopMenuPanels::draw(SettingsCategory category) {
         break;
     case SettingsCategory::Visual:
         EbDesktopMenuPanelsDraw::drawVisual();
+        break;
+    case SettingsCategory::UI:
+        EbDesktopMenuPanelsDraw::drawUI();
         break;
     case SettingsCategory::Keys:
         EbDesktopMenuPanelsDraw::drawKeys();

@@ -9,6 +9,8 @@
 #include <Geode/utils/web.hpp>
 #include <imgui.h>
 #include <algorithm>
+#include <filesystem>
+#include <string>
 
 class EbDesktopMenuIconsState {
 public:
@@ -28,12 +30,12 @@ public:
     static constexpr float kPad = 16.0f;
     static constexpr float kGap = 12.0f;
 
-    // Hit slot is square; glyph is aspect-fitted inside with padding.
-    static constexpr float kModeSlotSize = 40.0f;
-    static constexpr float kModeGlyphMax = 32.0f;
-    static constexpr float kModeGap = 26.0f;
-    static constexpr float kModeRowPadY = 6.0f;
-    static constexpr float kModeIdleAlpha = 0.75f;
+    // Square slots; glyphs are pre-padded 160x160 PNGs (native aspect preserved).
+    static constexpr float kModeSlotSize = 44.0f;
+    static constexpr float kModeGlyphSize = 36.0f;
+    static constexpr float kModeGap = 28.0f;
+    static constexpr float kModeRowPadY = 8.0f;
+    static constexpr float kModeIdleAlpha = 0.5f;
     static constexpr float kModeActiveAlpha = 1.0f;
 
     class ModeGlyph {
@@ -41,8 +43,6 @@ public:
         cocos2d::CCTexture2D* texture = nullptr;
         float contentW = 1.0f;
         float contentH = 1.0f;
-        ImVec2 uv0 = ImVec2(0.0f, 0.0f);
-        ImVec2 uv1 = ImVec2(1.0f, 1.0f);
     };
 
     static ModeGlyph* modeGlyphs() {
@@ -50,7 +50,7 @@ public:
         return values;
     }
 
-    static constexpr char const* kModeSprites[EbDesktopMenuIcons::kGamemodeCount] = {
+    static constexpr char const* kModeFiles[EbDesktopMenuIcons::kGamemodeCount] = {
         "eb_mode_cube.png", "eb_mode_ship.png",  "eb_mode_ball.png",   "eb_mode_ufo.png",
         "eb_mode_wave.png", "eb_mode_robot.png", "eb_mode_spider.png", "eb_mode_swing.png",
     };
@@ -65,12 +65,68 @@ public:
         if (!sprPath) {
             return nullptr;
         }
-        // Geode sprite paths already include the mod id (via _spr at the call site).
         auto* sprite = geode::prelude::CCSprite::create(sprPath);
         if (!sprite) {
             return nullptr;
         }
         return sprite->getTexture();
+    }
+
+    // Dedicated texture from the PNG file — avoids Geode atlas UV / point-vs-pixel bugs.
+    static cocos2d::CCTexture2D* textureFromPngFile(char const* fileName, float* outW, float* outH) {
+        if (!fileName) {
+            return nullptr;
+        }
+        auto* mod = geode::prelude::Mod::get();
+        if (!mod) {
+            return nullptr;
+        }
+
+        auto const root = mod->getResourcesDir();
+        auto const id = mod->getID();
+        std::filesystem::path const candidates[] = {
+            root / fileName,
+            root / "ui" / fileName,
+            root / id / fileName,
+            root / id / "ui" / fileName,
+            mod->getPackagePath().parent_path() / "resources" / "ui" / fileName,
+            mod->getPackagePath().parent_path() / "resources" / id / fileName,
+        };
+
+        std::filesystem::path found;
+        for (auto const& candidate : candidates) {
+            std::error_code error;
+            if (!candidate.empty() && std::filesystem::is_regular_file(candidate, error)) {
+                found = candidate;
+                break;
+            }
+        }
+        if (found.empty()) {
+            return nullptr;
+        }
+
+        auto* image = new cocos2d::CCImage();
+        if (!image->initWithImageFile(found.string().c_str())) {
+            delete image;
+            return nullptr;
+        }
+
+        auto* texture = new cocos2d::CCTexture2D();
+        if (!texture->initWithImage(image)) {
+            delete texture;
+            delete image;
+            return nullptr;
+        }
+        // Keep alive for the process — ImGui samples the GL name each frame.
+        texture->retain();
+        if (outW) {
+            *outW = static_cast<float>(image->getWidth());
+        }
+        if (outH) {
+            *outH = static_cast<float>(image->getHeight());
+        }
+        delete image;
+        return texture;
     }
 
     static ImTextureID toImGui(cocos2d::CCTexture2D* texture) {
@@ -122,6 +178,7 @@ public:
         }
 
         float const slot = EbDesktopMenuIconsState::kModeSlotSize;
+        float const glyphSize = EbDesktopMenuIconsState::kModeGlyphSize;
         ImGui::PushID(index);
         bool const pressed = ImGui::InvisibleButton("##mode", ImVec2(slot, slot));
         EbDesktopMenuTooltip::show(title);
@@ -131,25 +188,17 @@ public:
             EbDesktopMenuMotion::smoothToward(ImGui::GetItemID() ^ 0x5a5a5a5au, selected, 0.07f);
 
         ImVec2 const slotMin = ImGui::GetItemRectMin();
-        ImVec2 const slotMax = ImGui::GetItemRectMax();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-        // Aspect-fit glyph inside the square slot (no stretch).
-        float const maxGlyph = EbDesktopMenuIconsState::kModeGlyphMax;
-        float const aspect = glyph.contentW / std::max(glyph.contentH, 1.0f);
-        float drawW = maxGlyph;
-        float drawH = maxGlyph;
-        if (aspect >= 1.0f) {
-            drawH = maxGlyph / aspect;
-        } else {
-            drawW = maxGlyph * aspect;
-        }
-        ImVec2 const imgMin(slotMin.x + (slot - drawW) * 0.5f, slotMin.y + (slot - drawH) * 0.5f);
-        ImVec2 const imgMax(imgMin.x + drawW, imgMin.y + drawH);
+        // Padded square PNGs — draw as squares; native aspect is already in the alpha.
+        ImVec2 const imgMin(slotMin.x + (slot - glyphSize) * 0.5f,
+                            slotMin.y + (slot - glyphSize) * 0.5f);
+        ImVec2 const imgMax(imgMin.x + glyphSize, imgMin.y + glyphSize);
 
         if (heat > 0.01f && !selected) {
             ImVec4 plate(1.0f, 1.0f, 1.0f, 0.08f * heat);
-            drawList->AddRectFilled(slotMin, slotMax, EbDesktopMenuTheme::toU32(plate), 8.0f);
+            drawList->AddRectFilled(slotMin, ImVec2(slotMin.x + slot, slotMin.y + slot),
+                                    EbDesktopMenuTheme::toU32(plate), 8.0f);
         }
         if (select > 0.01f) {
             EbDesktopMenuTheme::drawAccentGlow(drawList, imgMin, imgMax, 6.0f, 0.45f * select);
@@ -160,43 +209,14 @@ public:
                                 ImVec4(1.0f, 1.0f, 1.0f, EbDesktopMenuIconsState::kModeActiveAlpha),
                                 select)
                                 .w;
-        float const hoverBoost = (!selected) ? (0.10f * heat) : 0.0f;
+        float const hoverBoost = (!selected) ? (0.12f * heat) : 0.0f;
         ImVec4 tint(1.0f, 1.0f, 1.0f, std::min(1.0f, alpha + hoverBoost));
-        drawList->AddImage(toImGui(glyph.texture), imgMin, imgMax, glyph.uv0, glyph.uv1,
-                           EbDesktopMenuTheme::toU32(tint));
+        // Full UV — dedicated file textures are not atlas-packed.
+        drawList->AddImage(toImGui(glyph.texture), imgMin, imgMax, ImVec2(0.0f, 0.0f),
+                           ImVec2(1.0f, 1.0f), EbDesktopMenuTheme::toU32(tint));
 
         ImGui::PopID();
         return pressed;
-    }
-
-    static EbDesktopMenuIconsState::ModeGlyph glyphFromSprite(char const* sprPath) {
-        EbDesktopMenuIconsState::ModeGlyph glyph;
-        if (!sprPath) {
-            return glyph;
-        }
-        auto* sprite = geode::prelude::CCSprite::create(sprPath);
-        if (!sprite) {
-            return glyph;
-        }
-        auto* texture = sprite->getTexture();
-        if (!texture) {
-            return glyph;
-        }
-
-        cocos2d::CCRect const rect = sprite->getTextureRect();
-        float const texW = static_cast<float>(texture->getPixelsWide());
-        float const texH = static_cast<float>(texture->getPixelsHigh());
-        if (texW <= 0.0f || texH <= 0.0f || rect.size.width <= 0.0f || rect.size.height <= 0.0f) {
-            return glyph;
-        }
-
-        glyph.texture = texture;
-        glyph.contentW = rect.size.width;
-        glyph.contentH = rect.size.height;
-        glyph.uv0 = ImVec2(rect.origin.x / texW, rect.origin.y / texH);
-        glyph.uv1 = ImVec2((rect.origin.x + rect.size.width) / texW,
-                           (rect.origin.y + rect.size.height) / texH);
-        return glyph;
     }
 
 private:
@@ -204,7 +224,6 @@ private:
 };
 
 void EbDesktopMenuIcons::load() {
-    // Re-resolve after fullscreen (GL context / texture cache refresh).
     EbDesktopMenuIconsState::githubTex() =
         EbDesktopMenuIconsDraw::textureFromSprite("eb_github.png"_spr);
     if (!EbDesktopMenuIconsState::githubTex()) {
@@ -216,18 +235,22 @@ void EbDesktopMenuIcons::load() {
         geode::log::warn("[EarlyBuffer] desktop menu: eb_discord.png missing");
     }
 
-    // `_spr` only works on string literals — resolve each mode sprite explicitly.
-    char const* modeSpr[kGamemodeCount] = {
-        "eb_mode_cube.png"_spr,   "eb_mode_ship.png"_spr,  "eb_mode_ball.png"_spr,
-        "eb_mode_ufo.png"_spr,    "eb_mode_wave.png"_spr,  "eb_mode_robot.png"_spr,
-        "eb_mode_spider.png"_spr, "eb_mode_swing.png"_spr,
-    };
     for (int i = 0; i < kGamemodeCount; ++i) {
-        EbDesktopMenuIconsState::modeGlyphs()[i] =
-            EbDesktopMenuIconsDraw::glyphFromSprite(modeSpr[i]);
-        if (!EbDesktopMenuIconsState::modeGlyphs()[i].texture) {
-            geode::log::warn("[EarlyBuffer] desktop menu: {} missing",
-                             EbDesktopMenuIconsState::kModeSprites[i]);
+        float width = 0.0f;
+        float height = 0.0f;
+        auto& glyph = EbDesktopMenuIconsState::modeGlyphs()[i];
+        // Drop previous dedicated texture on reload (fullscreen / GL refresh).
+        if (glyph.texture) {
+            glyph.texture->release();
+            glyph.texture = nullptr;
+        }
+        glyph.texture = EbDesktopMenuIconsDraw::textureFromPngFile(
+            EbDesktopMenuIconsState::kModeFiles[i], &width, &height);
+        glyph.contentW = std::max(1.0f, width);
+        glyph.contentH = std::max(1.0f, height);
+        if (!glyph.texture) {
+            geode::log::warn("[EarlyBuffer] desktop menu: {} missing (file load)",
+                             EbDesktopMenuIconsState::kModeFiles[i]);
         }
     }
 }
@@ -284,7 +307,6 @@ bool EbDesktopMenuIcons::drawGamemodeBar(int* selected) {
         }
     }
 
-    // Advance layout past the padded icon row for following widgets.
     ImGui::SetCursorScreenPos(ImVec2(originX, originY));
     ImGui::Dummy(ImVec2(avail, slot + rowPad * 2.0f));
     return changed;

@@ -69,7 +69,7 @@ public:
 
     static constexpr float kSidebarWidth = 196.0f;
     static constexpr float kMenuWidth = 900.0f;
-    static constexpr float kMenuHeight = 560.0f;
+    static constexpr float kMenuHeight = 600.0f;
     // Inset so section cards sit inside the tab — bg shows around the card.
     static constexpr float kContentPadX = 28.0f;
     static constexpr float kContentPadY = 24.0f;
@@ -286,9 +286,9 @@ public:
 
         navGroupLabel("SETTINGS");
         SettingsCategory const settingsTabs[] = {
-            SettingsCategory::Main,   SettingsCategory::Scope, SettingsCategory::Assist,
-            SettingsCategory::Bake,   SettingsCategory::Modes, SettingsCategory::Visual,
-            SettingsCategory::Keys};
+            SettingsCategory::Main,  SettingsCategory::Assist, SettingsCategory::Learn,
+            SettingsCategory::Bake,  SettingsCategory::Modes,  SettingsCategory::Visual,
+            SettingsCategory::UI,    SettingsCategory::Keys};
         for (SettingsCategory category : settingsTabs) {
             bool const selected = EbDesktopMenuShellState::active() == category;
             if (navTab(EbInLevelSettingsFilter::categoryName(category), selected, tabWidth)) {
