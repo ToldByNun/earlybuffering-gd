@@ -156,8 +156,9 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"save-feedback-counter", SettingsCategory::Visual},
     {"save-icon-color", SettingsCategory::Visual},
 
-    // UI — chrome + light diagnostics
+    // UI — chrome + accent + light diagnostics
     {"title-ui", SettingsCategory::UI},
+    {"desktop-accent-color", SettingsCategory::UI},
     {"show-overlay", SettingsCategory::UI},
     {"show-pause-hub", SettingsCategory::UI},
     {"show-pause-bake", SettingsCategory::UI},

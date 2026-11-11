@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[131] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[132] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
@@ -15,6 +15,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[131] = {
     {"show-pause-bake", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
     {"desktop-classic-settings", EbConfigBundleKeys::Kind::Bool},
+    {"desktop-accent-color", EbConfigBundleKeys::Kind::Color},
     {"save-feedback-sound", EbConfigBundleKeys::Kind::Bool},
     {"save-feedback-color", EbConfigBundleKeys::Kind::Bool},
     {"save-feedback-counter", EbConfigBundleKeys::Kind::Bool},
@@ -217,7 +218,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
     expect(kindString == 6, "kind-string-6");
-    expect(kindColor == 1, "kind-color-1");
+    expect(kindColor == 2, "kind-color-2");
     expect(kindKeybind == 6, "kind-keybind-6");
 
     auto const* enabled = EbConfigBundleKeys::find("enabled");
@@ -227,6 +228,8 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(bakePath && bakePath->kind == Kind::Bool, "find-show-bake-path");
     auto const* color = EbConfigBundleKeys::find("save-icon-color");
     expect(color && color->kind == Kind::Color, "find-color");
+    auto const* accent = EbConfigBundleKeys::find("desktop-accent-color");
+    expect(accent && accent->kind == Kind::Color, "find-accent-color");
     auto const* hotkey = EbConfigBundleKeys::find("hotkey-assist-mode");
     expect(hotkey && hotkey->kind == Kind::Keybind, "find-keybind");
     auto const* menuHotkey = EbConfigBundleKeys::find("hotkey-desktop-menu");

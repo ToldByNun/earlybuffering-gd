@@ -2,6 +2,7 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "desktop_menu_bind.hpp"
 #include <algorithm>
 
 class EbDesktopMenuThemeColors {
@@ -9,6 +10,31 @@ public:
     static ImVec4 rgbByte(int red, int green, int blue, float alpha = 1.0f) {
         return ImVec4(static_cast<float>(red) / 255.0f, static_cast<float>(green) / 255.0f,
                       static_cast<float>(blue) / 255.0f, alpha);
+    }
+
+    static ImVec4 fromSetting() {
+        // Default matches historical EarlyBuffer purple (#7B61FF).
+        cocos2d::ccColor3B const fallback{123, 97, 255};
+        cocos2d::ccColor3B const color =
+            EbDesktopMenuBind::getColor("desktop-accent-color", fallback);
+        return rgbByte(color.r, color.g, color.b);
+    }
+
+    static ImVec4 lighten(ImVec4 const& color, float amount) {
+        float const t = std::clamp(amount, 0.0f, 1.0f);
+        return ImVec4(color.x + (1.0f - color.x) * t, color.y + (1.0f - color.y) * t,
+                      color.z + (1.0f - color.z) * t, color.w);
+    }
+
+    static ImVec4 darken(ImVec4 const& color, float amount) {
+        float const scale = 1.0f - std::clamp(amount, 0.0f, 1.0f);
+        return ImVec4(color.x * scale, color.y * scale, color.z * scale, color.w);
+    }
+
+    static ImVec4 lerp(ImVec4 const& from, ImVec4 const& to, float t) {
+        float const clamped = std::clamp(t, 0.0f, 1.0f);
+        return ImVec4(from.x + (to.x - from.x) * clamped, from.y + (to.y - from.y) * clamped,
+                      from.z + (to.z - from.z) * clamped, from.w + (to.w - from.w) * clamped);
     }
 
 private:
@@ -20,33 +46,38 @@ ImU32 EbDesktopMenuTheme::toU32(ImVec4 const& color) {
 }
 
 ImVec4 EbDesktopMenuTheme::bg() {
-    // Near-black canvas (image 1 right pane).
     return EbDesktopMenuThemeColors::rgbByte(13, 13, 18);
 }
 
 ImVec4 EbDesktopMenuTheme::panel() {
-    // Section card — lifted enough that tab bg() reads as a gutter around it.
     return EbDesktopMenuThemeColors::rgbByte(28, 28, 40);
 }
 
 ImVec4 EbDesktopMenuTheme::surface() {
-    // Input / control wells.
     return EbDesktopMenuThemeColors::rgbByte(26, 26, 30);
 }
 
-ImVec4 EbDesktopMenuTheme::sidebarBg() {
-    // Deep purple — readable white labels (flat stand-in until AP6 shader).
-    return EbDesktopMenuThemeColors::rgbByte(58, 42, 148);
-}
-
 ImVec4 EbDesktopMenuTheme::accent() {
-    // Primary purple (button / active pill / sidebar base).
-    return EbDesktopMenuThemeColors::rgbByte(123, 97, 255);
+    return EbDesktopMenuThemeColors::fromSetting();
 }
 
 ImVec4 EbDesktopMenuTheme::accentLight() {
-    // Shader lightWave — lighter purple for fills / gradients.
-    return EbDesktopMenuThemeColors::rgbByte(131, 112, 255);
+    // Slightly lifted accent for fills / active chrome.
+    return EbDesktopMenuThemeColors::lighten(accent(), 0.12f);
+}
+
+ImVec4 EbDesktopMenuTheme::sidebarBg() {
+    // Deep dock base under the wave (readable white labels).
+    return EbDesktopMenuThemeColors::darken(accent(), 0.52f);
+}
+
+ImVec4 EbDesktopMenuTheme::sidebarWaveDark() {
+    // Matches shaders/sidebar_wave.frag base — between dock and accent.
+    return EbDesktopMenuThemeColors::lerp(sidebarBg(), accent(), 0.72f);
+}
+
+ImVec4 EbDesktopMenuTheme::sidebarWaveLight() {
+    return accentLight();
 }
 
 ImVec4 EbDesktopMenuTheme::text() {
@@ -54,12 +85,10 @@ ImVec4 EbDesktopMenuTheme::text() {
 }
 
 ImVec4 EbDesktopMenuTheme::muted() {
-    // Caps labels / descriptions.
     return EbDesktopMenuThemeColors::rgbByte(156, 163, 175);
 }
 
 ImVec4 EbDesktopMenuTheme::outline() {
-    // Thin grey stroke on inputs / cards.
     return EbDesktopMenuThemeColors::rgbByte(55, 55, 68);
 }
 
@@ -97,7 +126,6 @@ void EbDesktopMenuTheme::drawAccentGlow(ImDrawList* drawList, ImVec2 const& min,
         return;
     }
     ImVec4 glow = accent();
-    // Three expanding soft rings — cheap bloom without a post-process pass.
     float const pads[3] = {2.0f, 5.0f, 9.0f};
     float const alphas[3] = {0.35f, 0.18f, 0.08f};
     for (int index = 0; index < 3; ++index) {
@@ -164,7 +192,7 @@ void EbDesktopMenuTheme::apply() {
     colors[ImGuiCol_SliderGrabActive] = cAccentLight;
     colors[ImGuiCol_Button] = cAccent;
     colors[ImGuiCol_ButtonHovered] = cAccentLight;
-    colors[ImGuiCol_ButtonActive] = ImVec4(0.40f, 0.28f, 0.95f, 1.0f);
+    colors[ImGuiCol_ButtonActive] = EbDesktopMenuThemeColors::darken(cAccent, 0.18f);
     colors[ImGuiCol_Header] = ImVec4(cAccent.x, cAccent.y, cAccent.z, 0.35f);
     colors[ImGuiCol_HeaderHovered] = ImVec4(cAccent.x, cAccent.y, cAccent.z, 0.55f);
     colors[ImGuiCol_HeaderActive] = cAccent;

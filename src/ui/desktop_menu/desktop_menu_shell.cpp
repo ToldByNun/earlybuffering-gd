@@ -373,6 +373,8 @@ public:
     static void frame() {
         float const deltaTime = (std::max)(0.0f, ImGui::GetIO().DeltaTime);
         EbDesktopMenuMotion::beginFrame();
+        // Live accent — ImGui style + wave chrome pick up desktop-accent-color edits.
+        EbDesktopMenuTheme::apply();
         EbDesktopMenuShellAnim::updateOpen(deltaTime);
         EbDesktopMenuShellAnim::updateTab(deltaTime);
 

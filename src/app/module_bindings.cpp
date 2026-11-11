@@ -225,6 +225,8 @@ void EbModuleBindings::registerSettings() {
     watchBool("save-feedback-counter");
     geode::prelude::listenForSettingChanges<cocos2d::ccColor3B>(
         "save-icon-color", [](cocos2d::ccColor3B) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<cocos2d::ccColor3B>(
+        "desktop-accent-color", [](cocos2d::ccColor3B) { EbModuleBindings::onAnySetting(); });
     auto watchFloat = [](char const* id) {
         geode::prelude::listenForSettingChanges<double>(
             id, [](double) { EbModuleBindings::onAnySetting(); });

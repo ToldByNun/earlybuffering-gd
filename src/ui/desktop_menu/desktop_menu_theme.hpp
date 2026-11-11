@@ -19,6 +19,9 @@ public:
     static ImVec4 sidebarBg();
     static ImVec4 accent();
     static ImVec4 accentLight();
+    // Sidebar wave endpoints (CPU port of sidebar_wave.frag).
+    static ImVec4 sidebarWaveDark();
+    static ImVec4 sidebarWaveLight();
     static ImVec4 text();
     static ImVec4 muted();
     static ImVec4 outline();

@@ -225,6 +225,8 @@ public:
 
     static void drawUI() {
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
+            EbColorPicker::drawSetting("desktop-accent-color", "Accent Color");
+            gap();
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
             EbCheckbox::drawSetting("show-pause-bake", "Pause Status Lines");

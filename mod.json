@@ -1040,7 +1040,13 @@
 		"title-ui": {
 			"type": "title",
 			"name": "UI",
-			"description": "In-level overlay, pause chrome, classic Geode settings menu, and light diagnostics."
+			"description": "In-level overlay, pause chrome, classic Geode settings menu, accent color, and light diagnostics."
+		},
+		"desktop-accent-color": {
+			"type": "color",
+			"name": "Accent Color",
+			"description": "Desktop menu accent — sidebar wave, checkboxes, sliders, and active chrome. Default is EarlyBuffer purple.",
+			"default": "#7B61FF"
 		},
 		"show-overlay": {
 			"type": "bool",

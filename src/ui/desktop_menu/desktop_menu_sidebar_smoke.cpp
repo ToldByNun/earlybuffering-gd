@@ -22,9 +22,13 @@ public:
 
     static ImU32 colorFromWave(float wave) {
         float const t = wave < 0.0f ? 0.0f : (wave > 1.0f ? 1.0f : wave);
-        int const r = static_cast<int>((0.439f + (0.514f - 0.439f) * t) * 255.0f + 0.5f);
-        int const g = static_cast<int>((0.306f + (0.376f - 0.306f) * t) * 255.0f + 0.5f);
-        return IM_COL32(r, g, 255, 255);
+        ImVec4 const dark = EbDesktopMenuTheme::sidebarWaveDark();
+        ImVec4 const light = EbDesktopMenuTheme::sidebarWaveLight();
+        float const r = dark.x + (light.x - dark.x) * t;
+        float const g = dark.y + (light.y - dark.y) * t;
+        float const b = dark.z + (light.z - dark.z) * t;
+        return IM_COL32(static_cast<int>(r * 255.0f + 0.5f), static_cast<int>(g * 255.0f + 0.5f),
+                        static_cast<int>(b * 255.0f + 0.5f), 255);
     }
 
     static constexpr float kPi = 3.14159265358979323846f;

@@ -37,8 +37,8 @@ private:
 
 class EbConfigBundleKeysTable {
 public:
-    static EbConfigBundleKeys::Entry const kEntries[131];
-    static constexpr int kEntryCount = 131;
+    static EbConfigBundleKeys::Entry const kEntries[132];
+    static constexpr int kEntryCount = 132;
 
 private:
     EbConfigBundleKeysTable() = default;

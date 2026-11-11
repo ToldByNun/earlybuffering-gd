@@ -1,10 +1,14 @@
 // Ported from Shadertoy ES (#version 300 es → GL 2.x / gl_FragColor).
+// Live desktop menu paints the CPU twin in desktop_menu_sidebar_smoke.cpp,
+// driven by desktop-accent-color (uBaseColor / uLightColor equivalents).
 #ifdef GL_ES
 precision mediump float;
 #endif
 
 uniform float uTime;
 uniform vec2 uResolution;
+uniform vec3 uBaseColor;
+uniform vec3 uLightColor;
 varying vec2 v_uv;
 
 void main() {
@@ -17,8 +21,6 @@ void main() {
     }
 
     float wave = 0.5 + 0.5 * sin(uTime - uv.y - uv.x);
-    vec3 basePurple = vec3(0.439, 0.306, 1.0);
-    vec3 lightWave = vec3(0.514, 0.376, 1.0);
-    vec3 finalColor = mix(basePurple, lightWave, wave);
+    vec3 finalColor = mix(uBaseColor, uLightColor, wave);
     gl_FragColor = vec4(finalColor, 1.0);
 }
