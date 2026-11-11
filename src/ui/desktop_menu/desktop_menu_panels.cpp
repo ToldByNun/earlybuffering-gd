@@ -1,4 +1,5 @@
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_icons.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_color_picker.hpp"
@@ -174,8 +175,8 @@ public:
         EbSectionCard::end();
     }
 
-    static void drawGamemode(char const* sectionId, char const* title, char const* prefix) {
-        if (!sectionId || !title || !prefix) {
+    static void drawGamemodeBody(char const* title, char const* prefix) {
+        if (!title || !prefix) {
             return;
         }
         char enableKey[64];
@@ -184,45 +185,40 @@ public:
         char capKey[64];
         char slackKey[64];
         char latencyKey[64];
-        char enableLabel[64];
-        char overwriteLabel[64];
-        char ticksLabel[64];
-        char capLabel[64];
-        char slackLabel[64];
-        char latencyLabel[64];
         std::snprintf(enableKey, sizeof(enableKey), "%s-enable", prefix);
         std::snprintf(overwriteKey, sizeof(overwriteKey), "%s-overwrite", prefix);
         std::snprintf(ticksKey, sizeof(ticksKey), "%s-ticks", prefix);
         std::snprintf(capKey, sizeof(capKey), "%s-cap", prefix);
         std::snprintf(slackKey, sizeof(slackKey), "%s-slack", prefix);
         std::snprintf(latencyKey, sizeof(latencyKey), "%s-latency", prefix);
-        std::snprintf(enableLabel, sizeof(enableLabel), "Enable %s", title);
-        std::snprintf(overwriteLabel, sizeof(overwriteLabel), "Overwrite %s", title);
-        std::snprintf(ticksLabel, sizeof(ticksLabel), "%s Window", title);
-        std::snprintf(capLabel, sizeof(capLabel), "%s Look-Ahead", title);
-        std::snprintf(slackLabel, sizeof(slackLabel), "%s Slack", title);
-        std::snprintf(latencyLabel, sizeof(latencyLabel), "%s Latency", title);
 
-        if (EbSectionCard::begin(sectionId, title)) {
-            EbCheckbox::drawSetting(enableKey, enableLabel);
-            EbCheckbox::drawSetting(overwriteKey, overwriteLabel);
-            EbSlider::drawIntSetting(ticksKey, ticksLabel, 0, 32);
-            EbSlider::drawIntSetting(capKey, capLabel, 0, 240);
-            EbSlider::drawIntSetting(slackKey, slackLabel, -1, 16);
-            EbSlider::drawFloatSetting(latencyKey, latencyLabel, 0.0f, 2.0f, 2);
-        }
-        EbSectionCard::end();
+        // Short labels — the icon bar already names the active gamemode.
+        EbCheckbox::drawSetting(enableKey, "Enable");
+        EbCheckbox::drawSetting(overwriteKey, "Overwrite");
+        EbSlider::drawIntSetting(ticksKey, "Window", 0, 32);
+        EbSlider::drawIntSetting(capKey, "Look-Ahead", 0, 240);
+        EbSlider::drawIntSetting(slackKey, "Slack", -1, 16);
+        EbSlider::drawFloatSetting(latencyKey, "Latency", 0.0f, 2.0f, 2);
+        (void)title;
     }
 
     static void drawModes() {
-        drawGamemode("mode-cube", "Cube", "cube");
-        drawGamemode("mode-ship", "Ship", "ship");
-        drawGamemode("mode-ball", "Ball", "ball");
-        drawGamemode("mode-ufo", "UFO", "ufo");
-        drawGamemode("mode-wave", "Wave", "wave");
-        drawGamemode("mode-robot", "Robot", "robot");
-        drawGamemode("mode-spider", "Spider", "spider");
-        drawGamemode("mode-swing", "Swing", "swing");
+        static int selected = 0;
+        if (selected < 0 || selected >= EbDesktopMenuIcons::kGamemodeCount) {
+            selected = 0;
+        }
+
+        if (EbSectionCard::begin("modes-picker", "Modes")) {
+            EbDesktopMenuIcons::drawGamemodeBar(&selected);
+        }
+        EbSectionCard::end();
+
+        char const* title = EbDesktopMenuIcons::gamemodeTitle(selected);
+        char const* prefix = EbDesktopMenuIcons::gamemodePrefix(selected);
+        if (EbSectionCard::begin("modes-settings", "Settings")) {
+            drawGamemodeBody(title, prefix);
+        }
+        EbSectionCard::end();
     }
 
     static void drawVisual() {

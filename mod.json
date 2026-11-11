@@ -1316,7 +1316,15 @@
 		"sprites": [
 			"resources/ui/eb_star.png",
 			"resources/ui/eb_github.png",
-			"resources/ui/eb_discord.png"
+			"resources/ui/eb_discord.png",
+			"resources/ui/eb_mode_cube.png",
+			"resources/ui/eb_mode_ship.png",
+			"resources/ui/eb_mode_ball.png",
+			"resources/ui/eb_mode_ufo.png",
+			"resources/ui/eb_mode_wave.png",
+			"resources/ui/eb_mode_robot.png",
+			"resources/ui/eb_mode_spider.png",
+			"resources/ui/eb_mode_swing.png"
 		]
 	}
 }
