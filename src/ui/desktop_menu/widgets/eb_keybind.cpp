@@ -6,6 +6,7 @@
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include "../../../core/bundle/config_bundle_codec.hpp"
 #include <imgui.h>
 #include <algorithm>
@@ -279,7 +280,7 @@ public:
     }
 
     static bool drawRow(char const* id, char const* label, std::vector<geode::Keybind>* binds,
-                        bool enabled) {
+                        bool enabled, char const* tooltip) {
         if (!id || id[0] == '\0' || !label || !binds) {
             return false;
         }
@@ -315,6 +316,9 @@ public:
             pressed = ImGui::InvisibleButton("##eb-key-row", ImVec2(avail, rowH));
         } else {
             ImGui::Dummy(ImVec2(avail, rowH));
+        }
+        if (!capturing) {
+            EbDesktopMenuTooltip::show(tooltip);
         }
         bool const hovered = enabled && ImGui::IsItemHovered();
         float const heat = enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(),
@@ -425,8 +429,8 @@ void EbKeybind::cancelCapture() {
 }
 
 bool EbKeybind::draw(char const* id, char const* label, std::vector<geode::Keybind>* binds,
-                     bool enabled) {
-    return EbKeybindDraw::drawRow(id, label, binds, enabled);
+                     bool enabled, char const* tooltip) {
+    return EbKeybindDraw::drawRow(id, label, binds, enabled, tooltip);
 }
 
 bool EbKeybind::drawSetting(char const* key, char const* label, bool enabled) {
@@ -437,7 +441,8 @@ bool EbKeybind::drawSetting(char const* key, char const* label, bool enabled) {
         return false;
     }
     std::vector<geode::Keybind> binds = EbDesktopMenuBind::getKeybind(key);
-    if (!EbKeybindDraw::drawRow(key, label, &binds, enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
+    if (!EbKeybindDraw::drawRow(key, label, &binds, enabled, tip.c_str())) {
         return false;
     }
     return EbDesktopMenuBind::setKeybind(key, binds);
@@ -452,11 +457,12 @@ bool EbKeybind::isCapturing() {
 void EbKeybind::cancelCapture() {}
 
 bool EbKeybind::draw(char const* id, char const* label, std::vector<geode::Keybind>* binds,
-                     bool enabled) {
+                     bool enabled, char const* tooltip) {
     (void)id;
     (void)label;
     (void)binds;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

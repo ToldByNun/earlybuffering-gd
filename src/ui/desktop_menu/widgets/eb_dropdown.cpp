@@ -6,6 +6,7 @@
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
@@ -64,7 +65,7 @@ public:
 
     static bool drawBlock(char const* id, char const* label, char const* const* options,
                           int optionCount, int* selectedIndex, char const* const* displayLabels,
-                          bool enabled) {
+                          bool enabled, char const* tooltip) {
         if (!id || id[0] == '\0' || !label || !options || optionCount <= 0 || !selectedIndex) {
             return false;
         }
@@ -91,6 +92,7 @@ public:
         } else {
             ImGui::Dummy(ImVec2(avail, blockH));
         }
+        EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
         if (openPopup) {
             ImGui::OpenPopup("##eb-drop-popup");
@@ -224,9 +226,9 @@ private:
 
 bool EbDropdown::draw(char const* id, char const* label, char const* const* options,
                       int optionCount, int* selectedIndex, char const* const* displayLabels,
-                      bool enabled) {
+                      bool enabled, char const* tooltip) {
     return EbDropdownDraw::drawBlock(id, label, options, optionCount, selectedIndex, displayLabels,
-                                     enabled);
+                                     enabled, tooltip);
 }
 
 bool EbDropdown::drawSetting(char const* key, char const* label, char const* const* options,
@@ -239,8 +241,9 @@ bool EbDropdown::drawSetting(char const* key, char const* label, char const* con
     }
     std::string const current = EbDesktopMenuBind::getString(key, options[0] ? options[0] : "");
     int selected = EbDropdownDraw::findIndex(options, optionCount, current.c_str());
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
     if (!EbDropdownDraw::drawBlock(key, label, options, optionCount, &selected, displayLabels,
-                                   enabled)) {
+                                   enabled, tip.c_str())) {
         return false;
     }
     if (!options[selected]) {
@@ -253,7 +256,7 @@ bool EbDropdown::drawSetting(char const* key, char const* label, char const* con
 
 bool EbDropdown::draw(char const* id, char const* label, char const* const* options,
                       int optionCount, int* selectedIndex, char const* const* displayLabels,
-                      bool enabled) {
+                      bool enabled, char const* tooltip) {
     (void)id;
     (void)label;
     (void)options;
@@ -261,6 +264,7 @@ bool EbDropdown::draw(char const* id, char const* label, char const* const* opti
     (void)selectedIndex;
     (void)displayLabels;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

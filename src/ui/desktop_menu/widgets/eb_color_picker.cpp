@@ -6,10 +6,12 @@
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 class EbColorPickerDraw {
 public:
@@ -49,7 +51,8 @@ public:
         std::snprintf(out, outSize, "#%02X%02X%02X", r, g, b);
     }
 
-    static bool drawRow(char const* id, char const* label, float rgb[3], bool enabled) {
+    static bool drawRow(char const* id, char const* label, float rgb[3], bool enabled,
+                        char const* tooltip) {
         if (!id || id[0] == '\0' || !label || !rgb) {
             return false;
         }
@@ -71,6 +74,7 @@ public:
         } else {
             ImGui::Dummy(ImVec2(avail, rowH));
         }
+        EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const open = ImGui::IsPopupOpen("##eb-color-popup");
         float const heat = enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(),
@@ -164,8 +168,9 @@ private:
     EbColorPickerDraw() = delete;
 };
 
-bool EbColorPicker::draw(char const* id, char const* label, float rgb[3], bool enabled) {
-    return EbColorPickerDraw::drawRow(id, label, rgb, enabled);
+bool EbColorPicker::draw(char const* id, char const* label, float rgb[3], bool enabled,
+                         char const* tooltip) {
+    return EbColorPickerDraw::drawRow(id, label, rgb, enabled, tooltip);
 }
 
 bool EbColorPicker::drawSetting(char const* key, char const* label, bool enabled) {
@@ -178,7 +183,8 @@ bool EbColorPicker::drawSetting(char const* key, char const* label, bool enabled
     cocos2d::ccColor3B const current =
         EbDesktopMenuBind::getColor(key, cocos2d::ccColor3B{124, 255, 74});
     float rgb[3] = {current.r / 255.0f, current.g / 255.0f, current.b / 255.0f};
-    if (!EbColorPickerDraw::drawRow(key, label, rgb, enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
+    if (!EbColorPickerDraw::drawRow(key, label, rgb, enabled, tip.c_str())) {
         return false;
     }
     cocos2d::ccColor3B const next{
@@ -191,11 +197,13 @@ bool EbColorPicker::drawSetting(char const* key, char const* label, bool enabled
 
 #else
 
-bool EbColorPicker::draw(char const* id, char const* label, float rgb[3], bool enabled) {
+bool EbColorPicker::draw(char const* id, char const* label, float rgb[3], bool enabled,
+                         char const* tooltip) {
     (void)id;
     (void)label;
     (void)rgb;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

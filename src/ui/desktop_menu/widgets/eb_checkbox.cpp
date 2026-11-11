@@ -7,8 +7,10 @@
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_sidebar_smoke.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
 #include <algorithm>
+#include <string>
 
 class EbCheckboxDraw {
 public:
@@ -52,7 +54,8 @@ public:
         }
     }
 
-    static bool drawRow(char const* id, char const* label, bool* value, bool enabled) {
+    static bool drawRow(char const* id, char const* label, bool* value, bool enabled,
+                        char const* tooltip) {
         if (!id || id[0] == '\0' || !label || !value) {
             return false;
         }
@@ -73,6 +76,7 @@ public:
         } else {
             ImGui::Dummy(ImVec2(avail, rowH));
         }
+        EbDesktopMenuTooltip::show(tooltip);
 
         bool const hovered = enabled && ImGui::IsItemHovered();
         ImGuiID const itemId = ImGui::GetItemID();
@@ -146,8 +150,9 @@ private:
     EbCheckboxDraw() = delete;
 };
 
-bool EbCheckbox::draw(char const* id, char const* label, bool* value, bool enabled) {
-    return EbCheckboxDraw::drawRow(id, label, value, enabled);
+bool EbCheckbox::draw(char const* id, char const* label, bool* value, bool enabled,
+                      char const* tooltip) {
+    return EbCheckboxDraw::drawRow(id, label, value, enabled, tooltip);
 }
 
 bool EbCheckbox::drawSetting(char const* key, char const* label, bool enabled) {
@@ -158,7 +163,8 @@ bool EbCheckbox::drawSetting(char const* key, char const* label, bool enabled) {
         return false;
     }
     bool value = EbDesktopMenuBind::getBool(key, false);
-    if (!EbCheckboxDraw::drawRow(key, label, &value, enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
+    if (!EbCheckboxDraw::drawRow(key, label, &value, enabled, tip.c_str())) {
         return false;
     }
     return EbDesktopMenuBind::setBool(key, value);
@@ -166,11 +172,13 @@ bool EbCheckbox::drawSetting(char const* key, char const* label, bool enabled) {
 
 #else
 
-bool EbCheckbox::draw(char const* id, char const* label, bool* value, bool enabled) {
+bool EbCheckbox::draw(char const* id, char const* label, bool* value, bool enabled,
+                      char const* tooltip) {
     (void)id;
     (void)label;
     (void)value;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

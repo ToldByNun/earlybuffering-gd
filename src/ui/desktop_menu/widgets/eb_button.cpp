@@ -5,13 +5,14 @@
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include "../../settings/action_button_setting.hpp"
 #include <imgui.h>
 #include <string>
 
 class EbButtonDraw {
 public:
-    static bool drawChrome(char const* id, char const* label, bool enabled) {
+    static bool drawChrome(char const* id, char const* label, bool enabled, char const* tooltip) {
         if (!id || id[0] == '\0' || !label) {
             return false;
         }
@@ -34,6 +35,7 @@ public:
         } else {
             ImGui::Dummy(ImVec2(width, height));
         }
+        EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const held = enabled && ImGui::IsItemActive();
         float const heat =
@@ -87,8 +89,8 @@ private:
     EbButtonDraw() = delete;
 };
 
-bool EbButton::draw(char const* id, char const* label, bool enabled) {
-    return EbButtonDraw::drawChrome(id, label, enabled);
+bool EbButton::draw(char const* id, char const* label, bool enabled, char const* tooltip) {
+    return EbButtonDraw::drawChrome(id, label, enabled, tooltip);
 }
 
 bool EbButton::drawAction(char const* actionKey, char const* fallbackLabel) {
@@ -99,7 +101,8 @@ bool EbButton::drawAction(char const* actionKey, char const* fallbackLabel) {
     std::string const label =
         EbActionButtonSettingImplementation::dynamicButtonLabel(actionKey, fallback);
     bool const enabled = EbActionButtonSettingImplementation::actionShouldEnable(actionKey);
-    if (!EbButtonDraw::drawChrome(actionKey, label.c_str(), enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(actionKey);
+    if (!EbButtonDraw::drawChrome(actionKey, label.c_str(), enabled, tip.c_str())) {
         return false;
     }
     EbActionButtonSettingImplementation::fireSettingAction(actionKey);
@@ -108,10 +111,11 @@ bool EbButton::drawAction(char const* actionKey, char const* fallbackLabel) {
 
 #else
 
-bool EbButton::draw(char const* id, char const* label, bool enabled) {
+bool EbButton::draw(char const* id, char const* label, bool enabled, char const* tooltip) {
     (void)id;
     (void)label;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

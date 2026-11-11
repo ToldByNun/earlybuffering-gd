@@ -6,10 +6,12 @@
 class EbButton {
 public:
     // Returns true on click.
-    static bool draw(char const* id, char const* label, bool enabled = true);
+    static bool draw(char const* id, char const* label, bool enabled = true,
+                     char const* tooltip = nullptr);
 
     // Fires EbActionButtonSettingImplementation::fireSettingAction(actionKey).
     // Label falls back through dynamicButtonLabel; enable via actionShouldEnable.
+    // Tooltip defaults to the action setting's mod.json description.
     static bool drawAction(char const* actionKey, char const* fallbackLabel);
 
 private:

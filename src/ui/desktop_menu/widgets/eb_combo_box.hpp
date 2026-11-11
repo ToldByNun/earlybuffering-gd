@@ -7,9 +7,10 @@ class EbComboBox {
 public:
     // options[i] are display + store values. Returns true when *selectedIndex changes.
     static bool draw(char const* id, char const* label, char const* const* options, int optionCount,
-                     int* selectedIndex, bool enabled = true);
+                     int* selectedIndex, bool enabled = true, char const* tooltip = nullptr);
 
     // Binds a string SettingV3 key; options must match stored one-of values.
+    // Tooltip defaults to the setting's mod.json description.
     static bool drawSetting(char const* key, char const* label, char const* const* options,
                             int optionCount, bool enabled = true);
 

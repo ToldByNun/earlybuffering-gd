@@ -7,10 +7,12 @@
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_sidebar_smoke.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 class EbSliderDraw {
 public:
@@ -53,7 +55,7 @@ public:
 
     // Shared chrome: t in [0,1]. Returns true if the user dragged to a new t.
     static bool drawChrome(char const* id, char const* label, char const* valueText, float t,
-                           float* outT, bool enabled) {
+                           float* outT, bool enabled, char const* tooltip) {
         if (!id || id[0] == '\0' || !label || !valueText || !outT) {
             return false;
         }
@@ -73,6 +75,7 @@ public:
         } else {
             ImGui::Dummy(ImVec2(avail, totalH));
         }
+        EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const held = enabled && ImGui::IsItemActive();
         ImGuiID const itemId = ImGui::GetItemID();
@@ -170,7 +173,8 @@ private:
 };
 
 bool EbSlider::drawFloat(char const* id, char const* label, float* value, float minValue,
-                         float maxValue, int decimals, char const* suffix, bool enabled) {
+                         float maxValue, int decimals, char const* suffix, bool enabled,
+                         char const* tooltip) {
     if (!value || maxValue <= minValue) {
         return false;
     }
@@ -179,7 +183,7 @@ bool EbSlider::drawFloat(char const* id, char const* label, float* value, float 
     char text[64];
     EbSliderDraw::formatFloat(text, sizeof(text), *value, decimals, suffix);
     float newT = t;
-    if (!EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled)) {
+    if (!EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled, tooltip)) {
         return false;
     }
     float const next = minValue + newT * span;
@@ -191,7 +195,7 @@ bool EbSlider::drawFloat(char const* id, char const* label, float* value, float 
 }
 
 bool EbSlider::drawInt(char const* id, char const* label, int* value, int minValue, int maxValue,
-                       char const* suffix, bool enabled) {
+                       char const* suffix, bool enabled, char const* tooltip) {
     if (!value || maxValue <= minValue) {
         return false;
     }
@@ -200,7 +204,7 @@ bool EbSlider::drawInt(char const* id, char const* label, int* value, int minVal
     char text[64];
     EbSliderDraw::formatInt(text, sizeof(text), *value, suffix);
     float newT = t;
-    if (!EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled)) {
+    if (!EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled, tooltip)) {
         return false;
     }
     int const next = minValue + static_cast<int>(std::lround(newT * span));
@@ -218,7 +222,9 @@ bool EbSlider::drawFloatSetting(char const* key, char const* label, float minVal
         return false;
     }
     float value = static_cast<float>(EbDesktopMenuBind::getFloat(key, minValue));
-    if (!drawFloat(key, label, &value, minValue, maxValue, decimals, suffix, enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
+    if (!drawFloat(key, label, &value, minValue, maxValue, decimals, suffix, enabled,
+                   tip.c_str())) {
         return false;
     }
     return EbDesktopMenuBind::setFloat(key, static_cast<double>(value));
@@ -232,7 +238,8 @@ bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minVal
     int value = static_cast<int>(EbDesktopMenuBind::getInt(key, minValue));
     int const minI = static_cast<int>(minValue);
     int const maxI = static_cast<int>(maxValue);
-    if (!drawInt(key, label, &value, minI, maxI, suffix, enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
+    if (!drawInt(key, label, &value, minI, maxI, suffix, enabled, tip.c_str())) {
         return false;
     }
     return EbDesktopMenuBind::setInt(key, static_cast<int64_t>(value));
@@ -241,7 +248,8 @@ bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minVal
 #else
 
 bool EbSlider::drawFloat(char const* id, char const* label, float* value, float minValue,
-                         float maxValue, int decimals, char const* suffix, bool enabled) {
+                         float maxValue, int decimals, char const* suffix, bool enabled,
+                         char const* tooltip) {
     (void)id;
     (void)label;
     (void)value;
@@ -250,11 +258,12 @@ bool EbSlider::drawFloat(char const* id, char const* label, float* value, float 
     (void)decimals;
     (void)suffix;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 
 bool EbSlider::drawInt(char const* id, char const* label, int* value, int minValue, int maxValue,
-                       char const* suffix, bool enabled) {
+                       char const* suffix, bool enabled, char const* tooltip) {
     (void)id;
     (void)label;
     (void)value;
@@ -262,6 +271,7 @@ bool EbSlider::drawInt(char const* id, char const* label, int* value, int minVal
     (void)maxValue;
     (void)suffix;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

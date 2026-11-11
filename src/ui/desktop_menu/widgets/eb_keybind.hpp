@@ -14,9 +14,10 @@ public:
 
     // Returns true when *binds changes. Empty vector = unbound.
     static bool draw(char const* id, char const* label, std::vector<geode::Keybind>* binds,
-                     bool enabled = true);
+                     bool enabled = true, char const* tooltip = nullptr);
 
     // Binds a keybind SettingV3 key (e.g. hotkey-desktop-menu).
+    // Tooltip defaults to the setting's mod.json description.
     static bool drawSetting(char const* key, char const* label, bool enabled = true);
 
 private:

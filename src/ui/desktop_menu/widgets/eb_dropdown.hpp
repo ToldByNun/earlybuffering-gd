@@ -9,9 +9,10 @@ public:
     // Returns true when *selectedIndex changes.
     static bool draw(char const* id, char const* label, char const* const* options, int optionCount,
                      int* selectedIndex, char const* const* displayLabels = nullptr,
-                     bool enabled = true);
+                     bool enabled = true, char const* tooltip = nullptr);
 
     // Binds a string SettingV3 key; options must match stored one-of values.
+    // Tooltip defaults to the setting's mod.json description.
     static bool drawSetting(char const* key, char const* label, char const* const* options,
                             int optionCount, char const* const* displayLabels = nullptr,
                             bool enabled = true);

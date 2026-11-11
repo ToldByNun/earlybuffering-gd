@@ -6,6 +6,7 @@
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
+#include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
@@ -62,7 +63,7 @@ public:
     }
 
     static bool drawRow(char const* id, char const* label, char const* const* options,
-                        int optionCount, int* selectedIndex, bool enabled) {
+                        int optionCount, int* selectedIndex, bool enabled, char const* tooltip) {
         if (!id || id[0] == '\0' || !label || !options || optionCount <= 0 || !selectedIndex) {
             return false;
         }
@@ -96,6 +97,7 @@ public:
         } else {
             ImGui::Dummy(ImVec2(avail, rowH));
         }
+        EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
         if (openPopup) {
             ImGui::OpenPopup("##eb-combo-popup");
@@ -223,8 +225,9 @@ private:
 };
 
 bool EbComboBox::draw(char const* id, char const* label, char const* const* options,
-                      int optionCount, int* selectedIndex, bool enabled) {
-    return EbComboBoxDraw::drawRow(id, label, options, optionCount, selectedIndex, enabled);
+                      int optionCount, int* selectedIndex, bool enabled, char const* tooltip) {
+    return EbComboBoxDraw::drawRow(id, label, options, optionCount, selectedIndex, enabled,
+                                   tooltip);
 }
 
 bool EbComboBox::drawSetting(char const* key, char const* label, char const* const* options,
@@ -237,7 +240,9 @@ bool EbComboBox::drawSetting(char const* key, char const* label, char const* con
     }
     std::string const current = EbDesktopMenuBind::getString(key, options[0] ? options[0] : "");
     int selected = EbComboBoxDraw::findIndex(options, optionCount, current.c_str());
-    if (!EbComboBoxDraw::drawRow(key, label, options, optionCount, &selected, enabled)) {
+    std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
+    if (!EbComboBoxDraw::drawRow(key, label, options, optionCount, &selected, enabled,
+                                 tip.c_str())) {
         return false;
     }
     if (!options[selected]) {
@@ -249,13 +254,14 @@ bool EbComboBox::drawSetting(char const* key, char const* label, char const* con
 #else
 
 bool EbComboBox::draw(char const* id, char const* label, char const* const* options,
-                      int optionCount, int* selectedIndex, bool enabled) {
+                      int optionCount, int* selectedIndex, bool enabled, char const* tooltip) {
     (void)id;
     (void)label;
     (void)options;
     (void)optionCount;
     (void)selectedIndex;
     (void)enabled;
+    (void)tooltip;
     return false;
 }
 

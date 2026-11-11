@@ -4,6 +4,7 @@
 
 #include "desktop_menu_motion.hpp"
 #include "desktop_menu_theme.hpp"
+#include "desktop_menu_tooltip.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/web.hpp>
 #include <imgui.h>
@@ -51,7 +52,8 @@ public:
         return (ImTextureID)(uintptr_t)texture->getName();
     }
 
-    static bool iconButton(char const* id, cocos2d::CCTexture2D* texture, char const* url) {
+    static bool iconButton(char const* id, cocos2d::CCTexture2D* texture, char const* url,
+                           char const* tooltip) {
         if (!id || !texture || !url) {
             return false;
         }
@@ -59,6 +61,7 @@ public:
         float const size = EbDesktopMenuIconsState::kIconSize;
         ImGui::PushID(id);
         bool const pressed = ImGui::InvisibleButton("##hit", ImVec2(size, size));
+        EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = ImGui::IsItemHovered();
         float const heat =
             EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered, 0.05f);
@@ -112,12 +115,12 @@ void EbDesktopMenuIcons::drawSidebarLinks(ImVec2 const& sideMin, float sideWidth
 
     ImGui::SetCursorScreenPos(cursor);
     EbDesktopMenuIconsDraw::iconButton("##eb-link-github", EbDesktopMenuIconsState::githubTex(),
-                                       EbDesktopMenuIconsState::kGithubUrl);
+                                       EbDesktopMenuIconsState::kGithubUrl, "Open GitHub repository");
 
     cursor.x += size + gap;
     ImGui::SetCursorScreenPos(cursor);
     EbDesktopMenuIconsDraw::iconButton("##eb-link-discord", EbDesktopMenuIconsState::discordTex(),
-                                       EbDesktopMenuIconsState::kDiscordUrl);
+                                       EbDesktopMenuIconsState::kDiscordUrl, "Join the Discord");
 }
 
 #endif
