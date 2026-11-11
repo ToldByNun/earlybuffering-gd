@@ -75,6 +75,8 @@ public:
     void kickIfStaleEmpty(PlayLayer* layer);
     // Bake validate: drain slices until idle or wallMs. err on cancel / incomplete.
     bool waitUntilReady(PlayLayer* layer, int wallMs, std::string& err);
+    // Used by shadow world capture (Hard Unknown for follow-like static movers).
+    static bool isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind);
 
 private:
     friend class EbServiceStore;
@@ -126,7 +128,6 @@ private:
     static EbTriggerPose toKey(int tick, LivePose const& live);
     static void pushKey(EbTriggerTrack& track, int tick, LivePose const& live);
     static int durationTicks(float durationSec, double tps);
-    static bool isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind);
     static cocos2d::CCPoint groupCenter(int groupId, std::vector<GameObject*> const& objects,
                                         std::unordered_map<int, LivePose> const& live);
 

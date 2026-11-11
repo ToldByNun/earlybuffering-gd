@@ -2,6 +2,11 @@
 
 ## v1.5.1-dev
 
+### Idle-prefix sharing (classic ascending delays)
+- Classic `plan()` evaluates delays 1..limit on one shared idle spine: checkpoint player+world at each pre-press, fork the press path, restore, then advance one idle tick.
+- Same trajectories as independent `runOne(d)`; idle physics drops from ~N(N+1)/2 to ~N (large Max Assist).
+- Delay 0 / traj engine / dual reset still use the prior path. PlanGold: `idle-prefix-share`.
+
 ### Dynamic / Adaptive throughput (no budget cuts)
 - Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).
 - Adaptive→classic fallthrough seeds terminal / horizon-proven delay results + threat zone + prefix-death tick so classic skips re-sim of finished Adaptive work. Partial Alive screens stay unseeded (classic still proves them).

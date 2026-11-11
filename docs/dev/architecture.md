@@ -53,3 +53,7 @@ Markers other mods can use to ignore them:
 
 Sim death is `simulator.m_dead` — ghosts must not stay `m_isDead` (breaks Mega Hack / QOL “hitboxes on death”).
 Mega Hack / OpenHack may latch an internal `s_isDead` on **any** `destroyPlayer` (even swallowed); EarlyBuffer sets `suppressDeathHitboxes` and force-hides `m_debugDrawNode` in `postUpdate` while real P1 is alive.
+
+## Idle-prefix sharing
+
+Classic candidate search (`EbIdlePrefixShare`) advances idle ticks once for delays 1..N, forks press continuations from a player+world checkpoint (`EbIdlePrefixForkState` + eval ghost 0), then restores before the next idle step. Traj engine and linked-dual remain on independent `runOne`.

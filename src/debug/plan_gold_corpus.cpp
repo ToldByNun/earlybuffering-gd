@@ -40,6 +40,7 @@
 #include "../core/sim/orbs/orb_stack_resolver.hpp"
 #include "../core/sim/orbs/toggle_orb_sim.hpp"
 #include "../core/sim/prefix_sim.hpp"
+#include "../core/sim/planning/search/idle_prefix_share.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_collision_policy.hpp"
 #include "../core/sim/sim_trust.hpp"
@@ -152,6 +153,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbModeSurvival::selfCheck(modeSurvivalReport), "mode-survival");
     std::string prefixSimReport;
     expect(EbPrefixSim::selfCheck(prefixSimReport), "prefix-sim");
+    std::string idlePrefixReport;
+    expect(EbIdlePrefixShare::selfCheck(idlePrefixReport), "idle-prefix-share");
     std::string perfectAssistReport;
     expect(EbPerfectAssistPolicy::selfCheck(perfectAssistReport), "perfect-assist-policy");
     std::string orbAlignReport;

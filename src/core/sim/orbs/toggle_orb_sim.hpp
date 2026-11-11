@@ -54,6 +54,7 @@ public:
 
 private:
     friend class EbServiceStore;
+    friend class EbIdlePrefixForkState;
 
     EbToggleOrbSim() = default;
 

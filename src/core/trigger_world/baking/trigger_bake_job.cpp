@@ -2,7 +2,7 @@
 #include "../../../debug/assist_log.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
-#include "../../../level/section_object_walk.hpp"
+#include "../../level/section_object_walk.hpp"
 #include "../trigger_world_baker.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>

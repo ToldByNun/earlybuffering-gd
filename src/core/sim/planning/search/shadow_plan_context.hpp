@@ -24,6 +24,8 @@ private:
     friend class EbShadowPlanSelection;
     friend class EbShadowPlanResult;
     friend class EbShadowPlanSearch;
+    friend class EbIdlePrefixShare;
+    friend class EbIdlePrefixForkState;
     bool wallExceeded() const;
     bool linkedDual() const;
     EbShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,

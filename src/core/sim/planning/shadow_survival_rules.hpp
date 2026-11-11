@@ -42,6 +42,7 @@ private:
     friend class EbShadowPlanResult;
     friend class EbShadowPlanSearch;
     friend class EbShadowPlanContext;
+    friend class EbIdlePrefixShare;
 
     friend class EbShadowRegressionChecks;
 

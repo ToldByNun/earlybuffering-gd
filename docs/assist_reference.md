@@ -297,6 +297,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 
 **Commit 10 (PrefixSim + two-pass / same-crash):** Ideas reimplemented (no upstream). Shared-prefix: idle death at tick T marks all delays `d > T` without re-sim. Same `deathTick` after press across ≥2 delays → stop (next obstacle). Two-pass: quick cand fill, then hold/release theories only on `delaysForFullScore` (survivors + top died-acted). Mode-gated WaveTurn/ship recover. Jitter (±3% firstDt) only Top-2 picks. PlanGold: `prefix-sim`.
 
+**Idle-prefix sharing (1.5.1):** Classic ascending delays 1..limit share one idle spine (`EbIdlePrefixShare`): player+world fork at each pre-press, restore after the press continuation. Same outcomes as per-delay `runOne`; idle cost ~N instead of ~N²/2. PlanGold: `idle-prefix-share`.
+
 **Commit 11 (PerfectAssistPolicy):** Opportunity + Trust → `MustDelaySearch` (skip spam-Pass / PassNoThreat early exit). Named Pass: `pass-parity-drift` / `pass-spot-untrusted` / `pass-untrust` / `pass-hard-unknown` / `pass-tw-empty` / `pass-budget`. Never soft-trust `budgetHit` into Delay; never invent auto-click/release. InterveneGate help-don't-hurt + Wave smallest-clear helpers. PlanGold: `perfect-assist-policy`.
 
 **Commit 12 (Real metrics primary + simEstimate secondary):** Ship gates stay on `AssistRealMetrics` (DAF / AssistCov / TrustRate / Parity / Wilson G5–G7b). Counterfactual `Prev` / `Caused` / `Net` / `HarmRate_sim` live in `AssistSimEstimate` — tagged `simEstimate`, **G10 diagnostic only** (never ship Pass/Fail). DevReport/eval notes d0 vs planned Delay; overlay `daf=… cov=… trust=…` then `simEst net=+P/-C harm=…%`. Freeze-world **forced on** while DevCycle records. PlanGold: `assist-sim-estimate`.

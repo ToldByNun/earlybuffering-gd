@@ -11,6 +11,7 @@ class EbSimulationCandidate;
 #include "../assist/contracts/assist_verdict.hpp"
 #include "../replay/replay_import.hpp"
 #include "planning/simulation_plan.hpp"
+#include "shadow_run_result.hpp"
 #include <Geode/Geode.hpp>
 #include <cstdint>
 #include <functional>
@@ -23,6 +24,8 @@ class EbSimulationCandidate;
 // robustness, optional firstDt jitter, latency-weighted endX. Never blocks (Pass).
 class EbShadowSimulator {
 public:
+    using RunResult = EbShadowRunResult;
+
     static constexpr int SNAPSHOT_SLOTS = 16;
     // Slot 0 is immortal attempt-start (bake). Plan/traj ring uses 1..13.
     // Slots 14–15 are reserved for GhostParityProbe anchors (not rotated by plan).
@@ -395,31 +398,6 @@ public:
     private:
     };
 
-    class RunResult {
-    public:
-        bool landedAfterAction = false;
-        bool died = false;
-        bool diedBeforeAction = false;
-        bool jumped = false;
-        bool unknown = false;
-        bool activatedRing = false;
-        bool unknownTrunc = false;
-        bool toggleUnknown = false;
-        bool zoneCleared = false;
-        bool wasDashing = false;
-        int ringCount = 0;
-        int jumpTick = -1;
-        int deathTick = -1;
-        int unknownTick = -1;
-        int ticksRan = 0;
-        int ticksBeforeNeutral = 0;
-        float endX = 0.f;
-        float deathX = 0.f;
-        GameObject* deathObject = nullptr;
-
-    private:
-    };
-
 private:
     friend class EbServiceStore;
 
@@ -439,6 +417,8 @@ private:
     friend class EbShadowPlayerState;
     friend class EbShadowPhysics;
     friend class EbShadowCandidateRunner;
+    friend class EbIdlePrefixShare;
+    friend class EbIdlePrefixForkState;
     friend class EbAdaptiveResumeRunner;
     friend class EbAdaptivePlanSearch;
     friend class EbShadowPlanPolicy;

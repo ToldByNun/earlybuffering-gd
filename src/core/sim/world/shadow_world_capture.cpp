@@ -2,7 +2,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
-#include "../../../level/section_object_walk.hpp"
+#include "../../level/section_object_walk.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
