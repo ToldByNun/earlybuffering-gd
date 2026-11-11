@@ -6,6 +6,15 @@
 - Classic `plan()` evaluates delays 1..limit on one shared idle spine: checkpoint player+world at each pre-press, fork the press path, restore, then advance one idle tick.
 - Same trajectories as independent `runOne(d)`; idle physics drops from ~N(N+1)/2 to ~N (large Max Assist).
 - Delay 0 / traj engine / dual reset still use the prior path. PlanGold: `idle-prefix-share`.
+- RequireAlive **input-window** (cube/ball) now fills 1..limit via the same idle spine before ranking (was still per-delay `evalDelay`).
+
+### Grief ball input-window ranking
+- `stopAtBallLanding` made `ticksRan ≈ delay + flight`, so later delays faked higher `surviveBin` and Live armed late peaks (session: Live d=7, Eval `bestSurv=0`).
+- Landed observation-safe cands now rank by endX−λ·delay only, and need >`kFutileEndXGain` to beat an earlier Delay.
+
+### Live click hitch (`sim-budget-us=0`)
+- Classic Live no longer treats `sim-budget-us=0` as a multi-frame freeze: soft wall clamps to **8000µs** per press (Adaptive keeps true unlimited `0`).
+- Input-window idle-prefix stops after the first post-survivor death (ball/cube peak cliff) instead of simming the rest of Max Assist.
 
 ### Dynamic / Adaptive throughput (no budget cuts)
 - Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).

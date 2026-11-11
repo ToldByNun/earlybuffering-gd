@@ -255,7 +255,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. Adaptive Live floor 4000 when set &gt;0. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
+| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited for Adaptive. **Classic Live** maps 0→8000µs hitch ceiling (Grief-class freezes). Adaptive Live floor 4000 when set &gt;0. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
 | tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first + Live reserve). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp ≤2000 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |

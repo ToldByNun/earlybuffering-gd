@@ -29,8 +29,11 @@ When `requireAliveForDelay` and (press down or continuous control):
 - Viability = `survivesObservation` (alive / unknown / landing rules)
 - **Continuous** (wave/ship/swing): earliest safe, then stop
 - **Discrete** (cube/ball/…): scan the band, pick survive_then_endx (+ latency)
+- Candidate fill: d0 via `evalDelay`, then **idle-prefix share** for 1..limit (legacy per-delay fill for gaps / dual / traj)
 
 Stopping at first safe on ball was a real footgun (Eval `bestSurv` ≠ Live pick).
+
+Ball `stopAtBallLanding`: do **not** rank landed cands by `surviveBin` — ticksRan grows with delay. Prefer earlier Delay unless endX−λ·delay gains more than `kFutileEndXGain` (Grief Live late peak vs Eval `bestSurv=0`).
 
 ### Same-crash cut
 

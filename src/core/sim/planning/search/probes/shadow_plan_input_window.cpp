@@ -4,8 +4,10 @@
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../../shadow_simulator.hpp"
 #include "../../shadow_survival_rules.hpp"
-#include "../../simulation_plan.hpp"
+#include "../../simulation_candidate.hpp"
+#include "../idle_prefix_share.hpp"
 #include "../shadow_plan_context.hpp"
+#include <cmath>
 
 bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     if (!context.inputWindow)
@@ -31,6 +33,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     int bestDelay = -1;
     int bestSurviveBin = -1;
     float bestScore = 0.f;
+    bool bestLanded = false;
 
     auto considerSafe = [&](int delayValue, EbSimulationCandidate const& candidate) {
         if (delayValue > 0)
@@ -47,24 +50,51 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         int const surviveBin = EbShadowSurvivalRules::surviveBinOf(surviveTicks);
         float const score =
             candidate.endX - context.latencyWeight * static_cast<float>(delayValue);
+        bool const landed = candidate.raw.landedAfterAction;
+
+        // Ball stopAtBallLanding makes ticksRan ≈ delay + flight, so later delays
+        // inflate surviveBin without surviving longer after the press. Rank landed
+        // cands by score only, and require a clear endX gain to prefer a later Delay
+        // (Grief Live d=7 vs Eval bestSurv=0).
+        if (landed) {
+            if (bestDelay < 0) {
+                bestDelay = delayValue;
+                bestSurviveBin = surviveBin;
+                bestScore = score;
+                bestLanded = true;
+                return;
+            }
+            if (!bestLanded) {
+                bestDelay = delayValue;
+                bestSurviveBin = surviveBin;
+                bestScore = score;
+                bestLanded = true;
+                return;
+            }
+            float const gain = score - bestScore;
+            if (gain > EbShadowSimulator::kFutileEndXGain ||
+                (std::fabs(gain) <= EbShadowSimulator::kFutileEndXGain &&
+                 delayValue < bestDelay)) {
+                bestDelay = delayValue;
+                bestSurviveBin = surviveBin;
+                bestScore = score;
+            }
+            return;
+        }
+
         if (bestDelay < 0 || surviveBin > bestSurviveBin ||
             (surviveBin == bestSurviveBin && score > bestScore)) {
             bestDelay = delayValue;
             bestSurviveBin = surviveBin;
             bestScore = score;
+            bestLanded = false;
         }
     };
 
-    for (int delayValue = 0; delayValue <= context.limit; ++delayValue) {
-        if (context.wallExceeded() || context.tickBudget <= 0) {
-            context.plan.budgetHit = true;
-            break;
-        }
-
-        auto candidate = context.evalDelay(delayValue, -1);
+    auto ingest = [&](int delayValue, EbSimulationCandidate candidate) -> bool {
         if (candidate.raw.ticksRan == 0) {
             context.plan.budgetHit = true;
-            break;
+            return false;
         }
         bool dead = candidate.raw.died;
         bool safe = complete(candidate.raw);
@@ -73,7 +103,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                                                                    : context.layer->m_player1;
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
-                break;
+                return false;
             }
             auto partner = context.runEngine(other, delayValue, -1, nullptr);
             context.simulator.resetCaptureForNextRun(context.layer);
@@ -91,14 +121,71 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.plan.firstDeathObject = candidate.raw.deathObject;
             if (!dead && !safe) {
                 context.plan.reason = AssistReason::PassHardUnknown;
-                break;
+                return false;
             }
         }
-        if (!safe)
-            continue;
+        if (safe)
+            considerSafe(delayValue, candidate);
+        return true;
+    };
 
-        considerSafe(delayValue, candidate);
-        // Continuous: stop at earliest observation-safe delay.
+    // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
+    if (context.wallExceeded() || context.tickBudget <= 0) {
+        context.plan.budgetHit = true;
+    } else if (!ingest(0, context.evalDelay(0, -1))) {
+        context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
+                              context.ledgerEarlyExit());
+        return true;
+    }
+
+    if (!dual && !context.useTrajEngine && context.limit >= 1 && !context.plan.budgetHit &&
+        context.plan.reason != AssistReason::PassHardUnknown) {
+        EbIdlePrefixShare::evaluateAscending(context);
+    }
+
+    for (int delayValue = 1; delayValue <= context.limit; ++delayValue) {
+        if (context.plan.reason == AssistReason::PassHardUnknown)
+            break;
+        if (context.wallExceeded() || context.tickBudget <= 0) {
+            context.plan.budgetHit = true;
+            break;
+        }
+        if (context.candReady[static_cast<size_t>(delayValue)]) {
+            auto const& ready = context.cands[static_cast<size_t>(delayValue)];
+            bool dead = ready.raw.died;
+            bool safe = complete(ready.raw);
+            if (dual && !dead) {
+                auto* other = context.real == context.layer->m_player1 ? context.layer->m_player2
+                                                                       : context.layer->m_player1;
+                if (context.wallExceeded() || context.tickBudget <= 0) {
+                    context.plan.budgetHit = true;
+                    break;
+                }
+                auto partner = context.runEngine(other, delayValue, -1, nullptr);
+                context.simulator.resetCaptureForNextRun(context.layer);
+                dead = partner.died;
+                safe = safe && complete(partner);
+                EbSimulationCandidate updated = ready;
+                updated.viable = safe;
+                updated.clearsThreat = safe;
+                context.cands[static_cast<size_t>(delayValue)] = updated;
+            } else {
+                EbSimulationCandidate updated = ready;
+                updated.viable = safe;
+                updated.clearsThreat = safe;
+                context.cands[static_cast<size_t>(delayValue)] = updated;
+            }
+            if (safe)
+                considerSafe(delayValue, context.cands[static_cast<size_t>(delayValue)]);
+            if (continuous && bestDelay >= 0) {
+                context.ledgerEarliestSafeExit = true;
+                break;
+            }
+            continue;
+        }
+
+        if (!ingest(delayValue, context.evalDelay(delayValue, -1)))
+            break;
         if (continuous && bestDelay >= 0) {
             context.ledgerEarliestSafeExit = true;
             break;

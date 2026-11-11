@@ -23,4 +23,4 @@ The plan only looks a limited distance ahead. Movers the ghost cannot see can fa
 
 ## Eval says bestSurv=X but Live picked something else
 
-Live may stop early (especially some input-window paths) or prefer earliest-safe on continuous modes. Newer 1.5.1 work aims to scan discrete peaks better. Report the session / report line if it still mismatches after update.
+Live may stop early (especially some input-window paths) or prefer earliest-safe on continuous modes. Discrete input-window scans the delay band; ball landing no longer inflates later delays via `surviveBin`. Report the session / report line if it still mismatches after update.

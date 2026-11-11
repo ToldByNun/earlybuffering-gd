@@ -265,6 +265,11 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // override unlimited 0, never lower a higher user setting).
     if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
         opts.budgetUs = 4000;
+    // Classic Live: sim-budget-us=0 is "unlimited" and hitch-freezes on Max Assist
+    // 12 + Trigger World (Grief session cpu~129%/click). Keep Adaptive's true 0;
+    // classic gets an 8ms soft ceiling so one press cannot eat the frame.
+    if (!opts.adaptivePlan && opts.budgetUs <= 0)
+        opts.budgetUs = 8000;
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();
