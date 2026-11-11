@@ -4,6 +4,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../assist/contracts/assist_verdict.hpp"
+#include "simulation_candidate.hpp"
 #include <Geode/Geode.hpp>
 #include <vector>
 
@@ -64,6 +65,12 @@ public:
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     EbThreatZone seedThreatZone{};
+    // Adaptive→classic fallthrough: terminal / horizon-proven delay results so
+    // classic does not re-sim work Adaptive already finished. Partial Alive
+    // screens are NOT seeded (classic must still prove them to horizon).
+    std::vector<EbSimulationCandidate> seedCandidates{};
+    // Shared idle-death tick from Adaptive PrefixSim (−1 = none).
+    int seedPrefixDeathTick = -1;
     // Adaptive Prediction Planner (AP0 contracts; search path lands in later APs).
     // When false, callers keep classic ShadowPlanSearch. Adaptive must not raise
     // Max Assist or Prediction Horizon from these knobs — only subdivide tickBudget.
@@ -105,6 +112,8 @@ public:
     // True when sim overlapped a toggle-orb / touch-toggle target (Commit 3).
     bool toggleUnknown = false;
     bool budgetHit = false;
+    // Wall µs spent in plan()/planSequence (filled by Live press/release planners).
+    int planUs = 0;
     bool activatedRing = false;
     bool usedOrbWindow = false;
     bool foresightOrbPad = false; // TravelForesight orb/pad in travel cone

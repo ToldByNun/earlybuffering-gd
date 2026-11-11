@@ -24,6 +24,7 @@
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 
 bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLayer* playLayer,
@@ -232,8 +233,12 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
+    auto const t0 = std::chrono::steady_clock::now();
     auto plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
                                             firstDt, opts);
+    plan.planUs = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
+            .count());
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     EbDevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);

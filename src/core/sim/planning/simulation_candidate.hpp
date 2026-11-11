@@ -1,7 +1,7 @@
 #ifndef SIMULATION_CANDIDATE_HPP
 #define SIMULATION_CANDIDATE_HPP
 
-#include "../shadow_simulator.hpp"
+#include "../shadow_run_result.hpp"
 
 class EbSimulationCandidate {
 public:
@@ -23,7 +23,7 @@ public:
     float endX = 0.f;
     float deathX = 0.f;
     int jumpTick = 0;
-    EbShadowSimulator::RunResult raw{};
+    EbShadowRunResult raw{};
 
 private:
 };

@@ -24,10 +24,30 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
                     options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
     plan.trajectoryEngine = useTrajEngine;
     model.continuePastClear = options.requireAliveForDelay;
+    // Live Delay proof: run a few ticks past the nominal horizon so a death on
+    // the next frame after hitCap is not declared Safe (session Dump-SP class).
+    if (options.requireAliveForDelay && model.cap > 0) {
+        model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
+    }
     plan.continuous = model.continuous;
+    robustK = EbShadowSurvivalRules::clampRobustKToWindow(robustK, limit);
     if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;
     wall0 = std::chrono::steady_clock::now();
+}
+
+EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
+    if (plan.budgetHit)
+        return EbDevRejectLedger::EarlyExit::Budget;
+    if (ledgerPreferEarlyExit)
+        return EbDevRejectLedger::EarlyExit::PreferBand;
+    if (ledgerSameCrashExit)
+        return EbDevRejectLedger::EarlyExit::SameCrash;
+    if (ledgerEarliestSafeExit)
+        return EbDevRejectLedger::EarlyExit::EarliestSafe;
+    if (ledgerPeakDeathExit)
+        return EbDevRejectLedger::EarlyExit::PeakDeath;
+    return EbDevRejectLedger::EarlyExit::None;
 }
 
 bool EbShadowPlanContext::wallExceeded() const {

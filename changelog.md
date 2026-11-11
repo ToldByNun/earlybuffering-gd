@@ -1,5 +1,83 @@
 # Changelog
 
+## v1.5.1
+
+**Live hitch + Wave honesty + orbs under input-window** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+Release notes: [`releases/v1.5.1.md`](releases/v1.5.1.md).
+
+Ships AP0–AP1 / AP3a–AP3b / AP4 from the 1.5.1 plan. **Deferred:** AP2 landed ranking rewrite, AP3c micro-window cube / triple-jump polish.
+
+### AP4 — Orbs under input-window
+- Live IW runs cheap `spatialOrbHint` whenever Orbs are on, plus budget-capped `scanOrbWindow` (coast + press-reach).
+- After cand fill: orb-intent → earliest±k activation band as `DelayOrb` / `requireOrb` / `dMin`–`dMax` candNotes (before Wave help-only).
+- Dash hold salvage (`releaseAfter=40`) and toggle → `PassToggleUnknown` on the IW path.
+- Adaptive Gate Delay with activation sets `requireOrb` + DelayOrb honestly.
+- PlanGold: `orb-under-input-window`, `orb-dash-hold-iw`, `pass-toggle-unknown-iw`.
+
+### AP3b — Live IW Wave anti-phase + help-only
+- Continuous Wave IW no longer skips classic anti-phase: **help-only** (d0 Alive → `PassD0Safe`, never Delay to pad endX), **proximity** (`PassWaveProximity`), **futile** (`PassWaveFutile`), earliest later Alive Delay when d0 dies.
+- Cheap baseline coast under continuous IW for `idleSafer`. PlanGold: `wave-iw-help-only`, `wave-iw-prox-pass`.
+
+### AP3a — Wave horizon floor
+- Continuous Live IW / Adaptive no longer overwrite look-ahead with bare Max Assist limit.
+- Cap = `max(continuousLookAhead, short AssistHorizon planCap)`; Wave short floor **32** ticks (`EbLivePlanContracts::kWaveHorizonFloor`).
+- `kPostCapProveTicks` still appended after the floor. PlanGold: `wave-horizon-floor`. Wave regression retargeted + legacy short-horizon dual assert.
+
+### AP1 — Hitch (small levels)
+- Live `sim-budget-us=0` → **8000µs** hitch ceiling for classic **and** Adaptive (`EbLivePlanContracts::intendedLiveBudgetUs`).
+- Adaptive→classic fallthrough uses remUs floor **2000µs** when the wall is spent but ticks remain (was `budgetUs=1`).
+- Fallthrough seeds observation-cleared Alive screens (not only terminal/horizon); IW accepts those seeds at screen quantum.
+- Discrete peak-death cut marks leftovers `Skipped`/`peak-death-cut` only — no fake-dead clones; IW does not re-`evalDelay` them.
+- PlanGold: `live-hitch-ceiling`. Adaptive parity smoke: `adaptive-zero-wall-clamped`, `fallthrough-remus-floor`.
+
+### AP0 — Live plan contracts (no behavior change)
+- Ledger: `peak-death-cut` reject code + `EarlyExit::PeakDeath`.
+- Pure `EbLivePlanContracts` locks current vs intended hitch / landed-rank / peak-death / orb-under-IW tables. PlanGold: `live-plan-contracts`.
+- DevTrace `planFinished` adds `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
+
+### Idle-prefix sharing (classic ascending delays)
+- Classic `plan()` evaluates delays 1..limit on one shared idle spine: checkpoint player+world at each pre-press, fork the press path, restore, then advance one idle tick.
+- Same trajectories as independent `runOne(d)`; idle physics drops from ~N(N+1)/2 to ~N (large Max Assist).
+- Delay 0 / traj engine / dual reset still use the prior path. PlanGold: `idle-prefix-share`.
+- RequireAlive **input-window** (cube/ball) now fills 1..limit via the same idle spine before ranking (was still per-delay `evalDelay`).
+
+### Grief ball input-window ranking
+- `stopAtBallLanding` made `ticksRan ≈ delay + flight`, so later delays faked higher `surviveBin` and Live armed late peaks (session: Live d=7, Eval `bestSurv=0`).
+- Landed observation-safe cands now rank by endX−λ·delay only, and need >`kFutileEndXGain` to beat an earlier Delay.
+
+### Live click hitch (`sim-budget-us=0`)
+- Classic Live no longer treats `sim-budget-us=0` as a multi-frame freeze: soft wall clamps to **8000µs** per press.
+- **AP1:** Adaptive Live uses the same hitch ceiling; peak-death leftovers stay honest Skipped (see AP1 above).
+
+### Dynamic / Adaptive throughput (no budget cuts)
+- Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).
+- Adaptive→classic fallthrough seeds terminal / horizon-proven / observation-cleared Alive screens + threat zone + prefix-death tick so classic skips re-sim of finished Adaptive work.
+
+### Dev Lab resource stats
+- Session JSON + Dev report overlay now carry process RAM/CPU min–max (`resourceStats` / `ram=…-…MB cpu=…-…%`), sampled on session start, planFinished, and attempt seal (Windows Working Set + process CPU).
+
+### Live honesty (Dump-SP / startpos class)
+- Touch movers and follow-like static targets that TW cannot bake are registered as Hard Unknown (no more frozen editor-pose “safe” Delays).
+- Live Delay proof adds post-horizon prove-out ticks so a death on the frame after hitCap is not armed as Safe.
+
+### Ledger honesty + tiny Max Assist windows
+- CandNotes no longer label same-crash / continuous earliest-safe cuts as fake `skip=not-viable` — codes are `same-crash-cut` and `earliest-safe-exit`.
+- Discrete input-window (cube/ball) ranks the full delay band by survive_then_endx; continuous still earliest-safe.
+- `robustK` is clamped to the Max Assist window (`limit=1` → k=0) so a 1-tick cube Delay no longer needs a viable d0 neighbor to arm.
+
+### Per-tick shell cheaper (same outcomes)
+- Capture builds a group→members sidetable once (`belongsToGroup` per solid×needed group, not per effect×solid) for follow / toggle / unmodeled targets.
+- TW / live-dynamic apply skips `writePose` when the sampled pose matches the last write (hold keys no longer rewrite Cocos every tick).
+- Ghost mute runs once per session / `copyPlayerState`, not 3× inside each physics tick.
+
+### Shadow ghosts vs hitbox-on-death menus
+- Owned ghosts no longer leave `m_isDead` latched after sim collisions; death stays on `simulator.m_dead` only.
+- `PlayLayer::destroyPlayer` uses `Priority::Stub` swallow; `collidedWithObjectInternal` clears ghost deaths too.
+- Sim sessions force `m_hitboxesOnDeath=false` and hide `m_debugDrawNode`; restore after. Real P1/P2 death flags restored if sim contaminated them.
+- After a ghost death swallow, `postUpdate` (Last) keeps `m_debugDrawNode` hidden while the real icon is alive — undoes Mega Hack / OpenHack `s_isDead` latches that fire on any `destroyPlayer` call.
+- Suppress clears on real death / `resetLevel`. Ghosts tagged `audesign.earlybuffer/sim-ghost` (+ node ids) for cooperative ignore.
+
 ## v1.5.0
 
 **Adaptive Prediction Planner (Live) + assist honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

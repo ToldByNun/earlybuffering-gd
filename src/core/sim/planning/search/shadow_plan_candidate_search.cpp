@@ -4,11 +4,37 @@
 #include "../../prefix_sim.hpp"
 #include "../shadow_survival_rules.hpp"
 #include "../simulation_candidate.hpp"
+#include "idle_prefix_share.hpp"
 #include "shadow_plan_context.hpp"
 #include <algorithm>
 #include <vector>
 
 void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
+    // Bake-prior prefer band (shared by idle-prefix + legacy).
+    context.preferLo = -1;
+    context.preferHi = -1;
+    context.hasPrefer = context.options.preferDelayMin >= 0 &&
+                        context.options.preferDelayMax >= context.options.preferDelayMin;
+    if (context.hasPrefer) {
+        context.preferLo = std::max(0, context.options.preferDelayMin);
+        context.preferHi = std::min(context.limit, context.options.preferDelayMax);
+        context.hasPrefer = context.preferLo <= context.preferHi;
+    }
+
+    // Ascending idle-prefix share for runOne engine (not traj): one idle spine,
+    // fork at each press. Falls through to legacy when traj / dual abort / fail.
+    if (EbIdlePrefixShare::evaluateAscending(context)) {
+        bool anyMissing = false;
+        for (int delay = 1; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)]) {
+                anyMissing = true;
+                break;
+            }
+        }
+        if (!anyMissing)
+            return;
+    }
+
     std::vector<int> order;
     order.reserve(static_cast<size_t>(context.limit) + 1);
     order.push_back(0);
@@ -27,16 +53,6 @@ void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    // Bake-prior prefer band (after d0 / orb): evaluate ±k margin so robust check works.
-    context.preferLo = -1;
-    context.preferHi = -1;
-    context.hasPrefer = context.options.preferDelayMin >= 0 &&
-                        context.options.preferDelayMax >= context.options.preferDelayMin;
-    if (context.hasPrefer) {
-        context.preferLo = std::max(0, context.options.preferDelayMin);
-        context.preferHi = std::min(context.limit, context.options.preferDelayMax);
-        context.hasPrefer = context.preferLo <= context.preferHi;
-    }
     int preferLastInOrder = -1;
     if (context.hasPrefer) {
         int const offset = context.robustK;
@@ -81,10 +97,22 @@ void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
     };
 
     // Commit 10 PrefixSim: shared-prefix early-death + same-crash cut.
-    int prefixDeathTick = -1;
+    // Adaptive fallthrough may already know the idle-death tick.
+    int prefixDeathTick = context.options.seedPrefixDeathTick;
     int sameCrashStreak = 0;
     int sameCrashPrevTick = -1;
     bool sameCrashStopped = false;
+    if (prefixDeathTick < 0) {
+        for (int delay = 0; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            auto const& seeded = context.cands[static_cast<size_t>(delay)];
+            if (!seeded.diedBeforeAction)
+                continue;
+            prefixDeathTick = EbPrefixSim::mergePrefixDeathTick(
+                prefixDeathTick, seeded.raw.deathTick, true);
+        }
+    }
 
     bool const isWaveMode = context.real && context.real->m_isDart;
     bool const isShipLike = context.real && (context.real->m_isShip || context.real->m_isBird ||
@@ -167,6 +195,7 @@ void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
         }
         if (EbPrefixSim::sameCrashShouldStop(sameCrashStreak)) {
             sameCrashStopped = true;
+            context.ledgerSameCrashExit = true;
             EbAssistLog::debug(fmt::format("PLAN id={} same-crash stop deathTick={} after delay={}",
                                          context.plan.planId, candidate.raw.deathTick, delayValue));
             break;

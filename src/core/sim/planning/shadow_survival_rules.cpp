@@ -120,3 +120,9 @@ int EbShadowSurvivalRules::resolveRobustK(PlayerObject* real, EbPlanOptions cons
     }
     return std::clamp(forced, 1, 3);
 }
+
+int EbShadowSurvivalRules::clampRobustKToWindow(int robustK, int limit) {
+    if (limit <= 0)
+        return 0;
+    return std::min(std::max(0, robustK), std::max(0, limit - 1));
+}

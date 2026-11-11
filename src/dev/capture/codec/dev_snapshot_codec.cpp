@@ -232,6 +232,7 @@ matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {
     otherIndex["triggerSkipFollow"] = w.triggerSkipFollow;
     otherIndex["triggerSkipDynamic"] = w.triggerSkipDynamic;
     otherIndex["triggerSkipNonSpawn"] = w.triggerSkipNonSpawn;
+    otherIndex["triggerSkipTouch"] = w.triggerSkipTouch;
     if (w.hasHazardDigest) {
         otherIndex["hazardDigest"] = fmt::format("{:016x}", w.hazardDigest);
     }
@@ -333,6 +334,7 @@ bool EbDevSnapshotCodec::witnessFromJson(matjson::Value const& j, EbDevLiveWitne
     ti("triggerSkipFollow", w.triggerSkipFollow);
     ti("triggerSkipDynamic", w.triggerSkipDynamic);
     ti("triggerSkipNonSpawn", w.triggerSkipNonSpawn);
+    ti("triggerSkipTouch", w.triggerSkipTouch);
     if (j.contains("hazardDigest")) {
         auto hs = std::string(j["hazardDigest"].asString().unwrapOr("0"));
         w.hazardDigest = std::strtoull(hs.c_str(), nullptr, 16);

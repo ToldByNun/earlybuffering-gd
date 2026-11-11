@@ -22,6 +22,7 @@
 #include "../../../trigger_world/trigger_world_store.hpp"
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
+#include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../orb_align.hpp"
@@ -265,6 +266,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // override unlimited 0, never lower a higher user setting).
     if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
         opts.budgetUs = 4000;
+    // 1.5.1 AP1: sim-budget-us=0 → hitch ceiling for classic AND Adaptive Live
+    // (EbLivePlanContracts). Stops Adaptive unlimited freezes on small levels.
+    opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();
@@ -302,6 +306,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     int const planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    plan.planUs = planUs;
     EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
     // Classic coverage proxy until Adaptive reports real fully-verified counts.
     int const fullyVerified = plan.budgetHit ? 0 : std::max(0, plan.candidatesTried);

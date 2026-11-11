@@ -9,7 +9,13 @@
 class $modify(EbPlayLayer, PlayLayer) {
 public:
     static void onModify(auto& self) {
-        (void)self.setHookPriority("PlayLayer::destroyPlayer", geode::prelude::Priority::First);
+        // Stub runs before First — swallow ghost deaths before MH/QOL hooks that
+        // call Parent then latch "hitboxes on death" (OpenHack priority 0x500000).
+        (void)self.setHookPriorityPre("PlayLayer::destroyPlayer",
+                                      geode::prelude::Priority::Stub);
+        // After MH postUpdate re-shows debug draw from a false s_isDead latch.
+        (void)self.setHookPriorityPost("PlayLayer::postUpdate",
+                                       geode::prelude::Priority::Last);
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer);
@@ -23,6 +29,8 @@ public:
     // until a full re-enter. Quit cleanup stays in onQuit only.
 
     void destroyPlayer(PlayerObject* player, GameObject* object);
+
+    void postUpdate(float deltaTime);
 
     void playEndAnimationToPos(cocos2d::CCPoint position);
 

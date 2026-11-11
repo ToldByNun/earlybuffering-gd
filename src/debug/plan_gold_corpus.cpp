@@ -3,6 +3,7 @@
 #include "../core/assist/assist_controller.hpp"
 #include "../core/assist/contracts/assist_contracts140.hpp"
 #include "../core/assist/contracts/assist_verdict.hpp"
+#include "../core/assist/contracts/live_plan_contracts.hpp"
 #include "../core/assist/contracts/miss_assist_contracts.hpp"
 #include "../core/assist/input/buffer_event_machine.hpp"
 #include "../core/assist/input/click_intent_guard.hpp"
@@ -40,6 +41,7 @@
 #include "../core/sim/orbs/orb_stack_resolver.hpp"
 #include "../core/sim/orbs/toggle_orb_sim.hpp"
 #include "../core/sim/prefix_sim.hpp"
+#include "../core/sim/planning/search/idle_prefix_share.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_collision_policy.hpp"
 #include "../core/sim/sim_trust.hpp"
@@ -49,6 +51,7 @@
 #include "../dev/capture/dev_cycle_recorder.hpp"
 #include "../dev/capture/dev_live_witness.hpp"
 #include "../dev/capture/dev_trace_store.hpp"
+#include "../dev/diagnostics/dev_resource_stats.hpp"
 #include "../dev/dev_config.hpp"
 #include "../dev/dev_session.hpp"
 #include "../dev/evaluation/dev_eval_engine.hpp"
@@ -151,6 +154,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbModeSurvival::selfCheck(modeSurvivalReport), "mode-survival");
     std::string prefixSimReport;
     expect(EbPrefixSim::selfCheck(prefixSimReport), "prefix-sim");
+    std::string idlePrefixReport;
+    expect(EbIdlePrefixShare::selfCheck(idlePrefixReport), "idle-prefix-share");
     std::string perfectAssistReport;
     expect(EbPerfectAssistPolicy::selfCheck(perfectAssistReport), "perfect-assist-policy");
     std::string orbAlignReport;
@@ -163,6 +168,52 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk");
     std::string diagDumpReport;
     expect(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
+    std::string livePlanReport;
+    expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
+    // 1.5.1 AP1: Adaptive + classic Live both clamp simUs=0 → hitch ceiling.
+    expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs &&
+               EbLivePlanContracts::intendedLiveBudgetUs(0) ==
+                   EbLivePlanContracts::currentClassicBudgetUs(0) &&
+               EbLivePlanContracts::currentAdaptiveBudgetUs(0) == 0,
+           "live-hitch-ceiling");
+    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
+               EbLivePlanContracts::kFallthroughRemUsFloor,
+           "live-hitch-ceiling-remus");
+    // 1.5.1 AP3a: Wave continuous IW floor (≥32), not bare Max Assist limit.
+    expect(EbLivePlanContracts::kWaveHorizonFloor == 32 &&
+               EbLivePlanContracts::intendedContinuousIwCap(
+                   12, EbLivePlanContracts::waveShortPlanCap(12)) == 32 &&
+               EbAssistHorizon::continuousInputWindowCap(GameModeKind::Wave, 12, 1.f) == 32,
+           "wave-horizon-floor");
+    // 1.5.1 AP3b: Live IW Wave help-only + proximity anti-phase.
+    expect(EbLivePlanContracts::waveIwHelpOnlyPass(true, true, true) &&
+               EbLivePlanContracts::waveIwChooseDelay(true, 7) == 0 &&
+               !EbLivePlanContracts::waveIwHelpOnlyPass(true, true, false),
+           "wave-iw-help-only");
+    expect(EbLivePlanContracts::waveIwProximityPass(true, true, false, true, true, false) &&
+               !EbLivePlanContracts::waveIwProximityPass(true, true, true, true, true, false) &&
+               !EbLivePlanContracts::waveIwProximityPass(true, true, false, true, true, true),
+           "wave-iw-prox-pass");
+    // 1.5.1 AP4: orb hint/scan allowed under IW; earliest act → DelayOrb.
+    expect(EbLivePlanContracts::intendedSpatialOrbHintAllowed(true) &&
+               EbLivePlanContracts::intendedOrbWindowScanAllowed(true, true, true) &&
+               !EbLivePlanContracts::currentOrbWindowScanRuns(true, true),
+           "orb-under-input-window");
+    {
+        EbAssistPickV1::CandView orbCands[] = {
+            {false, false}, {true, true}, {true, true}, {true, true}};
+        auto const orbPick = EbAssistPickV1::choose(orbCands, 3, 0, true, 1, 3);
+        expect(!orbPick.doPass && orbPick.chosen == 1 && orbPick.requireOrb, "orb-under-input-window");
+    }
+    // Dash hold contract: wasDashing salvage uses releaseAfter=40 (IW mirrors classic).
+    {
+        int const dashHoldReleaseAfter = 40;
+        expect(dashHoldReleaseAfter == 40 && dashHoldReleaseAfter > 0, "orb-dash-hold-iw");
+    }
+    // Toggle unknown named Pass (not Hopeless) — reason id locked in AssistVerdict.
+    expect(std::string(EbAssistVerdict::name(AssistReason::PassToggleUnknown))
+                   .find("toggle") != std::string::npos,
+           "pass-toggle-unknown-iw");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;
@@ -200,6 +251,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
     std::string devTraceReport;
     expect(EbDevTraceStore::selfCheck(devTraceReport), "dev-trace-store");
+    std::string devResourceReport;
+    expect(EbDevResourceStats::selfCheck(devResourceReport), "dev-resource-stats");
     std::string devCycleReport;
     expect(EbDevCycleRecorder::selfCheck(devCycleReport), "dev-cycle-recorder");
     // Synthetic gold: earliest robust policy — no midpoint

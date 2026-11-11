@@ -11,11 +11,14 @@ bool EbSectionObjectWalk::pointerLooksLive(void const* valuePointer) {
         return false;
     if (addr == ~uintptr_t{0})
         return false;
-    // Common low poison patterns (0xDEAD… left for platform; keep cheap).
-    if (!(addr == 0xFFFFFFFFFFFFFFFEull)) {
-        return true;
-    }
-    return false;
+    if (addr == 0xFFFFFFFFFFFFFFFEull)
+        return false;
+    // Reject non-canonical / non-user addresses. Section slots can hold tagged
+    // garbage (e.g. 0x9…); typeinfo_cast then AVs reading vtable @ -1.
+    constexpr uintptr_t kUserCanonicalMax = 0x00007FFFFFFFFFFFull;
+    if (addr > kUserCanonicalMax)
+        return false;
+    return true;
 }
 
 GameObject* EbSectionObjectWalk::asGameObject(void* rawData) {
@@ -78,6 +81,7 @@ bool EbSectionObjectWalk::selfCheck(std::string& report) {
     expect(!pointerLooksLive(reinterpret_cast<void*>(0x100ull)), "null-page");
     expect(!pointerLooksLive(reinterpret_cast<void*>(~uintptr_t{0})), "poison-ff");
     expect(!pointerLooksLive(reinterpret_cast<void*>(0xFFFFFFFFFFFFFFFEull)), "poison-fe");
+    expect(!pointerLooksLive(reinterpret_cast<void*>(0x90037d0012ab6a0eull)), "non-canonical");
 
     // Stack / heap addresses used as “live-looking” for the filter only.
     int stackProbe = 0;

@@ -8,6 +8,10 @@
 
 class EbShadowSurvivalRules {
 public:
+    // Extra ticks past Prediction Horizon when Live requires Alive for Delay.
+    // Catches deaths on the tick after the wall (Dump-SP / startpos class).
+    static constexpr int kPostCapProveTicks = 8;
+
     static int surviveBinOf(int ticks);
     static int rankingSurviveTicks(EbShadowSimulator::RunResult const& r);
     static bool clearsThreatOf(EbShadowSimulator::RunResult const& r, EbThreatZone const& zone);
@@ -25,6 +29,9 @@ public:
                                    bool requireAliveForDelay = false);
     static bool exitSurvivedHonest(bool died, bool unknown);
     static int resolveRobustK(PlayerObject* real, EbPlanOptions const& options);
+    // ±k must fit the Max Assist window. limit=1 + k=1 made Delay@1 require
+    // viable d0 — so cube with a 1-tick window almost never armed a Delay.
+    static int clampRobustKToWindow(int robustK, int limit);
 
 private:
     friend class EbShadowPlanInputWindow;
@@ -35,6 +42,7 @@ private:
     friend class EbShadowPlanResult;
     friend class EbShadowPlanSearch;
     friend class EbShadowPlanContext;
+    friend class EbIdlePrefixShare;
 
     friend class EbShadowRegressionChecks;
 

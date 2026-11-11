@@ -13,6 +13,10 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
             return nullptr;
         player->setPosition({0.f, 105.f});
         player->setID(id);
+        // Explicit marker for other mods (hitbox overlays, etc.): ignore these
+        // PlayerObjects — they are sim ghosts, not the real icon.
+        player->setUserObject("audesign.earlybuffer/sim-ghost"_spr,
+                              cocos2d::CCBool::create(true));
         // objectLayer owns the node (addChild retain). Do NOT extra-retain —
         // release-on-quit while still parented / double-free in ~PlayerObject
         // during setNextScene was the quit AV (CCObject::release).
@@ -43,6 +47,10 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
     simulator.m_applyingRing = false;
     simulator.m_orbScanning = false;
     simulator.m_orbOverlapTick = false;
+    simulator.m_suppressDeathHitboxes = false;
+    simulator.m_savedHitboxesOnDeath = false;
+    simulator.m_savedP1Dead = false;
+    simulator.m_savedP2Dead = false;
     simulator.m_dead = false;
     simulator.m_jumped = false;
     simulator.m_unknown = false;
@@ -134,6 +142,8 @@ void EbShadowGhostLifecycle::parkGhosts(EbShadowSimulator& simulator) {
         player->m_outerSectionIndex = -1;
         player->m_innerSectionIndex = -1;
         player->m_middleSectionIndex = -1;
+        // Snapshots can die during capture — never leave m_isDead for menus.
+        player->m_isDead = false;
         simulator.hideGhost(player);
     };
     auto parkOffLevel = [&](PlayerObject* player) {
@@ -165,7 +175,27 @@ void EbShadowGhostLifecycle::parkGhosts(EbShadowSimulator& simulator) {
 void EbShadowGhostLifecycle::beginSession(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_simulating = true;
     simulator.m_applyingRing = false;
+    // Vanilla / MH "hitboxes on death" keys off these — freeze them for the sim.
+    simulator.m_savedHitboxesOnDeath = false;
+    simulator.m_savedP1Dead = false;
+    simulator.m_savedP2Dead = false;
+    if (layer) {
+        simulator.m_savedHitboxesOnDeath = layer->m_hitboxesOnDeath;
+        layer->m_hitboxesOnDeath = false;
+        if (layer->m_player1)
+            simulator.m_savedP1Dead = layer->m_player1->m_isDead;
+        if (layer->m_player2)
+            simulator.m_savedP2Dead = layer->m_player2->m_isDead;
+        // Hide RobTop debug draw for the session so ghost section poses cannot
+        // flash hazard hitboxes mid-plan (MH patches keep the draw path hot).
+        if (layer->m_debugDrawNode)
+            layer->m_debugDrawNode->setVisible(false);
+    }
     simulator.beginCapture(layer);
+    // Mute once for the session; stepPhysics no longer re-mutes every tick.
+    simulator.hideGhost(simulator.m_shadow);
+    if (simulator.m_evalActive)
+        simulator.hideGhost(simulator.m_evalActive);
 }
 
 void EbShadowGhostLifecycle::endSession(EbShadowSimulator& simulator, PlayLayer* layer) {
@@ -174,6 +204,19 @@ void EbShadowGhostLifecycle::endSession(EbShadowSimulator& simulator, PlayLayer*
     simulator.m_bakeOffline = false;
     if (layer) {
         simulator.restoreCapture(layer);
+        layer->m_hitboxesOnDeath = simulator.m_savedHitboxesOnDeath;
+        // Sim must not leave the real icons looking dead to hitbox-on-death menus.
+        if (layer->m_player1 && !simulator.m_savedP1Dead)
+            layer->m_player1->m_isDead = false;
+        if (layer->m_player2 && !simulator.m_savedP2Dead)
+            layer->m_player2->m_isDead = false;
+        if (layer->m_debugDrawNode && layer->m_player1 && !layer->m_player1->m_isDead &&
+            !layer->m_isDebugDrawEnabled) {
+            // Keep suppressed after ghost deaths; MH postUpdate may re-show —
+            // PlayLayer::postUpdate (Last) enforces while suppressDeathHitboxes.
+            if (simulator.m_suppressDeathHitboxes)
+                layer->m_debugDrawNode->setVisible(false);
+        }
     } else {
         // Still drop claim deltas / flags if the layer vanished mid-sim.
         EbToggleOrbSim::get().restore();

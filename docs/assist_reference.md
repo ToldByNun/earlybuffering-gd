@@ -1,10 +1,10 @@
 # EarlyBuffer Assist Reference
 
-## Cloud Configs in v1.5.0
+## Cloud Configs in v1.5.1
 
 Open Settings → Assist → Assist Actions → Cloud Configs, below Import Config. Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.5.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.5.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -30,7 +30,7 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Adaptive budget (AP3):** `EbAdaptiveBudgetController::plan` uses `tick-budget` (platform-clamped) as the hard Dynamic Plan Tick allowance and splits into screen / verify / reserve (`adaptive-reserve-pct`, screen share 30% of the non-reserve pool). `sim-budget-us` stays a soft runtime wall (plus EMA suggestion for diagnostics) — it must not shrink hard ticks (that starved Live into PassBudget). Quanta: `adaptive-screen-ticks` / `adaptive-verify-quantum`.
 
-**Adaptive planner (AP4–AP6):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start (same as classic). `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0 / screen quantum only vs dying d0). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`). Alive-but-unproven d0 is `PassBudget`, not Hopeless. Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
+**Adaptive planner (AP4–AP6):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic). `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0 / screen quantum only vs dying d0). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) with remaining ticks + remUs floor 2000µs and observation-cleared Alive seeds. Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
 
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
@@ -255,7 +255,7 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock; 0=unlimited. Adaptive Live floor 4000 when set &gt;0. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
+| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock. **Live** (classic + Adaptive) maps 0→8000µs hitch ceiling (Grief-class freezes). Adaptive Live floor 4000 when set &gt;0. Adaptive→classic fallthrough remUs floor 2000µs when ticks remain. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
 | tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first + Live reserve). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp ≤2000 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |
@@ -296,6 +296,8 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 **Commit 9 (ModeSurvival — lethal vs recoverable vs landing):** Ideas reimplemented (no upstream code). `ModeSurvival` classifies cand outcomes: Cube/Ball **Landing** after settle past threat; Wave **Recoverable** after clear (3 flip-probe helpers + smallest clear +1px); Ship/UFO/Spider **Recoverable** after clear; **LateCrashAfterClear** when death is past the threat; **Lethal** inside the zone. Narrow overlap-ignore only for follow/spent hazards already overlapping at click. ParityGate: ascent-shaped death alone ≠ Landing. Soft classes (`countsAsSafeForDelay`) avoid false-lethal bake labeling; **Live Delay-arm** uses Delay-worthy (`countsAsDelayWorthy` = Alive only via `PlanOptions.requireAliveForDelay`, plus `shouldSkipFalseOpportunity` so Landing/LateCrash never invent Delay). Bake `verifyDelay` keeps soft. PlanGold: `mode-survival`.
 
 **Commit 10 (PrefixSim + two-pass / same-crash):** Ideas reimplemented (no upstream). Shared-prefix: idle death at tick T marks all delays `d > T` without re-sim. Same `deathTick` after press across ≥2 delays → stop (next obstacle). Two-pass: quick cand fill, then hold/release theories only on `delaysForFullScore` (survivors + top died-acted). Mode-gated WaveTurn/ship recover. Jitter (±3% firstDt) only Top-2 picks. PlanGold: `prefix-sim`.
+
+**Idle-prefix sharing (1.5.1):** Classic ascending delays 1..limit share one idle spine (`EbIdlePrefixShare`): player+world fork at each pre-press, restore after the press continuation. Same outcomes as per-delay `runOne`; idle cost ~N instead of ~N²/2. PlanGold: `idle-prefix-share`.
 
 **Commit 11 (PerfectAssistPolicy):** Opportunity + Trust → `MustDelaySearch` (skip spam-Pass / PassNoThreat early exit). Named Pass: `pass-parity-drift` / `pass-spot-untrusted` / `pass-untrust` / `pass-hard-unknown` / `pass-tw-empty` / `pass-budget`. Never soft-trust `budgetHit` into Delay; never invent auto-click/release. InterveneGate help-don't-hurt + Wave smallest-clear helpers. PlanGold: `perfect-assist-policy`.
 
@@ -444,9 +446,13 @@ Owned ghosts (shadow + snapshots) never enter vanilla `destroyPlayer` / `playerD
 Death to an owned ghost as the killer object is swallowed. Real-player deaths are swallowed while
 `m_simulating` (anticheat on real players still passes). During sim, `collisionCheckObjects` runs
 only for the shadow (filter via a **persistent** scratch `gd::vector`, never a stack temporary — iOS ABI).
-Live collision lists strip owned ghosts. `SimSessionGuard` RAII always `restoreCapture` + clears
-`m_simulating` / `m_applyingRing` and parks owned ghosts (shadow + eval off-level; snapshots scrub+hide)
-after each plan/bake/traj session so live `playerTouchedRing` never sees half-restored claim flags.
+Live collision lists strip owned ghosts. Ghost `collidedWithObjectInternal` clears `m_isDead`; sim
+sessions clear `m_hitboxesOnDeath` and hide debug draw. After a swallowed ghost death,
+`suppressDeathHitboxes` + `postUpdate` (Last) keeps `m_debugDrawNode` hidden while real P1 is alive
+(Mega Hack / OpenHack can latch hitboxes on any `destroyPlayer` call). `SimSessionGuard` RAII always
+`restoreCapture` + clears `m_simulating` / `m_applyingRing` and parks owned ghosts (shadow + eval
+off-level; snapshots scrub+hide) after each plan/bake/traj session so live `playerTouchedRing`
+never sees half-restored claim flags.
 Ring restore uses `typeinfo_cast<RingObject*>`; `m_activatedObjectIDs` is always restored.
 Ghost `update` is no-op unless actively stepping. Before `resetLevel` / checkpoint load:
 `evacuateGhosts` pulls all owned ghosts out of section vectors (avoids `sortSectionVector` AV)
@@ -484,6 +490,7 @@ Physics unit = **tick** (often ~240/s). UI “frames” at 60fps are **not** the
 | G1 Window-Cap | `delay`, `fireTick`, bake/hold ETA never exceed `activeLimit` (`params.ticks`). Ideal timing past the window does not exist for assist — pick best among `0..limit` only. Example: ideal `d=6`, limit `4`, `d=4` viable → Delay ≤4, never wait for 6. |
 | G1 v1 | Setting `assist-pick` = **v1** (default, ex-Legacy): `d0` viable → Pass; else **latest** ±k-robust viable in window (non-orb). Orb band still earliest activation. Live choose lives in `AssistPickV1` (PlanGold `assist-pick-v1`); ShadowSimulator only adds jitter / shared cand eval. |
 | G1 v2 | `AssistPickV2` foresight-first: among ±k-robust **Delay-worthy** delays (`viable && !died`) rank `orbUseful > surviveBin > surviveTicks > endX−λ·delay` (not latest). Orb band still earliest. `idleSafer` / `longForesightNeedSearch` / `ascentUseful` prefer a later **Alive** Delay when one exists; both-dead / soft-died → hopeless (`chosen=-1`), never invent Delay. Live only — Hybrid bake wins never hit this path. Plus **LongForesight**. `planSequence` only when `smart-depth` > 1. PlanGold `assist-pick-v2`. |
+| Live IW vs G1 | Live presses set `requireAliveForDelay` → **input-window** returns before AssistPick. Continuous IW / Adaptive cap = `max(lookAhead, short AssistHorizon)` (Wave ≥32, AP3a). Wave IW runs help-only / proximity / futile (AP3b). Orbs: spatial hint + budget-capped `scanOrbWindow` under IW → earliest±k `DelayOrb` (AP4). Classic selection is skipped. PlanGold: `live-plan-contracts`, `wave-horizon-floor`, `wave-iw-help-only`, `wave-iw-prox-pass`, `orb-under-input-window`. |
 | G2 | `Pass no-threat` only after foresight + `OpportunityProbe` (mid/limit) agree the corridor is empty. Foresight orb/pad or probe activation/bin/endX gain → full search. |
 | G3 | Every Pass/Delay sets `AssistReason`; overlay / `VERDICT` / `PLAN … verdict=` logs it. `pass-unknown` is a bug. |
 | Soft Hold-Until-Safe | Trusted only (`SimTrust.okAt`). `PassBudget` / `PassHopeless` / foresight+budget/unknown / continuous `idleSafer`+`ascentUseful` → arm (`holdUntilSafe`). Cadenced replan (every 3 ticks / ΔX≥8 / foresight edge / rem≤2); budget exhaust → deadline. Trust lost mid-HUS → Pass (no inject). Overlay `HUS` + `HOLD~`. |
@@ -542,7 +549,7 @@ Before blind `Pass no-threat`, `OpportunityProbe` forces further search when for
 | Toggle-orb corridor (solids flip on 1594) | Delay only after modeled flip; else `PASS toggle-unk` / HUS | Same | `ToggleOrbSim` restores on capture teardown |
 | Toggle+Jump orb stack (co-located) | Both fire (toggle flip + jump boost) | Same | `OrbStackResolver::fireStackedPartners` — vanilla clicks both |
 | Empty corridor, single tap | `PASS no-threat`, vanilla now | Same | |
-| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same | Overlay `PASS spam` / `PASS wave-prox` |
+| Wave zigzag spam, no orb | Pass spam / wave-prox — no Delay | Same (IW AP3b: help-only / prox / futile) | Overlay `PASS spam` / `PASS wave-prox` |
 | Wave + orb in travel cone | Delay/Hold — wave-prox/futile blocked by foresight | Same | `foresightOrbPad` overrides wave Pass |
 | Ship/Wave: idle lives, press-now dies, later delay clears | Delay/HUS (`idleSafer`+`ascent`) | Same | PLAN log `idleSafer=1 ascent=1` |
 | Hybrid: bake hit (verify ok, in window) | Overlay `hy bake [lo,hi]`; LagProbe `eb.hybrid.verify` short / `cache=1` on repeat | Same | No Live plan this press |

@@ -2,6 +2,7 @@
 #include "../../../debug/assist_log.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
+#include "../../level/section_object_walk.hpp"
 #include "../trigger_world_baker.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
@@ -139,14 +140,18 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
                     break;
                 }
                 auto* mid = sections[owner.m_secOuter];
-                if (!mid || owner.m_secInner >= mid->size()) {
+                // Never raw typeinfo_cast on section slots — poison / tagged
+                // garbage AVs (read @ -1). Same filter as EbSectionObjectWalk.
+                if (!EbSectionObjectWalk::pointerLooksLive(mid) ||
+                    owner.m_secInner >= mid->size()) {
                     ++owner.m_secOuter;
                     owner.m_secInner = 0;
                     owner.m_secSlot = 0;
                     continue;
                 }
                 auto* inner = (*mid)[owner.m_secInner];
-                if (!inner || owner.m_secSlot >= inner->size()) {
+                if (!EbSectionObjectWalk::pointerLooksLive(inner) ||
+                    owner.m_secSlot >= inner->size()) {
                     ++owner.m_secInner;
                     owner.m_secSlot = 0;
                     continue;
@@ -155,7 +160,7 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
                 ++owner.m_secSlot;
                 ++count;
                 size_t const before = owner.m_seenIds.size();
-                owner.considerCollectedObject(geode::prelude::typeinfo_cast<GameObject*>(rawData));
+                owner.considerCollectedObject(EbSectionObjectWalk::asGameObject(rawData));
                 if (owner.m_seenIds.size() > before) {
                     ++owner.m_sectionExtras;
                 }

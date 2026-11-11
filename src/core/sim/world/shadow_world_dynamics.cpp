@@ -105,11 +105,29 @@ void EbShadowWorldDynamics::applyLiveDynamicNear(EbShadowSimulator& simulator, P
             pose.scaleX = t.scaleX;
             pose.scaleY = t.scaleY;
             pose.active = t.nodeVisible;
-            EbTriggerWorldStore::writePose(object, pose);
-            for (auto const& st : simulator.m_savedTransforms) {
+            EbShadowSimulator::SavedTransform* saved = nullptr;
+            for (auto& st : simulator.m_savedTransforms) {
                 if (st.uniqueId == t.uniqueId) {
-                    st.dirty = true;
+                    saved = &st;
                     break;
+                }
+            }
+            bool const sameCached =
+                saved && saved->hasAppliedPose && saved->appliedActive == pose.active &&
+                saved->appliedX == pose.x && saved->appliedY == pose.y &&
+                saved->appliedRotation == pose.rotation && saved->appliedScaleX == pose.scaleX &&
+                saved->appliedScaleY == pose.scaleY;
+            if (!sameCached) {
+                (void)EbTriggerWorldStore::writePoseIfChanged(object, pose);
+                if (saved) {
+                    saved->dirty = true;
+                    saved->hasAppliedPose = true;
+                    saved->appliedActive = pose.active;
+                    saved->appliedX = pose.x;
+                    saved->appliedY = pose.y;
+                    saved->appliedRotation = pose.rotation;
+                    saved->appliedScaleX = pose.scaleX;
+                    saved->appliedScaleY = pose.scaleY;
                 }
             }
             simulator.m_liveDynamicAppliedIds.insert(t.uniqueId);
@@ -191,8 +209,22 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         }
         if (!ok)
             continue;
-        EbTriggerWorldStore::writePose(object, pose);
-        c.st->dirty = true;
+        bool const sameCached =
+            c.st->hasAppliedPose && c.st->appliedActive == pose.active &&
+            c.st->appliedX == pose.x && c.st->appliedY == pose.y &&
+            c.st->appliedRotation == pose.rotation && c.st->appliedScaleX == pose.scaleX &&
+            c.st->appliedScaleY == pose.scaleY;
+        if (!sameCached) {
+            (void)EbTriggerWorldStore::writePoseIfChanged(object, pose);
+            c.st->dirty = true;
+            c.st->hasAppliedPose = true;
+            c.st->appliedActive = pose.active;
+            c.st->appliedX = pose.x;
+            c.st->appliedY = pose.y;
+            c.st->appliedRotation = pose.rotation;
+            c.st->appliedScaleX = pose.scaleX;
+            c.st->appliedScaleY = pose.scaleY;
+        }
         ++applied;
     }
     // Far / over-budget tracks hold last written pose (or capture baseline).

@@ -24,6 +24,8 @@ private:
     friend class EbShadowPlanSelection;
     friend class EbShadowPlanResult;
     friend class EbShadowPlanSearch;
+    friend class EbIdlePrefixShare;
+    friend class EbIdlePrefixForkState;
     bool wallExceeded() const;
     bool linkedDual() const;
     EbShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,
@@ -61,6 +63,10 @@ private:
     int ledgerActMax = -1;
     bool ledgerOrbIntent = false;
     bool ledgerPreferEarlyExit = false;
+    bool ledgerSameCrashExit = false;
+    bool ledgerEarliestSafeExit = false;
+    bool ledgerPeakDeathExit = false;
+    EbDevRejectLedger::EarlyExit ledgerEarlyExit() const;
     int minSurviveLong = 0;
     bool requireAlive = false;
     int scoreHorizon = 0;

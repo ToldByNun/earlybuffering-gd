@@ -11,6 +11,7 @@ class EbSimulationCandidate;
 #include "../assist/contracts/assist_verdict.hpp"
 #include "../replay/replay_import.hpp"
 #include "planning/simulation_plan.hpp"
+#include "shadow_run_result.hpp"
 #include <Geode/Geode.hpp>
 #include <cstdint>
 #include <functional>
@@ -23,6 +24,8 @@ class EbSimulationCandidate;
 // robustness, optional firstDt jitter, latency-weighted endX. Never blocks (Pass).
 class EbShadowSimulator {
 public:
+    using RunResult = EbShadowRunResult;
+
     static constexpr int SNAPSHOT_SLOTS = 16;
     // Slot 0 is immortal attempt-start (bake). Plan/traj ring uses 1..13.
     // Slots 14–15 are reserved for GhostParityProbe anchors (not rotated by plan).
@@ -74,6 +77,26 @@ public:
     }
     // Shadow + snapshot slots — never feed these into vanilla destroyPlayer.
     bool isOwnedGhost(PlayerObject* player) const;
+    // Mega Hack / OpenHack "hitboxes on death" may latch on any destroyPlayer
+    // (even after we swallow). While set, force-hide debug draw if P1 is alive.
+    bool suppressDeathHitboxes() const {
+        return m_suppressDeathHitboxes;
+    }
+    void noteGhostDeathHitboxSuppress() {
+        m_suppressDeathHitboxes = true;
+    }
+    void clearDeathHitboxSuppress() {
+        m_suppressDeathHitboxes = false;
+    }
+    // While simulating, keep real icons looking alive unless they were already dead.
+    void clearContaminatedRealDeathFlags(PlayLayer* layer) {
+        if (!layer || !m_simulating)
+            return;
+        if (layer->m_player1 && !m_savedP1Dead)
+            layer->m_player1->m_isDead = false;
+        if (layer->m_player2 && !m_savedP2Dead)
+            layer->m_player2->m_isDead = false;
+    }
     PlayerObject* shadow() const {
         return m_shadow;
     }
@@ -375,31 +398,6 @@ public:
     private:
     };
 
-    class RunResult {
-    public:
-        bool landedAfterAction = false;
-        bool died = false;
-        bool diedBeforeAction = false;
-        bool jumped = false;
-        bool unknown = false;
-        bool activatedRing = false;
-        bool unknownTrunc = false;
-        bool toggleUnknown = false;
-        bool zoneCleared = false;
-        bool wasDashing = false;
-        int ringCount = 0;
-        int jumpTick = -1;
-        int deathTick = -1;
-        int unknownTick = -1;
-        int ticksRan = 0;
-        int ticksBeforeNeutral = 0;
-        float endX = 0.f;
-        float deathX = 0.f;
-        GameObject* deathObject = nullptr;
-
-    private:
-    };
-
 private:
     friend class EbServiceStore;
 
@@ -419,6 +417,8 @@ private:
     friend class EbShadowPlayerState;
     friend class EbShadowPhysics;
     friend class EbShadowCandidateRunner;
+    friend class EbIdlePrefixShare;
+    friend class EbIdlePrefixForkState;
     friend class EbAdaptiveResumeRunner;
     friend class EbAdaptivePlanSearch;
     friend class EbShadowPlanPolicy;
@@ -458,6 +458,14 @@ private:
         float scaleY = 1.f;
         bool nodeVisible = true;
         mutable bool dirty = false;
+        // Last pose written this capture session — skip redundant writePose.
+        mutable bool hasAppliedPose = false;
+        mutable float appliedX = 0.f;
+        mutable float appliedY = 0.f;
+        mutable float appliedRotation = 0.f;
+        mutable float appliedScaleX = 1.f;
+        mutable float appliedScaleY = 1.f;
+        mutable bool appliedActive = true;
 
     private:
     };
@@ -533,6 +541,12 @@ private:
     bool m_applyingRing = false;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;
+    // Set when a ghost destroyPlayer was swallowed; cleared on real death / reset.
+    bool m_suppressDeathHitboxes = false;
+    // Restored in endSession so sim never leaves vanilla death-hitbox mode stuck.
+    bool m_savedHitboxesOnDeath = false;
+    bool m_savedP1Dead = false;
+    bool m_savedP2Dead = false;
     bool m_dead = false;
     bool m_jumped = false;
     bool m_unknown = false;

@@ -81,3 +81,8 @@ state/
 releases/*
 !releases/*.md
 /releases
+
+# VitePress docs
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/

@@ -5,8 +5,9 @@
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../assist/contracts/assist_verdict.hpp"
-#include "../../../assist/contracts/miss_assist_contracts.hpp"
+#include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
+#include "../shadow_survival_rules.hpp"
 #include "../../../assist/planning/opportunity_probe.hpp"
 #include "../../shadow_simulator.hpp"
 #include "../../sim_session_guard.hpp"
@@ -84,18 +85,25 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         context.options.requireAliveForDelay && (context.down || continuousControl);
     context.model.stopAtBallLanding = context.inputWindow && context.real->m_isBall &&
                                       !context.useTrajEngine && !context.linkedDual();
-    // Continuous steering is local to the input window: a single held direction
-    // cannot cover the later turns of a corridor. Discrete modes retain the
-    // existing 96-tick maximum. Explicit horizon settings take precedence.
+    // Continuous IW: max(local look-ahead, short AssistHorizon planCap) so Wave
+    // keeps ≥32 ticks (AP3a) instead of bare limit. Discrete retain 96-tick max.
+    // Explicit mode/look-ahead settings take precedence. Prove ticks follow.
     if (context.inputWindow && EbStageConfig::paramsFor(context.real).cap == 0 &&
         EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {
-            context.model.cap = EbMissAssistContracts::continuousLookAhead(context.limit);
+            auto const kind = EbStageConfig::kindOf(context.real);
+            context.model.cap = EbAssistHorizon::continuousInputWindowCap(
+                kind, context.limit, context.options.capMul);
+            if (context.options.requireAliveForDelay && context.model.cap > 0)
+                context.model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
         } else {
             context.model.cap = std::min(context.model.cap, std::max(1, 96 - context.limit));
         }
     }
-    if (!context.inputWindow) {
+    // Classic always coasts. Continuous Live IW also runs a cheap baseline so
+    // idleSafer can steer Wave help-only / futile (AP3b) without leaving IW.
+    if (EbLivePlanContracts::waveIwBaselineCoastAllowed(context.inputWindow, continuousControl,
+                                                        context.down)) {
         auto base = context.simulator.runBaseline(context.layer, context.real, context.down,
                                                   context.deltaTime, context.firstDt, context.model,
                                                   &context.tickBudget);
@@ -110,14 +118,27 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     context.orbAssist = EbStageConfig::assistOrbs() && context.down;
     context.orbHint = {};
     context.spatialHint = false;
-    if (context.orbAssist && !context.inputWindow) {
+    // AP4: spatial hint always when orbs on (even under Live IW). Budget-capped
+    // scanOrbWindow also runs under IW (was classic-only).
+    if (context.orbAssist &&
+        EbLivePlanContracts::intendedSpatialOrbHintAllowed(context.orbAssist)) {
+        context.spatialHint = context.simulator.spatialOrbHint(context.layer, context.real,
+                                                               context.limit, context.deltaTime);
+        context.plan.foresightOrbPad = context.spatialHint;
+    }
+    bool const orbScanBudgetOk =
+        context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe;
+    if (context.orbAssist &&
+        EbLivePlanContracts::intendedOrbWindowScanAllowed(context.orbAssist, context.inputWindow,
+                                                          orbScanBudgetOk)) {
         int const scanTicks = EbOpportunityProbe::orbScanTicks(context.limit, context.model.slack);
         context.orbHint = context.simulator.scanOrbWindow(
             context.layer, context.real, context.down, scanTicks, context.deltaTime,
             context.firstDt, &context.tickBudget, false);
         context.simulator.resetCaptureForNextRun(context.layer);
         // Press-to-reach: second scan with Jump held if coast missed (budget-capped).
-        if (!context.orbHint.found && context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe) {
+        if (!context.orbHint.found &&
+            context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe) {
             int const reachTicks =
                 EbOpportunityProbe::pressReachScanTicks(context.limit, context.model.slack);
             auto held = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
@@ -130,17 +151,29 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         }
         if (context.orbHint.found)
             context.plan.usedOrbWindow = true;
-        context.spatialHint = context.simulator.spatialOrbHint(context.layer, context.real,
-                                                               context.limit, context.deltaTime);
-        context.plan.foresightOrbPad = context.spatialHint;
     }
 
     context.zone = {};
     context.cands.resize(static_cast<size_t>(context.limit) + 1);
     context.candReady.assign(static_cast<size_t>(context.limit) + 1, 0);
 
+    // Adaptive fallthrough seeds: place terminal/horizon results before probes
+    // so threat/candidate search skip re-sim. finalizeViable runs after zone.
+    for (auto const& seeded : context.options.seedCandidates) {
+        if (seeded.delay < 0 || seeded.delay > context.limit)
+            continue;
+        size_t const index = static_cast<size_t>(seeded.delay);
+        context.cands[index] = seeded;
+        context.candReady[index] = 1;
+        if (seeded.toggleUnknown || (seeded.unknownTrunc && context.hadToggleTargets))
+            context.sawToggleUnknown = true;
+    }
+
     context.ledgerActMin = -1;
     context.ledgerActMax = -1;
     context.ledgerOrbIntent = false;
     context.ledgerPreferEarlyExit = false;
+    context.ledgerSameCrashExit = false;
+    context.ledgerEarliestSafeExit = false;
+    context.ledgerPeakDeathExit = false;
 }

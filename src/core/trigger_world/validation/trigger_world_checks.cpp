@@ -29,6 +29,8 @@ bool EbTriggerWorldChecks::selfCheck(std::string& report) {
     dummy.active = true;
     EbTriggerWorldStore::writePose(nullptr, dummy);
     expect(true, "writePose-null");
+    expect(!EbTriggerWorldStore::poseMatchesObject(nullptr, dummy), "pose-match-null");
+    expect(!EbTriggerWorldStore::writePoseIfChanged(nullptr, dummy), "write-if-null");
 
     expect(EbTriggerClassify::classify(nullptr) == TriggerKind::Ignore, "classify-null");
 

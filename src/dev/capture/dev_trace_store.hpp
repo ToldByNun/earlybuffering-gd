@@ -1,6 +1,7 @@
 #ifndef DEV_TRACE_STORE_HPP
 #define DEV_TRACE_STORE_HPP
 
+#include "../diagnostics/dev_resource_stats.hpp"
 #include "../evaluation/dev_reject_ledger.hpp"
 #include "../evaluation/dev_state_diff.hpp"
 #include "dev_clock_contract.hpp"
@@ -80,6 +81,14 @@ public:
     bool candNotesTruncated = false;
     std::vector<EbDevRejectLedger::AttributionNote> attribution;
 
+    // 1.5.1 AP0: hitch / Adaptive shell diagnostics on planFinished (additive JSON).
+    bool hasPlanCost = false;
+    int planUs = 0;
+    bool budgetHit = false;
+    int candidatesTried = 0;
+    bool adaptiveShell = false;
+    bool adaptiveFellThrough = false;
+
 private:
 };
 
@@ -108,6 +117,8 @@ public:
     std::string settingsFingerprint;
     int recordingsTarget = 10;
     int recordingsDone = 0;
+    // Process RAM/CPU min-max over the session (Dev Lab diagnostics only).
+    EbDevResourceStats::Snapshot resourceStats{};
     std::vector<EbDevAttempt> attempts;
 
 private:
@@ -187,10 +198,13 @@ private:
     int64_t nextEventId();
     bool writeAtomic(matjson::Value const& root) const;
 
+    void sampleResources();
+
     EbDevSessionFile m_session{};
     bool m_open = false;
     int64_t m_nextPressId = 1;
     int64_t m_nextEventId = 1;
+    EbDevResourceStats m_resourceStats{};
 };
 
 #include <Geode/Geode.hpp>

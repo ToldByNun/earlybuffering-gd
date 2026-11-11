@@ -1,4 +1,6 @@
 #include "assist_horizon.hpp"
+#include "../contracts/live_plan_contracts.hpp"
+#include "../contracts/miss_assist_contracts.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
@@ -115,6 +117,13 @@ EbAssistHorizon::Caps EbAssistHorizon::resolve(GameModeKind mode, bool trustOk, 
     return candidate;
 }
 
+int EbAssistHorizon::continuousInputWindowCap(GameModeKind mode, int limit, float capMul) {
+    int const look = EbMissAssistContracts::continuousLookAhead(limit);
+    // Short trust path — IW should not inflate to trust-long corridor length.
+    Caps const shortCaps = resolve(mode, false, limit, capMul, 0, 0);
+    return EbLivePlanContracts::intendedContinuousIwCap(look, shortCaps.planCap);
+}
+
 int EbAssistHorizon::minSurviveTicksForSuccess(int scoreHorizon, bool trustOk) {
     if (!trustOk)
         return 0; // short mode: threat-clear honesty alone
@@ -179,6 +188,11 @@ bool EbAssistHorizon::selfCheck(std::string& report) {
 
     // Trust-long draw must beat short draw for wave.
     expect(longW.trajDraw > shortW.trajDraw, "long-draw-gt-short");
+
+    // AP3a — continuous IW floor (Wave ≥32, not bare limit).
+    expect(continuousInputWindowCap(GameModeKind::Wave, 12, 1.f) == 32, "iw-wave-floor");
+    expect(continuousInputWindowCap(GameModeKind::Wave, 24, 1.f) == 40, "iw-wave-grow");
+    expect(continuousInputWindowCap(GameModeKind::Ship, 4, 1.f) >= 64, "iw-ship-floor");
 
     if (fails == 0) {
         report = "AssistHorizon selfCheck OK";

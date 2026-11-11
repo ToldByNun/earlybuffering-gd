@@ -188,6 +188,13 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     // Commit 12: full per-delay ledger from plan(); attribution filled later with eval.
     width->candNotes = plan.candNotes;
     width->candNotesTruncated = plan.candNotesTruncated;
+    // 1.5.1 AP0: hitch / Adaptive shell cost bits (additive; no plan behavior change).
+    width->hasPlanCost = true;
+    width->planUs = plan.planUs;
+    width->budgetHit = plan.budgetHit;
+    width->candidatesTried = plan.candidatesTried;
+    width->adaptiveShell = plan.adaptiveShell;
+    width->adaptiveFellThrough = plan.adaptiveFellThrough;
     {
         EbDevRejectLedger::AttributionInput attrIn;
         attrIn.hasPlanFinished = true;

@@ -130,6 +130,10 @@ public:
 
     // Write a sampled pose onto a live GameObject (position/rot/scale/visible).
     static void writePose(GameObject* object, EbTriggerPose const& pose);
+    // True when object already matches pose (no Cocos writes needed).
+    static bool poseMatchesObject(GameObject* object, EbTriggerPose const& pose);
+    // writePose only when poseMatchesObject is false. Returns true if written.
+    static bool writePoseIfChanged(GameObject* object, EbTriggerPose const& pose);
 
     // Apply all ready Static* tracks at live absTick (remapped). Walks objectLayer.
     // Returns number of objects written. No-op if store empty / bake off caller.

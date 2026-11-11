@@ -152,6 +152,10 @@ bool EbShadowRegressionChecks::regressionSelfCheck(std::string& report) {
     expect(EbShadowSimulator::autoRobustKHints(false, false, 1.f, 0.f, false) == 1, "k-cube");
     expect(EbShadowSimulator::autoRobustKHints(false, false, 1.6f, 0.f, false) == 3, "k-fast");
     expect(EbShadowSimulator::autoRobustKHints(true, false, 1.f, 0.1f, false) == 3, "k-dt-bump");
+    expect(EbShadowSurvivalRules::clampRobustKToWindow(1, 1) == 0, "k-clamp-limit1");
+    expect(EbShadowSurvivalRules::clampRobustKToWindow(2, 4) == 2, "k-clamp-ok");
+    expect(EbShadowSurvivalRules::clampRobustKToWindow(3, 2) == 1, "k-clamp-limit2");
+    expect(EbShadowSurvivalRules::clampRobustKToWindow(2, 0) == 0, "k-clamp-limit0");
 
     // Synthetic early-click snaps: d=0 dies in zone → Delay must clear past zoneEndX.
     class EbSnap {

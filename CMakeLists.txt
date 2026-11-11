@@ -8,7 +8,7 @@ else()
 endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(earlybuffer VERSION 1.5.0)
+project(earlybuffer VERSION 1.5.1)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
@@ -60,7 +60,9 @@ target_link_libraries(${PROJECT_NAME} libGDR)
 # Must stay WIN32-only — never link comdlg32 (or any dialog lib) on Android/NDK,
 # macOS, or iOS. Non-Windows uses SaveDropPaths under the mod save dir instead.
 if (WIN32)
-    target_link_libraries(${PROJECT_NAME} comdlg32)
+    # comdlg32: PauseActionBridge file dialogs.
+    # psapi: Dev Lab process RAM sampler (GetProcessMemoryInfo).
+    target_link_libraries(${PROJECT_NAME} comdlg32 psapi)
 elseif (ANDROID)
     message(STATUS "EarlyBuffer: Android build — no Windows dialog libs (comdlg32)")
 endif()

@@ -9,7 +9,12 @@
 // !adaptivePlan → classic ShadowPlanSearch.
 // A/B screen → C verify → D DecisionGate (honesty).
 // Soft wall (budgetUs) runs from plan start. Adaptive Delay / proven PassD0Safe
-// stick; any other Adaptive Pass falls through to classic.
+// stick; any other Adaptive Pass falls through to classic with the *remaining*
+// wall/ticks (never a fresh full press budget — that doubled Dynamic hitches).
+// Fallthrough seeds terminal/horizon/observation-cleared Alive outcomes into
+// classic so paid Adaptive work is not re-simulated. Soft wall 0 → hitch
+// ceiling; remUs floor when wall spent but ticks remain (AP1). Phase C rebuilds
+// past screen depth on the first cold grant, then resume-extends.
 class EbAdaptivePlanSearch {
 public:
     static EbSimPlan run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,

@@ -12,6 +12,9 @@
 //   resetCaptureForNextRun / switching candidates must call invalidateCheckpoint()
 //   — player pose alone is not enough after world orb/TW flags are restored.
 // Metrics (survive ticks, endX, …) survive invalidation for ranking diagnostics.
+// Screen→Verify: after screen reset the world is cold, so Phase C's first grant
+// for a delay must rebuild past ticksSimulated then extend (not re-run a short
+// quantum from 0 and pretend the screen depth still holds).
 class EbAdaptiveCandidateSlot {
 public:
     int delay = 0;

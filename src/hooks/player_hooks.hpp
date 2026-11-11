@@ -10,6 +10,11 @@ public:
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayerObject::pushButton", geode::prelude::Priority::First);
         (void)self.setHookPriority("PlayerObject::update", geode::prelude::Priority::First);
+        // Swallow before death-FX / hitbox-on-death menus that hook this.
+        (void)self.setHookPriorityPre("PlayerObject::playerDestroyed",
+                                      geode::prelude::Priority::Stub);
+        (void)self.setHookPriorityPre("PlayerObject::collidedWithObjectInternal",
+                                      geode::prelude::Priority::Stub);
     }
 
     bool pushButton(PlayerButton button);
@@ -19,6 +24,9 @@ public:
     void incrementJumps();
 
     void ringJump(RingObject* ring, bool skipCheck);
+
+    bool collidedWithObjectInternal(float deltaTime, GameObject* object, cocos2d::CCRect rect,
+                                    bool skipCheck);
 
     void playerDestroyed(bool noEffects);
 

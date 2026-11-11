@@ -106,6 +106,13 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         }
         otherIndex["attribution"] = attrs;
     }
+    if (e.hasPlanCost) {
+        otherIndex["planUs"] = e.planUs;
+        otherIndex["budgetHit"] = e.budgetHit;
+        otherIndex["candidatesTried"] = e.candidatesTried;
+        otherIndex["adaptiveShell"] = e.adaptiveShell;
+        otherIndex["adaptiveFellThrough"] = e.adaptiveFellThrough;
+    }
     return otherIndex;
 }
 
@@ -267,6 +274,21 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
             }
             e.attribution.push_back(std::move(a));
         }
+    }
+    if (j.contains("planUs") || j.contains("candidatesTried") || j.contains("adaptiveShell") ||
+        j.contains("adaptiveFellThrough") ||
+        (j.contains("budgetHit") && e.kind == DevEventKind::PlanFinished)) {
+        e.hasPlanCost = true;
+        e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
+        e.budgetHit = j.contains("budgetHit") ? j["budgetHit"].asBool().unwrapOr(false) : false;
+        e.candidatesTried = j.contains("candidatesTried")
+                                ? static_cast<int>(j["candidatesTried"].asInt().unwrapOr(0))
+                                : 0;
+        e.adaptiveShell =
+            j.contains("adaptiveShell") ? j["adaptiveShell"].asBool().unwrapOr(false) : false;
+        e.adaptiveFellThrough = j.contains("adaptiveFellThrough")
+                                    ? j["adaptiveFellThrough"].asBool().unwrapOr(false)
+                                    : false;
     }
     return true;
 }
