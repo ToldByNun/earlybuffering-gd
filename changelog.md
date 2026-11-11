@@ -2,6 +2,10 @@
 
 ## v1.5.1-dev
 
+### AP3b — Live IW Wave anti-phase + help-only
+- Continuous Wave IW no longer skips classic anti-phase: **help-only** (d0 Alive → `PassD0Safe`, never Delay to pad endX), **proximity** (`PassWaveProximity`), **futile** (`PassWaveFutile`), earliest later Alive Delay when d0 dies.
+- Cheap baseline coast under continuous IW for `idleSafer`. PlanGold: `wave-iw-help-only`, `wave-iw-prox-pass`.
+
 ### AP3a — Wave horizon floor
 - Continuous Live IW / Adaptive no longer overwrite look-ahead with bare Max Assist limit.
 - Cap = `max(continuousLookAhead, short AssistHorizon planCap)`; Wave short floor **32** ticks (`EbLivePlanContracts::kWaveHorizonFloor`).

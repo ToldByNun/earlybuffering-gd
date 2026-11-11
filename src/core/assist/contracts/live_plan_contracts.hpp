@@ -3,9 +3,9 @@
 
 #include <string>
 
-// 1.5.1 AP0/AP1/AP3a — pure Live plan contracts (no PlayLayer).
-// Hitch / remUs / peak-death / Wave horizon floor are wired. Landed-rank +
-// orb-under-IW + Wave help-only stay current-vs-intended until AP2/AP3b.
+// 1.5.1 AP0/AP1/AP3a/AP3b — pure Live plan contracts (no PlayLayer).
+// Hitch / remUs / peak-death / Wave horizon + help-only/prox are wired.
+// Landed-rank + orb-under-IW stay current-vs-intended until AP2/AP4.
 // selfCheck locks both tables.
 class EbLivePlanContracts {
 public:
@@ -58,6 +58,22 @@ public:
     static int waveShortPlanCap(int limit);
     // Intended AP3a: max(local look-ahead, short AssistHorizon planCap).
     static int intendedContinuousIwCap(int continuousLookAhead, int shortAssistHorizonPlanCap);
+
+    // --- Wave IW help-only / anti-phase (AP3b) ------------------------------
+
+    // d0 observation-safe / Alive → Pass (never Delay just to pad endX).
+    static bool waveIwHelpOnlyPass(bool isWave, bool pressDown, bool d0ObservationSafe);
+    // Alive d0 + hazard proximity + no orb → PassWaveProximity (not phase Delay).
+    static bool waveIwProximityPass(bool isWave, bool pressDown, bool d0Died, bool nearHazard,
+                                    bool noOrbTarget, bool foresightOrbPad);
+    // No Alive save from a dying d0 / no useful bin·gain → PassWaveFutile.
+    static bool waveIwFutilePass(bool isWave, bool pressDown, bool anyAliveSaveFromD0Death,
+                                 bool idleHoldsEscape, bool orbIntent, int bestSurviveBin,
+                                 float bestEndXGain, bool foresightOrbPad);
+    // Choose armed delay: help-only → 0; else earliest later safe (−1 = none).
+    static int waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay);
+    // Cheap coast baseline under continuous IW (idleSafer) is allowed.
+    static bool waveIwBaselineCoastAllowed(bool inputWindow, bool continuousControl, bool pressDown);
 
     // --- Orbs under input-window -------------------------------------------
 

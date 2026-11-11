@@ -185,6 +185,15 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                    12, EbLivePlanContracts::waveShortPlanCap(12)) == 32 &&
                EbAssistHorizon::continuousInputWindowCap(GameModeKind::Wave, 12, 1.f) == 32,
            "wave-horizon-floor");
+    // 1.5.1 AP3b: Live IW Wave help-only + proximity anti-phase.
+    expect(EbLivePlanContracts::waveIwHelpOnlyPass(true, true, true) &&
+               EbLivePlanContracts::waveIwChooseDelay(true, 7) == 0 &&
+               !EbLivePlanContracts::waveIwHelpOnlyPass(true, true, false),
+           "wave-iw-help-only");
+    expect(EbLivePlanContracts::waveIwProximityPass(true, true, false, true, true, false) &&
+               !EbLivePlanContracts::waveIwProximityPass(true, true, true, true, true, false) &&
+               !EbLivePlanContracts::waveIwProximityPass(true, true, false, true, true, true),
+           "wave-iw-prox-pass");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;

@@ -80,6 +80,46 @@ int EbLivePlanContracts::intendedContinuousIwCap(int continuousLookAhead,
     return std::max(look, plan);
 }
 
+bool EbLivePlanContracts::waveIwHelpOnlyPass(bool isWave, bool pressDown, bool d0ObservationSafe) {
+    return isWave && pressDown && d0ObservationSafe;
+}
+
+bool EbLivePlanContracts::waveIwProximityPass(bool isWave, bool pressDown, bool d0Died,
+                                              bool nearHazard, bool noOrbTarget,
+                                              bool foresightOrbPad) {
+    if (!pressDown || !isWave || d0Died || !nearHazard || !noOrbTarget)
+        return false;
+    return !foresightOrbPad;
+}
+
+bool EbLivePlanContracts::waveIwFutilePass(bool isWave, bool pressDown, bool anyAliveSaveFromD0Death,
+                                           bool idleHoldsEscape, bool orbIntent, int bestSurviveBin,
+                                           float bestEndXGain, bool foresightOrbPad) {
+    if (!pressDown || !isWave || anyAliveSaveFromD0Death || idleHoldsEscape || orbIntent ||
+        foresightOrbPad)
+        return false;
+    if (bestSurviveBin > 0)
+        return false;
+    return !(bestEndXGain >= kLandedScoreEps);
+}
+
+int EbLivePlanContracts::waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay) {
+    if (d0ObservationSafe)
+        return 0;
+    if (earliestLaterSafeDelay > 0)
+        return earliestLaterSafeDelay;
+    return -1;
+}
+
+bool EbLivePlanContracts::waveIwBaselineCoastAllowed(bool inputWindow, bool continuousControl,
+                                                     bool pressDown) {
+    if (!pressDown)
+        return false;
+    if (!inputWindow)
+        return true;
+    return continuousControl;
+}
+
 bool EbLivePlanContracts::currentOrbWindowScanRuns(bool assistOrbs, bool inputWindow) {
     return assistOrbs && !inputWindow;
 }
@@ -146,6 +186,22 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(currentContinuousIwCap(12) == 12, "cur-iw-cap-limit");
     expect(intendedContinuousIwCap(12, waveShortPlanCap(12)) == 32, "int-iw-cap-floor");
     expect(intendedContinuousIwCap(40, waveShortPlanCap(24)) == 40, "int-iw-cap-look-wins");
+
+    expect(waveIwHelpOnlyPass(true, true, true), "wave-iw-help-only");
+    expect(!waveIwHelpOnlyPass(true, true, false), "wave-iw-help-need-d0");
+    expect(!waveIwHelpOnlyPass(false, true, true), "wave-iw-help-wave-only");
+    expect(waveIwChooseDelay(true, 5) == 0, "wave-iw-choose-help");
+    expect(waveIwChooseDelay(false, 3) == 3, "wave-iw-choose-earliest");
+    expect(waveIwChooseDelay(false, -1) == -1, "wave-iw-choose-none");
+    expect(waveIwProximityPass(true, true, false, true, true, false), "wave-iw-prox-pass");
+    expect(!waveIwProximityPass(true, true, true, true, true, false), "wave-iw-prox-need-alive-d0");
+    expect(!waveIwProximityPass(true, true, false, true, true, true), "wave-iw-prox-orb-blocks");
+    expect(waveIwFutilePass(true, true, false, false, false, 0, 3.f, false), "wave-iw-futile");
+    expect(!waveIwFutilePass(true, true, true, false, false, 0, 3.f, false), "wave-iw-futile-save");
+    expect(!waveIwFutilePass(true, true, false, false, false, 1, 3.f, false), "wave-iw-futile-bin");
+    expect(waveIwBaselineCoastAllowed(true, true, true), "wave-iw-baseline-coast");
+    expect(!waveIwBaselineCoastAllowed(true, false, true), "wave-iw-baseline-discrete-skip");
+    expect(waveIwBaselineCoastAllowed(false, false, true), "wave-iw-baseline-classic");
 
     expect(currentOrbWindowScanRuns(true, false), "orb-scan-classic");
     expect(!currentOrbWindowScanRuns(true, true), "orb-scan-iw-skipped-today");

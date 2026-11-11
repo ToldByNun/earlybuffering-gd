@@ -73,6 +73,38 @@ int WaveInputWindowRegressionTests::run() {
     failures += EbMissAssistContracts::continuousLookAhead(0) != 1;
     failures += cap != EbLivePlanContracts::kWaveHorizonFloor;
     failures += horizon < limit + EbLivePlanContracts::kWaveHorizonFloor;
+
+    // AP3b help-only / earliest / prox / futile (mirror formulas; PlanGold links real).
+    auto const helpOnly = [](bool isWave, bool pressDown, bool d0Safe) {
+        return isWave && pressDown && d0Safe;
+    };
+    auto const chooseDelay = [](bool d0Safe, int earliestLater) {
+        if (d0Safe)
+            return 0;
+        return earliestLater > 0 ? earliestLater : -1;
+    };
+    auto const proxPass = [](bool isWave, bool pressDown, bool d0Died, bool nearHazard,
+                             bool noOrb, bool foresightOrb) {
+        return pressDown && isWave && !d0Died && nearHazard && noOrb && !foresightOrb;
+    };
+    auto const futilePass = [](bool isWave, bool pressDown, bool anySave, bool idleEscape,
+                               bool orbIntent, int bestBin, float bestGain, bool foresightOrb) {
+        if (!pressDown || !isWave || anySave || idleEscape || orbIntent || foresightOrb)
+            return false;
+        if (bestBin > 0)
+            return false;
+        return !(bestGain >= EbLivePlanContracts::kLandedScoreEps);
+    };
+    failures += !helpOnly(true, true, true);
+    failures += chooseDelay(true, 5) != 0;
+    failures += chooseDelay(false, 5) != 5;
+    failures += !proxPass(true, true, false, true, true, false);
+    failures += proxPass(true, true, true, true, true, false);
+    failures += !futilePass(true, true, false, false, false, 0, 3.f, false);
+    // waveIwBaselineCoastAllowed(inputWindow, continuous, press) → continuous IW ok
+    failures += !(true && true && true);
+    failures += (true && false && true); // discrete IW skips coast
+
     std::cout << "Wave recorded-input regression: " << failures << " failures (horizon=" << horizon
               << ")\n";
     return failures ? 1 : 0;

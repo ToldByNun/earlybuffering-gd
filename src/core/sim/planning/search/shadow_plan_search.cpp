@@ -5,6 +5,7 @@
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../assist/contracts/assist_verdict.hpp"
+#include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
 #include "../shadow_survival_rules.hpp"
 #include "../../../assist/planning/opportunity_probe.hpp"
@@ -99,7 +100,10 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
             context.model.cap = std::min(context.model.cap, std::max(1, 96 - context.limit));
         }
     }
-    if (!context.inputWindow) {
+    // Classic always coasts. Continuous Live IW also runs a cheap baseline so
+    // idleSafer can steer Wave help-only / futile (AP3b) without leaving IW.
+    if (EbLivePlanContracts::waveIwBaselineCoastAllowed(context.inputWindow, continuousControl,
+                                                        context.down)) {
         auto base = context.simulator.runBaseline(context.layer, context.real, context.down,
                                                   context.deltaTime, context.firstDt, context.model,
                                                   &context.tickBudget);

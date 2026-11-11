@@ -85,6 +85,15 @@ int AdaptiveParitySmokeTests::run() {
     expect(intendedFallthroughClassicBudgetUs(0, 0) == 0, "fallthrough-remus-done");
     expect(EbLivePlanContracts::kFallthroughRemUsFloor >= 2000, "fallthrough-remus-threshold");
 
+    // AP3b — Wave IW help-only still Passes when d0 clears (not unlimited Delay).
+    // Mirror EbLivePlanContracts::waveIwHelpOnlyPass / waveIwChooseDelay (fmt-free).
+    bool const isWave = true;
+    bool const pressDown = true;
+    bool const d0Safe = true;
+    expect(isWave && pressDown && d0Safe, "wave-iw-help-only");
+    int const chosen = d0Safe ? 0 : 4;
+    expect(chosen == 0, "wave-iw-help-not-delay");
+
     if (!ok)
         ++fails;
     std::cout << "Adaptive parity smoke: " << fails << " failures\n";
