@@ -1,5 +1,6 @@
 #include "idle_prefix_share.hpp"
 #include "../../../../debug/assist_log.hpp"
+#include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../orbs/toggle_orb_sim.hpp"
 #include "../../prefix_sim.hpp"
@@ -629,32 +630,22 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
                 context.plan.planId, candidate.raw.deathTick, delay));
             break;
         }
-        // Input-window discrete: once a survivor exists and this delay dies after
-        // acting, later ascending delays rarely revive the peak — stop burning
-        // press ticks (Grief ball cliff d=8..12). Mark leftovers ready so the
-        // input-window loop does not re-evalDelay them.
-        if (context.inputWindow && !isWaveMode && !isShipLike && candidate.raw.died &&
-            !candidate.diedBeforeAction) {
-            bool hadSurvivor = context.candReady[0] && !context.cands[0].raw.died;
-            for (int prior = 1; !hadSurvivor && prior < delay; ++prior) {
-                if (context.candReady[static_cast<size_t>(prior)] &&
-                    !context.cands[static_cast<size_t>(prior)].raw.died)
-                    hadSurvivor = true;
-            }
-            if (hadSurvivor) {
-                for (int rest = delay + 1; rest <= context.limit; ++rest) {
-                    if (context.candReady[static_cast<size_t>(rest)])
-                        continue;
-                    EbSimulationCandidate skip = candidate;
-                    skip.delay = rest;
-                    context.cands[static_cast<size_t>(rest)] = skip;
-                    context.candReady[static_cast<size_t>(rest)] = 1;
-                }
-                EbAssistLog::debug(fmt::format(
-                    "PLAN id={} idle-prefix input-window peak-death stop after delay={}",
-                    context.plan.planId, delay));
-                break;
-            }
+        // Input-window discrete: survivor then acted death → stop (Grief cliff).
+        // AP1: leave leftovers unevaluated; ledger PeakDeathCut — never fake-dead.
+        bool hadSurvivor = context.candReady[0] && !context.cands[0].raw.died;
+        for (int prior = 1; !hadSurvivor && prior < delay; ++prior) {
+            if (context.candReady[static_cast<size_t>(prior)] &&
+                !context.cands[static_cast<size_t>(prior)].raw.died)
+                hadSurvivor = true;
+        }
+        if (EbLivePlanContracts::peakDeathShouldStop(context.inputWindow, isWaveMode || isShipLike,
+                                                     hadSurvivor, candidate.raw.died &&
+                                                                     !candidate.diedBeforeAction)) {
+            context.ledgerPeakDeathExit = true;
+            EbAssistLog::debug(fmt::format(
+                "PLAN id={} idle-prefix input-window peak-death-cut after delay={}",
+                context.plan.planId, delay));
+            break;
         }
 
         bool const preferExitOk = EbMissAssistContracts::preferBandEarlyExitAllowed(

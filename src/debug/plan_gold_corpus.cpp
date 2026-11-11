@@ -170,6 +170,15 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
     std::string livePlanReport;
     expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
+    // 1.5.1 AP1: Adaptive + classic Live both clamp simUs=0 → hitch ceiling.
+    expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs &&
+               EbLivePlanContracts::intendedLiveBudgetUs(0) ==
+                   EbLivePlanContracts::currentClassicBudgetUs(0) &&
+               EbLivePlanContracts::currentAdaptiveBudgetUs(0) == 0,
+           "live-hitch-ceiling");
+    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
+               EbLivePlanContracts::kFallthroughRemUsFloor,
+           "live-hitch-ceiling-remus");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;

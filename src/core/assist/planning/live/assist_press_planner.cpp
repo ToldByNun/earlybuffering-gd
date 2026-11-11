@@ -22,6 +22,7 @@
 #include "../../../trigger_world/trigger_world_store.hpp"
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
+#include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../orb_align.hpp"
@@ -265,11 +266,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // override unlimited 0, never lower a higher user setting).
     if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
         opts.budgetUs = 4000;
-    // Classic Live: sim-budget-us=0 is "unlimited" and hitch-freezes on Max Assist
-    // 12 + Trigger World (Grief session cpu~129%/click). Keep Adaptive's true 0;
-    // classic gets an 8ms soft ceiling so one press cannot eat the frame.
-    if (!opts.adaptivePlan && opts.budgetUs <= 0)
-        opts.budgetUs = 8000;
+    // 1.5.1 AP1: sim-budget-us=0 → hitch ceiling for classic AND Adaptive Live
+    // (EbLivePlanContracts). Stops Adaptive unlimited freezes on small levels.
+    opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();

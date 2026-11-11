@@ -35,15 +35,15 @@ Stopping at first safe on ball was a real footgun (Eval `bestSurv` ≠ Live pick
 
 Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` — ticksRan grows with delay.
 
-**1.5.1 contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts`):
+**1.5.1 contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`):
 
-| Topic | Today (dev) | Intended (AP1–AP3) |
-|---|---|---|
-| Landed rank | Later only if score gain >8px | Eval-aligned: any score improve; tie → earlier |
-| Peak-death stop | May fake-fill later delays as dead | `skip=peak-death-cut` only |
-| Soft wall `simUs=0` | Classic → 8ms; Adaptive unlimited | Both → 8ms hitch ceiling |
-| Fallthrough remUs | `1` when wall spent / ticks left | Floor 2000µs |
-| Orbs under IW | `scanOrbWindow` skipped | Spatial hint + budget-capped scan; DelayOrb handoff |
+| Topic | Status |
+|---|---|
+| Soft wall `simUs=0` | **AP1:** classic + Adaptive → 8ms hitch ceiling |
+| Fallthrough remUs | **AP1:** floor 2000µs when ticks remain |
+| Peak-death stop | **AP1:** `skip=peak-death-cut` only (no fake-dead) |
+| Landed rank | Later only if score gain >8px → **AP2:** Eval-aligned any improve; tie → earlier |
+| Orbs under IW | `scanOrbWindow` skipped → **AP3:** spatial hint + budget-capped scan; DelayOrb handoff |
 
 Live press always takes input-window (`requireAliveForDelay`) — G1 AssistPick orb band is bypassed until AP3.
 

@@ -3,9 +3,9 @@
 
 #include <string>
 
-// 1.5.1 AP0 — pure Live plan contracts (no PlayLayer).
-// Documents current vs intended hitch / landed-rank / peak-death / orb-under-IW
-// policies. Call sites wire in AP1–AP3; selfCheck locks both tables.
+// 1.5.1 AP0/AP1 — pure Live plan contracts (no PlayLayer).
+// Hitch / remUs / peak-death tables are wired (AP1). Landed-rank + orb-under-IW
+// stay current-vs-intended until AP2–AP3. selfCheck locks both tables.
 class EbLivePlanContracts {
 public:
     // Soft wall hitch ceiling when user sets sim-budget-us=0 (µs).

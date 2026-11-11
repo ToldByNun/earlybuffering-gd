@@ -7,6 +7,7 @@
 #include "adaptive_resume_runner.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
+#include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../prefix_sim.hpp"
 #include "../../../sim_session_guard.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -404,22 +405,27 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                     out.adaptiveShell = true;
                     return out;
                 }
-                // Wall spent but ticks remain: keep a 1µs soft wall so classic
-                // cannot run unbounded (budgetUs<=0 means unlimited).
-                classicOpts.budgetUs = 1;
+                // 1.5.1 AP1: usable remUs floor when wall spent but ticks remain
+                // (was 1µs — classic input-window could not finish ranking).
+                classicOpts.budgetUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+                    0, classicOpts.tickBudget);
             } else {
-                classicOpts.budgetUs = remUs;
+                classicOpts.budgetUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+                    remUs, classicOpts.tickBudget);
             }
         }
 
-        // Seed classic with Adaptive terminal / horizon-proven outcomes so
-        // fallthrough does not re-sim deaths Adaptive already paid for.
+        // Seed classic with Adaptive terminal / horizon-proven / observation-
+        // cleared Alive screens so fallthrough does not re-sim paid work.
         if (threatZone.valid)
             classicOpts.seedThreatZone = threatZone;
         classicOpts.seedPrefixDeathTick = prefixDeathTick;
+        // Keep screen quantum on classic opts so IW can accept seeded Alive.
+        classicOpts.adaptiveScreenTicks = options.adaptiveScreenTicks;
         classicOpts.seedCandidates.clear();
         classicOpts.seedCandidates.reserve(static_cast<size_t>(limit) + 1);
         int const modelCap = std::max(1, model.cap);
+        int const screenQuantum = std::max(1, options.adaptiveScreenTicks);
         for (int delay = 0; delay <= limit; ++delay) {
             auto const& slot = slots[static_cast<size_t>(delay)];
             if (!slot.screened)
@@ -428,8 +434,12 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             bool const horizonProven =
                 slot.autonomousAlive &&
                 (slot.terminalAliveCap || slot.ticksSimulated >= modelCap);
-            if (!terminal && !horizonProven)
-                continue; // partial Alive screen — classic must still prove
+            // Observation-cleared Alive: survived the Adaptive screen quantum.
+            bool const observationCleared =
+                slot.autonomousAlive && !slot.terminalUnknown &&
+                slot.ticksSimulated >= screenQuantum;
+            if (!terminal && !horizonProven && !observationCleared)
+                continue;
 
             EbSimulationCandidate seeded;
             seeded.delay = delay;
@@ -597,6 +607,16 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
     expect(EbAdaptiveDecisionGate::selfCheck(gateReport), "decision-gate");
     std::string budgetReport;
     expect(EbAdaptiveBudgetController::selfCheck(budgetReport), "budget");
+
+    // 1.5.1 AP1 hitch policy (wired at fallthrough / press planner).
+    expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,
+           "adaptive-zero-wall-clamped");
+    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 50) ==
+               EbLivePlanContracts::kFallthroughRemUsFloor,
+           "fallthrough-remus-floor");
+    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(1500, 50) == 1500,
+           "fallthrough-remus-keep");
+    expect(EbLivePlanContracts::peakDeathMarksSkippedNotDead(), "peak-death-skip-not-dead");
 
     // Overlay pass bit after early-pass stats.
     ShellStats passStats;

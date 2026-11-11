@@ -7,6 +7,7 @@
 #include "../../simulation_candidate.hpp"
 #include "../idle_prefix_share.hpp"
 #include "../shadow_plan_context.hpp"
+#include <algorithm>
 #include <cmath>
 
 bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
@@ -14,10 +15,27 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         return false;
 
     context.plan.fixedFireTick = true;
-    auto const complete = [&](EbShadowSimulator::RunResult const& result) {
-        return EbMissAssistContracts::survivesObservation(
-            result.died, result.unknown || result.unknownTrunc || result.toggleUnknown,
-            result.ticksRan, context.limit + context.model.cap, result.landedAfterAction);
+    auto const wasSeeded = [&](int delayValue) -> bool {
+        for (auto const& seeded : context.options.seedCandidates) {
+            if (seeded.delay == delayValue)
+                return true;
+        }
+        return false;
+    };
+    auto const complete = [&](EbShadowSimulator::RunResult const& result, int delayValue = -1) {
+        bool const unknown = result.unknown || result.unknownTrunc || result.toggleUnknown;
+        if (EbMissAssistContracts::survivesObservation(result.died, unknown, result.ticksRan,
+                                                       context.limit + context.model.cap,
+                                                       result.landedAfterAction)) {
+            return true;
+        }
+        // Adaptive→classic seed: Alive through the paid screen quantum counts.
+        if (delayValue >= 0 && wasSeeded(delayValue) && !result.died && !unknown &&
+            result.ticksRan > 0) {
+            int const quantum = std::max(1, context.options.adaptiveScreenTicks);
+            return result.ticksRan >= quantum;
+        }
+        return false;
     };
     bool const dual = context.linkedDual();
     // Continuous: earliest-safe only (local steering window). Discrete ball/cube
@@ -97,7 +115,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return false;
         }
         bool dead = candidate.raw.died;
-        bool safe = complete(candidate.raw);
+        bool safe = complete(candidate.raw, delayValue);
         if (dual && !dead) {
             auto* other = context.real == context.layer->m_player1 ? context.layer->m_player2
                                                                    : context.layer->m_player1;
@@ -108,7 +126,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             auto partner = context.runEngine(other, delayValue, -1, nullptr);
             context.simulator.resetCaptureForNextRun(context.layer);
             dead = partner.died;
-            safe = safe && complete(partner);
+            safe = safe && complete(partner, delayValue);
         }
         candidate.viable = safe;
         candidate.clearsThreat = safe;
@@ -150,10 +168,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.plan.budgetHit = true;
             break;
         }
+        // Peak-death-cut leftovers: do not re-evalDelay (honest Skipped notes).
+        if (context.ledgerPeakDeathExit && !context.candReady[static_cast<size_t>(delayValue)])
+            break;
         if (context.candReady[static_cast<size_t>(delayValue)]) {
             auto const& ready = context.cands[static_cast<size_t>(delayValue)];
             bool dead = ready.raw.died;
-            bool safe = complete(ready.raw);
+            bool safe = complete(ready.raw, delayValue);
             if (dual && !dead) {
                 auto* other = context.real == context.layer->m_player1 ? context.layer->m_player2
                                                                        : context.layer->m_player1;
@@ -164,7 +185,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 auto partner = context.runEngine(other, delayValue, -1, nullptr);
                 context.simulator.resetCaptureForNextRun(context.layer);
                 dead = partner.died;
-                safe = safe && complete(partner);
+                safe = safe && complete(partner, delayValue);
                 EbSimulationCandidate updated = ready;
                 updated.viable = safe;
                 updated.clearsThreat = safe;

@@ -2,8 +2,15 @@
 
 ## v1.5.1-dev
 
+### AP1 — Hitch (small levels)
+- Live `sim-budget-us=0` → **8000µs** hitch ceiling for classic **and** Adaptive (`EbLivePlanContracts::intendedLiveBudgetUs`).
+- Adaptive→classic fallthrough uses remUs floor **2000µs** when the wall is spent but ticks remain (was `budgetUs=1`).
+- Fallthrough seeds observation-cleared Alive screens (not only terminal/horizon); IW accepts those seeds at screen quantum.
+- Discrete peak-death cut marks leftovers `Skipped`/`peak-death-cut` only — no fake-dead clones; IW does not re-`evalDelay` them.
+- PlanGold: `live-hitch-ceiling`. Adaptive parity smoke: `adaptive-zero-wall-clamped`, `fallthrough-remus-floor`.
+
 ### AP0 — Live plan contracts (no behavior change)
-- Ledger: `peak-death-cut` reject code + `EarlyExit::PeakDeath` (idle-prefix still uses prior fill until AP1).
+- Ledger: `peak-death-cut` reject code + `EarlyExit::PeakDeath`.
 - Pure `EbLivePlanContracts` locks current vs intended hitch / landed-rank / peak-death / orb-under-IW tables. PlanGold: `live-plan-contracts`.
 - DevTrace `planFinished` adds `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
 
@@ -18,12 +25,12 @@
 - Landed observation-safe cands now rank by endX−λ·delay only, and need >`kFutileEndXGain` to beat an earlier Delay.
 
 ### Live click hitch (`sim-budget-us=0`)
-- Classic Live no longer treats `sim-budget-us=0` as a multi-frame freeze: soft wall clamps to **8000µs** per press (Adaptive keeps true unlimited `0`).
-- Input-window idle-prefix stops after the first post-survivor death (ball/cube peak cliff) instead of simming the rest of Max Assist.
+- Classic Live no longer treats `sim-budget-us=0` as a multi-frame freeze: soft wall clamps to **8000µs** per press.
+- **AP1:** Adaptive Live uses the same hitch ceiling; peak-death leftovers stay honest Skipped (see AP1 above).
 
 ### Dynamic / Adaptive throughput (no budget cuts)
 - Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).
-- Adaptive→classic fallthrough seeds terminal / horizon-proven delay results + threat zone + prefix-death tick so classic skips re-sim of finished Adaptive work. Partial Alive screens stay unseeded (classic still proves them).
+- Adaptive→classic fallthrough seeds terminal / horizon-proven / observation-cleared Alive screens + threat zone + prefix-death tick so classic skips re-sim of finished Adaptive work.
 
 ### Dev Lab resource stats
 - Session JSON + Dev report overlay now carry process RAM/CPU min–max (`resourceStats` / `ram=…-…MB cpu=…-…%`), sampled on session start, planFinished, and attempt seal (Windows Working Set + process CPU).
