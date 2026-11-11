@@ -27,6 +27,19 @@ public:
         return IM_COL32(r, g, 255, 255);
     }
 
+    static constexpr float kPi = 3.14159265358979323846f;
+
+    static void fillCornerDisc(ImDrawList* drawList, ImVec2 const& center, float radius,
+                               float sampleX, float sampleY, float width, float height,
+                               float timeSeconds, float a0, float a1) {
+        float const wave = waveAt(sampleX, sampleY, width, height, timeSeconds);
+        ImU32 const insideColor = colorFromWave(wave);
+        drawList->PathClear();
+        drawList->PathArcTo(center, radius, a0, a1, 16);
+        drawList->PathLineTo(center);
+        drawList->PathFillConvex(insideColor);
+    }
+
     // Square wave cells overwrite AA rounding — remask corners to a true rounded rect.
     static void remaskRoundedCorners(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max,
                                      float rounding, ImU32 outsideColor, float timeSeconds) {
@@ -45,22 +58,14 @@ public:
         drawList->AddRectFilled(ImVec2(max.x - r, max.y - r), ImVec2(max.x, max.y), outsideColor);
 
         // Put rounded corners back; sample wave so the remask matches the fill.
-        auto fillCorner = [&](ImVec2 center, float sampleX, float sampleY, float a0, float a1) {
-            float const wave = waveAt(sampleX, sampleY, width, height, timeSeconds);
-            ImU32 const insideColor = colorFromWave(wave);
-            drawList->PathClear();
-            drawList->PathArcTo(center, r, a0, a1, 16);
-            drawList->PathLineTo(center);
-            drawList->PathFillConvex(insideColor);
-        };
-        fillCorner(ImVec2(min.x + r, min.y + r), r * 0.35f, r * 0.35f, IM_PI,
-                   IM_PI * 1.5f);
-        fillCorner(ImVec2(max.x - r, min.y + r), width - r * 0.35f, r * 0.35f, IM_PI * 1.5f,
-                   IM_PI * 2.0f);
-        fillCorner(ImVec2(max.x - r, max.y - r), width - r * 0.35f, height - r * 0.35f, 0.0f,
-                   IM_PI * 0.5f);
-        fillCorner(ImVec2(min.x + r, max.y - r), r * 0.35f, height - r * 0.35f, IM_PI * 0.5f,
-                   IM_PI);
+        fillCornerDisc(drawList, ImVec2(min.x + r, min.y + r), r, r * 0.35f, r * 0.35f, width,
+                       height, timeSeconds, kPi, kPi * 1.5f);
+        fillCornerDisc(drawList, ImVec2(max.x - r, min.y + r), r, width - r * 0.35f, r * 0.35f,
+                       width, height, timeSeconds, kPi * 1.5f, kPi * 2.0f);
+        fillCornerDisc(drawList, ImVec2(max.x - r, max.y - r), r, width - r * 0.35f,
+                       height - r * 0.35f, width, height, timeSeconds, 0.0f, kPi * 0.5f);
+        fillCornerDisc(drawList, ImVec2(min.x + r, max.y - r), r, r * 0.35f, height - r * 0.35f,
+                       width, height, timeSeconds, kPi * 0.5f, kPi);
     }
 
 private:
