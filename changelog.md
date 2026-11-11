@@ -2,6 +2,13 @@
 
 ## v1.5.1-dev
 
+### AP4 — Orbs under input-window
+- Live IW runs cheap `spatialOrbHint` whenever Orbs are on, plus budget-capped `scanOrbWindow` (coast + press-reach).
+- After cand fill: orb-intent → earliest±k activation band as `DelayOrb` / `requireOrb` / `dMin`–`dMax` candNotes (before Wave help-only).
+- Dash hold salvage (`releaseAfter=40`) and toggle → `PassToggleUnknown` on the IW path.
+- Adaptive Gate Delay with activation sets `requireOrb` + DelayOrb honestly.
+- PlanGold: `orb-under-input-window`, `orb-dash-hold-iw`, `pass-toggle-unknown-iw`.
+
 ### AP3b — Live IW Wave anti-phase + help-only
 - Continuous Wave IW no longer skips classic anti-phase: **help-only** (d0 Alive → `PassD0Safe`, never Delay to pad endX), **proximity** (`PassWaveProximity`), **futile** (`PassWaveFutile`), earliest later Alive Delay when d0 dies.
 - Cheap baseline coast under continuous IW for `idleSafer`. PlanGold: `wave-iw-help-only`, `wave-iw-prox-pass`.

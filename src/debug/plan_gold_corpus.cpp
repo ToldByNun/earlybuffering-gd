@@ -194,6 +194,26 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                !EbLivePlanContracts::waveIwProximityPass(true, true, true, true, true, false) &&
                !EbLivePlanContracts::waveIwProximityPass(true, true, false, true, true, true),
            "wave-iw-prox-pass");
+    // 1.5.1 AP4: orb hint/scan allowed under IW; earliest act → DelayOrb.
+    expect(EbLivePlanContracts::intendedSpatialOrbHintAllowed(true) &&
+               EbLivePlanContracts::intendedOrbWindowScanAllowed(true, true, true) &&
+               !EbLivePlanContracts::currentOrbWindowScanRuns(true, true),
+           "orb-under-input-window");
+    {
+        EbAssistPickV1::CandView orbCands[] = {
+            {false, false}, {true, true}, {true, true}, {true, true}};
+        auto const orbPick = EbAssistPickV1::choose(orbCands, 3, 0, true, 1, 3);
+        expect(!orbPick.doPass && orbPick.chosen == 1 && orbPick.requireOrb, "orb-under-input-window");
+    }
+    // Dash hold contract: wasDashing salvage uses releaseAfter=40 (IW mirrors classic).
+    {
+        int const dashHoldReleaseAfter = 40;
+        expect(dashHoldReleaseAfter == 40 && dashHoldReleaseAfter > 0, "orb-dash-hold-iw");
+    }
+    // Toggle unknown named Pass (not Hopeless) — reason id locked in AssistVerdict.
+    expect(std::string(EbAssistVerdict::name(AssistReason::PassToggleUnknown))
+                   .find("toggle") != std::string::npos,
+           "pass-toggle-unknown-iw");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;

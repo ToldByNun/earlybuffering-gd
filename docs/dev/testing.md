@@ -21,7 +21,7 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 `src/debug/plan_gold_corpus.cpp` — synthetic planner gold cases. Extend when Pass/Delay contracts change.
 
-1.5.1 AP0–AP3b: `live-plan-contracts` + `live-hitch-ceiling` + `wave-horizon-floor` + `wave-iw-help-only` / `wave-iw-prox-pass` — hitch / remUs / Wave IW floor + help-only/prox wired; landed ranking + orb-under-IW until AP2/AP4.
+1.5.1 AP0–AP4: hitch / remUs / Wave IW floor + help-only/prox / orb-under-IW wired (`orb-under-input-window`, `orb-dash-hold-iw`, `pass-toggle-unknown-iw`). Landed ranking + AP3c micro-window still open.
 
 ## Adaptive smoke
 

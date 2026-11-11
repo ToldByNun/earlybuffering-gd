@@ -529,10 +529,14 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     if (gate.action == PlanAction::Delay && gate.delay > 0) {
         plan.viableDelays.clear();
         for (int delay = 0; delay <= limit; ++delay) {
-            if (EbAdaptiveDecisionGate::hasHazardProgress(views[static_cast<size_t>(delay)], views[0],
-                                                          model.cap, proofTicks)) {
+            auto const& view = views[static_cast<size_t>(delay)];
+            bool const keep =
+                plan.requireOrb
+                    ? (EbAdaptiveDecisionGate::isDelayWorthy(view) && view.activatedRing)
+                    : EbAdaptiveDecisionGate::hasHazardProgress(view, views[0], model.cap,
+                                                                proofTicks);
+            if (keep)
                 plan.viableDelays.push_back(delay);
-            }
         }
         if (!plan.viableDelays.empty()) {
             plan.dMin = plan.viableDelays.front();

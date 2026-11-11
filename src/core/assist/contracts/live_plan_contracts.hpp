@@ -3,9 +3,9 @@
 
 #include <string>
 
-// 1.5.1 AP0/AP1/AP3a/AP3b — pure Live plan contracts (no PlayLayer).
-// Hitch / remUs / peak-death / Wave horizon + help-only/prox are wired.
-// Landed-rank + orb-under-IW stay current-vs-intended until AP2/AP4.
+// 1.5.1 AP0–AP4 — pure Live plan contracts (no PlayLayer).
+// Hitch / remUs / peak-death / Wave horizon + help-only/prox / orb-under-IW
+// are wired. Landed-rank stays current-vs-intended until AP2.
 // selfCheck locks both tables.
 class EbLivePlanContracts {
 public:

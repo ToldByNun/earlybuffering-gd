@@ -182,14 +182,14 @@ EbAdaptiveDecisionGate::Result EbAdaptiveDecisionGate::decide(Input const& in) {
 
     auto const& win = in.cands[static_cast<size_t>(best)];
     out.action = PlanAction::Delay;
-    out.reason = EbAssistVerdict::inferDelayReason(in.activatedRingPlan || win.activatedRing, false,
-                                                   false);
+    // AP4: activation → requireOrb + DelayOrb (honest ledger / buffer band).
+    out.requireOrb = win.activatedRing || in.activatedRingPlan;
+    out.activatedRing = win.activatedRing || in.activatedRingPlan;
+    out.reason = EbAssistVerdict::inferDelayReason(out.activatedRing, out.requireOrb, false);
     out.delay = best;
     out.nowIsSafe = false;
     out.threatCleared = win.zoneCleared;
     out.jumpTick = best;
-    out.activatedRing = win.activatedRing;
-    out.requireOrb = false;
     return out;
 }
 
@@ -452,6 +452,32 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     cands[3].deathTick = 5;
     expect(decide(provenD0In).reason == AssistReason::PassD0Safe, "proven-d0-alone");
     expect(decide(provenD0In).action == PlanAction::Pass, "proven-d0-pass");
+
+    // AP4: Delay with activation → requireOrb + DelayOrb.
+    cands[0] = CandView{};
+    cands[0].screened = true;
+    cands[0].terminalDied = true;
+    cands[0].deathTick = 4;
+    cands[0].ticksSimulated = 5;
+    cands[2] = CandView{};
+    cands[2].screened = true;
+    cands[2].autonomousAlive = true;
+    cands[2].ticksSimulated = 40;
+    cands[2].zoneCleared = true;
+    cands[2].activatedRing = true;
+    cands[2].endX = 180.f;
+    for (int delay = 1; delay <= 4; ++delay) {
+        if (delay == 2)
+            continue;
+        cands[delay] = cands[0];
+    }
+    Input orbIn = deadIn;
+    orbIn.robustK = 0;
+    orbIn.modelCap = 84;
+    auto const orbOut = decide(orbIn);
+    expect(orbOut.action == PlanAction::Delay && orbOut.delay == 2, "orb-delay");
+    expect(orbOut.requireOrb && orbOut.activatedRing, "orb-require");
+    expect(orbOut.reason == AssistReason::DelayOrb, "orb-delay-reason");
 
     if (fails == 0)
         report = "AdaptiveDecisionGate OK";

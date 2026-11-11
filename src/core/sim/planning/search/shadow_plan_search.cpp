@@ -118,14 +118,27 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     context.orbAssist = EbStageConfig::assistOrbs() && context.down;
     context.orbHint = {};
     context.spatialHint = false;
-    if (context.orbAssist && !context.inputWindow) {
+    // AP4: spatial hint always when orbs on (even under Live IW). Budget-capped
+    // scanOrbWindow also runs under IW (was classic-only).
+    if (context.orbAssist &&
+        EbLivePlanContracts::intendedSpatialOrbHintAllowed(context.orbAssist)) {
+        context.spatialHint = context.simulator.spatialOrbHint(context.layer, context.real,
+                                                               context.limit, context.deltaTime);
+        context.plan.foresightOrbPad = context.spatialHint;
+    }
+    bool const orbScanBudgetOk =
+        context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe;
+    if (context.orbAssist &&
+        EbLivePlanContracts::intendedOrbWindowScanAllowed(context.orbAssist, context.inputWindow,
+                                                          orbScanBudgetOk)) {
         int const scanTicks = EbOpportunityProbe::orbScanTicks(context.limit, context.model.slack);
         context.orbHint = context.simulator.scanOrbWindow(
             context.layer, context.real, context.down, scanTicks, context.deltaTime,
             context.firstDt, &context.tickBudget, false);
         context.simulator.resetCaptureForNextRun(context.layer);
         // Press-to-reach: second scan with Jump held if coast missed (budget-capped).
-        if (!context.orbHint.found && context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe) {
+        if (!context.orbHint.found &&
+            context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe) {
             int const reachTicks =
                 EbOpportunityProbe::pressReachScanTicks(context.limit, context.model.slack);
             auto held = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
@@ -138,9 +151,6 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         }
         if (context.orbHint.found)
             context.plan.usedOrbWindow = true;
-        context.spatialHint = context.simulator.spatialOrbHint(context.layer, context.real,
-                                                               context.limit, context.deltaTime);
-        context.plan.foresightOrbPad = context.spatialHint;
     }
 
     context.zone = {};

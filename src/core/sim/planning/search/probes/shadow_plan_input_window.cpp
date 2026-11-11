@@ -4,6 +4,7 @@
 #include "../../../../assist/contracts/assist_verdict.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
+#include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../shadow_simulator.hpp"
 #include "../../shadow_survival_rules.hpp"
 #include "../../simulation_candidate.hpp"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
+#include <vector>
 
 bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     if (!context.inputWindow)
@@ -141,7 +143,11 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.plan.firstDeathTick = candidate.raw.deathTick;
             context.plan.firstDeathObject = candidate.raw.deathObject;
             if (!dead && !safe) {
-                context.plan.reason = AssistReason::PassHardUnknown;
+                // AP4: toggle overlap → named Pass (not opaque HardUnknown).
+                context.plan.reason =
+                    (candidate.toggleUnknown || context.sawToggleUnknown)
+                        ? AssistReason::PassToggleUnknown
+                        : AssistReason::PassHardUnknown;
                 return false;
             }
         }
@@ -220,10 +226,95 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     auto const& c0 = context.cands[0];
     bool const d0Safe = context.candReady[0] && c0.viable && !c0.raw.died;
 
+    // AP4 — Orb-intent handoff (before Wave help-only / Alive ranking).
+    // Classic selection never runs after IW returns — recover G1 earliest±k.
+    if (context.orbAssist && context.down &&
+        context.plan.reason != AssistReason::PassHardUnknown &&
+        context.plan.reason != AssistReason::PassToggleUnknown) {
+        bool anyActivation = false;
+        int actMin = -1;
+        int actMax = -1;
+        for (int delay = 0; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            auto& cand = context.cands[static_cast<size_t>(delay)];
+            if (cand.raw.activatedRing)
+                cand.activatedRing = true;
+            // Observation-safe + ring (or dash-hold salvage already on cand).
+            if (!(cand.viable && cand.activatedRing && !cand.raw.died))
+                continue;
+            anyActivation = true;
+            if (actMin < 0)
+                actMin = delay;
+            actMax = delay;
+        }
+        bool const orbIntent =
+            context.orbHint.found || context.spatialHint || context.plan.foresightOrbPad ||
+            anyActivation;
+        context.orbIntent = orbIntent;
+        context.ledgerOrbIntent = orbIntent;
+        if (orbIntent && actMin >= 0) {
+            std::vector<EbAssistPickV1::CandView> views(
+                static_cast<size_t>(std::max(0, context.limit)) + 1u);
+            for (int delay = 0; delay <= context.limit; ++delay) {
+                if (!context.candReady[static_cast<size_t>(delay)])
+                    continue;
+                auto const& cand = context.cands[static_cast<size_t>(delay)];
+                views[static_cast<size_t>(delay)].viable = cand.viable && !cand.raw.died;
+                views[static_cast<size_t>(delay)].activatedRing = cand.activatedRing;
+            }
+            auto const pick = EbAssistPickV1::choose(views.data(), context.limit, context.robustK,
+                                                     true, actMin, actMax);
+            if (pick.chosen > 0 && pick.requireOrb) {
+                auto& win = context.cands[static_cast<size_t>(pick.chosen)];
+                // Dash hold salvage if tap orb died / not observation-safe.
+                if (win.raw.activatedRing && win.raw.wasDashing && !win.viable &&
+                    context.tickBudget > 0 && !context.wallExceeded()) {
+                    auto hold = context.runEngine(context.real, pick.chosen, 40, nullptr);
+                    context.simulator.resetCaptureForNextRun(context.layer);
+                    if (!hold.died && complete(hold, pick.chosen)) {
+                        win.raw = hold;
+                        win.activatedRing = hold.activatedRing;
+                        win.viable = true;
+                        win.clearsThreat = true;
+                        win.requireHold = true;
+                        win.releaseAfter = 40;
+                        win.surviveTicks = EbShadowSurvivalRules::rankingSurviveTicks(hold);
+                        win.surviveBin = EbShadowSurvivalRules::surviveBinOf(win.surviveTicks);
+                        win.endX = hold.endX;
+                    }
+                }
+                if (win.viable && !win.raw.died) {
+                    context.plan.action = PlanAction::Delay;
+                    context.plan.delay = context.plan.jumpTick = pick.chosen;
+                    context.plan.nowIsSafe = false;
+                    context.plan.threatCleared = true;
+                    context.plan.requireOrb = true;
+                    context.plan.activatedRing = true;
+                    context.plan.requireHold = win.requireHold;
+                    context.plan.releaseAfter = win.releaseAfter;
+                    context.plan.dMin = actMin;
+                    context.plan.dMax = actMax;
+                    context.ledgerActMin = actMin;
+                    context.ledgerActMax = actMax;
+                    context.plan.reason = EbAssistVerdict::inferDelayReason(
+                        true, true, context.hasPrefer);
+                    context.publishLedger(pick.chosen, false, context.ledgerEarlyExit());
+                    EbAssistLog::debug(fmt::format(
+                        "PLAN id={} IW DelayOrb d={} act=[{},{}] hold={} foresight={}",
+                        context.plan.planId, pick.chosen, actMin, actMax,
+                        context.plan.requireHold ? 1 : 0, context.plan.foresightOrbPad ? 1 : 0));
+                    return true;
+                }
+            }
+        }
+    }
+
     // AP3b — Wave continuous IW: help-only / proximity / earliest / futile.
     // Classic selection never runs after IW returns, so anti-phase lives here.
     if (isWave && context.down && continuous &&
-        context.plan.reason != AssistReason::PassHardUnknown) {
+        context.plan.reason != AssistReason::PassHardUnknown &&
+        context.plan.reason != AssistReason::PassToggleUnknown) {
         context.plan.idleSafer = context.simulator.classifyIdleSafer(
             true, true, context.plan.baselineDeathTick >= 0, context.plan.baselineDeathTick,
             context.plan.baselineDeathX, c0.raw.died, c0.raw.died ? c0.raw.deathTick : -1,
@@ -341,6 +432,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     if (context.plan.budgetHit && bestDelay < 0)
         context.plan.reason = AssistReason::PassBudget;
+    // AP4: hopeless with toggle overlap → named PassToggleUnknown.
+    if (bestDelay < 0 && context.sawToggleUnknown &&
+        (context.plan.reason == AssistReason::PassHopeless ||
+         context.plan.reason == AssistReason::PassHardUnknown)) {
+        context.plan.reason = AssistReason::PassToggleUnknown;
+        context.plan.action = PlanAction::Pass;
+        context.plan.delay = 0;
+    }
 
     context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
                           context.ledgerEarlyExit());
