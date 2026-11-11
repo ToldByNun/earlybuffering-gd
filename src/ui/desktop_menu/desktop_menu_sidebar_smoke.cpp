@@ -112,11 +112,10 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     // pillRounding() is 999 — clamp so remask corner discs cannot flood the shell.
     float const maxRounding = (width < height ? width : height) * 0.5f;
     float const clampedRounding = rounding > maxRounding ? maxRounding : rounding;
+    // 0 = shell dock: keep AA cutouts transparent (don't punch opaque bg into them).
+    bool const transparentOutside = outsideColor == 0;
 
     ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
-    ImU32 const outside =
-        outsideColor != 0 ? outsideColor : EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::bg());
-
     drawList->AddRectFilled(min, max, base, clampedRounding, cornerFlags);
 
     // Dense grid on the sidebar; keep cells chunky on small pills so the last
@@ -144,6 +143,11 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     float const cellW = width / static_cast<float>(cols);
     float const cellH = height / static_cast<float>(rows);
 
+    bool const roundTopLeft = (cornerFlags & ImDrawFlags_RoundCornersTopLeft) != 0;
+    bool const roundTopRight = (cornerFlags & ImDrawFlags_RoundCornersTopRight) != 0;
+    bool const roundBottomLeft = (cornerFlags & ImDrawFlags_RoundCornersBottomLeft) != 0;
+    bool const roundBottomRight = (cornerFlags & ImDrawFlags_RoundCornersBottomRight) != 0;
+
     // Draw-list clip only — ImGui::PushClipRect also writes window->ClipRect and
     // desyncs hit-testing when callers mix drawList pushes (checkbox/slider).
     // Max is exclusive — +1 so the bottom/right pill edge is filled.
@@ -152,20 +156,52 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
         for (int col = 0; col < cols; ++col) {
             float const px = (static_cast<float>(col) + 0.5f) * cellW;
             float const py = (static_cast<float>(row) + 0.5f) * cellH;
+            ImVec2 const cellMin(min.x + static_cast<float>(col) * cellW,
+                                 min.y + static_cast<float>(row) * cellH);
+            ImVec2 const cellMax(cellMin.x + cellW + 0.75f, cellMin.y + cellH + 0.75f);
+
+            // Skip cells that sit outside the rounded AA edge — otherwise the
+            // square grid fills the transparent shell cutouts (sharp purple corners).
+            if (transparentOutside && clampedRounding > 0.5f) {
+                float const cx = (cellMin.x + cellMax.x) * 0.5f;
+                float const cy = (cellMin.y + cellMax.y) * 0.5f;
+                float const r = clampedRounding;
+                float const r2 = r * r;
+                bool outside = false;
+                if (roundTopLeft && cx < min.x + r && cy < min.y + r) {
+                    float const dx = (min.x + r) - cx;
+                    float const dy = (min.y + r) - cy;
+                    outside = dx * dx + dy * dy > r2;
+                } else if (roundTopRight && cx > max.x - r && cy < min.y + r) {
+                    float const dx = cx - (max.x - r);
+                    float const dy = (min.y + r) - cy;
+                    outside = dx * dx + dy * dy > r2;
+                } else if (roundBottomLeft && cx < min.x + r && cy > max.y - r) {
+                    float const dx = (min.x + r) - cx;
+                    float const dy = cy - (max.y - r);
+                    outside = dx * dx + dy * dy > r2;
+                } else if (roundBottomRight && cx > max.x - r && cy > max.y - r) {
+                    float const dx = cx - (max.x - r);
+                    float const dy = cy - (max.y - r);
+                    outside = dx * dx + dy * dy > r2;
+                }
+                if (outside) {
+                    continue;
+                }
+            }
+
             float const wave =
                 EbDesktopMenuSidebarSmokeMath::waveAt(px, py, width, height, timeSeconds);
             ImU32 const color = EbDesktopMenuSidebarSmokeMath::colorFromWave(wave);
-            ImVec2 const cellMin(min.x + static_cast<float>(col) * cellW,
-                                 min.y + static_cast<float>(row) * cellH);
-            // Slight overlap hides seams; outer clip + remask keep the pill edge clean.
-            ImVec2 const cellMax(cellMin.x + cellW + 0.75f, cellMin.y + cellH + 0.75f);
             drawList->AddRectFilled(cellMin, cellMax, color);
         }
     }
     drawList->PopClipRect();
 
-    EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(drawList, min, max, clampedRounding, outside,
-                                                        timeSeconds, cornerFlags);
+    if (!transparentOutside) {
+        EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(
+            drawList, min, max, clampedRounding, outsideColor, timeSeconds, cornerFlags);
+    }
 }
 
 #else

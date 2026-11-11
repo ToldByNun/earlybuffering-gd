@@ -1,5 +1,6 @@
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_fonts.hpp"
+#include "desktop_menu_icons.hpp"
 #include "desktop_menu_motion.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
@@ -307,6 +308,10 @@ public:
         ImGui::EndGroup();
     }
 
+    static void drawSidebarFooter(ImVec2 const& sideMin, float sideW, float sideH) {
+        EbDesktopMenuIcons::drawSidebarLinks(sideMin, sideW, sideH);
+    }
+
     static void drawContentBody(ImVec2 const& origin, float width, float height, float tabAlpha,
                                 float tabSlideX) {
         ImGui::SetCursorScreenPos(ImVec2(origin.x + tabSlideX, origin.y));
@@ -562,6 +567,7 @@ public:
                                                ImDrawFlags_RoundCornersLeft);
 
         drawSidebarNav(sideMin, sideW);
+        drawSidebarFooter(sideMin, sideW, winSize.y);
 
         float const tabE = EbDesktopMenuShellState::tabVisual();
         float const tabSlide =

@@ -1314,7 +1314,9 @@
 			"resources/fonts/Inter-SemiBold.ttf"
 		],
 		"sprites": [
-			"resources/ui/eb_star.png"
+			"resources/ui/eb_star.png",
+			"resources/ui/eb_github.png",
+			"resources/ui/eb_discord.png"
 		]
 	}
 }

@@ -1,5 +1,6 @@
 #include "desktop_menu.hpp"
 #include "desktop_menu_fonts.hpp"
+#include "desktop_menu_icons.hpp"
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_theme.hpp"
 
@@ -43,8 +44,9 @@ bool EbDesktopMenu::useImGuiShell() {
 void EbDesktopMenu::install() {
     ImGuiCocos::get()
         .setup([] {
-            // Fonts first — setup re-runs after fullscreen toggles.
+            // Fonts / icons first — setup re-runs after fullscreen toggles.
             EbDesktopMenuFonts::load();
+            EbDesktopMenuIcons::load();
             EbDesktopMenuTheme::apply();
         })
         .draw([] {

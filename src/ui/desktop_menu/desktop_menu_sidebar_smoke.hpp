@@ -14,7 +14,8 @@ public:
 #if defined(EB_DESKTOP_IMGUI)
     // Draw the animated wave into a rounded rect. cornerFlags selects which
     // corners stay rounded (docked shell uses left-only).
-    // outsideColor punches corner remask; 0 = shell bg().
+    // outsideColor: opaque remask for widget pills (panel/surface). 0 = leave
+    // shell corners transparent (cull wave cells; no opaque punch).
     void paint(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max, float rounding,
                float timeSeconds, ImDrawFlags cornerFlags = ImDrawFlags_RoundCornersLeft,
                ImU32 outsideColor = 0);
