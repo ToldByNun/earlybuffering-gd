@@ -4,6 +4,7 @@
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
+#include "widgets/eb_color_picker.hpp"
 #include "widgets/eb_combo_box.hpp"
 #include "widgets/eb_dropdown.hpp"
 #include "widgets/eb_section_card.hpp"
@@ -198,6 +199,12 @@ public:
                                           "Foxtrot", "Golf",  "Hotel",   "India", "Juliet"};
                 EbDropdown::draw("smoke-long-drop", "Long List", longOpts, 10, &s_smokeDrop);
             }
+
+            ImGui::Dummy(ImVec2(0.0f, 12.0f));
+            // AP13 color smoke — swatch + classic hue-bar popup picker.
+            EbColorPicker::drawSetting("save-icon-color", "Save Icon Color");
+            static float s_smokeRgb[3] = {0.48f, 0.38f, 1.0f};
+            EbColorPicker::draw("smoke-color", "Accent Smoke", s_smokeRgb);
         }
         EbSectionCard::end();
         // Extra scroll extent so the last rows clear the clip edge.
