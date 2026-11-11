@@ -125,6 +125,8 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("ticks-wave") == SettingsCategory::Main, "cat-ticks-wave-main");
     expect(categoryForKey("lag-probe") == SettingsCategory::Main, "cat-lag-main");
     expect(categoryForKey("show-pause-hub") == SettingsCategory::Main, "cat-hub-main");
+    expect(categoryForKey("desktop-classic-settings") == SettingsCategory::Main,
+           "cat-classic-main");
     expect(categoryForKey("show-overlay") == SettingsCategory::Main, "cat-overlay-main");
     expect(categoryForKey("title-scope") == SettingsCategory::Scope, "cat-title-scope");
     expect(categoryForKey("assist-only-practice") == SettingsCategory::Scope, "cat-practice-scope");
@@ -138,6 +140,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("show-bake-path") == SettingsCategory::Visual, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-debug") == SettingsCategory::Keys, "cat-hotkey-keys");
+    expect(categoryForKey("hotkey-desktop-menu") == SettingsCategory::Keys, "cat-hotkey-menu");
     expect(categoryForKey("preset") == SettingsCategory::Count, "cat-preset-gone");
     expect(categoryForKey("stage-index") == SettingsCategory::Count, "cat-stage-gone");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Count, "cat-cycle-hotkey-gone");
@@ -165,7 +168,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
         expect(candidate != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-165");
+    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-174");
 
     // Every portable ConfigBundle key must be in the category map.
     for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {

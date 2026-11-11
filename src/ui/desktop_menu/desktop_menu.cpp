@@ -10,6 +10,14 @@ bool EbDesktopMenu::isSupported() {
     return true;
 }
 
+bool EbDesktopMenu::useImGuiShell() {
+    auto* mod = geode::prelude::Mod::get();
+    if (!mod) {
+        return false;
+    }
+    return !mod->getSettingValue<bool>("desktop-classic-settings");
+}
+
 void EbDesktopMenu::install() {
     ImGuiCocos::get()
         .setup([] {
@@ -19,14 +27,15 @@ void EbDesktopMenu::install() {
             if (!ImGuiCocos::get().isVisible()) {
                 return;
             }
-            // AP1 stub only — shell / widgets arrive in later APs.
+            // AP1/AP2 stub only — shell / widgets arrive in later APs.
             ImGui::SetNextWindowSize(ImVec2(320.0f, 160.0f), ImGuiCond_FirstUseEver);
             if (ImGui::Begin("EarlyBuffer Desktop Menu", nullptr)) {
-                ImGui::TextUnformatted("ImGuiCocos desktop gate OK (AP1 stub)");
+                ImGui::TextUnformatted("ImGuiCocos desktop gate OK (AP2 stub)");
+                ImGui::TextUnformatted("Classic fallback: Main → Classic Settings Menu");
             }
             ImGui::End();
         });
-    // Closed until AP2 keybind / pause hub opens it.
+    // Closed until keybind / pause hub opens it.
     ImGuiCocos::get().setVisible(false);
 }
 
@@ -45,6 +54,10 @@ void EbDesktopMenu::toggle() {
 #else
 
 bool EbDesktopMenu::isSupported() {
+    return false;
+}
+
+bool EbDesktopMenu::useImGuiShell() {
     return false;
 }
 

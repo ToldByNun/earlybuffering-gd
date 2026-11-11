@@ -7,6 +7,7 @@
 #include "../../core/replay/replay_import.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../dev/dev_session.hpp"
+#include "../desktop_menu/desktop_menu.hpp"
 #include "../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../visualizers/trajectory_visualizer.hpp"
 #include "actions/pause_config_actions.hpp"
@@ -238,6 +239,16 @@ void EbPauseActionBridge::devCopyReport() {
 }
 
 void EbPauseActionBridge::openModSettings() {
+    if (EbDesktopMenu::useImGuiShell()) {
+        // ImGui XOR classic: do not stack over an open Geode popup.
+        if (EbInLevelSettingsFilterKeeper::isOpen())
+            return;
+        if (!EbDesktopMenu::isOpen())
+            EbDesktopMenu::setOpen(true);
+        return;
+    }
+    if (EbDesktopMenu::isOpen())
+        EbDesktopMenu::setOpen(false);
     if (EbInLevelSettingsFilterKeeper::isOpen())
         return;
     auto* mod = geode::prelude::Mod::get();

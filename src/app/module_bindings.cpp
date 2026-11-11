@@ -14,7 +14,9 @@
 #include "../debug/perf_trace.hpp"
 #include "../debug/plan_gold_corpus.hpp"
 #include "../dev/dev_config.hpp"
+#include "../ui/desktop_menu/desktop_menu.hpp"
 #include "../ui/overlays/status_overlay.hpp"
+#include "../ui/pause/pause_action_bridge.hpp"
 #include "../ui/settings/action_button_setting.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
@@ -79,6 +81,26 @@ void EbModuleBindings::registerSettings() {
             }
             EbAssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
             EbAssistController::get().updateOverlay();
+        });
+
+    geode::prelude::listenForKeybindSettingPresses(
+        "hotkey-desktop-menu", [](geode::Keybind const&, bool down, bool repeat, double) {
+            if (!down || repeat)
+                return;
+            if (EbDesktopMenu::useImGuiShell()) {
+                EbDesktopMenu::toggle();
+                return;
+            }
+            // Classic preference or mobile: open Geode settings popup.
+            EbPauseActionBridge::openModSettings();
+        });
+
+    geode::prelude::listenForSettingChanges<bool>(
+        "desktop-classic-settings", [](bool classic) {
+            if (classic && EbDesktopMenu::isOpen())
+                EbDesktopMenu::setOpen(false);
+            if (!EbStageConfig::isApplying())
+                EbModuleBindings::onAnySetting();
         });
 
     geode::prelude::listenForSettingChanges<bool>("show-overlay", [](bool value) {

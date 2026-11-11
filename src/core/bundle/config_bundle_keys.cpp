@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[129] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[131] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
@@ -14,6 +14,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[129] = {
     {"show-bake-path", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-bake", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
+    {"desktop-classic-settings", EbConfigBundleKeys::Kind::Bool},
     {"save-feedback-sound", EbConfigBundleKeys::Kind::Bool},
     {"save-feedback-color", EbConfigBundleKeys::Kind::Bool},
     {"save-feedback-counter", EbConfigBundleKeys::Kind::Bool},
@@ -119,6 +120,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[129] = {
     {"hotkey-auto-tune", EbConfigBundleKeys::Kind::Keybind},
     {"hotkey-assist-mode", EbConfigBundleKeys::Kind::Keybind},
     {"hotkey-trajectory", EbConfigBundleKeys::Kind::Keybind},
+    {"hotkey-desktop-menu", EbConfigBundleKeys::Kind::Keybind},
     {"dev-record-enable", EbConfigBundleKeys::Kind::Bool},
     {"dev-record-count", EbConfigBundleKeys::Kind::Int},
     {"dev-count-empty-attempts", EbConfigBundleKeys::Kind::Bool},
@@ -168,7 +170,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 129, "count-129");
+    expect(EbConfigBundleKeysTable::kEntryCount == 131, "count-131");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -211,12 +213,12 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 49, "kind-bool-49");
+    expect(kindBool == 50, "kind-bool-50");
     expect(kindInt == 43, "kind-int-43");
     expect(kindFloat == 20, "kind-float-20");
     expect(kindString == 6, "kind-string-6");
     expect(kindColor == 1, "kind-color-1");
-    expect(kindKeybind == 5, "kind-keybind-5");
+    expect(kindKeybind == 6, "kind-keybind-6");
 
     auto const* enabled = EbConfigBundleKeys::find("enabled");
     expect(enabled != nullptr, "find-enabled");
@@ -227,6 +229,10 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(color && color->kind == Kind::Color, "find-color");
     auto const* hotkey = EbConfigBundleKeys::find("hotkey-assist-mode");
     expect(hotkey && hotkey->kind == Kind::Keybind, "find-keybind");
+    auto const* menuHotkey = EbConfigBundleKeys::find("hotkey-desktop-menu");
+    expect(menuHotkey && menuHotkey->kind == Kind::Keybind, "find-desktop-menu-hotkey");
+    auto const* classic = EbConfigBundleKeys::find("desktop-classic-settings");
+    expect(classic && classic->kind == Kind::Bool, "find-classic-settings");
     auto const* offFrom = EbConfigBundleKeys::find("assist-off-1-from");
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
     expect(EbConfigBundleKeys::find("preset") == nullptr, "preset-removed");

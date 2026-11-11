@@ -103,6 +103,12 @@
 			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Scope, Assist, Bake, Modes, Visual, Keys, Dev). Off = open settings only from the Geode menu.",
 			"default": true
 		},
+		"desktop-classic-settings": {
+			"type": "bool",
+			"name": "Classic Settings Menu",
+			"description": "Desktop only. On = open the classic Geode settings popup (Pause EB / menu hotkey). Off = use the ImGui desktop menu. Android/iOS always use classic.",
+			"default": false
+		},
 		"show-pause-bake": {
 			"type": "bool",
 			"name": "Pause Status Lines",
@@ -1111,6 +1117,13 @@
 			"name": "Toggle Trajectory Viz",
 			"description": "Shows or hides trajectory / click-window paths (same as Visual → Trajectory Visualizer).",
 			"default": "Ctrl+Shift+T",
+			"category": "gameplay"
+		},
+		"hotkey-desktop-menu": {
+			"type": "keybind",
+			"name": "Toggle Desktop Menu",
+			"description": "Desktop: toggles the ImGui settings menu when Classic Settings Menu is off. When Classic is on (or on mobile), opens the Geode settings popup. Default Right Shift.",
+			"default": "RightShift",
 			"category": "gameplay"
 		},
 		"title-dev": {

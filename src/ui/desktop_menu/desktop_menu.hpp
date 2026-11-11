@@ -6,6 +6,8 @@
 class EbDesktopMenu {
 public:
     static bool isSupported();
+    // True when desktop ImGui is linked and Classic Settings Menu is off.
+    static bool useImGuiShell();
     static void install();
     static bool isOpen();
     static void setOpen(bool open);
