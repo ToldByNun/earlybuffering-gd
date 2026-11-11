@@ -34,6 +34,11 @@ ImVec4 EbDesktopMenuTheme::surface() {
     return EbDesktopMenuThemeColors::rgbByte(26, 26, 30);
 }
 
+ImVec4 EbDesktopMenuTheme::sidebarBg() {
+    // Deep purple — readable white labels (flat stand-in until AP6 shader).
+    return EbDesktopMenuThemeColors::rgbByte(58, 42, 148);
+}
+
 ImVec4 EbDesktopMenuTheme::accent() {
     // Primary purple (button / active pill / sidebar base).
     return EbDesktopMenuThemeColors::rgbByte(123, 97, 255);

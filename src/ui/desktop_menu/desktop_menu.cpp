@@ -1,11 +1,11 @@
 #include "desktop_menu.hpp"
+#include "desktop_menu_shell.hpp"
 #include "desktop_menu_theme.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
 #include <Geode/Geode.hpp>
 #include <imgui-cocos.hpp>
-#include <imgui.h>
 
 bool EbDesktopMenu::isSupported() {
     return true;
@@ -29,23 +29,7 @@ void EbDesktopMenu::install() {
             if (!ImGuiCocos::get().isVisible()) {
                 return;
             }
-            // AP3 stub — shell / widgets arrive in later APs.
-            ImGui::SetNextWindowSize(ImVec2(360.0f, 200.0f), ImGuiCond_FirstUseEver);
-            if (ImGui::Begin("EarlyBuffer Desktop Menu", nullptr)) {
-                ImGui::TextUnformatted("Theme tokens applied (AP3)");
-                ImGui::TextColored(EbDesktopMenuTheme::muted(),
-                                   "Classic fallback: Main → Classic Settings Menu");
-                ImGui::Spacing();
-                ImVec2 const btnMin = ImGui::GetCursorScreenPos();
-                float const btnW = ImGui::GetContentRegionAvail().x;
-                float const btnH = ImGui::GetFrameHeight();
-                EbDesktopMenuTheme::drawAccentGlow(
-                    ImGui::GetWindowDrawList(), btnMin, ImVec2(btnMin.x + btnW, btnMin.y + btnH),
-                    EbDesktopMenuTheme::frameRounding(), 0.85f);
-                if (ImGui::Button("Accent sample", ImVec2(-1.0f, 0.0f))) {
-                }
-            }
-            ImGui::End();
+            EbDesktopMenuShell::draw();
         });
     // Closed until keybind / pause hub opens it.
     ImGuiCocos::get().setVisible(false);
