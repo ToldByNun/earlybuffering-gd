@@ -1,5 +1,6 @@
 # Build VitePress docs and publish to GitHub Pages.
-# Repo Settings → Pages → Source = GitHub Actions (once).
+# Needs Pages Source = GitHub Actions (Settings → Pages), or configure-pages
+# enablement: true on first run (pages: write already granted below).
 name: Deploy docs
 
 on:
@@ -48,6 +49,9 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # First run on a repo without Pages: create the site (Source = Actions).
+          enablement: true
 
       - name: Install dependencies
         run: npm ci
