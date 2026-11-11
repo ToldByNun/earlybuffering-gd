@@ -1,4 +1,5 @@
 #include "desktop_menu_shell.hpp"
+#include "desktop_menu_fonts.hpp"
 #include "desktop_menu_theme.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
@@ -27,14 +28,17 @@ class EbDesktopMenuShellDraw {
 public:
     static void navGroupLabel(char const* label) {
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.50f));
+        EbDesktopMenuFonts::pushCaps();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.55f));
         ImGui::TextUnformatted(label);
         ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
     }
 
     static bool navTab(char const* label, bool selected, float width) {
         ImGui::PushID(label);
+        EbDesktopMenuFonts::pushUi();
         float const rowH = ImGui::GetFontSize() + 14.0f;
         ImVec2 const pos = ImGui::GetCursorScreenPos();
 
@@ -51,7 +55,8 @@ public:
 
         ImVec4 const textColor =
             selected ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(1.0f, 1.0f, 1.0f, 0.78f);
-        drawList->AddText(ImVec2(pos.x + 12.0f, pos.y + (rowH - ImGui::GetFontSize()) * 0.5f),
+        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                          ImVec2(pos.x + 12.0f, pos.y + (rowH - ImGui::GetFontSize()) * 0.5f),
                           EbDesktopMenuTheme::toU32(textColor), label);
 
         if (selected) {
@@ -62,6 +67,7 @@ public:
                               EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::accentLight()), 2.0f);
         }
 
+        EbDesktopMenuFonts::pop();
         ImGui::PopID();
         return pressed;
     }
@@ -70,17 +76,21 @@ public:
         ImGui::SetCursorScreenPos(ImVec2(origin.x + 14.0f, origin.y + 18.0f));
         ImGui::BeginGroup();
 
+        EbDesktopMenuFonts::pushHeader();
         ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
         ImGui::TextUnformatted("EARLYBUFFER");
         ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
 
         std::string version = "v?.?.?";
         if (auto* mod = geode::prelude::Mod::get()) {
             version = mod->getVersion().toVString();
         }
+        EbDesktopMenuFonts::pushCaps();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.45f));
         ImGui::TextUnformatted(version.c_str());
         ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
 
         float const tabWidth = width - 28.0f;
 
@@ -125,16 +135,20 @@ public:
             }
         }
 
+        EbDesktopMenuFonts::pushCaps();
         ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
         ImGui::TextUnformatted(header);
         ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
         ImGui::PushStyleColor(ImGuiCol_Separator, EbDesktopMenuTheme::outline());
         ImGui::Separator();
         ImGui::PopStyleColor();
         ImGui::Spacing();
+        EbDesktopMenuFonts::pushUi();
         ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
         ImGui::TextWrapped("Content host for category \"%s\". Widgets bind in later APs.", name);
         ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
 
         ImGui::EndChild();
         ImGui::PopStyleVar();

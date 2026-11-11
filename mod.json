@@ -1309,7 +1309,9 @@
 	},
 	"resources": {
 		"files": [
-			"resources/cues/*.mp3"
+			"resources/cues/*.mp3",
+			"resources/fonts/Inter-Regular.ttf",
+			"resources/fonts/Inter-SemiBold.ttf"
 		],
 		"sprites": [
 			"resources/ui/eb_star.png"
