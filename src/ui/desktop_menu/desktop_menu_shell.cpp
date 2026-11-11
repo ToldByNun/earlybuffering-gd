@@ -1,5 +1,6 @@
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_fonts.hpp"
+#include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
@@ -188,12 +189,15 @@ public:
         drawList->AddRectFilled(winPos, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
                                 EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::bg()), rounding);
 
-        // Sidebar paint on top of the left strip ( +1px into content kills AA seam ).
-        drawList->AddRectFilled(winPos, ImVec2(winPos.x + sideW + 1.0f, winPos.y + winSize.y),
-                                EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg()),
-                                rounding, ImDrawFlags_RoundCornersLeft);
+        // Sidebar as its own rounded card (inset) — same corner language as other panels.
+        float const sidePad = 10.0f;
+        float const sideRounding = EbDesktopMenuTheme::panelRounding();
+        ImVec2 const sideMin(winPos.x + sidePad, winPos.y + sidePad);
+        ImVec2 const sideMax(winPos.x + sideW - sidePad * 0.35f, winPos.y + winSize.y - sidePad);
+        EbDesktopMenuSidebarSmoke::get().paint(drawList, sideMin, sideMax, sideRounding,
+                                               static_cast<float>(ImGui::GetTime()));
 
-        drawSidebarNav(winPos, sideW);
+        drawSidebarNav(sideMin, sideMax.x - sideMin.x);
         drawContentBody(ImVec2(winPos.x + sideW, winPos.y), winSize.x - sideW, winSize.y);
 
         ImGui::End();
