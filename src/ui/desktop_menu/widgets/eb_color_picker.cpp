@@ -4,6 +4,7 @@
 
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
 #include <imgui.h>
 #include <algorithm>
@@ -72,6 +73,9 @@ public:
         }
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const open = ImGui::IsPopupOpen("##eb-color-popup");
+        float const heat = enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(),
+                                                                       hovered || open, 0.05f)
+                                   : 0.0f;
         if (openPopup) {
             ImGui::OpenPopup("##eb-color-popup");
         }
@@ -83,8 +87,8 @@ public:
         ImVec4 labelColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             labelColor = ImVec4(0.62f, 0.64f, 0.70f, 0.92f);
-        } else if (hovered || open) {
-            labelColor = EbDesktopMenuTheme::text();
+        } else {
+            labelColor = EbDesktopMenuMotion::lerp4(labelColor, EbDesktopMenuTheme::text(), heat);
         }
         drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                           ImVec2(rowMin.x, rowMin.y + (rowH - textH) * 0.5f),
@@ -95,8 +99,8 @@ public:
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
         stroke.w = enabled ? 0.75f : 0.4f;
-        if (enabled && (hovered || open)) {
-            stroke = ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
+        if (enabled) {
+            stroke = EbDesktopMenuMotion::lerp4(stroke, ImVec4(0.55f, 0.57f, 0.66f, 0.95f), heat);
         }
         drawList->AddRect(swatchMin, swatchMax, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
@@ -107,8 +111,8 @@ public:
         float const hexX = swatchMin.x - 10.0f - hexSize.x;
         if (hexX > rowMin.x + ImGui::CalcTextSize(label).x + 12.0f) {
             ImVec4 hexColor = EbDesktopMenuTheme::muted();
-            if (enabled && (hovered || open)) {
-                hexColor = EbDesktopMenuTheme::text();
+            if (enabled) {
+                hexColor = EbDesktopMenuMotion::lerp4(hexColor, EbDesktopMenuTheme::text(), heat);
             }
             drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                               ImVec2(hexX, rowMin.y + (rowH - hexSize.y) * 0.5f),

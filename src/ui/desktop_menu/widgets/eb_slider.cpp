@@ -4,6 +4,7 @@
 
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_sidebar_smoke.hpp"
 #include "../desktop_menu_theme.hpp"
 #include <imgui.h>
@@ -74,6 +75,12 @@ public:
         }
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const held = enabled && ImGui::IsItemActive();
+        ImGuiID const itemId = ImGui::GetItemID();
+        float const heat =
+            enabled ? EbDesktopMenuMotion::smoothToward(itemId, hovered || held, 0.05f) : 0.0f;
+        // Visual thumb/fill eases toward the live value (snappier while dragging).
+        float const visualT = EbDesktopMenuMotion::smoothFloat(itemId ^ 0x51ADu, clampf(t, 0.0f, 1.0f),
+                                                               held ? 0.028f : 0.08f);
 
         ImVec2 const valueSize = ImGui::CalcTextSize(valueText);
         ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -81,15 +88,15 @@ public:
         ImVec4 labelColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             labelColor = ImVec4(0.62f, 0.64f, 0.70f, 0.92f);
-        } else if (hovered || held) {
-            labelColor = EbDesktopMenuTheme::text();
+        } else {
+            labelColor = EbDesktopMenuMotion::lerp4(labelColor, EbDesktopMenuTheme::text(), heat);
         }
         // Value stays grey until hover / drag, then matches bright label text.
         ImVec4 valueColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             valueColor = ImVec4(0.62f, 0.64f, 0.70f, 0.85f);
-        } else if (hovered || held) {
-            valueColor = EbDesktopMenuTheme::text();
+        } else {
+            valueColor = EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::text(), heat);
         }
 
         drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), origin,
@@ -107,7 +114,7 @@ public:
         ImU32 const outside = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::panel());
 
         float const clampedT = clampf(t, 0.0f, 1.0f);
-        float const fillW = avail * clampedT;
+        float const fillW = avail * visualT;
         float const knobX = trackMin.x + fillW;
         float const knobY = trackMin.y + kTrackH * 0.5f;
 
@@ -115,14 +122,15 @@ public:
         // no hairline leak past the knob (mask/hide left AA gaps before).
         drawList->AddRectFilled(trackMin, trackMax, trackBg, trackRounding);
         if (enabled && fillW > 0.5f) {
-            ImGui::PushClipRect(ImVec2(trackMin.x - 1.0f, trackMin.y - 1.0f),
-                                ImVec2(knobX + 0.5f, trackMax.y + 1.0f), true);
+            // Draw-list clip only (never ImGui::PushClipRect) so window hit-tests stay valid.
+            drawList->PushClipRect(ImVec2(trackMin.x - 1.0f, trackMin.y - 1.0f),
+                                   ImVec2(knobX + 0.5f, trackMax.y + 1.0f), true);
             EbDesktopMenuSidebarSmoke::get().paint(
                 drawList, trackMin, trackMax, trackRounding, static_cast<float>(ImGui::GetTime()),
                 ImDrawFlags_RoundCornersAll, outside);
             // Slight lift so fill reads brighter than the panel / empty track.
             drawList->AddRectFilled(trackMin, trackMax, IM_COL32(220, 210, 255, 48), trackRounding);
-            ImGui::PopClipRect();
+            drawList->PopClipRect();
         } else if (!enabled && fillW > 1.5f) {
             ImVec4 dim = ImVec4(0.55f, 0.57f, 0.64f, 0.45f);
             drawList->AddRectFilled(trackMin, ImVec2(trackMin.x + fillW, trackMax.y),
@@ -131,10 +139,10 @@ public:
         ImU32 const knobColor =
             enabled ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 184, 196, 220);
         drawList->AddCircleFilled(ImVec2(knobX, knobY), kKnobR, knobColor, 20);
-        if (enabled && (hovered || held)) {
+        if (enabled && heat > 0.01f) {
             ImVec4 ring = EbDesktopMenuTheme::accentLight();
-            ring.w = held ? 0.55f : 0.35f;
-            drawList->AddCircle(ImVec2(knobX, knobY), kKnobR + 2.0f,
+            ring.w = (held ? 0.55f : 0.35f) * heat;
+            drawList->AddCircle(ImVec2(knobX, knobY), kKnobR + 1.0f + 1.5f * heat,
                                 EbDesktopMenuTheme::toU32(ring), 20, 1.5f);
         }
 

@@ -86,8 +86,13 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-desktop-menu", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat || EbKeybind::isCapturing())
+            if (!down || repeat)
                 return;
+            // Never leave the menu stuck open because a keybind row is capturing.
+            if (EbKeybind::isCapturing()) {
+                EbKeybind::cancelCapture();
+                return;
+            }
             if (EbDesktopMenu::useImGuiShell()) {
                 EbDesktopMenu::toggle();
                 return;

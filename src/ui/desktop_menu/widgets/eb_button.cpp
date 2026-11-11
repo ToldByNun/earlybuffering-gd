@@ -3,6 +3,7 @@
 #if defined(EB_DESKTOP_IMGUI)
 
 #include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../../settings/action_button_setting.hpp"
 #include <imgui.h>
@@ -35,34 +36,42 @@ public:
         }
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const held = enabled && ImGui::IsItemActive();
+        float const heat =
+            enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered || held, 0.05f)
+                    : 0.0f;
+        float const press =
+            enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID() ^ 0x9E3779B9u, held, 0.04f)
+                    : 0.0f;
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
         ImVec4 fill = EbDesktopMenuTheme::surface();
         if (!enabled) {
             fill.w = 0.85f;
-        } else if (held) {
-            fill = ImVec4(0.22f, 0.22f, 0.30f, 1.0f);
-        } else if (hovered) {
-            fill = ImVec4(0.18f, 0.18f, 0.24f, 1.0f);
+        } else {
+            ImVec4 const hoverFill(0.18f, 0.18f, 0.24f, 1.0f);
+            ImVec4 const heldFill(0.22f, 0.22f, 0.30f, 1.0f);
+            fill = EbDesktopMenuMotion::lerp4(fill, hoverFill, heat);
+            fill = EbDesktopMenuMotion::lerp4(fill, heldFill, press);
         }
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(fill), rounding);
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
         if (!enabled) {
             stroke = ImVec4(0.55f, 0.57f, 0.64f, 0.55f);
-        } else if (hovered || held) {
-            stroke = EbDesktopMenuTheme::accentLight();
-            stroke.w = held ? 0.95f : 0.75f;
+        } else {
+            ImVec4 accent = EbDesktopMenuTheme::accentLight();
+            accent.w = 0.75f + 0.2f * press;
+            stroke = EbDesktopMenuMotion::lerp4(stroke, accent, heat);
         }
         drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
 
-        ImVec4 textColor = EbDesktopMenuTheme::text();
+        ImVec4 textColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             textColor = ImVec4(0.62f, 0.64f, 0.70f, 0.92f);
-        } else if (!hovered && !held) {
-            textColor = EbDesktopMenuTheme::muted();
+        } else {
+            textColor = EbDesktopMenuMotion::lerp4(textColor, EbDesktopMenuTheme::text(), heat);
         }
         ImVec2 const textPos(min.x + (width - textSize.x) * 0.5f,
                              min.y + (height - textSize.y) * 0.5f);

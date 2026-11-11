@@ -9,6 +9,8 @@ class EbKeybind {
 public:
     // True while any keybind row is waiting for a key (hotkey listeners should no-op).
     static bool isCapturing();
+    // Drop capture without writing (Esc / menu close / click-away).
+    static void cancelCapture();
 
     // Returns true when *binds changes. Empty vector = unbound.
     static bool draw(char const* id, char const* label, std::vector<geode::Keybind>* binds,

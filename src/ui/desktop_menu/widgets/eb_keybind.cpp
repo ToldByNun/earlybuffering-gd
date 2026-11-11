@@ -4,6 +4,7 @@
 
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../../../core/bundle/config_bundle_codec.hpp"
 #include <imgui.h>
@@ -14,6 +15,12 @@ class EbKeybindState {
 public:
     static std::string& capturingId() {
         static std::string value;
+        return value;
+    }
+
+    // Skip capture for one frame after click-to-start (avoids eating the click).
+    static int& armDelay() {
+        static int value = 0;
         return value;
     }
 
@@ -32,6 +39,10 @@ public:
         return key == ImGuiKey_LeftCtrl || key == ImGuiKey_RightCtrl || key == ImGuiKey_LeftShift ||
                key == ImGuiKey_RightShift || key == ImGuiKey_LeftAlt || key == ImGuiKey_RightAlt ||
                key == ImGuiKey_LeftSuper || key == ImGuiKey_RightSuper;
+    }
+
+    static bool isMouseKey(ImGuiKey key) {
+        return key >= ImGuiKey_MouseLeft && key <= ImGuiKey_MouseWheelY;
     }
 
     static char const* keyToken(ImGuiKey key) {
@@ -88,26 +99,27 @@ public:
             return "Y";
         case ImGuiKey_Z:
             return "Z";
+        // Geode Keyboard.cpp uses word digit names, not "0"…"9".
         case ImGuiKey_0:
-            return "0";
+            return "Zero";
         case ImGuiKey_1:
-            return "1";
+            return "One";
         case ImGuiKey_2:
-            return "2";
+            return "Two";
         case ImGuiKey_3:
-            return "3";
+            return "Three";
         case ImGuiKey_4:
-            return "4";
+            return "Four";
         case ImGuiKey_5:
-            return "5";
+            return "Five";
         case ImGuiKey_6:
-            return "6";
+            return "Six";
         case ImGuiKey_7:
-            return "7";
+            return "Seven";
         case ImGuiKey_8:
-            return "8";
+            return "Eight";
         case ImGuiKey_9:
-            return "9";
+            return "Nine";
         case ImGuiKey_F1:
             return "F1";
         case ImGuiKey_F2:
@@ -156,47 +168,34 @@ public:
             return "Up";
         case ImGuiKey_DownArrow:
             return "Down";
-        case ImGuiKey_Apostrophe:
-            return "'";
-        case ImGuiKey_Comma:
-            return ",";
-        case ImGuiKey_Minus:
-            return "-";
-        case ImGuiKey_Period:
-            return ".";
-        case ImGuiKey_Slash:
-            return "/";
-        case ImGuiKey_Semicolon:
-            return ";";
-        case ImGuiKey_Equal:
-            return "=";
-        case ImGuiKey_LeftBracket:
-            return "[";
-        case ImGuiKey_Backslash:
-            return "\\";
-        case ImGuiKey_RightBracket:
-            return "]";
-        case ImGuiKey_GraveAccent:
-            return "`";
+        // Match Geode Keyboard.cpp keyNameToCode tokens exactly.
         case ImGuiKey_LeftCtrl:
-            return "LeftCtrl";
+            return "LeftControl";
         case ImGuiKey_RightCtrl:
-            return "RightCtrl";
+            return "RightControl";
         case ImGuiKey_LeftShift:
             return "LeftShift";
         case ImGuiKey_RightShift:
             return "RightShift";
         case ImGuiKey_LeftAlt:
-            return "LeftAlt";
+            return "LeftMenu";
         case ImGuiKey_RightAlt:
-            return "RightAlt";
-        case ImGuiKey_LeftSuper:
-            return "LeftSuper";
-        case ImGuiKey_RightSuper:
-            return "RightSuper";
+            return "RightMenu";
         default:
             return nullptr;
         }
+    }
+
+    static bool parseBind(std::string const& text, geode::Keybind& out) {
+        if (text.empty()) {
+            return false;
+        }
+        auto parsed = geode::Keybind::fromString(text);
+        if (parsed.isOk()) {
+            out = parsed.unwrap();
+            return true;
+        }
+        return false;
     }
 
     static std::string buildBindString(ImGuiKey key) {
@@ -227,19 +226,17 @@ public:
         if (!binds) {
             return false;
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-            EbKeybindState::capturingId().clear();
+        if (EbKeybindState::armDelay() > 0) {
+            EbKeybindState::armDelay() -= 1;
             return false;
         }
+        // Esc is owned by the shell (cancel capture, else close menu).
         if (ImGui::IsKeyPressed(ImGuiKey_Backspace, false) ||
             ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
-            if (!binds->empty()) {
-                binds->clear();
-                EbKeybindState::capturingId().clear();
-                return true;
-            }
-            EbKeybindState::capturingId().clear();
-            return false;
+            bool const changed = !binds->empty();
+            binds->clear();
+            EbKeybind::cancelCapture();
+            return changed;
         }
 
         for (int keyIndex = static_cast<int>(ImGuiKey_NamedKey_BEGIN);
@@ -248,20 +245,22 @@ public:
             if (key == ImGuiKey_Escape || key == ImGuiKey_Backspace || key == ImGuiKey_Delete) {
                 continue;
             }
+            if (isMouseKey(key)) {
+                continue;
+            }
             if (!ImGui::IsKeyPressed(key, false)) {
                 continue;
             }
+            // Wait for a real key — pure modifier presses alone are allowed
+            // (RightShift is a valid hotkey), but ignore until key-down edge.
             std::string const text = buildBindString(key);
-            if (text.empty()) {
-                continue;
-            }
-            auto parsed = geode::Keybind::fromString(text);
-            if (parsed.isErr()) {
+            geode::Keybind parsed;
+            if (!parseBind(text, parsed)) {
                 continue;
             }
             binds->clear();
-            binds->push_back(parsed.unwrap());
-            EbKeybindState::capturingId().clear();
+            binds->push_back(parsed);
+            EbKeybind::cancelCapture();
             return true;
         }
         return false;
@@ -318,12 +317,19 @@ public:
             ImGui::Dummy(ImVec2(avail, rowH));
         }
         bool const hovered = enabled && ImGui::IsItemHovered();
+        float const heat = enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(),
+                                                                       hovered || capturing, 0.05f)
+                                   : 0.0f;
 
         bool changed = false;
         if (capturing) {
-            changed = tryCapture(binds);
+            // Click away cancels capture.
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !hovered) {
+                EbKeybind::cancelCapture();
+            } else {
+                changed = tryCapture(binds);
+            }
         } else if (pressed && enabled) {
-            // Clear-hit on the right edge when a bind is set.
             ImVec2 const mouse = ImGui::GetIO().MousePos;
             bool const hitClear = !binds->empty() && mouse.x >= fieldMax.x - kClearW &&
                                   mouse.x <= fieldMax.x && mouse.y >= fieldMin.y &&
@@ -333,6 +339,7 @@ public:
                 changed = true;
             } else {
                 EbKeybindState::capturingId() = id;
+                EbKeybindState::armDelay() = 1;
             }
         }
 
@@ -340,8 +347,8 @@ public:
         ImVec4 labelColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             labelColor = ImVec4(0.62f, 0.64f, 0.70f, 0.92f);
-        } else if (hovered || capturing) {
-            labelColor = EbDesktopMenuTheme::text();
+        } else {
+            labelColor = EbDesktopMenuMotion::lerp4(labelColor, EbDesktopMenuTheme::text(), heat);
         }
         drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                           ImVec2(rowMin.x, rowMin.y + (rowH - textH) * 0.5f),
@@ -351,20 +358,21 @@ public:
         if (!enabled) {
             fill.w = 0.75f;
         } else if (capturing) {
-            fill = captureFill();
-        } else if (hovered) {
-            fill = hoverFill();
+            fill = EbDesktopMenuMotion::lerp4(fill, captureFill(), heat);
+        } else {
+            fill = EbDesktopMenuMotion::lerp4(fill, hoverFill(), heat);
         }
         drawList->AddRectFilled(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(fill), rounding);
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
         stroke.w = enabled ? 0.7f : 0.4f;
-        if (enabled && (hovered || capturing)) {
-            stroke = capturing ? EbDesktopMenuTheme::accentLight()
-                               : ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
+        if (enabled) {
+            ImVec4 hot = capturing ? EbDesktopMenuTheme::accentLight()
+                                   : ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
             if (capturing) {
-                stroke.w = 0.9f;
+                hot.w = 0.9f;
             }
+            stroke = EbDesktopMenuMotion::lerp4(stroke, hot, heat);
         }
         drawList->AddRect(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
@@ -373,9 +381,10 @@ public:
         if (!enabled) {
             valueColor = ImVec4(0.62f, 0.64f, 0.70f, 0.85f);
         } else if (capturing) {
-            valueColor = EbDesktopMenuTheme::accentLight();
-        } else if (hovered) {
-            valueColor = EbDesktopMenuTheme::text();
+            valueColor =
+                EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::accentLight(), heat);
+        } else {
+            valueColor = EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::text(), heat);
         }
         ImVec2 const valueSize = ImGui::CalcTextSize(display.c_str());
         float const valueMaxX = fieldMax.x - (binds->empty() || capturing ? kFieldPadX : kClearW);
@@ -387,7 +396,9 @@ public:
         drawList->PopClipRect();
 
         if (enabled && !binds->empty() && !capturing) {
-            ImVec4 clearColor = hovered ? EbDesktopMenuTheme::text() : EbDesktopMenuTheme::muted();
+            ImVec4 clearColor =
+                EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::muted(), EbDesktopMenuTheme::text(),
+                                           heat);
             ImVec2 const clearSize = ImGui::CalcTextSize("×");
             drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                               ImVec2(fieldMax.x - kClearW * 0.5f - clearSize.x * 0.5f,
@@ -406,6 +417,11 @@ private:
 
 bool EbKeybind::isCapturing() {
     return !EbKeybindState::capturingId().empty();
+}
+
+void EbKeybind::cancelCapture() {
+    EbKeybindState::capturingId().clear();
+    EbKeybindState::armDelay() = 0;
 }
 
 bool EbKeybind::draw(char const* id, char const* label, std::vector<geode::Keybind>* binds,
@@ -432,6 +448,8 @@ bool EbKeybind::drawSetting(char const* key, char const* label, bool enabled) {
 bool EbKeybind::isCapturing() {
     return false;
 }
+
+void EbKeybind::cancelCapture() {}
 
 bool EbKeybind::draw(char const* id, char const* label, std::vector<geode::Keybind>* binds,
                      bool enabled) {

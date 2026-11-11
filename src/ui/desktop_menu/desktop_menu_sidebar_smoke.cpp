@@ -144,9 +144,10 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     float const cellW = width / static_cast<float>(cols);
     float const cellH = height / static_cast<float>(rows);
 
-    // ImGui clip Max is exclusive — +1 so the bottom/right pill edge is filled
-    // (otherwise small wave pills get a flat cut + purple hairline below).
-    ImGui::PushClipRect(min, ImVec2(max.x + 1.0f, max.y + 1.0f), true);
+    // Draw-list clip only — ImGui::PushClipRect also writes window->ClipRect and
+    // desyncs hit-testing when callers mix drawList pushes (checkbox/slider).
+    // Max is exclusive — +1 so the bottom/right pill edge is filled.
+    drawList->PushClipRect(min, ImVec2(max.x + 1.0f, max.y + 1.0f), true);
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < cols; ++col) {
             float const px = (static_cast<float>(col) + 0.5f) * cellW;
@@ -161,7 +162,7 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
             drawList->AddRectFilled(cellMin, cellMax, color);
         }
     }
-    ImGui::PopClipRect();
+    drawList->PopClipRect();
 
     EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(drawList, min, max, clampedRounding, outside,
                                                         timeSeconds, cornerFlags);

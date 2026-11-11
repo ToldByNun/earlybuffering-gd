@@ -1,5 +1,6 @@
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_fonts.hpp"
+#include "desktop_menu_motion.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_button.hpp"
@@ -60,6 +61,16 @@ public:
         return value;
     }
 
+    static float& scrollTarget() {
+        static float value = 0.0f;
+        return value;
+    }
+
+    static float& scrollVisual() {
+        static float value = 0.0f;
+        return value;
+    }
+
     static constexpr float kSidebarWidth = 196.0f;
     static constexpr float kMenuWidth = 900.0f;
     static constexpr float kMenuHeight = 560.0f;
@@ -73,6 +84,38 @@ public:
     static constexpr float kOpenSlidePx = 14.0f;
     static constexpr float kTabSlidePx = 16.0f;
     static constexpr float kTabDip = 0.62f; // don't hard-reset to 0 on re-click
+    static constexpr float kDragFollowTau = 0.055f;
+    static constexpr int kTrailCount = 4;
+
+    static ImVec2& targetCenter() {
+        static ImVec2 value(0.0f, 0.0f);
+        return value;
+    }
+
+    static ImVec2& visualCenter() {
+        static ImVec2 value(0.0f, 0.0f);
+        return value;
+    }
+
+    static bool& dragging() {
+        static bool value = false;
+        return value;
+    }
+
+    static bool& haveAnchor() {
+        static bool value = false;
+        return value;
+    }
+
+    static ImVec2* trail() {
+        static ImVec2 values[kTrailCount];
+        return values;
+    }
+
+    static float& prevOpenVisual() {
+        static float value = 0.0f;
+        return value;
+    }
 
 private:
     EbDesktopMenuShellState() = delete;
@@ -169,32 +212,53 @@ public:
 
         bool const pressed = ImGui::InvisibleButton("##tab", ImVec2(width, rowH));
         bool const hovered = ImGui::IsItemHovered();
+        float const heat = EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered || selected,
+                                                             selected ? 0.04f : 0.055f);
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        if (selected || hovered) {
-            ImU32 const fill =
-                selected ? EbDesktopMenuTheme::toU32(ImVec4(1.0f, 1.0f, 1.0f, 0.14f))
-                         : EbDesktopMenuTheme::toU32(ImVec4(1.0f, 1.0f, 1.0f, 0.07f));
-            drawList->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + rowH), fill, 8.0f);
+        if (heat > 0.01f) {
+            float const alpha = selected ? 0.08f + 0.08f * heat : 0.07f * heat;
+            drawList->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + rowH),
+                                    EbDesktopMenuTheme::toU32(ImVec4(1.0f, 1.0f, 1.0f, alpha)),
+                                    8.0f);
         }
 
-        ImVec4 const textColor =
-            selected ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(1.0f, 1.0f, 1.0f, 0.78f);
+        ImVec4 textColor = EbDesktopMenuMotion::lerp4(ImVec4(1.0f, 1.0f, 1.0f, 0.72f),
+                                                      ImVec4(1.0f, 1.0f, 1.0f, 1.0f), heat);
         drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                           ImVec2(pos.x + 12.0f, pos.y + (rowH - ImGui::GetFontSize()) * 0.5f),
                           EbDesktopMenuTheme::toU32(textColor), label);
 
-        if (selected) {
+        if (selected || heat > 0.2f) {
             float const underlineY = pos.y + rowH - 3.0f;
             float const textW = ImGui::CalcTextSize(label).x;
+            ImVec4 line = EbDesktopMenuTheme::accentLight();
+            line.w = selected ? 1.0f : 0.55f * heat;
             drawList->AddLine(ImVec2(pos.x + 12.0f, underlineY),
-                              ImVec2(pos.x + 12.0f + textW, underlineY),
-                              EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::accentLight()), 2.0f);
+                              ImVec2(pos.x + 12.0f + textW * (selected ? 1.0f : heat), underlineY),
+                              EbDesktopMenuTheme::toU32(line), 2.0f);
         }
 
         EbDesktopMenuFonts::pop();
         ImGui::PopID();
         return pressed;
+    }
+
+    static void drawShellGhost(ImDrawList* drawList, ImVec2 const& center, ImVec2 const& size,
+                               float rounding, float alpha) {
+        if (!drawList || alpha <= 0.01f) {
+            return;
+        }
+        ImVec2 const min(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
+        ImVec2 const max(center.x + size.x * 0.5f, center.y + size.y * 0.5f);
+        ImVec4 bg = EbDesktopMenuTheme::bg();
+        bg.w = alpha;
+        drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(bg), rounding);
+        ImVec4 side = EbDesktopMenuTheme::sidebarBg();
+        side.w = alpha * 0.85f;
+        drawList->AddRectFilled(min, ImVec2(min.x + EbDesktopMenuShellState::kSidebarWidth, max.y),
+                                EbDesktopMenuTheme::toU32(side), rounding,
+                                ImDrawFlags_RoundCornersLeft);
     }
 
     static void drawSidebarNav(ImVec2 const& origin, float width) {
@@ -260,6 +324,8 @@ public:
                           ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
 
         if (EbDesktopMenuShellState::tabResetScroll()) {
+            EbDesktopMenuShellState::scrollTarget() = 0.0f;
+            EbDesktopMenuShellState::scrollVisual() = 0.0f;
             ImGui::SetScrollY(0.0f);
             EbDesktopMenuShellState::tabResetScroll() = false;
         }
@@ -331,23 +397,31 @@ public:
         // Extra scroll extent so the last rows clear the clip edge.
         ImGui::Dummy(ImVec2(0.0f, EbDesktopMenuShellState::kContentPadY + 24.0f));
 
-        // Apply wheel after layout so ScrollMaxY includes this frame's content.
+        // Smooth wheel scroll — target jumps, visual eases.
         float const wheel = EbDesktopMenuShell::takeWheelDelta();
         ImVec2 const mouse = ImGui::GetIO().MousePos;
         bool const overTab = mouse.x >= origin.x && mouse.x < origin.x + width &&
                              mouse.y >= origin.y && mouse.y < origin.y + height;
+        float const maxY = ImGui::GetScrollMaxY();
         if (wheel != 0.0f && overTab && EbDesktopMenuShellState::tabVisual() >= 0.97f) {
             float const step = ImGui::GetTextLineHeightWithSpacing();
-            float next = ImGui::GetScrollY() + wheel * step;
-            float const maxY = ImGui::GetScrollMaxY();
+            float next = EbDesktopMenuShellState::scrollTarget() + wheel * step;
             if (next < 0.0f) {
                 next = 0.0f;
             }
             if (next > maxY) {
                 next = maxY;
             }
-            ImGui::SetScrollY(next);
+            EbDesktopMenuShellState::scrollTarget() = next;
         }
+        // Keep target in range if content shrunk.
+        if (EbDesktopMenuShellState::scrollTarget() > maxY) {
+            EbDesktopMenuShellState::scrollTarget() = maxY;
+        }
+        EbDesktopMenuShellState::scrollVisual() = EbDesktopMenuMotion::approach(
+            EbDesktopMenuShellState::scrollVisual(), EbDesktopMenuShellState::scrollTarget(), 0.06f,
+            ImGui::GetIO().DeltaTime);
+        ImGui::SetScrollY(EbDesktopMenuShellState::scrollVisual());
 
         ImGui::EndChild();
         ImGui::PopStyleVar(4);
@@ -355,24 +429,91 @@ public:
 
     static void frame() {
         float const deltaTime = (std::max)(0.0f, ImGui::GetIO().DeltaTime);
+        EbDesktopMenuMotion::beginFrame();
         EbDesktopMenuShellAnim::updateOpen(deltaTime);
         EbDesktopMenuShellAnim::updateTab(deltaTime);
 
         float const openE = EbDesktopMenuShellState::openVisual();
         if (openE <= 0.001f && !EbDesktopMenuShellState::wantOpen()) {
+            EbDesktopMenuShellState::haveAnchor() = false;
+            EbDesktopMenuShellState::dragging() = false;
+            EbDesktopMenuShellState::prevOpenVisual() = openE;
             return;
         }
 
         ImGuiIO const& io = ImGui::GetIO();
-        ImVec2 const center(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
-        float const slideY = (1.0f - openE) * EbDesktopMenuShellState::kOpenSlidePx;
+        ImVec2 const screenCenter(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+        ImVec2 const winSize(EbDesktopMenuShellState::kMenuWidth,
+                             EbDesktopMenuShellState::kMenuHeight);
 
-        ImGui::SetNextWindowSize(
-            ImVec2(EbDesktopMenuShellState::kMenuWidth, EbDesktopMenuShellState::kMenuHeight),
-            ImGuiCond_Always);
-        // Always anchored — avoids Appearing/Always flips that jumped on spam-toggle.
-        ImGui::SetNextWindowPos(ImVec2(center.x, center.y + slideY), ImGuiCond_Always,
-                                ImVec2(0.5f, 0.5f));
+        // Fresh open from closed — re-anchor to screen center.
+        if (!EbDesktopMenuShellState::haveAnchor() ||
+            (EbDesktopMenuShellState::prevOpenVisual() <= 0.01f && openE > 0.01f)) {
+            EbDesktopMenuShellState::targetCenter() = screenCenter;
+            EbDesktopMenuShellState::visualCenter() = screenCenter;
+            for (int index = 0; index < EbDesktopMenuShellState::kTrailCount; ++index) {
+                EbDesktopMenuShellState::trail()[index] = screenCenter;
+            }
+            EbDesktopMenuShellState::haveAnchor() = true;
+            EbDesktopMenuShellState::dragging() = false;
+        }
+
+        // Drag continues from last frame's empty-space grab.
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            EbDesktopMenuShellState::dragging() = false;
+        } else if (EbDesktopMenuShellState::dragging() && EbDesktopMenuShellState::wantOpen() &&
+                   openE > 0.98f) {
+            EbDesktopMenuShellState::targetCenter().x += io.MouseDelta.x;
+            EbDesktopMenuShellState::targetCenter().y += io.MouseDelta.y;
+        }
+
+        EbDesktopMenuShellState::visualCenter() = EbDesktopMenuMotion::approach2(
+            EbDesktopMenuShellState::visualCenter(), EbDesktopMenuShellState::targetCenter(),
+            EbDesktopMenuShellState::kDragFollowTau, deltaTime);
+
+        ImVec2 const drift(
+            EbDesktopMenuShellState::targetCenter().x - EbDesktopMenuShellState::visualCenter().x,
+            EbDesktopMenuShellState::targetCenter().y - EbDesktopMenuShellState::visualCenter().y);
+        float const driftLen = std::sqrt(drift.x * drift.x + drift.y * drift.y);
+        bool const showTrail =
+            EbDesktopMenuShellState::dragging() || driftLen > 2.5f;
+
+        ImVec2* trail = EbDesktopMenuShellState::trail();
+        if (showTrail) {
+            trail[0] = EbDesktopMenuMotion::approach2(
+                trail[0], EbDesktopMenuShellState::visualCenter(), 0.035f, deltaTime);
+            for (int index = 1; index < EbDesktopMenuShellState::kTrailCount; ++index) {
+                trail[index] = EbDesktopMenuMotion::approach2(trail[index], trail[index - 1], 0.045f,
+                                                             deltaTime);
+            }
+        } else {
+            // Snap ghosts away when idle — stacked FG ghosts were darkening the UI.
+            for (int index = 0; index < EbDesktopMenuShellState::kTrailCount; ++index) {
+                trail[index] = EbDesktopMenuShellState::visualCenter();
+            }
+        }
+
+        float const slideY = (1.0f - openE) * EbDesktopMenuShellState::kOpenSlidePx;
+        ImVec2 const displayCenter(EbDesktopMenuShellState::visualCenter().x,
+                                   EbDesktopMenuShellState::visualCenter().y + slideY);
+        float const rounding = EbDesktopMenuTheme::windowRounding();
+
+        // Behind the real window only, and only while moving — never overlays the UI.
+        if (showTrail) {
+            if (ImDrawList* bg = ImGui::GetBackgroundDrawList()) {
+                for (int index = EbDesktopMenuShellState::kTrailCount - 1; index >= 0; --index) {
+                    float const trailAlpha =
+                        openE * 0.14f *
+                        (1.0f - static_cast<float>(index) /
+                                    static_cast<float>(EbDesktopMenuShellState::kTrailCount));
+                    ImVec2 ghost(trail[index].x, trail[index].y + slideY);
+                    drawShellGhost(bg, ghost, winSize, rounding, trailAlpha);
+                }
+            }
+        }
+
+        ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
+        ImGui::SetNextWindowPos(displayCenter, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, openE);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -384,20 +525,29 @@ public:
                                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground |
                                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
                                  ImGuiWindowFlags_NoMove;
-        // Block input until mostly open / while closing.
-        if (openE < 0.98f || !EbDesktopMenuShellState::wantOpen()) {
+        // Block input only while still opening / closing — unlock early so clicks work.
+        if (openE < 0.85f || !EbDesktopMenuShellState::wantOpen()) {
             flags |= ImGuiWindowFlags_NoInputs;
         }
         if (!ImGui::Begin("##eb-desktop-shell", nullptr, flags)) {
             ImGui::End();
             ImGui::PopStyleColor();
             ImGui::PopStyleVar(4);
+            EbDesktopMenuShellState::prevOpenVisual() = openE;
             return;
         }
 
+        // Esc: cancel keybind capture first, otherwise close the menu.
+        if (EbDesktopMenuShellState::wantOpen() && openE > 0.9f &&
+            ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            if (EbKeybind::isCapturing()) {
+                EbKeybind::cancelCapture();
+            } else {
+                EbDesktopMenuShell::requestOpen(false);
+            }
+        }
+
         ImVec2 const winPos = ImGui::GetWindowPos();
-        ImVec2 const winSize = ImGui::GetWindowSize();
-        float const rounding = EbDesktopMenuTheme::windowRounding();
         float const sideW = EbDesktopMenuShellState::kSidebarWidth;
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
@@ -422,9 +572,18 @@ public:
         drawContentBody(ImVec2(winPos.x + sideW, winPos.y), winSize.x - sideW, winSize.y, tabAlpha,
                         tabSlide);
 
+        // Drag only after widgets ran this frame — early checks stole presses onto empty gaps.
+        bool const overChrome = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+        if (EbDesktopMenuShellState::wantOpen() && openE > 0.85f &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left) && overChrome &&
+            !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive()) {
+            EbDesktopMenuShellState::dragging() = true;
+        }
+
         ImGui::End();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(4);
+        EbDesktopMenuShellState::prevOpenVisual() = openE;
     }
 
 private:
@@ -441,6 +600,9 @@ void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
 
 void EbDesktopMenuShell::requestOpen(bool open) {
     EbDesktopMenuShellState::wantOpen() = open;
+    if (!open) {
+        EbKeybind::cancelCapture();
+    }
 }
 
 bool EbDesktopMenuShell::wantsOpen() {

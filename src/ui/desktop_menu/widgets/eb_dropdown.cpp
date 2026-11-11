@@ -4,6 +4,7 @@
 
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
 #include <imgui.h>
 #include <algorithm>
@@ -91,10 +92,13 @@ public:
             ImGui::Dummy(ImVec2(avail, blockH));
         }
         bool const hovered = enabled && ImGui::IsItemHovered();
-        bool const open = ImGui::IsPopupOpen("##eb-drop-popup");
         if (openPopup) {
             ImGui::OpenPopup("##eb-drop-popup");
         }
+        bool const open = ImGui::IsPopupOpen("##eb-drop-popup");
+        float const heat = enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(),
+                                                                       hovered || open, 0.05f)
+                                   : 0.0f;
 
         ImVec2 const fieldMin(blockMin.x, blockMin.y + labelH + kLabelGap);
         ImVec2 const fieldMax(blockMin.x + avail, fieldMin.y + fieldH);
@@ -103,8 +107,8 @@ public:
         ImVec4 labelColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             labelColor = ImVec4(0.62f, 0.64f, 0.70f, 0.92f);
-        } else if (hovered || open) {
-            labelColor = EbDesktopMenuTheme::text();
+        } else {
+            labelColor = EbDesktopMenuMotion::lerp4(labelColor, EbDesktopMenuTheme::text(), heat);
         }
         drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), blockMin,
                           EbDesktopMenuTheme::toU32(labelColor), label);
@@ -112,15 +116,15 @@ public:
         ImVec4 fill = idleFill();
         if (!enabled) {
             fill.w = 0.75f;
-        } else if (hovered || open) {
-            fill = hoverFill();
+        } else {
+            fill = EbDesktopMenuMotion::lerp4(fill, hoverFill(), heat);
         }
         drawList->AddRectFilled(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(fill), rounding);
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
         stroke.w = enabled ? 0.7f : 0.4f;
-        if (enabled && (hovered || open)) {
-            stroke = ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
+        if (enabled) {
+            stroke = EbDesktopMenuMotion::lerp4(stroke, ImVec4(0.55f, 0.57f, 0.66f, 0.95f), heat);
         }
         drawList->AddRect(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
@@ -128,8 +132,8 @@ public:
         ImVec4 valueColor = EbDesktopMenuTheme::muted();
         if (!enabled) {
             valueColor = ImVec4(0.62f, 0.64f, 0.70f, 0.85f);
-        } else if (hovered || open) {
-            valueColor = EbDesktopMenuTheme::text();
+        } else {
+            valueColor = EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::text(), heat);
         }
         ImVec2 const valueSize = ImGui::CalcTextSize(current);
         ImVec2 const valuePos(fieldMin.x + kFieldPadX,
@@ -146,12 +150,17 @@ public:
                   kCaretW, EbDesktopMenuTheme::toU32(valueColor));
 
         bool changed = false;
+        // Open anim only — deferred close kept a modal popup and blocked other widgets.
+        float const openAmt =
+            EbDesktopMenuMotion::smoothToward(ImGui::GetID("##eb-drop-open"), open, 0.055f);
         float const optH = fieldH - 2.0f;
         float const listPad = 5.0f;
         int const visible = (std::min)(optionCount, kVisibleOptions);
-        float const popupH = listPad * 2.0f + visible * optH + (visible - 1) * 3.0f;
-        ImGui::SetNextWindowSize(ImVec2(avail, popupH), ImGuiCond_Always);
+        float const fullH = listPad * 2.0f + visible * optH + (visible - 1) * 3.0f;
+        float const animH = (std::max)(listPad * 2.0f + optH, fullH * (0.18f + 0.82f * openAmt));
+        ImGui::SetNextWindowSize(ImVec2(avail, open ? animH : fullH), ImGuiCond_Always);
         ImGui::SetNextWindowPos(ImVec2(fieldMin.x, fieldMax.y + 6.0f), ImGuiCond_Appearing);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.35f + 0.65f * openAmt);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(listPad, listPad));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
@@ -170,20 +179,21 @@ public:
                 ImVec2 const optMin = ImGui::GetCursorScreenPos();
                 bool const clicked = ImGui::InvisibleButton("##opt", ImVec2(popupInner, optH));
                 bool const optHover = ImGui::IsItemHovered();
+                float const optHeat =
+                    EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), optHover || selected, 0.05f);
                 ImDrawList* popupDraw = ImGui::GetWindowDrawList();
                 ImVec2 const optMax(optMin.x + popupInner, optMin.y + optH);
 
-                if (selected) {
+                ImVec4 optFill = selected ? selectedFill() : hoverFill();
+                if (optHeat > 0.01f) {
                     popupDraw->AddRectFilled(optMin, optMax,
-                                             EbDesktopMenuTheme::toU32(selectedFill()),
-                                             rounding - 2.0f);
-                } else if (optHover) {
-                    popupDraw->AddRectFilled(optMin, optMax, EbDesktopMenuTheme::toU32(hoverFill()),
+                                             EbDesktopMenuTheme::toU32(ImVec4(
+                                                 optFill.x, optFill.y, optFill.z, optFill.w * optHeat)),
                                              rounding - 2.0f);
                 }
 
-                ImVec4 optText = selected || optHover ? EbDesktopMenuTheme::text()
-                                                      : EbDesktopMenuTheme::muted();
+                ImVec4 optText = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::muted(),
+                                                            EbDesktopMenuTheme::text(), optHeat);
                 popupDraw->AddText(
                     ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(optMin.x + 12.0f, optMin.y + (optH - textH) * 0.5f),
@@ -201,7 +211,7 @@ public:
             ImGui::EndPopup();
         }
         ImGui::PopStyleColor(3);
-        ImGui::PopStyleVar(5);
+        ImGui::PopStyleVar(6);
 
         EbDesktopMenuFonts::pop();
         ImGui::PopID();
