@@ -15,6 +15,7 @@
 #include "../debug/plan_gold_corpus.hpp"
 #include "../dev/dev_config.hpp"
 #include "../ui/desktop_menu/desktop_menu.hpp"
+#include "../ui/desktop_menu/widgets/eb_keybind.hpp"
 #include "../ui/overlays/status_overlay.hpp"
 #include "../ui/pause/pause_action_bridge.hpp"
 #include "../ui/settings/action_button_setting.hpp"
@@ -31,7 +32,7 @@ void EbModuleBindings::onAnySetting() {
 void EbModuleBindings::registerSettings() {
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-debug", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleDebugLogging();
             bool const now = EbStageConfig::debugLogging();
@@ -40,7 +41,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-reset-level", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbAssistController::get().resetLevelProfile();
             EbAssistLog::info("LEARN: level profile reset (Ctrl+Shift+R)");
@@ -48,7 +49,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-auto-tune", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleAutoTune();
             bool const now = EbStageConfig::autoTune();
@@ -58,7 +59,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-assist-mode", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::cycleAssistMode();
             auto mode = EbStageConfig::assistMode();
@@ -69,7 +70,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-trajectory", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleShowTrajectory();
             bool const on = EbStageConfig::showTrajectory();
@@ -85,7 +86,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-desktop-menu", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             if (EbDesktopMenu::useImGuiShell()) {
                 EbDesktopMenu::toggle();

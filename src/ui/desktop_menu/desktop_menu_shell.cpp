@@ -7,6 +7,7 @@
 #include "widgets/eb_color_picker.hpp"
 #include "widgets/eb_combo_box.hpp"
 #include "widgets/eb_dropdown.hpp"
+#include "widgets/eb_keybind.hpp"
 #include "widgets/eb_section_card.hpp"
 #include "widgets/eb_slider.hpp"
 
@@ -205,6 +206,11 @@ public:
             EbColorPicker::drawSetting("save-icon-color", "Save Icon Color");
             static float s_smokeRgb[3] = {0.48f, 0.38f, 1.0f};
             EbColorPicker::draw("smoke-color", "Accent Smoke", s_smokeRgb);
+
+            ImGui::Dummy(ImVec2(0.0f, 12.0f));
+            // AP14 keybind smoke — capture field + clear; hotkeys gated while capturing.
+            EbKeybind::drawSetting("hotkey-desktop-menu", "Desktop Menu");
+            EbKeybind::drawSetting("hotkey-debug", "Debug Logging");
         }
         EbSectionCard::end();
         // Extra scroll extent so the last rows clear the clip edge.
