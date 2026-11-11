@@ -81,6 +81,14 @@ public:
     bool candNotesTruncated = false;
     std::vector<EbDevRejectLedger::AttributionNote> attribution;
 
+    // 1.5.1 AP0: hitch / Adaptive shell diagnostics on planFinished (additive JSON).
+    bool hasPlanCost = false;
+    int planUs = 0;
+    bool budgetHit = false;
+    int candidatesTried = 0;
+    bool adaptiveShell = false;
+    bool adaptiveFellThrough = false;
+
 private:
 };
 

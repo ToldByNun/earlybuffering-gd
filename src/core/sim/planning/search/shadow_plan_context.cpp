@@ -45,6 +45,8 @@ EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
         return EbDevRejectLedger::EarlyExit::SameCrash;
     if (ledgerEarliestSafeExit)
         return EbDevRejectLedger::EarlyExit::EarliestSafe;
+    if (ledgerPeakDeathExit)
+        return EbDevRejectLedger::EarlyExit::PeakDeath;
     return EbDevRejectLedger::EarlyExit::None;
 }
 

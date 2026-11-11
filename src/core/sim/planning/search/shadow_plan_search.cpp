@@ -157,4 +157,5 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     context.ledgerPreferEarlyExit = false;
     context.ledgerSameCrashExit = false;
     context.ledgerEarliestSafeExit = false;
+    context.ledgerPeakDeathExit = false;
 }

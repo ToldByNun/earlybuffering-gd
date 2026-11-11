@@ -112,6 +112,8 @@ public:
     // True when sim overlapped a toggle-orb / touch-toggle target (Commit 3).
     bool toggleUnknown = false;
     bool budgetHit = false;
+    // Wall µs spent in plan()/planSequence (filled by Live press/release planners).
+    int planUs = 0;
     bool activatedRing = false;
     bool usedOrbWindow = false;
     bool foresightOrbPad = false; // TravelForesight orb/pad in travel cone

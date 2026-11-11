@@ -307,6 +307,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     int const planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    plan.planUs = planUs;
     EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
     // Classic coverage proxy until Adaptive reports real fully-verified counts.
     int const fullyVerified = plan.budgetHit ? 0 : std::max(0, plan.candidatesTried);

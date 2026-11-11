@@ -77,6 +77,8 @@ char const* EbDevRejectLedger::rejectCodeId(RejectCode candidate) {
         return "same-crash-cut";
     case RejectCode::EarliestSafeExit:
         return "earliest-safe-exit";
+    case RejectCode::PeakDeathCut:
+        return "peak-death-cut";
     }
     return "not-viable";
 }
@@ -152,6 +154,10 @@ bool EbDevRejectLedger::parseRejectCode(std::string const& s, RejectCode& out) {
     }
     if (s == "earliest-safe-exit") {
         out = RejectCode::EarliestSafeExit;
+        return true;
+    }
+    if (s == "peak-death-cut") {
+        out = RejectCode::PeakDeathCut;
         return true;
     }
     return false;
@@ -280,6 +286,8 @@ EbDevRejectLedger::RejectCode EbDevRejectLedger::skipCode(EarlyExit early) {
         return RejectCode::SameCrashCut;
     case EarlyExit::EarliestSafe:
         return RejectCode::EarliestSafeExit;
+    case EarlyExit::PeakDeath:
+        return RejectCode::PeakDeathCut;
     // Unused order slots with no named cut — keep opaque not-viable.
     case EarlyExit::None:
         return RejectCode::NotViable;

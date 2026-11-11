@@ -38,9 +38,12 @@ If Live armed `d=2` but `bestSurv=5`, check whether Live **skipped** later delay
 | `prefer-band-early-exit` | Bake prefer ±k done |
 | `same-crash-cut` | Same deathTick across delays → stop |
 | `earliest-safe-exit` | Continuous input-window took first safe |
+| `peak-death-cut` | Discrete input-window stopped after survivor then acted death (AP1 wires honest skips) |
 | `not-viable` | Really rejected **or** legacy opaque skip |
 
 Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1.
+
+`planFinished` may also carry hitch/Adaptive cost bits: `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
 
 ## Lag / perf
 

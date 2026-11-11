@@ -2,6 +2,11 @@
 
 ## v1.5.1-dev
 
+### AP0 — Live plan contracts (no behavior change)
+- Ledger: `peak-death-cut` reject code + `EarlyExit::PeakDeath` (idle-prefix still uses prior fill until AP1).
+- Pure `EbLivePlanContracts` locks current vs intended hitch / landed-rank / peak-death / orb-under-IW tables. PlanGold: `live-plan-contracts`.
+- DevTrace `planFinished` adds `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
+
 ### Idle-prefix sharing (classic ascending delays)
 - Classic `plan()` evaluates delays 1..limit on one shared idle spine: checkpoint player+world at each pre-press, fork the press path, restore, then advance one idle tick.
 - Same trajectories as independent `runOne(d)`; idle physics drops from ~N(N+1)/2 to ~N (large Max Assist).

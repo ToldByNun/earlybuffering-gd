@@ -32,7 +32,8 @@ public:
         VerifyFailed,
         LearningDisplaced,
         SameCrashCut,
-        EarliestSafeExit
+        EarliestSafeExit,
+        PeakDeathCut
     };
 
     enum class Attribution {
@@ -78,7 +79,8 @@ public:
         NoThreat,
         WaveFutile,
         SameCrash,
-        EarliestSafe
+        EarliestSafe,
+        PeakDeath
     };
 
     class BuildInput {

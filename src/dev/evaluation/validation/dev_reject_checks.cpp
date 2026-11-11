@@ -125,6 +125,28 @@ bool EbDevRejectChecks::selfCheck(std::string& report) {
         auto earlyLedger = EbDevRejectLedger::build(early);
         expect(earlyLedger.notes[2].rejectCode == EbDevRejectLedger::RejectCode::EarliestSafeExit,
                "earliest-skip");
+        expect(std::strcmp(EbDevRejectLedger::rejectCodeId(
+                               EbDevRejectLedger::RejectCode::PeakDeathCut),
+                           "peak-death-cut") == 0,
+               "code-peak-death");
+        expect(EbDevRejectLedger::skipCode(EbDevRejectLedger::EarlyExit::PeakDeath) ==
+                   EbDevRejectLedger::RejectCode::PeakDeathCut,
+               "skip-peak-death");
+        EbDevRejectLedger::BuildInput peak;
+        peak.limit = 3;
+        peak.chosenDelay = 0;
+        peak.doPass = true;
+        peak.earlyExit = EbDevRejectLedger::EarlyExit::PeakDeath;
+        peak.snaps.resize(4);
+        peak.snaps[0].evaluated = true;
+        peak.snaps[0].viable = true;
+        peak.snaps[0].endX = 2.f;
+        peak.snaps[1].evaluated = true;
+        peak.snaps[1].viable = false;
+        auto peakLedger = EbDevRejectLedger::build(peak);
+        expect(peakLedger.notes[2].status == EbDevRejectLedger::Status::Skipped &&
+                   peakLedger.notes[2].rejectCode == EbDevRejectLedger::RejectCode::PeakDeathCut,
+               "peak-death-skip");
     }
 
     // Truncation: codes remain past kMaxCandNotes, scores drop.

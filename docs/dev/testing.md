@@ -21,6 +21,8 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 `src/debug/plan_gold_corpus.cpp` — synthetic planner gold cases. Extend when Pass/Delay contracts change.
 
+1.5.1 AP0: `live-plan-contracts` (`EbLivePlanContracts`) — hitch ceiling, landed ranking current vs intended, peak-death skip contract, orb-under-IW current vs intended. Wire call sites in AP1–AP3 without relaxing these tables.
+
 ## Adaptive smoke
 
 Offline helper mentioned in assist reference: `tools/test_adaptive_parity_smoke.cpp` (when present in tree).

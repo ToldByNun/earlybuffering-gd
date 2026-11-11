@@ -65,6 +65,7 @@ private:
     bool ledgerPreferEarlyExit = false;
     bool ledgerSameCrashExit = false;
     bool ledgerEarliestSafeExit = false;
+    bool ledgerPeakDeathExit = false;
     EbDevRejectLedger::EarlyExit ledgerEarlyExit() const;
     int minSurviveLong = 0;
     bool requireAlive = false;

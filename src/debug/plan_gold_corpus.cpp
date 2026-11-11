@@ -3,6 +3,7 @@
 #include "../core/assist/assist_controller.hpp"
 #include "../core/assist/contracts/assist_contracts140.hpp"
 #include "../core/assist/contracts/assist_verdict.hpp"
+#include "../core/assist/contracts/live_plan_contracts.hpp"
 #include "../core/assist/contracts/miss_assist_contracts.hpp"
 #include "../core/assist/input/buffer_event_machine.hpp"
 #include "../core/assist/input/click_intent_guard.hpp"
@@ -167,6 +168,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk");
     std::string diagDumpReport;
     expect(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
+    std::string livePlanReport;
+    expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
     std::string pickV1Report;
