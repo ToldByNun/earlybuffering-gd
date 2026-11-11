@@ -2,17 +2,11 @@
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
 #include "desktop_menu_motion.hpp"
+#include "desktop_menu_panels.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
 #include "desktop_menu_tooltip.hpp"
-#include "widgets/eb_button.hpp"
-#include "widgets/eb_checkbox.hpp"
-#include "widgets/eb_color_picker.hpp"
-#include "widgets/eb_combo_box.hpp"
-#include "widgets/eb_dropdown.hpp"
 #include "widgets/eb_keybind.hpp"
-#include "widgets/eb_section_card.hpp"
-#include "widgets/eb_slider.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -342,75 +336,7 @@ public:
         }
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
-        char const* name = EbInLevelSettingsFilter::categoryName(active);
-
-        // Sidebar already shows the active tab — no duplicate category title here.
-        char sectionId[64];
-        std::snprintf(sectionId, sizeof(sectionId), "smoke-%s", name);
-        if (EbSectionCard::begin(sectionId, "SECTION")) {
-            // Checkbox smoke (image 2): live bind + disabled dim row.
-            EbCheckbox::drawSetting("enabled", "Enabled");
-            static bool s_smokeLocal = true;
-            EbCheckbox::draw("smoke-local", "Checkbox", &s_smokeLocal, true,
-                             "Demo checkbox — toggles local UI state only.");
-            static bool s_smokeDisabled = false;
-            EbCheckbox::draw("smoke-disabled", "Checkbox disabled", &s_smokeDisabled, false,
-                             "Disabled demo row — not interactive.");
-
-            ImGui::Dummy(ImVec2(0.0f, 8.0f));
-            // Button smoke — full-width row chrome only (+ real eb-action).
-            EbButton::draw("smoke-row", "Row button", true, "Demo row button chrome.");
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            EbButton::drawAction("cycle-assist-mode", "Mode");
-
-            ImGui::Dummy(ImVec2(0.0f, 10.0f));
-            // Slider smoke — wave fill + white knob; int setting + float local + px.
-            EbSlider::drawIntSetting("ticks-all", "Window (Default)", 0, 48);
-            static float s_smokeFloat = 5.0f;
-            EbSlider::drawFloat("smoke-float", "Slider 1", &s_smokeFloat, 0.0f, 10.0f, 1, "F", true,
-                                "Demo float slider with unit suffix.");
-            static int s_smokePx = 12;
-            EbSlider::drawInt("smoke-px", "Slider px", &s_smokePx, 0, 64, "px", true,
-                              "Demo integer slider with px suffix.");
-
-            ImGui::Dummy(ImVec2(0.0f, 10.0f));
-            // AP11 combo smoke — short one-of enums.
-            {
-                char const* modeOpts[] = {"Live", "Replay", "Hybrid", "BruteForce"};
-                EbComboBox::drawSetting("assist-mode", "Assist Mode", modeOpts, 4);
-                char const* unitOpts[] = {"Ticks", "Frames"};
-                EbComboBox::drawSetting("window-unit", "Window Unit", unitOpts, 2);
-            }
-
-            ImGui::Dummy(ImVec2(0.0f, 12.0f));
-            // AP12 dropdown smoke — full-width field + longer scrollable list.
-            {
-                char const* objectiveOpts[] = {"survive_then_endx_v1", "planner_mirror_v1",
-                                               "horizon_clear_v1"};
-                char const* objectiveLabels[] = {"Survive then EndX", "Planner Mirror",
-                                                 "Horizon Clear"};
-                EbDropdown::drawSetting("dev-objective", "Dev Objective", objectiveOpts, 3,
-                                        objectiveLabels);
-                static int s_smokeDrop = 2;
-                char const* longOpts[] = {"Alpha",  "Bravo", "Charlie", "Delta", "Echo",
-                                          "Foxtrot", "Golf",  "Hotel",   "India", "Juliet"};
-                EbDropdown::draw("smoke-long-drop", "Long List", longOpts, 10, &s_smokeDrop, nullptr,
-                                 true, "Demo long dropdown with scrollable options.");
-            }
-
-            ImGui::Dummy(ImVec2(0.0f, 12.0f));
-            // AP13 color smoke — swatch + classic hue-bar popup picker.
-            EbColorPicker::drawSetting("save-icon-color", "Save Icon Color");
-            static float s_smokeRgb[3] = {0.48f, 0.38f, 1.0f};
-            EbColorPicker::draw("smoke-color", "Accent Smoke", s_smokeRgb, true,
-                                "Demo color swatch — click to open the picker.");
-
-            ImGui::Dummy(ImVec2(0.0f, 12.0f));
-            // AP14 keybind smoke — capture field + clear; hotkeys gated while capturing.
-            EbKeybind::drawSetting("hotkey-desktop-menu", "Desktop Menu");
-            EbKeybind::drawSetting("hotkey-debug", "Debug Logging");
-        }
-        EbSectionCard::end();
+        EbDesktopMenuPanels::draw(active);
         // Extra scroll extent so the last rows clear the clip edge.
         ImGui::Dummy(ImVec2(0.0f, EbDesktopMenuShellState::kContentPadY + 24.0f));
 
