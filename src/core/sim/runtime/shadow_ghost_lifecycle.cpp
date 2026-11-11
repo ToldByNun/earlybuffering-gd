@@ -166,6 +166,10 @@ void EbShadowGhostLifecycle::beginSession(EbShadowSimulator& simulator, PlayLaye
     simulator.m_simulating = true;
     simulator.m_applyingRing = false;
     simulator.beginCapture(layer);
+    // Mute once for the session; stepPhysics no longer re-mutes every tick.
+    simulator.hideGhost(simulator.m_shadow);
+    if (simulator.m_evalActive)
+        simulator.hideGhost(simulator.m_evalActive);
 }
 
 void EbShadowGhostLifecycle::endSession(EbShadowSimulator& simulator, PlayLayer* layer) {

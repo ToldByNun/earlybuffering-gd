@@ -117,10 +117,9 @@ void EbShadowPhysics::stepPreCollide(EbShadowSimulator& simulator, PlayLayer* la
         simulator.applyLiveDynamicNear(layer, state);
     }
     float const gdDt = EbAssistClock::secondsToGdStep(deltaTime);
-    simulator.hideGhost(state);
+    // Ghost muted once in copyPlayerState / beginSession — not every collide.
     simulator.clearCollisionLogs(state);
     layer->checkCollisions(state, gdDt, false);
-    simulator.hideGhost(state);
 }
 
 void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
@@ -139,13 +138,11 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
     if (colDt < deltaTime)
         colDt = deltaTime; // same rule as pre-collide: never a tiny remainder
     float const gdColDt = EbAssistClock::secondsToGdStep(colDt);
-    simulator.hideGhost(state);
+    // Ghost muted once in copyPlayerState / beginSession — not 3× per physics tick.
     state->update(gdStepDt);
-    simulator.hideGhost(state);
     if (!simulator.m_dead) {
         simulator.clearCollisionLogs(state);
         layer->checkCollisions(state, gdColDt, false);
-        simulator.hideGhost(state);
     }
     // AP1 measure-only: feed Adaptive BudgetController (does not change search).
     int const us = static_cast<int>(

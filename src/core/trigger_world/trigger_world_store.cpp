@@ -8,6 +8,7 @@
 #include "trigger_classify.hpp"
 #include "validation/trigger_world_checks.hpp"
 #include <Geode/utils/file.hpp>
+#include <cmath>
 #include <filesystem>
 #include <fmt/format.h>
 #include <string>
@@ -260,6 +261,35 @@ bool EbTriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, EbTriggerPos
     return this->samplePose(uniqueId, liveAbsTick, EbAssistController::get().simDt(), out);
 }
 
+bool EbTriggerWorldStore::poseMatchesObject(GameObject* object, EbTriggerPose const& pose) {
+    if (!object)
+        return false;
+    auto* effectObject = geode::prelude::typeinfo_cast<EnhancedGameObject*>(object);
+    if (!pose.active) {
+        if (object->isVisible())
+            return false;
+        if (effectObject && (effectObject->m_poweredOn || effectObject->m_visible))
+            return false;
+        return true;
+    }
+    if (!object->isVisible())
+        return false;
+    if (effectObject && (!effectObject->m_poweredOn || !effectObject->m_visible))
+        return false;
+    constexpr float kEps = 1e-4f;
+    if (std::fabs(object->getPositionX() - pose.x) > kEps)
+        return false;
+    if (std::fabs(object->getPositionY() - pose.y) > kEps)
+        return false;
+    if (std::fabs(object->getRotation() - pose.rotation) > kEps)
+        return false;
+    if (std::fabs(object->getScaleX() - pose.scaleX) > kEps)
+        return false;
+    if (std::fabs(object->getScaleY() - pose.scaleY) > kEps)
+        return false;
+    return true;
+}
+
 void EbTriggerWorldStore::writePose(GameObject* object, EbTriggerPose const& pose) {
     if (!object)
         return;
@@ -285,6 +315,13 @@ void EbTriggerWorldStore::writePose(GameObject* object, EbTriggerPose const& pos
     object->setRotation(pose.rotation);
     object->setScaleX(pose.scaleX);
     object->setScaleY(pose.scaleY);
+}
+
+bool EbTriggerWorldStore::writePoseIfChanged(GameObject* object, EbTriggerPose const& pose) {
+    if (EbTriggerWorldStore::poseMatchesObject(object, pose))
+        return false;
+    EbTriggerWorldStore::writePose(object, pose);
+    return true;
 }
 
 int EbTriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
@@ -324,7 +361,7 @@ int EbTriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
         if (!object)
             continue;
 
-        EbTriggerWorldStore::writePose(object, pose);
+        (void)EbTriggerWorldStore::writePoseIfChanged(object, pose);
         ++applied;
     }
     return applied;

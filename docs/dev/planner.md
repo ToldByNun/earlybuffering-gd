@@ -67,3 +67,9 @@ Bake `findNear` → `BakeVerifier` → only trust if clears threat and **not** `
 ## Wave regression
 
 When changing input planning, run the recorded Wave regression the project expects (`AGENTS.md`).
+
+## Per-tick cost notes (1.5.1)
+
+- Group membership for capture is a sidetable built in `beginCapture`
+- TW apply caches last written pose on `SavedTransform` and skips redundant writes
+- `hideGhost` is session/run scoped — not inside `stepPhysics` every collide/update

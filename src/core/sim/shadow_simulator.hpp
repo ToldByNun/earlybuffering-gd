@@ -458,6 +458,14 @@ private:
         float scaleY = 1.f;
         bool nodeVisible = true;
         mutable bool dirty = false;
+        // Last pose written this capture session — skip redundant writePose.
+        mutable bool hasAppliedPose = false;
+        mutable float appliedX = 0.f;
+        mutable float appliedY = 0.f;
+        mutable float appliedRotation = 0.f;
+        mutable float appliedScaleX = 1.f;
+        mutable float appliedScaleY = 1.f;
+        mutable bool appliedActive = true;
 
     private:
     };

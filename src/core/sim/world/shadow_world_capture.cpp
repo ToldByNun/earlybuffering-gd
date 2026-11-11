@@ -10,7 +10,57 @@
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+class EbGroupMemberIndex {
+public:
+    std::unordered_map<int, std::vector<GameObject*>> byGroup;
+
+    void build(std::vector<GameObject*> const& solids, std::unordered_set<int> const& groups) {
+        byGroup.clear();
+        if (solids.empty() || groups.empty())
+            return;
+        byGroup.reserve(groups.size());
+        for (int groupId : groups)
+            byGroup.emplace(groupId, std::vector<GameObject*>{});
+        for (auto* object : solids) {
+            if (!object)
+                continue;
+            for (int groupId : groups) {
+                if (!object->belongsToGroup(groupId))
+                    continue;
+                byGroup[groupId].push_back(object);
+            }
+        }
+    }
+
+    std::vector<GameObject*> const* members(int groupId) const {
+        auto it = byGroup.find(groupId);
+        if (it == byGroup.end())
+            return nullptr;
+        return &it->second;
+    }
+
+private:
+};
+
+static void collectObjectLayerSolids(PlayLayer* layer, std::vector<GameObject*>& solids) {
+    solids.clear();
+    if (!layer || !layer->m_objectLayer)
+        return;
+    auto* children = layer->m_objectLayer->getChildren();
+    if (!children)
+        return;
+    solids.reserve(static_cast<size_t>(children->count()));
+    for (unsigned index = 0; index < children->count(); ++index) {
+        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
+            continue;
+        solids.push_back(object);
+    }
+}
 
 void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_savedTransforms.clear();
@@ -58,6 +108,7 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
         st.scaleY = object->getScaleY();
         st.nodeVisible = object->isVisible();
         st.dirty = false;
+        st.hasAppliedPose = false;
         simulator.m_savedTransforms.push_back(st);
     };
 
@@ -82,9 +133,9 @@ void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simula
     if (!children)
         return;
 
-    // Collect toggle-orb / touch-toggle effects with a target group.
     std::vector<EffectGameObject*> toggleEffects;
     toggleEffects.reserve(32);
+    std::unordered_set<int> groups;
     for (unsigned index = 0; index < children->count(); ++index) {
         auto* effect =
             geode::prelude::typeinfo_cast<EffectGameObject*>(children->objectAtIndex(index));
@@ -101,29 +152,30 @@ void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simula
         if (!toggleOrb && !touchToggle)
             continue;
         toggleEffects.push_back(effect);
+        groups.insert(effect->m_targetGroupID);
         if (toggleEffects.size() >= 256)
             break;
     }
     if (toggleEffects.empty())
         return;
 
+    std::vector<GameObject*> solids;
+    collectObjectLayerSolids(layer, solids);
+    EbGroupMemberIndex index;
+    index.build(solids, groups);
+
     static constexpr size_t kMaxToggleTargets = 8192;
     for (auto* effect : toggleEffects) {
         int const groupId = effect->m_targetGroupID;
-        if (groupId <= 0)
+        auto const* members = index.members(groupId);
+        if (!members)
             continue;
-        for (unsigned index = 0; index < children->count(); ++index) {
+        for (auto* object : *members) {
             if (simulator.m_toggleTargetIds.size() >= kMaxToggleTargets)
                 return;
-            auto* object =
-                geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-            if (!object)
+            if (!object || object == effect)
                 continue;
             if (geode::prelude::typeinfo_cast<PlayerObject*>(object))
-                continue;
-            if (object == effect)
-                continue;
-            if (!object->belongsToGroup(groupId))
                 continue;
             // Commit 7: jump/dash rings keep orb path — not Hard toggle-Unknown.
             if (EbOrbStackResolver::shouldSkipToggleFlip(object, effect))
@@ -146,8 +198,8 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
 
     bool const wantJobs = !EbStageConfig::triggerBakeSkipDynamic();
 
-    // First collect DynamicFollow effects only; skip the second full-roster scan when none exist.
     std::vector<EffectGameObject*> followEffects;
+    std::unordered_set<int> groups;
     for (unsigned index = 0; index < children->count(); ++index) {
         if (followEffects.size() >= EbShadowSimulator::kMaxDynamicFollowJobs)
             break;
@@ -160,21 +212,15 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
         if (EbTriggerClassify::classify(effect) != TriggerKind::DynamicFollow)
             continue;
         followEffects.push_back(effect);
+        groups.insert(effect->m_targetGroupID);
     }
     if (followEffects.empty())
         return;
 
-    // Index solids once for group membership.
     std::vector<GameObject*> solids;
-    solids.reserve(static_cast<size_t>(children->count()));
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-        if (!object)
-            continue;
-        if (geode::prelude::typeinfo_cast<PlayerObject*>(object))
-            continue;
-        solids.push_back(object);
-    }
+    collectObjectLayerSolids(layer, solids);
+    EbGroupMemberIndex index;
+    index.build(solids, groups);
 
     std::unordered_set<int> savedTransformIds;
     if (wantJobs) {
@@ -188,7 +234,6 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
         if (simulator.m_dynamicFollowJobs.size() >= EbShadowSimulator::kMaxDynamicFollowJobs)
             break;
 
-        // Rotate-follow / non-positional: mark targets Unknown, no cheap probe.
         bool const rotateOnly = effect->m_rotateFollowP1 || effect->m_rotateFollowP2;
         bool const followY = EbTriggerClassify::isFollowPlayerTriggerId(effect->m_objectID);
         bool const targetPlayer = effect->m_targetPlayer1 || effect->m_targetPlayer2;
@@ -197,7 +242,8 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
         bool const probeable = !rotateOnly && (lockX || lockY);
 
         int const groupId = effect->m_targetGroupID;
-        if (groupId <= 0)
+        auto const* members = index.members(groupId);
+        if (!members)
             continue;
 
         EbShadowSimulator::DynamicFollowJob job;
@@ -210,10 +256,8 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
         job.offsetY =
             followY ? static_cast<float>(effect->m_followYOffset) : effect->m_moveOffset.y;
 
-        for (auto* object : solids) {
-            if (!object || !object->belongsToGroup(groupId))
-                continue;
-            if (object == effect)
+        for (auto* object : *members) {
+            if (!object || object == effect)
                 continue;
             simulator.m_dynamicTargetIds.insert(object->m_uniqueID);
 
@@ -232,6 +276,7 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
             st.scaleY = object->getScaleY();
             st.nodeVisible = object->isVisible();
             st.dirty = false;
+            st.hasAppliedPose = false;
             job.targets.push_back(st);
 
             if (savedTransformIds.insert(st.uniqueId).second) {
@@ -253,6 +298,7 @@ void EbShadowWorldCapture::resetTriggerTransforms(EbShadowSimulator& simulator) 
         if (!st.dirty)
             continue;
         st.dirty = false;
+        st.hasAppliedPose = false;
         auto* object = st.obj;
         if (!object || object->m_uniqueID != st.uniqueId)
             continue;
@@ -286,8 +332,10 @@ void EbShadowWorldCapture::beginCapture(EbShadowSimulator& simulator, PlayLayer*
     EbToggleOrbSim::get().restore();
     EbOrbStackResolver::get().begin();
     simulator.captureTriggerTransforms(layer);
-    simulator.captureDynamicFollows(layer);
-    simulator.captureToggleUnknownTargets(layer);
+    // Each of these builds a group→members sidetable for its needed groups
+    // (belongsToGroup once per solid×group, not per effect×solid scan).
+    captureDynamicFollows(simulator, layer);
+    captureToggleUnknownTargets(simulator, layer);
     captureUnmodeledMotionTargets(simulator, layer);
 }
 
@@ -300,15 +348,8 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
         return;
 
     static constexpr size_t kMaxUnmodeledTargets = 8192;
-    std::vector<GameObject*> solids;
-    solids.reserve(static_cast<size_t>(children->count()));
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
-            continue;
-        solids.push_back(object);
-    }
-
+    std::vector<EffectGameObject*> movers;
+    std::unordered_set<int> groups;
     for (unsigned index = 0; index < children->count(); ++index) {
         if (simulator.m_dynamicTargetIds.size() >= kMaxUnmodeledTargets)
             return;
@@ -318,7 +359,6 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
             continue;
 
         TriggerKind const kind = EbTriggerClassify::classify(effect);
-        // Already handled by captureDynamicFollows / captureToggleUnknownTargets.
         if (kind == TriggerKind::DynamicFollow)
             continue;
         if (EbTriggerClassify::isToggleOrbId(effect->m_objectID))
@@ -335,13 +375,25 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
         if (!touchMover && !followLikeStatic)
             continue;
 
-        int const groupId = effect->m_targetGroupID;
-        for (auto* object : solids) {
+        movers.push_back(effect);
+        groups.insert(effect->m_targetGroupID);
+    }
+    if (movers.empty())
+        return;
+
+    std::vector<GameObject*> solids;
+    collectObjectLayerSolids(layer, solids);
+    EbGroupMemberIndex index;
+    index.build(solids, groups);
+
+    for (auto* effect : movers) {
+        auto const* members = index.members(effect->m_targetGroupID);
+        if (!members)
+            continue;
+        for (auto* object : *members) {
             if (simulator.m_dynamicTargetIds.size() >= kMaxUnmodeledTargets)
                 return;
             if (!object || object == effect)
-                continue;
-            if (!object->belongsToGroup(groupId))
                 continue;
             simulator.m_dynamicTargetIds.insert(object->m_uniqueID);
         }
