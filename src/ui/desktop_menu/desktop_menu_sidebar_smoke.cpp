@@ -40,9 +40,10 @@ public:
         drawList->PathFillConvex(insideColor);
     }
 
-    // Square wave cells overwrite AA rounding — remask corners to a true rounded rect.
+    // Square wave cells overwrite AA rounding — remask only the requested corners.
     static void remaskRoundedCorners(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max,
-                                     float rounding, ImU32 outsideColor, float timeSeconds) {
+                                     float rounding, ImU32 outsideColor, float timeSeconds,
+                                     ImDrawFlags cornerFlags) {
         float const r = rounding;
         if (r <= 0.5f) {
             return;
@@ -50,22 +51,35 @@ public:
 
         float const width = max.x - min.x;
         float const height = max.y - min.y;
+        bool const topLeft = (cornerFlags & ImDrawFlags_RoundCornersTopLeft) != 0;
+        bool const topRight = (cornerFlags & ImDrawFlags_RoundCornersTopRight) != 0;
+        bool const bottomLeft = (cornerFlags & ImDrawFlags_RoundCornersBottomLeft) != 0;
+        bool const bottomRight = (cornerFlags & ImDrawFlags_RoundCornersBottomRight) != 0;
 
-        // Cover square overflows in each corner with the shell background.
-        drawList->AddRectFilled(ImVec2(min.x, min.y), ImVec2(min.x + r, min.y + r), outsideColor);
-        drawList->AddRectFilled(ImVec2(max.x - r, min.y), ImVec2(max.x, min.y + r), outsideColor);
-        drawList->AddRectFilled(ImVec2(min.x, max.y - r), ImVec2(min.x + r, max.y), outsideColor);
-        drawList->AddRectFilled(ImVec2(max.x - r, max.y - r), ImVec2(max.x, max.y), outsideColor);
-
-        // Put rounded corners back; sample wave so the remask matches the fill.
-        fillCornerDisc(drawList, ImVec2(min.x + r, min.y + r), r, r * 0.35f, r * 0.35f, width,
-                       height, timeSeconds, kPi, kPi * 1.5f);
-        fillCornerDisc(drawList, ImVec2(max.x - r, min.y + r), r, width - r * 0.35f, r * 0.35f,
-                       width, height, timeSeconds, kPi * 1.5f, kPi * 2.0f);
-        fillCornerDisc(drawList, ImVec2(max.x - r, max.y - r), r, width - r * 0.35f,
-                       height - r * 0.35f, width, height, timeSeconds, 0.0f, kPi * 0.5f);
-        fillCornerDisc(drawList, ImVec2(min.x + r, max.y - r), r, r * 0.35f, height - r * 0.35f,
-                       width, height, timeSeconds, kPi * 0.5f, kPi);
+        if (topLeft) {
+            drawList->AddRectFilled(ImVec2(min.x, min.y), ImVec2(min.x + r, min.y + r),
+                                    outsideColor);
+            fillCornerDisc(drawList, ImVec2(min.x + r, min.y + r), r, r * 0.35f, r * 0.35f, width,
+                           height, timeSeconds, kPi, kPi * 1.5f);
+        }
+        if (topRight) {
+            drawList->AddRectFilled(ImVec2(max.x - r, min.y), ImVec2(max.x, min.y + r),
+                                    outsideColor);
+            fillCornerDisc(drawList, ImVec2(max.x - r, min.y + r), r, width - r * 0.35f, r * 0.35f,
+                           width, height, timeSeconds, kPi * 1.5f, kPi * 2.0f);
+        }
+        if (bottomRight) {
+            drawList->AddRectFilled(ImVec2(max.x - r, max.y - r), ImVec2(max.x, max.y),
+                                    outsideColor);
+            fillCornerDisc(drawList, ImVec2(max.x - r, max.y - r), r, width - r * 0.35f,
+                           height - r * 0.35f, width, height, timeSeconds, 0.0f, kPi * 0.5f);
+        }
+        if (bottomLeft) {
+            drawList->AddRectFilled(ImVec2(min.x, max.y - r), ImVec2(min.x + r, max.y),
+                                    outsideColor);
+            fillCornerDisc(drawList, ImVec2(min.x + r, max.y - r), r, r * 0.35f, height - r * 0.35f,
+                           width, height, timeSeconds, kPi * 0.5f, kPi);
+        }
     }
 
 private:
@@ -78,7 +92,7 @@ EbDesktopMenuSidebarSmoke& EbDesktopMenuSidebarSmoke::get() {
 }
 
 void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max,
-                                      float rounding, float timeSeconds) {
+                                      float rounding, float timeSeconds, ImDrawFlags cornerFlags) {
     if (!drawList) {
         return;
     }
@@ -92,8 +106,7 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
     ImU32 const outside = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::bg());
 
-    // Full rounded card (same corner language as the rest of the shell).
-    drawList->AddRectFilled(min, max, base, rounding, ImDrawFlags_RoundCornersAll);
+    drawList->AddRectFilled(min, max, base, rounding, cornerFlags);
 
     constexpr int kCols = 12;
     constexpr int kRows = 32;
@@ -117,7 +130,7 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     ImGui::PopClipRect();
 
     EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(drawList, min, max, rounding, outside,
-                                                        timeSeconds);
+                                                        timeSeconds, cornerFlags);
 }
 
 #else

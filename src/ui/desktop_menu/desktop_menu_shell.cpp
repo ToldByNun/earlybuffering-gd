@@ -2,6 +2,7 @@
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
+#include "widgets/eb_section_card.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -17,9 +18,11 @@ public:
         return category;
     }
 
-    static constexpr float kSidebarWidth = 200.0f;
+    static constexpr float kSidebarWidth = 196.0f;
     static constexpr float kMenuWidth = 900.0f;
     static constexpr float kMenuHeight = 560.0f;
+    static constexpr float kContentPadX = 40.0f;
+    static constexpr float kContentPadY = 28.0f;
 
 private:
     EbDesktopMenuShellState() = delete;
@@ -28,19 +31,19 @@ private:
 class EbDesktopMenuShellDraw {
 public:
     static void navGroupLabel(char const* label) {
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        ImGui::Dummy(ImVec2(0.0f, 14.0f));
         EbDesktopMenuFonts::pushCaps();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.55f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.45f));
         ImGui::TextUnformatted(label);
         ImGui::PopStyleColor();
         EbDesktopMenuFonts::pop();
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
     }
 
     static bool navTab(char const* label, bool selected, float width) {
         ImGui::PushID(label);
         EbDesktopMenuFonts::pushUi();
-        float const rowH = ImGui::GetFontSize() + 14.0f;
+        float const rowH = ImGui::GetFontSize() + 12.0f;
         ImVec2 const pos = ImGui::GetCursorScreenPos();
 
         bool const pressed = ImGui::InvisibleButton("##tab", ImVec2(width, rowH));
@@ -61,7 +64,7 @@ public:
                           EbDesktopMenuTheme::toU32(textColor), label);
 
         if (selected) {
-            float const underlineY = pos.y + rowH - 4.0f;
+            float const underlineY = pos.y + rowH - 3.0f;
             float const textW = ImGui::CalcTextSize(label).x;
             drawList->AddLine(ImVec2(pos.x + 12.0f, underlineY),
                               ImVec2(pos.x + 12.0f + textW, underlineY),
@@ -74,7 +77,7 @@ public:
     }
 
     static void drawSidebarNav(ImVec2 const& origin, float width) {
-        ImGui::SetCursorScreenPos(ImVec2(origin.x + 14.0f, origin.y + 18.0f));
+        ImGui::SetCursorScreenPos(ImVec2(origin.x + 16.0f, origin.y + 20.0f));
         ImGui::BeginGroup();
 
         EbDesktopMenuFonts::pushHeader();
@@ -88,12 +91,12 @@ public:
             version = mod->getVersion().toVString();
         }
         EbDesktopMenuFonts::pushCaps();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.45f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.42f));
         ImGui::TextUnformatted(version.c_str());
         ImGui::PopStyleColor();
         EbDesktopMenuFonts::pop();
 
-        float const tabWidth = width - 28.0f;
+        float const tabWidth = width - 32.0f;
 
         navGroupLabel("SETTINGS");
         SettingsCategory const settingsTabs[] = {
@@ -121,38 +124,30 @@ public:
 
     static void drawContentBody(ImVec2 const& origin, float width, float height) {
         ImGui::SetCursorScreenPos(origin);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 18.0f));
-        ImGui::BeginChild("##eb-shell-section", ImVec2(width, height), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground |
-                              ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            ImVec2(EbDesktopMenuShellState::kContentPadX,
+                                   EbDesktopMenuShellState::kContentPadY));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 8.0f));
+        ImGui::BeginChild("##eb-shell-content", ImVec2(width, height), ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoBackground);
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         char const* name = EbInLevelSettingsFilter::categoryName(active);
-        char header[64];
-        std::snprintf(header, sizeof(header), "%s", name);
-        for (char* cursor = header; *cursor; ++cursor) {
-            if (*cursor >= 'a' && *cursor <= 'z') {
-                *cursor = static_cast<char>(*cursor - 'a' + 'A');
-            }
-        }
 
-        EbDesktopMenuFonts::pushCaps();
-        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
-        ImGui::TextUnformatted(header);
-        ImGui::PopStyleColor();
-        EbDesktopMenuFonts::pop();
-        ImGui::PushStyleColor(ImGuiCol_Separator, EbDesktopMenuTheme::outline());
-        ImGui::Separator();
-        ImGui::PopStyleColor();
-        ImGui::Spacing();
-        EbDesktopMenuFonts::pushUi();
-        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
-        ImGui::TextWrapped("Content host for category \"%s\". Widgets bind in later APs.", name);
-        ImGui::PopStyleColor();
-        EbDesktopMenuFonts::pop();
+        // Sidebar already shows the active tab — no duplicate category title here.
+        char sectionId[64];
+        std::snprintf(sectionId, sizeof(sectionId), "smoke-%s", name);
+        if (EbSectionCard::begin(sectionId, "SECTION")) {
+            EbDesktopMenuFonts::pushUi();
+            ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
+            ImGui::TextWrapped("Section body for \"%s\". Rows bind in later APs.", name);
+            ImGui::PopStyleColor();
+            EbDesktopMenuFonts::pop();
+        }
+        EbSectionCard::end();
 
         ImGui::EndChild();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
     }
 
     static void frame() {
@@ -178,26 +173,23 @@ public:
             return;
         }
 
-        // Use window rect — not cursor/avail (those shift after nav widgets).
         ImVec2 const winPos = ImGui::GetWindowPos();
         ImVec2 const winSize = ImGui::GetWindowSize();
         float const rounding = EbDesktopMenuTheme::windowRounding();
         float const sideW = EbDesktopMenuShellState::kSidebarWidth;
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-        // Single shell fill (all corners). Content is this same surface — no second panel.
+        // Unified shell — sidebar docked flush left (outer corners only).
         drawList->AddRectFilled(winPos, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
                                 EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::bg()), rounding);
 
-        // Sidebar as its own rounded card (inset) — same corner language as other panels.
-        float const sidePad = 10.0f;
-        float const sideRounding = EbDesktopMenuTheme::panelRounding();
-        ImVec2 const sideMin(winPos.x + sidePad, winPos.y + sidePad);
-        ImVec2 const sideMax(winPos.x + sideW - sidePad * 0.35f, winPos.y + winSize.y - sidePad);
-        EbDesktopMenuSidebarSmoke::get().paint(drawList, sideMin, sideMax, sideRounding,
-                                               static_cast<float>(ImGui::GetTime()));
+        ImVec2 const sideMin = winPos;
+        ImVec2 const sideMax(winPos.x + sideW, winPos.y + winSize.y);
+        EbDesktopMenuSidebarSmoke::get().paint(drawList, sideMin, sideMax, rounding,
+                                               static_cast<float>(ImGui::GetTime()),
+                                               ImDrawFlags_RoundCornersLeft);
 
-        drawSidebarNav(sideMin, sideMax.x - sideMin.x);
+        drawSidebarNav(sideMin, sideW);
         drawContentBody(ImVec2(winPos.x + sideW, winPos.y), winSize.x - sideW, winSize.y);
 
         ImGui::End();

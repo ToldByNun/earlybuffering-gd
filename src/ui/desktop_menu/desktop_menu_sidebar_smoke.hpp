@@ -12,9 +12,10 @@ public:
     static EbDesktopMenuSidebarSmoke& get();
 
 #if defined(EB_DESKTOP_IMGUI)
-    // Draw the animated wave into a fully rounded sidebar card.
+    // Draw the animated wave into the sidebar rect. cornerFlags selects which
+    // corners stay rounded (docked shell uses left-only).
     void paint(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max, float rounding,
-               float timeSeconds);
+               float timeSeconds, ImDrawFlags cornerFlags = ImDrawFlags_RoundCornersLeft);
 #endif
 
 private:
