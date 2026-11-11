@@ -4,6 +4,7 @@
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
+#include "widgets/eb_combo_box.hpp"
 #include "widgets/eb_section_card.hpp"
 #include "widgets/eb_slider.hpp"
 
@@ -21,11 +22,17 @@ public:
         return category;
     }
 
+    static float& wheelDelta() {
+        static float delta = 0.0f;
+        return delta;
+    }
+
     static constexpr float kSidebarWidth = 196.0f;
     static constexpr float kMenuWidth = 900.0f;
     static constexpr float kMenuHeight = 560.0f;
-    static constexpr float kContentPadX = 40.0f;
-    static constexpr float kContentPadY = 28.0f;
+    // Inset so section cards sit inside the tab — bg shows around the card.
+    static constexpr float kContentPadX = 28.0f;
+    static constexpr float kContentPadY = 24.0f;
 
 private:
     EbDesktopMenuShellState() = delete;
@@ -131,8 +138,13 @@ public:
                             ImVec2(EbDesktopMenuShellState::kContentPadX,
                                    EbDesktopMenuShellState::kContentPadY));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 8.0f));
-        ImGui::BeginChild("##eb-shell-content", ImVec2(width, height), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_NoBackground);
+        // Hide bar via size 0 — keep scroll extent (NoScrollbar can clip last rows).
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+        // AlwaysUseWindowPadding: borderless children ignore WindowPadding otherwise,
+        // so the section card would fill the tab 1:1 with no bg gutter.
+        ImGui::BeginChild("##eb-shell-tab", ImVec2(width, height),
+                          ImGuiChildFlags_AlwaysUseWindowPadding,
+                          ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         char const* name = EbInLevelSettingsFilter::categoryName(active);
@@ -157,17 +169,46 @@ public:
             EbButton::drawAction("cycle-assist-mode", "Mode", EbButton::Style::Primary);
 
             ImGui::Dummy(ImVec2(0.0f, 10.0f));
-            // AP10 slider smoke — wave fill + white knob; int setting + float local + px.
+            // Slider smoke — wave fill + white knob; int setting + float local + px.
             EbSlider::drawIntSetting("ticks-all", "Window (Default)", 0, 48);
             static float s_smokeFloat = 5.0f;
             EbSlider::drawFloat("smoke-float", "Slider 1", &s_smokeFloat, 0.0f, 10.0f, 1, "F");
             static int s_smokePx = 12;
             EbSlider::drawInt("smoke-px", "Slider px", &s_smokePx, 0, 64, "px");
+
+            ImGui::Dummy(ImVec2(0.0f, 10.0f));
+            // AP11 combo smoke — short one-of enums.
+            {
+                char const* modeOpts[] = {"Live", "Replay", "Hybrid", "BruteForce"};
+                EbComboBox::drawSetting("assist-mode", "Assist Mode", modeOpts, 4);
+                char const* unitOpts[] = {"Ticks", "Frames"};
+                EbComboBox::drawSetting("window-unit", "Window Unit", unitOpts, 2);
+            }
         }
         EbSectionCard::end();
+        // Extra scroll extent so the last rows clear the clip edge.
+        ImGui::Dummy(ImVec2(0.0f, EbDesktopMenuShellState::kContentPadY + 24.0f));
+
+        // Apply wheel after layout so ScrollMaxY includes this frame's content.
+        float const wheel = EbDesktopMenuShell::takeWheelDelta();
+        ImVec2 const mouse = ImGui::GetIO().MousePos;
+        bool const overTab = mouse.x >= origin.x && mouse.x < origin.x + width &&
+                             mouse.y >= origin.y && mouse.y < origin.y + height;
+        if (wheel != 0.0f && overTab) {
+            float const step = ImGui::GetTextLineHeightWithSpacing();
+            float next = ImGui::GetScrollY() + wheel * step;
+            float const maxY = ImGui::GetScrollMaxY();
+            if (next < 0.0f) {
+                next = 0.0f;
+            }
+            if (next > maxY) {
+                next = maxY;
+            }
+            ImGui::SetScrollY(next);
+        }
 
         ImGui::EndChild();
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(3);
     }
 
     static void frame() {
@@ -232,6 +273,16 @@ void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
     EbDesktopMenuShellState::active() = category;
 }
 
+void EbDesktopMenuShell::addWheelDelta(float deltaY) {
+    EbDesktopMenuShellState::wheelDelta() += deltaY;
+}
+
+float EbDesktopMenuShell::takeWheelDelta() {
+    float const delta = EbDesktopMenuShellState::wheelDelta();
+    EbDesktopMenuShellState::wheelDelta() = 0.0f;
+    return delta;
+}
+
 void EbDesktopMenuShell::draw() {
     EbDesktopMenuShellDraw::frame();
 }
@@ -244,6 +295,12 @@ SettingsCategory EbDesktopMenuShell::activeCategory() {
 
 void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
     (void)category;
+}
+
+void EbDesktopMenuShell::addWheelDelta(float) {}
+
+float EbDesktopMenuShell::takeWheelDelta() {
+    return 0.0f;
 }
 
 void EbDesktopMenuShell::draw() {}

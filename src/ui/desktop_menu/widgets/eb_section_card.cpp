@@ -13,6 +13,10 @@ public:
         return value;
     }
 
+    // Inner pad so widgets (checkbox, slider value, …) clear the card edge.
+    static constexpr float kPadX = 18.0f;
+    static constexpr float kPadY = 16.0f;
+
 private:
     EbSectionCardState() = delete;
 };
@@ -24,21 +28,25 @@ bool EbSectionCard::begin(char const* id, char const* title) {
 
     ImGui::PushID(id);
 
-    float const width = ImGui::GetContentRegionAvail().x;
-    float const rounding = EbDesktopMenuTheme::frameRounding();
     ImVec4 border = EbDesktopMenuTheme::outline();
     border.w = 0.55f;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, EbDesktopMenuTheme::panel());
     ImGui::PushStyleColor(ImGuiCol_Border, border);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, EbDesktopMenuTheme::frameRounding());
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, EbDesktopMenuTheme::outlineThickness());
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(EbSectionCardState::kPadX, EbSectionCardState::kPadY));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
 
-    ImGuiChildFlags const childFlags = ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders;
-    ImGui::BeginChild("##eb-section-card", ImVec2(width, 0.0f), childFlags,
-                      ImGuiWindowFlags_NoScrollbar);
+    // Auto-height card inside the scrolling tab. Inner WindowPadding insets
+    // widgets on all sides so nothing sits flush / clipped at the card edge.
+    // NoScrollWithMouse: tab host owns wheel (Cocos → SetScrollY).
+    float const cardWidth = ImGui::GetContentRegionAvail().x;
+    ImGui::BeginChild("##eb-section-body", ImVec2(cardWidth, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
+                          ImGuiChildFlags_AlwaysUseWindowPadding,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     EbDesktopMenuFonts::pushCaps();
     ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
@@ -56,11 +64,11 @@ void EbSectionCard::end() {
         return;
     }
 
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
     ImGui::EndChild();
     ImGui::PopStyleVar(4);
     ImGui::PopStyleColor(2);
     ImGui::PopID();
-
     ImGui::Dummy(ImVec2(0.0f, 12.0f));
     EbSectionCardState::depth() -= 1;
 }

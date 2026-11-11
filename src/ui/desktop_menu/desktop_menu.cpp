@@ -6,7 +6,27 @@
 #if defined(EB_DESKTOP_IMGUI)
 
 #include <Geode/Geode.hpp>
+#include <Geode/modify/CCMouseDispatcher.hpp>
 #include <imgui-cocos.hpp>
+
+class $modify(EbDesktopMenuMouseDispatcher, cocos2d::CCMouseDispatcher) {
+public:
+    static void onModify(auto& self) {
+        // Accumulate scroll before imgui-cocos may swallow WantCaptureMouse.
+        (void)self.setHookPriority("cocos2d::CCMouseDispatcher::dispatchScrollMSG",
+                                   geode::Priority::Early);
+    }
+
+    bool dispatchScrollMSG(float y, float x) {
+        if (EbDesktopMenu::isOpen()) {
+            // Raw Cocos delta → tab content host (not section). Sign: +y scrolls down.
+            EbDesktopMenuShell::addWheelDelta(y);
+        }
+        return CCMouseDispatcher::dispatchScrollMSG(y, x);
+    }
+
+private:
+};
 
 bool EbDesktopMenu::isSupported() {
     return true;

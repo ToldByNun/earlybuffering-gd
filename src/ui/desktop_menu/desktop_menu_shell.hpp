@@ -11,6 +11,10 @@ public:
     static SettingsCategory activeCategory();
     static void setActiveCategory(SettingsCategory category);
 
+    // Cocos mouse-wheel delta while the menu is open (content host consumes it).
+    static void addWheelDelta(float deltaY);
+    static float takeWheelDelta();
+
 private:
     EbDesktopMenuShell() = delete;
 };

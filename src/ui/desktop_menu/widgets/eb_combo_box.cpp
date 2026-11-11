@@ -1,0 +1,259 @@
+#include "eb_combo_box.hpp"
+
+#if defined(EB_DESKTOP_IMGUI)
+
+#include "../desktop_menu_bind.hpp"
+#include "../desktop_menu_fonts.hpp"
+#include "../desktop_menu_theme.hpp"
+#include <imgui.h>
+#include <algorithm>
+#include <cstring>
+#include <string>
+
+class EbComboBoxDraw {
+public:
+    static constexpr float kFieldPadX = 14.0f;
+    static constexpr float kFieldPadY = 8.0f;
+    static constexpr float kCaretW = 8.0f;
+    static constexpr float kMinFieldW = 108.0f;
+
+    static int findIndex(char const* const* options, int optionCount, char const* value) {
+        if (!options || optionCount <= 0 || !value) {
+            return 0;
+        }
+        for (int index = 0; index < optionCount; ++index) {
+            if (options[index] && std::strcmp(options[index], value) == 0) {
+                return index;
+            }
+        }
+        return 0;
+    }
+
+    static float maxOptionWidth(char const* const* options, int optionCount) {
+        float widest = 0.0f;
+        for (int index = 0; index < optionCount; ++index) {
+            if (!options[index]) {
+                continue;
+            }
+            widest = (std::max)(widest, ImGui::CalcTextSize(options[index]).x);
+        }
+        return widest;
+    }
+
+    static void drawCaret(ImDrawList* drawList, ImVec2 const& tip, float size, ImU32 color) {
+        if (!drawList) {
+            return;
+        }
+        drawList->AddTriangleFilled(ImVec2(tip.x, tip.y), ImVec2(tip.x + size, tip.y),
+                                    ImVec2(tip.x + size * 0.5f, tip.y + size * 0.65f), color);
+    }
+
+    static ImVec4 idleFill() {
+        return EbDesktopMenuTheme::surface();
+    }
+
+    static ImVec4 hoverFill() {
+        return ImVec4(0.18f, 0.18f, 0.24f, 1.0f);
+    }
+
+    static ImVec4 selectedFill() {
+        return ImVec4(0.24f, 0.24f, 0.32f, 1.0f);
+    }
+
+    static bool drawRow(char const* id, char const* label, char const* const* options,
+                        int optionCount, int* selectedIndex, bool enabled) {
+        if (!id || id[0] == '\0' || !label || !options || optionCount <= 0 || !selectedIndex) {
+            return false;
+        }
+        if (*selectedIndex < 0 || *selectedIndex >= optionCount) {
+            *selectedIndex = 0;
+        }
+        char const* current = options[*selectedIndex] ? options[*selectedIndex] : "";
+
+        ImGui::PushID(id);
+        EbDesktopMenuFonts::pushUi();
+
+        float const avail = ImGui::GetContentRegionAvail().x;
+        float const textH = ImGui::GetFontSize();
+        float const fieldH = textH + kFieldPadY * 2.0f;
+        float const contentW = maxOptionWidth(options, optionCount) + kCaretW + 14.0f;
+        float fieldW = contentW + kFieldPadX * 2.0f;
+        if (fieldW < kMinFieldW) {
+            fieldW = kMinFieldW;
+        }
+        if (fieldW > avail * 0.58f) {
+            fieldW = avail * 0.58f;
+        }
+        float const rowH = (std::max)(fieldH, textH + 10.0f);
+        float const rounding = 8.0f;
+
+        // Full-row hit/layout box so the tab scroller counts the real height.
+        ImVec2 const rowMin = ImGui::GetCursorScreenPos();
+        bool openPopup = false;
+        if (enabled) {
+            openPopup = ImGui::InvisibleButton("##eb-combo-row", ImVec2(avail, rowH));
+        } else {
+            ImGui::Dummy(ImVec2(avail, rowH));
+        }
+        bool const hovered = enabled && ImGui::IsItemHovered();
+        bool const open = ImGui::IsPopupOpen("##eb-combo-popup");
+        if (openPopup) {
+            ImGui::OpenPopup("##eb-combo-popup");
+        }
+
+        ImVec2 const fieldMin(rowMin.x + avail - fieldW, rowMin.y + (rowH - fieldH) * 0.5f);
+        ImVec2 const fieldMax(fieldMin.x + fieldW, fieldMin.y + fieldH);
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec4 labelColor = EbDesktopMenuTheme::muted();
+        if (!enabled) {
+            labelColor = ImVec4(0.62f, 0.64f, 0.70f, 0.92f);
+        } else if (hovered || open) {
+            labelColor = EbDesktopMenuTheme::text();
+        }
+        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                          ImVec2(rowMin.x, rowMin.y + (rowH - textH) * 0.5f),
+                          EbDesktopMenuTheme::toU32(labelColor), label);
+
+        ImVec4 fill = idleFill();
+        if (!enabled) {
+            fill.w = 0.75f;
+        } else if (hovered || open) {
+            fill = hoverFill();
+        }
+        drawList->AddRectFilled(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(fill), rounding);
+
+        ImVec4 stroke = EbDesktopMenuTheme::outline();
+        stroke.w = enabled ? 0.7f : 0.4f;
+        if (enabled && (hovered || open)) {
+            stroke = ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
+        }
+        drawList->AddRect(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
+                          EbDesktopMenuTheme::outlineThickness());
+
+        ImVec4 valueColor = EbDesktopMenuTheme::muted();
+        if (!enabled) {
+            valueColor = ImVec4(0.62f, 0.64f, 0.70f, 0.85f);
+        } else if (hovered || open) {
+            valueColor = EbDesktopMenuTheme::text();
+        }
+        ImVec2 const valueSize = ImGui::CalcTextSize(current);
+        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                          ImVec2(fieldMin.x + kFieldPadX,
+                                 fieldMin.y + (fieldH - valueSize.y) * 0.5f),
+                          EbDesktopMenuTheme::toU32(valueColor), current);
+        drawCaret(drawList,
+                  ImVec2(fieldMax.x - kFieldPadX - kCaretW,
+                         fieldMin.y + (fieldH - kCaretW * 0.65f) * 0.5f),
+                  kCaretW, EbDesktopMenuTheme::toU32(valueColor));
+
+        bool changed = false;
+        ImGui::SetNextWindowSize(ImVec2(fieldW, 0.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(fieldMin.x, fieldMax.y + 6.0f), ImGuiCond_Appearing);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 3.0f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, EbDesktopMenuTheme::panel());
+        ImGui::PushStyleColor(ImGuiCol_Border, EbDesktopMenuTheme::outline());
+        if (ImGui::BeginPopup("##eb-combo-popup",
+                              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+            float const popupInner = ImGui::GetContentRegionAvail().x;
+            float const optH = fieldH - 2.0f;
+            for (int index = 0; index < optionCount; ++index) {
+                char const* option = options[index] ? options[index] : "";
+                ImGui::PushID(index);
+                bool const selected = index == *selectedIndex;
+                ImVec2 const optMin = ImGui::GetCursorScreenPos();
+                bool const clicked = ImGui::InvisibleButton("##opt", ImVec2(popupInner, optH));
+                bool const optHover = ImGui::IsItemHovered();
+                ImDrawList* popupDraw = ImGui::GetWindowDrawList();
+                ImVec2 const optMax(optMin.x + popupInner, optMin.y + optH);
+
+                if (selected) {
+                    popupDraw->AddRectFilled(optMin, optMax,
+                                             EbDesktopMenuTheme::toU32(selectedFill()),
+                                             rounding - 2.0f);
+                } else if (optHover) {
+                    popupDraw->AddRectFilled(optMin, optMax, EbDesktopMenuTheme::toU32(hoverFill()),
+                                             rounding - 2.0f);
+                }
+
+                ImVec4 optText = selected || optHover ? EbDesktopMenuTheme::text()
+                                                      : EbDesktopMenuTheme::muted();
+                popupDraw->AddText(
+                    ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(optMin.x + 12.0f, optMin.y + (optH - textH) * 0.5f),
+                    EbDesktopMenuTheme::toU32(optText), option);
+
+                if (clicked) {
+                    if (index != *selectedIndex) {
+                        *selectedIndex = index;
+                        changed = true;
+                    }
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(4);
+
+        EbDesktopMenuFonts::pop();
+        ImGui::PopID();
+        return changed;
+    }
+
+private:
+    EbComboBoxDraw() = delete;
+};
+
+bool EbComboBox::draw(char const* id, char const* label, char const* const* options,
+                      int optionCount, int* selectedIndex, bool enabled) {
+    return EbComboBoxDraw::drawRow(id, label, options, optionCount, selectedIndex, enabled);
+}
+
+bool EbComboBox::drawSetting(char const* key, char const* label, char const* const* options,
+                             int optionCount, bool enabled) {
+    if (!key || key[0] == '\0' || !options || optionCount <= 0) {
+        return false;
+    }
+    if (!EbDesktopMenuBind::exists(key)) {
+        return false;
+    }
+    std::string const current = EbDesktopMenuBind::getString(key, options[0] ? options[0] : "");
+    int selected = EbComboBoxDraw::findIndex(options, optionCount, current.c_str());
+    if (!EbComboBoxDraw::drawRow(key, label, options, optionCount, &selected, enabled)) {
+        return false;
+    }
+    if (!options[selected]) {
+        return false;
+    }
+    return EbDesktopMenuBind::setString(key, options[selected]);
+}
+
+#else
+
+bool EbComboBox::draw(char const* id, char const* label, char const* const* options,
+                      int optionCount, int* selectedIndex, bool enabled) {
+    (void)id;
+    (void)label;
+    (void)options;
+    (void)optionCount;
+    (void)selectedIndex;
+    (void)enabled;
+    return false;
+}
+
+bool EbComboBox::drawSetting(char const* key, char const* label, char const* const* options,
+                             int optionCount, bool enabled) {
+    (void)key;
+    (void)label;
+    (void)options;
+    (void)optionCount;
+    (void)enabled;
+    return false;
+}
+
+#endif

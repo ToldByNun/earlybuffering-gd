@@ -25,8 +25,8 @@ ImVec4 EbDesktopMenuTheme::bg() {
 }
 
 ImVec4 EbDesktopMenuTheme::panel() {
-    // Section / card fill — slightly lifted from bg.
-    return EbDesktopMenuThemeColors::rgbByte(22, 22, 33);
+    // Section card — lifted enough that tab bg() reads as a gutter around it.
+    return EbDesktopMenuThemeColors::rgbByte(28, 28, 40);
 }
 
 ImVec4 EbDesktopMenuTheme::surface() {
