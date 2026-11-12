@@ -1,104 +1,165 @@
-# EarlyBuffer
+<div align="center">
 
-> **Docs (players + developers):** https://ToldByNun.github.io/earlybuffering-gd/  
-> Local preview: `npm install` → `npm run docs:dev`  
-> Install, features, settings, problems, how it works, and the **Dev** section live there. **Not on the Geode Index** — install from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases).
+<img src="logo.png" alt="EarlyBuffer" width="128" />
+
+# EarlyBuffer
 
 **Click early. Still live.**
 
-Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBuffer holds the press and fires on the first physics tick a shadow sim still calls safe. Assist, not autoplayer. No late-forgiveness (it does not rewind time for late clicks).
+<img src="media/desktop-ui.gif" alt="EarlyBuffer desktop settings UI" width="920" />
+
+Timing assist for Geometry Dash **2.2081** — not an autoplayer.<br/>
+You still click. EarlyBuffer only holds a slightly early jump and fires it on the first physics tick a shadow sim still calls safe.
+
+<br/>
+
+<a href="https://github.com/ToldByNun/earlybuffering-gd/releases"><img src="https://img.shields.io/github/v/release/ToldByNun/earlybuffering-gd?label=release&color=7B61FF" alt="Release" /></a>
+<a href="https://ToldByNun.github.io/earlybuffering-gd/"><img src="https://img.shields.io/badge/docs-players%20%2B%20devs-111827?labelColor=7B61FF" alt="Docs" /></a>
+<img src="https://img.shields.io/badge/GD-2.2081-111827" alt="GD 2.2081" />
+<img src="https://img.shields.io/badge/Geode-5.11.1%2B-111827" alt="Geode" />
+<img src="https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20iOS%20%7C%20Android-111827" alt="Platforms" />
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-111827" alt="MIT" /></a>
+
+<br/>
+
+<a href="https://github.com/ToldByNun/earlybuffering-gd/releases"><strong>Download</strong></a>
+&nbsp;·&nbsp;
+<a href="https://ToldByNun.github.io/earlybuffering-gd/"><strong>Docs</strong></a>
+&nbsp;·&nbsp;
+<a href="https://discord.gg/QJuTDkmPcf"><strong>Discord</strong></a>
+&nbsp;·&nbsp;
+<a href="https://github.com/ToldByNun/earlybuffering-gd/issues"><strong>Issues</strong></a>
+
+<br/>
+
+<strong>Not on the Geode Index.</strong> Install from <a href="https://github.com/ToldByNun/earlybuffering-gd/releases">GitHub Releases</a> only.<br/>
+<strong>Last 2.2081 line</strong> — v1.6.0 does not support newer Geometry Dash builds.
+
+</div>
+
+---
+
+## Install in 3 steps
+
+1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
+2. Download the multi-platform `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases).
+3. Put it in your Geode mods folder and restart GD.
+
+**Also need:** dependency **geode.node-ids** ≥ v1.23.3 (that one can still come from the Index).
+
+| You play on… | Make sure the package contains… |
+|---|---|
+| Windows | `audesign.earlybuffer.dll` |
+| Android | `audesign.earlybuffer.android64.so` |
+| iOS | `audesign.earlybuffer.ios.dylib` |
+
+A Windows-only local build will **not** load on phone. Use a merged / release package. Details: [`INSTALL.md`](INSTALL.md).
+
+---
+
+## What it does (20 seconds)
+
+1. You jump a little **too early**.
+2. EarlyBuffer **holds** that press for a short window.
+3. A tiny shadow copy of the game asks: “is this tick still safe?”
+4. **Yes** → it fires your jump there. **Nothing better** → your normal click goes through.
+
+It does **not** invent clicks. It does **not** rewind late clicks. Assist, not bot.
+
+---
+
+## Modes at a glance
+
+| Mode | What you get |
+|---|---|
+| **Live** | Plans each click with a shadow sim. Optional Adaptive Prediction Planner. |
+| **Hybrid** | Bake window when near + live verify, otherwise Live. |
+| **Replay** | Timing windows from an imported macro bake. |
+| **BruteForce** | Serial search bake into a timing map. |
+
+Also built in:
+
+- **Safe Mode** — when assist is on (or has touched a run), progress / bests are not saved as legit clears
+- **Scope gates** — platformer hard-off; practice / startpos / percent window; assist-off ranges
+- **Orbs / Wave / CPS budgets** — algorithm limits you can tune
+- **Learning** — optional per-level bias (off by default)
+- **Trigger World Bake** — cache static movers so the shadow sim can collide them
+- **Cloud Configs** — browse / rate / install / share community settings packs (classic Geode popup in v1.6.0)
+
+Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_reference.md) · player docs: [site](https://ToldByNun.github.io/earlybuffering-gd/)
+
+---
+
+## Desktop settings (v1.6.0)
+
+On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
+
+**Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**
+
+- Accent Color drives the purple theme + sidebar wave
+- Modes icon bar (Cube → Swing) with per-mode cards
+- Assist Off Ranges as an editable list
+- Styled in-shell confirm / info modals
+
+Open Geode → EarlyBuffer → Settings, or pause → **EB**.
+
+---
 
 ## Cloud Configs
 
-Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below **Import Config**. Browse and search community packs, sort by popularity or rating, and install settings. Keybinds and developer settings are preserved. Share submits your pack for review. Cached packs and bundled defaults support offline use. Installing a config can change your assist settings. See [Cloud Configs](docs/cloud_configs.md) for endpoints and network behavior.
+**Settings → Learn → Config → Cloud Configs** (or classic Assist actions below Import Config).
+
+- Browse / search packs, sort by downloads or rating
+- Install applies settings (keybinds + Dev Lab keys stay)
+- Share exports your current config for review
+- Cached / seed packs work offline
+
+See [Cloud Configs](docs/cloud_configs.md).
+
+---
+
+## Quick facts
 
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
 | Version | **1.6.0** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
-| Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`; iOS needs `.ios.dylib`) |
+| Platforms | Windows · macOS · iOS · Android |
 | License | [MIT](LICENSE) |
-| Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
+| Docs | [ToldByNun.github.io/earlybuffering-gd](https://ToldByNun.github.io/earlybuffering-gd/) |
+| Discord | [Invite](https://discord.gg/QJuTDkmPcf) |
 
-> **Last 2.2081 line.** **v1.6.0** still targets Geometry Dash **2.2081** only (desktop ImGui settings shell, Live hitch / Wave IW / orbs-under-IW, Adaptive Prediction Planner, Cloud Configs). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`; ship packages must pass `--forbid-zstd`).
+---
 
-## What it does
-
-- **Live / Hybrid** — plan each click with a shadow physics sim (threat zones, optional orb windows). Live can use the **Adaptive Prediction Planner** (`adaptive-plan`) with classic fallthrough. Hopeless clicks still pass through; your input is never blocked.
-- **Replay / BruteForce** — bake click *windows* from an imported macro or a serial main-thread search. These are timing maps, not a live multi-click bot queue.
-- **Trigger World Bake** — cache spawn-timed static mover / toggle poses so the shadow sim can collide them instead of treating every mover as unknown (see settings + [`docs/assist_reference.md`](docs/assist_reference.md)).
-- **Safe Mode** — when assist is on (or has touched a run), progress / bests / percentage are not saved as legit clears.
-- **Scope gates** — platformer hard-off; optional practice / startpos / percent window; up to six float “assist off” percent ranges.
-- **Learning** — optional per-level bias / trust (off by default; never changes your tick window; does not self-reinforce from inject “saves”).
-- **Self-bake** — optional practice (and normal) recording of vanilla clicks into the bake map (off by default), with idle merge/refine.
-
-Full planner / settings reference: [`docs/assist_reference.md`](docs/assist_reference.md).
-
-## Install
-
-> **Not on the Geode Index** (banned). Install from GitHub only.
-
-1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
-2. Download the `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases) (must contain `audesign.earlybuffer.android64.so` for Android; `audesign.earlybuffer.ios.dylib` for iOS).
-3. Ensure dependency **geode.node-ids** ≥ v1.23.3 (that dependency can still come from the Index).
-
-**Mobile (Android + iOS):** same save-dir I/O (`replay-drop/`, `earlybuffer-config.json`) and constrained planner budgets — details and device smoke checklists in [`INSTALL.md`](INSTALL.md).
-
-## Build
+## Build (maintainers)
 
 ```bash
-# Requires GEODE_SDK and a C++23 toolchain (MSVC on Windows)
+# Needs GEODE_SDK + C++23 (MSVC on Windows)
 geode build --config RelWithDebInfo
 ```
 
-Or configure CMake against `$env:GEODE_SDK` / `$GEODE_SDK`. See [`INSTALL.md`](INSTALL.md).
+CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/workflows/multi-platform.yml).  
+Ship packages must pass `python tools/geode_package_check.py … --forbid-zstd`.
 
-CI builds all platforms via [`.github/workflows/multi-platform.yml`](.github/workflows/multi-platform.yml).
+---
 
-## Settings (quick)
+## Support & ethics
 
-Open Geode → EarlyBuffer → Settings (or pause → **EB**). Highlights:
-
-- **Enabled / Assist Mode / Window** — master control, Live / Hybrid / Replay / BruteForce, and tick windows (unit + default + wave) on **Main** (no Preset packs)
-- **Pick Mode** (`assist-pick`) — **v1** (default); **v2** reserved (currently same as v1)
-- **Assist Engine** (`assist-engine`) — **ShadowPlayer** (default) vs **Trajectory** for Live V2; v1 always ShadowPlayer
-- **Safe Mode / Overlay / Pause UI** — publish-safe defaults; hide chrome when you want a clean pause menu
-- **Trigger World Bake** — static mover cache for the shadow sim; optional skip of player-follow dynamics
-- **Assist Off Ranges** — six From/To percent slots (`-1` = unused); assist forced off inside those ranges
-- **Orbs / CPS / budgets** — Assist algorithm limits (ticks ≠ 60fps frames); Adaptive knobs under Assist when Adaptive Plan is on
-- **Adaptive Plan** (`adaptive-plan`) — Live Prediction Planner (screen → verify → Gate); off = classic equal-walk
-- **Save Feedback** — separate Sound / Color / Counter toggles when a delayed click is injected
-
-Hotkeys are configurable (defaults include Ctrl+Shift+M assist mode, Ctrl+Shift+T trajectory, and more).
-
-## Development status
-
-EarlyBuffer **1.6.0** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
-
-## Authorship and AI use
-
-**Product direction is human.** Feature goals, constraints, and iterative review come from the maintainer (Audesign).
-
-**Implementation used AI coding tools** (Cursor and similar) as a drafting aid. **Every line shipped in this release was reviewed by the maintainer**, and behavior is **tested thoroughly and re-tested as features evolve** (playtesting, crash/lag probes, and automated self-checks). AI did not replace ownership, review, or QA.
-
-Bug reports with GD / Geode / platform / steps (and crashlogs when relevant) are welcome.
+- This mod **assists inputs**. Using it on rated / online content may break community norms or RobTop’s rules — keep **Safe Mode**, use practice, and use your own judgment.
+- Bugs: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues) with GD / Geode / platform / steps (crashlog if any).
+- Changelog: [`changelog.md`](changelog.md)
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / planner behavior, and PR expectations.
-
-## Support and ethics
-
-- This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
-- Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
-- Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.6.0** desktop menu + Android deflate packages; **v1.5.1** Live hitch / Wave / orbs-under-IW; **v1.5.0** Adaptive Prediction Planner; **v1.4.3** Cloud Configs (still GD **2.2081** only).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Credits
 
 - Maintainer / design / engineering: **Audesign** ([ToldByNun](https://github.com/ToldByNun))
 - Built on [Geode](https://geode-sdk.org/) and Geometry Dash bindings
-- Replay import uses [GDReplayFormat](https://github.com/maxnut/GDReplayFormat) (libGDR)
+- Replay import: [GDReplayFormat](https://github.com/maxnut/GDReplayFormat)
 
-Working-tree / early development also used the names *frirecracker* and *EarlyGrace*; the published mod is **EarlyBuffer** (`audesign.earlybuffer`).
+Product direction and review are human-owned. AI coding tools were used as a drafting aid; every shipped line was reviewed and playtested / self-checked.
+
+Working-tree names *frirecracker* / *EarlyGrace* refer to early development — the published mod is **EarlyBuffer**.
