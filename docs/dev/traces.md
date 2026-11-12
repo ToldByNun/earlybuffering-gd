@@ -8,11 +8,12 @@ Typical path (Windows):
 
 `%LocalAppData%\GeometryDash\geode\mods\audesign.earlybuffer\devtraces\session-*.json`
 
-Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, …) with:
+Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, `modeTransition`, …) with:
 
 - `assistReason`, `plannedDelay`
 - `candNotes` (chosen / rejected / skipped + reject codes; when evaluated also `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass`)
 - `plannerPath` + `gameModeKind` + `modeParams` + hold/threat honesty on `planFinished`
+- attempt-scoped `modeTransition` / `checkpoint` timeline (`timelineChange`, mode/speed/gravity/dual flags)
 - `witness` (player blob, trigger ready tracks, clock / midStep)
 - `attribution` (e.g. `best-surviving-absent`)
 
@@ -64,6 +65,17 @@ Planner-branch honesty (AP4):
 | `modeParams` | ticks / cap / λ / Adaptive quanta for that mode |
 | `viableDelays` / hold / `threatZone` | Plan honesty for Continuous / Wave research |
 | `candNotes[].survivalClass` | `alive` / `landing` / `recoverable` / `late-crash` / `lethal` |
+
+Mode-transition timeline (AP5; `pressId=0`, not part of a press chain):
+
+| `kind` / `timelineChange` | Meaning |
+|---|---|
+| `modeTransition` / `seed` | First snapshot when recording sees P1 |
+| `modeTransition` / `mode` | Gamemode portal change (`fromGameModeKind` → `gameModeKind`) |
+| `modeTransition` / `speed` | Speed portal (`playerSpeed`) |
+| `modeTransition` / `gravity` | Gravity flip (`upsideDown`) |
+| `modeTransition` / `dual` | Dual on/off |
+| `checkpoint` / `checkpoint` | Practice checkpoint load (tick reset) |
 
 ## Lag / perf
 

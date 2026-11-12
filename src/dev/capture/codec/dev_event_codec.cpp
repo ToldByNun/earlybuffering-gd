@@ -166,6 +166,23 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
             otherIndex["threatZone"] = tz;
         }
     }
+    if (e.hasTimelineMeta) {
+        if (!e.timelineChange.empty())
+            otherIndex["timelineChange"] = e.timelineChange;
+        if (!e.fromGameModeKind.empty())
+            otherIndex["fromGameModeKind"] = e.fromGameModeKind;
+        // gameModeKind / continuous may already be set via planner meta; still write for
+        // attempt-scoped timeline events that skip plannerPath.
+        if (!e.hasPlannerMeta) {
+            if (!e.gameModeKind.empty())
+                otherIndex["gameModeKind"] = e.gameModeKind;
+            otherIndex["continuous"] = e.continuous;
+        }
+        otherIndex["playerSpeed"] = e.playerSpeed;
+        otherIndex["upsideDown"] = e.upsideDown;
+        otherIndex["dual"] = e.dual;
+        otherIndex["playerX"] = e.playerX;
+    }
     return otherIndex;
 }
 
@@ -362,8 +379,9 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                                     ? j["adaptiveFellThrough"].asBool().unwrapOr(false)
                                     : false;
     }
-    if (j.contains("plannerPath") || j.contains("gameModeKind") || j.contains("modeParams") ||
-        j.contains("viableDelays") || j.contains("inputWindow") || j.contains("threatZone")) {
+    if (j.contains("plannerPath") || j.contains("modeParams") || j.contains("viableDelays") ||
+        j.contains("inputWindow") || j.contains("threatZone") ||
+        (e.kind == DevEventKind::PlanFinished && j.contains("gameModeKind"))) {
         e.hasPlannerMeta = true;
         if (j.contains("plannerPath"))
             e.plannerPath = std::string(j["plannerPath"].asString().unwrapOr(""));
@@ -447,6 +465,28 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                                    ? static_cast<float>(tz["endX"].asDouble().unwrapOr(0.0))
                                    : 0.f;
         }
+    }
+    if (j.contains("timelineChange") || e.kind == DevEventKind::ModeTransition ||
+        (e.kind == DevEventKind::Checkpoint &&
+         (j.contains("playerSpeed") || j.contains("dual") || j.contains("upsideDown")))) {
+        e.hasTimelineMeta = true;
+        if (j.contains("timelineChange"))
+            e.timelineChange = std::string(j["timelineChange"].asString().unwrapOr(""));
+        if (j.contains("fromGameModeKind"))
+            e.fromGameModeKind = std::string(j["fromGameModeKind"].asString().unwrapOr(""));
+        if (!e.hasPlannerMeta && j.contains("gameModeKind"))
+            e.gameModeKind = std::string(j["gameModeKind"].asString().unwrapOr(""));
+        if (!e.hasPlannerMeta)
+            e.continuous =
+                j.contains("continuous") ? j["continuous"].asBool().unwrapOr(false) : false;
+        e.playerSpeed = j.contains("playerSpeed")
+                            ? static_cast<float>(j["playerSpeed"].asDouble().unwrapOr(0.0))
+                            : 0.f;
+        e.upsideDown =
+            j.contains("upsideDown") ? j["upsideDown"].asBool().unwrapOr(false) : false;
+        e.dual = j.contains("dual") ? j["dual"].asBool().unwrapOr(false) : false;
+        e.playerX =
+            j.contains("playerX") ? static_cast<float>(j["playerX"].asDouble().unwrapOr(0.0)) : 0.f;
     }
     return true;
 }

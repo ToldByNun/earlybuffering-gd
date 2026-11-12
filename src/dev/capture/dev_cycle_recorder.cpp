@@ -8,6 +8,7 @@
 #include "../evaluation/dev_state_diff.hpp"
 #include "dev_live_witness.hpp"
 #include <Geode/Geode.hpp>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
@@ -445,18 +446,119 @@ void EbDevCycleRecorder::noteHoldExtend(int64_t pressId, int holdExtendMax) {
     cycle->holdExtendMax = holdExtendMax;
 }
 
-void EbDevCycleRecorder::noteCheckpoint(int attemptTick) {
-    if (!this->isRecording())
+void EbDevCycleRecorder::resetModeTimeline() {
+    this->m_modeTimeline = {};
+}
+
+void EbDevCycleRecorder::fillTimelineMeta(EbDevDecisionEvent& ev, PlayLayer* layer,
+                                        PlayerObject* player, char const* change,
+                                        char const* fromKind) const {
+    ev.hasTimelineMeta = true;
+    ev.timelineChange = change ? change : "";
+    if (fromKind && fromKind[0] != '\0')
+        ev.fromGameModeKind = fromKind;
+    if (!player)
         return;
+    auto const kind = EbStageConfig::kindOf(player);
+    ev.gameModeKind = EbStageConfig::kindName(kind);
+    ev.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+    ev.playerSpeed = player->m_playerSpeed;
+    ev.upsideDown = player->m_isUpsideDown;
+    ev.playerX = player->getPositionX();
+    ev.dual = layer && layer->m_gameState.m_isDualMode;
+}
+
+EbDevDecisionEvent* EbDevCycleRecorder::appendAttemptScoped(DevEventKind kind, int attemptTick,
+                                                          char const* reason) {
+    if (!this->isRecording())
+        return nullptr;
     EbDevDecisionEvent ev;
-    ev.kind = DevEventKind::Checkpoint;
+    ev.kind = kind;
     ev.pressId = 0;
     ev.cycleId = 0;
     ev.parentEventId = 0;
     ev.effectTick = attemptTick;
     ev.pressTick = attemptTick;
-    ev.assistReason = "checkpoint";
-    (void)EbDevTraceStore::get().appendEvent(ev);
+    if (reason)
+        ev.assistReason = reason;
+    return EbDevTraceStore::get().appendEvent(ev);
+}
+
+void EbDevCycleRecorder::noteCheckpoint(PlayLayer* layer, int attemptTick) {
+    auto* written = this->appendAttemptScoped(DevEventKind::Checkpoint, attemptTick, "checkpoint");
+    if (!written)
+        return;
+    PlayerObject* player = layer ? layer->m_player1 : nullptr;
+    char const* fromKind = nullptr;
+    if (this->m_modeTimeline.known)
+        fromKind = EbStageConfig::kindName(this->m_modeTimeline.mode);
+    this->fillTimelineMeta(*written, layer, player, "checkpoint", fromKind);
+    if (player) {
+        this->m_modeTimeline.known = true;
+        this->m_modeTimeline.mode = EbStageConfig::kindOf(player);
+        this->m_modeTimeline.playerSpeed = player->m_playerSpeed;
+        this->m_modeTimeline.upsideDown = player->m_isUpsideDown;
+        this->m_modeTimeline.dual = layer && layer->m_gameState.m_isDualMode;
+    }
+}
+
+void EbDevCycleRecorder::pollModeTimeline(PlayLayer* layer, int attemptTick) {
+    if (!this->isRecording() || !layer)
+        return;
+    auto* player = layer->m_player1;
+    if (!player || player->m_isDead)
+        return;
+
+    auto const kind = EbStageConfig::kindOf(player);
+    float const speed = player->m_playerSpeed;
+    bool const upsideDown = player->m_isUpsideDown;
+    bool const dual = layer->m_gameState.m_isDualMode;
+
+    if (!this->m_modeTimeline.known) {
+        auto* written =
+            this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick, "timeline-seed");
+        if (written)
+            this->fillTimelineMeta(*written, layer, player, "seed", nullptr);
+        this->m_modeTimeline.known = true;
+        this->m_modeTimeline.mode = kind;
+        this->m_modeTimeline.playerSpeed = speed;
+        this->m_modeTimeline.upsideDown = upsideDown;
+        this->m_modeTimeline.dual = dual;
+        return;
+    }
+
+    if (kind != this->m_modeTimeline.mode) {
+        char const* fromKind = EbStageConfig::kindName(this->m_modeTimeline.mode);
+        auto* written =
+            this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick, "timeline-mode");
+        if (written)
+            this->fillTimelineMeta(*written, layer, player, "mode", fromKind);
+        this->m_modeTimeline.mode = kind;
+    }
+    if (std::fabs(speed - this->m_modeTimeline.playerSpeed) > 1e-3f) {
+        auto* written =
+            this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick, "timeline-speed");
+        if (written)
+            this->fillTimelineMeta(*written, layer, player, "speed",
+                                   EbStageConfig::kindName(this->m_modeTimeline.mode));
+        this->m_modeTimeline.playerSpeed = speed;
+    }
+    if (upsideDown != this->m_modeTimeline.upsideDown) {
+        auto* written =
+            this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick, "timeline-gravity");
+        if (written)
+            this->fillTimelineMeta(*written, layer, player, "gravity",
+                                   EbStageConfig::kindName(this->m_modeTimeline.mode));
+        this->m_modeTimeline.upsideDown = upsideDown;
+    }
+    if (dual != this->m_modeTimeline.dual) {
+        auto* written =
+            this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick, "timeline-dual");
+        if (written)
+            this->fillTimelineMeta(*written, layer, player, "dual",
+                                   EbStageConfig::kindName(this->m_modeTimeline.mode));
+        this->m_modeTimeline.dual = dual;
+    }
 }
 
 void EbDevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason, bool lived,
@@ -518,9 +620,13 @@ bool EbDevCycleRecorder::shouldCountAttempt() const {
         if (pair.second.pressId > 0)
             return true;
     }
+    // Mode-timeline-only attempts must not consume the rolling window.
     auto const* attempt = EbDevTraceStore::get().currentAttempt();
-    if (!(!attempt)) {
-        return !attempt->events.empty();
+    if (!attempt)
+        return false;
+    for (auto const& ev : attempt->events) {
+        if (ev.kind == DevEventKind::PressObserved)
+            return true;
     }
     return false;
 }
@@ -536,6 +642,7 @@ bool EbDevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool liv
     bool const count = this->shouldCountAttempt();
     this->m_cycles.clear();
     this->m_activePressId = 0;
+    this->resetModeTimeline();
     return store.sealAttempt(std::move(endReason), count);
 }
 
@@ -549,6 +656,7 @@ bool EbDevCycleRecorder::beginNewAttempt(int startTick) {
         return true;
     this->m_cycles.clear();
     this->m_activePressId = 0;
+    this->resetModeTimeline();
     return store.beginAttempt(startTick);
 }
 
@@ -575,6 +683,7 @@ bool EbDevCycleRecorder::flushQuit() {
         bool const count = this->shouldCountAttempt();
         this->m_cycles.clear();
         this->m_activePressId = 0;
+        this->resetModeTimeline();
         (void)store.sealAttempt("quit", count);
     }
     return store.flush();

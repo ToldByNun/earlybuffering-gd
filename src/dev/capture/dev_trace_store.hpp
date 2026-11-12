@@ -23,7 +23,9 @@ enum class DevEventKind {
     Hus,
     Fire,
     Checkpoint,
-    Outcome
+    Outcome,
+    // Attempt-scoped (pressId=0): mode / speed / gravity / dual transitions.
+    ModeTransition
 };
 
 enum class DevEventSource { Live = 0, Bake };
@@ -120,6 +122,15 @@ public:
     bool threatZoneValid = false;
     float threatZoneStartX = 0.f;
     float threatZoneEndX = 0.f;
+
+    // Dev Lab AP5: attempt-scoped mode/speed/gravity/dual/checkpoint timeline.
+    bool hasTimelineMeta = false;
+    std::string timelineChange; // seed|mode|speed|gravity|dual|checkpoint
+    std::string fromGameModeKind;
+    float playerSpeed = 0.f;
+    bool upsideDown = false;
+    bool dual = false;
+    float playerX = 0.f;
 
 private:
 };

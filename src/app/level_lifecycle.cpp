@@ -43,7 +43,7 @@ void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLaye
     controller.m_startSnapshotTaken = false;
     controller.m_startSnapshotSlot = -1;
     EbClickIntentGuard::get().reset();
-    EbDevCycleRecorder::get().noteCheckpoint(0);
+    EbDevCycleRecorder::get().noteCheckpoint(playLayer, 0);
     EbLagProbe::get().mark("triggerWorld.checkpoint", "keep store / no rebuild / attemptTick=0");
 }
 

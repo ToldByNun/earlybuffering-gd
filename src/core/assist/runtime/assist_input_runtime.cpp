@@ -150,6 +150,11 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         controller.m_modeSwing = playerOne->m_isSwing;
         controller.m_modeKnown = true;
 
+        {
+            EbPerfTrace::Scope const scope("devModeTimeline");
+            EbDevCycleRecorder::get().pollModeTimeline(playLayer, controller.m_attemptTick);
+        }
+
         if (modeChanged && controller.m_buffer.state != BufferState::Idle) {
             EbAssistLog::debug("mode change → delivering buffered input");
             EbPerfTrace::Scope const scope("fireBuffered.modeChange");

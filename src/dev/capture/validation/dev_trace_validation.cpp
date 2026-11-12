@@ -220,9 +220,14 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
            "kind-press");
     expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::Outcome), "outcome") == 0,
            "kind-outcome");
+    expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::ModeTransition), "modeTransition") == 0,
+           "kind-mode-transition");
     DevEventKind offset = DevEventKind::PressObserved;
     expect(EbDevTraceStore::parseKind("delayArm", offset) && offset == DevEventKind::DelayArm,
            "parse-delayArm");
+    expect(EbDevTraceStore::parseKind("modeTransition", offset) &&
+               offset == DevEventKind::ModeTransition,
+           "parse-mode-transition");
     expect(!EbDevTraceStore::parseKind("nope", offset), "parse-kind-fail");
 
     // Valid Delay chain: press → plan → arm → fire → outcome
@@ -335,17 +340,26 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
             EbDevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 0, 0, pid, 0, 0);
         e1.pressTick = 100;
         expect(store.appendEvent(e1) != nullptr, "store-append-press");
+        EbDevDecisionEvent modeEv;
+        modeEv.kind = DevEventKind::ModeTransition;
+        modeEv.pressId = 0;
+        modeEv.effectTick = 100;
+        modeEv.hasTimelineMeta = true;
+        modeEv.timelineChange = "seed";
+        modeEv.gameModeKind = "cube";
+        expect(store.appendEvent(modeEv) != nullptr, "store-append-mode-transition");
         auto* pPlan = store.appendEvent(
             EbDevTraceStoreImplementation::makeEv(DevEventKind::PlanFinished, 0, 0, pid, 0, 9));
         expect(pPlan != nullptr, "store-append-plan");
         // Fix parent to press eventId after auto-assign.
         auto* cur = store.currentAttempt();
-        expect(cur && cur->events.size() >= 2, "store-two-events");
-        if (cur && cur->events.size() >= 2) {
-            cur->events[1].parentEventId = cur->events[0].eventId;
-            cur->events[1].planId = 9;
+        expect(cur && cur->events.size() >= 3, "store-three-events");
+        if (cur && pPlan) {
+            // events: press, modeTransition(pressId=0), planFinished
+            pPlan->parentEventId = cur->events[0].eventId;
+            pPlan->planId = 9;
             auto* arm = store.appendEvent(EbDevTraceStoreImplementation::makeEv(
-                DevEventKind::DelayArm, 0, 0, pid, cur->events[1].eventId, 9));
+                DevEventKind::DelayArm, 0, 0, pid, pPlan->eventId, 9));
             expect(arm != nullptr, "store-append-arm");
             auto* fire = store.appendEvent(EbDevTraceStoreImplementation::makeEv(
                 DevEventKind::Fire, 0, 0, pid, arm->eventId, 9));

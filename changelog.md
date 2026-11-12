@@ -21,6 +21,10 @@
 - `planFinished` stamps `plannerPath`, `gameModeKind`, resolved `modeParams`, Adaptive honesty, `viableDelays`, hold window, threat-zone summary.
 - `candNotes` carry structured `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass` (beside scores/rejects).
 
+### Dev Lab Mode-Transition Timeline
+- Attempt-scoped `modeTransition` / `checkpoint` events (`pressId=0`): seed + mode/speed/gravity/dual changes with tick, `gameModeKind`, `playerSpeed`, `upsideDown`, `dual`, `playerX`.
+- Fixes checkpoint append (was rejected by pressId gate).
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
