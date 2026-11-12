@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[132] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[133] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
@@ -24,6 +24,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[132] = {
     {"assist-startpos-only", EbConfigBundleKeys::Kind::Bool},
     {"assist-percent-min", EbConfigBundleKeys::Kind::Int},
     {"assist-percent-max", EbConfigBundleKeys::Kind::Int},
+    {"assist-off-ranges", EbConfigBundleKeys::Kind::String},
     {"assist-off-1-from", EbConfigBundleKeys::Kind::Float},
     {"assist-off-1-to", EbConfigBundleKeys::Kind::Float},
     {"assist-off-2-from", EbConfigBundleKeys::Kind::Float},
@@ -171,7 +172,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 131, "count-131");
+    expect(EbConfigBundleKeysTable::kEntryCount == 133, "count-133");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -214,10 +215,10 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 50, "kind-bool-50");
-    expect(kindInt == 43, "kind-int-43");
+    expect(kindBool == 51, "kind-bool-51");
+    expect(kindInt == 46, "kind-int-46");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 6, "kind-string-6");
+    expect(kindString == 8, "kind-string-8");
     expect(kindColor == 2, "kind-color-2");
     expect(kindKeybind == 6, "kind-keybind-6");
 
@@ -238,6 +239,8 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(classic && classic->kind == Kind::Bool, "find-classic-settings");
     auto const* offFrom = EbConfigBundleKeys::find("assist-off-1-from");
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
+    auto const* offRanges = EbConfigBundleKeys::find("assist-off-ranges");
+    expect(offRanges && offRanges->kind == Kind::String, "find-assist-off-ranges");
     expect(EbConfigBundleKeys::find("preset") == nullptr, "preset-removed");
     expect(EbConfigBundleKeys::find("stage-index") == nullptr, "stage-index-removed");
     expect(EbConfigBundleKeys::find("no-such-setting") == nullptr, "find-miss");

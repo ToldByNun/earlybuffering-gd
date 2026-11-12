@@ -249,7 +249,8 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | assist-startpos-only | bool | false | | | Assist — where it runs |
 | assist-percent-min | int | 0 | 0 | 100 | Assist — where it runs |
 | assist-percent-max | int | 100 | 0 | 100 | Assist — where it runs |
-| assist-off-N-from/to | float | -1 | -1 | 100 | Assist — N=1..6; -1 unused; inclusive off range |
+| assist-off-ranges | string | `` | JSON `[[from,to],…]` | | Assist — canonical off-range list (soft cap 32); desktop EbElementList |
+| assist-off-N-from/to | float | -1 | -1 | 100 | Assist — legacy N=1..6; -1 unused; migrate/mirror into assist-off-ranges |
 | desktop-accent-color | rgb | #7B61FF | | | UI — desktop ImGui accent + wave fill |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |

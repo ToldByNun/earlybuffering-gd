@@ -5,6 +5,7 @@
 #include "widgets/eb_color_picker.hpp"
 #include "widgets/eb_combo_box.hpp"
 #include "widgets/eb_dropdown.hpp"
+#include "widgets/eb_element_list.hpp"
 #include "widgets/eb_keybind.hpp"
 #include "widgets/eb_section_card.hpp"
 #include "widgets/eb_slider.hpp"
@@ -69,23 +70,7 @@ public:
         EbSectionCard::end();
 
         if (EbSectionCard::begin("assist-off", "Assist Off Ranges")) {
-            EbSlider::drawFloatSetting("assist-off-1-from", "Range 1 From", -1.0f, 100.0f, 1, "%");
-            EbSlider::drawFloatSetting("assist-off-1-to", "Range 1 To", -1.0f, 100.0f, 1, "%");
-            gap();
-            EbSlider::drawFloatSetting("assist-off-2-from", "Range 2 From", -1.0f, 100.0f, 1, "%");
-            EbSlider::drawFloatSetting("assist-off-2-to", "Range 2 To", -1.0f, 100.0f, 1, "%");
-            gap();
-            EbSlider::drawFloatSetting("assist-off-3-from", "Range 3 From", -1.0f, 100.0f, 1, "%");
-            EbSlider::drawFloatSetting("assist-off-3-to", "Range 3 To", -1.0f, 100.0f, 1, "%");
-            gap();
-            EbSlider::drawFloatSetting("assist-off-4-from", "Range 4 From", -1.0f, 100.0f, 1, "%");
-            EbSlider::drawFloatSetting("assist-off-4-to", "Range 4 To", -1.0f, 100.0f, 1, "%");
-            gap();
-            EbSlider::drawFloatSetting("assist-off-5-from", "Range 5 From", -1.0f, 100.0f, 1, "%");
-            EbSlider::drawFloatSetting("assist-off-5-to", "Range 5 To", -1.0f, 100.0f, 1, "%");
-            gap();
-            EbSlider::drawFloatSetting("assist-off-6-from", "Range 6 From", -1.0f, 100.0f, 1, "%");
-            EbSlider::drawFloatSetting("assist-off-6-to", "Range 6 To", -1.0f, 100.0f, 1, "%");
+            EbElementList::drawAssistOffRanges();
         }
         EbSectionCard::end();
 

@@ -231,14 +231,23 @@ void EbModuleBindings::registerSettings() {
         geode::prelude::listenForSettingChanges<double>(
             id, [](double) { EbModuleBindings::onAnySetting(); });
     };
+    auto watchAssistOffFloat = [](char const* id) {
+        geode::prelude::listenForSettingChanges<double>(id, [](double) {
+            // Classic Geode rows are source of truth until desktop rewrites JSON.
+            EbStageConfig::rebuildAssistOffRangesFromLegacySlots();
+            EbModuleBindings::onAnySetting();
+        });
+    };
     char const* offFrom[] = {"assist-off-1-from", "assist-off-2-from", "assist-off-3-from",
                              "assist-off-4-from", "assist-off-5-from", "assist-off-6-from"};
     char const* offTo[] = {"assist-off-1-to", "assist-off-2-to", "assist-off-3-to",
                            "assist-off-4-to", "assist-off-5-to", "assist-off-6-to"};
     for (auto* id : offFrom)
-        watchFloat(id);
+        watchAssistOffFloat(id);
     for (auto* id : offTo)
-        watchFloat(id);
+        watchAssistOffFloat(id);
+    geode::prelude::listenForSettingChanges<std::string>(
+        "assist-off-ranges", [](std::string) { EbModuleBindings::onAnySetting(); });
 
     char const* boolIds[] = {
         "cube-enable",   "cube-overwrite",   "ship-enable",  "ship-overwrite",

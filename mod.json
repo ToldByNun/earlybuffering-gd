@@ -205,7 +205,13 @@
 		"title-assist-off": {
 			"type": "title",
 			"name": "Assist Off Ranges (%)",
-			"description": "Percent holes where assist is forced off (even inside Min–Max). Set From/To for a range; leave -1 to ignore that slot. Inclusive."
+			"description": "Percent holes where assist is forced off (even inside Min–Max). Desktop menu: add/remove list. Classic: up to six From/To rows (-1 = unused). Inclusive."
+		},
+		"assist-off-ranges": {
+			"type": "string",
+			"name": "Assist Off Ranges (JSON)",
+			"description": "Canonical off-range list as JSON [[from,to],…]. Soft cap 32. Desktop menu edits this; classic six float rows migrate into / mirror the first six. Leave empty to import legacy slots once.",
+			"default": ""
 		},
 		"assist-off-1-from": {
 			"type": "float",

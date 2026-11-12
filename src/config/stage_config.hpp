@@ -101,10 +101,16 @@ public:
 
     private:
     };
-    static constexpr int ASSIST_OFF_SLOTS = 6;
-    // Ranges where assist is forced off (inclusive). From float settings assist-off-N-from/to (-1 =
-    // unused).
+    static constexpr int ASSIST_OFF_SLOTS = 6; // legacy Geode float pairs (classic UI)
+    static constexpr int ASSIST_OFF_MAX = 32;  // soft cap for assist-off-ranges JSON
+    // Ranges where assist is forced off (inclusive). Canonical store: string setting
+    // assist-off-ranges (JSON). Legacy assist-off-N-from/to (-1 = unused) still migrate / mirror.
     static std::vector<PercentRange> const& assistDisableRanges();
+    // Normalize, clamp to ASSIST_OFF_MAX, write JSON + mirror first 6 legacy slots. true if store
+    // changed.
+    static bool setAssistDisableRanges(std::vector<PercentRange> const& ranges);
+    // Classic float-row edit: rebuild JSON from the 6 legacy slots (no-op while isApplying).
+    static void rebuildAssistOffRangesFromLegacySlots();
     static bool isInAssistDisableRange(float percent);
 
     // --- Default Window ---
@@ -228,6 +234,17 @@ public:
     static float round2(float value);
     static void loadAssistOffSlots(geode::prelude::Mod* mod,
                                    std::vector<EbStageConfig::PercentRange>& out);
+    static void loadAssistOffFromLegacy(geode::prelude::Mod* mod,
+                                        std::vector<EbStageConfig::PercentRange>& out);
+    static bool parseAssistOffRangesJson(std::string const& raw,
+                                         std::vector<EbStageConfig::PercentRange>& out);
+    static std::string serializeAssistOffRangesJson(
+        std::vector<EbStageConfig::PercentRange> const& ranges);
+    static void normalizeAssistOffRanges(std::vector<EbStageConfig::PercentRange>& ranges);
+    static void writeAssistOffRangesJson(geode::prelude::Mod* mod,
+                                         std::vector<EbStageConfig::PercentRange> const& ranges);
+    static void mirrorAssistOffLegacySlots(geode::prelude::Mod* mod,
+                                           std::vector<EbStageConfig::PercentRange> const& ranges);
     static void ensureCache();
 
 private:

@@ -40,6 +40,8 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"assist-percent-min", SettingsCategory::Assist},
     {"assist-percent-max", SettingsCategory::Assist},
     {"title-assist-off", SettingsCategory::Assist},
+    // JSON store is Dev-only in classic popup (desktop Assist uses EbElementList).
+    {"assist-off-ranges", SettingsCategory::Dev},
     {"assist-off-1-from", SettingsCategory::Assist},
     {"assist-off-1-to", SettingsCategory::Assist},
     {"assist-off-2-from", SettingsCategory::Assist},
