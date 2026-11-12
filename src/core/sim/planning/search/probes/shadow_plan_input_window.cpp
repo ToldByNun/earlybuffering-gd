@@ -52,6 +52,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         return known;
     };
+    auto const observationFloor = [&](int delayValue) -> int {
+        int const quantum = std::max(1, context.options.adaptiveScreenTicks);
+        if (delayValue >= 0 && wasSeeded(delayValue)) {
+            return EbLivePlanContracts::adaptiveHonestAliveMinTicks(quantum, knownDeathTick(),
+                                                                    context.model.cap);
+        }
+        return std::max(1, context.limit + context.model.cap);
+    };
     auto const complete = [&](EbShadowSimulator::RunResult const& result, int delayValue = -1) {
         bool const unknown = result.unknown || result.unknownTrunc || result.toggleUnknown;
         if (EbMissAssistContracts::survivesObservation(result.died, unknown, result.ticksRan,
@@ -65,9 +73,18 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             result.ticksRan > 0) {
             int const quantum = std::max(1, context.options.adaptiveScreenTicks);
             return EbLivePlanContracts::adaptiveSeedCountsAlive(result.ticksRan, quantum,
-                                                                knownDeathTick());
+                                                                knownDeathTick(),
+                                                                context.model.cap);
         }
         return false;
+    };
+    auto const isDepthTruncated = [&](EbShadowSimulator::RunResult const& result,
+                                      int delayValue) -> bool {
+        bool const unknown = result.unknown || result.unknownTrunc || result.toggleUnknown;
+        if (result.landedAfterAction)
+            return false;
+        return EbLivePlanContracts::depthTruncatedAlive(result.died, unknown, result.ticksRan,
+                                                        observationFloor(delayValue));
     };
     bool const dual = context.linkedDual();
     // Continuous: earliest-safe only (local steering window). Discrete ball/cube
@@ -82,8 +99,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     int bestDelay = -1;
     int bestSurviveBin = -1;
+    int bestTicksRan = -1;
     float bestScore = 0.f;
     bool bestLanded = false;
+    bool anyDepthTruncated = false;
+    int const fairDepthFloor = std::max(1, context.options.adaptiveScreenTicks > 0
+                                               ? context.options.adaptiveScreenTicks
+                                               : 24);
 
     auto considerSafe = [&](int delayValue, EbSimulationCandidate const& candidate) {
         if (delayValue > 0)
@@ -101,6 +123,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         float const score =
             candidate.endX - context.latencyWeight * static_cast<float>(delayValue);
         bool const landed = candidate.raw.landedAfterAction;
+        int const ticksRan = candidate.raw.ticksRan;
 
         // Ball stopAtBallLanding makes ticksRan ≈ delay + flight, so later delays
         // inflate surviveBin without surviving longer after the press. Rank landed
@@ -111,6 +134,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 bestDelay = delayValue;
                 bestSurviveBin = surviveBin;
                 bestScore = score;
+                bestTicksRan = ticksRan;
                 bestLanded = true;
                 return;
             }
@@ -118,6 +142,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 bestDelay = delayValue;
                 bestSurviveBin = surviveBin;
                 bestScore = score;
+                bestTicksRan = ticksRan;
                 bestLanded = true;
                 return;
             }
@@ -128,15 +153,20 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 bestDelay = delayValue;
                 bestSurviveBin = surviveBin;
                 bestScore = score;
+                bestTicksRan = ticksRan;
             }
             return;
         }
 
-        if (bestDelay < 0 || surviveBin > bestSurviveBin ||
-            (surviveBin == bestSurviveBin && score > bestScore)) {
+        // Assist Pack AP1: do not let a deep d0 bin beat a quantum-only later
+        // survivor on surviveBin alone (unequal eval depth).
+        if (bestDelay < 0 ||
+            EbLivePlanContracts::fairDepthPreferCand(bestTicksRan, bestSurviveBin, bestScore,
+                                                     ticksRan, surviveBin, score, fairDepthFloor)) {
             bestDelay = delayValue;
             bestSurviveBin = surviveBin;
             bestScore = score;
+            bestTicksRan = ticksRan;
             bestLanded = false;
         }
     };
@@ -148,6 +178,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         bool dead = candidate.raw.died;
         bool safe = complete(candidate.raw, delayValue);
+        if (!safe && isDepthTruncated(candidate.raw, delayValue))
+            anyDepthTruncated = true;
         if (dual && !dead) {
             auto* other = context.real == context.layer->m_player1 ? context.layer->m_player2
                                                                    : context.layer->m_player1;
@@ -159,6 +191,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.simulator.resetCaptureForNextRun(context.layer);
             dead = partner.died;
             safe = safe && complete(partner, delayValue);
+            if (!safe && isDepthTruncated(partner, delayValue))
+                anyDepthTruncated = true;
         }
         candidate.viable = safe;
         candidate.clearsThreat = safe;
@@ -209,8 +243,24 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             break;
         if (context.candReady[static_cast<size_t>(delayValue)]) {
             auto const& ready = context.cands[static_cast<size_t>(delayValue)];
+            // Assist Pack AP1: shallow Adaptive/prefix Alive must be re-sim'd to
+            // the honest floor when budget remains — do not Hopeless on truncated depth.
+            if (isDepthTruncated(ready.raw, delayValue) && context.tickBudget > 0 &&
+                !context.wallExceeded()) {
+                anyDepthTruncated = true;
+                context.candReady[static_cast<size_t>(delayValue)] = 0;
+                if (!ingest(delayValue, context.evalDelay(delayValue, -1)))
+                    break;
+                if (continuous && bestDelay >= 0) {
+                    context.ledgerEarliestSafeExit = true;
+                    break;
+                }
+                continue;
+            }
             bool dead = ready.raw.died;
             bool safe = complete(ready.raw, delayValue);
+            if (!safe && isDepthTruncated(ready.raw, delayValue))
+                anyDepthTruncated = true;
             if (dual && !dead) {
                 auto* other = context.real == context.layer->m_player1 ? context.layer->m_player2
                                                                        : context.layer->m_player1;
@@ -222,6 +272,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.simulator.resetCaptureForNextRun(context.layer);
                 dead = partner.died;
                 safe = safe && complete(partner, delayValue);
+                if (!safe && isDepthTruncated(partner, delayValue))
+                    anyDepthTruncated = true;
                 EbSimulationCandidate updated = ready;
                 updated.viable = safe;
                 updated.clearsThreat = safe;
@@ -469,6 +521,15 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     if (context.plan.budgetHit && bestDelay < 0)
         context.plan.reason = AssistReason::PassBudget;
+    // Assist Pack AP1: depth-truncated Alive blocks dishonest PassHopeless.
+    if (bestDelay < 0 &&
+        EbLivePlanContracts::hopelessBlockedByDepthTruncation(anyDepthTruncated, false) &&
+        context.plan.reason == AssistReason::PassHopeless) {
+        context.plan.budgetHit = true;
+        context.plan.reason = AssistReason::PassBudget;
+        context.plan.action = PlanAction::Pass;
+        context.plan.delay = 0;
+    }
     // AP4: hopeless with toggle overlap → named PassToggleUnknown.
     if (bestDelay < 0 && context.sawToggleUnknown &&
         (context.plan.reason == AssistReason::PassHopeless ||

@@ -94,6 +94,37 @@ int AdaptiveParitySmokeTests::run() {
     int const chosen = d0Safe ? 0 : 4;
     expect(chosen == 0, "wave-iw-help-not-delay");
 
+    // Assist Pack AP1 — fair depth (frozen A4 from research_20261113_001322).
+    // Mirrors EbLivePlanContracts helpers fmt-free so this binary stays link-light.
+    // Full selfCheck + ledger live in PlanGold / tools/test_fair_depth_ap1.cpp.
+    auto const depthTruncatedAlive = [](bool died, bool unknown, int ticksRan,
+                                        int honestFloorTicks) {
+        if (died || unknown || ticksRan <= 0)
+            return false;
+        int const floor = honestFloorTicks > 1 ? honestFloorTicks : 1;
+        return ticksRan < floor;
+    };
+    auto const fairDepthPreferCand = [](int bestTicks, int bestBin, float bestScore, int candTicks,
+                                        int candBin, float candScore, int depthFloor) {
+        int const floor = depthFloor > 1 ? depthFloor : 1;
+        bool const bestDeep = bestTicks >= floor;
+        bool const candDeep = candTicks >= floor;
+        if (candDeep == bestDeep) {
+            if (candBin != bestBin)
+                return candBin > bestBin;
+            return candScore > bestScore;
+        }
+        if (!candDeep && bestDeep)
+            return (candScore - bestScore) > EbLivePlanContracts::kLandedScoreEps;
+        return true;
+    };
+    // A4: d0 deathTick=54, later Alive ticks 43/18 were not-viable + pass-hopeless.
+    expect(depthTruncatedAlive(false, false, 43, 54), "ap1-a4-later-43-trunc");
+    expect(depthTruncatedAlive(false, false, 18, 54), "ap1-a4-later-18-trunc");
+    expect(!depthTruncatedAlive(true, false, 55, 54), "ap1-a4-d0-dead");
+    expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18), "ap1-a4-no-bin-steal");
+    expect(fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 18), "ap1-a4-score-gain");
+
     if (!ok)
         ++fails;
     std::cout << "Adaptive parity smoke: " << fails << " failures\n";

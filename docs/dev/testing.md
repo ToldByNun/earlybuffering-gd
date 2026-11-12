@@ -25,7 +25,12 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 ## Adaptive smoke
 
-`tools/test_adaptive_parity_smoke.cpp` — fallthrough Gate + AP1 `adaptive-zero-wall-clamped` / `fallthrough-remus-floor` (link `live_plan_contracts.cpp`).
+`tools/test_adaptive_parity_smoke.cpp` — fallthrough Gate + AP1 `adaptive-zero-wall-clamped` / `fallthrough-remus-floor` + Assist Pack AP1 A4 fair-depth mirrors.
+
+Assist Pack AP1 before/after:
+- Frozen fixture: `tools/fixtures/fair_depth_ap1_a4.json` (Silent Hoveropolis A4 from `research_20261113_001322`).
+- Offline policy smoke: `tools/test_fair_depth_ap1.cpp` (depth trunc / Hopeless block / ledger `budget-not-reached`).
+- Pack KPI compare: `python tools/score_assist_pack_fair_depth.py --baseline <old_pack> --candidate <new_pack>` (primary: `hopelessWithAliveShort`, `notViableAliveShort`, `underselectZero`, `caused`).
 
 ## Docs site
 

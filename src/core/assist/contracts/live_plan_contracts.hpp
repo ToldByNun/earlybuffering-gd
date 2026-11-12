@@ -96,6 +96,24 @@ public:
     static bool adaptiveSeedCountsAlive(int ticksRan, int screenQuantum, int knownDeathTick,
                                         int modelCap = 0);
 
+    // --- Fair depth before ranking / Hopeless (Assist Pack AP1) -------------
+
+    // Alive run stopped before the honest observation floor (budget / quantum),
+    // not a real death. Callers must pass !died && !unknown already when useful;
+    // this helper still guards those flags.
+    static bool depthTruncatedAlive(bool died, bool unknown, int ticksRan, int honestFloorTicks);
+
+    // surviveBin may only decide when both sides reached depthFloor ticks.
+    // Unequal depth: shallow never loses on bin alone; needs clear score gain
+    // (kLandedScoreEps) to beat a deeper cand. Deeper cand always beats shallow.
+    static bool fairDepthPreferCand(int bestTicks, int bestBin, float bestScore, int candTicks,
+                                    int candBin, float candScore, int depthFloor);
+
+    // Hopeless is dishonest when any Alive (incl. depth-truncated) still exists.
+    // PassBudget / extend instead of PassHopeless.
+    static bool hopelessBlockedByDepthTruncation(bool anyDepthTruncatedAlive,
+                                                 bool anyObservationSafeDelay);
+
     static bool selfCheck(std::string& report);
 
 private:

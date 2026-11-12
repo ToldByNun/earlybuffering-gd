@@ -154,6 +154,41 @@ bool EbLivePlanContracts::adaptiveSeedCountsAlive(int ticksRan, int screenQuantu
     return ticksRan >= adaptiveHonestAliveMinTicks(screenQuantum, knownDeathTick, modelCap);
 }
 
+bool EbLivePlanContracts::depthTruncatedAlive(bool died, bool unknown, int ticksRan,
+                                              int honestFloorTicks) {
+    if (died || unknown || ticksRan <= 0) {
+        return false;
+    }
+    int const floor = std::max(1, honestFloorTicks);
+    return ticksRan < floor;
+}
+
+bool EbLivePlanContracts::fairDepthPreferCand(int bestTicks, int bestBin, float bestScore,
+                                              int candTicks, int candBin, float candScore,
+                                              int depthFloor) {
+    int const floor = std::max(1, depthFloor);
+    bool const bestDeep = bestTicks >= floor;
+    bool const candDeep = candTicks >= floor;
+    if (candDeep == bestDeep) {
+        if (candBin != bestBin) {
+            return candBin > bestBin;
+        }
+        return candScore > bestScore;
+    }
+    // Unequal depth: ignore surviveBin. Shallow needs a clear score gain; deeper
+    // proof always outranks a quantum-only cand.
+    if (!candDeep && bestDeep) {
+        return (candScore - bestScore) > kLandedScoreEps;
+    }
+    return true;
+}
+
+bool EbLivePlanContracts::hopelessBlockedByDepthTruncation(bool anyDepthTruncatedAlive,
+                                                           bool anyObservationSafeDelay) {
+    (void)anyObservationSafeDelay;
+    return anyDepthTruncatedAlive;
+}
+
 bool EbLivePlanContracts::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -237,6 +272,19 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(!adaptiveSeedCountsAlive(23, 24, -1), "adaptive-seed-below-quantum");
     expect(adaptiveHonestAliveMinTicks(24, 54, 40) == 40, "adaptive-seed-cap-clamp");
     expect(adaptiveHonestAliveMinTicks(24, 54, 100) == 54, "adaptive-seed-death-floor");
+
+    // Assist Pack AP1 — fair depth (A4-style: shallow Alive ≠ not-viable / Hopeless).
+    expect(depthTruncatedAlive(false, false, 18, 54), "depth-trunc-shallow");
+    expect(!depthTruncatedAlive(false, false, 54, 54), "depth-trunc-covered");
+    expect(!depthTruncatedAlive(true, false, 18, 54), "depth-trunc-dead");
+    expect(!depthTruncatedAlive(false, true, 18, 54), "depth-trunc-unknown");
+    // Deep d0 bin3 vs quantum later bin0: later wins only with clear score gain.
+    expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 24), "fair-depth-no-bin-steal");
+    expect(fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 24), "fair-depth-score-gain");
+    expect(fairDepthPreferCand(18, 0, 100.f, 96, 3, 99.f, 24), "fair-depth-deeper-wins");
+    expect(fairDepthPreferCand(18, 0, 100.f, 20, 1, 101.f, 24), "fair-depth-both-shallow-bin");
+    expect(hopelessBlockedByDepthTruncation(true, false), "hopeless-blocked-trunc");
+    expect(!hopelessBlockedByDepthTruncation(false, false), "hopeless-ok-empty");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

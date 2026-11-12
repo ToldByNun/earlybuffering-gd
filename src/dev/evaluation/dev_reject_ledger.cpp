@@ -313,6 +313,11 @@ EbDevRejectLedger::RejectCode EbDevRejectLedger::classifyRejected(CandSnap const
         return RejectCode::WaveFutile;
     }
 
+    // Assist Pack AP1: truncated Alive / budget-short runs are BudgetNotReached,
+    // never opaque not-viable (A4 false Hopeless ledger).
+    if (!snap.viable && snap.budgetHit)
+        return RejectCode::BudgetNotReached;
+
     if (snap.viable) {
         if (in.orbIntent && in.actMin >= 0 && in.actMax >= in.actMin &&
             (delay < in.actMin || delay > in.actMax)) {

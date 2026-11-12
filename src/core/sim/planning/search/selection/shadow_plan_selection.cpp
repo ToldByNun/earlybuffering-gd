@@ -3,6 +3,7 @@
 #include "../../../../../debug/assist_log.hpp"
 #include "../../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../../assist/contracts/assist_verdict.hpp"
+#include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../../assist/planning/assist_pick_v2.hpp"
 #include "../../../../assist/planning/perfect_assist_policy.hpp"
@@ -343,8 +344,18 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
                 bool const d0Ok = context.cands[0].viable && !context.cands[0].raw.died;
                 bool improves = !d0Ok;
                 if (d0Ok) {
-                    improves = fc.surviveBin > context.cands[0].surviveBin ||
-                               fc.endX > context.cands[0].endX + EbShadowSimulator::kFutileEndXGain;
+                    int const depthFloor =
+                        std::max(1, context.options.adaptiveScreenTicks > 0
+                                        ? context.options.adaptiveScreenTicks
+                                        : 24);
+                    // Assist Pack AP1: fair depth — shallow later must not lose on
+                    // surviveBin alone against a deeper d0.
+                    improves = EbLivePlanContracts::fairDepthPreferCand(
+                                   context.cands[0].raw.ticksRan, context.cands[0].surviveBin,
+                                   context.cands[0].endX, fc.raw.ticksRan, fc.surviveBin, fc.endX,
+                                   depthFloor) ||
+                               fc.endX > context.cands[0].endX +
+                                             EbShadowSimulator::kFutileEndXGain;
                 }
                 if (EbPerfectAssistPolicy::interveneOk(d0Ok, true, improves)) {
                     context.chosen = forced;
@@ -373,6 +384,25 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
             context.chosen = -1;
             context.doPass = false;
             context.plan.requireOrb = false;
+        }
+    }
+
+    // Assist Pack AP1: no pick + depth-truncated Alive → PassBudget, not Hopeless.
+    if (context.chosen < 0) {
+        int const honestFloor = std::max(1, context.limit + context.model.cap);
+        for (int delay = 0; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            auto const& cand = context.cands[static_cast<size_t>(delay)];
+            if (cand.raw.landedAfterAction)
+                continue;
+            bool const unknown =
+                cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
+            if (EbLivePlanContracts::depthTruncatedAlive(cand.raw.died, unknown,
+                                                         cand.raw.ticksRan, honestFloor)) {
+                context.plan.budgetHit = true;
+                break;
+            }
         }
     }
 

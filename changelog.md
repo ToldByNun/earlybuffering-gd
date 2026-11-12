@@ -2,6 +2,12 @@
 
 ## v1.6.1 (dev)
 
+### Assist Pack AP1 — Fair Depth
+- Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
+- Input-window re-sims shallow ready seeds when budget remains; otherwise `pass-budget` + `budget-not-reached`.
+- `surviveBin` compares only at comparable depth (`fairDepthPreferCand`); unequal depth uses score/endX, not bin crush.
+- Proof harness: PlanGold `assist-pack-ap1-fair-depth-a4` + `LivePlanContracts`/`DevRejectLedger` selfChecks; offline `tools/test_fair_depth_ap1.cpp` / parity-smoke A4 mirrors; pack KPI `tools/score_assist_pack_fair_depth.py` (baseline `research_20261113_001322` → new Research Pack).
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 

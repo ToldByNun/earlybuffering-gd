@@ -119,8 +119,13 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         s.ticksRan = candidate.raw.ticksRan;
         s.unknown = candidate.raw.unknown || candidate.raw.unknownTrunc;
         s.surviveTicks = candidate.surviveTicks;
-        s.budgetHit = plan.budgetHit && !candidate.raw.died && !candidate.raw.unknown &&
-                      candidate.raw.ticksRan > 0 && candidate.raw.ticksRan < model.cap;
+        // Assist Pack AP1: depth-truncated Alive (short ticksRan, not dead) is a
+        // budget/depth issue — never classify as opaque not-viable in the ledger.
+        bool const aliveShort = !candidate.raw.died && !candidate.raw.unknown &&
+                                !candidate.raw.unknownTrunc && candidate.raw.ticksRan > 0 &&
+                                candidate.raw.ticksRan < model.cap;
+        s.budgetHit =
+            (plan.budgetHit && aliveShort) || (aliveShort && !candidate.viable);
         auto const cls = EbModeSurvival::classify(
             EbShadowSurvivalRules::survivalInputFrom(candidate.raw, zone, model, real));
         s.survivalClass = EbModeSurvival::classId(cls);

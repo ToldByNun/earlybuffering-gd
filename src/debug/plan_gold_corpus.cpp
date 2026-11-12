@@ -179,6 +179,11 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbDevSessionCompare::selfCheck(sessionCompareReport), "dev-session-compare");
     std::string livePlanReport;
     expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
+    // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
+    expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
+               EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&
+               !EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18),
+           "assist-pack-ap1-fair-depth-a4");
     // 1.5.1 AP1: Adaptive + classic Live both clamp simUs=0 → hitch ceiling.
     expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs &&
                EbLivePlanContracts::intendedLiveBudgetUs(0) ==
