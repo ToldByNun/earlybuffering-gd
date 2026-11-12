@@ -122,29 +122,30 @@ public:
         EbSectionCard::end();
 
         if (EbSectionCard::begin("learn-actions", "Config")) {
-            EbButton::drawAction("reset-learn-action", "Reset Learning");
-            gap();
+            // No gap() between rows — ItemSpacing alone keeps H/V grid even.
+            EbButton::beginRow(2);
             EbButton::drawAction("export-config-action", "Export Config");
-            gap();
             EbButton::drawAction("import-config-action", "Import Config");
-            gap();
+            EbButton::endRow();
+            EbButton::beginRow(2);
+            EbButton::drawAction("reset-learn-action", "Reset Learning");
             EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
+            EbButton::endRow();
         }
         EbSectionCard::end();
     }
 
     static void drawBake() {
         if (EbSectionCard::begin("bake-actions", "Bake Actions")) {
+            EbButton::beginRow(2);
             EbButton::drawAction("import-bake-replay", "Import Replay");
-            gap();
             EbButton::drawAction("cycle-assist-mode", "Cycle Mode");
-            gap();
+            EbButton::endRow();
+            EbButton::beginRow(2);
             EbButton::drawAction("bake-map-action", "Bake Map");
-            gap();
             EbButton::drawAction("brute-bake-action", "Brute Bake");
-            gap();
+            EbButton::endRow();
             EbButton::drawAction("cancel-bake-action", "Cancel Bake");
-            gap();
             EbSlider::drawIntSetting("bake-radius", "Bake Radius", 0, 128);
         }
         EbSectionCard::end();
