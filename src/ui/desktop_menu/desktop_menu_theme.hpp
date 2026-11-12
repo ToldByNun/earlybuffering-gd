@@ -12,7 +12,10 @@ public:
     static void apply();
 
 #if defined(EB_DESKTOP_IMGUI)
+    // Multiplies color.a by ImGuiStyle.Alpha so custom draw-list paint fades with
+    // shell open/close (ImGui widgets already honor Style.Alpha; Add* does not).
     static ImU32 toU32(ImVec4 const& color);
+    static float styleAlpha();
     static ImVec4 bg();
     static ImVec4 panel();
     static ImVec4 surface();

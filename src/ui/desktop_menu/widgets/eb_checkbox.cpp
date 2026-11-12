@@ -131,8 +131,9 @@ public:
                     EbDesktopMenuTheme::drawAccentGlow(drawList, boxMin, boxMax, kBoxRounding,
                                                        0.45f * heat * check);
                 }
-                int const alpha = static_cast<int>((0.55f + 0.45f * check) * 255.0f + 0.5f);
-                drawCheckMark(drawList, boxMin, kBoxSize, IM_COL32(255, 255, 255, alpha), check);
+                ImVec4 checkColor(1.0f, 1.0f, 1.0f, 0.55f + 0.45f * check);
+                drawCheckMark(drawList, boxMin, kBoxSize, EbDesktopMenuTheme::toU32(checkColor),
+                              check);
             }
             ImVec4 stroke = EbDesktopMenuTheme::outline();
             ImVec4 accent = EbDesktopMenuTheme::accentLight();

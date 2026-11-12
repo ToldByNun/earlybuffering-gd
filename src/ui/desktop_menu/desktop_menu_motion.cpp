@@ -7,7 +7,9 @@
 
 class EbDesktopMenuMotionStore {
 public:
-    static constexpr int kSlots = 128;
+    // Dense pages (Assist/Dev) use several slots per widget; keep headroom so
+    // scroll-away reclaim does not restart fills from 0.
+    static constexpr int kSlots = 512;
 
     class Slot {
     public:
@@ -38,7 +40,9 @@ public:
         return value;
     }
 
-    static Slot* findOrAlloc(ImGuiID id) {
+    // seedValue: first frame / reclaim snaps to current target so scrolled-off
+    // widgets do not replay a 0→target intro when they come back into view.
+    static Slot* findOrAlloc(ImGuiID id, float seedValue) {
         Slot* list = slots();
         Slot* freeSlot = nullptr;
         Slot* oldest = &list[0];
@@ -56,7 +60,7 @@ public:
         }
         Slot* slot = freeSlot ? freeSlot : oldest;
         slot->id = id;
-        slot->value = 0.0f;
+        slot->value = seedValue;
         slot->frame = frame();
         return slot;
     }
@@ -115,7 +119,7 @@ float EbDesktopMenuMotion::smoothFloat(ImGuiID id, float target, float tau) {
     if (id == 0) {
         return target;
     }
-    EbDesktopMenuMotionStore::Slot* slot = EbDesktopMenuMotionStore::findOrAlloc(id);
+    EbDesktopMenuMotionStore::Slot* slot = EbDesktopMenuMotionStore::findOrAlloc(id, target);
     slot->frame = EbDesktopMenuMotionStore::frame();
     float const dt = ImGui::GetIO().DeltaTime;
     slot->value = approach(slot->value, target, tau, dt);

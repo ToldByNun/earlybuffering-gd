@@ -281,12 +281,13 @@ public:
             EbDesktopMenuTooltip::show(tip);
         }
         ImGuiID const itemId = ImGui::GetItemID();
-        // Brightness: selected snaps bright; hover eases toward full white.
-        float const heat = EbDesktopMenuMotion::smoothToward(itemId, hovered || selected,
-                                                             selected ? 0.04f : 0.055f);
+        // Select and hover ease independently so active-tab color does not snap.
+        float const selectAmt =
+            EbDesktopMenuMotion::smoothToward(itemId ^ 0x5E1EC7u, selected, 0.08f);
+        float const hoverAmt = EbDesktopMenuMotion::smoothToward(itemId, hovered, 0.055f);
         float const underlineTarget = selected ? 1.0f : (hovered ? 0.7f : 0.0f);
-        float const underlineT = EbDesktopMenuMotion::smoothFloat(
-            itemId ^ 0x554E44u, underlineTarget, selected ? 0.045f : 0.07f);
+        float const underlineT =
+            EbDesktopMenuMotion::smoothFloat(itemId ^ 0x554E44u, underlineTarget, 0.07f);
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImFont* const font = ImGui::GetFont();
@@ -296,17 +297,19 @@ public:
         // Idle muted → selected/hover full white (no soft fill plate).
         ImVec4 const idle(1.0f, 1.0f, 1.0f, 0.62f);
         ImVec4 const bright(1.0f, 1.0f, 1.0f, 1.0f);
-        float const brightT = selected ? (0.85f + 0.15f * heat) : (0.35f * heat);
+        float const brightT = (std::max)(selectAmt, hoverAmt * 0.55f);
         ImVec4 textColor = EbDesktopMenuMotion::lerp4(idle, bright, brightT);
         EbDesktopMenuTheme::drawTextShadowed(drawList, font, fontSize, textPos, textColor, label);
 
         if (underlineT > 0.01f) {
             float const underlineY = pos.y + rowH - 3.0f;
             ImVec4 line = EbDesktopMenuTheme::accentLight();
-            line.w = (selected ? 1.0f : 0.55f) * underlineT;
+            float const lineStrength = 0.55f + 0.45f * selectAmt;
+            line.w = lineStrength * underlineT;
             float const lineW = textW * underlineT;
+            float const lineThickness = 1.75f + 0.5f * selectAmt;
             drawList->AddLine(ImVec2(textPos.x, underlineY), ImVec2(textPos.x + lineW, underlineY),
-                              EbDesktopMenuTheme::toU32(line), selected ? 2.25f : 1.75f);
+                              EbDesktopMenuTheme::toU32(line), lineThickness);
         }
 
         EbDesktopMenuFonts::pop();

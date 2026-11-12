@@ -42,8 +42,14 @@ private:
     EbDesktopMenuThemeColors() = delete;
 };
 
+float EbDesktopMenuTheme::styleAlpha() {
+    return std::clamp(ImGui::GetStyle().Alpha, 0.0f, 1.0f);
+}
+
 ImU32 EbDesktopMenuTheme::toU32(ImVec4 const& color) {
-    return ImGui::ColorConvertFloat4ToU32(color);
+    ImVec4 faded = color;
+    faded.w *= styleAlpha();
+    return ImGui::ColorConvertFloat4ToU32(faded);
 }
 
 ImVec4 EbDesktopMenuTheme::bg() {

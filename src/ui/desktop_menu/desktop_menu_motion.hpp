@@ -21,6 +21,7 @@ public:
     static float smoothToward(ImGuiID id, bool active, float tau = 0.05f);
 
     // Smooth any float toward target, keyed by id (check anim, slider visual, scroll…).
+    // New/reclaimed slots seed to `target` (no 0→target replay after scroll).
     static float smoothFloat(ImGuiID id, float target, float tau = 0.07f);
 #endif
 

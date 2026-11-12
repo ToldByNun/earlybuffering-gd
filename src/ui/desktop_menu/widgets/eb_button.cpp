@@ -114,12 +114,10 @@ public:
                     : 0.0f;
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        // Custom draw-list paint ignores ImGuiStyleVar_Alpha unless we apply it.
-        float const styleAlpha = ImGui::GetStyle().Alpha;
+        // toU32 applies Style.Alpha (shell open/close fade).
 
-        if (enabled && heat > 0.02f && styleAlpha > 0.01f) {
-            EbDesktopMenuTheme::drawAccentGlow(drawList, min, max, rounding,
-                                               0.28f * heat * styleAlpha);
+        if (enabled && heat > 0.02f && EbDesktopMenuTheme::styleAlpha() > 0.01f) {
+            EbDesktopMenuTheme::drawAccentGlow(drawList, min, max, rounding, 0.28f * heat);
         }
 
         ImVec4 fill = idleFill();
@@ -132,12 +130,11 @@ public:
             fill = EbDesktopMenuMotion::lerp4(fill, accentWash, heat * 0.50f);
             fill = EbDesktopMenuMotion::lerp4(fill, heldFill(), press);
         }
-        fill.w *= styleAlpha;
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(fill), rounding);
 
         // Soft top edge — cheap depth without a second box.
         if (enabled) {
-            ImVec4 tip(1.0f, 1.0f, 1.0f, (0.05f + 0.04f * heat) * styleAlpha);
+            ImVec4 tip(1.0f, 1.0f, 1.0f, 0.05f + 0.04f * heat);
             drawList->AddRectFilled(ImVec2(min.x + 1.0f, min.y + 1.0f),
                                     ImVec2(max.x - 1.0f, min.y + 2.0f),
                                     EbDesktopMenuTheme::toU32(tip), rounding);
@@ -150,7 +147,6 @@ public:
             accent.w = 0.45f + 0.45f * heat + 0.10f * press;
             stroke = EbDesktopMenuMotion::lerp4(stroke, accent, heat);
         }
-        stroke.w *= styleAlpha;
         drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
 
@@ -162,7 +158,6 @@ public:
             muted.w = 0.95f;
             textColor = EbDesktopMenuMotion::lerp4(muted, textColor, 0.72f + 0.28f * heat);
         }
-        textColor.w *= styleAlpha;
         float const textMaxW = (std::max)(0.0f, width - kPadX * 2.0f);
         float textDrawW = textSize.x > textMaxW ? textMaxW : textSize.x;
         ImVec2 const textPos(min.x + (width - textDrawW) * 0.5f,

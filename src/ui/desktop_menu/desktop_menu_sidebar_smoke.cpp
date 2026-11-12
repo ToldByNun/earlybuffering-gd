@@ -25,11 +25,9 @@ public:
         float const t = wave < 0.0f ? 0.0f : (wave > 1.0f ? 1.0f : wave);
         ImVec4 const dark = EbDesktopMenuTheme::sidebarWaveDark();
         ImVec4 const light = EbDesktopMenuTheme::sidebarWaveLight();
-        float const r = dark.x + (light.x - dark.x) * t;
-        float const g = dark.y + (light.y - dark.y) * t;
-        float const b = dark.z + (light.z - dark.z) * t;
-        return IM_COL32(static_cast<int>(r * 255.0f + 0.5f), static_cast<int>(g * 255.0f + 0.5f),
-                        static_cast<int>(b * 255.0f + 0.5f), 255);
+        ImVec4 color(dark.x + (light.x - dark.x) * t, dark.y + (light.y - dark.y) * t,
+                     dark.z + (light.z - dark.z) * t, 1.0f);
+        return EbDesktopMenuTheme::toU32(color);
     }
 
     static constexpr float kPi = 3.14159265358979323846f;

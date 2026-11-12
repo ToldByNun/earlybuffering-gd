@@ -147,7 +147,9 @@ public:
             }
         }
         ImU32 const knobColor =
-            enabled ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 184, 196, 220);
+            enabled ? EbDesktopMenuTheme::toU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f))
+                    : EbDesktopMenuTheme::toU32(ImVec4(180.0f / 255.0f, 184.0f / 255.0f,
+                                                       196.0f / 255.0f, 220.0f / 255.0f));
         drawList->AddCircleFilled(ImVec2(knobX, knobY), kKnobR, knobColor, 20);
         if (enabled && heat > 0.01f) {
             ImVec4 ring = EbDesktopMenuTheme::accentLight();

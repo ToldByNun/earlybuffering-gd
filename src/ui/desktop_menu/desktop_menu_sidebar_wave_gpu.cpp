@@ -2,8 +2,10 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "desktop_menu_theme.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/cocos/platform/CCGL.h>
+#include <imgui.h>
 
 // GPU wave via offscreen FBO → ImGui AddImage.
 // Must NOT use ImDrawCallback: gd-imgui-cocos calls every UserCallback as a
@@ -472,8 +474,11 @@ void EbDesktopMenuSidebarWaveGpu::paint(ImDrawList* drawList, PaintRequest const
     ImTextureID const tex =
         EbDesktopMenuSidebarWaveGpuGl::toImGuiTexture(EbDesktopMenuSidebarWaveGpuState::colorTex());
     // Discarded corners stay alpha-0 from the FBO clear — AddImage blends them out.
+    // Tint alpha follows Style.Alpha so the GPU wave fades with shell open/close.
+    float const fade = EbDesktopMenuTheme::styleAlpha();
+    int const a = static_cast<int>(fade * 255.0f + 0.5f);
     drawList->AddImage(tex, request.min, request.max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
-                       IM_COL32_WHITE);
+                       IM_COL32(255, 255, 255, a < 0 ? 0 : (a > 255 ? 255 : a)));
 }
 
 #endif

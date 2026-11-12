@@ -99,7 +99,8 @@ public:
                           ImVec2(rowMin.x, rowMin.y + (rowH - textH) * 0.5f),
                           EbDesktopMenuTheme::toU32(labelColor), label);
 
-        ImU32 const fill = ImGui::ColorConvertFloat4ToU32(ImVec4(rgb[0], rgb[1], rgb[2], 1.0f));
+        ImU32 const fill =
+            EbDesktopMenuTheme::toU32(ImVec4(rgb[0], rgb[1], rgb[2], 1.0f));
         drawList->AddRectFilled(swatchMin, swatchMax, fill, rounding);
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
