@@ -5,7 +5,6 @@
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
-#include "../desktop_menu_sidebar_smoke.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
@@ -111,20 +110,22 @@ public:
             drawList->AddRect(boxMin, boxMax, EbDesktopMenuTheme::toU32(stroke), kBoxRounding, 0,
                               EbDesktopMenuTheme::outlineThickness());
         } else {
-            // Empty surface always underneath; wave fill fades in with `check`.
-            drawList->AddRectFilled(boxMin, boxMax, EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::surface()),
+            // Empty surface underneath; accent fill fades in with `check`.
+            drawList->AddRectFilled(boxMin, boxMax,
+                                    EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::surface()),
                                     kBoxRounding);
             if (check > 0.01f) {
-                ImU32 const outside = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::panel());
+                ImVec4 fill = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::accent(),
+                                                         EbDesktopMenuTheme::accentLight(), 0.28f);
+                fill.w *= check;
+                drawList->AddRectFilled(boxMin, boxMax, EbDesktopMenuTheme::toU32(fill),
+                                        kBoxRounding);
+                // Soft top lift (kept inside the rounded box via clip).
                 drawList->PushClipRect(boxMin, boxMax, true);
-                EbDesktopMenuSidebarSmoke::get().paint(drawList, boxMin, boxMax, kBoxRounding,
-                                                       static_cast<float>(ImGui::GetTime()),
-                                                       ImDrawFlags_RoundCornersAll, outside, 5.5f);
-                // Soft veil so partial check reads as a fade, not a hard cut.
-                int const veil = static_cast<int>((1.0f - check) * 200.0f);
-                if (veil > 0) {
-                    drawList->AddRectFilled(boxMin, boxMax, IM_COL32(22, 22, 33, veil), kBoxRounding);
-                }
+                ImVec4 lift = EbDesktopMenuTheme::accentLight();
+                lift.w = 0.22f * check;
+                drawList->AddRectFilled(boxMin, ImVec2(boxMax.x, boxMin.y + kBoxSize * 0.45f),
+                                        EbDesktopMenuTheme::toU32(lift), kBoxRounding);
                 drawList->PopClipRect();
                 if (heat > 0.01f) {
                     EbDesktopMenuTheme::drawAccentGlow(drawList, boxMin, boxMax, kBoxRounding,

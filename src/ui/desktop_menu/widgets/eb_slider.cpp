@@ -5,7 +5,6 @@
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
-#include "../desktop_menu_sidebar_smoke.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
@@ -114,34 +113,38 @@ public:
         float const trackRounding = kTrackH * 0.5f;
 
         ImU32 const trackBg = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::surface());
-        ImU32 const outside = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::panel());
 
         float const clampedT = clampf(t, 0.0f, 1.0f);
         float const fillW = avail * visualT;
         float const knobX = trackMin.x + fillW;
         float const knobY = trackMin.y + kTrackH * 0.5f;
 
-        // Empty track first, then full-width wave clipped to the fill — stable UVs,
-        // no hairline leak past the knob (mask/hide left AA gaps before).
+        // Empty track, then rounded accent fill (MultiColor has square corners — avoid it).
         drawList->AddRectFilled(trackMin, trackMax, trackBg, trackRounding);
-        if (enabled && fillW > 0.5f) {
-            // Draw-list clip only (never ImGui::PushClipRect) so window hit-tests stay valid.
-            drawList->PushClipRect(ImVec2(trackMin.x - 1.0f, trackMin.y - 1.0f),
-                                   ImVec2(knobX + 0.5f, trackMax.y + 1.0f), true);
-            // Chunky cells on tracks — cheaper than the smooth sidebar wave.
-            EbDesktopMenuSidebarSmoke::get().paint(
-                drawList, trackMin, trackMax, trackRounding, static_cast<float>(ImGui::GetTime()),
-                ImDrawFlags_RoundCornersAll, outside, 5.5f);
-            // Slight lift so fill reads brighter than the panel / empty track.
-            ImVec4 lift = EbDesktopMenuTheme::accentLight();
-            lift.w = 0.19f;
-            drawList->AddRectFilled(trackMin, trackMax, EbDesktopMenuTheme::toU32(lift),
-                                    trackRounding);
-            drawList->PopClipRect();
-        } else if (!enabled && fillW > 1.5f) {
-            ImVec4 dim = ImVec4(0.55f, 0.57f, 0.64f, 0.45f);
-            drawList->AddRectFilled(trackMin, ImVec2(trackMin.x + fillW, trackMax.y),
-                                    EbDesktopMenuTheme::toU32(dim), trackRounding);
+        if (fillW > 0.5f) {
+            ImVec2 const fillMax(trackMin.x + fillW, trackMax.y);
+            float fillRound = trackRounding;
+            float const fillSpan = fillMax.x - trackMin.x;
+            if (fillSpan < fillRound * 2.0f) {
+                fillRound = fillSpan * 0.5f;
+            }
+            if (enabled) {
+                ImVec4 fill = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::accent(),
+                                                         EbDesktopMenuTheme::accentLight(), 0.35f);
+                drawList->AddRectFilled(trackMin, fillMax, EbDesktopMenuTheme::toU32(fill),
+                                        fillRound);
+                // Soft top lift inside the rounded fill.
+                drawList->PushClipRect(trackMin, fillMax, true);
+                ImVec4 lift = EbDesktopMenuTheme::accentLight();
+                lift.w = 0.20f;
+                drawList->AddRectFilled(trackMin, ImVec2(fillMax.x, trackMin.y + kTrackH * 0.45f),
+                                        EbDesktopMenuTheme::toU32(lift), fillRound);
+                drawList->PopClipRect();
+            } else {
+                ImVec4 dim = ImVec4(0.55f, 0.57f, 0.64f, 0.45f);
+                drawList->AddRectFilled(trackMin, fillMax, EbDesktopMenuTheme::toU32(dim),
+                                        fillRound);
+            }
         }
         ImU32 const knobColor =
             enabled ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 184, 196, 220);
