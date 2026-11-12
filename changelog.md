@@ -6,7 +6,7 @@
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 
 ### Dev Lab UX
-- Desktop Dev tab uses normal section cards (same chrome as Main/Assist): **Now → Setup → Setup Extras → Record → Eval → Save → Danger**.
+- Desktop Dev tab uses normal section cards (same chrome as Main/Assist): **Now → Setup → Setup Extras → Record → Eval → Save → Compare → Danger**.
 - One Record toggle; Eval settings + Eval Last/Session in an Eval section (no TreeNode foldouts).
 - Save = Research Pack (primary) + Copy Report / Session Path / Dump Diag. Clear Traces confirms.
 
@@ -41,6 +41,14 @@
 - Dual mode always tags `worldDeps.dual` (missing P2 → honest `absent` + gate `missingDual`, no silent skip).
 - Orbs dep always serializes `orbIds` (possibly `[]`); empty/partial → `playerOnlyApproximated`.
 - Witness `contact` / `dualContact` collide scalars + object ids for hitbox research; mismatch soft-fails fidelity.
+
+### Dev Lab Session Compare
+- Compare Last N (default 5, same levelKey): newest sealed session vs median of older → **gained / flat / regressed** with driving metrics.
+- Writes `devtraces/compare_<stamp>.json`; Dev tab **Compare Sessions** + CLI `tools/compare_devlab_sessions.py`.
+
+### Dev Lab Docs + Scan CLI
+- `docs/dev/traces.md`: Research Preset workflow, crash note, Pack/Compare legend, offline CLI.
+- `tools/scan_devlab_assists.py` accepts Research Pack folders + sealed-eval mismatch / mode-timeline summary (no hardcoded session paths).
 
 ## v1.6.0
 

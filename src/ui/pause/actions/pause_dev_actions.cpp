@@ -8,6 +8,8 @@
 #include "../../../dev/reporting/dev_diag_dump.hpp"
 #include "../../../dev/reporting/dev_report.hpp"
 #include "../../../dev/reporting/dev_research_pack.hpp"
+#include "../../../dev/reporting/dev_session_compare.hpp"
+#include <algorithm>
 #include "../pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
@@ -263,4 +265,48 @@ void EbPauseDevActions::devCopyReport() {
                           fileErr, text);
     }
     EbDesktopAlert::info("EarlyBuffer Dev", msg.c_str());
+}
+
+void EbPauseDevActions::devCompareSessions() {
+    EbDevSessionCompare::Options opts;
+    opts.lastN = EbDevSessionCompare::kDefaultLastN;
+    opts.sameLevelOnly = true;
+    if (auto* mod = geode::prelude::Mod::get()) {
+        try {
+            opts.lastN = static_cast<int>(mod->getSettingValue<int64_t>("dev-compare-last-n"));
+        } catch (...) {
+        }
+        try {
+            opts.sameLevelOnly = mod->getSettingValue<bool>("dev-compare-same-level");
+        } catch (...) {
+        }
+    }
+    opts.lastN = std::clamp(opts.lastN, 2, EbDevSessionCompare::kMaxLastN);
+
+    if (opts.sameLevelOnly) {
+        if (EbDevTraceStore::get().isOpen() &&
+            !EbDevTraceStore::get().session().levelKey.empty()) {
+            opts.levelKeyFilter = EbDevTraceStore::get().session().levelKey;
+        }
+    }
+
+    EbDevSessionCompare::Result result;
+    std::string err;
+    if (!EbDevSessionCompare::run(opts, result, err)) {
+        EbAssistLog::info(fmt::format("Dev Lab: Compare Sessions failed: {}", err));
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             err.empty() ? "Compare Sessions failed." : err.c_str());
+        return;
+    }
+
+    bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(result.outPath);
+    auto const message =
+        fmt::format("{}\n\n"
+                    "{}\n"
+                    "{}\n\n"
+                    "Newest vs median of older sessions.",
+                    result.summaryLine, result.outPath.string(),
+                    EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
+    EbAssistLog::info(fmt::format("Dev Lab: {}", result.summaryLine));
+    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }

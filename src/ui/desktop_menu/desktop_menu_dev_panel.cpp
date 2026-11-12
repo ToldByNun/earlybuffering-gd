@@ -267,6 +267,26 @@ public:
         EbSectionCard::end();
     }
 
+    static void drawCompare() {
+        if (!EbSectionCard::begin("dev-compare", "Compare")) {
+            EbSectionCard::end();
+            return;
+        }
+
+        mutedText("Newest sealed session vs median of the older ones → gained / flat / regressed.");
+        gap();
+        EbSlider::drawIntSetting("dev-compare-last-n", "Compare Last N", 2, 20);
+        EbCheckbox::drawSetting("dev-compare-same-level", "Same levelKey only");
+        gap();
+        if (EbButton::draw("##dev-compare-sessions", "Compare Sessions", true,
+                           "Writes compare_<stamp>.json under devtraces/ and copies the path.",
+                           true)) {
+            fireAction("dev-compare-sessions-action");
+        }
+
+        EbSectionCard::end();
+    }
+
     static void drawDanger() {
         if (!EbSectionCard::begin("dev-danger", "Danger")) {
             EbSectionCard::end();
@@ -295,6 +315,8 @@ public:
         drawEval();
         gap();
         drawSave();
+        gap();
+        drawCompare();
         gap();
         drawDanger();
     }

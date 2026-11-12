@@ -13,6 +13,7 @@ public:
     static void devDumpDiag();
     static void devCopyReport();
     static void devExportResearchPack();
+    static void devCompareSessions();
 
 private:
     EbPauseDevActions() = delete;

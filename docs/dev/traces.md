@@ -2,6 +2,19 @@
 
 For debugging assist picks vs reality.
 
+## Recommended capture workflow
+
+1. Dev tab → **Apply Research Preset** (Record + Candidates + Freeze World + Hazards + Eval On Death + Overlay + Disable Random).
+2. **Start Recording** in the level → die / complete a few attempts (Eval On Death seals offline eval).
+3. **Export Research Pack** → send the clipboard folder path.
+4. Optional: **Compare Sessions** after several sessions on the same levelKey.
+
+Optional heavy toggles (not in Research Preset): `dev-record-traj`.
+
+### Crash note
+
+Level enter / re-attach used to AV in `HardStreak::reset` when tearing down sim ghosts (`m_waveTrail`). Current builds skip streak `reset()` on detach and attach once before `resetAttempt`. If you still see a ghost/waveTrail crash on enter, grab **Dump Diag** + the session JSON — not a Research Pack alone.
+
 ## Session JSON
 
 Typical path (Windows):
@@ -147,6 +160,47 @@ Clipboard gets the **pack folder path** (send that folder).
 | `README.txt` | Pack legend |
 
 Bake bugs still use **Dump All Diag** (`diag/full_*`), not the research pack.
+
+## Session compare (AP11)
+
+Dev tab **Compare** (or `dev-compare-sessions-action`):
+
+- Settings: `dev-compare-last-n` (default 5) + `dev-compare-same-level` (default on)
+- Reads newest → older `devtraces/session-*.json`
+- Scores newest vs **median of the older N−1**
+- Writes `devtraces/compare_<stamp>.json` + alert summary; clipboard = compare file path
+
+| Verdict | Meaning |
+|---|---|
+| `gained` | Majority of valid metrics improved |
+| `flat` | Within noise band (≈2% abs / 5% rel) |
+| `regressed` | Majority worsened |
+
+Tracked deltas (higher better unless noted): live↔eval match rate, bestSurv share, fidelity reproduced share, gatePass rate, mean chosen endX; **lower better:** death-after-fire, median ticks-to-death, hopeless, budget-hit, simNet harm share.
+
+## Offline CLI tools
+
+No game required. Point at Mod-Save `devtraces/` or a Research Pack folder.
+
+### Scan one session / pack
+
+```bash
+python tools/scan_devlab_assists.py path/to/session-….json
+python tools/scan_devlab_assists.py path/to/research/research_<stamp>
+python tools/scan_devlab_assists.py path/to/devtraces
+```
+
+Prints kind/reason buckets, plannerPath, sealed-eval fidelity + **live↔bestSurv mismatches**, mode-transition timeline, planFinished / delayArm / fire rows.
+
+### Compare many sessions (Gain / Flat / Regress)
+
+```bash
+python tools/compare_devlab_sessions.py --dir <devtraces> --last 5
+python tools/compare_devlab_sessions.py --dir <devtraces> --last 5 --level-key <key>
+python tools/compare_devlab_sessions.py --dir <devtraces> --last 5 --any-level
+```
+
+Writes `compare_<stamp>.json` next to the sessions (same schema as in-game Compare).
 
 ## Code owners
 

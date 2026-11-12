@@ -1597,6 +1597,25 @@
 			"description": "Show Dev Lab overlay lines while a session is active or a report is available. Off = no HUD.",
 			"default": false
 		},
+		"title-dev-compare": {
+			"type": "title",
+			"name": "Dev Session Compare",
+			"description": "Compare the last N sealed session-*.json files under devtraces/ (Gain / Flat / Regress)."
+		},
+		"dev-compare-last-n": {
+			"type": "int",
+			"name": "Dev Compare Last N",
+			"description": "How many recent sealed sessions to include in Compare Sessions (newest vs median of older). Default 5, max 20.",
+			"default": 5,
+			"min": 2,
+			"max": 20
+		},
+		"dev-compare-same-level": {
+			"type": "bool",
+			"name": "Dev Compare Same Level",
+			"description": "When on, Compare Sessions only uses sessions that share the newest session's levelKey (or the open session's level). Default on.",
+			"default": true
+		},
 		"title-dev-actions": {
 			"type": "title",
 			"name": "Dev Actions",
@@ -1649,6 +1668,12 @@
 			"name": "Export Research Pack",
 			"description": "One click: runs Eval Session (or Eval Last), then writes research/research_<stamp>/ with MANIFEST, session.json, report.txt/json, fingerprint, config.json (no keybinds). Copies the pack folder path to the clipboard.",
 			"button-text": "pack"
+		},
+		"dev-compare-sessions-action": {
+			"type": "custom:eb-action",
+			"name": "Compare Sessions",
+			"description": "Compares the last N sealed session-*.json under devtraces/ (newest vs median of older). Writes compare_<stamp>.json and shows gained/flat/regressed with driving metrics. Copies the compare file path.",
+			"button-text": "compare"
 		},
 		"title-dev-diag": {
 			"type": "title",

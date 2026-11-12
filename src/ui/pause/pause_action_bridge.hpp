@@ -44,6 +44,7 @@ public:
     static void devDumpDiag();
     // One-click research folder under saveDir/research/research_<stamp>/.
     static void devExportResearchPack();
+    static void devCompareSessions();
 
     // Desktop ImGui shell / Geode popup: Main/Assist/Learn/Bake/Modes/Visual/UI/Keys/Dev.
     static void openModSettings();

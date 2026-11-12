@@ -150,11 +150,14 @@ Every `mod.json` key (including `title-*` and `custom:eb-action`) maps to exactl
 
 ## Dev Lab diagnostics (session JSON)
 
-With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir.
+With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir. Full schema + Research Pack / Compare / CLI: [`docs/dev/traces.md`](dev/traces.md).
+
+**Research workflow (1.6.1):** Apply Research Preset → Record → die a few times → **Export Research Pack** (one folder on clipboard). Optional **Compare Sessions** for Gain/Flat/Regress on the same `levelKey`. Offline: `tools/scan_devlab_assists.py` (session or pack) and `tools/compare_devlab_sessions.py`.
 
 | Field | Where | Meaning |
 |-------|--------|---------|
 | `settingsFingerprint` | session root | Compact stage/mode/pick/ticks/safe/orbs/budgets/trigger-bake/learning summary (always filled on session start / level meta refresh) |
+| `eval` | attempt (after Eval) | Sealed samples + fidelity + `bestSurvivingDelay` / `bestEvaluatedDelay` |
 | `witness.triggerReadyTracks` / `triggerTrackCount` | `planFinished` | Store ready vs total tracks |
 | `witness.triggerBakeEffects` / `triggerBakeChildren` / `triggerCollectedEffects` | `planFinished` | Last bake: effects that produced keys, object-layer children, collected EffectGameObjects |
 | `witness.triggerSkipFollow` / `SkipDynamic` / `SkipNonSpawn` | `planFinished` | Last bake skip counters |

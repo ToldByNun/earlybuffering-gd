@@ -218,6 +218,8 @@ void EbModuleBindings::registerSettings() {
     watchBool("dev-record-cands");
     watchInt("dev-eval-tick-budget");
     watchBool("dev-overlay");
+    watchInt("dev-compare-last-n");
+    watchBool("dev-compare-same-level");
     geode::prelude::listenForSettingChanges<std::string>(
         "dev-eval-grid", [](std::string) { EbModuleBindings::onAnySetting(); });
     geode::prelude::listenForSettingChanges<std::string>(

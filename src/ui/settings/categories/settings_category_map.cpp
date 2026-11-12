@@ -239,6 +239,9 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"dev-eval-tick-budget", SettingsCategory::Dev},
     {"title-dev-overlay", SettingsCategory::Dev},
     {"dev-overlay", SettingsCategory::Dev},
+    {"title-dev-compare", SettingsCategory::Dev},
+    {"dev-compare-last-n", SettingsCategory::Dev},
+    {"dev-compare-same-level", SettingsCategory::Dev},
     {"title-dev-actions", SettingsCategory::Dev},
     {"dev-start-record-action", SettingsCategory::Dev},
     {"dev-stop-record-action", SettingsCategory::Dev},
@@ -248,6 +251,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"dev-clear-traces-action", SettingsCategory::Dev},
     {"dev-copy-report-action", SettingsCategory::Dev},
     {"dev-export-research-pack-action", SettingsCategory::Dev},
+    {"dev-compare-sessions-action", SettingsCategory::Dev},
     {"title-dev-diag", SettingsCategory::Dev},
     {"dev-dump-diag-action", SettingsCategory::Dev},
 };

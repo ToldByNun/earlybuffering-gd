@@ -234,6 +234,10 @@ void EbPauseActionBridge::devExportResearchPack() {
     return EbPauseDevActions::devExportResearchPack();
 }
 
+void EbPauseActionBridge::devCompareSessions() {
+    return EbPauseDevActions::devCompareSessions();
+}
+
 void EbPauseActionBridge::openModSettings() {
     if (EbDesktopMenu::useImGuiShell()) {
         // ImGui XOR classic: do not stack over an open Geode popup.
