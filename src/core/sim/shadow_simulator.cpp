@@ -365,9 +365,10 @@ void EbShadowSimulator::finishEvalWorldRestore(PlayLayer* layer) {
 
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowSimulator::evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const& witness, int delay,
-                                     int horizonTicks, bool down, int* tickBudgetLeft) {
+                                     int horizonTicks, bool down, int* tickBudgetLeft,
+                                     bool captureTraj) {
     return EbShadowFreezeEvaluator::evalDelayFromFreeze(*this, layer, witness, delay, horizonTicks,
-                                                      down, tickBudgetLeft);
+                                                      down, tickBudgetLeft, captureTraj);
 }
 
 EbShadowSimulator::EvalFromFreezeResult

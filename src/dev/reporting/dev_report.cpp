@@ -141,8 +141,11 @@ bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisi
             }
         }
         // AP3: seal samples + objective onto the attempt JSON and flush.
+        // AP8: optional chosen/bestSurv/bestEval trajectories when record-traj.
         if (attemptId > 0 && EbDevTraceStore::get().isOpen()) {
             auto sealed = EbDevAttemptEval::fromGrid(grid, out);
+            EbDevAttemptEval::captureOptionalTrajectories(sealed, layer, planEv.witness,
+                                                          planEv.down);
             (void)EbDevTraceStore::get().sealOfflineEval(attemptId, std::move(sealed));
         }
     }

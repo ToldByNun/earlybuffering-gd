@@ -209,6 +209,7 @@ void EbModuleBindings::registerSettings() {
     watchBool("dev-count-empty-attempts");
     watchBool("dev-freeze-world");
     watchBool("dev-record-hazards");
+    watchBool("dev-record-traj");
     watchBool("dev-disable-random");
     watchBool("dev-eval-on-death");
     watchInt("dev-eval-horizon");

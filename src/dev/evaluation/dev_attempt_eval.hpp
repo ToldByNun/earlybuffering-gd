@@ -1,6 +1,7 @@
 #ifndef DEV_ATTEMPT_EVAL_HPP
 #define DEV_ATTEMPT_EVAL_HPP
 
+#include "../capture/dev_live_witness.hpp"
 #include "dev_eval_engine.hpp"
 #include "dev_objective.hpp"
 #include "dev_state_diff.hpp"
@@ -9,6 +10,31 @@
 #include <vector>
 
 class EbDevReport;
+class PlayLayer;
+
+// AP8: optional per-tick pose for a sealed eval delay (chosen / bestSurv / bestEval).
+class EbDevTrajPoint {
+public:
+    int tick = 0;
+    float x = 0.f;
+    float y = 0.f;
+    float vy = 0.f;
+    bool alive = true;
+    bool unknown = false;
+    std::string survivalClass;
+
+private:
+};
+
+class EbDevTrajCapture {
+public:
+    std::string role; // chosen | bestSurv | bestEval
+    int delay = -1;
+    std::string survivalClass;
+    std::vector<EbDevTrajPoint> points;
+
+private:
+};
 
 // Offline eval seal attached to a Dev Lab attempt (AP3). Additive JSON key "eval".
 class EbDevAttemptEval {
@@ -53,8 +79,14 @@ public:
     std::string overlayLine;
     std::vector<EbDevObjective::Sample> samples;
 
+    // AP8: only when dev-record-traj (default off).
+    std::vector<EbDevTrajCapture> trajectories;
+
     static EbDevAttemptEval fromGrid(EbDevEvalEngine::GridReport const& grid,
                                      EbDevReport const& report);
+    // Re-run freeze eval for chosen / bestSurv / bestEval with traj samples.
+    static void captureOptionalTrajectories(EbDevAttemptEval& eval, PlayLayer* layer,
+                                            EbDevLiveWitness const& witness, bool down);
     static matjson::Value toJson(EbDevAttemptEval const& eval);
     static bool fromJson(matjson::Value const& j, EbDevAttemptEval& out, std::string& err);
 

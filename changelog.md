@@ -34,6 +34,9 @@
 - Hold timeline on fire/outcome: early UP, swallow, injected release ticks.
 - Offline eval seals `simNetClass` onto attempt `eval` and Delay `planFinished`.
 
+### Dev Lab Optional Trajectories
+- Setting `dev-record-traj` (default **off**): on eval seal, re-sim chosen + bestSurv (+ bestEval when distinct) and store per-tick pose samples under `eval.trajectories`. Heavy — not part of Research Preset.
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

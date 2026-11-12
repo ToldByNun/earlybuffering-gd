@@ -1,6 +1,74 @@
 #include "dev_attempt_eval.hpp"
 #include "../dev_config.hpp"
 #include "../reporting/dev_report.hpp"
+#include "../../core/sim/shadow_simulator.hpp"
+#include <algorithm>
+#include <unordered_set>
+
+class EbDevAttemptEvalTraj {
+public:
+    static constexpr int kMaxPoints = 96;
+
+    static char const* coarseSurvivalClass(bool alive, bool unknown) {
+        if (unknown)
+            return "";
+        if (!alive)
+            return "lethal";
+        return "alive";
+    }
+
+    static std::vector<EbDevTrajPoint>
+    fromRaw(std::vector<EbShadowSimulator::TrajSample> const& raw) {
+        std::vector<EbDevTrajPoint> points;
+        if (raw.empty())
+            return points;
+
+        int stride = 1;
+        int const count = static_cast<int>(raw.size());
+        if (count > kMaxPoints)
+            stride = (count + kMaxPoints - 1) / kMaxPoints;
+
+        points.reserve(static_cast<size_t>((count + stride - 1) / stride));
+        for (int index = 0; index < count; index += stride) {
+            auto const& sample = raw[static_cast<size_t>(index)];
+            EbDevTrajPoint point;
+            point.tick = sample.tick;
+            point.x = sample.x;
+            point.y = sample.y;
+            point.vy = sample.vy;
+            point.alive = sample.alive;
+            point.unknown = sample.unknown;
+            point.survivalClass = coarseSurvivalClass(sample.alive, sample.unknown);
+            points.push_back(std::move(point));
+        }
+        // Always keep the last sample if stride skipped it.
+        if (stride > 1 && (count - 1) % stride != 0) {
+            auto const& sample = raw.back();
+            EbDevTrajPoint point;
+            point.tick = sample.tick;
+            point.x = sample.x;
+            point.y = sample.y;
+            point.vy = sample.vy;
+            point.alive = sample.alive;
+            point.unknown = sample.unknown;
+            point.survivalClass = coarseSurvivalClass(sample.alive, sample.unknown);
+            points.push_back(std::move(point));
+        }
+        return points;
+    }
+
+    static void pushUnique(std::vector<std::pair<std::string, int>>& wants, char const* role,
+                           int delay, std::unordered_set<int>& seen) {
+        if (!role || delay < 0)
+            return;
+        if (!seen.insert(delay).second)
+            return;
+        wants.emplace_back(role, delay);
+    }
+
+private:
+    EbDevAttemptEvalTraj() = delete;
+};
 
 EbDevAttemptEval EbDevAttemptEval::fromGrid(EbDevEvalEngine::GridReport const& grid,
                                             EbDevReport const& report) {
@@ -46,6 +114,55 @@ EbDevAttemptEval EbDevAttemptEval::fromGrid(EbDevEvalEngine::GridReport const& g
     out.overlayLine = report.overlayLine;
     out.samples = grid.samples;
     return out;
+}
+
+void EbDevAttemptEval::captureOptionalTrajectories(EbDevAttemptEval& eval, PlayLayer* layer,
+                                                   EbDevLiveWitness const& witness, bool down) {
+    eval.trajectories.clear();
+    if (!eval.valid || !EbDevConfig::recordTraj())
+        return;
+    if (!layer || !witness.valid)
+        return;
+
+    std::vector<std::pair<std::string, int>> wants;
+    std::unordered_set<int> seen;
+    // Prefer chosen; skip duplicates when bestSurv/bestEval share the delay.
+    EbDevAttemptEvalTraj::pushUnique(wants, "chosen", eval.plannedDelay, seen);
+    if (eval.claimsAllowed && eval.hasBestSurviving) {
+        EbDevAttemptEvalTraj::pushUnique(wants, "bestSurv", eval.bestSurvivingDelay, seen);
+    }
+    if (eval.claimsAllowed && eval.hasBestEvaluated) {
+        EbDevAttemptEvalTraj::pushUnique(wants, "bestEval", eval.bestEvaluatedDelay, seen);
+    }
+    if (wants.empty())
+        return;
+
+    int const schedHorizon = eval.horizonTicks + std::max(0, eval.tailTicks);
+    if (schedHorizon <= 0)
+        return;
+
+    EbShadowSimulator::get().clearEvalAbort();
+    for (auto const& want : wants) {
+        if (EbShadowSimulator::get().evalAbortRequested())
+            break;
+        auto raw = EbShadowSimulator::get().evalDelayFromFreeze(
+            layer, witness, want.second, schedHorizon, down, nullptr, true);
+        if (raw.clockMismatch || !raw.ran)
+            continue;
+
+        EbDevTrajCapture capture;
+        capture.role = want.first;
+        capture.delay = want.second;
+        capture.points = EbDevAttemptEvalTraj::fromRaw(raw.traj);
+        if (raw.unknown)
+            capture.survivalClass.clear();
+        else if (raw.died)
+            capture.survivalClass = "lethal";
+        else
+            capture.survivalClass = "alive";
+        if (!capture.points.empty())
+            eval.trajectories.push_back(std::move(capture));
+    }
 }
 
 matjson::Value EbDevAttemptEval::toJson(EbDevAttemptEval const& eval) {
@@ -117,6 +234,34 @@ matjson::Value EbDevAttemptEval::toJson(EbDevAttemptEval const& eval) {
         samples.push(sj);
     }
     root["samples"] = samples;
+
+    if (!eval.trajectories.empty()) {
+        matjson::Value trajs = matjson::Value::array();
+        for (auto const& traj : eval.trajectories) {
+            matjson::Value tj = matjson::Value::object();
+            if (!traj.role.empty())
+                tj["role"] = traj.role;
+            tj["delay"] = traj.delay;
+            if (!traj.survivalClass.empty())
+                tj["survivalClass"] = traj.survivalClass;
+            matjson::Value pts = matjson::Value::array();
+            for (auto const& point : traj.points) {
+                matjson::Value pj = matjson::Value::object();
+                pj["tick"] = point.tick;
+                pj["x"] = point.x;
+                pj["y"] = point.y;
+                pj["vy"] = point.vy;
+                pj["alive"] = point.alive;
+                pj["unknown"] = point.unknown;
+                if (!point.survivalClass.empty())
+                    pj["survivalClass"] = point.survivalClass;
+                pts.push(pj);
+            }
+            tj["points"] = pts;
+            trajs.push(tj);
+        }
+        root["trajectories"] = trajs;
+    }
     return root;
 }
 
@@ -229,6 +374,49 @@ bool EbDevAttemptEval::fromJson(matjson::Value const& j, EbDevAttemptEval& out, 
             s.ticksRan =
                 sj.contains("ticksRan") ? static_cast<int>(sj["ticksRan"].asInt().unwrapOr(0)) : 0;
             out.samples.push_back(s);
+        }
+    }
+
+    if (j.contains("trajectories") && j["trajectories"].isArray()) {
+        for (auto const& tj : j["trajectories"].asArray().unwrap()) {
+            if (!tj.isObject())
+                continue;
+            EbDevTrajCapture capture;
+            capture.role =
+                tj.contains("role") ? std::string(tj["role"].asString().unwrapOr("")) : "";
+            capture.delay =
+                tj.contains("delay") ? static_cast<int>(tj["delay"].asInt().unwrapOr(-1)) : -1;
+            capture.survivalClass = tj.contains("survivalClass")
+                                        ? std::string(tj["survivalClass"].asString().unwrapOr(""))
+                                        : "";
+            if (tj.contains("points") && tj["points"].isArray()) {
+                for (auto const& pj : tj["points"].asArray().unwrap()) {
+                    if (!pj.isObject())
+                        continue;
+                    EbDevTrajPoint point;
+                    point.tick =
+                        pj.contains("tick") ? static_cast<int>(pj["tick"].asInt().unwrapOr(0)) : 0;
+                    point.x =
+                        pj.contains("x") ? static_cast<float>(pj["x"].asDouble().unwrapOr(0.0))
+                                         : 0.f;
+                    point.y =
+                        pj.contains("y") ? static_cast<float>(pj["y"].asDouble().unwrapOr(0.0))
+                                         : 0.f;
+                    point.vy =
+                        pj.contains("vy") ? static_cast<float>(pj["vy"].asDouble().unwrapOr(0.0))
+                                          : 0.f;
+                    point.alive =
+                        pj.contains("alive") ? pj["alive"].asBool().unwrapOr(true) : true;
+                    point.unknown =
+                        pj.contains("unknown") ? pj["unknown"].asBool().unwrapOr(false) : false;
+                    point.survivalClass =
+                        pj.contains("survivalClass")
+                            ? std::string(pj["survivalClass"].asString().unwrapOr(""))
+                            : "";
+                    capture.points.push_back(std::move(point));
+                }
+            }
+            out.trajectories.push_back(std::move(capture));
         }
     }
     return true;

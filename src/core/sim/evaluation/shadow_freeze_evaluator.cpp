@@ -203,7 +203,8 @@ void EbShadowFreezeEvaluator::finishEvalWorldRestore(EbShadowSimulator& simulato
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayLayer* layer,
                                            EbDevLiveWitness const& witness, int delay,
-                                           int horizonTicks, bool down, int* tickBudgetLeft) {
+                                           int horizonTicks, bool down, int* tickBudgetLeft,
+                                           bool captureTraj) {
     EbShadowSimulator::EvalFromFreezeResult out;
     out.evalSimPathId = DevSimPathId::EvalDelayFromFreeze;
     simulator.m_evalAbort = false;
@@ -264,6 +265,19 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
         return false;
     };
 
+    auto pushTraj = [&](int tick) {
+        if (!captureTraj)
+            return;
+        EbShadowSimulator::TrajSample sample;
+        sample.tick = tick;
+        sample.x = ghost->getPositionX();
+        sample.y = ghost->getPositionY();
+        sample.vy = static_cast<float>(ghost->m_yVelocity);
+        sample.alive = !simulator.m_dead;
+        sample.unknown = simulator.m_unknown;
+        out.traj.push_back(sample);
+    };
+
     if (delay > 0) {
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase;
@@ -274,10 +288,12 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
             out.died = true;
             out.deathTick = 0;
             out.endX = ghost->getPositionX();
+            pushTraj(0);
         } else if (simulator.m_unknown) {
             out.ticksRan = 1;
             out.unknown = true;
             out.endX = ghost->getPositionX();
+            pushTraj(0);
         }
     }
 
@@ -319,6 +335,7 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
         }
 
         simulator.stepPhysics(layer, ghost, stepDt, witness.clock.simDt);
+        pushTraj(tick);
         if (simulator.m_dead) {
             out.died = true;
             out.deathTick = tick;

@@ -23,6 +23,7 @@ After **Eval Last / Eval Session / Eval On Death**, each evaluated attempt also 
 - `bestSurvivingDelay` / `bestEvaluatedDelay` (when claims allow)
 - `samples[]` with `delay`, `survivedPrimary`, `deathTick`, `endX`, `unknown`, `budgetHit`, tail fields, `ticksRan`
 - `overlay` line for that seal
+- optional `trajectories[]` when `dev-record-traj` (AP8; default off)
 
 Research Pack copies this sealed session as `session.json`.
 
@@ -94,6 +95,17 @@ Continuous / Wave / Hold (AP7):
 | `wave` on `planFinished` | IW `proxX` / `nearHazard` / `bestGain` / `earliestLater` / help-only / futile / proximityPass |
 | `holdTimeline` on fire/outcome | `releaseSeenTick`, `userUpTick`, `injectReleaseTick`, `swallow` |
 | `simNetClass` | G10 class on sealed `eval` + Delay `planFinished` after offline eval |
+
+Optional delay trajectories (AP8; `dev-record-traj`, **default off** — heavy):
+
+| Field | Meaning |
+|---|---|
+| `eval.trajectories[].role` | `chosen` / `bestSurv` / `bestEval` (unique delays only) |
+| `eval.trajectories[].delay` | Counterfactual delay that was re-simmed at seal |
+| `eval.trajectories[].survivalClass` | Coarse final class (`alive` / `lethal`) |
+| `eval.trajectories[].points[]` | `(tick,x,y,vy,alive,unknown,survivalClass)` — capped ~96 pts |
+
+Not enabled by Research Preset; turn on only when you need path plots.
 
 ## Lag / perf
 

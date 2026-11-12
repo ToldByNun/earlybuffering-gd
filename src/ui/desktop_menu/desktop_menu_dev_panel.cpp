@@ -155,6 +155,7 @@ public:
 
         EbCheckbox::drawSetting("dev-freeze-world", "Freeze World");
         EbCheckbox::drawSetting("dev-record-hazards", "Record Hazards / Hitbox");
+        EbCheckbox::drawSetting("dev-record-traj", "Record Trajectories (heavy)");
         EbCheckbox::drawSetting("dev-record-cands", "Record Candidates");
         EbCheckbox::drawSetting("dev-disable-random", "Disable Random");
         EbCheckbox::drawSetting("dev-count-empty-attempts", "Count Empty Attempts");

@@ -1505,6 +1505,12 @@
 			"description": "On planFinished, store Top-N nearby hazard id/AABB/type plus live/ghost collide rects and threat-zone geometry in the witness (AP6). Digest remains. Default on with Freeze World research presets. Off keeps sessions thinner.",
 			"default": true
 		},
+		"dev-record-traj": {
+			"type": "bool",
+			"name": "Dev Record Trajectories",
+			"description": "On offline eval seal, re-simulate chosen + bestSurv (+ bestEval when distinct) delays and store per-tick (tick,x,y,vy,alive,unknown,survivalClass) samples under eval.trajectories (AP8). Default off — heavy CPU/JSON. Research-only opt-in; not part of Research Preset.",
+			"default": false
+		},
 		"dev-disable-random": {
 			"type": "bool",
 			"name": "Dev Disable Random",

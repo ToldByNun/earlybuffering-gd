@@ -201,6 +201,18 @@ public:
                                   EbPlanOptions const& options = {});
 
     // --- Dev Lab eval (Commit 9): clock-bound stepSchedule, own ghosts ---
+    class TrajSample {
+    public:
+        int tick = 0;
+        float x = 0.f;
+        float y = 0.f;
+        float vy = 0.f;
+        bool alive = true;
+        bool unknown = false;
+
+    private:
+    };
+
     class EvalFromFreezeResult {
     public:
         bool ran = false;
@@ -216,6 +228,8 @@ public:
         uint64_t stepScheduleHash = 0;
         DevSimPathId evalSimPathId = DevSimPathId::None;
         EbDevEvalRestore restore{};
+        // AP8: filled when evalDelayFromFreeze(..., captureTraj=true).
+        std::vector<TrajSample> traj;
 
     private:
     };
@@ -232,9 +246,11 @@ public:
     void finishEvalWorldRestore(PlayLayer* layer);
 
     // Counterfactual delay d on witness stamp; steps from DevClockContract::stepSchedule.
+    // captureTraj (AP8): fill EvalFromFreezeResult::traj with per-tick pose samples.
     EvalFromFreezeResult evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const& witness,
                                              int delay, int horizonTicks, bool down,
-                                             int* tickBudgetLeft = nullptr);
+                                             int* tickBudgetLeft = nullptr,
+                                             bool captureTraj = false);
 
     // Replay actualFireTick (absolute) on the same stamp — not a delay search.
     EvalFromFreezeResult replayActualFire(PlayLayer* layer, EbDevLiveWitness const& witness,
