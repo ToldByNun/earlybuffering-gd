@@ -15,16 +15,20 @@ When a delayed click actually fires, optional:
 
 - Sound
 - Color flash
-- Counter (`+N` / streaks)
+- Counter (`+N` / streaks) — `+N` is physics ticks held before inject, not “saved”
 
 These are feedback only — they do not change the plan.
 
 ## Import / Export / Cloud
 
-Assist Actions:
+Desktop menu: **Learn → Config**. Classic popup: Assist Actions.
 
 - Export your settings
 - Import a friend’s JSON
 - Open [Cloud Configs](/features/cloud-configs)
 
 Keybinds + Dev settings are preserved across cloud installs.
+
+## UI extras (v1.6.0)
+
+**Accent Color** and overlay / pause chrome live under the **UI** tab on the desktop shell.

@@ -14,7 +14,10 @@
 #include "../debug/perf_trace.hpp"
 #include "../debug/plan_gold_corpus.hpp"
 #include "../dev/dev_config.hpp"
+#include "../ui/desktop_menu/desktop_menu.hpp"
+#include "../ui/desktop_menu/widgets/eb_keybind.hpp"
 #include "../ui/overlays/status_overlay.hpp"
+#include "../ui/pause/pause_action_bridge.hpp"
 #include "../ui/settings/action_button_setting.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
@@ -29,7 +32,7 @@ void EbModuleBindings::onAnySetting() {
 void EbModuleBindings::registerSettings() {
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-debug", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleDebugLogging();
             bool const now = EbStageConfig::debugLogging();
@@ -38,7 +41,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-reset-level", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbAssistController::get().resetLevelProfile();
             EbAssistLog::info("LEARN: level profile reset (Ctrl+Shift+R)");
@@ -46,7 +49,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-auto-tune", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleAutoTune();
             bool const now = EbStageConfig::autoTune();
@@ -56,7 +59,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-assist-mode", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::cycleAssistMode();
             auto mode = EbStageConfig::assistMode();
@@ -67,7 +70,7 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForKeybindSettingPresses(
         "hotkey-trajectory", [](geode::Keybind const&, bool down, bool repeat, double) {
-            if (!down || repeat)
+            if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleShowTrajectory();
             bool const on = EbStageConfig::showTrajectory();
@@ -79,6 +82,31 @@ void EbModuleBindings::registerSettings() {
             }
             EbAssistLog::info(fmt::format("TRAJ: visualizer {}", on ? "ON" : "OFF"));
             EbAssistController::get().updateOverlay();
+        });
+
+    geode::prelude::listenForKeybindSettingPresses(
+        "hotkey-desktop-menu", [](geode::Keybind const&, bool down, bool repeat, double) {
+            if (!down || repeat)
+                return;
+            // Never leave the menu stuck open because a keybind row is capturing.
+            if (EbKeybind::isCapturing()) {
+                EbKeybind::cancelCapture();
+                return;
+            }
+            if (EbDesktopMenu::useImGuiShell()) {
+                EbDesktopMenu::toggle();
+                return;
+            }
+            // Classic preference or mobile: open Geode settings popup.
+            EbPauseActionBridge::openModSettings();
+        });
+
+    geode::prelude::listenForSettingChanges<bool>(
+        "desktop-classic-settings", [](bool classic) {
+            if (classic && EbDesktopMenu::isOpen())
+                EbDesktopMenu::setOpen(false);
+            if (!EbStageConfig::isApplying())
+                EbModuleBindings::onAnySetting();
         });
 
     geode::prelude::listenForSettingChanges<bool>("show-overlay", [](bool value) {
@@ -197,32 +225,117 @@ void EbModuleBindings::registerSettings() {
     watchBool("save-feedback-counter");
     geode::prelude::listenForSettingChanges<cocos2d::ccColor3B>(
         "save-icon-color", [](cocos2d::ccColor3B) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<cocos2d::ccColor3B>(
+        "desktop-accent-color", [](cocos2d::ccColor3B) { EbModuleBindings::onAnySetting(); });
     auto watchFloat = [](char const* id) {
         geode::prelude::listenForSettingChanges<double>(
             id, [](double) { EbModuleBindings::onAnySetting(); });
+    };
+    auto watchAssistOffFloat = [](char const* id) {
+        geode::prelude::listenForSettingChanges<double>(id, [](double) {
+            // Classic Geode rows are source of truth until desktop rewrites JSON.
+            EbStageConfig::rebuildAssistOffRangesFromLegacySlots();
+            EbModuleBindings::onAnySetting();
+        });
     };
     char const* offFrom[] = {"assist-off-1-from", "assist-off-2-from", "assist-off-3-from",
                              "assist-off-4-from", "assist-off-5-from", "assist-off-6-from"};
     char const* offTo[] = {"assist-off-1-to", "assist-off-2-to", "assist-off-3-to",
                            "assist-off-4-to", "assist-off-5-to", "assist-off-6-to"};
     for (auto* id : offFrom)
-        watchFloat(id);
+        watchAssistOffFloat(id);
     for (auto* id : offTo)
-        watchFloat(id);
+        watchAssistOffFloat(id);
+    geode::prelude::listenForSettingChanges<std::string>(
+        "assist-off-ranges", [](std::string) { EbModuleBindings::onAnySetting(); });
 
     char const* boolIds[] = {
-        "cube-enable",   "cube-overwrite",   "ship-enable",  "ship-overwrite",
-        "ball-enable",   "ball-overwrite",   "ufo-enable",   "ufo-overwrite",
-        "wave-enable",   "wave-overwrite",   "robot-enable", "robot-overwrite",
-        "spider-enable", "spider-overwrite", "swing-enable", "swing-overwrite"};
+        "cube-enable",
+        "cube-overwrite",
+        "cube-adaptive-overwrite",
+        "cube-adaptive-plan",
+        "ship-enable",
+        "ship-overwrite",
+        "ship-adaptive-overwrite",
+        "ship-adaptive-plan",
+        "ball-enable",
+        "ball-overwrite",
+        "ball-adaptive-overwrite",
+        "ball-adaptive-plan",
+        "ufo-enable",
+        "ufo-overwrite",
+        "ufo-adaptive-overwrite",
+        "ufo-adaptive-plan",
+        "wave-enable",
+        "wave-overwrite",
+        "wave-adaptive-overwrite",
+        "wave-adaptive-plan",
+        "robot-enable",
+        "robot-overwrite",
+        "robot-adaptive-overwrite",
+        "robot-adaptive-plan",
+        "spider-enable",
+        "spider-overwrite",
+        "spider-adaptive-overwrite",
+        "spider-adaptive-plan",
+        "swing-enable",
+        "swing-overwrite",
+        "swing-adaptive-overwrite",
+        "swing-adaptive-plan",
+    };
     for (auto* id : boolIds)
         watchBool(id);
 
     char const* intIds[] = {
-        "cube-ticks",   "cube-cap",   "cube-slack",   "ship-ticks",  "ship-cap",  "ship-slack",
-        "ball-ticks",   "ball-cap",   "ball-slack",   "ufo-ticks",   "ufo-cap",   "ufo-slack",
-        "wave-ticks",   "wave-cap",   "wave-slack",   "robot-ticks", "robot-cap", "robot-slack",
-        "spider-ticks", "spider-cap", "spider-slack", "swing-ticks", "swing-cap", "swing-slack"};
+        "cube-ticks",
+        "cube-cap",
+        "cube-slack",
+        "cube-adaptive-screen-ticks",
+        "cube-adaptive-verify-quantum",
+        "cube-adaptive-reserve-pct",
+        "ship-ticks",
+        "ship-cap",
+        "ship-slack",
+        "ship-adaptive-screen-ticks",
+        "ship-adaptive-verify-quantum",
+        "ship-adaptive-reserve-pct",
+        "ball-ticks",
+        "ball-cap",
+        "ball-slack",
+        "ball-adaptive-screen-ticks",
+        "ball-adaptive-verify-quantum",
+        "ball-adaptive-reserve-pct",
+        "ufo-ticks",
+        "ufo-cap",
+        "ufo-slack",
+        "ufo-adaptive-screen-ticks",
+        "ufo-adaptive-verify-quantum",
+        "ufo-adaptive-reserve-pct",
+        "wave-ticks",
+        "wave-cap",
+        "wave-slack",
+        "wave-adaptive-screen-ticks",
+        "wave-adaptive-verify-quantum",
+        "wave-adaptive-reserve-pct",
+        "robot-ticks",
+        "robot-cap",
+        "robot-slack",
+        "robot-adaptive-screen-ticks",
+        "robot-adaptive-verify-quantum",
+        "robot-adaptive-reserve-pct",
+        "spider-ticks",
+        "spider-cap",
+        "spider-slack",
+        "spider-adaptive-screen-ticks",
+        "spider-adaptive-verify-quantum",
+        "spider-adaptive-reserve-pct",
+        "swing-ticks",
+        "swing-cap",
+        "swing-slack",
+        "swing-adaptive-screen-ticks",
+        "swing-adaptive-verify-quantum",
+        "swing-adaptive-reserve-pct",
+    };
     for (auto* id : intIds)
         watchInt(id);
 

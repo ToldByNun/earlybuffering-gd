@@ -18,6 +18,8 @@ Copying a Windows-only build to Android. Geode then says it cannot find:
 
 Fix: use a release / merged package that actually has that file. See [Mobile problems](/troubleshoot/mobile).
 
+Also prefer **v1.6.0+** packages (deflate-only). Older **v1.5.1** zstd zips can fail with `Unable to read entry (code -3)`.
+
 ## iOS
 
 1. Geode + GD **2.2081** on device.

@@ -84,6 +84,18 @@ public:
     // Intended AP3: budget-capped scanOrbWindow allowed under IW when orbs on.
     static bool intendedOrbWindowScanAllowed(bool assistOrbs, bool inputWindow, bool budgetOk);
 
+    // --- Adaptive→classic seed honesty (AP10) ------------------------------
+
+    // Min ticks a later Alive cand must have simulated to honestly beat a known
+    // death at knownDeathTick. screenQuantum = Adaptive screen floor. modelCap>0
+    // clamps the requirement (cannot demand past the look-ahead wall).
+    // knownDeathTick<=0 → quantum alone.
+    static int adaptiveHonestAliveMinTicks(int screenQuantum, int knownDeathTick,
+                                           int modelCap = 0);
+    // Seeded / screen Alive counts only when ticksRan covers the honest floor.
+    static bool adaptiveSeedCountsAlive(int ticksRan, int screenQuantum, int knownDeathTick,
+                                        int modelCap = 0);
+
     static bool selfCheck(std::string& report);
 
 private:

@@ -25,6 +25,12 @@ public:
     int slack = 2;
     // betterCand: score = endX − latencyWeight · delay (Wave high, Cube low).
     float latencyWeight = 0.25f;
+    // Adaptive Prediction — resolved in cache (overwrite off → Main Adaptive).
+    bool adaptiveOverwrite = false;
+    bool adaptivePlan = true;
+    int adaptiveScreenTicks = 24;
+    int adaptiveVerifyQuantum = 16;
+    int adaptiveReservePct = 15;
 
 private:
 };
@@ -55,8 +61,8 @@ public:
     static void beginApplying();
     static void endApplying();
 
-    // Setting groups mirror mod.json / tabs: Main (Window) → Scope → Assist →
-    // Bake → Modes → Visual → Keys → Dev.
+    // Setting groups mirror mod.json / tabs: Main → Assist → Learn → Bake →
+    // Modes → Visual → UI → Keys → Dev.
 
     // --- General / UI ---
     static bool isEnabled();
@@ -101,10 +107,16 @@ public:
 
     private:
     };
-    static constexpr int ASSIST_OFF_SLOTS = 6;
-    // Ranges where assist is forced off (inclusive). From float settings assist-off-N-from/to (-1 =
-    // unused).
+    static constexpr int ASSIST_OFF_SLOTS = 6; // legacy Geode float pairs (classic UI)
+    static constexpr int ASSIST_OFF_MAX = 32;  // soft cap for assist-off-ranges JSON
+    // Ranges where assist is forced off (inclusive). Canonical store: string setting
+    // assist-off-ranges (JSON). Legacy assist-off-N-from/to (-1 = unused) still migrate / mirror.
     static std::vector<PercentRange> const& assistDisableRanges();
+    // Normalize, clamp to ASSIST_OFF_MAX, write JSON + mirror first 6 legacy slots. true if store
+    // changed.
+    static bool setAssistDisableRanges(std::vector<PercentRange> const& ranges);
+    // Classic float-row edit: rebuild JSON from the 6 legacy slots (no-op while isApplying).
+    static void rebuildAssistOffRangesFromLegacySlots();
     static bool isInAssistDisableRange(float percent);
 
     // --- Default Window ---
@@ -161,10 +173,20 @@ public:
     // --- Adaptive Prediction Planner (Live; classic search until Adaptive ships) ---
     // Does not raise Max Assist ticks or Prediction Horizon — only subdivides
     // Dynamic Plan Tick Budget (tick-budget / sim-budget-us ceilings).
+    // Global Main defaults / fallback when a mode's Adaptive Overwrite is off.
     static bool adaptivePlan();
     static int adaptiveScreenTicks();
     static int adaptiveVerifyQuantum();
     static int adaptiveReservePct();
+    // Kind-resolved Adaptive (mode overwrite → mode knobs, else Main).
+    static bool adaptivePlanFor(GameModeKind kind);
+    static int adaptiveScreenTicksFor(GameModeKind kind);
+    static int adaptiveVerifyQuantumFor(GameModeKind kind);
+    static int adaptiveReservePctFor(GameModeKind kind);
+    static bool adaptivePlanFor(PlayerObject* player);
+    static int adaptiveScreenTicksFor(PlayerObject* player);
+    static int adaptiveVerifyQuantumFor(PlayerObject* player);
+    static int adaptiveReservePctFor(PlayerObject* player);
 
     // --- Learning ---
     static bool autoTune();
@@ -187,6 +209,9 @@ public:
 
     // Overlay / fingerprint: "OFF" or "NA/NW" from Main Window values.
     static std::string stageLabel(EbStageInfo const& info);
+
+    // Pure resolve + cache identity checks (PlanGold).
+    static bool selfCheck(std::string& report);
 
 private:
     friend class EbStageSettingsCache;
@@ -213,6 +238,11 @@ public:
     char const* cap;
     char const* slack;
     char const* latency;
+    char const* adaptiveOverwrite;
+    char const* adaptivePlan;
+    char const* adaptiveScreenTicks;
+    char const* adaptiveVerifyQuantum;
+    char const* adaptiveReservePct;
     char const* name;
 
 private:
@@ -228,6 +258,17 @@ public:
     static float round2(float value);
     static void loadAssistOffSlots(geode::prelude::Mod* mod,
                                    std::vector<EbStageConfig::PercentRange>& out);
+    static void loadAssistOffFromLegacy(geode::prelude::Mod* mod,
+                                        std::vector<EbStageConfig::PercentRange>& out);
+    static bool parseAssistOffRangesJson(std::string const& raw,
+                                         std::vector<EbStageConfig::PercentRange>& out);
+    static std::string serializeAssistOffRangesJson(
+        std::vector<EbStageConfig::PercentRange> const& ranges);
+    static void normalizeAssistOffRanges(std::vector<EbStageConfig::PercentRange>& ranges);
+    static void writeAssistOffRangesJson(geode::prelude::Mod* mod,
+                                         std::vector<EbStageConfig::PercentRange> const& ranges);
+    static void mirrorAssistOffLegacySlots(geode::prelude::Mod* mod,
+                                           std::vector<EbStageConfig::PercentRange> const& ranges);
     static void ensureCache();
 
 private:
@@ -240,20 +281,32 @@ private:
 
     inline static constexpr EbModeSettingKeys MODE_IDS[] = {
         {"cube-enable", "cube-overwrite", "cube-ticks", "cube-cap", "cube-slack", "cube-latency",
-         "cube"},
+         "cube-adaptive-overwrite", "cube-adaptive-plan", "cube-adaptive-screen-ticks",
+         "cube-adaptive-verify-quantum", "cube-adaptive-reserve-pct", "cube"},
         {"ship-enable", "ship-overwrite", "ship-ticks", "ship-cap", "ship-slack", "ship-latency",
-         "ship"},
+         "ship-adaptive-overwrite", "ship-adaptive-plan", "ship-adaptive-screen-ticks",
+         "ship-adaptive-verify-quantum", "ship-adaptive-reserve-pct", "ship"},
         {"ball-enable", "ball-overwrite", "ball-ticks", "ball-cap", "ball-slack", "ball-latency",
-         "ball"},
-        {"ufo-enable", "ufo-overwrite", "ufo-ticks", "ufo-cap", "ufo-slack", "ufo-latency", "ufo"},
+         "ball-adaptive-overwrite", "ball-adaptive-plan", "ball-adaptive-screen-ticks",
+         "ball-adaptive-verify-quantum", "ball-adaptive-reserve-pct", "ball"},
+        {"ufo-enable", "ufo-overwrite", "ufo-ticks", "ufo-cap", "ufo-slack", "ufo-latency",
+         "ufo-adaptive-overwrite", "ufo-adaptive-plan", "ufo-adaptive-screen-ticks",
+         "ufo-adaptive-verify-quantum", "ufo-adaptive-reserve-pct", "ufo"},
         {"wave-enable", "wave-overwrite", "wave-ticks", "wave-cap", "wave-slack", "wave-latency",
-         "wave"},
+         "wave-adaptive-overwrite", "wave-adaptive-plan", "wave-adaptive-screen-ticks",
+         "wave-adaptive-verify-quantum", "wave-adaptive-reserve-pct", "wave"},
         {"robot-enable", "robot-overwrite", "robot-ticks", "robot-cap", "robot-slack",
-         "robot-latency", "robot"},
+         "robot-latency", "robot-adaptive-overwrite", "robot-adaptive-plan",
+         "robot-adaptive-screen-ticks", "robot-adaptive-verify-quantum", "robot-adaptive-reserve-pct",
+         "robot"},
         {"spider-enable", "spider-overwrite", "spider-ticks", "spider-cap", "spider-slack",
-         "spider-latency", "spider"},
+         "spider-latency", "spider-adaptive-overwrite", "spider-adaptive-plan",
+         "spider-adaptive-screen-ticks", "spider-adaptive-verify-quantum",
+         "spider-adaptive-reserve-pct", "spider"},
         {"swing-enable", "swing-overwrite", "swing-ticks", "swing-cap", "swing-slack",
-         "swing-latency", "swing"},
+         "swing-latency", "swing-adaptive-overwrite", "swing-adaptive-plan",
+         "swing-adaptive-screen-ticks", "swing-adaptive-verify-quantum", "swing-adaptive-reserve-pct",
+         "swing"},
     };
     static EbStageInfo s_cachedStage;
     static std::array<EbModeParams, EbStageConfig::MODE_COUNT> s_cachedModes;

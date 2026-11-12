@@ -12,7 +12,7 @@ Preserve **serialized setting keys** when renaming C++ identifiers.
 
 ## Categories (UI tabs)
 
-Filter map lives under `src/ui/settings/` (`title-*` keys → Main / Scope / Assist / Bake / Modes / Keys / Dev).
+Filter map lives under `src/ui/settings/` (`title-*` keys → Main / Assist / Learn / Bake / Modes / Visual / UI / Keys / Dev). Desktop ImGui panels mirror that map.
 
 ## Fingerprint
 

@@ -1,6 +1,6 @@
-# Scope — where assist is allowed
+# Where assist is allowed (Assist tab)
 
-Platformer is **always** blocked. Everything else is optional gates.
+In **v1.6.0** these gates live under **Assist** (desktop menu and classic filter). Platformer is **always** blocked. Everything else is optional.
 
 ## Practice only
 
@@ -22,10 +22,10 @@ Examples:
 
 ## Assist Off Ranges
 
-Up to six From/To holes **inside** the min–max window.
+Percent holes **inside** the min–max window where assist is forced off (inclusive).
 
-- Set both From and To
-- Leave **-1** to ignore that slot
-- Inclusive
+**Desktop menu:** add/remove list (soft cap 32). Stored as `assist-off-ranges` JSON `[[from,to],…]`.
+
+**Classic Geode popup:** up to six From/To rows. Leave **-1** to ignore a slot. Those rows migrate into / mirror the first six JSON entries.
 
 Example: Min 0, Max 100, Off Range 40–55 → assist skips that mid section.

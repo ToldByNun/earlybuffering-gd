@@ -10,6 +10,15 @@ Cube, Ship, Ball, UFO, Wave, Robot, Spider, Swing
 2. Set that mode’s window  
 3. Leave others off → they use Main → Window (Default) / Wave default
 
+## Adaptive Overwrite
+
+Each mode also has **Adaptive Overwrite**.
+
+1. Leave it off → that mode uses **Main → Adaptive Prediction**
+2. Turn it on → set Adaptive Plan / Screen Ticks / Verify Quantum / Reserve % for that mode only
+
+Wave Adaptive on does not change Cube while Cube Adaptive Overwrite is off.
+
 ## Tips
 
 - Wave: keep small

@@ -8,7 +8,7 @@ else()
 endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(earlybuffer VERSION 1.5.1)
+project(earlybuffer VERSION 1.6.0)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
@@ -55,6 +55,25 @@ add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 set(LIBGDR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 CPMAddPackage("gh:maxnut/GDReplayFormat#d8d2f0b1193a46cdf47b413dc832616dd052b6a9")
 target_link_libraries(${PROJECT_NAME} libGDR)
+
+# Desktop ImGui (Windows + macOS only). Android/iOS never fetch or link imgui-cocos.
+set(EB_DESKTOP_IMGUI OFF)
+if (WIN32)
+    set(EB_DESKTOP_IMGUI ON)
+elseif (APPLE AND NOT ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS))
+    set(EB_DESKTOP_IMGUI ON)
+endif()
+if (EB_DESKTOP_IMGUI)
+    # Draw above early-hook mod menus (we are a settings overlay, not under them).
+    set(IMGUI_HOOK_EARLY OFF CACHE BOOL "" FORCE)
+    set(IMGUI_VERSION "v1.92.4" CACHE STRING "" FORCE)
+    CPMAddPackage("gh:matcool/gd-imgui-cocos#934958c68b1f050a8976d893584fa71368c1df1f")
+    target_link_libraries(${PROJECT_NAME} imgui-cocos)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE EB_DESKTOP_IMGUI=1)
+    message(STATUS "EarlyBuffer: desktop ImGui enabled (gd-imgui-cocos)")
+else()
+    message(STATUS "EarlyBuffer: desktop ImGui disabled (non-desktop target)")
+endif()
 
 # Win32 file dialogs (PauseActionBridge GetOpenFileNameW / GetSaveFileNameW).
 # Must stay WIN32-only — never link comdlg32 (or any dialog lib) on Android/NDK,

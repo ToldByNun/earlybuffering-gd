@@ -30,12 +30,19 @@ How early a click may be delayed.
 
 Wave is sensitive — keep its window low until you have a reason.
 
+## Smart / Adaptive (folded into Main)
+
+Smart prediction knobs and Adaptive Plan toggles that used to sit under a separate Smart tab live here in **v1.6.0**. See [Adaptive Plan](/features/adaptive).
+
 ## Overlay / Pause UI
+
+Desktop chrome (Accent Color, overlay / pause toggles) lives under the **UI** tab. Pause EB still opens the ImGui shell on Windows (version label = package version, currently **1.6.0**).
 
 | Setting | Effect |
 |---|---|
 | In-Level Overlay | Tiny status while playing |
 | Pause EB Button | Top-right EB opens settings |
 | Pause Status Lines | Extra pause text |
+| Accent Color | Desktop menu theme + wave fill (UI tab) |
 
 None of these change assist strength by themselves.

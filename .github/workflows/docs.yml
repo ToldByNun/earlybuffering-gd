@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-      - earlybuffer-1.5.1-dev
+      - earlybuffer-1.6.0-dev
     paths:
       - 'docs/**'
       - 'package.json'

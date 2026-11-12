@@ -4,6 +4,9 @@
 #include "../../../core/bundle/config_bundle.hpp"
 #include "../../../core/platform/save_drop_paths.hpp"
 #include "../../cloud/cloud_config_popup.hpp"
+#include "../../desktop_menu/desktop_menu.hpp"
+#include "../../desktop_menu/desktop_menu_alert.hpp"
+#include "../../desktop_menu/desktop_menu_cloud_overlay.hpp"
 #include "../../overlays/status_overlay.hpp"
 #include "../../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../../visualizers/bake_path_visualizer.hpp"
@@ -28,10 +31,7 @@ void EbPauseConfigActions::exportConfig() {
     auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     if (!drops.ensureDirs(dirErr)) {
-        FLAlertLayer::create("EarlyBuffer",
-                             dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", dirErr.empty() ? "Could not create the save folder." : dirErr.c_str());
         return;
     }
     path = drops.configPath();
@@ -50,12 +50,10 @@ void EbPauseConfigActions::exportConfig() {
         errorMessage = fmt::format("{}\n\n{}\n{}", errorMessage, path->string(),
                                    EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
 #endif
-        FLAlertLayer::create("EarlyBuffer", errorMessage.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", errorMessage.c_str());
         return;
     }
-    FLAlertLayer::create("EarlyBuffer", EbPauseActionBridgeDetail::formatExportSuccess(*path).c_str(),
-                         "OK")
-        ->show();
+    EbDesktopAlert::info("EarlyBuffer", EbPauseActionBridgeDetail::formatExportSuccess(*path).c_str());
 }
 
 void EbPauseConfigActions::importConfig() {
@@ -68,10 +66,7 @@ void EbPauseConfigActions::importConfig() {
     auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     if (!drops.ensureDirs(dirErr)) {
-        FLAlertLayer::create("EarlyBuffer",
-                             dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", dirErr.empty() ? "Could not create the save folder." : dirErr.c_str());
         return;
     }
     path = drops.configPath();
@@ -88,7 +83,7 @@ void EbPauseConfigActions::importConfig() {
                         "Export Config writes that path. Then Import again.",
                         path->string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
                         EbPauseActionBridgeDetail::mobileTransferHint());
-        FLAlertLayer::create("EarlyBuffer", message.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", message.c_str());
         return;
     }
     auto const size = std::filesystem::file_size(*path, ec);
@@ -99,7 +94,7 @@ void EbPauseConfigActions::importConfig() {
                         "{}\n"
                         "{}",
                         path->string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
-        FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", emptyMsg.c_str());
         return;
     }
 #endif
@@ -108,7 +103,7 @@ void EbPauseConfigActions::importConfig() {
         bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const badMsg = fmt::format("{}\n\nFile:\n{}\n{}", result.unwrapErr(), path->string(),
                                         EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
-        FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", badMsg.c_str());
         return;
     }
 
@@ -116,6 +111,14 @@ void EbPauseConfigActions::importConfig() {
 }
 
 void EbPauseConfigActions::openCloudConfigs() {
+#if defined(EB_DESKTOP_IMGUI)
+    // 1.6.0: keep classic Geode Cloud Configs popup. Desktop ImGui overlay
+    // (EbDesktopCloudOverlay) stays in tree but unbound until a later ship.
+    // if (EbDesktopMenu::useImGuiShell() && EbDesktopMenu::isOpen()) {
+    //     EbDesktopCloudOverlay::open();
+    //     return;
+    // }
+#endif
     EbCloudConfigPopup::open();
 }
 
@@ -148,5 +151,5 @@ void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
     EbInLevelSettingsFilterKeeper::reloadAfterImport();
     // Show success after the settings rebuild so it stays on top.
     geode::prelude::Loader::get()->queueInMainThread(
-        [successMsg] { FLAlertLayer::create("EarlyBuffer", successMsg.c_str(), "OK")->show(); });
+        [successMsg] { EbDesktopAlert::info("EarlyBuffer", successMsg.c_str()); });
 }

@@ -10,18 +10,18 @@ Geode timing assist for Geometry Dash **2.2081**. Jump a little soon — EarlyBu
 
 ## Cloud Configs
 
-Open **Settings → Assist → Assist Actions → Cloud Configs**, directly below **Import Config**. Browse and search community packs, sort by popularity or rating, and install settings. Keybinds and developer settings are preserved. Share submits your pack for review. Cached packs and bundled defaults support offline use. Installing a config can change your assist settings. See [Cloud Configs](docs/cloud_configs.md) for endpoints and network behavior.
+Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below **Import Config**. Browse and search community packs, sort by popularity or rating, and install settings. Keybinds and developer settings are preserved. Share submits your pack for review. Cached packs and bundled defaults support offline use. Installing a config can change your assist settings. See [Cloud Configs](docs/cloud_configs.md) for endpoints and network behavior.
 
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.5.1** |
+| Version | **1.6.0** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows, macOS, iOS, Android (multi-platform `.geode` — must include `android64.so`; iOS needs `.ios.dylib`) |
 | License | [MIT](LICENSE) |
 | Repository | [ToldByNun/earlybuffering-gd](https://github.com/ToldByNun/earlybuffering-gd) |
 
-> **Last 2.2081 line.** **v1.5.1** still targets Geometry Dash **2.2081** only (Live hitch / Wave IW / orbs-under-IW, Adaptive Prediction Planner, Cloud Configs). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`).
+> **Last 2.2081 line.** **v1.6.0** still targets Geometry Dash **2.2081** only (desktop ImGui settings shell, Live hitch / Wave IW / orbs-under-IW, Adaptive Prediction Planner, Cloud Configs). Newer GD versions need a separate port / major bump. A Windows-only local build will **not** load on Android or iOS — use a merged / checked package (`INSTALL.md`: `--require android64` / `--require ios`; ship packages must pass `--forbid-zstd`).
 
 ## What it does
 
@@ -74,7 +74,7 @@ Hotkeys are configurable (defaults include Ctrl+Shift+M assist mode, Ctrl+Shift+
 
 ## Development status
 
-EarlyBuffer **1.5.1** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
+EarlyBuffer **1.6.0** is an **actively maintained** release for **2.2081**: features are still being developed and optimized, and the build is exercised regularly (manual play + automated self-checks on mod load / PlanGold). Treat it as a production assist for this GD version — not an abandoned prototype — while remembering it will not track newer game builds.
 
 ## Authorship and AI use
 
@@ -93,7 +93,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build tips, how to add settings / p
 - This mod **assists inputs**. Using it on rated / online content may violate community norms or RobTop’s rules — use **Safe Mode**, practice, and your own judgment.
 - Discord: [https://discord.gg/QJuTDkmPcf](https://discord.gg/QJuTDkmPcf)
 - Issues: [GitHub Issues](https://github.com/ToldByNun/earlybuffering-gd/issues). In-mod support text: `support.md`.
-- **Changelog:** see [`changelog.md`](changelog.md) — **v1.5.1** Live hitch / Wave / orbs-under-IW; **v1.5.0** Adaptive Prediction Planner; **v1.4.3** Cloud Configs (still GD **2.2081** only).
+- **Changelog:** see [`changelog.md`](changelog.md) — **v1.6.0** desktop menu + Android deflate packages; **v1.5.1** Live hitch / Wave / orbs-under-IW; **v1.5.0** Adaptive Prediction Planner; **v1.4.3** Cloud Configs (still GD **2.2081** only).
 
 ## Credits
 

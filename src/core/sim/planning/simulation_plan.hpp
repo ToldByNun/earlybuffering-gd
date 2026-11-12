@@ -66,8 +66,9 @@ public:
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     EbThreatZone seedThreatZone{};
     // Adaptive→classic fallthrough: terminal / horizon-proven delay results so
-    // classic does not re-sim work Adaptive already finished. Partial Alive
-    // screens are NOT seeded (classic must still prove them to horizon).
+    // classic does not re-sim work Adaptive already finished. Observation-cleared
+    // Alive screens seed only when ticks cover screen quantum AND any known
+    // longer death (AP10). Shorter partial screens are NOT seeded.
     std::vector<EbSimulationCandidate> seedCandidates{};
     // Shared idle-death tick from Adaptive PrefixSim (−1 = none).
     int seedPrefixDeathTick = -1;

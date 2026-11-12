@@ -4,9 +4,11 @@
 #include "cache/stage_settings_cache.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
+#include <matjson.hpp>
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -121,28 +123,172 @@ float EbStageConfigImplementation::round2(float value) {
     return std::round(value * 100.f) / 100.f;
 }
 
-void EbStageConfigImplementation::loadAssistOffSlots(geode::prelude::Mod* mod,
-                                                   std::vector<EbStageConfig::PercentRange>& out) {
+void EbStageConfigImplementation::normalizeAssistOffRanges(
+    std::vector<EbStageConfig::PercentRange>& ranges) {
+    std::vector<EbStageConfig::PercentRange> cleaned;
+    cleaned.reserve(ranges.size());
+    for (auto range : ranges) {
+        if (range.from < 0.f || range.to < 0.f) {
+            continue;
+        }
+        range.from = round2(clampPct(range.from));
+        range.to = round2(clampPct(range.to));
+        if (range.from > range.to) {
+            std::swap(range.from, range.to);
+        }
+        cleaned.push_back(range);
+        if (static_cast<int>(cleaned.size()) >= EbStageConfig::ASSIST_OFF_MAX) {
+            break;
+        }
+    }
+    ranges.swap(cleaned);
+}
+
+bool EbStageConfigImplementation::parseAssistOffRangesJson(
+    std::string const& raw, std::vector<EbStageConfig::PercentRange>& out) {
     out.clear();
+    if (raw.empty()) {
+        return false;
+    }
+    auto parsed = matjson::parse(raw);
+    if (parsed.isErr() || !parsed.unwrap().isArray()) {
+        return false;
+    }
+    for (auto const& item : parsed.unwrap().asArray().unwrap()) {
+        float from = -1.f;
+        float to = -1.f;
+        if (item.isArray()) {
+            auto const& pair = item.asArray().unwrap();
+            if (pair.size() < 2) {
+                continue;
+            }
+            from = static_cast<float>(pair[0].asDouble().unwrapOr(-1.0));
+            to = static_cast<float>(pair[1].asDouble().unwrapOr(-1.0));
+        } else if (item.isObject()) {
+            if (!item.contains("from") || !item.contains("to")) {
+                continue;
+            }
+            from = static_cast<float>(item["from"].asDouble().unwrapOr(-1.0));
+            to = static_cast<float>(item["to"].asDouble().unwrapOr(-1.0));
+        } else {
+            continue;
+        }
+        out.push_back({from, to});
+        if (static_cast<int>(out.size()) >= EbStageConfig::ASSIST_OFF_MAX) {
+            break;
+        }
+    }
+    normalizeAssistOffRanges(out);
+    return true;
+}
+
+std::string EbStageConfigImplementation::serializeAssistOffRangesJson(
+    std::vector<EbStageConfig::PercentRange> const& ranges) {
+    matjson::Value root = matjson::Value::array();
+    for (auto const& range : ranges) {
+        matjson::Value pair = matjson::Value::array();
+        pair.push(static_cast<double>(range.from));
+        pair.push(static_cast<double>(range.to));
+        root.push(pair);
+    }
+    return root.dump();
+}
+
+void EbStageConfigImplementation::loadAssistOffFromLegacy(
+    geode::prelude::Mod* mod, std::vector<EbStageConfig::PercentRange>& out) {
+    out.clear();
+    if (!mod) {
+        return;
+    }
     static char const* fromIds[] = {"assist-off-1-from", "assist-off-2-from", "assist-off-3-from",
                                     "assist-off-4-from", "assist-off-5-from", "assist-off-6-from"};
     static char const* toIds[] = {"assist-off-1-to", "assist-off-2-to", "assist-off-3-to",
                                   "assist-off-4-to", "assist-off-5-to", "assist-off-6-to"};
     static_assert(sizeof(fromIds) / sizeof(fromIds[0]) == EbStageConfig::ASSIST_OFF_SLOTS);
     for (int index = 0; index < EbStageConfig::ASSIST_OFF_SLOTS; ++index) {
-        float firstValue = EbStageConfigImplementation::readFloat(mod, fromIds[index], -1.f);
-        float secondValue = EbStageConfigImplementation::readFloat(mod, toIds[index], -1.f);
-        // -1 = unused slot
-        if (firstValue < 0.f || secondValue < 0.f)
+        float firstValue = readFloat(mod, fromIds[index], -1.f);
+        float secondValue = readFloat(mod, toIds[index], -1.f);
+        if (firstValue < 0.f || secondValue < 0.f) {
             continue;
-        firstValue =
-            EbStageConfigImplementation::round2(EbStageConfigImplementation::clampPct(firstValue));
-        secondValue =
-            EbStageConfigImplementation::round2(EbStageConfigImplementation::clampPct(secondValue));
-        if (firstValue > secondValue)
-            std::swap(firstValue, secondValue);
+        }
         out.push_back({firstValue, secondValue});
     }
+    normalizeAssistOffRanges(out);
+}
+
+void EbStageConfigImplementation::writeAssistOffRangesJson(
+    geode::prelude::Mod* mod, std::vector<EbStageConfig::PercentRange> const& ranges) {
+    if (!mod) {
+        return;
+    }
+    std::string const json = serializeAssistOffRangesJson(ranges);
+    bool const nested = s_applying;
+    if (!nested) {
+        s_applying = true;
+    }
+    try {
+        mod->setSettingValue<std::string>("assist-off-ranges", json);
+    } catch (...) {
+    }
+    if (!nested) {
+        s_applying = false;
+    }
+}
+
+void EbStageConfigImplementation::mirrorAssistOffLegacySlots(
+    geode::prelude::Mod* mod, std::vector<EbStageConfig::PercentRange> const& ranges) {
+    if (!mod) {
+        return;
+    }
+    static char const* fromIds[] = {"assist-off-1-from", "assist-off-2-from", "assist-off-3-from",
+                                    "assist-off-4-from", "assist-off-5-from", "assist-off-6-from"};
+    static char const* toIds[] = {"assist-off-1-to", "assist-off-2-to", "assist-off-3-to",
+                                  "assist-off-4-to", "assist-off-5-to", "assist-off-6-to"};
+    static_assert(sizeof(fromIds) / sizeof(fromIds[0]) == EbStageConfig::ASSIST_OFF_SLOTS);
+
+    bool const nested = s_applying;
+    if (!nested) {
+        s_applying = true;
+    }
+    for (int index = 0; index < EbStageConfig::ASSIST_OFF_SLOTS; ++index) {
+        double fromValue = -1.0;
+        double toValue = -1.0;
+        if (index < static_cast<int>(ranges.size())) {
+            fromValue = static_cast<double>(ranges[static_cast<size_t>(index)].from);
+            toValue = static_cast<double>(ranges[static_cast<size_t>(index)].to);
+        }
+        try {
+            mod->setSettingValue<double>(fromIds[index], fromValue);
+            mod->setSettingValue<double>(toIds[index], toValue);
+        } catch (...) {
+        }
+    }
+    if (!nested) {
+        s_applying = false;
+    }
+}
+
+void EbStageConfigImplementation::loadAssistOffSlots(geode::prelude::Mod* mod,
+                                                     std::vector<EbStageConfig::PercentRange>& out) {
+    out.clear();
+    if (!mod) {
+        return;
+    }
+
+    std::string raw;
+    try {
+        raw = mod->getSettingValue<std::string>("assist-off-ranges");
+    } catch (...) {
+        raw.clear();
+    }
+
+    if (parseAssistOffRangesJson(raw, out)) {
+        return;
+    }
+
+    // Empty / invalid JSON → import legacy float pairs, then persist JSON once.
+    loadAssistOffFromLegacy(mod, out);
+    writeAssistOffRangesJson(mod, out);
 }
 
 void EbStageConfig::refreshCache() {
@@ -455,6 +601,89 @@ int EbStageConfig::adaptiveReservePct() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAdaptiveReservePct;
 }
+bool EbStageConfig::adaptivePlanFor(GameModeKind kind) {
+    return paramsFor(kind).adaptivePlan;
+}
+int EbStageConfig::adaptiveScreenTicksFor(GameModeKind kind) {
+    return paramsFor(kind).adaptiveScreenTicks;
+}
+int EbStageConfig::adaptiveVerifyQuantumFor(GameModeKind kind) {
+    return paramsFor(kind).adaptiveVerifyQuantum;
+}
+int EbStageConfig::adaptiveReservePctFor(GameModeKind kind) {
+    return paramsFor(kind).adaptiveReservePct;
+}
+bool EbStageConfig::adaptivePlanFor(PlayerObject* player) {
+    return adaptivePlanFor(kindOf(player));
+}
+int EbStageConfig::adaptiveScreenTicksFor(PlayerObject* player) {
+    return adaptiveScreenTicksFor(kindOf(player));
+}
+int EbStageConfig::adaptiveVerifyQuantumFor(PlayerObject* player) {
+    return adaptiveVerifyQuantumFor(kindOf(player));
+}
+int EbStageConfig::adaptiveReservePctFor(PlayerObject* player) {
+    return adaptiveReservePctFor(kindOf(player));
+}
+
+bool EbStageConfig::selfCheck(std::string& report) {
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (!ok) {
+            ++fails;
+            report += std::string("FAIL ") + name + "; ";
+        }
+    };
+
+    // Pure resolve: overwrite off → global; overwrite on → mode value.
+    auto resolveBool = [](bool overwrite, bool modeValue, bool globalValue) {
+        return overwrite ? modeValue : globalValue;
+    };
+    auto resolveInt = [](bool overwrite, int modeValue, int globalValue) {
+        return overwrite ? modeValue : globalValue;
+    };
+    expect(resolveBool(false, false, true) == true, "resolve-off-uses-global");
+    expect(resolveBool(true, false, true) == false, "resolve-on-uses-mode");
+    expect(resolveInt(false, 8, 24) == 24, "resolve-int-off");
+    expect(resolveInt(true, 8, 24) == 8, "resolve-int-on");
+
+    EbStageConfigImplementation::ensureCache();
+    bool const globalPlan = adaptivePlan();
+    int const globalScreen = adaptiveScreenTicks();
+    int const globalVerify = adaptiveVerifyQuantum();
+    int const globalReserve = adaptiveReservePct();
+    for (int index = 0; index < MODE_COUNT; ++index) {
+        auto const kind = static_cast<GameModeKind>(index);
+        EbModeParams const params = paramsFor(kind);
+        expect(adaptivePlanFor(kind) == params.adaptivePlan, "for-matches-params-plan");
+        expect(adaptiveScreenTicksFor(kind) == params.adaptiveScreenTicks,
+               "for-matches-params-screen");
+        expect(adaptiveVerifyQuantumFor(kind) == params.adaptiveVerifyQuantum,
+               "for-matches-params-verify");
+        expect(adaptiveReservePctFor(kind) == params.adaptiveReservePct,
+               "for-matches-params-reserve");
+        if (!params.adaptiveOverwrite) {
+            expect(params.adaptivePlan == globalPlan, "fallback-plan");
+            expect(params.adaptiveScreenTicks == globalScreen, "fallback-screen");
+            expect(params.adaptiveVerifyQuantum == globalVerify, "fallback-verify");
+            expect(params.adaptiveReservePct == globalReserve, "fallback-reserve");
+        } else {
+            expect(params.adaptiveScreenTicks >= 8 && params.adaptiveScreenTicks <= 64,
+                   "mode-screen-range");
+            expect(params.adaptiveVerifyQuantum >= 8 && params.adaptiveVerifyQuantum <= 64,
+                   "mode-verify-range");
+            expect(params.adaptiveReservePct >= 0 && params.adaptiveReservePct <= 40,
+                   "mode-reserve-range");
+        }
+    }
+
+    if (fails == 0) {
+        report = "StageConfig adaptive resolve selfCheck OK";
+        return true;
+    }
+    report = std::string("StageConfig adaptive resolve selfCheck fails: ") + report;
+    return false;
+}
 char const* EbStageConfig::assistVerifyMode() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAssistVerify.c_str();
@@ -497,6 +726,59 @@ std::vector<EbStageConfig::PercentRange> const& EbStageConfig::assistDisableRang
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAssistDisableRanges;
 }
+
+bool EbStageConfig::setAssistDisableRanges(std::vector<PercentRange> const& ranges) {
+    auto* mod = geode::prelude::Mod::get();
+    if (!mod) {
+        return false;
+    }
+    std::vector<PercentRange> next = ranges;
+    EbStageConfigImplementation::normalizeAssistOffRanges(next);
+
+    EbStageConfigImplementation::ensureCache();
+    if (next.size() == EbStageConfigImplementation::s_cachedAssistDisableRanges.size()) {
+        bool same = true;
+        for (size_t index = 0; index < next.size(); ++index) {
+            if (next[index].from != EbStageConfigImplementation::s_cachedAssistDisableRanges[index].from ||
+                next[index].to != EbStageConfigImplementation::s_cachedAssistDisableRanges[index].to) {
+                same = false;
+                break;
+            }
+        }
+        if (same) {
+            return false;
+        }
+    }
+
+    bool const nested = EbStageConfigImplementation::s_applying;
+    if (!nested) {
+        EbStageConfigImplementation::s_applying = true;
+    }
+    EbStageConfigImplementation::writeAssistOffRangesJson(mod, next);
+    EbStageConfigImplementation::mirrorAssistOffLegacySlots(mod, next);
+    if (!nested) {
+        EbStageConfigImplementation::s_applying = false;
+    }
+    EbStageConfigImplementation::s_cachedAssistDisableRanges = next;
+    return true;
+}
+
+void EbStageConfig::rebuildAssistOffRangesFromLegacySlots() {
+    if (EbStageConfigImplementation::s_applying) {
+        return;
+    }
+    auto* mod = geode::prelude::Mod::get();
+    if (!mod) {
+        return;
+    }
+    std::vector<PercentRange> next;
+    EbStageConfigImplementation::loadAssistOffFromLegacy(mod, next);
+    EbStageConfigImplementation::s_applying = true;
+    EbStageConfigImplementation::writeAssistOffRangesJson(mod, next);
+    EbStageConfigImplementation::s_applying = false;
+    EbStageConfigImplementation::s_cachedAssistDisableRanges = std::move(next);
+}
+
 bool EbStageConfig::isInAssistDisableRange(float percent) {
     EbStageConfigImplementation::ensureCache();
     float const valuePointer = EbStageConfigImplementation::clampPct(percent);

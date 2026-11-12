@@ -1,10 +1,10 @@
 # EarlyBuffer Assist Reference
 
-## Cloud Configs in v1.5.1
+## Cloud Configs in v1.6.0
 
-Open Settings → Assist → Assist Actions → Cloud Configs, below Import Config. Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
+Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.0** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.5.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.6.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -30,7 +30,7 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Adaptive budget (AP3):** `EbAdaptiveBudgetController::plan` uses `tick-budget` (platform-clamped) as the hard Dynamic Plan Tick allowance and splits into screen / verify / reserve (`adaptive-reserve-pct`, screen share 30% of the non-reserve pool). `sim-budget-us` stays a soft runtime wall (plus EMA suggestion for diagnostics) — it must not shrink hard ticks (that starved Live into PassBudget). Quanta: `adaptive-screen-ticks` / `adaptive-verify-quantum`.
 
-**Adaptive planner (AP4–AP6):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic). `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0 / screen quantum only vs dying d0). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) with remaining ticks + remUs floor 2000µs and observation-cleared Alive seeds. Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
+**Adaptive planner (AP4–AP6 + AP10 honesty):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`; Modes may overwrite Adaptive knobs). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic) — uncapped fallthrough after that wall is spent is still expensive when ticks remain. `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0). **AP10:** a short screen-quantum Alive seed must **not** beat a known later death (esp. d0 `deathTick`); seed / gate / IW require `ticksRan` covering that death clock (capped by look-ahead). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) with remaining ticks + remUs floor 2000µs and honesty-cleared Alive seeds. Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-seed-before-d0-death-rejected`, `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
 
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
@@ -130,16 +130,19 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**EB** (and Geode → Mods → EarlyBuffer → Settings) opens the normal Geode `ModSettingsPopup`. EarlyBuffer attaches a **text-only category strip** under the search field (selected = white, idle = grey; no pill / background chrome). Tapping a label filters the scroll list to that page; Geode’s search still runs on the visible rows.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.6.0**). Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill.
+
+**Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 
 | Tab | Contents |
 |-----|----------|
-| Main | Enabled, Safe Mode, Assist Mode, **Window** (`window-unit` / `ticks-all` / `ticks-wave`), overlay / pause chrome, light diagnostics (`debug-logging`, `perf-trace`, `lag-probe`) |
-| Scope | Practice / start-pos / percent window / off-ranges |
-| Assist | Action rows (Reset Learn / Export·Import Config) + Algorithm / Smart / Learning / Trigger World |
-| Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius |
-| Modes | Cube…Swing per-mode blocks |
+| Main | Enabled, Safe Mode, Assist Mode, **Window**, Smart / Adaptive prediction |
+| Assist | Where it runs (ex-Scope: practice / percent / off-ranges) + Algorithm (pick, engine, orbs, budgets) |
+| Learn | Learning toggles + Export / Import / Cloud Configs |
+| Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius, Trigger World |
+| Modes | Cube…Swing icon picker + per-mode blocks |
 | Visual | Trajectory, Bake Visualizer, Save Feedback / Color |
+| UI | Accent Color, overlay / pause chrome, light diagnostics |
 | Keys | Hotkeys (no Preset / F6 cycle) |
 | Dev | Dev Lab session / eval / overlay / actions |
 
@@ -220,7 +223,7 @@ Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` witho
 
 ## Settings table
 
-Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off Ranges) → **Assist** (Algorithm / Smart / Learning / Trigger World) → **Bake** → **Modes** → **Visual** → **Keys** → **Dev**. Preset packs are removed — windows live only on Main.
+Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assist** (where it runs + Algorithm) → **Learn** (Learning + Config) → **Bake** → **Modes** → **Visual** → **UI** (Accent + chrome) → **Keys** → **Dev**. Preset packs are removed — windows live only on Main. Scope gates live under Assist.
 
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
@@ -240,13 +243,15 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | show-pause-hub | bool | true | | | Main — EB button |
 | save-feedback-sound | bool | false | | | Visual — per-tick MP3 cue on delayed inject |
 | save-feedback-color | bool | false | | | Visual — flash player icon on delayed inject |
-| save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart); palette 1…8 `#ff614e`…`#c069fa`; cap 64 markers |
+| save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart); **+N = physics ticks held before inject, not proof of a save**; palette 1…8 `#ff614e`…`#c069fa`; cap 64 markers |
 | save-icon-color | rgb | #7CFF4A | | | Visual — flash color when save-feedback-color is on |
-| assist-only-practice | bool | false | | | Scope — gates all Assist Modes |
-| assist-startpos-only | bool | false | | | Scope |
-| assist-percent-min | int | 0 | 0 | 100 | Scope |
-| assist-percent-max | int | 100 | 0 | 100 | Scope |
-| assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
+| assist-only-practice | bool | false | | | Assist — where it runs (ex-Scope); gates all Assist Modes |
+| assist-startpos-only | bool | false | | | Assist — where it runs |
+| assist-percent-min | int | 0 | 0 | 100 | Assist — where it runs |
+| assist-percent-max | int | 100 | 0 | 100 | Assist — where it runs |
+| assist-off-ranges | string | `` | JSON `[[from,to],…]` | | Assist — canonical off-range list (soft cap 32); desktop EbElementList |
+| assist-off-N-from/to | float | -1 | -1 | 100 | Assist — legacy N=1..6; -1 unused; migrate/mirror into assist-off-ranges |
+| desktop-accent-color | rgb | #7B61FF | | | UI — desktop ImGui accent + wave fill |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
 | assist-pick | string | v1 | v1/v2 (aliases Legacy/New) | | Assist / Algorithm — G1 pick. **v1** = latest-robust; **v2** = foresight-first (`AssistPickV2`) + `LongForesight` |
@@ -264,7 +269,9 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | smart-horizon | int | 0 | 0 | 320 | Smart — 0=auto |
 | robust-k | int | 0 | 0 | 3 | Smart — 0=auto (mode/speed/dt var → 1–3) |
 | robust-jitter | bool | false | | | Smart — re-sim top cand at firstDt ±3% |
-| adaptive-plan | bool | true | | | Adaptive — prefer Adaptive Prediction Planner on Live when search path exists; until then classic `plan()` still runs. Never raises Max Assist or look-ahead |
+| adaptive-plan | bool | true | | | Main Adaptive — prefer Adaptive Prediction Planner on Live; Modes `*-adaptive-overwrite` may override per gamemode. Never raises Max Assist or look-ahead |
+| *-adaptive-overwrite | bool | false | | | Modes — when on, that mode uses its Adaptive Plan / screen / verify / reserve instead of Main |
+| *-adaptive-plan / screen-ticks / verify-quantum / reserve-pct | bool/int | Main defaults | same as Main | | Modes — Adaptive knobs when overwrite is on |
 | adaptive-screen-ticks | int | 24 | 8 | 64 | Adaptive — Phase A/B screen quantum per delay (subdivides tick-budget only) |
 | adaptive-verify-quantum | int | 16 | 8 | 64 | Adaptive — Phase C verify grant size |
 | adaptive-reserve-pct | int | 15 | 0 | 40 | Adaptive — % of Dynamic Plan Tick Budget reserved for Phase D ties |

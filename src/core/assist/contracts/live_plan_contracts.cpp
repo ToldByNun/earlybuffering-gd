@@ -134,6 +134,26 @@ bool EbLivePlanContracts::intendedOrbWindowScanAllowed(bool assistOrbs, bool inp
     return assistOrbs && budgetOk;
 }
 
+int EbLivePlanContracts::adaptiveHonestAliveMinTicks(int screenQuantum, int knownDeathTick,
+                                                     int modelCap) {
+    int minTicks = std::max(1, screenQuantum);
+    if (knownDeathTick > 0) {
+        minTicks = std::max(minTicks, knownDeathTick);
+    }
+    if (modelCap > 0) {
+        minTicks = std::min(minTicks, modelCap);
+    }
+    return minTicks;
+}
+
+bool EbLivePlanContracts::adaptiveSeedCountsAlive(int ticksRan, int screenQuantum,
+                                                  int knownDeathTick, int modelCap) {
+    if (ticksRan <= 0) {
+        return false;
+    }
+    return ticksRan >= adaptiveHonestAliveMinTicks(screenQuantum, knownDeathTick, modelCap);
+}
+
 bool EbLivePlanContracts::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -209,6 +229,14 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(!intendedSpatialOrbHintAllowed(false), "orb-hint-off");
     expect(intendedOrbWindowScanAllowed(true, true, true), "orb-scan-iw-intended");
     expect(!intendedOrbWindowScanAllowed(true, true, false), "orb-scan-budget");
+
+    // AP10 — short Adaptive seed must not beat a known later death.
+    expect(!adaptiveSeedCountsAlive(44, 24, 54), "adaptive-seed-before-d0-death-rejected");
+    expect(adaptiveSeedCountsAlive(54, 24, 54), "adaptive-seed-covers-d0-death");
+    expect(adaptiveSeedCountsAlive(24, 24, -1), "adaptive-seed-quantum-no-death");
+    expect(!adaptiveSeedCountsAlive(23, 24, -1), "adaptive-seed-below-quantum");
+    expect(adaptiveHonestAliveMinTicks(24, 54, 40) == 40, "adaptive-seed-cap-clamp");
+    expect(adaptiveHonestAliveMinTicks(24, 54, 100) == 54, "adaptive-seed-death-floor");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

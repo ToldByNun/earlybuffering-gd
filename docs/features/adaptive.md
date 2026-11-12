@@ -1,6 +1,7 @@
 # Adaptive Plan
 
-Setting: **Assist → Adaptive Plan** (`adaptive-plan`).
+Setting: **Main → Adaptive Prediction** (`adaptive-plan`).  
+Per-mode override: **Modes → Adaptive Overwrite** (`*-adaptive-overwrite`).
 
 ## Plain English
 
@@ -25,7 +26,7 @@ If Adaptive is unsure, it can fall back to classic Live planning with the **rema
 - You are still learning windows / Safe Mode
 - You are bisecting a bug (“is Adaptive involved?”)
 
-## Knobs (Assist → Adaptive)
+## Knobs (Main → Adaptive)
 
 Names vary slightly in the UI, but the idea is:
 
@@ -33,6 +34,14 @@ Names vary slightly in the UI, but the idea is:
 - reserve percent (keep some ticks for later)
 - overall tick budget still caps the press
 
+Main Adaptive is the **default / fallback**. Under **Modes**, turn **Adaptive Overwrite** on to use different Adaptive knobs for Wave/Ship/etc. without changing the Main defaults.
+
 If Adaptive feels “always budget”, raise tick budget carefully or turn Adaptive off and retest.
+
+## Honesty (short seeds)
+
+A quick screen that looks Alive for ~24 ticks must **not** arm Delay when another delay (often d0) already died later in the same search. Live waits until the candidate has been simulated at least through that known death clock (or the look-ahead wall).
+
+Red **+Nt** save-feedback counters mean “held N physics ticks before inject” — not “this click was a save.”
 
 Deep notes: [Assist reference](/assist_reference).

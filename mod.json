@@ -8,7 +8,7 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.5.1",
+	"version": "v1.6.0",
 	"developer": "Audesign",
 	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -34,7 +34,7 @@
 		"title-general": {
 			"type": "title",
 			"name": "Main",
-			"description": "On/off, Safe Mode, Assist Mode, delay windows (unit + default + wave), pause/overlay chrome, and light diagnostics."
+			"description": "On/off, Safe Mode, Assist Mode, delay windows, and smart/adaptive prediction."
 		},
 		"enabled": {
 			"type": "bool",
@@ -91,45 +91,87 @@
 			"min": 0,
 			"max": 48
 		},
-		"show-overlay": {
+		"title-smart": {
+			"type": "title",
+			"name": "Smart Prediction",
+			"description": "Multi-jump foresight for Live / Hybrid. Replay/Brute ignore these."
+		},
+		"smart-depth": {
+			"type": "int",
+			"name": "Smart Depth (Jumps Ahead)",
+			"description": "How many jumps ahead Live/Hybrid may look. Depth 1 = single plan() (v1 choose). 2–3 run planSequence follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
+			"default": 1,
+			"min": 1,
+			"max": 3
+		},
+		"smart-combos": {
+			"type": "int",
+			"name": "Smart Combos",
+			"description": "Max timing combinations tested when Smart Depth > 1. Higher = smarter sequences, more CPU. Lower = faster, may pick a weaker first delay. Also limited by Sim Budget.",
+			"default": 48,
+			"min": 8,
+			"max": 256
+		},
+		"smart-horizon": {
+			"type": "int",
+			"name": "Smart Horizon (Ticks)",
+			"description": "How far (ticks) the multi-jump search looks. 0 = automatic. Higher = plans further ahead (more CPU). Lower = shorter foresight. Only used when Smart Depth > 1.",
+			"default": 0,
+			"min": 0,
+			"max": 320
+		},
+		"robust-k": {
+			"type": "int",
+			"name": "Robust Window (±k)",
+			"description": "Neighbor ticks around a pick that must also be safe (±k). 0 = automatic from mode/speed/frame jitter (recommended). Higher fixed k = safer but may delay more / Pass more. 1 ≈ classic earliest±1.",
+			"default": 0,
+			"min": 0,
+			"max": 3
+		},
+		"robust-jitter": {
 			"type": "bool",
-			"name": "In-Level Overlay",
-			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
+			"name": "Robust firstDt Jitter",
+			"description": "Before locking a Delay, re-check with slightly shorter/longer first frame time (±3%). On = rejects fragile timings (extra sims, safer under unstable FPS). Off = fewer sims, default.",
 			"default": false
 		},
-		"show-pause-hub": {
+		"title-adaptive": {
+			"type": "title",
+			"name": "Adaptive Prediction",
+			"description": "Contracts for the Adaptive Prediction Planner. Max Assist ticks, Prediction Horizon (look-ahead), and Dynamic Plan Tick Budget stay separate — Adaptive only redistributes sim work inside the tick/time ceilings and never invents extra real clicks. Search path lands in later builds; settings are wired now."
+		},
+		"adaptive-plan": {
 			"type": "bool",
-			"name": "Pause EB Button",
-			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Scope, Assist, Bake, Modes, Visual, Keys, Dev). Off = open settings only from the Geode menu.",
+			"name": "Adaptive Plan",
+			"description": "Prefer Adaptive Prediction Planner on Live presses when available. Off = classic equal-walk search. Does not raise Max Assist or look-ahead; only changes how tick-budget is spent. Until Adaptive search ships, both paths still use classic plan().",
 			"default": true
 		},
-		"show-pause-bake": {
-			"type": "bool",
-			"name": "Pause Status Lines",
-			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
-			"default": false
+		"adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Adaptive Screen Ticks",
+			"description": "Short simulation quantum for Adaptive Phase A/B (baseline + candidate screening) per delay. Higher = fewer false culls, more CPU. Lower = cheaper screen. Clamped inside tick-budget; never raises Max Assist or look-ahead.",
+			"default": 24,
+			"min": 8,
+			"max": 64
 		},
-		"debug-logging": {
-			"type": "bool",
-			"name": "Debug Logging",
-			"description": "Writes planner / SAVED lines to the Geode console. On = useful when tuning; Off = quieter console. Does not change assist strength.",
-			"default": false
+		"adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Adaptive Verify Quantum",
+			"description": "How many extra physics ticks Adaptive Phase C grants a promising candidate per step. Higher = deeper verification per grant. Lower = finer budget splitting across candidates.",
+			"default": 16,
+			"min": 8,
+			"max": 64
 		},
-		"perf-trace": {
-			"type": "bool",
-			"name": "Perf Trace",
-			"description": "Times assist work every physics tick and can write earlybuffer-perf.log. On = noisy and a bit of overhead — use only when hunting hitch causes. Prefer Lag Probe for death/reset lag.",
-			"default": false
-		},
-		"lag-probe": {
-			"type": "bool",
-			"name": "Lag Probe",
-			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
-			"default": false
+		"adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Adaptive Reserve %",
+			"description": "Percent of Dynamic Plan Tick Budget held for Phase D ties / unclear cases (0–40). Higher = more late re-checks when two delays look similar. Does not grow Max Assist or look-ahead.",
+			"default": 15,
+			"min": 0,
+			"max": 40
 		},
 		"title-scope": {
 			"type": "title",
-			"name": "Scope",
+			"name": "Where Assist Runs",
 			"description": "Where assist is allowed: practice, start-pos, percent window, and off-ranges. Platformer is always blocked."
 		},
 		"assist-only-practice": {
@@ -163,7 +205,13 @@
 		"title-assist-off": {
 			"type": "title",
 			"name": "Assist Off Ranges (%)",
-			"description": "Percent holes where assist is forced off (even inside Min–Max). Set From/To for a range; leave -1 to ignore that slot. Inclusive."
+			"description": "Percent holes where assist is forced off (even inside Min–Max). Desktop menu: add/remove list. Classic: up to six From/To rows (-1 = unused). Inclusive."
+		},
+		"assist-off-ranges": {
+			"type": "string",
+			"name": "Assist Off Ranges (JSON)",
+			"description": "Canonical off-range list as JSON [[from,to],…]. Soft cap 32. Desktop menu edits this; classic six float rows migrate into / mirror the first six. Leave empty to import legacy slots once.",
+			"default": ""
 		},
 		"assist-off-1-from": {
 			"type": "float",
@@ -321,38 +369,9 @@
 			},
 			"description": "End of off-range 6 (%). -1 = unused."
 		},
-		"title-assist-actions": {
-			"type": "title",
-			"name": "Assist Actions",
-			"description": "Quick actions for learning reset and config files."
-		},
-		"reset-learn-action": {
-			"type": "custom:eb-action",
-			"name": "Reset Level Learning",
-			"description": "Clears learned bias/trust for the current level so auto-tune starts fresh. Does not change your tick window settings.",
-			"button-text": "reset"
-		},
-		"export-config-action": {
-			"type": "custom:eb-action",
-			"name": "Export Config",
-			"description": "Saves your EarlyBuffer settings to a JSON file you can back up or share.",
-			"button-text": "export"
-		},
-		"import-config-action": {
-			"type": "custom:eb-action",
-			"name": "Import Config",
-			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
-			"button-text": "import"
-		},
-		"browse-cloud-configs-action": {
-			"type": "custom:eb-action",
-			"name": "Cloud Configs",
-			"description": "Browse, install and share community settings packs.",
-			"button-text": "cloud"
-		},
 		"title-algorithm": {
 			"type": "title",
-			"name": "Algorithm",
+			"name": "Assist",
 			"description": "How the planner decides delays: pick mode, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section. Bake Radius lives under Bake."
 		},
 		"death-slack": {
@@ -441,87 +460,9 @@
 			"description": "On = jump releases can be delayed (useful for wave/ship/robot short-hops). Off = releases are immediate.",
 			"default": true
 		},
-		"title-smart": {
-			"type": "title",
-			"name": "Smart Prediction (Live / Hybrid)",
-			"description": "Multi-jump foresight for Live / Hybrid. Replay/Brute ignore these."
-		},
-		"smart-depth": {
-			"type": "int",
-			"name": "Smart Depth (Jumps Ahead)",
-			"description": "How many jumps ahead Live/Hybrid may look. Depth 1 = single plan() (v1 choose). 2–3 run planSequence follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
-			"default": 1,
-			"min": 1,
-			"max": 3
-		},
-		"smart-combos": {
-			"type": "int",
-			"name": "Smart Combos",
-			"description": "Max timing combinations tested when Smart Depth > 1. Higher = smarter sequences, more CPU. Lower = faster, may pick a weaker first delay. Also limited by Sim Budget.",
-			"default": 48,
-			"min": 8,
-			"max": 256
-		},
-		"smart-horizon": {
-			"type": "int",
-			"name": "Smart Horizon (Ticks)",
-			"description": "How far (ticks) the multi-jump search looks. 0 = automatic. Higher = plans further ahead (more CPU). Lower = shorter foresight. Only used when Smart Depth > 1.",
-			"default": 0,
-			"min": 0,
-			"max": 320
-		},
-		"robust-k": {
-			"type": "int",
-			"name": "Robust Window (±k)",
-			"description": "Neighbor ticks around a pick that must also be safe (±k). 0 = automatic from mode/speed/frame jitter (recommended). Higher fixed k = safer but may delay more / Pass more. 1 ≈ classic earliest±1.",
-			"default": 0,
-			"min": 0,
-			"max": 3
-		},
-		"robust-jitter": {
-			"type": "bool",
-			"name": "Robust firstDt Jitter",
-			"description": "Before locking a Delay, re-check with slightly shorter/longer first frame time (±3%). On = rejects fragile timings (extra sims, safer under unstable FPS). Off = fewer sims, default.",
-			"default": false
-		},
-		"title-adaptive": {
-			"type": "title",
-			"name": "Adaptive Prediction (Live)",
-			"description": "Contracts for the Adaptive Prediction Planner. Max Assist ticks, Prediction Horizon (look-ahead), and Dynamic Plan Tick Budget stay separate — Adaptive only redistributes sim work inside the tick/time ceilings and never invents extra real clicks. Search path lands in later builds; settings are wired now."
-		},
-		"adaptive-plan": {
-			"type": "bool",
-			"name": "Adaptive Plan",
-			"description": "Prefer Adaptive Prediction Planner on Live presses when available. Off = classic equal-walk search. Does not raise Max Assist or look-ahead; only changes how tick-budget is spent. Until Adaptive search ships, both paths still use classic plan().",
-			"default": true
-		},
-		"adaptive-screen-ticks": {
-			"type": "int",
-			"name": "Adaptive Screen Ticks",
-			"description": "Short simulation quantum for Adaptive Phase A/B (baseline + candidate screening) per delay. Higher = fewer false culls, more CPU. Lower = cheaper screen. Clamped inside tick-budget; never raises Max Assist or look-ahead.",
-			"default": 24,
-			"min": 8,
-			"max": 64
-		},
-		"adaptive-verify-quantum": {
-			"type": "int",
-			"name": "Adaptive Verify Quantum",
-			"description": "How many extra physics ticks Adaptive Phase C grants a promising candidate per step. Higher = deeper verification per grant. Lower = finer budget splitting across candidates.",
-			"default": 16,
-			"min": 8,
-			"max": 64
-		},
-		"adaptive-reserve-pct": {
-			"type": "int",
-			"name": "Adaptive Reserve %",
-			"description": "Percent of Dynamic Plan Tick Budget held for Phase D ties / unclear cases (0–40). Higher = more late re-checks when two delays look similar. Does not grow Max Assist or look-ahead.",
-			"default": 15,
-			"min": 0,
-			"max": 40
-		},
 		"title-learning": {
 			"type": "title",
-			"name": "Learning",
+			"name": "Learn",
 			"description": "Optional per-level learning and self-bake (both off by default). Learning never changes your tick window numbers — only soft bias/trust."
 		},
 		"auto-tune": {
@@ -550,33 +491,34 @@
 			"default": true,
 			"enable-if": "self-bake"
 		},
-		"title-trigger-world": {
+		"title-assist-actions": {
 			"type": "title",
-			"name": "Trigger World",
-			"description": "Caches moving/toggling solids for the shadow sim so plans see them more accurately. Follow-player style triggers stay special-cased."
+			"name": "Config",
+			"description": "Quick actions for learning reset and config files."
 		},
-		"trigger-bake": {
-			"type": "bool",
-			"name": "Trigger World Bake",
-			"description": "On = load/build a cache of static movers/toggles for this level and use it in the shadow sim (better plans on moving ground). Off = old behavior (movers often treated as unknown). First enter of a level may build in the background.",
-			"default": true
+		"reset-learn-action": {
+			"type": "custom:eb-action",
+			"name": "Reset Level Learning",
+			"description": "Clears learned bias/trust for the current level so auto-tune starts fresh. Does not change your tick window settings.",
+			"button-text": "reset"
 		},
-		"trigger-bake-skip-dynamic": {
-			"type": "bool",
-			"name": "Skip Dynamic Triggers",
-			"description": "On (recommended) = do not try to simulate follow-player / click-timed toggles in the cache (they stay unknown — safer/lighter). Off = attempt a cheap live snap to the ghost for simple lock/follow-Y cases (can help, but dual/rotate-follow still unknown).",
-			"default": true,
-			"enable-if": "trigger-bake"
+		"export-config-action": {
+			"type": "custom:eb-action",
+			"name": "Export Config",
+			"description": "Saves your EarlyBuffer settings to a JSON file you can back up or share.",
+			"button-text": "export"
 		},
-		"assist-verify": {
-			"type": "string",
-			"name": "Assist Verify",
-			"description": "Debug only: when two planners disagree, randomly try one and log VERIFY lines (uses extra budget). Prefer Off for normal play.",
-			"one-of": [
-				"off",
-				"ab"
-			],
-			"default": "off"
+		"import-config-action": {
+			"type": "custom:eb-action",
+			"name": "Import Config",
+			"description": "Loads EarlyBuffer settings from a JSON file (overwrites current values).",
+			"button-text": "import"
+		},
+		"browse-cloud-configs-action": {
+			"type": "custom:eb-action",
+			"name": "Cloud Configs",
+			"description": "Browse, install and share community settings packs.",
+			"button-text": "cloud"
 		},
 		"title-bake-actions": {
 			"type": "title",
@@ -620,6 +562,34 @@
 			"default": 0,
 			"min": 0,
 			"max": 128
+		},
+		"title-trigger-world": {
+			"type": "title",
+			"name": "Trigger World",
+			"description": "Caches moving/toggling solids for the shadow sim so plans see them more accurately. Follow-player style triggers stay special-cased."
+		},
+		"trigger-bake": {
+			"type": "bool",
+			"name": "Trigger World Bake",
+			"description": "On = load/build a cache of static movers/toggles for this level and use it in the shadow sim (better plans on moving ground). Off = old behavior (movers often treated as unknown). First enter of a level may build in the background.",
+			"default": true
+		},
+		"trigger-bake-skip-dynamic": {
+			"type": "bool",
+			"name": "Skip Dynamic Triggers",
+			"description": "On (recommended) = do not try to simulate follow-player / click-timed toggles in the cache (they stay unknown — safer/lighter). Off = attempt a cheap live snap to the ghost for simple lock/follow-Y cases (can help, but dual/rotate-follow still unknown).",
+			"default": true,
+			"enable-if": "trigger-bake"
+		},
+		"assist-verify": {
+			"type": "string",
+			"name": "Assist Verify",
+			"description": "Debug only: when two planners disagree, randomly try one and log VERIFY lines (uses extra budget). Prefer Off for normal play.",
+			"one-of": [
+				"off",
+				"ab"
+			],
+			"default": "off"
 		},
 		"title-cube": {
 			"type": "title",
@@ -673,6 +643,46 @@
 			"max": 2,
 			"enable-if": "cube-overwrite"
 		},
+		"cube-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Cube",
+			"default": false,
+			"description": "On = use Cube Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"cube-adaptive-plan": {
+			"type": "bool",
+			"name": "Cube Adaptive Plan",
+			"default": true,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Cube when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"cube-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Cube Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Screen quantum for Cube Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"cube-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Cube Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Verify quantum for Cube Adaptive Phase C when overwrite is on."
+		},
+		"cube-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Cube Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Reserve percent for Cube Adaptive Phase D when overwrite is on."
+		},
 		"title-ship": {
 			"type": "title",
 			"name": "Ship"
@@ -724,6 +734,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "ship-overwrite"
+		},
+		"ship-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Ship",
+			"default": false,
+			"description": "On = use Ship Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"ship-adaptive-plan": {
+			"type": "bool",
+			"name": "Ship Adaptive Plan",
+			"default": true,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Ship when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"ship-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Ship Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Screen quantum for Ship Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"ship-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Ship Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Verify quantum for Ship Adaptive Phase C when overwrite is on."
+		},
+		"ship-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Ship Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Reserve percent for Ship Adaptive Phase D when overwrite is on."
 		},
 		"title-ball": {
 			"type": "title",
@@ -777,6 +827,46 @@
 			"max": 2,
 			"enable-if": "ball-overwrite"
 		},
+		"ball-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Ball",
+			"default": false,
+			"description": "On = use Ball Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"ball-adaptive-plan": {
+			"type": "bool",
+			"name": "Ball Adaptive Plan",
+			"default": true,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Ball when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"ball-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Ball Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Screen quantum for Ball Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"ball-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Ball Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Verify quantum for Ball Adaptive Phase C when overwrite is on."
+		},
+		"ball-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Ball Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Reserve percent for Ball Adaptive Phase D when overwrite is on."
+		},
 		"title-ufo": {
 			"type": "title",
 			"name": "UFO"
@@ -828,6 +918,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "ufo-overwrite"
+		},
+		"ufo-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite UFO",
+			"default": false,
+			"description": "On = use UFO Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"ufo-adaptive-plan": {
+			"type": "bool",
+			"name": "UFO Adaptive Plan",
+			"default": true,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for UFO when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"ufo-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "UFO Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Screen quantum for UFO Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"ufo-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "UFO Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Verify quantum for UFO Adaptive Phase C when overwrite is on."
+		},
+		"ufo-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "UFO Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Reserve percent for UFO Adaptive Phase D when overwrite is on."
 		},
 		"title-wave": {
 			"type": "title",
@@ -881,6 +1011,46 @@
 			"max": 2,
 			"enable-if": "wave-overwrite"
 		},
+		"wave-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Wave",
+			"default": false,
+			"description": "On = use Wave Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"wave-adaptive-plan": {
+			"type": "bool",
+			"name": "Wave Adaptive Plan",
+			"default": true,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Wave when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"wave-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Wave Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Screen quantum for Wave Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"wave-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Wave Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Verify quantum for Wave Adaptive Phase C when overwrite is on."
+		},
+		"wave-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Wave Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Reserve percent for Wave Adaptive Phase D when overwrite is on."
+		},
 		"title-robot": {
 			"type": "title",
 			"name": "Robot"
@@ -932,6 +1102,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "robot-overwrite"
+		},
+		"robot-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Robot",
+			"default": false,
+			"description": "On = use Robot Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"robot-adaptive-plan": {
+			"type": "bool",
+			"name": "Robot Adaptive Plan",
+			"default": true,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Robot when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"robot-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Robot Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Screen quantum for Robot Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"robot-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Robot Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Verify quantum for Robot Adaptive Phase C when overwrite is on."
+		},
+		"robot-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Robot Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Reserve percent for Robot Adaptive Phase D when overwrite is on."
 		},
 		"title-spider": {
 			"type": "title",
@@ -985,6 +1195,46 @@
 			"max": 2,
 			"enable-if": "spider-overwrite"
 		},
+		"spider-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Spider",
+			"default": false,
+			"description": "On = use Spider Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"spider-adaptive-plan": {
+			"type": "bool",
+			"name": "Spider Adaptive Plan",
+			"default": true,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Spider when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"spider-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Spider Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Screen quantum for Spider Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"spider-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Spider Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Verify quantum for Spider Adaptive Phase C when overwrite is on."
+		},
+		"spider-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Spider Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Reserve percent for Spider Adaptive Phase D when overwrite is on."
+		},
 		"title-swing": {
 			"type": "title",
 			"name": "Swing"
@@ -1037,6 +1287,46 @@
 			"max": 2,
 			"enable-if": "swing-overwrite"
 		},
+		"swing-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Swing",
+			"default": false,
+			"description": "On = use Swing Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"swing-adaptive-plan": {
+			"type": "bool",
+			"name": "Swing Adaptive Plan",
+			"default": true,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Swing when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"swing-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Swing Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Screen quantum for Swing Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"swing-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Swing Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Verify quantum for Swing Adaptive Phase C when overwrite is on."
+		},
+		"swing-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Swing Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Reserve percent for Swing Adaptive Phase D when overwrite is on."
+		},
 		"show-trajectory": {
 			"type": "bool",
 			"name": "Trajectory Visualizer",
@@ -1073,10 +1363,70 @@
 			"description": "Color used for the icon flash when Save Feedback Color is on.",
 			"default": "#7CFF4A"
 		},
+		"title-ui": {
+			"type": "title",
+			"name": "UI",
+			"description": "In-level overlay, pause chrome, classic Geode settings menu, accent color, and light diagnostics."
+		},
+		"desktop-accent-color": {
+			"type": "color",
+			"name": "Accent Color",
+			"description": "Desktop menu accent — sidebar wave, checkboxes, sliders, and active chrome. Default is EarlyBuffer purple.",
+			"default": "#7B61FF"
+		},
+		"show-overlay": {
+			"type": "bool",
+			"name": "In-Level Overlay",
+			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
+			"default": false
+		},
+		"show-pause-hub": {
+			"type": "bool",
+			"name": "Pause EB Button",
+			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Assist, Learn, Bake, Modes, Visual, UI, Keys, Dev). Off = open settings only from the Geode menu.",
+			"default": true
+		},
+		"show-pause-bake": {
+			"type": "bool",
+			"name": "Pause Status Lines",
+			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
+			"default": false
+		},
+		"desktop-classic-settings": {
+			"type": "bool",
+			"name": "Classic Settings Menu",
+			"description": "Desktop only. On = open the classic Geode settings popup (Pause EB / menu hotkey). Off = use the ImGui desktop menu. Android/iOS always use classic.",
+			"default": false
+		},
+		"debug-logging": {
+			"type": "bool",
+			"name": "Debug Logging",
+			"description": "Writes planner / SAVED lines to the Geode console. On = useful when tuning; Off = quieter console. Does not change assist strength.",
+			"default": false
+		},
+		"perf-trace": {
+			"type": "bool",
+			"name": "Perf Trace",
+			"description": "Times assist work every physics tick and can write earlybuffer-perf.log. On = noisy and a bit of overhead — use only when hunting hitch causes. Prefer Lag Probe for death/reset lag.",
+			"default": false
+		},
+		"lag-probe": {
+			"type": "bool",
+			"name": "Lag Probe",
+			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
+			"default": false
+		},
 		"title-keys": {
 			"type": "title",
 			"name": "Keys",
 			"description": "In-game hotkeys. Each hotkey edits the same setting as the matching Main / Assist / Visual control."
+		},
+		"hotkey-desktop-menu": {
+			"type": "keybind",
+			"name": "Toggle Desktop Menu",
+			"description": "Desktop: toggles the ImGui settings menu when Classic Settings Menu is off. When Classic is on (or on mobile), opens the Geode settings popup. Default Right Shift.",
+			"default": "RightShift",
+			"category": "gameplay"
 		},
 		"hotkey-debug": {
 			"type": "keybind",
@@ -1296,10 +1646,23 @@
 	},
 	"resources": {
 		"files": [
-			"resources/cues/*.mp3"
+			"resources/cues/*.mp3",
+			"resources/fonts/Inter-Regular.ttf",
+			"resources/fonts/Inter-SemiBold.ttf"
 		],
 		"sprites": [
-			"resources/ui/eb_star.png"
+			"resources/ui/eb_star.png",
+			"resources/ui/eb_github.png",
+			"resources/ui/eb_discord.png",
+			"resources/ui/eb_share.png",
+			"resources/ui/eb_mode_cube.png",
+			"resources/ui/eb_mode_ship.png",
+			"resources/ui/eb_mode_ball.png",
+			"resources/ui/eb_mode_ufo.png",
+			"resources/ui/eb_mode_wave.png",
+			"resources/ui/eb_mode_robot.png",
+			"resources/ui/eb_mode_spider.png",
+			"resources/ui/eb_mode_swing.png"
 		]
 	}
 }

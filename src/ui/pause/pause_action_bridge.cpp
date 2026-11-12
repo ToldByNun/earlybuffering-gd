@@ -7,6 +7,7 @@
 #include "../../core/replay/replay_import.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../dev/dev_session.hpp"
+#include "../desktop_menu/desktop_menu.hpp"
 #include "../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../visualizers/trajectory_visualizer.hpp"
 #include "actions/pause_config_actions.hpp"
@@ -26,6 +27,7 @@
 #endif
 #include <commdlg.h>
 #include <windows.h>
+#include "../desktop_menu/desktop_menu_alert.hpp"
 #endif
 
 void EbPauseActionBridge::refreshPauseLabels(PauseLayer* self) {
@@ -56,21 +58,18 @@ void EbPauseActionBridge::handleImportedPath(std::filesystem::path const& path) 
     auto loaded = EbReplayImport::load(path);
     if (loaded.isErr()) {
         EbAssistLog::info(fmt::format("Import failed: {}", loaded.unwrapErr()));
-        FLAlertLayer::create("EarlyBuffer", loaded.unwrapErr().c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", loaded.unwrapErr().c_str());
         return;
     }
     EbBakeMap::get().setPendingReplay(loaded.unwrap());
     EbAssistController::get().updateOverlay();
     auto const* result = EbBakeMap::get().pendingReplay();
-    FLAlertLayer::create("EarlyBuffer",
-                         fmt::format("Imported {}\n{} events @ {:.0f} tps ({})\n\n"
-                                     "Press Bake Map for replay windows.\n"
-                                     "Brute Bake ignores this and searches the level itself.",
-                                     result->sourceName, result->events.size(), result->tps,
-                                     result->format)
-                             .c_str(),
-                         "OK")
-        ->show();
+    EbDesktopAlert::info(
+        "EarlyBuffer",
+        fmt::format("Imported {}\n{} events @ {:.0f} tps ({})\n\n"
+                    "Press Bake Map for replay windows.\n"
+                    "Brute Bake ignores this and searches the level itself.",
+                    result->sourceName, result->events.size(), result->tps, result->format));
     if (auto* pause = geode::prelude::CCScene::get()->getChildByType<PauseLayer>(0)) {
         refreshPauseLabels(pause);
     }
@@ -78,7 +77,7 @@ void EbPauseActionBridge::handleImportedPath(std::filesystem::path const& path) 
 
 void EbPauseActionBridge::importReplay() {
     if (EbBakeMap::get().isBaking() || EbBakeScheduler::get().running()) {
-        FLAlertLayer::create("EarlyBuffer", "Bake in progress — wait or cancel.", "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", "Bake in progress — wait or cancel.");
         return;
     }
 #ifdef GEODE_IS_WINDOWS
@@ -97,27 +96,21 @@ void EbPauseActionBridge::importReplay() {
 void EbPauseActionBridge::startBake(bool brute) {
     auto* playLayer = PlayLayer::get();
     if (!playLayer) {
-        FLAlertLayer::create("EarlyBuffer", "No level loaded.", "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", "No level loaded.");
         return;
     }
     if (EbBakeMap::get().isBaking() || EbBakeScheduler::get().running()) {
-        FLAlertLayer::create("EarlyBuffer", "Bake already running.", "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", "Bake already running.");
         return;
     }
     if (!brute && !EbBakeMap::get().pendingReplay()) {
-        FLAlertLayer::create("EarlyBuffer",
-                             "Bake Map needs a replay.\nImport Replay first — or use Brute "
-                             "Bake\n(no macro, explores safe clicks).",
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", "Bake Map needs a replay.\nImport Replay first — or use Brute "
+                             "Bake\n(no macro, explores safe clicks).");
         return;
     }
     auto snap = EbAssistController::get().ensureStartSnapshot(playLayer);
     if (snap.isErr()) {
-        FLAlertLayer::create("EarlyBuffer",
-                             "Reset the level once (play from start),\nthen pause and bake again.",
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", "Reset the level once (play from start),\nthen pause and bake again.");
         return;
     }
 
@@ -128,7 +121,7 @@ void EbPauseActionBridge::startBake(bool brute) {
     bool ok = EbBakeScheduler::get().start(playLayer, slot, EbStageConfig::bakeRadius(),
                                          brute ? BakeMethod::BruteForce : BakeMethod::Replay);
     if (!ok) {
-        FLAlertLayer::create("EarlyBuffer", "Could not start bake.", "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", "Could not start bake.");
         return;
     }
     EbAssistController::get().updateOverlay();
@@ -238,6 +231,16 @@ void EbPauseActionBridge::devCopyReport() {
 }
 
 void EbPauseActionBridge::openModSettings() {
+    if (EbDesktopMenu::useImGuiShell()) {
+        // ImGui XOR classic: do not stack over an open Geode popup.
+        if (EbInLevelSettingsFilterKeeper::isOpen())
+            return;
+        if (!EbDesktopMenu::isOpen())
+            EbDesktopMenu::setOpen(true);
+        return;
+    }
+    if (EbDesktopMenu::isOpen())
+        EbDesktopMenu::setOpen(false);
     if (EbInLevelSettingsFilterKeeper::isOpen())
         return;
     auto* mod = geode::prelude::Mod::get();
