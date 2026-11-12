@@ -8,7 +8,11 @@
 ### Dev Lab UX
 - Desktop Dev tab uses normal section cards (same chrome as Main/Assist): **Now → Setup → Setup Extras → Record → Eval → Save → Danger**.
 - One Record toggle; Eval settings + Eval Last/Session in an Eval section (no TreeNode foldouts).
-- Save = Copy Report (primary); Session Path + Dump Diag secondary. Clear Traces confirms.
+- Save = Research Pack (primary) + Copy Report / Session Path / Dump Diag. Clear Traces confirms.
+
+### Dev Lab Research Pack
+- **Export Research Pack** = one click: Eval Session (else Eval Last) → `research/research_<stamp>/` (`MANIFEST`, `session.json`, `report.txt`/`json`, fingerprint, `config.json` without keybinds) → clipboard = pack folder path.
+- Copy Report also writes `earlybuffer-dev-report.json` when structured `jsonLine` exists.
 
 ## v1.6.0
 

@@ -1629,8 +1629,14 @@
 		"dev-copy-report-action": {
 			"type": "custom:eb-action",
 			"name": "Copy Last Dev Report",
-			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
+			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard. Also writes earlybuffer-dev-report.txt (+ .json when available).",
 			"button-text": "copy"
+		},
+		"dev-export-research-pack-action": {
+			"type": "custom:eb-action",
+			"name": "Export Research Pack",
+			"description": "One click: runs Eval Session (or Eval Last), then writes research/research_<stamp>/ with MANIFEST, session.json, report.txt/json, fingerprint, config.json (no keybinds). Copies the pack folder path to the clipboard.",
+			"button-text": "pack"
 		},
 		"title-dev-diag": {
 			"type": "title",

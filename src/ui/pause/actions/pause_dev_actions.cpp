@@ -7,6 +7,7 @@
 #include "../../../dev/dev_session.hpp"
 #include "../../../dev/reporting/dev_diag_dump.hpp"
 #include "../../../dev/reporting/dev_report.hpp"
+#include "../../../dev/reporting/dev_research_pack.hpp"
 #include "../pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
@@ -134,6 +135,61 @@ void EbPauseDevActions::devDumpDiag() {
     EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
 
+void EbPauseDevActions::devExportResearchPack() {
+    // One click: eval everything we can → seal pack → clipboard = pack folder.
+    auto& store = EbDevTraceStore::get();
+    if (store.isOpen())
+        (void)store.flush();
+
+    int evalCount = 0;
+    std::string evalNote;
+    std::string evalErr;
+    if (store.isOpen()) {
+        if (EbDevReport::evalSession(evalErr, &evalCount)) {
+            evalNote = fmt::format("Eval Session: {} attempt(s).", evalCount);
+            EbAssistController::get().updateOverlay();
+        } else if (EbDevReport::evalLastAttempt(evalErr)) {
+            evalCount = 1;
+            evalNote = "Eval Last (session-wide eval failed).";
+            EbAssistController::get().updateOverlay();
+        } else {
+            evalNote = fmt::format("Eval skipped: {}",
+                                   evalErr.empty() ? "no planFinished witness" : evalErr);
+        }
+    } else if (EbDevReport::evalLastAttempt(evalErr)) {
+        evalCount = 1;
+        evalNote = "Eval Last (no open session).";
+        EbAssistController::get().updateOverlay();
+    } else {
+        evalNote = fmt::format("Eval skipped: {}",
+                               evalErr.empty() ? "no open session / no witness" : evalErr);
+    }
+
+    EbDevResearchPack::Result pack;
+    std::string err;
+    if (!EbDevResearchPack::exportPack(pack, err)) {
+        EbAssistLog::info(fmt::format("Dev Lab: research pack failed: {}", err));
+        EbDesktopAlert::info(
+            "EarlyBuffer Dev",
+            fmt::format("{}\n\nPack failed: {}", evalNote,
+                        err.empty() ? "export failed" : err)
+                .c_str());
+        return;
+    }
+
+    bool const clipOk = geode::utils::clipboard::write(pack.dir.string());
+    auto const message = fmt::format(
+        "{}\n\n"
+        "Research pack ready — paste this folder path:\n{}\n\n"
+        "session={}  report={}  config={}  files={}\n"
+        "{}",
+        evalNote, pack.dir.string(), pack.hasSession ? "yes" : "no",
+        pack.hasReport ? "yes" : "no", pack.hasConfig ? "yes" : "no", pack.files.size(),
+        clipOk ? "Folder path copied to clipboard." : "Clipboard copy failed — copy the path above.");
+    EbAssistLog::info(fmt::format("Dev Lab: research pack → {} ({})", pack.dir.string(), evalNote));
+    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
+}
+
 void EbPauseDevActions::devCopyReport() {
     if (!EbDevReport::hasLast()) {
         EbDesktopAlert::info("EarlyBuffer Dev", "No Dev report yet. Run Eval Last / Eval Session first.");
@@ -149,12 +205,16 @@ void EbPauseDevActions::devCopyReport() {
     bool fileOk = false;
     std::string fileErr;
     auto const path = drops.reportPath();
+    auto const jsonPath = drops.rootDir() / "earlybuffer-dev-report.json";
     if (!drops.ensureDirs(dirErr)) {
         fileErr = dirErr.empty() ? "could not create save folder" : dirErr;
     } else {
         auto const written = geode::utils::file::writeString(path, text);
         if (written.isOk()) {
             fileOk = true;
+            if (!r.jsonLine.empty()) {
+                (void)geode::utils::file::writeString(jsonPath, r.jsonLine + "\n");
+            }
         } else {
             fileErr = written.unwrapErr();
             if (fileErr.empty())
@@ -166,6 +226,9 @@ void EbPauseDevActions::devCopyReport() {
     std::string clipPayload = text;
     if (fileOk) {
         clipPayload += fmt::format("\n\n---\nSaved path:\n{}", path.string());
+        if (!r.jsonLine.empty()) {
+            clipPayload += fmt::format("\nJSON:\n{}", jsonPath.string());
+        }
     }
     bool const clipOk = geode::utils::clipboard::write(clipPayload);
 

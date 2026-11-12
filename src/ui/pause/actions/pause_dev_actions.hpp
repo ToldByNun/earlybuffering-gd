@@ -12,6 +12,7 @@ public:
     static void devClearTraces();
     static void devDumpDiag();
     static void devCopyReport();
+    static void devExportResearchPack();
 
 private:
     EbPauseDevActions() = delete;

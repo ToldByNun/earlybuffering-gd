@@ -245,6 +245,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"dev-export-session-action", SettingsCategory::Dev},
     {"dev-clear-traces-action", SettingsCategory::Dev},
     {"dev-copy-report-action", SettingsCategory::Dev},
+    {"dev-export-research-pack-action", SettingsCategory::Dev},
     {"title-dev-diag", SettingsCategory::Dev},
     {"dev-dump-diag-action", SettingsCategory::Dev},
 };

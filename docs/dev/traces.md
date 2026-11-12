@@ -57,6 +57,26 @@ Empty `skip=not-viable` without a named cut usually means unevaluated leftovers 
 
 Newer builds can attach RAM/CPU-ish stats to sessions/reports (if present in that package). Older `v1.5.0` traces may lack them.
 
+## Research pack
+
+Dev tab **Export Research Pack** (or `dev-export-research-pack-action`) is one click:
+runs **Eval Session** (fallback Eval Last), then writes:
+
+`%LocalAppData%\GeometryDash\geode\mods\audesign.earlybuffer\research\research_<stamp>\`
+
+Clipboard gets the **pack folder path** (send that folder).
+
+| File | Contents |
+|---|---|
+| `MANIFEST.json` | Schema, session/level ids, file list |
+| `session.json` | Open session or newest `devtraces/session-*.json` |
+| `report.txt` / `report.json` | Last eval overlay + structured `jsonLine` |
+| `settings_fingerprint.txt` | Compact assist/dev fingerprint |
+| `config.json` | Portable settings, keybinds omitted |
+| `README.txt` | Pack legend |
+
+Bake bugs still use **Dump All Diag** (`diag/full_*`), not the research pack.
+
 ## Code owners
 
 `src/dev/capture/`, `src/dev/evaluation/`, `src/dev/reporting/`.

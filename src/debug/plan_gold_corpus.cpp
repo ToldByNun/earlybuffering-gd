@@ -62,6 +62,7 @@
 #include "../dev/evaluation/dev_state_diff.hpp"
 #include "../dev/reporting/dev_diag_dump.hpp"
 #include "../dev/reporting/dev_report.hpp"
+#include "../dev/reporting/dev_research_pack.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
 #include <fmt/format.h>
 
@@ -171,6 +172,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk");
     std::string diagDumpReport;
     expect(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
+    std::string researchPackReport;
+    expect(EbDevResearchPack::selfCheck(researchPackReport), "dev-research-pack");
     std::string livePlanReport;
     expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
     // 1.5.1 AP1: Adaptive + classic Live both clamp simUs=0 → hitch ceiling.

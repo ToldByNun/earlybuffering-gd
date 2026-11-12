@@ -231,27 +231,34 @@ public:
             return;
         }
 
-        mutedText("Copy the report line for Discord / research. Session JSON stays in devtraces/.");
+        mutedText("One click: eval all → write pack folder → path on clipboard (send that folder).");
         gap();
 
-        bool const hasReport = EbDevReport::hasLast();
-        if (EbButton::draw("##dev-copy-report", "Copy Report", hasReport,
-                           "Copies the last fid/bestSurv line (+ save path) to the clipboard.",
+        if (EbButton::draw("##dev-research-pack", "Export Research Pack", true,
+                           "Eval Session/Last, then research/research_<stamp>/ (session, report, "
+                           "fingerprint, config). Copies the folder path.",
                            true)) {
-            fireAction("dev-copy-report-action");
+            fireAction("dev-export-research-pack-action");
         }
 
         gap();
+        bool const hasReport = EbDevReport::hasLast();
         EbButton::beginRow(2);
+        if (EbButton::draw("##dev-copy-report", "Copy Report", hasReport,
+                           "Copies the last fid/bestSurv line (+ save path) to the clipboard.")) {
+            fireAction("dev-copy-report-action");
+        }
         if (EbButton::draw("##dev-session-path", "Session Path", true,
                            "Shows / copies the current session JSON path.")) {
             fireAction("dev-export-session-action");
         }
+        EbButton::endRow();
+
+        gap();
         if (EbButton::draw("##dev-dump-diag", "Dump Diag", true,
                            "Bake/TW/clock folder — for bake bugs, not Live Delay research.")) {
             fireAction("dev-dump-diag-action");
         }
-        EbButton::endRow();
 
         EbSectionCard::end();
     }
