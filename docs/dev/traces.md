@@ -14,7 +14,7 @@ Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, `mode
 - `candNotes` (chosen / rejected / skipped + reject codes; when evaluated also `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass`)
 - `plannerPath` + `gameModeKind` + `modeParams` + hold/threat honesty on `planFinished`
 - attempt-scoped `modeTransition` / `checkpoint` timeline (`timelineChange`, mode/speed/gravity/dual flags)
-- `witness` (player blob, trigger ready tracks, clock / midStep)
+- `witness` (player blob, trigger ready tracks, clock / midStep; with Record Hazards also `hazards[]` / `hitbox` / `threatZone`)
 - `attribution` (e.g. `best-surviving-absent`)
 
 After **Eval Last / Eval Session / Eval On Death**, each evaluated attempt also gets an additive `eval` object:
@@ -76,6 +76,15 @@ Mode-transition timeline (AP5; `pressId=0`, not part of a press chain):
 | `modeTransition` / `gravity` | Gravity flip (`upsideDown`) |
 | `modeTransition` / `dual` | Dual on/off |
 | `checkpoint` / `checkpoint` | Practice checkpoint load (tick reset) |
+
+Hazard / hitbox on `planFinished.witness` (AP6; `dev-record-hazards`, default on):
+
+| Field | Meaning |
+|---|---|
+| `hazardDigest` | Fast neighborhood hash (always when recording) |
+| `hazards[]` | Top-N nearby hazard `id` / `type` / AABB (`ox,oy,ow,oh`) |
+| `hitbox` | Live (+ optional ghost) collide rect + overlap counts vs that list |
+| `threatZone` | Plan threat-zone geometry (`startX`/`endX`) |
 
 ## Lag / perf
 

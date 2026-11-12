@@ -25,6 +25,9 @@
 - Attempt-scoped `modeTransition` / `checkpoint` events (`pressId=0`): seed + mode/speed/gravity/dual changes with tick, `gameModeKind`, `playerSpeed`, `upsideDown`, `dual`, `playerX`.
 - Fixes checkpoint append (was rejected by pressId gate).
 
+### Dev Lab Hazard + Hitbox Capture
+- Setting `dev-record-hazards` (default on): `planFinished.witness` stores Top-N hazard id/AABB/type, live/ghost collide rects + overlap counts, and threat-zone geometry (digest stays). Research Preset enables it.
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

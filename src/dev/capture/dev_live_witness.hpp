@@ -33,6 +33,43 @@ public:
 private:
 };
 
+// Dev Lab AP6: axis-aligned rect (GameObject::getObjectRect).
+class EbDevAabb {
+public:
+    float x = 0.f;
+    float y = 0.f;
+    float w = 0.f;
+    float h = 0.f;
+
+private:
+};
+
+// Top-N hazard neighborhood (id/type/AABB) for offline ghost-hitbox research.
+class EbDevHazardSnap {
+public:
+    int uniqueId = 0;
+    int objectType = 0;
+    float x = 0.f;
+    float y = 0.f;
+    EbDevAabb aabb{};
+    float dist2 = 0.f;
+
+private:
+};
+
+// Plan-time collide rects (live + optional shadow) + overlap counts vs hazard list.
+class EbDevHitboxSnap {
+public:
+    bool present = false;
+    EbDevAabb live{};
+    bool hasGhost = false;
+    EbDevAabb ghost{};
+    int hazardOverlapLive = 0;
+    int hazardOverlapGhost = 0;
+
+private:
+};
+
 inline bool operator==(EbDevObjectPose const& a, EbDevObjectPose const& b) {
     return a.uniqueId == b.uniqueId && a.x == b.x && a.y == b.y && a.rotation == b.rotation &&
            a.scaleX == b.scaleX && a.scaleY == b.scaleY && a.active == b.active;
@@ -130,6 +167,15 @@ public:
     uint64_t playerBlobSchema = 0;
     uint64_t hazardDigest = 0;
     bool hasHazardDigest = false;
+    // AP6: structured hazard neighborhood + hitbox (when recordHazards).
+    static constexpr int kMaxHazardSnaps = 24;
+    std::vector<EbDevHazardSnap> hazards;
+    bool hasHazards = false;
+    EbDevHitboxSnap hitbox{};
+    bool hasHitbox = false;
+    bool hasThreatZone = false;
+    float threatZoneStartX = 0.f;
+    float threatZoneEndX = 0.f;
     bool freezeWorld = false;
     bool valid = false;
 
@@ -162,6 +208,9 @@ private:
     static void setCategory(EbDevLiveWitness& w, DevWitnessCategory candidate,
                             DevWitnessStatus status, uint64_t digest = 0);
     static uint64_t hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player, float radiusX);
+    static void captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer, PlayerObject* player,
+                                   float radiusX);
+    static void captureHitboxSnap(EbDevLiveWitness& w, PlayLayer* layer, PlayerObject* player);
 };
 
 #include <Geode/Geode.hpp>

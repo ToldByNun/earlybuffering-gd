@@ -44,6 +44,7 @@ public:
         return EbDesktopMenuBind::getBool("dev-record-enable") &&
                EbDesktopMenuBind::getBool("dev-record-cands") &&
                EbDesktopMenuBind::getBool("dev-freeze-world") &&
+               EbDesktopMenuBind::getBool("dev-record-hazards") &&
                EbDesktopMenuBind::getBool("dev-eval-on-death") &&
                EbDesktopMenuBind::getBool("dev-overlay") &&
                EbDesktopMenuBind::getBool("dev-disable-random");
@@ -53,15 +54,16 @@ public:
         (void)EbDesktopMenuBind::setBool("dev-record-enable", true);
         (void)EbDesktopMenuBind::setBool("dev-record-cands", true);
         (void)EbDesktopMenuBind::setBool("dev-freeze-world", true);
+        (void)EbDesktopMenuBind::setBool("dev-record-hazards", true);
         (void)EbDesktopMenuBind::setBool("dev-eval-on-death", true);
         (void)EbDesktopMenuBind::setBool("dev-overlay", true);
         (void)EbDesktopMenuBind::setBool("dev-disable-random", true);
         EbDesktopAlert::info(
             "EarlyBuffer Dev",
             "Research Preset on:\n"
-            "Record + Candidates + Freeze World +\n"
+            "Record + Candidates + Freeze World + Hazards +\n"
             "Eval On Death + Overlay + Disable Random.\n\n"
-            "Next: press Record, die a few times, then Copy Report.");
+            "Next: press Record, die a few times, then Export Research Pack.");
     }
 
     static std::string shortPath(std::filesystem::path const& path) {
@@ -130,8 +132,8 @@ public:
         bool const ready = researchPresetReady();
         if (EbButton::draw("##dev-research-preset",
                            ready ? "Research Preset ✓" : "Apply Research Preset", true,
-                           "Record Enable, Candidates, Freeze World, Eval On Death, Overlay, "
-                           "Disable Random.",
+                           "Record Enable, Candidates, Freeze World, Hazards, Eval On Death, "
+                           "Overlay, Disable Random.",
                            !ready)) {
             applyResearchPreset();
         }
@@ -152,6 +154,7 @@ public:
         }
 
         EbCheckbox::drawSetting("dev-freeze-world", "Freeze World");
+        EbCheckbox::drawSetting("dev-record-hazards", "Record Hazards / Hitbox");
         EbCheckbox::drawSetting("dev-record-cands", "Record Candidates");
         EbCheckbox::drawSetting("dev-disable-random", "Disable Random");
         EbCheckbox::drawSetting("dev-count-empty-attempts", "Count Empty Attempts");

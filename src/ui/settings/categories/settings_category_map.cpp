@@ -225,6 +225,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"dev-record-count", SettingsCategory::Dev},
     {"dev-count-empty-attempts", SettingsCategory::Dev},
     {"dev-freeze-world", SettingsCategory::Dev},
+    {"dev-record-hazards", SettingsCategory::Dev},
     {"dev-disable-random", SettingsCategory::Dev},
     {"title-dev-eval", SettingsCategory::Dev},
     {"dev-eval-on-death", SettingsCategory::Dev},

@@ -1499,6 +1499,12 @@
 			"description": "Capture nearby object poses / restoreable world state for high-fidelity eval (Commit 2 LOCK default on). Off = player+clock digest only (playerOnlyApproximated). Heavier CPU/IO when on.",
 			"default": true
 		},
+		"dev-record-hazards": {
+			"type": "bool",
+			"name": "Dev Record Hazards",
+			"description": "On planFinished, store Top-N nearby hazard id/AABB/type plus live/ghost collide rects and threat-zone geometry in the witness (AP6). Digest remains. Default on with Freeze World research presets. Off keeps sessions thinner.",
+			"default": true
+		},
 		"dev-disable-random": {
 			"type": "bool",
 			"name": "Dev Disable Random",

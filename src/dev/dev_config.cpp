@@ -12,6 +12,7 @@ int EbDevConfigImplementation::s_devRecordCount = 10;
 bool EbDevConfigImplementation::s_devCountEmptyAttempts = false;
 bool EbDevConfigImplementation::s_devFreezeWorld = false;
 bool EbDevConfigImplementation::s_devDisableRandom = true;
+bool EbDevConfigImplementation::s_devRecordHazards = true;
 bool EbDevConfigImplementation::s_devEvalOnDeath = true;
 EbDevConfig::EvalGrid EbDevConfigImplementation::s_devEvalGrid = EbDevConfig::EvalGrid::Band;
 int EbDevConfigImplementation::s_devEvalHorizon = 48;
@@ -88,6 +89,8 @@ void EbDevConfig::refreshCache() {
         EbDevConfigImplementation::readBool(mod, "dev-freeze-world", true);
     EbDevConfigImplementation::s_devDisableRandom =
         EbDevConfigImplementation::readBool(mod, "dev-disable-random", true);
+    EbDevConfigImplementation::s_devRecordHazards =
+        EbDevConfigImplementation::readBool(mod, "dev-record-hazards", true);
     EbDevConfigImplementation::s_devEvalOnDeath =
         EbDevConfigImplementation::readBool(mod, "dev-eval-on-death", true);
     EbDevConfigImplementation::s_devEvalGrid = EbDevConfigImplementation::parseEvalGrid(
@@ -139,6 +142,11 @@ bool EbDevConfig::freezeWorld() {
 bool EbDevConfig::disableRandom() {
     EbDevConfigImplementation::ensureCache();
     return EbDevConfigImplementation::s_devDisableRandom;
+}
+
+bool EbDevConfig::recordHazards() {
+    EbDevConfigImplementation::ensureCache();
+    return EbDevConfigImplementation::s_devRecordHazards;
 }
 
 bool EbDevConfig::evalOnDeath() {

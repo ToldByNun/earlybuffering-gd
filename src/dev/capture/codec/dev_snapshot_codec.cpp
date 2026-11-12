@@ -236,6 +236,46 @@ matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {
     if (w.hasHazardDigest) {
         otherIndex["hazardDigest"] = fmt::format("{:016x}", w.hazardDigest);
     }
+    if (w.hasHazards) {
+        std::vector<matjson::Value> hazards;
+        hazards.reserve(w.hazards.size());
+        for (auto const& h : w.hazards) {
+            matjson::Value hj = matjson::Value::object();
+            hj["id"] = h.uniqueId;
+            hj["type"] = h.objectType;
+            hj["x"] = h.x;
+            hj["y"] = h.y;
+            hj["ox"] = h.aabb.x;
+            hj["oy"] = h.aabb.y;
+            hj["ow"] = h.aabb.w;
+            hj["oh"] = h.aabb.h;
+            hazards.push_back(hj);
+        }
+        otherIndex["hazards"] = hazards;
+    }
+    if (w.hasHitbox && w.hitbox.present) {
+        matjson::Value hb = matjson::Value::object();
+        hb["lx"] = w.hitbox.live.x;
+        hb["ly"] = w.hitbox.live.y;
+        hb["lw"] = w.hitbox.live.w;
+        hb["lh"] = w.hitbox.live.h;
+        hb["overlapLive"] = w.hitbox.hazardOverlapLive;
+        if (w.hitbox.hasGhost) {
+            hb["gx"] = w.hitbox.ghost.x;
+            hb["gy"] = w.hitbox.ghost.y;
+            hb["gw"] = w.hitbox.ghost.w;
+            hb["gh"] = w.hitbox.ghost.h;
+            hb["overlapGhost"] = w.hitbox.hazardOverlapGhost;
+        }
+        otherIndex["hitbox"] = hb;
+    }
+    if (w.hasThreatZone) {
+        matjson::Value tz = matjson::Value::object();
+        tz["valid"] = true;
+        tz["startX"] = w.threatZoneStartX;
+        tz["endX"] = w.threatZoneEndX;
+        otherIndex["threatZone"] = tz;
+    }
     return otherIndex;
 }
 
@@ -339,6 +379,52 @@ bool EbDevSnapshotCodec::witnessFromJson(matjson::Value const& j, EbDevLiveWitne
         auto hs = std::string(j["hazardDigest"].asString().unwrapOr("0"));
         w.hazardDigest = std::strtoull(hs.c_str(), nullptr, 16);
         w.hasHazardDigest = true;
+    }
+    if (j.contains("hazards") && j["hazards"].isArray()) {
+        w.hasHazards = true;
+        for (auto const& hj : j["hazards"].asArray().unwrap()) {
+            EbDevHazardSnap h;
+            h.uniqueId = static_cast<int>(hj["id"].asInt().unwrapOr(0));
+            h.objectType = static_cast<int>(hj["type"].asInt().unwrapOr(0));
+            h.x = static_cast<float>(hj["x"].asDouble().unwrapOr(0.0));
+            h.y = static_cast<float>(hj["y"].asDouble().unwrapOr(0.0));
+            h.aabb.x = static_cast<float>(hj["ox"].asDouble().unwrapOr(0.0));
+            h.aabb.y = static_cast<float>(hj["oy"].asDouble().unwrapOr(0.0));
+            h.aabb.w = static_cast<float>(hj["ow"].asDouble().unwrapOr(0.0));
+            h.aabb.h = static_cast<float>(hj["oh"].asDouble().unwrapOr(0.0));
+            w.hazards.push_back(h);
+        }
+    }
+    if (j.contains("hitbox") && j["hitbox"].isObject()) {
+        auto const& hb = j["hitbox"];
+        w.hasHitbox = true;
+        w.hitbox.present = true;
+        w.hitbox.live.x = static_cast<float>(hb["lx"].asDouble().unwrapOr(0.0));
+        w.hitbox.live.y = static_cast<float>(hb["ly"].asDouble().unwrapOr(0.0));
+        w.hitbox.live.w = static_cast<float>(hb["lw"].asDouble().unwrapOr(0.0));
+        w.hitbox.live.h = static_cast<float>(hb["lh"].asDouble().unwrapOr(0.0));
+        w.hitbox.hazardOverlapLive =
+            hb.contains("overlapLive") ? static_cast<int>(hb["overlapLive"].asInt().unwrapOr(0))
+                                       : 0;
+        if (hb.contains("gx") || hb.contains("gw")) {
+            w.hitbox.hasGhost = true;
+            w.hitbox.ghost.x = static_cast<float>(hb["gx"].asDouble().unwrapOr(0.0));
+            w.hitbox.ghost.y = static_cast<float>(hb["gy"].asDouble().unwrapOr(0.0));
+            w.hitbox.ghost.w = static_cast<float>(hb["gw"].asDouble().unwrapOr(0.0));
+            w.hitbox.ghost.h = static_cast<float>(hb["gh"].asDouble().unwrapOr(0.0));
+            w.hitbox.hazardOverlapGhost =
+                hb.contains("overlapGhost")
+                    ? static_cast<int>(hb["overlapGhost"].asInt().unwrapOr(0))
+                    : 0;
+        }
+    }
+    if (j.contains("threatZone") && j["threatZone"].isObject()) {
+        auto const& tz = j["threatZone"];
+        w.hasThreatZone = tz.contains("valid") ? tz["valid"].asBool().unwrapOr(false) : true;
+        w.threatZoneStartX =
+            tz.contains("startX") ? static_cast<float>(tz["startX"].asDouble().unwrapOr(0.0)) : 0.f;
+        w.threatZoneEndX =
+            tz.contains("endX") ? static_cast<float>(tz["endX"].asDouble().unwrapOr(0.0)) : 0.f;
     }
     return true;
 }
