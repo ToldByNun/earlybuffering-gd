@@ -152,15 +152,17 @@ public:
         ImVec2 const min = ImGui::GetItemRectMin();
         ImVec2 const max = ImGui::GetItemRectMax();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-        if (heat > 0.01f) {
-            ImVec4 plate(1.0f, 1.0f, 1.0f, 0.10f * heat);
-            drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(plate), 6.0f);
-        }
+        ImTextureID const texId = toImGui(texture);
 
         ImVec4 tint = EbDesktopMenuMotion::lerp4(ImVec4(1.0f, 1.0f, 1.0f, 0.55f),
                                                  ImVec4(1.0f, 1.0f, 1.0f, 1.0f), heat);
-        drawList->AddImage(toImGui(texture), min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+        // Minimal 1px drop — same idea as sidebar text shadows.
+        ImU32 const shadow =
+            EbDesktopMenuTheme::toU32(ImVec4(0.0f, 0.0f, 0.0f, 0.28f * tint.w));
+        drawList->AddImage(texId, ImVec2(min.x + 1.0f, min.y + 1.0f),
+                           ImVec2(max.x + 1.0f, max.y + 1.0f), ImVec2(0.0f, 0.0f),
+                           ImVec2(1.0f, 1.0f), shadow);
+        drawList->AddImage(texId, min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
                            EbDesktopMenuTheme::toU32(tint));
 
         if (pressed) {

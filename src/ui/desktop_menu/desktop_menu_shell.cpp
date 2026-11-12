@@ -13,6 +13,7 @@
 #include <Geode/Geode.hpp>
 #include <imgui.h>
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -193,9 +194,13 @@ public:
     static void navGroupLabel(char const* label) {
         ImGui::Dummy(ImVec2(0.0f, 14.0f));
         EbDesktopMenuFonts::pushCaps();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.45f));
-        ImGui::TextUnformatted(label);
-        ImGui::PopStyleColor();
+        ImVec2 const pos = ImGui::GetCursorScreenPos();
+        ImFont* const font = ImGui::GetFont();
+        float const fontSize = ImGui::GetFontSize();
+        ImVec2 const textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
+        EbDesktopMenuTheme::drawTextShadowed(ImGui::GetWindowDrawList(), font, fontSize, pos,
+                                             ImVec4(1.0f, 1.0f, 1.0f, 0.45f), label);
+        ImGui::Dummy(ImVec2(textSize.x, textSize.y));
         EbDesktopMenuFonts::pop();
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
     }
@@ -203,7 +208,8 @@ public:
     static bool navTab(char const* label, bool selected, float width) {
         ImGui::PushID(label);
         EbDesktopMenuFonts::pushUi();
-        float const rowH = ImGui::GetFontSize() + 12.0f;
+        float const fontSize = ImGui::GetFontSize();
+        float const rowH = fontSize + 12.0f;
         ImVec2 const pos = ImGui::GetCursorScreenPos();
 
         bool const pressed = ImGui::InvisibleButton("##tab", ImVec2(width, rowH));
@@ -213,31 +219,33 @@ public:
             std::snprintf(tip, sizeof(tip), "Open the %s settings tab", label);
             EbDesktopMenuTooltip::show(tip);
         }
-        float const heat = EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered || selected,
+        ImGuiID const itemId = ImGui::GetItemID();
+        // Brightness: selected snaps bright; hover eases toward full white.
+        float const heat = EbDesktopMenuMotion::smoothToward(itemId, hovered || selected,
                                                              selected ? 0.04f : 0.055f);
+        float const underlineTarget = selected ? 1.0f : (hovered ? 0.7f : 0.0f);
+        float const underlineT = EbDesktopMenuMotion::smoothFloat(
+            itemId ^ 0x554E44u, underlineTarget, selected ? 0.045f : 0.07f);
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        if (heat > 0.01f) {
-            float const alpha = selected ? 0.08f + 0.08f * heat : 0.07f * heat;
-            drawList->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + rowH),
-                                    EbDesktopMenuTheme::toU32(ImVec4(1.0f, 1.0f, 1.0f, alpha)),
-                                    8.0f);
-        }
+        ImFont* const font = ImGui::GetFont();
+        ImVec2 const textPos(pos.x + 12.0f, pos.y + (rowH - fontSize) * 0.5f);
+        float const textW = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label).x;
 
-        ImVec4 textColor = EbDesktopMenuMotion::lerp4(ImVec4(1.0f, 1.0f, 1.0f, 0.72f),
-                                                      ImVec4(1.0f, 1.0f, 1.0f, 1.0f), heat);
-        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                          ImVec2(pos.x + 12.0f, pos.y + (rowH - ImGui::GetFontSize()) * 0.5f),
-                          EbDesktopMenuTheme::toU32(textColor), label);
+        // Idle muted → selected/hover full white (no soft fill plate).
+        ImVec4 const idle(1.0f, 1.0f, 1.0f, 0.62f);
+        ImVec4 const bright(1.0f, 1.0f, 1.0f, 1.0f);
+        float const brightT = selected ? (0.85f + 0.15f * heat) : (0.35f * heat);
+        ImVec4 textColor = EbDesktopMenuMotion::lerp4(idle, bright, brightT);
+        EbDesktopMenuTheme::drawTextShadowed(drawList, font, fontSize, textPos, textColor, label);
 
-        if (selected || heat > 0.2f) {
+        if (underlineT > 0.01f) {
             float const underlineY = pos.y + rowH - 3.0f;
-            float const textW = ImGui::CalcTextSize(label).x;
             ImVec4 line = EbDesktopMenuTheme::accentLight();
-            line.w = selected ? 1.0f : 0.55f * heat;
-            drawList->AddLine(ImVec2(pos.x + 12.0f, underlineY),
-                              ImVec2(pos.x + 12.0f + textW * (selected ? 1.0f : heat), underlineY),
-                              EbDesktopMenuTheme::toU32(line), 2.0f);
+            line.w = (selected ? 1.0f : 0.55f) * underlineT;
+            float const lineW = textW * underlineT;
+            drawList->AddLine(ImVec2(textPos.x, underlineY), ImVec2(textPos.x + lineW, underlineY),
+                              EbDesktopMenuTheme::toU32(line), selected ? 2.25f : 1.75f);
         }
 
         EbDesktopMenuFonts::pop();
@@ -266,10 +274,18 @@ public:
         ImGui::SetCursorScreenPos(ImVec2(origin.x + 16.0f, origin.y + 20.0f));
         ImGui::BeginGroup();
 
+        ImDrawList* const sideDraw = ImGui::GetWindowDrawList();
         EbDesktopMenuFonts::pushHeader();
-        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
-        ImGui::TextUnformatted("EARLYBUFFER");
-        ImGui::PopStyleColor();
+        {
+            ImVec2 const pos = ImGui::GetCursorScreenPos();
+            ImFont* const font = ImGui::GetFont();
+            float const fontSize = ImGui::GetFontSize();
+            char const* title = "EARLYBUFFER";
+            ImVec2 const textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, title);
+            EbDesktopMenuTheme::drawTextShadowed(sideDraw, font, fontSize, pos,
+                                                 EbDesktopMenuTheme::text(), title);
+            ImGui::Dummy(ImVec2(textSize.x, textSize.y));
+        }
         EbDesktopMenuFonts::pop();
 
         std::string version = "v?.?.?";
@@ -277,9 +293,16 @@ public:
             version = mod->getVersion().toVString();
         }
         EbDesktopMenuFonts::pushCaps();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.42f));
-        ImGui::TextUnformatted(version.c_str());
-        ImGui::PopStyleColor();
+        {
+            ImVec2 const pos = ImGui::GetCursorScreenPos();
+            ImFont* const font = ImGui::GetFont();
+            float const fontSize = ImGui::GetFontSize();
+            ImVec2 const textSize =
+                font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, version.c_str());
+            EbDesktopMenuTheme::drawTextShadowed(sideDraw, font, fontSize, pos,
+                                                 ImVec4(1.0f, 1.0f, 1.0f, 0.42f), version.c_str());
+            ImGui::Dummy(ImVec2(textSize.x, textSize.y));
+        }
         EbDesktopMenuFonts::pop();
 
         float const tabWidth = width - 32.0f;

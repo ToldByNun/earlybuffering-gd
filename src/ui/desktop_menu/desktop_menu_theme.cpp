@@ -4,6 +4,7 @@
 
 #include "desktop_menu_bind.hpp"
 #include <algorithm>
+#include <cmath>
 
 class EbDesktopMenuThemeColors {
 public:
@@ -145,6 +146,22 @@ void EbDesktopMenuTheme::drawAccentGlow(ImDrawList* drawList, ImVec2 const& min,
         drawList->AddRectFilled(ImVec2(min.x - pad, min.y - pad), ImVec2(max.x + pad, max.y + pad),
                                 toU32(glow), rounding + pad);
     }
+}
+
+void EbDesktopMenuTheme::drawTextShadowed(ImDrawList* drawList, ImFont* font, float fontSize,
+                                          ImVec2 const& pos, ImVec4 const& color,
+                                          char const* text) {
+    if (!drawList || !font || !text || text[0] == '\0' || fontSize <= 0.0f) {
+        return;
+    }
+    float const alpha = std::clamp(color.w, 0.0f, 1.0f);
+    if (alpha <= 0.01f) {
+        return;
+    }
+    // Minimal 1px outer drop — nearly invisible on dark wave, just enough on bright peaks.
+    ImU32 const shadow = toU32(ImVec4(0.0f, 0.0f, 0.0f, 0.28f * alpha));
+    drawList->AddText(font, fontSize, ImVec2(pos.x + 1.0f, pos.y + 1.0f), shadow, text);
+    drawList->AddText(font, fontSize, pos, toU32(color), text);
 }
 
 void EbDesktopMenuTheme::apply() {

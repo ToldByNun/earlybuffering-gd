@@ -36,6 +36,10 @@ public:
     // Soft purple bloom behind an active pill / focused control.
     static void drawAccentGlow(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max,
                                float rounding, float strength = 1.0f);
+
+    // Dark outer drop shadow then main glyph — sidebar labels on the wave.
+    static void drawTextShadowed(ImDrawList* drawList, ImFont* font, float fontSize,
+                                 ImVec2 const& pos, ImVec4 const& color, char const* text);
 #endif
 
 private:
