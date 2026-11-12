@@ -1466,7 +1466,7 @@
 		"title-dev": {
 			"type": "title",
 			"name": "Dev Lab",
-			"description": "Developer forensics: record assist decision traces, evaluate counterfactual delays, export reports. Not for normal play — leave recording off unless you are debugging timing."
+			"description": "Developer forensics workflow: Capture preset → Record → Eval → Pack/Compare. Record assist decision traces and counterfactual delays. Not for normal play — leave recording off unless debugging."
 		},
 		"title-dev-session": {
 			"type": "title",

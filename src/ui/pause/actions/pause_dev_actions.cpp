@@ -103,9 +103,17 @@ void EbPauseDevActions::devExportSession() {
 }
 
 void EbPauseDevActions::devClearTraces() {
-    int const count = EbDevSession::get().clearTraces();
-    auto const message = fmt::format("Cleared {} session file(s) under devtraces/.", count);
-    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
+    EbDesktopAlert::confirm(
+        "Clear Dev Traces",
+        "Stop recording (if active) and delete all session-*.json under devtraces/?\n"
+        "This cannot be undone.",
+        []() {
+            int const count = EbDevSession::get().clearTraces();
+            auto const message =
+                fmt::format("Cleared {} session file(s) under devtraces/.", count);
+            EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
+        },
+        {}, "Clear", "Cancel");
 }
 
 void EbPauseDevActions::devDumpDiag() {

@@ -5,6 +5,11 @@
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 
+### Dev Lab UX
+- Desktop Dev tab uses normal section cards (same chrome as Main/Assist): **Now → Setup → Setup Extras → Record → Eval → Save → Danger**.
+- One Record toggle; Eval settings + Eval Last/Session in an Eval section (no TreeNode foldouts).
+- Save = Copy Report (primary); Session Path + Dump Diag secondary. Clear Traces confirms.
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
@@ -35,32 +40,32 @@ Release notes: [`releases/v1.6.0.md`](releases/v1.6.0.md).
 
 Release notes: [`releases/v1.5.1.md`](releases/v1.5.1.md).
 
-Ships AP0–AP1 / AP3a–AP3b / AP4 from the 1.5.1 plan. **Deferred:** AP2 landed ranking rewrite, AP3c micro-window cube / triple-jump polish.
+**Deferred:** landed ranking rewrite, micro-window cube / triple-jump polish.
 
-### AP4 — Orbs under input-window
+### Orbs under input-window
 - Live IW runs cheap `spatialOrbHint` whenever Orbs are on, plus budget-capped `scanOrbWindow` (coast + press-reach).
 - After cand fill: orb-intent → earliest±k activation band as `DelayOrb` / `requireOrb` / `dMin`–`dMax` candNotes (before Wave help-only).
 - Dash hold salvage (`releaseAfter=40`) and toggle → `PassToggleUnknown` on the IW path.
 - Adaptive Gate Delay with activation sets `requireOrb` + DelayOrb honestly.
 - PlanGold: `orb-under-input-window`, `orb-dash-hold-iw`, `pass-toggle-unknown-iw`.
 
-### AP3b — Live IW Wave anti-phase + help-only
+### Live IW Wave anti-phase + help-only
 - Continuous Wave IW no longer skips classic anti-phase: **help-only** (d0 Alive → `PassD0Safe`, never Delay to pad endX), **proximity** (`PassWaveProximity`), **futile** (`PassWaveFutile`), earliest later Alive Delay when d0 dies.
 - Cheap baseline coast under continuous IW for `idleSafer`. PlanGold: `wave-iw-help-only`, `wave-iw-prox-pass`.
 
-### AP3a — Wave horizon floor
+### Wave horizon floor
 - Continuous Live IW / Adaptive no longer overwrite look-ahead with bare Max Assist limit.
 - Cap = `max(continuousLookAhead, short AssistHorizon planCap)`; Wave short floor **32** ticks (`EbLivePlanContracts::kWaveHorizonFloor`).
 - `kPostCapProveTicks` still appended after the floor. PlanGold: `wave-horizon-floor`. Wave regression retargeted + legacy short-horizon dual assert.
 
-### AP1 — Hitch (small levels)
+### Hitch (small levels)
 - Live `sim-budget-us=0` → **8000µs** hitch ceiling for classic **and** Adaptive (`EbLivePlanContracts::intendedLiveBudgetUs`).
 - Adaptive→classic fallthrough uses remUs floor **2000µs** when the wall is spent but ticks remain (was `budgetUs=1`).
 - Fallthrough seeds observation-cleared Alive screens (not only terminal/horizon); IW accepts those seeds at screen quantum.
 - Discrete peak-death cut marks leftovers `Skipped`/`peak-death-cut` only — no fake-dead clones; IW does not re-`evalDelay` them.
 - PlanGold: `live-hitch-ceiling`. Adaptive parity smoke: `adaptive-zero-wall-clamped`, `fallthrough-remus-floor`.
 
-### AP0 — Live plan contracts (no behavior change)
+### Live plan contracts (no behavior change)
 - Ledger: `peak-death-cut` reject code + `EarlyExit::PeakDeath`.
 - Pure `EbLivePlanContracts` locks current vs intended hitch / landed-rank / peak-death / orb-under-IW tables. PlanGold: `live-plan-contracts`.
 - DevTrace `planFinished` adds `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
@@ -77,7 +82,7 @@ Ships AP0–AP1 / AP3a–AP3b / AP4 from the 1.5.1 plan. **Deferred:** AP2 lande
 
 ### Live click hitch (`sim-budget-us=0`)
 - Classic Live no longer treats `sim-budget-us=0` as a multi-frame freeze: soft wall clamps to **8000µs** per press.
-- **AP1:** Adaptive Live uses the same hitch ceiling; peak-death leftovers stay honest Skipped (see AP1 above).
+- Adaptive Live uses the same hitch ceiling; peak-death leftovers stay honest Skipped.
 
 ### Dynamic / Adaptive throughput (no budget cuts)
 - Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).
