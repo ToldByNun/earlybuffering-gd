@@ -172,7 +172,8 @@ matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {
     otherIndex["playerBlobSchema"] = fmt::format("{:016x}", w.playerBlobSchema);
     otherIndex["freezeWorld"] = w.freezeWorld;
     otherIndex["player"] = EbDevTraceStoreImplementation::playerBlobToJson(w.player);
-    if (w.dual.present)
+    // AP9: always emit dual when Dual is a worldDep (even present:false).
+    if (w.dual.present || EbDevLiveWitness::hasWorldDep(w, DevWitnessCategory::Dual))
         otherIndex["dual"] = EbDevTraceStoreImplementation::playerBlobToJson(w.dual);
     if (w.clock.valid)
         otherIndex["clock"] = EbDevTraceStoreImplementation::clockStampToJson(w.clock);
@@ -198,7 +199,8 @@ matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {
     }
     otherIndex["worldDeps"] = deps;
 
-    if (!w.orbIds.empty()) {
+    // AP9: always emit orbIds (possibly []) when Orbs is a worldDep — no silent omit.
+    if (!w.orbIds.empty() || EbDevLiveWitness::hasWorldDep(w, DevWitnessCategory::Orbs)) {
         std::vector<matjson::Value> orbs;
         orbs.reserve(w.orbIds.size());
         for (int id : w.orbIds)
@@ -271,6 +273,34 @@ matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {
         }
         otherIndex["hitbox"] = hb;
     }
+    auto contactToJson = [](EbDevContactSnap const& c) {
+        matjson::Value cj = matjson::Value::object();
+        cj["present"] = c.present;
+        cj["maybeIsColliding"] = c.maybeIsColliding;
+        cj["collidingWithLeft"] = c.collidingWithLeft;
+        cj["collidingWithRight"] = c.collidingWithRight;
+        cj["lastCollisionBottom"] = c.lastCollisionBottom;
+        cj["lastCollisionTop"] = c.lastCollisionTop;
+        cj["lastCollisionLeft"] = c.lastCollisionLeft;
+        cj["lastCollisionRight"] = c.lastCollisionRight;
+        cj["collidedTopMinY"] = c.collidedTopMinY;
+        cj["collidedBottomMaxY"] = c.collidedBottomMaxY;
+        cj["collidedLeftMaxX"] = c.collidedLeftMaxX;
+        cj["collidedRightMinX"] = c.collidedRightMinX;
+        cj["snapDistance"] = c.snapDistance;
+        cj["groundYVelocity"] = c.groundYVelocity;
+        cj["groundObjectMaterial"] = c.groundObjectMaterial;
+        cj["collidedObjectId"] = c.collidedObjectId;
+        cj["lastGroundObjectId"] = c.lastGroundObjectId;
+        cj["objectSnappedToId"] = c.objectSnappedToId;
+        cj["isOnIce"] = c.isOnIce;
+        cj["isSliding"] = c.isSliding;
+        return cj;
+    };
+    if (w.hasContact && w.contact.present)
+        otherIndex["contact"] = contactToJson(w.contact);
+    if (w.hasDualContact && w.dualContact.present)
+        otherIndex["dualContact"] = contactToJson(w.dualContact);
     if (w.hasThreatZone) {
         matjson::Value tz = matjson::Value::object();
         tz["valid"] = true;
@@ -427,6 +457,78 @@ bool EbDevSnapshotCodec::witnessFromJson(matjson::Value const& j, EbDevLiveWitne
             tz.contains("startX") ? static_cast<float>(tz["startX"].asDouble().unwrapOr(0.0)) : 0.f;
         w.threatZoneEndX =
             tz.contains("endX") ? static_cast<float>(tz["endX"].asDouble().unwrapOr(0.0)) : 0.f;
+    }
+    auto contactFromJson = [](matjson::Value const& cj, EbDevContactSnap& c) {
+        c = {};
+        c.present = cj.contains("present") ? cj["present"].asBool().unwrapOr(true) : true;
+        c.maybeIsColliding =
+            cj.contains("maybeIsColliding") ? cj["maybeIsColliding"].asBool().unwrapOr(false)
+                                            : false;
+        c.collidingWithLeft =
+            cj.contains("collidingWithLeft") ? cj["collidingWithLeft"].asBool().unwrapOr(false)
+                                             : false;
+        c.collidingWithRight =
+            cj.contains("collidingWithRight") ? cj["collidingWithRight"].asBool().unwrapOr(false)
+                                              : false;
+        c.lastCollisionBottom =
+            cj.contains("lastCollisionBottom") ? cj["lastCollisionBottom"].asBool().unwrapOr(false)
+                                               : false;
+        c.lastCollisionTop =
+            cj.contains("lastCollisionTop") ? cj["lastCollisionTop"].asBool().unwrapOr(false)
+                                            : false;
+        c.lastCollisionLeft =
+            cj.contains("lastCollisionLeft") ? cj["lastCollisionLeft"].asBool().unwrapOr(false)
+                                             : false;
+        c.lastCollisionRight =
+            cj.contains("lastCollisionRight") ? cj["lastCollisionRight"].asBool().unwrapOr(false)
+                                              : false;
+        c.collidedTopMinY = cj.contains("collidedTopMinY")
+                                ? static_cast<float>(cj["collidedTopMinY"].asDouble().unwrapOr(0.0))
+                                : 0.f;
+        c.collidedBottomMaxY =
+            cj.contains("collidedBottomMaxY")
+                ? static_cast<float>(cj["collidedBottomMaxY"].asDouble().unwrapOr(0.0))
+                : 0.f;
+        c.collidedLeftMaxX =
+            cj.contains("collidedLeftMaxX")
+                ? static_cast<float>(cj["collidedLeftMaxX"].asDouble().unwrapOr(0.0))
+                : 0.f;
+        c.collidedRightMinX =
+            cj.contains("collidedRightMinX")
+                ? static_cast<float>(cj["collidedRightMinX"].asDouble().unwrapOr(0.0))
+                : 0.f;
+        c.snapDistance = cj.contains("snapDistance")
+                             ? static_cast<float>(cj["snapDistance"].asDouble().unwrapOr(0.0))
+                             : 0.f;
+        c.groundYVelocity = cj.contains("groundYVelocity")
+                                ? static_cast<float>(cj["groundYVelocity"].asDouble().unwrapOr(0.0))
+                                : 0.f;
+        c.groundObjectMaterial =
+            cj.contains("groundObjectMaterial")
+                ? static_cast<int>(cj["groundObjectMaterial"].asInt().unwrapOr(0))
+                : 0;
+        c.collidedObjectId =
+            cj.contains("collidedObjectId")
+                ? static_cast<int>(cj["collidedObjectId"].asInt().unwrapOr(0))
+                : 0;
+        c.lastGroundObjectId =
+            cj.contains("lastGroundObjectId")
+                ? static_cast<int>(cj["lastGroundObjectId"].asInt().unwrapOr(0))
+                : 0;
+        c.objectSnappedToId =
+            cj.contains("objectSnappedToId")
+                ? static_cast<int>(cj["objectSnappedToId"].asInt().unwrapOr(0))
+                : 0;
+        c.isOnIce = cj.contains("isOnIce") ? cj["isOnIce"].asBool().unwrapOr(false) : false;
+        c.isSliding = cj.contains("isSliding") ? cj["isSliding"].asBool().unwrapOr(false) : false;
+    };
+    if (j.contains("contact") && j["contact"].isObject()) {
+        contactFromJson(j["contact"], w.contact);
+        w.hasContact = w.contact.present;
+    }
+    if (j.contains("dualContact") && j["dualContact"].isObject()) {
+        contactFromJson(j["dualContact"], w.dualContact);
+        w.hasDualContact = w.dualContact.present;
     }
     return true;
 }

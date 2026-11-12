@@ -105,12 +105,24 @@ bool EbDevFidelityChecks::selfCheck(std::string& report) {
         expect(resultValue.claimsAllowed && resultValue.approx, "approx-claims");
     }
 
-    // --- Dual dep missing + requireDeps → notReproducible ---
+    // --- AP9: Dual worldDep + Absent at capture → gate missingDual ---
+    {
+        EbDevLiveWitness w2 = wit;
+        w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Dual));
+        w2.categories.push_back({DevWitnessCategory::Dual, DevWitnessStatus::Absent, 0, false});
+        auto gameObject = EbDevStateDiff::classifyWitnessGate(w2, opts);
+        expect(gameObject.fidelity == DevFidelity::NotReproducible, "dual-absent-gate-fid");
+        expect(!gameObject.claimsAllowed, "dual-absent-gate-claims");
+        expect(gameObject.evalSuppressedReason == "missingDual", "dual-absent-gate-reason");
+    }
+
+    // --- Dual dep missing on restore + requireDeps → notReproducible ---
     {
         EbDevLiveWitness w2 = wit;
         w2.dual.present = true;
         w2.dual.x = 1.f;
         w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Dual));
+        w2.categories.push_back({DevWitnessCategory::Dual, DevWitnessStatus::Restored, 0, false});
         EbDevEvalRestore result =
             EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
         EbDevEvalRestore::notePlayerWritten(result, w2.player);
@@ -121,19 +133,60 @@ bool EbDevFidelityChecks::selfCheck(std::string& report) {
         expect(resultValue.evalSuppressedReason == "requireDeps", "dual-hard-reason");
     }
 
-    // --- Dual dep missing + requireDeps off → approx ---
+    // --- Dual dep missing on restore + requireDeps off → approx ---
     {
         EbDevClassifyOptions soft = opts;
         soft.requireDeps = false;
         EbDevLiveWitness w2 = wit;
         w2.dual.present = true;
         w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Dual));
+        w2.categories.push_back({DevWitnessCategory::Dual, DevWitnessStatus::Restored, 0, false});
         EbDevEvalRestore result =
             EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
         EbDevEvalRestore::notePlayerWritten(result, w2.player);
         auto resultValue = EbDevStateDiff::classify(w2, result, soft);
         expect(resultValue.fidelity == DevFidelity::PlayerOnlyApproximated, "dual-soft-fid");
         expect(resultValue.claimsAllowed && resultValue.approx, "dual-soft-claims");
+    }
+
+    // --- AP9: Orbs dep Partial (empty ids) → approx, claims allowed ---
+    {
+        EbDevLiveWitness w2 = wit;
+        w2.worldDeps.insert(static_cast<int>(DevWitnessCategory::Orbs));
+        w2.categories.push_back({DevWitnessCategory::Orbs, DevWitnessStatus::Partial, 0, false});
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
+        EbDevEvalRestore::noteOrbsWritten(result, {});
+        auto resultValue = EbDevStateDiff::classify(w2, result, opts);
+        expect(resultValue.fidelity == DevFidelity::PlayerOnlyApproximated, "orbs-partial-fid");
+        expect(resultValue.claimsAllowed && resultValue.approx, "orbs-partial-claims");
+    }
+
+    // --- AP9: contact match keeps reproduced; mismatch → approx ---
+    {
+        EbDevLiveWitness w2 = wit;
+        w2.hasContact = true;
+        w2.contact.present = true;
+        w2.contact.collidedObjectId = 42;
+        w2.contact.lastGroundObjectId = 7;
+        EbDevEvalRestore result =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(result, w2.player);
+        EbDevEvalRestore::noteContactWritten(result, w2.contact, false);
+        auto ok = EbDevStateDiff::classify(w2, result, opts);
+        expect(ok.fidelity == DevFidelity::Reproduced, "contact-match-fid");
+        expect(ok.claimsAllowed && !ok.approx, "contact-match-claims");
+
+        EbDevContactSnap bad = w2.contact;
+        bad.collidedObjectId = 99;
+        EbDevEvalRestore badRestore =
+            EbDevEvalRestore::beginFromWitness(w2, DevSimPathId::EvalDelayFromFreeze);
+        EbDevEvalRestore::notePlayerWritten(badRestore, w2.player);
+        EbDevEvalRestore::noteContactWritten(badRestore, bad, false);
+        auto badResult = EbDevStateDiff::classify(w2, badRestore, opts);
+        expect(badResult.fidelity == DevFidelity::PlayerOnlyApproximated, "contact-mis-fid");
+        expect(badResult.claimsAllowed && badResult.approx, "contact-mis-claims");
     }
 
     // --- Wrong eval path ---

@@ -37,6 +37,11 @@
 ### Dev Lab Optional Trajectories
 - Setting `dev-record-traj` (default **off**): on eval seal, re-sim chosen + bestSurv (+ bestEval when distinct) and store per-tick pose samples under `eval.trajectories`. Heavy — not part of Research Preset.
 
+### Dev Lab Dual / Orbs / CollisionFlags
+- Dual mode always tags `worldDeps.dual` (missing P2 → honest `absent` + gate `missingDual`, no silent skip).
+- Orbs dep always serializes `orbIds` (possibly `[]`); empty/partial → `playerOnlyApproximated`.
+- Witness `contact` / `dualContact` collide scalars + object ids for hitbox research; mismatch soft-fails fidelity.
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

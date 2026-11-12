@@ -64,11 +64,17 @@ void EbShadowFreezeEvaluator::applyEvalWorldRestore(EbShadowSimulator& simulator
     simulator.m_savedTransforms.clear();
     simulator.m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
 
-    // --- Dual ghost ---
+    // --- Dual ghost (AP9: Dual worldDep without blob stays Absent — honest) ---
     if (witness.dual.present && simulator.m_evalGhosts[1]) {
         simulator.applyPlayerBlob(simulator.m_evalGhosts[1], witness.dual);
         EbDevEvalRestore::noteDualWritten(restore, witness.dual);
+        if (witness.hasDualContact)
+            EbDevEvalRestore::noteContactWritten(restore, witness.dualContact, true);
     }
+
+    // --- Contact parity bookkeeping (no pointer restore onto ghosts) ---
+    if (witness.hasContact)
+        EbDevEvalRestore::noteContactWritten(restore, witness.contact, false);
 
     // --- Orbs: set activated ID set + mark matching objects claimed ---
     {

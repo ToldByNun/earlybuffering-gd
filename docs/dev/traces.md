@@ -14,7 +14,7 @@ Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, `mode
 - `candNotes` (chosen / rejected / skipped + reject codes; when evaluated also `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass`)
 - `plannerPath` + `gameModeKind` + `modeParams` + hold/threat honesty on `planFinished`
 - attempt-scoped `modeTransition` / `checkpoint` timeline (`timelineChange`, mode/speed/gravity/dual flags)
-- `witness` (player blob, trigger ready tracks, clock / midStep; with Record Hazards also `hazards[]` / `hitbox` / `threatZone`)
+- `witness` (player blob, trigger ready tracks, clock / midStep; with Record Hazards also `hazards[]` / `hitbox` / `threatZone`; AP9 also `contact` / `dualContact` collide scalars + honest Dual/Orbs status)
 - `attribution` (e.g. `best-surviving-absent`)
 
 After **Eval Last / Eval Session / Eval On Death**, each evaluated attempt also gets an additive `eval` object:
@@ -106,6 +106,15 @@ Optional delay trajectories (AP8; `dev-record-traj`, **default off** — heavy):
 | `eval.trajectories[].points[]` | `(tick,x,y,vy,alive,unknown,survivalClass)` — capped ~96 pts |
 
 Not enabled by Research Preset; turn on only when you need path plots.
+
+Dual / Orbs / CollisionFlags (AP9 — no silent `absent`):
+
+| Field / rule | Meaning |
+|---|---|
+| `worldDeps` includes `dual` | Whenever dual mode is on — even if P2 is missing (`categories.dual=absent` → gate `missingDual`) |
+| `worldDeps` includes `orbs` | Orb-window / requireOrb / foresight — empty `orbIds:[]` stays `partial` → eval `approx` |
+| `contact` / `dualContact` | Collide scalars + object uniqueIds (not pointers) for ghost-hitbox research |
+| fidelity | Dual unrestored hard-fails under `requireDeps`; orbs/contact gaps → `playerOnlyApproximated` with claims |
 
 ## Lag / perf
 

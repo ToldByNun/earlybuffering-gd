@@ -188,6 +188,39 @@ EbDevClassifyResult EbDevStateDiff::classifyWitnessGate(EbDevLiveWitness const& 
         return out;
     }
 
+    // AP9: marked Dual/Orbs/CollisionFlags must not stay silent Absent.
+    if (EbDevLiveWitness::hasWorldDep(witness, DevWitnessCategory::Dual)) {
+        DevWitnessStatus const dualStatus =
+            EbDevLiveWitness::categoryStatus(witness, DevWitnessCategory::Dual);
+        if (!witness.dual.present || dualStatus == DevWitnessStatus::Absent) {
+            out.evalSuppressedReason = "missingDual";
+            pushDiff(out.diffs, DevWitnessCategory::Dual, "blob",
+                     EbDevLiveWitness::statusId(dualStatus), "", DevDiffKind::Unrestored);
+            return out;
+        }
+    }
+    if (EbDevLiveWitness::hasWorldDep(witness, DevWitnessCategory::Orbs)) {
+        DevWitnessStatus const orbStatus =
+            EbDevLiveWitness::categoryStatus(witness, DevWitnessCategory::Orbs);
+        if (orbStatus == DevWitnessStatus::Absent) {
+            out.evalSuppressedReason = "missingOrbs";
+            pushDiff(out.diffs, DevWitnessCategory::Orbs, "orbIds", "absent", "",
+                     DevDiffKind::Unrestored);
+            return out;
+        }
+        // Empty orbIds with Partial is allowed through the gate → classify soft/approx.
+    }
+    if (EbDevLiveWitness::hasWorldDep(witness, DevWitnessCategory::CollisionFlags)) {
+        DevWitnessStatus const flagStatus =
+            EbDevLiveWitness::categoryStatus(witness, DevWitnessCategory::CollisionFlags);
+        if (flagStatus == DevWitnessStatus::Absent) {
+            out.evalSuppressedReason = "missingCollisionFlags";
+            pushDiff(out.diffs, DevWitnessCategory::CollisionFlags, "flags", "absent", "",
+                     DevDiffKind::Unrestored);
+            return out;
+        }
+    }
+
     // Witness alone is not enough for claims — need a restore attempt.
     // Gate only suppresses hard failures; otherwise leave room for eval.
     out.fidelity = DevFidelity::NotReproducible;
@@ -337,10 +370,16 @@ EbDevClassifyResult EbDevStateDiff::classify(EbDevLiveWitness const& witness,
         }
 
         if (dep == DevWitnessCategory::Orbs) {
+            // Partial (empty ids) or unrestored → soft approx; never silent.
             if (state != DevWitnessStatus::Restored) {
                 allDepsRestored = false;
-                pushDiff(out.diffs, dep, "orbIds", fmt::format("{}", witness.orbIds.size()),
-                         EbDevLiveWitness::statusId(state), DevDiffKind::Unrestored);
+                pushDiff(out.diffs, dep, "orbIds",
+                         fmt::format("n={}({})", witness.orbIds.size(),
+                                     EbDevLiveWitness::statusId(
+                                         EbDevLiveWitness::categoryStatus(witness, dep))),
+                         EbDevLiveWitness::statusId(state),
+                         state == DevWitnessStatus::Partial ? DevDiffKind::DigestOnly
+                                                            : DevDiffKind::Unrestored);
                 softFail = true; // orbs are soft under requireDeps
             } else if (witness.orbIds != restore.orbIds) {
                 allDepsRestored = false;
@@ -365,7 +404,7 @@ EbDevClassifyResult EbDevStateDiff::classify(EbDevLiveWitness const& witness,
         }
 
         if (dep == DevWitnessCategory::CollisionFlags) {
-            // Witness is Partial (pointer refs absent); restore Partial matches.
+            // Partial is expected (pointer refs → uniqueId contact snap only).
             if (state == DevWitnessStatus::Absent) {
                 allDepsRestored = false;
                 softFail = true;
@@ -373,6 +412,34 @@ EbDevClassifyResult EbDevStateDiff::classify(EbDevLiveWitness const& witness,
             } else if (state != DevWitnessStatus::Restored && state != DevWitnessStatus::Partial) {
                 allDepsRestored = false;
                 softFail = true;
+            } else if (witness.hasContact) {
+                // AP9: contact scalar parity — mismatch → approx, not silent.
+                if (!restore.hasContact) {
+                    allDepsRestored = false;
+                    softFail = true;
+                    pushDiff(out.diffs, dep, "contact", "present", "absent",
+                             DevDiffKind::Unrestored);
+                } else if (witness.contact != restore.contact) {
+                    allDepsRestored = false;
+                    softFail = true;
+                    pushDiff(out.diffs, dep, "contact",
+                             fmt::format("col={} ground={}", witness.contact.collidedObjectId,
+                                         witness.contact.lastGroundObjectId),
+                             fmt::format("col={} ground={}", restore.contact.collidedObjectId,
+                                         restore.contact.lastGroundObjectId),
+                             DevDiffKind::Mismatch);
+                }
+            }
+            if (witness.hasDualContact &&
+                EbDevLiveWitness::hasWorldDep(witness, DevWitnessCategory::Dual)) {
+                if (!restore.hasDualContact || witness.dualContact != restore.dualContact) {
+                    allDepsRestored = false;
+                    softFail = true;
+                    pushDiff(out.diffs, dep, "dualContact",
+                             witness.hasDualContact ? "present" : "absent",
+                             restore.hasDualContact ? "present" : "absent",
+                             DevDiffKind::Mismatch);
+                }
             }
             continue;
         }
