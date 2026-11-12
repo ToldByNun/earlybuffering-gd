@@ -6,6 +6,13 @@ Windows-only package on Android fails with:
 
   Unable to find platform binary under the name 'audesign.earlybuffer.android64.so'
 
+Zstd-compressed entries (ZIP method 93) can fail Android install with:
+
+  Unable to read entry (code -3)
+
+(code -3 = minizip MZ_DATA_ERROR while inflating). Prefer classic deflate for
+ship packages. Use --forbid-zstd on release gates.
+
 This tool fails loudly before that install step.
 """
 
@@ -29,6 +36,12 @@ PLATFORM_SUFFIX: dict[str, str] = {
 }
 
 DEFAULT_MOD_ID = "audesign.earlybuffer"
+
+# ZIP compression methods (APPNOTE). 8 = deflate, 0 = store, 93 = zstd.
+ZIP_STORED = 0
+ZIP_DEFLATED = 8
+ZIP_ZSTD = 93
+ZIP_ZSTD_PKWARE_DEPRECATED = 20
 
 # Mach-O (little-endian thin + fat) — used to detect LC_CODE_SIGNATURE on iOS.
 MH_MAGIC_64 = 0xFEEDFACF
@@ -154,11 +167,22 @@ def find_entry(zf: zipfile.ZipFile, basename: str) -> str | None:
     return None
 
 
+def list_zstd_entries(zf: zipfile.ZipFile) -> list[str]:
+    """Basenames (or paths) that use zstd ZIP compression."""
+    found: list[str] = []
+    for raw in zf.namelist():
+        info = zf.getinfo(raw)
+        if info.compress_type in (ZIP_ZSTD, ZIP_ZSTD_PKWARE_DEPRECATED):
+            found.append(raw)
+    return found
+
+
 def check_package(
     path: Path,
     require: list[str],
     mod_id: str | None,
     check_ios_sign: bool = False,
+    forbid_zstd: bool = False,
 ) -> int:
     if not path.is_file():
         print(f"ERROR: package not found: {path}", file=sys.stderr)
@@ -193,8 +217,26 @@ def check_package(
                 )
 
             present = list_binaries(zf, resolved_id)
+            zstd_entries = list_zstd_entries(zf)
             print(f"package: {path}")
             print(f"mod id:  {resolved_id}")
+            if zstd_entries:
+                print(f"zstd entries: {len(zstd_entries)} (ZIP method 93/20)")
+                for name in zstd_entries[:12]:
+                    print(f"  {name}")
+                if len(zstd_entries) > 12:
+                    print(f"  … +{len(zstd_entries) - 12} more")
+            else:
+                print("zstd entries: none (deflate/store only)")
+            if forbid_zstd and zstd_entries:
+                print(
+                    "FAIL: package uses zstd compression. Android Geode can "
+                    "fail with 'Unable to read entry (code -3)' on those entries."
+                )
+                print(
+                    "  Re-merge without --zstd (CI: combine action zstd: false)."
+                )
+                return 1
             print("binaries found:")
             if present:
                 for b in present:
@@ -312,6 +354,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "(also implied by --require ios)"
         ),
     )
+    p.add_argument(
+        "--forbid-zstd",
+        action="store_true",
+        help=(
+            "Fail if any zip entry uses zstd (method 93/20). Ship packages "
+            "should stay on deflate — Android hit 'Unable to read entry (code -3)'."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -329,11 +379,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list_only:
         # Open and list only; empty require → never fail on missing platforms.
-        code = check_package(args.package, [], args.mod_id, False)
+        code = check_package(args.package, [], args.mod_id, False, False)
         return 0 if code in (0, 1) else code
 
     return check_package(
-        args.package, require_unique, args.mod_id, args.check_ios_sign
+        args.package,
+        require_unique,
+        args.mod_id,
+        args.check_ios_sign,
+        args.forbid_zstd,
     )
 
 

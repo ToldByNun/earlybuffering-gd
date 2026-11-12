@@ -227,6 +227,18 @@ python tools/merge_geode_packages.py ^
 
 ### iOS load errors (UNKNOWN ERROR / Unable to load the DYLIB)
 
+### Android: `Unable to read entry (code -3)`
+
+Geode’s unzip reports **code -3** as minizip **`MZ_DATA_ERROR`** while decompressing a zip entry. On EarlyBuffer **v1.5.1** the GitHub combine step defaulted to **`--zstd`** (ZIP method **93**). Many Android installs then failed with exactly that popup / `CS: DOWNLOAD FAILED` when extracting the `.geode`.
+
+**Ship rule:** merge/combine **without** zstd (classic deflate). CI sets `zstd: false` on `build-geode-mod/combine`, and the package gate runs:
+
+```bash
+python tools/geode_package_check.py path/to/ship.geode --require android64 --forbid-zstd
+```
+
+Local merge: do **not** pass `--zstd` to `tools/merge_geode_packages.py` for phone builds. Re-download a deflate package if a phone already has a truncated/corrupt zstd zip.
+
 These Geode popups are **package/signing** failures, not assist logic:
 
 | Symptom in the dialog | Cause | Fix |

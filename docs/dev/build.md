@@ -26,11 +26,13 @@ python tools/geode_package_check.py build-android64/audesign.earlybuffer.geode -
 ## Package honesty
 
 ```bash
-python tools/geode_package_check.py path/to/merged.geode --require win --require android64
+python tools/geode_package_check.py path/to/merged.geode --require win --require android64 --forbid-zstd
 # add --require ios when the dylib is present
 ```
 
-Exit `0` = required binaries inside the zip.
+Exit `0` = required binaries inside the zip, and (with `--forbid-zstd`) no ZIP method 93.
+
+**Android `Unable to read entry (code -3)`:** usually zstd-compressed `.geode` entries from `geode package merge --zstd` / CI combine default. Ship with deflate only (`zstd: false` / no `--zstd`).
 
 ## CI
 
