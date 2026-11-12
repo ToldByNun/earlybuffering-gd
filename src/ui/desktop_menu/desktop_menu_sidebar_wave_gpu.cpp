@@ -7,6 +7,16 @@
 #include <Geode/cocos/platform/CCGL.h>
 #include <imgui.h>
 
+// macOS Cocos pulls OpenGL/gl.h + glext (VAO via APPLE), not gl3.h — so
+// GL_VERTEX_ARRAY_BINDING is missing while glBindVertexArray*APPLE exists.
+#if !defined(GL_VERTEX_ARRAY_BINDING)
+#if defined(GL_VERTEX_ARRAY_BINDING_APPLE)
+#define GL_VERTEX_ARRAY_BINDING GL_VERTEX_ARRAY_BINDING_APPLE
+#else
+#define GL_VERTEX_ARRAY_BINDING 0x85B5
+#endif
+#endif
+
 // GPU wave via offscreen FBO → ImGui AddImage.
 // Must NOT use ImDrawCallback: gd-imgui-cocos calls every UserCallback as a
 // function pointer (ResetRenderState == -1 crashes) and custom GL mid-batch
