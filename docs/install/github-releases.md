@@ -24,7 +24,7 @@ If you only built on Windows locally, that package is **Windows-only** and will 
 Maintainers can check:
 
 ```bash
-python tools/geode_package_check.py path/to/audesign.earlybuffer.geode --require win --require android64
+python tools/geode_package_check.py path/to/audesign.earlybuffer.geode --require win --require android64 --forbid-zstd
 ```
 
-Exit code `0` = required binaries are inside the zip.
+Exit code `0` = required binaries are inside the zip, and (with `--forbid-zstd`) no ZIP method 93. Prefer **v1.6.0+** release packages on Android.

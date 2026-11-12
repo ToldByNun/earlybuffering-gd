@@ -1,6 +1,6 @@
-# Scope — where assist is allowed
+# Where assist is allowed (Assist tab)
 
-Platformer is **always** blocked. Everything else is optional gates.
+In **v1.6.0** these gates live under **Assist** (desktop menu and classic filter). Platformer is **always** blocked. Everything else is optional.
 
 ## Practice only
 

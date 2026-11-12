@@ -4,8 +4,8 @@ Browse community settings packs, install them, rate them, and share your own.
 
 ## Open it
 
-**Settings → Assist → Assist Actions → Cloud Configs**  
-(directly under **Import Config**)
+**Settings → Learn → Config → Cloud Configs** (desktop menu)  
+or classic Assist actions directly under **Import Config**
 
 ## What install does
 

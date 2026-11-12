@@ -5,7 +5,7 @@ Start here. Pick the closest match.
 | Symptom | Go to |
 |---|---|
 | Assist too strong / floaty / never helps | [Feels wrong](/troubleshoot/feels-wrong) |
-| Android / iOS missing binary | [Mobile](/troubleshoot/mobile) |
+| Android / iOS missing binary or code -3 unzip | [Mobile](/troubleshoot/mobile) |
 | Stutters, hitches, crashes | [Lag & crashes](/troubleshoot/lag) |
 | Progress / leaderboard worries | [Safe Mode](/features/safe-mode) |
 | Cannot find mod on Geode Index | Expected — [banned](/install/geode-index). Use [GitHub Releases](/install/github-releases) |

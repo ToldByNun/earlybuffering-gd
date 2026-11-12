@@ -8,7 +8,7 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.5.1",
+	"version": "v1.6.0",
 	"developer": "Audesign",
 	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -1057,7 +1057,7 @@
 		"show-pause-hub": {
 			"type": "bool",
 			"name": "Pause EB Button",
-			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Scope, Assist, Bake, Modes, Visual, Keys, Dev). Off = open settings only from the Geode menu.",
+			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Assist, Learn, Bake, Modes, Visual, UI, Keys, Dev). Off = open settings only from the Geode menu.",
 			"default": true
 		},
 		"show-pause-bake": {

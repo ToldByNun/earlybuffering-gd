@@ -1,6 +1,10 @@
 # Assist settings
 
-These change **how** the planner thinks — not just the window size.
+**v1.6.0** Assist tab covers **where** assist may run (practice / percent / off-ranges — formerly Scope) and **how** the planner thinks.
+
+## Where it runs
+
+See [Where it runs](/configure/scope). Platformer is always off.
 
 ## Pick Mode / Assist Engine
 
@@ -30,7 +34,7 @@ See [Adaptive Plan](/features/adaptive). Extra knobs (screen / verify / reserve)
 
 ## Learning / Auto-Tune / Self-Bake
 
-All **off** by default on purpose.
+On the desktop menu these live under **Learn** (and Self-Bake / Trigger World often under Bake). All **off** by default on purpose.
 
 - Learning = optional per-level bias (does not widen your tick window by itself)
 - Self-Bake = record vanilla clicks into a bake map (practice-oriented)
@@ -41,6 +45,6 @@ Turn on only when you want that workflow.
 
 See [Bake & Trigger World](/features/bake).
 
-## Assist Actions
+## Assist Actions / Config
 
-Import / export config, **Cloud Configs**, and related buttons live here.
+On the desktop menu, import / export and **Cloud Configs** live under **Learn → Config**. Classic Geode popup still shows Assist action rows.

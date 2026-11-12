@@ -11,7 +11,7 @@
 ## Does nothing
 
 1. **Enabled** on?  
-2. [Scope](/configure/scope): practice-only? percent min/max? off-range covering this part?  
+2. [Where it runs](/configure/scope) (Assist tab): practice-only? percent min/max? off-range covering this part?  
 3. Platformer? Always off.  
 4. Assist Mode Replay/Brute with **no bake map** for this level → nothing useful to apply  
 5. Overlay on → are you seeing PassBudget / PassHopeless every time?  

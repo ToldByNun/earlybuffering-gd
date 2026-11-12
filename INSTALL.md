@@ -1,6 +1,6 @@
 # Build & install
 
-Release **v1.5.1** targets GD **2.2081**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Assist → Assist Actions → Cloud Configs**, directly below Import Config. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use. Adaptive Plan lives under Assist settings (`adaptive-plan`).
+Release **v1.6.0** targets GD **2.2081**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use. Adaptive Plan lives under Assist / Main settings (`adaptive-plan`).
 
 ## Requirements
 
@@ -229,7 +229,7 @@ python tools/merge_geode_packages.py ^
 
 ### Android: `Unable to read entry (code -3)`
 
-Geode’s unzip reports **code -3** as minizip **`MZ_DATA_ERROR`** while decompressing a zip entry. On EarlyBuffer **v1.5.1** the GitHub combine step defaulted to **`--zstd`** (ZIP method **93**). Many Android installs then failed with exactly that popup / `CS: DOWNLOAD FAILED` when extracting the `.geode`.
+Geode’s unzip reports **code -3** as minizip **`MZ_DATA_ERROR`** while decompressing a zip entry. On EarlyBuffer **v1.5.1** the GitHub combine step defaulted to **`--zstd`** (ZIP method **93**). Many Android installs then failed with exactly that popup / `CS: DOWNLOAD FAILED` when extracting the `.geode`. **v1.6.0+** ships deflate-only packages.
 
 **Ship rule:** merge/combine **without** zstd (classic deflate). CI sets `zstd: false` on `build-geode-mod/combine`, and the package gate runs:
 

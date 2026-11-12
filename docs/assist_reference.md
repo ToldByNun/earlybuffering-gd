@@ -1,10 +1,10 @@
 # EarlyBuffer Assist Reference
 
-## Cloud Configs in v1.5.1
+## Cloud Configs in v1.6.0
 
-Open Settings → Assist → Assist Actions → Cloud Configs, below Import Config. Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
+Open **Settings → Learn → Config → Cloud Configs** (desktop ImGui menu) or classic Assist actions below Import Config. Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.5.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.6.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -130,16 +130,19 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**EB** (and Geode → Mods → EarlyBuffer → Settings) opens the normal Geode `ModSettingsPopup`. EarlyBuffer attaches a **text-only category strip** under the search field (selected = white, idle = grey; no pill / background chrome). Tapping a label filters the scroll list to that page; Geode’s search still runs on the visible rows.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.6.0**). Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill.
+
+**Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 
 | Tab | Contents |
 |-----|----------|
-| Main | Enabled, Safe Mode, Assist Mode, **Window** (`window-unit` / `ticks-all` / `ticks-wave`), overlay / pause chrome, light diagnostics (`debug-logging`, `perf-trace`, `lag-probe`) |
-| Scope | Practice / start-pos / percent window / off-ranges |
-| Assist | Action rows (Reset Learn / Export·Import Config) + Algorithm / Smart / Learning / Trigger World |
-| Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius |
-| Modes | Cube…Swing per-mode blocks |
+| Main | Enabled, Safe Mode, Assist Mode, **Window**, Smart / Adaptive prediction |
+| Assist | Where it runs (ex-Scope: practice / percent / off-ranges) + Algorithm (pick, engine, orbs, budgets) |
+| Learn | Learning toggles + Export / Import / Cloud Configs |
+| Bake | Import Bake Replay, Cycle Assist Mode, Bake Map, Brute Bake, Cancel, Bake Radius, Trigger World |
+| Modes | Cube…Swing icon picker + per-mode blocks |
 | Visual | Trajectory, Bake Visualizer, Save Feedback / Color |
+| UI | Accent Color, overlay / pause chrome, light diagnostics |
 | Keys | Hotkeys (no Preset / F6 cycle) |
 | Dev | Dev Lab session / eval / overlay / actions |
 
@@ -220,7 +223,7 @@ Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` witho
 
 ## Settings table
 
-Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off Ranges) → **Assist** (Algorithm / Smart / Learning / Trigger World) → **Bake** → **Modes** → **Visual** → **Keys** → **Dev**. Preset packs are removed — windows live only on Main.
+Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assist** (where it runs + Algorithm) → **Learn** (Learning + Config) → **Bake** → **Modes** → **Visual** → **UI** (Accent + chrome) → **Keys** → **Dev**. Preset packs are removed — windows live only on Main. Scope gates live under Assist.
 
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
@@ -242,11 +245,12 @@ Geode setting titles follow tabs: **Main** (incl. Window) → **Scope** (+ Off R
 | save-feedback-color | bool | false | | | Visual — flash player icon on delayed inject |
 | save-feedback-counter | bool | false | | | Visual — world circle + +N at click (clears on death/restart); palette 1…8 `#ff614e`…`#c069fa`; cap 64 markers |
 | save-icon-color | rgb | #7CFF4A | | | Visual — flash color when save-feedback-color is on |
-| assist-only-practice | bool | false | | | Scope — gates all Assist Modes |
-| assist-startpos-only | bool | false | | | Scope |
-| assist-percent-min | int | 0 | 0 | 100 | Scope |
-| assist-percent-max | int | 100 | 0 | 100 | Scope |
-| assist-off-N-from/to | float | -1 | -1 | 100 | Scope — N=1..6; -1 unused; inclusive off range |
+| assist-only-practice | bool | false | | | Assist — where it runs (ex-Scope); gates all Assist Modes |
+| assist-startpos-only | bool | false | | | Assist — where it runs |
+| assist-percent-min | int | 0 | 0 | 100 | Assist — where it runs |
+| assist-percent-max | int | 100 | 0 | 100 | Assist — where it runs |
+| assist-off-N-from/to | float | -1 | -1 | 100 | Assist — N=1..6; -1 unused; inclusive off range |
+| desktop-accent-color | rgb | #7B61FF | | | UI — desktop ImGui accent + wave fill |
 | death-slack | int | 2 | 0 | 16 | Assist / Algorithm — look-ahead slack, not zone |
 | look-ahead-cap | int | 0 | 0 | 240 | Assist / Algorithm — 0=auto |
 | assist-pick | string | v1 | v1/v2 (aliases Legacy/New) | | Assist / Algorithm — G1 pick. **v1** = latest-robust; **v2** = foresight-first (`AssistPickV2`) + `LongForesight` |

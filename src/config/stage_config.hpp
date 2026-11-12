@@ -55,8 +55,8 @@ public:
     static void beginApplying();
     static void endApplying();
 
-    // Setting groups mirror mod.json / tabs: Main (Window) → Scope → Assist →
-    // Bake → Modes → Visual → Keys → Dev.
+    // Setting groups mirror mod.json / tabs: Main → Assist → Learn → Bake →
+    // Modes → Visual → UI → Keys → Dev.
 
     // --- General / UI ---
     static bool isEnabled();

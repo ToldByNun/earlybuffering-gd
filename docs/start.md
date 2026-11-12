@@ -47,7 +47,7 @@ Leave Learning / Auto-Tune / Self-Bake **off** until you know what they do.
 ## 5. Only change one knob
 
 If it feels floaty → lower Window.  
-If it never helps → raise Window a little, or check [Scope](/configure/scope) (percent / practice rules).  
+If it never helps → raise Window a little, or check [where it runs](/configure/scope) under Assist (percent / practice rules).  
 If progress looks “wrong” online → keep **Safe Mode on**.
 
 ## Done?

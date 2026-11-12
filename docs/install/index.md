@@ -22,7 +22,7 @@ Pick **one** path:
 - [ ] For phone: the `.geode` must include the phone binary (not Windows-only)
 
 ::: warning Wrong game version
-EarlyBuffer **1.5.x** is built for **2.2081 only**. Newer Geometry Dash builds need a future port.
+EarlyBuffer **1.6.x** is built for **2.2081 only**. Newer Geometry Dash builds need a future port.
 :::
 
 ## After install

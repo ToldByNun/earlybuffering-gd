@@ -1,10 +1,10 @@
 # Contributing
 
-For v1.5.1 Adaptive / Live IW / Cloud Config changes, verify Adaptive Plan Live Delay vs classic fallthrough, Wave help-only / orb-under-IW, the Settings → Assist Cloud Configs entry, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md) and Adaptive notes in `docs/assist_reference.md`.
+For v1.6.0 desktop menu / Adaptive / Live IW / Cloud Config changes, verify the ImGui shell tabs + Accent Color, Adaptive Plan Live Delay vs classic fallthrough, Wave help-only / orb-under-IW, Cloud Configs under Learn/Config, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Ship packages must pass `geode_package_check.py --forbid-zstd`. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md) and Adaptive notes in `docs/assist_reference.md`.
 
 Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) development / authorship notes: direction and review are human-led; AI may assist drafting. Prefer small, testable PRs.
 
-**Scope note:** **v1.2.1** targets **GD 2.2081** only (last line for that game build). Work for newer GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
+**Scope note:** **v1.6.x** targets **GD 2.2081** only (last line for that game build). Work for newer GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
 
 ## Setup
 

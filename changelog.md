@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.6.0
+
+**Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
+
+Release notes: [`releases/v1.6.0.md`](releases/v1.6.0.md).
+
+### Desktop menu (ImGui)
+- New desktop settings shell (sidebar + tab panels) binding all SettingV3 categories with checkbox / slider / combo / dropdown / color / keybind / action widgets.
+- Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev** (Smart folded into Main; Scope folded into Assist).
+- Modes icon top-bar (Cube→Swing) with per-mode settings card.
+- **Accent Color** (`desktop-accent-color`) under UI — drives theme primary + secondary greys + sidebar/widget wave fill.
+- Sidebar wave stays smooth; widget fills use coarser cells (cheaper).
+
+### Android package fix
+- v1.5.1 GitHub combine defaulted to **zstd** (ZIP method 93) → Android `Unable to read entry (code -3)` / `CS: DOWNLOAD FAILED`.
+- Ship combine now forces **deflate** (`zstd: false`); `geode_package_check.py --forbid-zstd` gates releases.
+
 ## v1.5.1
 
 **Live hitch + Wave honesty + orbs under input-window** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

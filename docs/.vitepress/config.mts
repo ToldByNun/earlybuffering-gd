@@ -26,7 +26,7 @@ export default defineConfig({
       { text: 'Problems', link: '/troubleshoot/' },
       { text: 'Dev', link: '/dev/' },
       {
-        text: 'v1.5.x',
+        text: 'v1.6.0',
         items: [
           { text: 'GitHub', link: 'https://github.com/ToldByNun/earlybuffering-gd' },
           { text: 'Releases', link: 'https://github.com/ToldByNun/earlybuffering-gd/releases' },
@@ -103,7 +103,7 @@ export default defineConfig({
             { text: 'Settings map', link: '/configure/' },
             { text: 'Main & Window', link: '/configure/main' },
             { text: 'Assist', link: '/configure/assist' },
-            { text: 'Scope (where it runs)', link: '/configure/scope' },
+            { text: 'Where it runs (Assist)', link: '/configure/scope' },
             { text: 'Per game-mode', link: '/configure/modes' },
             { text: 'Keys & extras', link: '/configure/keys' },
           ],
@@ -154,7 +154,7 @@ export default defineConfig({
       provider: 'local',
     },
     editLink: {
-      pattern: 'https://github.com/ToldByNun/earlybuffering-gd/edit/earlybuffer-1.5.1-dev/docs/:path',
+      pattern: 'https://github.com/ToldByNun/earlybuffering-gd/edit/earlybuffer-1.6.0-dev/docs/:path',
       text: 'Edit this page on GitHub',
     },
     footer: {

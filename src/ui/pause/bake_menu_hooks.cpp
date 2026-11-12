@@ -52,7 +52,7 @@ auto EbPauseLayer::customSetup() -> void {
     marker->setID("earlybuffer-pause-ui"_spr);
     host->addChild(marker);
 
-    // Top-right: opens Geode ModSettingsPopup (Main/Scope/Assist/Bake/…).
+    // Top-right: opens desktop ImGui shell / Geode settings (Main/Assist/Learn/Bake/…).
     if (showHub) {
         auto* sprite = geode::prelude::CircleButtonSprite::create(
             geode::prelude::CCLabelBMFont::create("EB", "bigFont.fnt"),

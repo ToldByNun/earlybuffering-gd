@@ -41,7 +41,7 @@ If Live armed `d=2` but `bestSurv=5`, check whether Live **skipped** later delay
 | `peak-death-cut` | Discrete input-window stopped after survivor then acted death (AP1 wires honest skips) |
 | `not-viable` | Really rejected **or** legacy opaque skip |
 
-Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1.
+Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1 / 1.6.0.
 
 `planFinished` may also carry hitch/Adaptive cost bits: `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
 

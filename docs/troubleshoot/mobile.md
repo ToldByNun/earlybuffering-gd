@@ -12,8 +12,14 @@ Fix:
 Check (on PC):
 
 ```bash
-python tools/geode_package_check.py path/to/file.geode --require android64
+python tools/geode_package_check.py path/to/file.geode --require android64 --forbid-zstd
 ```
+
+## “Unable to read entry (code -3)” / DOWNLOAD FAILED
+
+The zip entry failed to decompress (`MZ_DATA_ERROR`). EarlyBuffer **v1.5.1** release packages used **zstd** (ZIP method 93); many Android Geode builds choke on that.
+
+Fix: install **v1.6.0+** (deflate-only ship). On PC, reject zstd packages with `--forbid-zstd` as above.
 
 ## iOS missing dylib
 

@@ -42,7 +42,7 @@ public:
     // Writes settings/clock/replay/TW/bake-probe logs under saveDir/diag/.
     static void devDumpDiag();
 
-    // Geode ModSettingsPopup with Main/Scope/Assist/Bake/Modes/Visual/Keys/Dev switcher.
+    // Desktop ImGui shell / Geode popup: Main/Assist/Learn/Bake/Modes/Visual/UI/Keys/Dev.
     static void openModSettings();
     // Same as openModSettings (EB pause button). No-op if already open.
     static void openHub();

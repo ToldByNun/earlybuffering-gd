@@ -9,7 +9,8 @@ Short list of what EarlyBuffer can do. Each item has a deeper page.
 | [Cloud Configs](/features/cloud-configs) | Download / share settings packs |
 | [Safe Mode](/features/safe-mode) | Do not treat assisted runs as normal clears |
 | [Bake & Trigger World](/features/bake) | Precomputed windows + mover/toggle cache for the sim |
-| Scope gates | Practice / start-pos / percent / off-ranges |
+| Where it runs | Practice / start-pos / percent / off-ranges (Assist tab) |
+| Desktop menu | ImGui shell + Modes icons + Accent Color (Windows) |
 | Learning / Self-bake | Optional; off by default |
 | Overlay / pause EB | Status line + settings button |
 | Save feedback | Sound / color / counter when a delay actually fired |
