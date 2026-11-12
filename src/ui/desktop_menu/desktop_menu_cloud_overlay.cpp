@@ -8,9 +8,16 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "../../cloud/catalog/cloud_config_index.hpp"
+#include "../../cloud/catalog/cloud_config_service.hpp"
+#include "../../cloud/cloud_config_stats.hpp"
+#include "../../cloud/cloud_config_store.hpp"
+#include <Geode/Geode.hpp>
 #include <imgui.h>
 #include <algorithm>
 #include <cfloat>
+#include <cstdint>
+#include <string>
 
 class EbDesktopCloudOverlayState {
 public:
@@ -45,6 +52,51 @@ public:
         return value;
     }
 
+    static uint64_t& sessionGen() {
+        static uint64_t value = 0;
+        return value;
+    }
+
+    static uint64_t& opGen() {
+        static uint64_t value = 0;
+        return value;
+    }
+
+    static uint64_t& statsGen() {
+        static uint64_t value = 0;
+        return value;
+    }
+
+    static bool& busyUi() {
+        static bool value = false;
+        return value;
+    }
+
+    static bool& statusError() {
+        static bool value = false;
+        return value;
+    }
+
+    static std::string& statusText() {
+        static std::string value;
+        return value;
+    }
+
+    static std::string& selectedId() {
+        static std::string value;
+        return value;
+    }
+
+    static std::string& activeId() {
+        static std::string value;
+        return value;
+    }
+
+    static size_t& packCount() {
+        static size_t value = 0;
+        return value;
+    }
+
     static constexpr float kOpenTau = 0.09f;
     static constexpr float kCloseDuration = 0.20f;
     static constexpr float kCardW = 680.0f;
@@ -54,6 +106,146 @@ public:
 
 private:
     EbDesktopCloudOverlayState() = delete;
+};
+
+class EbDesktopCloudOverlayCatalog {
+public:
+    static bool sessionLive(uint64_t generation) {
+        return generation == EbDesktopCloudOverlayState::sessionGen() &&
+               EbDesktopCloudOverlayState::wantOpen();
+    }
+
+    static void setStatus(std::string text, bool isError) {
+        EbDesktopCloudOverlayState::statusText() = std::move(text);
+        EbDesktopCloudOverlayState::statusError() = isError;
+    }
+
+    static void syncPackCount() {
+        EbDesktopCloudOverlayState::packCount() =
+            EbCloudConfigService::get().catalog().packs.size();
+    }
+
+    static void ensureSelection() {
+        auto const& packs = EbCloudConfigService::get().catalog().packs;
+        if (packs.empty()) {
+            return;
+        }
+        std::string& selected = EbDesktopCloudOverlayState::selectedId();
+        if (selected.empty() || !EbCloudConfigIndex::findById(EbCloudConfigService::get().catalog(),
+                                                              selected)) {
+            selected = packs.front().id;
+        }
+    }
+
+    static void ensureLocalCatalog() {
+        if (!EbCloudConfigService::get().catalog().packs.empty()) {
+            return;
+        }
+        EbCloudConfigService::RefreshResult local{};
+        (void)EbCloudConfigService::get().loadLocalCatalog(local);
+    }
+
+    static void startStatsFetch() {
+        uint64_t const session = EbDesktopCloudOverlayState::sessionGen();
+        uint64_t const generation = ++EbDesktopCloudOverlayState::statsGen();
+        EbCloudConfigStats::get().fetchStats(
+            [session, generation](bool ok, std::string const&) {
+                if (!sessionLive(session) ||
+                    generation != EbDesktopCloudOverlayState::statsGen()) {
+                    return;
+                }
+                if (!ok) {
+                    return;
+                }
+                // AP4 will rebuild list badges from cached stats.
+                syncPackCount();
+            });
+    }
+
+    static void onRefreshDone(EbCloudConfigService::RefreshResult const& result) {
+        EbDesktopCloudOverlayState::busyUi() = false;
+
+        if (result.busy) {
+            setStatus("Busy…", false);
+            return;
+        }
+        if (!result.ok) {
+            ensureLocalCatalog();
+            syncPackCount();
+            size_t const count = EbDesktopCloudOverlayState::packCount();
+            setStatus(fmt::format("Offline · {} packs", count), count == 0);
+            ensureSelection();
+            startStatsFetch();
+            return;
+        }
+
+        char const* source = result.usedFallback ? "Online*" : "Online";
+        std::string stamp = result.catalog.updatedAt;
+        if (stamp.size() > 16) {
+            stamp = stamp.substr(0, 16);
+        }
+        if (!stamp.empty()) {
+            setStatus(fmt::format("{} · {} packs · {}", source, result.catalog.packs.size(), stamp),
+                      false);
+        } else {
+            setStatus(fmt::format("{} · {} packs", source, result.catalog.packs.size()), false);
+        }
+        if (result.catalog.packs.empty()) {
+            ensureLocalCatalog();
+        }
+        syncPackCount();
+        ensureSelection();
+        startStatsFetch();
+    }
+
+    static void startRefresh(bool force) {
+        if (EbDesktopCloudOverlayState::busyUi() || EbCloudConfigService::get().isBusy()) {
+            setStatus("Busy…", false);
+            return;
+        }
+        EbDesktopCloudOverlayState::busyUi() = true;
+        uint64_t const session = EbDesktopCloudOverlayState::sessionGen();
+        uint64_t const generation = ++EbDesktopCloudOverlayState::opGen();
+        setStatus(force ? "Refreshing (force)…" : "Refreshing…", false);
+
+        std::string const custom = EbCloudConfigService::readCatalogUrlSetting();
+        EbCloudConfigService::get().refreshCatalog(
+            custom,
+            [session, generation](EbCloudConfigService::RefreshResult const& result) {
+                if (!sessionLive(session) || generation != EbDesktopCloudOverlayState::opGen()) {
+                    return;
+                }
+                onRefreshDone(result);
+            },
+            force);
+    }
+
+    static void loadInitial() {
+        EbCloudConfigStore::ActiveInfo active{};
+        std::string err;
+        if (EbCloudConfigStore::get().readActive(active, err)) {
+            EbDesktopCloudOverlayState::activeId() = active.id;
+        } else {
+            EbDesktopCloudOverlayState::activeId().clear();
+        }
+
+        ensureLocalCatalog();
+        syncPackCount();
+        auto const& cat = EbCloudConfigService::get().catalog();
+        char const* source =
+            EbCloudConfigService::get().source() == EbCloudConfigService::CatalogSource::Seed
+                ? "Seed"
+            : EbCloudConfigService::get().source() == EbCloudConfigService::CatalogSource::DiskCache
+                ? "Cache"
+                : "Local";
+        setStatus(fmt::format("{} · {} packs", source, cat.packs.size()), cat.packs.empty());
+        ensureSelection();
+        startStatsFetch();
+        startRefresh(false);
+    }
+
+private:
+    EbDesktopCloudOverlayCatalog() = delete;
 };
 
 class EbDesktopCloudOverlayDraw {
@@ -114,7 +306,7 @@ public:
         visual = EbDesktopCloudOverlayState::closeStartVisual() * (1.0f - u);
     }
 
-    static void drawPlaceholderBody(float innerW) {
+    static void drawHeader(float innerW) {
         EbDesktopMenuFonts::pushUi();
         EbDesktopMenuFonts::pushCaps();
         ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
@@ -122,12 +314,39 @@ public:
         ImGui::PopStyleColor();
         EbDesktopMenuFonts::pop();
 
-        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
+        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopCloudOverlayState::statusError()
+                                                 ? EbDesktopMenuTheme::danger()
+                                                 : EbDesktopMenuTheme::muted());
         ImGui::PushTextWrapPos(ImGui::GetCursorScreenPos().x + innerW);
-        ImGui::TextUnformatted("Browse, install, rate, and share community packs.");
+        ImGui::TextUnformatted(EbDesktopCloudOverlayState::statusText().c_str());
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
+
+        bool const canRefresh = !EbDesktopCloudOverlayState::busyUi();
+        if (EbButton::draw("##eb-cloud-refresh", "Refresh", canRefresh)) {
+            EbDesktopCloudOverlayCatalog::startRefresh(true);
+        }
+
         EbDesktopMenuFonts::pop();
+    }
+
+    static void drawBody(float innerW) {
+        drawHeader(innerW);
+
+        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
+        ImGui::PushTextWrapPos(ImGui::GetCursorScreenPos().x + innerW);
+        ImGui::TextUnformatted(
+            "Browse, install, rate, and share community packs. List UI lands in AP4.");
+        if (!EbDesktopCloudOverlayState::selectedId().empty()) {
+            ImGui::Text("Selected: %s", EbDesktopCloudOverlayState::selectedId().c_str());
+        }
+        if (!EbDesktopCloudOverlayState::activeId().empty()) {
+            ImGui::Text("Active: %s", EbDesktopCloudOverlayState::activeId().c_str());
+        }
+        ImGui::Text("Packs in catalog: %zu", EbDesktopCloudOverlayState::packCount());
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
 
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
         if (EbButton::draw("##eb-cloud-close", "Close")) {
@@ -144,7 +363,6 @@ public:
             return;
         }
 
-        // Modal owns Esc / capture when stacked above this overlay.
         bool const modalUp = EbDesktopMenuModal::isOpen();
         if (!modalUp) {
             ImGui::SetNextFrameWantCaptureKeyboard(true);
@@ -209,7 +427,7 @@ public:
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar;
         ImGui::Begin("##eb-cloud-card", nullptr, cardFlags);
 
-        drawPlaceholderBody(cardW - pad * 2.0f);
+        drawBody(cardW - pad * 2.0f);
 
         bool const cardHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
         ImGui::End();
@@ -229,7 +447,10 @@ private:
 void EbDesktopCloudOverlay::open() {
     EbKeybind::cancelCapture();
     EbDesktopCloudOverlayState::shareOpen() = false;
+    ++EbDesktopCloudOverlayState::sessionGen();
+    EbDesktopCloudOverlayState::busyUi() = false;
     EbDesktopCloudOverlayState::wantOpen() = true;
+    EbDesktopCloudOverlayCatalog::loadInitial();
 }
 
 void EbDesktopCloudOverlay::dismiss() {
@@ -239,6 +460,8 @@ void EbDesktopCloudOverlay::dismiss() {
     }
     EbDesktopCloudOverlayState::shareOpen() = false;
     EbDesktopCloudOverlayState::wantOpen() = false;
+    ++EbDesktopCloudOverlayState::sessionGen();
+    EbDesktopCloudOverlayState::busyUi() = false;
 }
 
 bool EbDesktopCloudOverlay::isOpen() {
