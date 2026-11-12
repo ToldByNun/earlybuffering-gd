@@ -20,6 +20,11 @@ public:
     static void addWheelDelta(float deltaY);
     static float takeWheelDelta();
 
+    // Combo / dropdown / color popups are viewport-anchored. Shell requests dismiss on
+    // scroll/tab; widgets honor it inside BeginPopup (CloseCurrentPopup only works there).
+    static void requestDismissFloatingPopups();
+    static bool shouldDismissFloatingPopups();
+
 private:
     EbDesktopMenuShell() = delete;
 };

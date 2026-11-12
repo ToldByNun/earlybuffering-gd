@@ -131,6 +131,12 @@ public:
         return value;
     }
 
+    // Sticky for one frame — widgets close their BeginPopup when set.
+    static bool& dismissFloatingPopups() {
+        static bool value = false;
+        return value;
+    }
+
 private:
     EbDesktopMenuShellState() = delete;
 };
@@ -237,6 +243,7 @@ public:
         EbDesktopMenuShellState::tabResetScroll() = true;
         EbDesktopMenuShellState::active() = next;
         EbDesktopMenuShellState::wheelDelta() = 0.0f;
+        EbDesktopMenuShell::requestDismissFloatingPopups();
     }
 
 private:
@@ -412,17 +419,15 @@ public:
             EbDesktopMenuShellState::tabResetScroll() = false;
         }
 
-        SettingsCategory const active = EbDesktopMenuShellState::active();
-        EbDesktopMenuPanels::draw(active);
-        // No extra end Dummy — AlwaysUseWindowPadding already mirrors top kContentPadY
-        // at the bottom. (Old Dummy(pad+24) made the scrolled-end gutter ~2× the top.)
-
-        // Smooth wheel scroll — target jumps, visual eases.
+        // Scroll + dismiss BEFORE panels so combo/dropdown/color can CloseCurrentPopup
+        // inside their BeginPopup this frame (shell-side CloseCurrentPopup is a no-op).
         float const wheel = EbDesktopMenuShell::takeWheelDelta();
         ImVec2 const mouse = ImGui::GetIO().MousePos;
         bool const overTab = mouse.x >= origin.x && mouse.x < origin.x + width &&
                              mouse.y >= origin.y && mouse.y < origin.y + height;
         float const maxY = ImGui::GetScrollMaxY();
+        float const scrollBefore = EbDesktopMenuShellState::scrollVisual();
+        bool scrolled = false;
         if (wheel != 0.0f && overTab && EbDesktopMenuShellState::tabVisual() >= 0.97f) {
             float const step = ImGui::GetTextLineHeightWithSpacing();
             float next = EbDesktopMenuShellState::scrollTarget() + wheel * step;
@@ -432,16 +437,29 @@ public:
             if (next > maxY) {
                 next = maxY;
             }
+            if (std::fabs(next - EbDesktopMenuShellState::scrollTarget()) > 0.01f) {
+                scrolled = true;
+            }
             EbDesktopMenuShellState::scrollTarget() = next;
         }
-        // Keep target in range if content shrunk.
         if (EbDesktopMenuShellState::scrollTarget() > maxY) {
             EbDesktopMenuShellState::scrollTarget() = maxY;
         }
         EbDesktopMenuShellState::scrollVisual() = EbDesktopMenuMotion::approach(
             EbDesktopMenuShellState::scrollVisual(), EbDesktopMenuShellState::scrollTarget(), 0.06f,
             ImGui::GetIO().DeltaTime);
+        if (std::fabs(EbDesktopMenuShellState::scrollVisual() - scrollBefore) > 0.5f) {
+            scrolled = true;
+        }
+        if (scrolled) {
+            EbDesktopMenuShell::requestDismissFloatingPopups();
+        }
         ImGui::SetScrollY(EbDesktopMenuShellState::scrollVisual());
+
+        SettingsCategory const active = EbDesktopMenuShellState::active();
+        EbDesktopMenuPanels::draw(active);
+        // No extra end Dummy — AlwaysUseWindowPadding already mirrors top kContentPadY
+        // at the bottom. (Old Dummy(pad+24) made the scrolled-end gutter ~2× the top.)
 
         ImGui::EndChild();
         ImGui::PopStyleVar(4);
@@ -450,6 +468,7 @@ public:
     static void frame() {
         float const deltaTime = (std::max)(0.0f, ImGui::GetIO().DeltaTime);
         EbDesktopMenuMotion::beginFrame();
+        EbDesktopMenuShellState::dismissFloatingPopups() = false;
         // Live accent — ImGui style + wave chrome pick up desktop-accent-color edits.
         EbDesktopMenuTheme::apply();
         EbDesktopMenuShellAnim::updateOpen(deltaTime);
@@ -646,6 +665,14 @@ float EbDesktopMenuShell::takeWheelDelta() {
     return delta;
 }
 
+void EbDesktopMenuShell::requestDismissFloatingPopups() {
+    EbDesktopMenuShellState::dismissFloatingPopups() = true;
+}
+
+bool EbDesktopMenuShell::shouldDismissFloatingPopups() {
+    return EbDesktopMenuShellState::dismissFloatingPopups();
+}
+
 void EbDesktopMenuShell::draw() {
     EbDesktopMenuShellDraw::frame();
 }
@@ -674,6 +701,12 @@ void EbDesktopMenuShell::addWheelDelta(float) {}
 
 float EbDesktopMenuShell::takeWheelDelta() {
     return 0.0f;
+}
+
+void EbDesktopMenuShell::requestDismissFloatingPopups() {}
+
+bool EbDesktopMenuShell::shouldDismissFloatingPopups() {
+    return false;
 }
 
 void EbDesktopMenuShell::draw() {}

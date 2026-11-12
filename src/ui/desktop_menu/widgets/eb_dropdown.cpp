@@ -5,6 +5,7 @@
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
+#include "../desktop_menu_shell.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
@@ -173,42 +174,47 @@ public:
         ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0.35f, 0.35f, 0.42f, 0.9f));
         if (ImGui::BeginPopup("##eb-drop-popup",
                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
-            float const popupInner = ImGui::GetContentRegionAvail().x;
-            for (int index = 0; index < optionCount; ++index) {
-                char const* option = displayAt(options, displayLabels, index);
-                ImGui::PushID(index);
-                bool const selected = index == *selectedIndex;
-                ImVec2 const optMin = ImGui::GetCursorScreenPos();
-                bool const clicked = ImGui::InvisibleButton("##opt", ImVec2(popupInner, optH));
-                bool const optHover = ImGui::IsItemHovered();
-                float const optHeat =
-                    EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), optHover || selected, 0.05f);
-                ImDrawList* popupDraw = ImGui::GetWindowDrawList();
-                ImVec2 const optMax(optMin.x + popupInner, optMin.y + optH);
+            if (EbDesktopMenuShell::shouldDismissFloatingPopups()) {
+                ImGui::CloseCurrentPopup();
+            } else {
+                float const popupInner = ImGui::GetContentRegionAvail().x;
+                for (int index = 0; index < optionCount; ++index) {
+                    char const* option = displayAt(options, displayLabels, index);
+                    ImGui::PushID(index);
+                    bool const selected = index == *selectedIndex;
+                    ImVec2 const optMin = ImGui::GetCursorScreenPos();
+                    bool const clicked = ImGui::InvisibleButton("##opt", ImVec2(popupInner, optH));
+                    bool const optHover = ImGui::IsItemHovered();
+                    float const optHeat = EbDesktopMenuMotion::smoothToward(
+                        ImGui::GetItemID(), optHover || selected, 0.05f);
+                    ImDrawList* popupDraw = ImGui::GetWindowDrawList();
+                    ImVec2 const optMax(optMin.x + popupInner, optMin.y + optH);
 
-                ImVec4 optFill = selected ? selectedFill() : hoverFill();
-                if (optHeat > 0.01f) {
-                    popupDraw->AddRectFilled(optMin, optMax,
-                                             EbDesktopMenuTheme::toU32(ImVec4(
-                                                 optFill.x, optFill.y, optFill.z, optFill.w * optHeat)),
-                                             rounding - 2.0f);
-                }
-
-                ImVec4 optText = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::muted(),
-                                                            EbDesktopMenuTheme::text(), optHeat);
-                popupDraw->AddText(
-                    ImGui::GetFont(), ImGui::GetFontSize(),
-                    ImVec2(optMin.x + 12.0f, optMin.y + (optH - textH) * 0.5f),
-                    EbDesktopMenuTheme::toU32(optText), option);
-
-                if (clicked) {
-                    if (index != *selectedIndex) {
-                        *selectedIndex = index;
-                        changed = true;
+                    ImVec4 optFill = selected ? selectedFill() : hoverFill();
+                    if (optHeat > 0.01f) {
+                        popupDraw->AddRectFilled(
+                            optMin, optMax,
+                            EbDesktopMenuTheme::toU32(
+                                ImVec4(optFill.x, optFill.y, optFill.z, optFill.w * optHeat)),
+                            rounding - 2.0f);
                     }
-                    ImGui::CloseCurrentPopup();
+
+                    ImVec4 optText = EbDesktopMenuMotion::lerp4(
+                        EbDesktopMenuTheme::muted(), EbDesktopMenuTheme::text(), optHeat);
+                    popupDraw->AddText(
+                        ImGui::GetFont(), ImGui::GetFontSize(),
+                        ImVec2(optMin.x + 12.0f, optMin.y + (optH - textH) * 0.5f),
+                        EbDesktopMenuTheme::toU32(optText), option);
+
+                    if (clicked) {
+                        if (index != *selectedIndex) {
+                            *selectedIndex = index;
+                            changed = true;
+                        }
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::PopID();
                 }
-                ImGui::PopID();
             }
             ImGui::EndPopup();
         }

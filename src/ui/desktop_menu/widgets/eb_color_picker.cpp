@@ -5,6 +5,7 @@
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
+#include "../desktop_menu_shell.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
@@ -140,18 +141,22 @@ public:
         ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
         if (ImGui::BeginPopup("##eb-color-popup",
                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGuiColorEditFlags const flags =
-                ImGuiColorEditFlags_PickerHueBar | ImGuiColorEditFlags_DisplayRGB |
-                ImGuiColorEditFlags_DisplayHex | ImGuiColorEditFlags_NoSidePreview |
-                ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoAlpha |
-                ImGuiColorEditFlags_Uint8;
-            if (ImGui::ColorPicker3("##eb-color-picker", draft, flags)) {
-                clampRgb(draft);
-                if (!nearlyEqual(draft, rgb)) {
-                    rgb[0] = draft[0];
-                    rgb[1] = draft[1];
-                    rgb[2] = draft[2];
-                    changed = true;
+            if (EbDesktopMenuShell::shouldDismissFloatingPopups()) {
+                ImGui::CloseCurrentPopup();
+            } else {
+                ImGuiColorEditFlags const flags =
+                    ImGuiColorEditFlags_PickerHueBar | ImGuiColorEditFlags_DisplayRGB |
+                    ImGuiColorEditFlags_DisplayHex | ImGuiColorEditFlags_NoSidePreview |
+                    ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoAlpha |
+                    ImGuiColorEditFlags_Uint8;
+                if (ImGui::ColorPicker3("##eb-color-picker", draft, flags)) {
+                    clampRgb(draft);
+                    if (!nearlyEqual(draft, rgb)) {
+                        rgb[0] = draft[0];
+                        rgb[1] = draft[1];
+                        rgb[2] = draft[2];
+                        changed = true;
+                    }
                 }
             }
             ImGui::EndPopup();
