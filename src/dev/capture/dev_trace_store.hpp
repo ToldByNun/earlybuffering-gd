@@ -2,6 +2,7 @@
 #define DEV_TRACE_STORE_HPP
 
 #include "../diagnostics/dev_resource_stats.hpp"
+#include "../evaluation/dev_attempt_eval.hpp"
 #include "../evaluation/dev_reject_ledger.hpp"
 #include "../evaluation/dev_state_diff.hpp"
 #include "dev_clock_contract.hpp"
@@ -101,6 +102,8 @@ public:
     // True when seal counted toward the rolling window (pressObserved / empty-count).
     bool counted = false;
     std::vector<EbDevDecisionEvent> events;
+    // Offline counterfactual eval (AP3) — optional; written by Eval Last/Session/On-Death.
+    EbDevAttemptEval eval{};
 
 private:
 };
@@ -173,6 +176,8 @@ public:
     // Seal current attempt, bump recordingsDone when it counts, rolling-trim, flush.
     // Never auto-stops the session — keeps only the last recordingsTarget counted attempts.
     bool sealAttempt(std::string endReason, bool countTowardTarget);
+    // Attach offline eval grid to an attempt and flush (AP3).
+    bool sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval);
     bool flush();
     void closeSession();
 

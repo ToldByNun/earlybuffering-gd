@@ -366,6 +366,19 @@ bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget)
     return this->flush();
 }
 
+bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) {
+    if (!this->m_open || attemptId <= 0)
+        return false;
+    for (auto& attempt : this->m_session.attempts) {
+        if (attempt.attemptId != attemptId)
+            continue;
+        attempt.eval = std::move(eval);
+        this->sampleResources();
+        return this->flush();
+    }
+    return false;
+}
+
 bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
     auto const directory = this->tracesDir();
     (void)geode::utils::file::createDirectoryAll(directory);

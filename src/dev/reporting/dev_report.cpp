@@ -7,9 +7,12 @@
 #include "../diagnostics/dev_resource_stats.hpp"
 #include "../dev_config.hpp"
 #include "../dev_session.hpp"
+#include "../evaluation/dev_attempt_eval.hpp"
 #include <Geode/Geode.hpp>
+#include <cstdint>
 #include <cstring>
 #include <fmt/format.h>
+#include <vector>
 
 EbDevReport EbDevReportImplementation::s_lastReport{};
 bool EbDevReportImplementation::s_hasLastReport = false;
@@ -69,7 +72,8 @@ int EbDevReportImplementation::limitFromPlanEvent(EbDevDecisionEvent const& e) {
 }
 
 bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisionEvent const& planEv,
-                                                 EbDevReport& out, std::string& err) {
+                                                 EbDevReport& out, std::string& err,
+                                                 int64_t attemptId) {
     if (!layer) {
         err = "no-playlayer";
         return false;
@@ -135,6 +139,11 @@ bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisi
                     root["resourceBit"] = out.resourceBit;
                 out.jsonLine = root.dump(0);
             }
+        }
+        // AP3: seal samples + objective onto the attempt JSON and flush.
+        if (attemptId > 0 && EbDevTraceStore::get().isOpen()) {
+            auto sealed = EbDevAttemptEval::fromGrid(grid, out);
+            (void)EbDevTraceStore::get().sealOfflineEval(attemptId, std::move(sealed));
         }
     }
     return out.valid;
@@ -344,8 +353,9 @@ bool EbDevReport::evalLastAttempt(std::string& err) {
         return false;
     }
 
+    int64_t const attemptId = target->attemptId;
     EbDevReport rep;
-    if (!EbDevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, err)) {
+    if (!EbDevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, err, attemptId)) {
         if (err.empty())
             err = "eval-failed";
         return false;
@@ -369,18 +379,35 @@ bool EbDevReport::evalSession(std::string& err, int* outCount) {
         return false;
     }
 
+    // Snapshot attempt ids first — sealing mutates/flushes mid-loop.
+    std::vector<int64_t> attemptIds;
+    attemptIds.reserve(store.session().attempts.size());
+    for (auto const& attempt : store.session().attempts) {
+        if (!attempt.sealed && &attempt != &store.session().attempts.back())
+            continue;
+        if (!EbDevReportImplementation::findPlanFinished(attempt))
+            continue;
+        attemptIds.push_back(attempt.attemptId);
+    }
+
     int ran = 0;
     EbDevReport lastOk;
-    for (auto const& attempt : store.session().attempts) {
-        if (!attempt.sealed && &attempt != &store.session().attempts.back()) {
-            continue;
+    for (int64_t const attemptId : attemptIds) {
+        EbDevAttempt const* attempt = nullptr;
+        for (auto const& candidate : store.session().attempts) {
+            if (candidate.attemptId == attemptId) {
+                attempt = &candidate;
+                break;
+            }
         }
-        auto const* planEv = EbDevReportImplementation::findPlanFinished(attempt);
+        if (!attempt)
+            continue;
+        auto const* planEv = EbDevReportImplementation::findPlanFinished(*attempt);
         if (!planEv)
             continue;
         EbDevReport rep;
         std::string localErr;
-        if (!EbDevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, localErr))
+        if (!EbDevReportImplementation::runEvalOnPlanEvent(layer, *planEv, rep, localErr, attemptId))
             continue;
         lastOk = std::move(rep);
         ++ran;

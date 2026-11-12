@@ -15,6 +15,15 @@ Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, …) 
 - `witness` (player blob, trigger ready tracks, clock / midStep)
 - `attribution` (e.g. `best-surviving-absent`)
 
+After **Eval Last / Eval Session / Eval On Death**, each evaluated attempt also gets an additive `eval` object:
+
+- fidelity / claims / objective / grid / horizon / tail
+- `bestSurvivingDelay` / `bestEvaluatedDelay` (when claims allow)
+- `samples[]` with `delay`, `survivedPrimary`, `deathTick`, `endX`, `unknown`, `budgetHit`, tail fields, `ticksRan`
+- `overlay` line for that seal
+
+Research Pack copies this sealed session as `session.json`.
+
 ## Report line
 
 `earlybuffer-dev-report.txt` style:

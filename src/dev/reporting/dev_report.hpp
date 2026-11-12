@@ -81,8 +81,9 @@ public:
     static EbDevObjective::Kind objectiveKindFromConfig();
     static EbDevDecisionEvent const* findPlanFinished(EbDevAttempt const& attempt);
     static int limitFromPlanEvent(EbDevDecisionEvent const& e);
+    // attemptId > 0 → seal offline eval onto that attempt and flush (AP3).
     static bool runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisionEvent const& planEv, EbDevReport& out,
-                                   std::string& err);
+                                   std::string& err, int64_t attemptId = 0);
 
 private:
     friend class EbDevReport;

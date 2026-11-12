@@ -278,6 +278,23 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     att.endReason = "death";
     att.sealed = true;
     att.events = good;
+    att.eval.valid = true;
+    att.eval.objectiveId = "survive_then_endx_v1";
+    att.eval.gridId = "band";
+    att.eval.horizonTicks = 48;
+    att.eval.hasBestSurviving = true;
+    att.eval.bestSurvivingDelay = 2;
+    att.eval.claimsAllowed = true;
+    att.eval.fidelity = DevFidelity::Reproduced;
+    att.eval.overlayLine = "REC 1/10 | fid=reproduced | bestSurv=2";
+    {
+        EbDevObjective::Sample sample;
+        sample.delay = 2;
+        sample.survivedPrimary = true;
+        sample.endX = 100.f;
+        sample.ticksRan = 48;
+        att.eval.samples.push_back(sample);
+    }
     sess.attempts.push_back(att);
 
     auto body = EbDevTraceStore::sessionToJsonString(sess);
@@ -296,6 +313,10 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     expect(back.attempts[0].events[1].planId == 42, "json-planId");
     expect(back.attempts[0].events[3].parentEventId == 3, "json-parent");
     expect(EbDevTraceStore::validatePressChain(back.attempts[0].events, 10, err), "json-chain");
+    expect(back.attempts[0].eval.valid, "json-eval-valid");
+    expect(back.attempts[0].eval.bestSurvivingDelay == 2, "json-eval-bestSurv");
+    expect(back.attempts[0].eval.samples.size() == 1, "json-eval-samples");
+    expect(back.attempts[0].eval.samples[0].delay == 2, "json-eval-sample-delay");
 
     // Store API: begin/append/seal/flush (disk) when Mod is available.
     // Constrained devices (Android/iOS) skip disk gold — PlatformLimits::allowLoadDiskSelfCheck.
