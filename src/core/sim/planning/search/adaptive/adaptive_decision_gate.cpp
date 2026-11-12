@@ -1,4 +1,5 @@
 #include "adaptive_decision_gate.hpp"
+#include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
@@ -56,11 +57,12 @@ bool EbAdaptiveDecisionGate::hasHazardProgress(CandView const& cand, CandView co
         return true;
     // Screen-Alive alone never counts while d0 is also Alive — that falsely
     // PassD0Safe'd presses (minProof==screen) and blocked classic fallthrough.
-    // minProof only arms Delay when beating a dying d0.
+    // vs dying d0: screen quantum AND known death clock (AP10 — no short seed).
     if (d0.terminalDied) {
         int const proofFloor = std::clamp(screenProofTicks, 8, 64);
-        int const minProof = std::min(cap, proofFloor);
-        if (cand.ticksSimulated >= minProof)
+        int const knownDeath = d0.deathTick > 0 ? d0.deathTick : -1;
+        if (EbLivePlanContracts::adaptiveSeedCountsAlive(cand.ticksSimulated, proofFloor,
+                                                         knownDeath, cap))
             return true;
     }
     return false;
@@ -311,7 +313,7 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     expect(!hasHazardProgress(proof, d0live, 96, 24), "no-min-proof-while-d0-alive");
     expect(!isProvenSafe(proof, 96), "screen-not-proven-safe");
 
-    // minProof arms Delay only when beating a dying d0.
+    // minProof arms Delay only when beating a dying d0 (and covering deathTick).
     CandView d0dead = d0live;
     d0dead.terminalDied = true;
     d0dead.autonomousAlive = false;
@@ -319,6 +321,12 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     d0dead.ticksSimulated = 6;
     expect(hasHazardProgress(proof, d0dead, 96, 24), "min-proof-vs-dead-d0");
     expect(!hasHazardProgress(proof, d0dead, 96, 32), "min-proof-below-floor");
+    // AP10: short screen Alive must not beat a known later d0 death.
+    d0dead.deathTick = 54;
+    expect(!hasHazardProgress(proof, d0dead, 96, 24), "adaptive-seed-before-d0-death-rejected");
+    CandView proofLong = proof;
+    proofLong.ticksSimulated = 54;
+    expect(hasHazardProgress(proofLong, d0dead, 96, 24), "adaptive-seed-covers-d0-death");
 
     // Screen-only Alive d0 → PassBudget (not PassD0Safe / not Hopeless), even
     // without budgetHitIncomplete — classic fallthrough must still run.

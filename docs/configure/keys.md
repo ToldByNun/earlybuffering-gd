@@ -15,7 +15,7 @@ When a delayed click actually fires, optional:
 
 - Sound
 - Color flash
-- Counter (`+N` / streaks)
+- Counter (`+N` / streaks) — `+N` is physics ticks held before inject, not “saved”
 
 These are feedback only — they do not change the plan.
 

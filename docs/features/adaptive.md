@@ -38,4 +38,10 @@ Main Adaptive is the **default / fallback**. Under **Modes**, turn **Adaptive Ov
 
 If Adaptive feels “always budget”, raise tick budget carefully or turn Adaptive off and retest.
 
+## Honesty (short seeds)
+
+A quick screen that looks Alive for ~24 ticks must **not** arm Delay when another delay (often d0) already died later in the same search. Live waits until the candidate has been simulated at least through that known death clock (or the look-ahead wall).
+
+Red **+Nt** save-feedback counters mean “held N physics ticks before inject” — not “this click was a save.”
+
 Deep notes: [Assist reference](/assist_reference).

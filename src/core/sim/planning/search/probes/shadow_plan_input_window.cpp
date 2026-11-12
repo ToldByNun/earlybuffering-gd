@@ -27,6 +27,31 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         return false;
     };
+    auto const knownDeathTick = [&]() -> int {
+        // Longest observed death among ready / fully evaluated cands (esp. d0).
+        int known = -1;
+        if (context.options.seedPrefixDeathTick > 0) {
+            known = context.options.seedPrefixDeathTick;
+        }
+        int const lim = std::max(0, context.limit);
+        for (int delay = 0; delay <= lim; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)]) {
+                continue;
+            }
+            auto const& cand = context.cands[static_cast<size_t>(delay)];
+            if (!cand.raw.died || cand.raw.deathTick <= 0) {
+                continue;
+            }
+            if (known < 0 || cand.raw.deathTick > known) {
+                known = cand.raw.deathTick;
+            }
+        }
+        if (context.plan.firstDeathTick > 0 &&
+            (known < 0 || context.plan.firstDeathTick > known)) {
+            known = context.plan.firstDeathTick;
+        }
+        return known;
+    };
     auto const complete = [&](EbShadowSimulator::RunResult const& result, int delayValue = -1) {
         bool const unknown = result.unknown || result.unknownTrunc || result.toggleUnknown;
         if (EbMissAssistContracts::survivesObservation(result.died, unknown, result.ticksRan,
@@ -34,11 +59,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                                                        result.landedAfterAction)) {
             return true;
         }
-        // Adaptive→classic seed: Alive through the paid screen quantum counts.
+        // Adaptive→classic seed: Alive only if screen quantum AND any known
+        // longer death clock are covered (AP10 — no short seed over d0 death).
         if (delayValue >= 0 && wasSeeded(delayValue) && !result.died && !unknown &&
             result.ticksRan > 0) {
             int const quantum = std::max(1, context.options.adaptiveScreenTicks);
-            return result.ticksRan >= quantum;
+            return EbLivePlanContracts::adaptiveSeedCountsAlive(result.ticksRan, quantum,
+                                                                knownDeathTick());
         }
         return false;
     };

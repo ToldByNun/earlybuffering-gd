@@ -9,9 +9,15 @@ Release notes: [`releases/v1.6.0.md`](releases/v1.6.0.md).
 ### Desktop menu (ImGui)
 - New desktop settings shell (sidebar + tab panels) binding all SettingV3 categories with checkbox / slider / combo / dropdown / color / keybind / action widgets.
 - Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev** (Smart folded into Main; Scope folded into Assist).
-- Modes icon top-bar (Cube→Swing) with per-mode settings card.
+- Modes icon top-bar (Cube→Swing) with per-mode settings card + **Adaptive Overwrite**.
+- Assist Off Ranges: desktop add/remove list (`assist-off-ranges` JSON; legacy 6 float pairs migrate).
 - **Accent Color** (`desktop-accent-color`) under UI — drives theme primary + secondary greys + sidebar/widget wave fill.
 - Sidebar wave stays smooth; widget fills use coarser cells (cheaper).
+- Styled ImGui modal for in-shell alerts; keybind capture open/close fixes.
+
+### Live Adaptive honesty
+- Short Adaptive screen Alive seeds can no longer beat a known later death (esp. d0) when falling through to classic or arming Delay.
+- Save-feedback `+N` clarified as held physics ticks, not a save proof.
 
 ### Android package fix
 - v1.5.1 GitHub combine defaulted to **zstd** (ZIP method 93) → Android `Unable to read entry (code -3)` / `CS: DOWNLOAD FAILED`.

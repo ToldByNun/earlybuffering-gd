@@ -429,6 +429,17 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         classicOpts.seedCandidates.reserve(static_cast<size_t>(limit) + 1);
         int const modelCap = std::max(1, model.cap);
         int const screenQuantum = std::max(1, options.adaptiveScreenTicks);
+        // Longest known Adaptive death — short screen Alive must not outrank it.
+        int knownDeathTick = prefixDeathTick > 0 ? prefixDeathTick : -1;
+        for (int delay = 0; delay <= limit; ++delay) {
+            auto const& slot = slots[static_cast<size_t>(delay)];
+            if (!slot.screened || !slot.terminalDied || slot.deathTick <= 0) {
+                continue;
+            }
+            if (knownDeathTick < 0 || slot.deathTick > knownDeathTick) {
+                knownDeathTick = slot.deathTick;
+            }
+        }
         for (int delay = 0; delay <= limit; ++delay) {
             auto const& slot = slots[static_cast<size_t>(delay)];
             if (!slot.screened)
@@ -437,10 +448,11 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             bool const horizonProven =
                 slot.autonomousAlive &&
                 (slot.terminalAliveCap || slot.ticksSimulated >= modelCap);
-            // Observation-cleared Alive: survived the Adaptive screen quantum.
+            // Observation-cleared Alive: screen quantum + honesty vs known death.
             bool const observationCleared =
                 slot.autonomousAlive && !slot.terminalUnknown &&
-                slot.ticksSimulated >= screenQuantum;
+                EbLivePlanContracts::adaptiveSeedCountsAlive(slot.ticksSimulated, screenQuantum,
+                                                             knownDeathTick, modelCap);
             if (!terminal && !horizonProven && !observationCleared)
                 continue;
 
