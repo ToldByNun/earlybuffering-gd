@@ -2,6 +2,7 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "desktop_menu_sidebar_wave_gpu.hpp"
 #include "desktop_menu_theme.hpp"
 #include <cmath>
 
@@ -121,6 +122,21 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
 
     ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
     drawList->AddRectFilled(min, max, base, clampedRounding, cornerFlags);
+
+    // GPU path (sidebar): fragment shader into current FB via ImDrawCallback.
+    // No custom FBO — that previously crashed on the ImGui swap path.
+    if (transparentOutside && EbDesktopMenuSidebarWaveGpu::ensureReady()) {
+        EbDesktopMenuSidebarWaveGpu::PaintRequest request;
+        request.min = min;
+        request.max = max;
+        request.timeSeconds = timeSeconds;
+        request.rounding = clampedRounding;
+        request.cornerFlags = cornerFlags;
+        request.baseColor = EbDesktopMenuTheme::sidebarWaveDark();
+        request.lightColor = EbDesktopMenuTheme::sidebarWaveLight();
+        EbDesktopMenuSidebarWaveGpu::paint(drawList, request);
+        return;
+    }
 
     // Caller picks density: sidebar ~2.25 (smooth), widgets ~5–6 (chunky / cheap).
     float const targetCell = targetCellPx < 1.5f ? 1.5f : targetCellPx;

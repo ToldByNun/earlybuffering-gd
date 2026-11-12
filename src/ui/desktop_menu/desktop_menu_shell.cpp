@@ -76,9 +76,9 @@ public:
     static constexpr float kContentPadX = 28.0f;
     static constexpr float kContentPadY = 24.0f;
 
-    static constexpr float kOpenTau = 0.11f;   // ~settle in ~0.35s
-    static constexpr float kCloseTau = 0.09f;  // ~settle in ~0.28s
-    static constexpr float kTabTau = 0.10f;    // ~settle in ~0.30s
+    static constexpr float kOpenTau = 0.11f;    // ~settle in ~0.35s
+    static constexpr float kCloseDuration = 0.20f; // fixed cubic close — hits 0, no end snap hitch
+    static constexpr float kTabTau = 0.10f;     // ~settle in ~0.30s
     static constexpr float kOpenSlidePx = 14.0f;
     static constexpr float kTabSlidePx = 16.0f;
     static constexpr float kTabDip = 0.62f; // don't hard-reset to 0 on re-click
@@ -115,6 +115,22 @@ public:
         return value;
     }
 
+    // Close curve state — captured when wantOpen flips false.
+    static bool& closing() {
+        static bool value = false;
+        return value;
+    }
+
+    static float& closeElapsed() {
+        static float value = 0.0f;
+        return value;
+    }
+
+    static float& closeStartVisual() {
+        static float value = 1.0f;
+        return value;
+    }
+
 private:
     EbDesktopMenuShellState() = delete;
 };
@@ -144,20 +160,57 @@ public:
         return next;
     }
 
+    static void clearTrailToCenter() {
+        ImVec2 const center = EbDesktopMenuShellState::visualCenter();
+        ImVec2* trail = EbDesktopMenuShellState::trail();
+        for (int index = 0; index < EbDesktopMenuShellState::kTrailCount; ++index) {
+            trail[index] = center;
+        }
+        EbDesktopMenuShellState::dragging() = false;
+    }
+
     static void updateOpen(float deltaTime) {
-        float const target = EbDesktopMenuShellState::wantOpen() ? 1.0f : 0.0f;
-        float const tau = EbDesktopMenuShellState::wantOpen() ? EbDesktopMenuShellState::kOpenTau
-                                                             : EbDesktopMenuShellState::kCloseTau;
         float& visual = EbDesktopMenuShellState::openVisual();
-        visual = approach(visual, target, tau, deltaTime);
-        // Exponential ease never quite hits 0 — without a finish snap the shell
-        // lingered nearly-invisible for a beat before ImGui finally hid.
-        if (!EbDesktopMenuShellState::wantOpen() && visual < 0.04f) {
+        float const dt = clampf(deltaTime, 0.0f, 1.0f / 20.0f);
+
+        if (EbDesktopMenuShellState::wantOpen()) {
+            // Interrupted close → resume exponential open from current visual.
+            EbDesktopMenuShellState::closing() = false;
+            EbDesktopMenuShellState::closeElapsed() = 0.0f;
+            visual = approach(visual, 1.0f, EbDesktopMenuShellState::kOpenTau, dt);
+            if (visual > 0.985f) {
+                visual = 1.0f;
+            }
+            return;
+        }
+
+        // Already fully closed — stay parked (don't restart a tiny close loop).
+        if (visual <= 0.001f) {
             visual = 0.0f;
+            EbDesktopMenuShellState::closing() = false;
+            EbDesktopMenuShellState::closeElapsed() = 0.0f;
+            return;
         }
-        if (EbDesktopMenuShellState::wantOpen() && visual > 0.985f) {
-            visual = 1.0f;
+
+        // Begin close: capture start visual, kill trail ghosts immediately.
+        if (!EbDesktopMenuShellState::closing()) {
+            EbDesktopMenuShellState::closing() = true;
+            EbDesktopMenuShellState::closeElapsed() = 0.0f;
+            EbDesktopMenuShellState::closeStartVisual() = visual;
+            clearTrailToCenter();
         }
+
+        EbDesktopMenuShellState::closeElapsed() += dt;
+        float const dur = EbDesktopMenuShellState::kCloseDuration;
+        float t = dur > 0.0f ? EbDesktopMenuShellState::closeElapsed() / dur : 1.0f;
+        if (t >= 1.0f) {
+            visual = 0.0f;
+            EbDesktopMenuShellState::closing() = false;
+            return;
+        }
+        // Smoothstep — continuous velocity at ends, lands exactly on 0 at t=1.
+        float const u = t * t * (3.0f - 2.0f * t);
+        visual = EbDesktopMenuShellState::closeStartVisual() * (1.0f - u);
     }
 
     static void updateTab(float deltaTime) {
@@ -406,6 +459,8 @@ public:
         if (openE <= 0.001f && !EbDesktopMenuShellState::wantOpen()) {
             EbDesktopMenuShellState::haveAnchor() = false;
             EbDesktopMenuShellState::dragging() = false;
+            EbDesktopMenuShellState::closing() = false;
+            EbDesktopMenuShellAnim::clearTrailToCenter();
             EbDesktopMenuShellState::prevOpenVisual() = openE;
             return;
         }
@@ -444,8 +499,9 @@ public:
             EbDesktopMenuShellState::targetCenter().x - EbDesktopMenuShellState::visualCenter().x,
             EbDesktopMenuShellState::targetCenter().y - EbDesktopMenuShellState::visualCenter().y);
         float const driftLen = std::sqrt(drift.x * drift.x + drift.y * drift.y);
-        bool const showTrail =
-            EbDesktopMenuShellState::dragging() || driftLen > 2.5f;
+        // Never draw trail ghosts while closing — they felt like an end hitch.
+        bool const showTrail = EbDesktopMenuShellState::wantOpen() &&
+                               (EbDesktopMenuShellState::dragging() || driftLen > 2.5f);
 
         ImVec2* trail = EbDesktopMenuShellState::trail();
         if (showTrail) {
@@ -456,10 +512,7 @@ public:
                                                              deltaTime);
             }
         } else {
-            // Snap ghosts away when idle — stacked FG ghosts were darkening the UI.
-            for (int index = 0; index < EbDesktopMenuShellState::kTrailCount; ++index) {
-                trail[index] = EbDesktopMenuShellState::visualCenter();
-            }
+            EbDesktopMenuShellAnim::clearTrailToCenter();
         }
 
         float const slideY = (1.0f - openE) * EbDesktopMenuShellState::kOpenSlidePx;
