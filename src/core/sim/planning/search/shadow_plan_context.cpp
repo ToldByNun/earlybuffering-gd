@@ -10,6 +10,7 @@
 #include "../simulation_plan.hpp"
 #include <algorithm>
 #include <chrono>
+#include <fmt/format.h>
 
 EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer,
                                      PlayerObject* real, bool down, int limit, float deltaTime,
@@ -112,6 +113,17 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         s.verifyFailed = candidate.verifyFailed;
         s.surviveBin = candidate.surviveBin;
         s.endX = candidate.endX;
+        // AP4: structured candidate truth for offline multi-mode research.
+        s.hasRunTruth = true;
+        s.deathTick = candidate.raw.deathTick;
+        s.ticksRan = candidate.raw.ticksRan;
+        s.unknown = candidate.raw.unknown || candidate.raw.unknownTrunc;
+        s.surviveTicks = candidate.surviveTicks;
+        s.budgetHit = plan.budgetHit && !candidate.raw.died && !candidate.raw.unknown &&
+                      candidate.raw.ticksRan > 0 && candidate.raw.ticksRan < model.cap;
+        auto const cls = EbModeSurvival::classify(
+            EbShadowSurvivalRules::survivalInputFrom(candidate.raw, zone, model, real));
+        s.survivalClass = EbModeSurvival::classId(cls);
     }
     auto ledger = EbDevRejectLedger::build(in);
     for (auto& note : ledger.notes) {

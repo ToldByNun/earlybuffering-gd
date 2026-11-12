@@ -421,6 +421,17 @@ EbDevRejectLedger::Ledger EbDevRejectLedger::build(BuildInput const& in) {
             note.hasScores = false;
         }
 
+        // AP4: always copy structured run truth when present (not score-gated).
+        if (snap.hasRunTruth) {
+            note.hasRunTruth = true;
+            note.deathTick = snap.deathTick;
+            note.ticksRan = snap.ticksRan;
+            note.unknown = snap.unknown;
+            note.budgetHit = snap.budgetHit;
+            note.surviveTicks = snap.surviveTicks;
+            note.survivalClass = snap.survivalClass;
+        }
+
         out.notes.push_back(std::move(note));
     }
 

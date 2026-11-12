@@ -17,6 +17,10 @@
 ### Dev Lab Eval Seal
 - Offline eval seals an `eval` object onto each attempt in `session-*.json` (samples + objective + fidelity + overlay) and flushes. Covers Eval Last / Session / On-Death.
 
+### Dev Lab Planner-Branch + Candidate Truth
+- `planFinished` stamps `plannerPath`, `gameModeKind`, resolved `modeParams`, Adaptive honesty, `viableDelays`, hold window, threat-zone summary.
+- `candNotes` carry structured `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass` (beside scores/rejects).
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

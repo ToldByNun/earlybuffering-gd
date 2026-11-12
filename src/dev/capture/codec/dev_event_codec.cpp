@@ -88,6 +88,15 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
                 nj["threatCleared"] = n.threatCleared;
                 nj["score"] = n.score;
             }
+            if (n.hasRunTruth) {
+                nj["deathTick"] = n.deathTick;
+                nj["ticksRan"] = n.ticksRan;
+                nj["unknown"] = n.unknown;
+                nj["budgetHit"] = n.budgetHit;
+                nj["surviveTicks"] = n.surviveTicks;
+                if (!n.survivalClass.empty())
+                    nj["survivalClass"] = n.survivalClass;
+            }
             notes.push_back(nj);
         }
         otherIndex["candNotes"] = notes;
@@ -112,6 +121,50 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["candidatesTried"] = e.candidatesTried;
         otherIndex["adaptiveShell"] = e.adaptiveShell;
         otherIndex["adaptiveFellThrough"] = e.adaptiveFellThrough;
+    }
+    if (e.hasPlannerMeta) {
+        if (!e.plannerPath.empty())
+            otherIndex["plannerPath"] = e.plannerPath;
+        if (!e.gameModeKind.empty())
+            otherIndex["gameModeKind"] = e.gameModeKind;
+        otherIndex["continuous"] = e.continuous;
+        otherIndex["inputWindow"] = e.inputWindow;
+        matjson::Value mode = matjson::Value::object();
+        mode["ticks"] = e.modeTicks;
+        mode["cap"] = e.modeCap;
+        mode["slack"] = e.modeSlack;
+        mode["latencyWeight"] = e.modeLatencyWeight;
+        mode["adaptivePlan"] = e.modeAdaptivePlan;
+        mode["adaptiveScreenTicks"] = e.modeAdaptiveScreenTicks;
+        mode["adaptiveVerifyQuantum"] = e.modeAdaptiveVerifyQuantum;
+        mode["adaptiveReservePct"] = e.modeAdaptiveReservePct;
+        otherIndex["modeParams"] = mode;
+        otherIndex["adaptiveScreenedCount"] = e.adaptiveScreenedCount;
+        otherIndex["adaptiveSurvivors"] = e.adaptiveSurvivors;
+        otherIndex["adaptiveVerifyGrants"] = e.adaptiveVerifyGrants;
+        if (!e.viableDelays.empty()) {
+            std::vector<matjson::Value> vd;
+            vd.reserve(e.viableDelays.size());
+            for (int delay : e.viableDelays)
+                vd.push_back(delay);
+            otherIndex["viableDelays"] = vd;
+        }
+        otherIndex["requireHold"] = e.requireHold;
+        otherIndex["releaseAfter"] = e.releaseAfter;
+        otherIndex["releaseEarliest"] = e.releaseEarliest;
+        otherIndex["releaseLatest"] = e.releaseLatest;
+        otherIndex["idleSafer"] = e.idleSafer;
+        otherIndex["ascentUseful"] = e.ascentUseful;
+        otherIndex["usedOrbWindow"] = e.usedOrbWindow;
+        otherIndex["foresightOrbPad"] = e.foresightOrbPad;
+        otherIndex["longForesightNeedSearch"] = e.longForesightNeedSearch;
+        if (e.threatZoneValid) {
+            matjson::Value tz = matjson::Value::object();
+            tz["valid"] = true;
+            tz["startX"] = e.threatZoneStartX;
+            tz["endX"] = e.threatZoneEndX;
+            otherIndex["threatZone"] = tz;
+        }
     }
     return otherIndex;
 }
@@ -256,6 +309,25 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                                       : false;
                 n.score = static_cast<float>(nj["score"].asDouble().unwrapOr(0.0));
             }
+            if (nj.contains("deathTick") || nj.contains("ticksRan") || nj.contains("surviveTicks") ||
+                nj.contains("survivalClass")) {
+                n.hasRunTruth = true;
+                n.deathTick = nj.contains("deathTick")
+                                  ? static_cast<int>(nj["deathTick"].asInt().unwrapOr(-1))
+                                  : -1;
+                n.ticksRan =
+                    nj.contains("ticksRan") ? static_cast<int>(nj["ticksRan"].asInt().unwrapOr(0))
+                                            : 0;
+                n.unknown =
+                    nj.contains("unknown") ? nj["unknown"].asBool().unwrapOr(false) : false;
+                n.budgetHit =
+                    nj.contains("budgetHit") ? nj["budgetHit"].asBool().unwrapOr(false) : false;
+                n.surviveTicks = nj.contains("surviveTicks")
+                                     ? static_cast<int>(nj["surviveTicks"].asInt().unwrapOr(0))
+                                     : 0;
+                if (nj.contains("survivalClass"))
+                    n.survivalClass = std::string(nj["survivalClass"].asString().unwrapOr(""));
+            }
             e.candNotes.push_back(std::move(n));
         }
     }
@@ -289,6 +361,92 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.adaptiveFellThrough = j.contains("adaptiveFellThrough")
                                     ? j["adaptiveFellThrough"].asBool().unwrapOr(false)
                                     : false;
+    }
+    if (j.contains("plannerPath") || j.contains("gameModeKind") || j.contains("modeParams") ||
+        j.contains("viableDelays") || j.contains("inputWindow") || j.contains("threatZone")) {
+        e.hasPlannerMeta = true;
+        if (j.contains("plannerPath"))
+            e.plannerPath = std::string(j["plannerPath"].asString().unwrapOr(""));
+        if (j.contains("gameModeKind"))
+            e.gameModeKind = std::string(j["gameModeKind"].asString().unwrapOr(""));
+        e.continuous =
+            j.contains("continuous") ? j["continuous"].asBool().unwrapOr(false) : false;
+        e.inputWindow =
+            j.contains("inputWindow") ? j["inputWindow"].asBool().unwrapOr(false) : false;
+        if (j.contains("modeParams") && j["modeParams"].isObject()) {
+            auto const& mode = j["modeParams"];
+            e.modeTicks =
+                mode.contains("ticks") ? static_cast<int>(mode["ticks"].asInt().unwrapOr(0)) : 0;
+            e.modeCap =
+                mode.contains("cap") ? static_cast<int>(mode["cap"].asInt().unwrapOr(0)) : 0;
+            e.modeSlack =
+                mode.contains("slack") ? static_cast<int>(mode["slack"].asInt().unwrapOr(0)) : 0;
+            e.modeLatencyWeight = mode.contains("latencyWeight")
+                                      ? static_cast<float>(mode["latencyWeight"].asDouble().unwrapOr(0.0))
+                                      : 0.f;
+            e.modeAdaptivePlan = mode.contains("adaptivePlan")
+                                     ? mode["adaptivePlan"].asBool().unwrapOr(false)
+                                     : false;
+            e.modeAdaptiveScreenTicks =
+                mode.contains("adaptiveScreenTicks")
+                    ? static_cast<int>(mode["adaptiveScreenTicks"].asInt().unwrapOr(0))
+                    : 0;
+            e.modeAdaptiveVerifyQuantum =
+                mode.contains("adaptiveVerifyQuantum")
+                    ? static_cast<int>(mode["adaptiveVerifyQuantum"].asInt().unwrapOr(0))
+                    : 0;
+            e.modeAdaptiveReservePct =
+                mode.contains("adaptiveReservePct")
+                    ? static_cast<int>(mode["adaptiveReservePct"].asInt().unwrapOr(0))
+                    : 0;
+        }
+        e.adaptiveScreenedCount = j.contains("adaptiveScreenedCount")
+                                      ? static_cast<int>(j["adaptiveScreenedCount"].asInt().unwrapOr(0))
+                                      : 0;
+        e.adaptiveSurvivors = j.contains("adaptiveSurvivors")
+                                  ? static_cast<int>(j["adaptiveSurvivors"].asInt().unwrapOr(0))
+                                  : 0;
+        e.adaptiveVerifyGrants =
+            j.contains("adaptiveVerifyGrants")
+                ? static_cast<int>(j["adaptiveVerifyGrants"].asInt().unwrapOr(0))
+                : 0;
+        if (j.contains("viableDelays") && j["viableDelays"].isArray()) {
+            for (auto const& item : j["viableDelays"].asArray().unwrap()) {
+                e.viableDelays.push_back(static_cast<int>(item.asInt().unwrapOr(0)));
+            }
+        }
+        e.requireHold =
+            j.contains("requireHold") ? j["requireHold"].asBool().unwrapOr(false) : false;
+        e.releaseAfter = j.contains("releaseAfter")
+                             ? static_cast<int>(j["releaseAfter"].asInt().unwrapOr(-1))
+                             : -1;
+        e.releaseEarliest = j.contains("releaseEarliest")
+                                ? static_cast<int>(j["releaseEarliest"].asInt().unwrapOr(-1))
+                                : -1;
+        e.releaseLatest = j.contains("releaseLatest")
+                              ? static_cast<int>(j["releaseLatest"].asInt().unwrapOr(-1))
+                              : -1;
+        e.idleSafer = j.contains("idleSafer") ? j["idleSafer"].asBool().unwrapOr(false) : false;
+        e.ascentUseful =
+            j.contains("ascentUseful") ? j["ascentUseful"].asBool().unwrapOr(false) : false;
+        e.usedOrbWindow =
+            j.contains("usedOrbWindow") ? j["usedOrbWindow"].asBool().unwrapOr(false) : false;
+        e.foresightOrbPad =
+            j.contains("foresightOrbPad") ? j["foresightOrbPad"].asBool().unwrapOr(false) : false;
+        e.longForesightNeedSearch = j.contains("longForesightNeedSearch")
+                                        ? j["longForesightNeedSearch"].asBool().unwrapOr(false)
+                                        : false;
+        if (j.contains("threatZone") && j["threatZone"].isObject()) {
+            auto const& tz = j["threatZone"];
+            e.threatZoneValid =
+                tz.contains("valid") ? tz["valid"].asBool().unwrapOr(false) : false;
+            e.threatZoneStartX = tz.contains("startX")
+                                     ? static_cast<float>(tz["startX"].asDouble().unwrapOr(0.0))
+                                     : 0.f;
+            e.threatZoneEndX = tz.contains("endX")
+                                   ? static_cast<float>(tz["endX"].asDouble().unwrapOr(0.0))
+                                   : 0.f;
+        }
     }
     return true;
 }

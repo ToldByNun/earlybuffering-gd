@@ -53,8 +53,11 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
     simulator.m_simAbsTick = -1;
     EbSimSessionGuard session(simulator, layer);
     prepare(context);
-    if (EbShadowPlanInputWindow::evaluate(context))
+    if (EbShadowPlanInputWindow::evaluate(context)) {
+        if (plan.plannerPath.empty())
+            plan.plannerPath = "inputWindow";
         return plan;
+    }
     bool const trustLong = context.real && EbSimTrust::get().okAt(context.real->getPositionX());
     auto const horizonCaps = EbAssistHorizon::resolve(
         context.real ? EbStageConfig::kindOf(context.real) : GameModeKind::Cube, trustLong,
@@ -66,12 +69,20 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
 
     context.scoreHorizon = horizonCaps.scoreHorizon;
 
-    if (EbShadowPlanThreatProbe::evaluate(context))
+    if (EbShadowPlanThreatProbe::evaluate(context)) {
+        if (plan.plannerPath.empty())
+            plan.plannerPath = "threatProbe";
         return plan;
+    }
     EbShadowPlanCandidateSearch::evaluate(context);
-    if (EbShadowPlanSelection::choose(context))
+    if (EbShadowPlanSelection::choose(context)) {
+        if (plan.plannerPath.empty())
+            plan.plannerPath = "classic";
         return plan;
+    }
     EbShadowPlanResult::publish(context);
+    if (plan.plannerPath.empty())
+        plan.plannerPath = "classic";
     return plan;
 }
 

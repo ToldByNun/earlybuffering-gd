@@ -1,5 +1,6 @@
 #include "../../app/class_manager.hpp"
 #include "dev_cycle_recorder.hpp"
+#include "../../config/stage_config.hpp"
 #include "../../core/platform/platform_limits.hpp"
 #include "../../debug/lag_probe.hpp"
 #include "../dev_config.hpp"
@@ -195,6 +196,40 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->candidatesTried = plan.candidatesTried;
     width->adaptiveShell = plan.adaptiveShell;
     width->adaptiveFellThrough = plan.adaptiveFellThrough;
+    // Dev Lab AP4: planner branch + resolved ModeParams + hold/threat honesty.
+    width->hasPlannerMeta = true;
+    width->plannerPath = plan.plannerPath;
+    width->inputWindow = plan.fixedFireTick;
+    width->adaptiveScreenedCount = plan.adaptiveScreenedCount;
+    width->adaptiveSurvivors = plan.adaptiveSurvivors;
+    width->adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
+    width->viableDelays = plan.viableDelays;
+    width->requireHold = plan.requireHold;
+    width->releaseAfter = plan.releaseAfter;
+    width->releaseEarliest = plan.releaseEarliest;
+    width->releaseLatest = plan.releaseLatest;
+    width->idleSafer = plan.idleSafer;
+    width->ascentUseful = plan.ascentUseful;
+    width->usedOrbWindow = plan.usedOrbWindow;
+    width->foresightOrbPad = plan.foresightOrbPad;
+    width->longForesightNeedSearch = plan.longForesightNeedSearch;
+    width->threatZoneValid = plan.threatZone.valid;
+    width->threatZoneStartX = plan.threatZone.startX;
+    width->threatZoneEndX = plan.threatZone.endX;
+    if (player) {
+        auto const kind = EbStageConfig::kindOf(player);
+        width->gameModeKind = EbStageConfig::kindName(kind);
+        width->continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        auto const params = EbStageConfig::paramsFor(kind);
+        width->modeTicks = params.ticks;
+        width->modeCap = params.cap;
+        width->modeSlack = params.slack;
+        width->modeLatencyWeight = params.latencyWeight;
+        width->modeAdaptivePlan = params.adaptivePlan;
+        width->modeAdaptiveScreenTicks = params.adaptiveScreenTicks;
+        width->modeAdaptiveVerifyQuantum = params.adaptiveVerifyQuantum;
+        width->modeAdaptiveReservePct = params.adaptiveReservePct;
+    }
     {
         EbDevRejectLedger::AttributionInput attrIn;
         attrIn.hasPlanFinished = true;

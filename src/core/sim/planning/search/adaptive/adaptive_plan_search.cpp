@@ -97,6 +97,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     plan.smartDepthUsed = 1;
     plan.planId = s_planId++;
     plan.adaptiveShell = true;
+    plan.plannerPath = "adaptive";
 
     ShellStats stats;
     stats.used = true;
@@ -481,6 +482,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         classicPlan.adaptiveScreenedCount = plan.adaptiveScreenedCount;
         classicPlan.adaptiveSurvivors = plan.adaptiveSurvivors;
         classicPlan.adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
+        classicPlan.plannerPath = "hybridFallthrough";
         return classicPlan;
     };
 

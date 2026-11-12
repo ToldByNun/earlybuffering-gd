@@ -11,7 +11,8 @@ Typical path (Windows):
 Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, …) with:
 
 - `assistReason`, `plannedDelay`
-- `candNotes` (chosen / rejected / skipped + reject codes)
+- `candNotes` (chosen / rejected / skipped + reject codes; when evaluated also `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass`)
+- `plannerPath` + `gameModeKind` + `modeParams` + hold/threat honesty on `planFinished`
 - `witness` (player blob, trigger ready tracks, clock / midStep)
 - `attribution` (e.g. `best-surviving-absent`)
 
@@ -53,6 +54,16 @@ If Live armed `d=2` but `bestSurv=5`, check whether Live **skipped** later delay
 Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1 / 1.6.0.
 
 `planFinished` may also carry hitch/Adaptive cost bits: `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
+
+Planner-branch honesty (AP4):
+
+| Field | Meaning |
+|---|---|
+| `plannerPath` | `inputWindow` / `threatProbe` / `adaptive` / `classic` / `hybridFallthrough` |
+| `gameModeKind` | Resolved mode id at plan time (`cube`…`swing`) |
+| `modeParams` | ticks / cap / λ / Adaptive quanta for that mode |
+| `viableDelays` / hold / `threatZone` | Plan honesty for Continuous / Wave research |
+| `candNotes[].survivalClass` | `alive` / `landing` / `recoverable` / `late-crash` / `lethal` |
 
 ## Lag / perf
 

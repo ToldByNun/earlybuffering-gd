@@ -90,6 +90,37 @@ public:
     bool adaptiveShell = false;
     bool adaptiveFellThrough = false;
 
+    // Dev Lab AP4: planner-branch + resolved mode params on planFinished.
+    bool hasPlannerMeta = false;
+    std::string plannerPath;
+    std::string gameModeKind;
+    bool continuous = false;
+    bool inputWindow = false;
+    int modeTicks = 0;
+    int modeCap = 0;
+    int modeSlack = 0;
+    float modeLatencyWeight = 0.f;
+    bool modeAdaptivePlan = false;
+    int modeAdaptiveScreenTicks = 0;
+    int modeAdaptiveVerifyQuantum = 0;
+    int modeAdaptiveReservePct = 0;
+    int adaptiveScreenedCount = 0;
+    int adaptiveSurvivors = 0;
+    int adaptiveVerifyGrants = 0;
+    std::vector<int> viableDelays;
+    bool requireHold = false;
+    int releaseAfter = -1;
+    int releaseEarliest = -1;
+    int releaseLatest = -1;
+    bool idleSafer = false;
+    bool ascentUseful = false;
+    bool usedOrbWindow = false;
+    bool foresightOrbPad = false;
+    bool longForesightNeedSearch = false;
+    bool threatZoneValid = false;
+    float threatZoneStartX = 0.f;
+    float threatZoneEndX = 0.f;
+
 private:
 };
 

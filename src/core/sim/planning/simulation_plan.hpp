@@ -6,6 +6,7 @@
 #include "../../assist/contracts/assist_verdict.hpp"
 #include "simulation_candidate.hpp"
 #include <Geode/Geode.hpp>
+#include <string>
 #include <vector>
 
 enum class PlanAction {
@@ -154,6 +155,9 @@ public:
     int adaptiveScreenedCount = 0;    // delays that received a screen quantum
     int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
     int adaptiveVerifyGrants = 0;     // Phase C verify quanta granted
+    // Dev Lab AP4: which search branch produced this plan.
+    // inputWindow | threatProbe | adaptive | classic | hybridFallthrough
+    std::string plannerPath;
 
 private:
 };
