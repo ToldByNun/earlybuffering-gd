@@ -4,6 +4,9 @@
 #include "../../../core/bundle/config_bundle.hpp"
 #include "../../../core/platform/save_drop_paths.hpp"
 #include "../../cloud/cloud_config_popup.hpp"
+#include "../../desktop_menu/desktop_menu.hpp"
+#include "../../desktop_menu/desktop_menu_alert.hpp"
+#include "../../desktop_menu/desktop_menu_cloud_overlay.hpp"
 #include "../../overlays/status_overlay.hpp"
 #include "../../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../../visualizers/bake_path_visualizer.hpp"
@@ -17,7 +20,6 @@
 #include <optional>
 #include <string>
 #include <system_error>
-#include "../../desktop_menu/desktop_menu_alert.hpp"
 
 void EbPauseConfigActions::exportConfig() {
     std::optional<std::filesystem::path> path;
@@ -109,6 +111,13 @@ void EbPauseConfigActions::importConfig() {
 }
 
 void EbPauseConfigActions::openCloudConfigs() {
+#if defined(EB_DESKTOP_IMGUI)
+    // Desktop ImGui shell already open → themed overlay (keeps immersion).
+    if (EbDesktopMenu::useImGuiShell() && EbDesktopMenu::isOpen()) {
+        EbDesktopCloudOverlay::open();
+        return;
+    }
+#endif
     EbCloudConfigPopup::open();
 }
 
