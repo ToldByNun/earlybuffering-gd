@@ -128,11 +128,15 @@ public:
             // Draw-list clip only (never ImGui::PushClipRect) so window hit-tests stay valid.
             drawList->PushClipRect(ImVec2(trackMin.x - 1.0f, trackMin.y - 1.0f),
                                    ImVec2(knobX + 0.5f, trackMax.y + 1.0f), true);
+            // Chunky cells on tracks — cheaper than the smooth sidebar wave.
             EbDesktopMenuSidebarSmoke::get().paint(
                 drawList, trackMin, trackMax, trackRounding, static_cast<float>(ImGui::GetTime()),
-                ImDrawFlags_RoundCornersAll, outside);
+                ImDrawFlags_RoundCornersAll, outside, 5.5f);
             // Slight lift so fill reads brighter than the panel / empty track.
-            drawList->AddRectFilled(trackMin, trackMax, IM_COL32(220, 210, 255, 48), trackRounding);
+            ImVec4 lift = EbDesktopMenuTheme::accentLight();
+            lift.w = 0.19f;
+            drawList->AddRectFilled(trackMin, trackMax, EbDesktopMenuTheme::toU32(lift),
+                                    trackRounding);
             drawList->PopClipRect();
         } else if (!enabled && fillW > 1.5f) {
             ImVec4 dim = ImVec4(0.55f, 0.57f, 0.64f, 0.45f);

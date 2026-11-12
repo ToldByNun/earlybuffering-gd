@@ -46,15 +46,22 @@ ImU32 EbDesktopMenuTheme::toU32(ImVec4 const& color) {
 }
 
 ImVec4 EbDesktopMenuTheme::bg() {
-    return EbDesktopMenuThemeColors::rgbByte(13, 13, 18);
+    // Near-black canvas with a soft accent pull so secondary greys track the picker.
+    ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(13, 13, 18);
+    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.90f),
+                                          0.14f);
 }
 
 ImVec4 EbDesktopMenuTheme::panel() {
-    return EbDesktopMenuThemeColors::rgbByte(28, 28, 40);
+    ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(28, 28, 40);
+    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.82f),
+                                          0.18f);
 }
 
 ImVec4 EbDesktopMenuTheme::surface() {
-    return EbDesktopMenuThemeColors::rgbByte(26, 26, 30);
+    ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(26, 26, 30);
+    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.86f),
+                                          0.16f);
 }
 
 ImVec4 EbDesktopMenuTheme::accent() {
@@ -85,11 +92,15 @@ ImVec4 EbDesktopMenuTheme::text() {
 }
 
 ImVec4 EbDesktopMenuTheme::muted() {
-    return EbDesktopMenuThemeColors::rgbByte(156, 163, 175);
+    ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(156, 163, 175);
+    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::lighten(accent(), 0.55f),
+                                          0.22f);
 }
 
 ImVec4 EbDesktopMenuTheme::outline() {
-    return EbDesktopMenuThemeColors::rgbByte(55, 55, 68);
+    ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(55, 55, 68);
+    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.55f),
+                                          0.28f);
 }
 
 ImVec4 EbDesktopMenuTheme::danger() {

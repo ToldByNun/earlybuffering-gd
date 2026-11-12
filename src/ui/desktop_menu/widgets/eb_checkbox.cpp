@@ -119,7 +119,7 @@ public:
                 drawList->PushClipRect(boxMin, boxMax, true);
                 EbDesktopMenuSidebarSmoke::get().paint(drawList, boxMin, boxMax, kBoxRounding,
                                                        static_cast<float>(ImGui::GetTime()),
-                                                       ImDrawFlags_RoundCornersAll, outside);
+                                                       ImDrawFlags_RoundCornersAll, outside, 5.5f);
                 // Soft veil so partial check reads as a fade, not a hard cut.
                 int const veil = static_cast<int>((1.0f - check) * 200.0f);
                 if (veil > 0) {

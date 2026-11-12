@@ -102,7 +102,7 @@ ImU32 EbDesktopMenuSidebarSmoke::sampleColor(float timeSeconds, float px, float 
 
 void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, ImVec2 const& max,
                                       float rounding, float timeSeconds, ImDrawFlags cornerFlags,
-                                      ImU32 outsideColor) {
+                                      ImU32 outsideColor, float targetCellPx) {
     if (!drawList) {
         return;
     }
@@ -122,27 +122,21 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
     drawList->AddRectFilled(min, max, base, clampedRounding, cornerFlags);
 
-    // Dense grid on the sidebar; keep cells chunky on small pills so the last
-    // row is not a sub-pixel strip that clips into a flat edge + hairline.
-    int cols = 12;
-    int rows = 32;
-    if (height < 72.0f) {
-        rows = static_cast<int>(height * 0.5f);
-        if (rows < 6) {
-            rows = 6;
-        }
-        if (rows > 16) {
-            rows = 16;
-        }
+    // Caller picks density: sidebar ~2.25 (smooth), widgets ~5–6 (chunky / cheap).
+    float const targetCell = targetCellPx < 1.5f ? 1.5f : targetCellPx;
+    int cols = static_cast<int>(width / targetCell + 0.5f);
+    int rows = static_cast<int>(height / targetCell + 0.5f);
+    if (cols < 4) {
+        cols = 4;
     }
-    if (width < 120.0f) {
-        cols = static_cast<int>(width / 3.0f);
-        if (cols < 6) {
-            cols = 6;
-        }
-        if (cols > 12) {
-            cols = 12;
-        }
+    if (rows < 3) {
+        rows = 3;
+    }
+    if (cols > 128) {
+        cols = 128;
+    }
+    if (rows > 280) {
+        rows = 280;
     }
     float const cellW = width / static_cast<float>(cols);
     float const cellH = height / static_cast<float>(rows);
@@ -162,7 +156,8 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
             float const py = (static_cast<float>(row) + 0.5f) * cellH;
             ImVec2 const cellMin(min.x + static_cast<float>(col) * cellW,
                                  min.y + static_cast<float>(row) * cellH);
-            ImVec2 const cellMax(cellMin.x + cellW + 0.75f, cellMin.y + cellH + 0.75f);
+            // Tiny overlap kills hairline gaps without reintroducing chunky seams.
+            ImVec2 const cellMax(cellMin.x + cellW + 0.35f, cellMin.y + cellH + 0.35f);
 
             // Skip cells that sit outside the rounded AA edge — otherwise the
             // square grid fills the transparent shell cutouts (sharp purple corners).
