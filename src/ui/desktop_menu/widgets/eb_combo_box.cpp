@@ -79,13 +79,17 @@ public:
         float const avail = ImGui::GetContentRegionAvail().x;
         float const textH = ImGui::GetFontSize();
         float const fieldH = textH + kFieldPadY * 2.0f;
+        // Size the field to the longest option so labels like "Downloads" stay fully
+        // visible — never shrink via an arbitrary % cap / string ellipsis.
+        float const labelW = ImGui::CalcTextSize(label).x + 16.0f;
         float const contentW = maxOptionWidth(options, optionCount) + kCaretW + 14.0f;
         float fieldW = contentW + kFieldPadX * 2.0f;
         if (fieldW < kMinFieldW) {
             fieldW = kMinFieldW;
         }
-        if (fieldW > avail * 0.58f) {
-            fieldW = avail * 0.58f;
+        float const maxField = (std::max)(kMinFieldW, avail - labelW);
+        if (fieldW > maxField) {
+            fieldW = maxField;
         }
         float const rowH = (std::max)(fieldH, textH + 10.0f);
         float const rounding = 8.0f;

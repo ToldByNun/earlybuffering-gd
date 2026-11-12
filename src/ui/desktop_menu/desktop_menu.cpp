@@ -190,7 +190,10 @@ public:
     }
 
     bool dispatchScrollMSG(float y, float x) {
-        if (EbDesktopMenu::isOpen()) {
+        if (EbDesktopCloudOverlay::isOpen()) {
+            // Cloud sheet owns the menu while open — don't feed the hidden shell.
+            EbDesktopCloudOverlay::addWheelDelta(y);
+        } else if (EbDesktopMenu::isOpen()) {
             // Raw Cocos delta → tab content host (not section). Sign: +y scrolls down.
             EbDesktopMenuShell::addWheelDelta(y);
         }

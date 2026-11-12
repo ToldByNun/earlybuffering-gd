@@ -6,9 +6,9 @@
 // Actions route through eb-action bridges.
 class EbButton {
 public:
-    // Returns true on click.
+    // Returns true on click. accent=true → stronger fill + accent rim (primary actions).
     static bool draw(char const* id, char const* label, bool enabled = true,
-                     char const* tooltip = nullptr);
+                     char const* tooltip = nullptr, bool accent = false);
 
     // Fires EbActionButtonSettingImplementation::fireSettingAction(actionKey).
     // Label falls back through dynamicButtonLabel; enable via actionShouldEnable.

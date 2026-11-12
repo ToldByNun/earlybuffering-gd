@@ -1,4 +1,5 @@
 #include "desktop_menu_shell.hpp"
+#include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
 #include "desktop_menu_motion.hpp"
@@ -474,6 +475,17 @@ public:
         EbDesktopMenuShellState::dismissFloatingPopups() = false;
         // Live accent — ImGui style + wave chrome pick up desktop-accent-color edits.
         EbDesktopMenuTheme::apply();
+
+        // Exclusive cloud sheet: hide shell while cloud is up, park fade so return eases in.
+        if (EbDesktopCloudOverlay::isOpen()) {
+            EbDesktopMenuShellState::openVisual() = 0.0f;
+            EbDesktopMenuShellState::prevOpenVisual() = 0.0f;
+            EbDesktopMenuShellState::closing() = false;
+            EbDesktopMenuShellState::dragging() = false;
+            EbDesktopMenuShellAnim::clearTrailToCenter();
+            return;
+        }
+
         EbDesktopMenuShellAnim::updateOpen(deltaTime);
         EbDesktopMenuShellAnim::updateTab(deltaTime);
 

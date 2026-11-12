@@ -12,6 +12,9 @@ public:
     // True while visible or closing — host keeps ImGui up if needed.
     static bool shouldKeepVisible();
 
+    // Cocos wheel while the cloud sheet owns the menu (shell is suppressed).
+    static void addWheelDelta(float deltaY);
+
     // Call after the shell, before the modal, each ImGui frame.
     static void draw();
 

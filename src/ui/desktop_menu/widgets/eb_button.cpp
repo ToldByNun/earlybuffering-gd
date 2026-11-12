@@ -48,19 +48,36 @@ public:
     static constexpr float kPadX = 14.0f;
     static constexpr float kMinHeight = 34.0f;
 
-    static ImVec4 idleFill() {
+    static ImVec4 idleFill(bool accent) {
         // Lifted above panel() so chips read as controls, not hollow outlines.
         ImVec4 fill = EbDesktopMenuTheme::surface();
-        ImVec4 lift(0.17f, 0.17f, 0.22f, 1.0f);
-        return EbDesktopMenuMotion::lerp4(fill, lift, 0.55f);
+        ImVec4 lift(0.20f, 0.20f, 0.27f, 1.0f);
+        fill = EbDesktopMenuMotion::lerp4(fill, lift, 0.72f);
+        if (accent) {
+            ImVec4 wash = EbDesktopMenuTheme::accent();
+            wash.w = 0.28f;
+            fill = EbDesktopMenuMotion::lerp4(fill, wash, 0.85f);
+            fill.w = 1.0f;
+        }
+        return fill;
     }
 
-    static ImVec4 hoverFill() {
-        return ImVec4(0.22f, 0.22f, 0.30f, 1.0f);
+    static ImVec4 hoverFill(bool accent) {
+        if (accent) {
+            ImVec4 wash = EbDesktopMenuTheme::accent();
+            wash.w = 0.40f;
+            return EbDesktopMenuMotion::lerp4(ImVec4(0.24f, 0.24f, 0.32f, 1.0f), wash, 0.75f);
+        }
+        return ImVec4(0.26f, 0.26f, 0.34f, 1.0f);
     }
 
-    static ImVec4 heldFill() {
-        return ImVec4(0.28f, 0.28f, 0.36f, 1.0f);
+    static ImVec4 heldFill(bool accent) {
+        if (accent) {
+            ImVec4 wash = EbDesktopMenuTheme::accent();
+            wash.w = 0.50f;
+            return EbDesktopMenuMotion::lerp4(ImVec4(0.30f, 0.30f, 0.38f, 1.0f), wash, 0.80f);
+        }
+        return ImVec4(0.32f, 0.32f, 0.40f, 1.0f);
     }
 
     static float resolveWidth() {
@@ -81,7 +98,8 @@ public:
         }
     }
 
-    static bool drawChrome(char const* id, char const* label, bool enabled, char const* tooltip) {
+    static bool drawChrome(char const* id, char const* label, bool enabled, char const* tooltip,
+                           bool accent) {
         if (!id || id[0] == '\0' || !label) {
             return false;
         }
@@ -116,39 +134,38 @@ public:
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         // toU32 applies Style.Alpha (shell open/close fade).
 
-        if (enabled && heat > 0.02f && EbDesktopMenuTheme::styleAlpha() > 0.01f) {
-            EbDesktopMenuTheme::drawAccentGlow(drawList, min, max, rounding, 0.28f * heat);
+        float const glow = accent ? (0.22f + 0.35f * heat) : (0.28f * heat);
+        if (enabled && glow > 0.02f && EbDesktopMenuTheme::styleAlpha() > 0.01f) {
+            EbDesktopMenuTheme::drawAccentGlow(drawList, min, max, rounding, glow);
         }
 
-        ImVec4 fill = idleFill();
+        ImVec4 fill = idleFill(accent);
         if (!enabled) {
             fill.w = 0.72f;
         } else {
-            ImVec4 accentWash = EbDesktopMenuTheme::accent();
-            accentWash.w = 0.16f;
-            fill = EbDesktopMenuMotion::lerp4(fill, hoverFill(), heat);
-            fill = EbDesktopMenuMotion::lerp4(fill, accentWash, heat * 0.50f);
-            fill = EbDesktopMenuMotion::lerp4(fill, heldFill(), press);
+            fill = EbDesktopMenuMotion::lerp4(fill, hoverFill(accent), heat);
+            fill = EbDesktopMenuMotion::lerp4(fill, heldFill(accent), press);
         }
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(fill), rounding);
 
         // Soft top edge — cheap depth without a second box.
         if (enabled) {
-            ImVec4 tip(1.0f, 1.0f, 1.0f, 0.05f + 0.04f * heat);
+            ImVec4 tip(1.0f, 1.0f, 1.0f, 0.07f + 0.05f * heat + (accent ? 0.04f : 0.0f));
             drawList->AddRectFilled(ImVec2(min.x + 1.0f, min.y + 1.0f),
                                     ImVec2(max.x - 1.0f, min.y + 2.0f),
                                     EbDesktopMenuTheme::toU32(tip), rounding);
         }
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
-        stroke.w = enabled ? 0.78f : 0.42f;
+        stroke.w = enabled ? 0.88f : 0.42f;
         if (enabled) {
-            ImVec4 accent = EbDesktopMenuTheme::accentLight();
-            accent.w = 0.45f + 0.45f * heat + 0.10f * press;
-            stroke = EbDesktopMenuMotion::lerp4(stroke, accent, heat);
+            ImVec4 accentRim = EbDesktopMenuTheme::accentLight();
+            accentRim.w = (accent ? 0.70f : 0.35f) + 0.45f * heat + 0.10f * press;
+            stroke = EbDesktopMenuMotion::lerp4(stroke, accentRim, accent ? (0.55f + 0.45f * heat)
+                                                                          : heat);
         }
         drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
-                          EbDesktopMenuTheme::outlineThickness());
+                          accent ? 1.5f : EbDesktopMenuTheme::outlineThickness());
 
         ImVec4 textColor = EbDesktopMenuTheme::text();
         if (!enabled) {
@@ -156,7 +173,7 @@ public:
         } else {
             ImVec4 muted = EbDesktopMenuTheme::muted();
             muted.w = 0.95f;
-            textColor = EbDesktopMenuMotion::lerp4(muted, textColor, 0.72f + 0.28f * heat);
+            textColor = EbDesktopMenuMotion::lerp4(muted, textColor, 0.80f + 0.20f * heat);
         }
         float const textMaxW = (std::max)(0.0f, width - kPadX * 2.0f);
         float textDrawW = textSize.x > textMaxW ? textMaxW : textSize.x;
@@ -176,8 +193,9 @@ private:
     EbButtonDraw() = delete;
 };
 
-bool EbButton::draw(char const* id, char const* label, bool enabled, char const* tooltip) {
-    return EbButtonDraw::drawChrome(id, label, enabled, tooltip);
+bool EbButton::draw(char const* id, char const* label, bool enabled, char const* tooltip,
+                    bool accent) {
+    return EbButtonDraw::drawChrome(id, label, enabled, tooltip, accent);
 }
 
 bool EbButton::drawAction(char const* actionKey, char const* fallbackLabel) {
@@ -189,7 +207,7 @@ bool EbButton::drawAction(char const* actionKey, char const* fallbackLabel) {
         EbActionButtonSettingImplementation::dynamicButtonLabel(actionKey, fallback);
     bool const enabled = EbActionButtonSettingImplementation::actionShouldEnable(actionKey);
     std::string const tip = EbDesktopMenuTooltip::descriptionForKey(actionKey);
-    if (!EbButtonDraw::drawChrome(actionKey, label.c_str(), enabled, tip.c_str())) {
+    if (!EbButtonDraw::drawChrome(actionKey, label.c_str(), enabled, tip.c_str(), false)) {
         return false;
     }
     EbActionButtonSettingImplementation::fireSettingAction(actionKey);
@@ -232,11 +250,13 @@ void EbButton::endRow() {
 
 #else
 
-bool EbButton::draw(char const* id, char const* label, bool enabled, char const* tooltip) {
+bool EbButton::draw(char const* id, char const* label, bool enabled, char const* tooltip,
+                    bool accent) {
     (void)id;
     (void)label;
     (void)enabled;
     (void)tooltip;
+    (void)accent;
     return false;
 }
 
