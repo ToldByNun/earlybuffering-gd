@@ -2,6 +2,7 @@
 #include "bake_scheduler.hpp"
 #include "../../debug/assist_log.hpp"
 #include <Geode/Geode.hpp>
+#include "../../ui/desktop_menu/desktop_menu_alert.hpp"
 
 EbBakeScheduler& EbBakeScheduler::get() {
     return EbClassManager::get().service<EbBakeScheduler>();
@@ -20,9 +21,7 @@ bool EbBakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMet
         return false;
     if (startSlot < 0) {
         EbAssistLog::info("BAKE failed: no start snapshot slot");
-        FLAlertLayer::create("EarlyBuffer", "No start snapshot — reset the level once, then bake.",
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", "No start snapshot — reset the level once, then bake.");
         return false;
     }
     m_running = true;
@@ -33,7 +32,7 @@ bool EbBakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMet
         EbBakeScheduler::get().markFinished();
         if (result.isErr()) {
             EbAssistLog::info(fmt::format("BAKE failed: {}", result.unwrapErr()));
-            FLAlertLayer::create("EarlyBuffer", result.unwrapErr().c_str(), "OK")->show();
+            EbDesktopAlert::info("EarlyBuffer", result.unwrapErr().c_str());
             return;
         }
         int const count = result.unwrap();
@@ -41,7 +40,7 @@ bool EbBakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMet
             // Belt: bake*() should Err on empty; never celebrate 0 windows.
             char const* message = "Bake produced 0 windows — reset the level, then try again.";
             EbAssistLog::info(fmt::format("BAKE done clicks=0 (treated as fail)"));
-            FLAlertLayer::create("EarlyBuffer", message, "OK")->show();
+            EbDesktopAlert::info("EarlyBuffer", message);
             return;
         }
         auto const status = EbBakeMap::get().progress().getStatus();
@@ -52,7 +51,7 @@ bool EbBakeScheduler::start(PlayLayer* layer, int startSlot, int radius, BakeMet
             message += status;
             message += " — Hybrid part OK)";
         }
-        FLAlertLayer::create("EarlyBuffer", message.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", message.c_str());
     });
     return true;
 }

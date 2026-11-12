@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include "../../desktop_menu/desktop_menu_alert.hpp"
 
 void EbPauseConfigActions::exportConfig() {
     std::optional<std::filesystem::path> path;
@@ -28,10 +29,7 @@ void EbPauseConfigActions::exportConfig() {
     auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     if (!drops.ensureDirs(dirErr)) {
-        FLAlertLayer::create("EarlyBuffer",
-                             dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", dirErr.empty() ? "Could not create the save folder." : dirErr.c_str());
         return;
     }
     path = drops.configPath();
@@ -50,12 +48,10 @@ void EbPauseConfigActions::exportConfig() {
         errorMessage = fmt::format("{}\n\n{}\n{}", errorMessage, path->string(),
                                    EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
 #endif
-        FLAlertLayer::create("EarlyBuffer", errorMessage.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", errorMessage.c_str());
         return;
     }
-    FLAlertLayer::create("EarlyBuffer", EbPauseActionBridgeDetail::formatExportSuccess(*path).c_str(),
-                         "OK")
-        ->show();
+    EbDesktopAlert::info("EarlyBuffer", EbPauseActionBridgeDetail::formatExportSuccess(*path).c_str());
 }
 
 void EbPauseConfigActions::importConfig() {
@@ -68,10 +64,7 @@ void EbPauseConfigActions::importConfig() {
     auto& drops = EbSaveDropPaths::get();
     std::string dirErr;
     if (!drops.ensureDirs(dirErr)) {
-        FLAlertLayer::create("EarlyBuffer",
-                             dirErr.empty() ? "Could not create the save folder." : dirErr.c_str(),
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer", dirErr.empty() ? "Could not create the save folder." : dirErr.c_str());
         return;
     }
     path = drops.configPath();
@@ -88,7 +81,7 @@ void EbPauseConfigActions::importConfig() {
                         "Export Config writes that path. Then Import again.",
                         path->string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
                         EbPauseActionBridgeDetail::mobileTransferHint());
-        FLAlertLayer::create("EarlyBuffer", message.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", message.c_str());
         return;
     }
     auto const size = std::filesystem::file_size(*path, ec);
@@ -99,7 +92,7 @@ void EbPauseConfigActions::importConfig() {
                         "{}\n"
                         "{}",
                         path->string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
-        FLAlertLayer::create("EarlyBuffer", emptyMsg.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", emptyMsg.c_str());
         return;
     }
 #endif
@@ -108,7 +101,7 @@ void EbPauseConfigActions::importConfig() {
         bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(*path);
         auto const badMsg = fmt::format("{}\n\nFile:\n{}\n{}", result.unwrapErr(), path->string(),
                                         EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
-        FLAlertLayer::create("EarlyBuffer", badMsg.c_str(), "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer", badMsg.c_str());
         return;
     }
 
@@ -148,5 +141,5 @@ void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
     EbInLevelSettingsFilterKeeper::reloadAfterImport();
     // Show success after the settings rebuild so it stays on top.
     geode::prelude::Loader::get()->queueInMainThread(
-        [successMsg] { FLAlertLayer::create("EarlyBuffer", successMsg.c_str(), "OK")->show(); });
+        [successMsg] { EbDesktopAlert::info("EarlyBuffer", successMsg.c_str()); });
 }

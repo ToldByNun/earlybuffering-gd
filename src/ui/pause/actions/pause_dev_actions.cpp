@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <system_error>
+#include "../../desktop_menu/desktop_menu_alert.hpp"
 
 void EbPauseDevActions::stubDevAction(char const* name) {
     EbAssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
@@ -25,51 +26,44 @@ void EbPauseDevActions::stubDevAction(char const* name) {
 void EbPauseDevActions::devStartRecord() {
     if (!EbDevConfig::recordEnable()) {
         EbAssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
-        FLAlertLayer::create("EarlyBuffer Dev",
-                             "Turn on Dev Record Enable first, then Start Recording.", "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", "Turn on Dev Record Enable first, then Start Recording.");
         return;
     }
     if (!EbDevSession::get().start()) {
-        FLAlertLayer::create("EarlyBuffer Dev", "Could not start Dev Lab recording session.", "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", "Could not start Dev Lab recording session.");
         return;
     }
     auto const& s = EbDevTraceStore::get().session();
     auto const startMsg =
         fmt::format("Recording started (rolling last {}).\nSession {}\nDoes not auto-stop.",
                     s.recordingsTarget, s.sessionId);
-    FLAlertLayer::create("EarlyBuffer Dev", startMsg.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", startMsg.c_str());
 }
 
 void EbPauseDevActions::devStopRecord() {
     if (!EbDevSession::get().isRecording() && !EbDevTraceStore::get().isOpen()) {
         EbAssistLog::info("Dev Lab: no open session to stop");
-        FLAlertLayer::create("EarlyBuffer Dev", "No session is recording.", "OK")->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", "No session is recording.");
         return;
     }
     auto const path = EbDevSession::get().sessionPath();
     EbDevSession::get().stop();
     auto const stopMsg = path.empty() ? std::string("Recording stopped.")
                                       : fmt::format("Recording stopped.\n{}", path.string());
-    FLAlertLayer::create("EarlyBuffer Dev", stopMsg.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", stopMsg.c_str());
 }
 
 void EbPauseDevActions::devEvalLast() {
     std::string err;
     if (!EbDevReport::evalLastAttempt(err)) {
         EbAssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
-        FLAlertLayer::create("EarlyBuffer Dev",
-                             err.empty() ? "Eval Last Attempt failed." : err.c_str(), "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", err.empty() ? "Eval Last Attempt failed." : err.c_str());
         return;
     }
     EbAssistController::get().updateOverlay();
     auto const& r = EbDevReport::last();
     EbAssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
-    FLAlertLayer::create("EarlyBuffer Dev",
-                         r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str(), "OK")
-        ->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str());
 }
 
 void EbPauseDevActions::devEvalSession() {
@@ -77,24 +71,21 @@ void EbPauseDevActions::devEvalSession() {
     int count = 0;
     if (!EbDevReport::evalSession(err, &count)) {
         EbAssistLog::info(fmt::format("Dev Lab: Eval Session failed: {}", err));
-        FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Eval Session failed." : err.c_str(),
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", err.empty() ? "Eval Session failed." : err.c_str());
         return;
     }
     EbAssistController::get().updateOverlay();
     auto const& r = EbDevReport::last();
     auto const message = fmt::format("Evaluated {} attempt(s).\n{}", count, r.overlayLine);
     EbAssistLog::info(fmt::format("Dev Lab: Eval Session → {}", message));
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
 
 void EbPauseDevActions::devExportSession() {
     auto& store = EbDevTraceStore::get();
     if (!store.isOpen()) {
         EbAssistLog::info("Dev Lab: no open session to export");
-        FLAlertLayer::create("EarlyBuffer Dev", "No open Dev session. Start Recording first.", "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", "No open Dev session. Start Recording first.");
         return;
     }
     (void)store.flush();
@@ -108,13 +99,13 @@ void EbPauseDevActions::devExportSession() {
                     "Attempts kept: {}/{} (rolling)",
                     path.string(), EbPauseActionBridgeDetail::pathClipboardNote(clipOk),
                     store.session().recordingsDone, store.session().recordingsTarget);
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
 
 void EbPauseDevActions::devClearTraces() {
     int const count = EbDevSession::get().clearTraces();
     auto const message = fmt::format("Cleared {} session file(s) under devtraces/.", count);
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
 
 void EbPauseDevActions::devDumpDiag() {
@@ -122,9 +113,7 @@ void EbPauseDevActions::devDumpDiag() {
     std::string err;
     if (!EbDevDiagDump::dumpAll(dir, err)) {
         EbAssistLog::info(fmt::format("DIAG dump failed: {}", err));
-        FLAlertLayer::create("EarlyBuffer Dev", err.empty() ? "Diag dump failed." : err.c_str(),
-                             "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", err.empty() ? "Diag dump failed." : err.c_str());
         return;
     }
     bool const clipOk = geode::utils::clipboard::write(dir.string());
@@ -134,14 +123,12 @@ void EbPauseDevActions::devDumpDiag() {
                     "bake probe (first clicks vs sim death), self-checks.\n\n"
                     "{}",
                     dir.string(), clipOk ? "Path copied to clipboard." : "Clipboard copy failed.");
-    FLAlertLayer::create("EarlyBuffer Dev", message.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
 
 void EbPauseDevActions::devCopyReport() {
     if (!EbDevReport::hasLast()) {
-        FLAlertLayer::create("EarlyBuffer Dev",
-                             "No Dev report yet. Run Eval Last / Eval Session first.", "OK")
-            ->show();
+        EbDesktopAlert::info("EarlyBuffer Dev", "No Dev report yet. Run Eval Last / Eval Session first.");
         return;
     }
     auto const& r = EbDevReport::last();
@@ -204,5 +191,5 @@ void EbPauseDevActions::devCopyReport() {
                           "{}",
                           fileErr, text);
     }
-    FLAlertLayer::create("EarlyBuffer Dev", msg.c_str(), "OK")->show();
+    EbDesktopAlert::info("EarlyBuffer Dev", msg.c_str());
 }

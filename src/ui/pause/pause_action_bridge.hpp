@@ -3,6 +3,7 @@
 
 class EbPauseActionBridgeDetail;
 
+#include "../desktop_menu/desktop_menu_alert.hpp"
 #include <filesystem>
 #include <string>
 
@@ -161,10 +162,9 @@ public:
         auto& drops = EbSaveDropPaths::get();
         std::string err;
         if (!drops.ensureDirs(err)) {
-            FLAlertLayer::create(
+            EbDesktopAlert::info(
                 "EarlyBuffer",
-                err.empty() ? "Could not create the replay drop folder." : err.c_str(), "OK")
-                ->show();
+                err.empty() ? "Could not create the replay drop folder." : err.c_str());
             return std::nullopt;
         }
 
@@ -181,7 +181,7 @@ public:
                             "Empty files are ignored.\n"
                             "If several files are present, Import uses the newest.",
                             directory.string(), pathClipboardNote(clipOk), mobileTransferHint());
-            FLAlertLayer::create("EarlyBuffer", message.c_str(), "OK")->show();
+            EbDesktopAlert::info("EarlyBuffer", message);
             return std::nullopt;
         }
 

@@ -2,6 +2,7 @@
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
+#include "desktop_menu_modal.hpp"
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_keybind.hpp"
@@ -159,6 +160,9 @@ public:
                         return geode::ListenerResult::Propagate;
                     }
                     feedImGui(data);
+                    if (EbDesktopMenuModal::isOpen()) {
+                        return geode::ListenerResult::Stop;
+                    }
                     if (EbKeybind::isCapturing()) {
                         EbKeybind::noteKeyboard(data);
                         return geode::ListenerResult::Stop;
@@ -220,11 +224,14 @@ void EbDesktopMenu::install() {
                 return;
             }
             // Force capture flags while capturing so imgui-cocos also treats keys as UI.
-            if (EbKeybind::isCapturing() && ImGui::GetCurrentContext()) {
+            if ((EbKeybind::isCapturing() || EbDesktopMenuModal::isOpen()) &&
+                ImGui::GetCurrentContext()) {
                 ImGui::SetNextFrameWantCaptureKeyboard(true);
             }
             EbDesktopMenuShell::draw();
-            if (!EbDesktopMenuShell::shouldKeepVisible()) {
+            EbDesktopMenuModal::draw();
+            if (!EbDesktopMenuShell::shouldKeepVisible() &&
+                !EbDesktopMenuModal::shouldKeepVisible()) {
                 ImGuiCocos::get().setVisible(false);
             }
         });
@@ -243,9 +250,11 @@ void EbDesktopMenu::setOpen(bool open) {
         ImGuiCocos::get().setVisible(true);
     } else {
         EbKeybind::cancelCapture();
+        EbDesktopMenuModal::dismiss();
     }
     EbDesktopMenuShell::requestOpen(open);
-    if (!open && !EbDesktopMenuShell::shouldKeepVisible()) {
+    if (!open && !EbDesktopMenuShell::shouldKeepVisible() &&
+        !EbDesktopMenuModal::shouldKeepVisible()) {
         ImGuiCocos::get().setVisible(false);
     }
 }
