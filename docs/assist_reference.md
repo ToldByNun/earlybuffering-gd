@@ -269,7 +269,9 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | smart-horizon | int | 0 | 0 | 320 | Smart — 0=auto |
 | robust-k | int | 0 | 0 | 3 | Smart — 0=auto (mode/speed/dt var → 1–3) |
 | robust-jitter | bool | false | | | Smart — re-sim top cand at firstDt ±3% |
-| adaptive-plan | bool | true | | | Adaptive — prefer Adaptive Prediction Planner on Live when search path exists; until then classic `plan()` still runs. Never raises Max Assist or look-ahead |
+| adaptive-plan | bool | true | | | Main Adaptive — prefer Adaptive Prediction Planner on Live; Modes `*-adaptive-overwrite` may override per gamemode. Never raises Max Assist or look-ahead |
+| *-adaptive-overwrite | bool | false | | | Modes — when on, that mode uses its Adaptive Plan / screen / verify / reserve instead of Main |
+| *-adaptive-plan / screen-ticks / verify-quantum / reserve-pct | bool/int | Main defaults | same as Main | | Modes — Adaptive knobs when overwrite is on |
 | adaptive-screen-ticks | int | 24 | 8 | 64 | Adaptive — Phase A/B screen quantum per delay (subdivides tick-budget only) |
 | adaptive-verify-quantum | int | 16 | 8 | 64 | Adaptive — Phase C verify grant size |
 | adaptive-reserve-pct | int | 15 | 0 | 40 | Adaptive — % of Dynamic Plan Tick Budget reserved for Phase D ties |

@@ -643,6 +643,46 @@
 			"max": 2,
 			"enable-if": "cube-overwrite"
 		},
+		"cube-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Cube",
+			"default": false,
+			"description": "On = use Cube Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"cube-adaptive-plan": {
+			"type": "bool",
+			"name": "Cube Adaptive Plan",
+			"default": true,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Cube when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"cube-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Cube Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Screen quantum for Cube Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"cube-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Cube Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Verify quantum for Cube Adaptive Phase C when overwrite is on."
+		},
+		"cube-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Cube Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "cube-adaptive-overwrite",
+			"description": "Reserve percent for Cube Adaptive Phase D when overwrite is on."
+		},
 		"title-ship": {
 			"type": "title",
 			"name": "Ship"
@@ -694,6 +734,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "ship-overwrite"
+		},
+		"ship-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Ship",
+			"default": false,
+			"description": "On = use Ship Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"ship-adaptive-plan": {
+			"type": "bool",
+			"name": "Ship Adaptive Plan",
+			"default": true,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Ship when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"ship-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Ship Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Screen quantum for Ship Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"ship-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Ship Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Verify quantum for Ship Adaptive Phase C when overwrite is on."
+		},
+		"ship-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Ship Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "ship-adaptive-overwrite",
+			"description": "Reserve percent for Ship Adaptive Phase D when overwrite is on."
 		},
 		"title-ball": {
 			"type": "title",
@@ -747,6 +827,46 @@
 			"max": 2,
 			"enable-if": "ball-overwrite"
 		},
+		"ball-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Ball",
+			"default": false,
+			"description": "On = use Ball Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"ball-adaptive-plan": {
+			"type": "bool",
+			"name": "Ball Adaptive Plan",
+			"default": true,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Ball when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"ball-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Ball Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Screen quantum for Ball Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"ball-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Ball Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Verify quantum for Ball Adaptive Phase C when overwrite is on."
+		},
+		"ball-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Ball Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "ball-adaptive-overwrite",
+			"description": "Reserve percent for Ball Adaptive Phase D when overwrite is on."
+		},
 		"title-ufo": {
 			"type": "title",
 			"name": "UFO"
@@ -798,6 +918,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "ufo-overwrite"
+		},
+		"ufo-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite UFO",
+			"default": false,
+			"description": "On = use UFO Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"ufo-adaptive-plan": {
+			"type": "bool",
+			"name": "UFO Adaptive Plan",
+			"default": true,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for UFO when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"ufo-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "UFO Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Screen quantum for UFO Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"ufo-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "UFO Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Verify quantum for UFO Adaptive Phase C when overwrite is on."
+		},
+		"ufo-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "UFO Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "ufo-adaptive-overwrite",
+			"description": "Reserve percent for UFO Adaptive Phase D when overwrite is on."
 		},
 		"title-wave": {
 			"type": "title",
@@ -851,6 +1011,46 @@
 			"max": 2,
 			"enable-if": "wave-overwrite"
 		},
+		"wave-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Wave",
+			"default": false,
+			"description": "On = use Wave Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"wave-adaptive-plan": {
+			"type": "bool",
+			"name": "Wave Adaptive Plan",
+			"default": true,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Wave when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"wave-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Wave Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Screen quantum for Wave Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"wave-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Wave Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Verify quantum for Wave Adaptive Phase C when overwrite is on."
+		},
+		"wave-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Wave Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "wave-adaptive-overwrite",
+			"description": "Reserve percent for Wave Adaptive Phase D when overwrite is on."
+		},
 		"title-robot": {
 			"type": "title",
 			"name": "Robot"
@@ -902,6 +1102,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "robot-overwrite"
+		},
+		"robot-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Robot",
+			"default": false,
+			"description": "On = use Robot Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"robot-adaptive-plan": {
+			"type": "bool",
+			"name": "Robot Adaptive Plan",
+			"default": true,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Robot when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"robot-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Robot Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Screen quantum for Robot Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"robot-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Robot Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Verify quantum for Robot Adaptive Phase C when overwrite is on."
+		},
+		"robot-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Robot Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "robot-adaptive-overwrite",
+			"description": "Reserve percent for Robot Adaptive Phase D when overwrite is on."
 		},
 		"title-spider": {
 			"type": "title",
@@ -955,6 +1195,46 @@
 			"max": 2,
 			"enable-if": "spider-overwrite"
 		},
+		"spider-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Spider",
+			"default": false,
+			"description": "On = use Spider Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"spider-adaptive-plan": {
+			"type": "bool",
+			"name": "Spider Adaptive Plan",
+			"default": true,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Spider when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"spider-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Spider Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Screen quantum for Spider Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"spider-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Spider Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Verify quantum for Spider Adaptive Phase C when overwrite is on."
+		},
+		"spider-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Spider Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "spider-adaptive-overwrite",
+			"description": "Reserve percent for Spider Adaptive Phase D when overwrite is on."
+		},
 		"title-swing": {
 			"type": "title",
 			"name": "Swing"
@@ -1006,6 +1286,46 @@
 			"min": 0,
 			"max": 2,
 			"enable-if": "swing-overwrite"
+		},
+		"swing-adaptive-overwrite": {
+			"type": "bool",
+			"name": "Adaptive Overwrite Swing",
+			"default": false,
+			"description": "On = use Swing Adaptive Plan / screen / verify / reserve below instead of Main Adaptive defaults. Off = Main Adaptive Prediction."
+		},
+		"swing-adaptive-plan": {
+			"type": "bool",
+			"name": "Swing Adaptive Plan",
+			"default": true,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Prefer Adaptive Prediction Planner for Swing when Adaptive Overwrite is on. Off = classic equal-walk for this mode only."
+		},
+		"swing-adaptive-screen-ticks": {
+			"type": "int",
+			"name": "Swing Adaptive Screen Ticks",
+			"default": 24,
+			"min": 8,
+			"max": 64,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Screen quantum for Swing Adaptive Phase A/B when overwrite is on. Same meaning as Main Adaptive Screen Ticks."
+		},
+		"swing-adaptive-verify-quantum": {
+			"type": "int",
+			"name": "Swing Adaptive Verify Quantum",
+			"default": 16,
+			"min": 8,
+			"max": 64,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Verify quantum for Swing Adaptive Phase C when overwrite is on."
+		},
+		"swing-adaptive-reserve-pct": {
+			"type": "int",
+			"name": "Swing Adaptive Reserve %",
+			"default": 15,
+			"min": 0,
+			"max": 40,
+			"enable-if": "swing-adaptive-overwrite",
+			"description": "Reserve percent for Swing Adaptive Phase D when overwrite is on."
 		},
 		"show-trajectory": {
 			"type": "bool",

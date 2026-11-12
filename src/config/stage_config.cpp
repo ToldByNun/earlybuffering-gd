@@ -601,6 +601,89 @@ int EbStageConfig::adaptiveReservePct() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAdaptiveReservePct;
 }
+bool EbStageConfig::adaptivePlanFor(GameModeKind kind) {
+    return paramsFor(kind).adaptivePlan;
+}
+int EbStageConfig::adaptiveScreenTicksFor(GameModeKind kind) {
+    return paramsFor(kind).adaptiveScreenTicks;
+}
+int EbStageConfig::adaptiveVerifyQuantumFor(GameModeKind kind) {
+    return paramsFor(kind).adaptiveVerifyQuantum;
+}
+int EbStageConfig::adaptiveReservePctFor(GameModeKind kind) {
+    return paramsFor(kind).adaptiveReservePct;
+}
+bool EbStageConfig::adaptivePlanFor(PlayerObject* player) {
+    return adaptivePlanFor(kindOf(player));
+}
+int EbStageConfig::adaptiveScreenTicksFor(PlayerObject* player) {
+    return adaptiveScreenTicksFor(kindOf(player));
+}
+int EbStageConfig::adaptiveVerifyQuantumFor(PlayerObject* player) {
+    return adaptiveVerifyQuantumFor(kindOf(player));
+}
+int EbStageConfig::adaptiveReservePctFor(PlayerObject* player) {
+    return adaptiveReservePctFor(kindOf(player));
+}
+
+bool EbStageConfig::selfCheck(std::string& report) {
+    int fails = 0;
+    auto expect = [&](bool ok, char const* name) {
+        if (!ok) {
+            ++fails;
+            report += std::string("FAIL ") + name + "; ";
+        }
+    };
+
+    // Pure resolve: overwrite off → global; overwrite on → mode value.
+    auto resolveBool = [](bool overwrite, bool modeValue, bool globalValue) {
+        return overwrite ? modeValue : globalValue;
+    };
+    auto resolveInt = [](bool overwrite, int modeValue, int globalValue) {
+        return overwrite ? modeValue : globalValue;
+    };
+    expect(resolveBool(false, false, true) == true, "resolve-off-uses-global");
+    expect(resolveBool(true, false, true) == false, "resolve-on-uses-mode");
+    expect(resolveInt(false, 8, 24) == 24, "resolve-int-off");
+    expect(resolveInt(true, 8, 24) == 8, "resolve-int-on");
+
+    EbStageConfigImplementation::ensureCache();
+    bool const globalPlan = adaptivePlan();
+    int const globalScreen = adaptiveScreenTicks();
+    int const globalVerify = adaptiveVerifyQuantum();
+    int const globalReserve = adaptiveReservePct();
+    for (int index = 0; index < MODE_COUNT; ++index) {
+        auto const kind = static_cast<GameModeKind>(index);
+        EbModeParams const params = paramsFor(kind);
+        expect(adaptivePlanFor(kind) == params.adaptivePlan, "for-matches-params-plan");
+        expect(adaptiveScreenTicksFor(kind) == params.adaptiveScreenTicks,
+               "for-matches-params-screen");
+        expect(adaptiveVerifyQuantumFor(kind) == params.adaptiveVerifyQuantum,
+               "for-matches-params-verify");
+        expect(adaptiveReservePctFor(kind) == params.adaptiveReservePct,
+               "for-matches-params-reserve");
+        if (!params.adaptiveOverwrite) {
+            expect(params.adaptivePlan == globalPlan, "fallback-plan");
+            expect(params.adaptiveScreenTicks == globalScreen, "fallback-screen");
+            expect(params.adaptiveVerifyQuantum == globalVerify, "fallback-verify");
+            expect(params.adaptiveReservePct == globalReserve, "fallback-reserve");
+        } else {
+            expect(params.adaptiveScreenTicks >= 8 && params.adaptiveScreenTicks <= 64,
+                   "mode-screen-range");
+            expect(params.adaptiveVerifyQuantum >= 8 && params.adaptiveVerifyQuantum <= 64,
+                   "mode-verify-range");
+            expect(params.adaptiveReservePct >= 0 && params.adaptiveReservePct <= 40,
+                   "mode-reserve-range");
+        }
+    }
+
+    if (fails == 0) {
+        report = "StageConfig adaptive resolve selfCheck OK";
+        return true;
+    }
+    report = std::string("StageConfig adaptive resolve selfCheck fails: ") + report;
+    return false;
+}
 char const* EbStageConfig::assistVerifyMode() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAssistVerify.c_str();

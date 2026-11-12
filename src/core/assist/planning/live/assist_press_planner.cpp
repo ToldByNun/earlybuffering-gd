@@ -257,11 +257,11 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.smartDepth = EbStageConfig::smartDepth();
     opts.smartCombos = EbStageConfig::smartCombos();
     opts.smartHorizon = EbStageConfig::smartHorizon();
-    // Adaptive Prediction Planner (AP0–AP6): plan() → AdaptivePlanSearch when on.
-    opts.adaptivePlan = EbStageConfig::adaptivePlan();
-    opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicks();
-    opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantum();
-    opts.adaptiveReservePct = EbStageConfig::adaptiveReservePct();
+    // Adaptive Prediction Planner — kind-resolved (Modes Adaptive Overwrite or Main).
+    opts.adaptivePlan = EbStageConfig::adaptivePlanFor(kind);
+    opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicksFor(kind);
+    opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantumFor(kind);
+    opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
     // Adaptive screen+verify needs a usable soft wall; raise floor (never
     // override unlimited 0, never lower a higher user setting).
     if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)

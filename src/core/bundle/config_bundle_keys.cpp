@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[133] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[173] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
@@ -75,48 +75,88 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[133] = {
     {"cube-cap", EbConfigBundleKeys::Kind::Int},
     {"cube-slack", EbConfigBundleKeys::Kind::Int},
     {"cube-latency", EbConfigBundleKeys::Kind::Float},
+    {"cube-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"cube-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"cube-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"cube-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"cube-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"ship-enable", EbConfigBundleKeys::Kind::Bool},
     {"ship-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"ship-ticks", EbConfigBundleKeys::Kind::Int},
     {"ship-cap", EbConfigBundleKeys::Kind::Int},
     {"ship-slack", EbConfigBundleKeys::Kind::Int},
     {"ship-latency", EbConfigBundleKeys::Kind::Float},
+    {"ship-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"ship-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"ship-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"ship-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"ship-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"ball-enable", EbConfigBundleKeys::Kind::Bool},
     {"ball-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"ball-ticks", EbConfigBundleKeys::Kind::Int},
     {"ball-cap", EbConfigBundleKeys::Kind::Int},
     {"ball-slack", EbConfigBundleKeys::Kind::Int},
     {"ball-latency", EbConfigBundleKeys::Kind::Float},
+    {"ball-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"ball-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"ball-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"ball-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"ball-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"ufo-enable", EbConfigBundleKeys::Kind::Bool},
     {"ufo-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"ufo-ticks", EbConfigBundleKeys::Kind::Int},
     {"ufo-cap", EbConfigBundleKeys::Kind::Int},
     {"ufo-slack", EbConfigBundleKeys::Kind::Int},
     {"ufo-latency", EbConfigBundleKeys::Kind::Float},
+    {"ufo-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"ufo-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"ufo-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"ufo-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"ufo-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"wave-enable", EbConfigBundleKeys::Kind::Bool},
     {"wave-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"wave-ticks", EbConfigBundleKeys::Kind::Int},
     {"wave-cap", EbConfigBundleKeys::Kind::Int},
     {"wave-slack", EbConfigBundleKeys::Kind::Int},
     {"wave-latency", EbConfigBundleKeys::Kind::Float},
+    {"wave-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"wave-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"wave-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"wave-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"wave-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"robot-enable", EbConfigBundleKeys::Kind::Bool},
     {"robot-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"robot-ticks", EbConfigBundleKeys::Kind::Int},
     {"robot-cap", EbConfigBundleKeys::Kind::Int},
     {"robot-slack", EbConfigBundleKeys::Kind::Int},
     {"robot-latency", EbConfigBundleKeys::Kind::Float},
+    {"robot-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"robot-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"robot-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"robot-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"robot-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"spider-enable", EbConfigBundleKeys::Kind::Bool},
     {"spider-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"spider-ticks", EbConfigBundleKeys::Kind::Int},
     {"spider-cap", EbConfigBundleKeys::Kind::Int},
     {"spider-slack", EbConfigBundleKeys::Kind::Int},
     {"spider-latency", EbConfigBundleKeys::Kind::Float},
+    {"spider-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"spider-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"spider-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"spider-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"spider-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"swing-enable", EbConfigBundleKeys::Kind::Bool},
     {"swing-overwrite", EbConfigBundleKeys::Kind::Bool},
     {"swing-ticks", EbConfigBundleKeys::Kind::Int},
     {"swing-cap", EbConfigBundleKeys::Kind::Int},
     {"swing-slack", EbConfigBundleKeys::Kind::Int},
     {"swing-latency", EbConfigBundleKeys::Kind::Float},
+    {"swing-adaptive-overwrite", EbConfigBundleKeys::Kind::Bool},
+    {"swing-adaptive-plan", EbConfigBundleKeys::Kind::Bool},
+    {"swing-adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
+    {"swing-adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
+    {"swing-adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"hotkey-debug", EbConfigBundleKeys::Kind::Keybind},
     {"hotkey-reset-level", EbConfigBundleKeys::Kind::Keybind},
     {"hotkey-auto-tune", EbConfigBundleKeys::Kind::Keybind},
@@ -172,7 +212,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 133, "count-133");
+    expect(EbConfigBundleKeysTable::kEntryCount == 173, "count-173");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -215,8 +255,8 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 51, "kind-bool-51");
-    expect(kindInt == 46, "kind-int-46");
+    expect(kindBool == 67, "kind-bool-67");
+    expect(kindInt == 70, "kind-int-70");
     expect(kindFloat == 20, "kind-float-20");
     expect(kindString == 8, "kind-string-8");
     expect(kindColor == 2, "kind-color-2");
@@ -241,6 +281,8 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
     auto const* offRanges = EbConfigBundleKeys::find("assist-off-ranges");
     expect(offRanges && offRanges->kind == Kind::String, "find-assist-off-ranges");
+    auto const* waveAdaptive = EbConfigBundleKeys::find("wave-adaptive-plan");
+    expect(waveAdaptive && waveAdaptive->kind == Kind::Bool, "find-wave-adaptive-plan");
     expect(EbConfigBundleKeys::find("preset") == nullptr, "preset-removed");
     expect(EbConfigBundleKeys::find("stage-index") == nullptr, "stage-index-removed");
     expect(EbConfigBundleKeys::find("no-such-setting") == nullptr, "find-miss");

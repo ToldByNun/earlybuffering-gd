@@ -167,7 +167,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
         expect(candidate != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-177");
+    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-217");
 
     for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
         auto const candidate = categoryForKey(it->key);

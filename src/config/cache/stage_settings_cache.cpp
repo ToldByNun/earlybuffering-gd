@@ -213,6 +213,24 @@ void EbStageSettingsCache::refreshCache() {
             p.slack = EbStageConfigImplementation::s_cachedSlack;
             p.latencyWeight = latDefault;
         }
+        // Adaptive: mode overwrite → mode knobs; else Main Adaptive defaults.
+        p.adaptiveOverwrite =
+            EbStageConfigImplementation::readBool(mod, ids.adaptiveOverwrite, false);
+        if (p.adaptiveOverwrite) {
+            p.adaptivePlan =
+                EbStageConfigImplementation::readBool(mod, ids.adaptivePlan, true);
+            p.adaptiveScreenTicks = EbStageConfigImplementation::clampInt(
+                EbStageConfigImplementation::readInt(mod, ids.adaptiveScreenTicks, 24), 8, 64);
+            p.adaptiveVerifyQuantum = EbStageConfigImplementation::clampInt(
+                EbStageConfigImplementation::readInt(mod, ids.adaptiveVerifyQuantum, 16), 8, 64);
+            p.adaptiveReservePct = EbStageConfigImplementation::clampInt(
+                EbStageConfigImplementation::readInt(mod, ids.adaptiveReservePct, 15), 0, 40);
+        } else {
+            p.adaptivePlan = EbStageConfigImplementation::s_cachedAdaptivePlan;
+            p.adaptiveScreenTicks = EbStageConfigImplementation::s_cachedAdaptiveScreenTicks;
+            p.adaptiveVerifyQuantum = EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum;
+            p.adaptiveReservePct = EbStageConfigImplementation::s_cachedAdaptiveReservePct;
+        }
         // Settings store window-unit values; planner always wants physics ticks.
         // Use StageConfigImplementation::s_cachedWindowUnitFrames directly (avoid ensureCache
         // recursion).

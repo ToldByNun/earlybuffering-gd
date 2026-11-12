@@ -1,6 +1,7 @@
 # Adaptive Plan
 
-Setting: **Assist → Adaptive Plan** (`adaptive-plan`).
+Setting: **Main → Adaptive Prediction** (`adaptive-plan`).  
+Per-mode override: **Modes → Adaptive Overwrite** (`*-adaptive-overwrite`).
 
 ## Plain English
 
@@ -25,13 +26,15 @@ If Adaptive is unsure, it can fall back to classic Live planning with the **rema
 - You are still learning windows / Safe Mode
 - You are bisecting a bug (“is Adaptive involved?”)
 
-## Knobs (Assist → Adaptive)
+## Knobs (Main → Adaptive)
 
 Names vary slightly in the UI, but the idea is:
 
 - screen / verify tick slices
 - reserve percent (keep some ticks for later)
 - overall tick budget still caps the press
+
+Main Adaptive is the **default / fallback**. Under **Modes**, turn **Adaptive Overwrite** on to use different Adaptive knobs for Wave/Ship/etc. without changing the Main defaults.
 
 If Adaptive feels “always budget”, raise tick budget carefully or turn Adaptive off and retest.
 

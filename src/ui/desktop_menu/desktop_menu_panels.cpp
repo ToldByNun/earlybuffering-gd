@@ -1,4 +1,5 @@
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_bind.hpp"
 #include "desktop_menu_icons.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
@@ -52,6 +53,7 @@ public:
         EbSectionCard::end();
 
         if (EbSectionCard::begin("main-adaptive", "Adaptive Prediction")) {
+            // Defaults / fallback when a mode's Adaptive Overwrite is off.
             EbCheckbox::drawSetting("adaptive-plan", "Adaptive Plan");
             EbSlider::drawIntSetting("adaptive-screen-ticks", "Screen Ticks", 8, 64);
             EbSlider::drawIntSetting("adaptive-verify-quantum", "Verify Quantum", 8, 64);
@@ -158,12 +160,25 @@ public:
         char capKey[64];
         char slackKey[64];
         char latencyKey[64];
+        char adaptiveOwKey[64];
+        char adaptivePlanKey[64];
+        char adaptiveScreenKey[64];
+        char adaptiveVerifyKey[64];
+        char adaptiveReserveKey[64];
         std::snprintf(enableKey, sizeof(enableKey), "%s-enable", prefix);
         std::snprintf(overwriteKey, sizeof(overwriteKey), "%s-overwrite", prefix);
         std::snprintf(ticksKey, sizeof(ticksKey), "%s-ticks", prefix);
         std::snprintf(capKey, sizeof(capKey), "%s-cap", prefix);
         std::snprintf(slackKey, sizeof(slackKey), "%s-slack", prefix);
         std::snprintf(latencyKey, sizeof(latencyKey), "%s-latency", prefix);
+        std::snprintf(adaptiveOwKey, sizeof(adaptiveOwKey), "%s-adaptive-overwrite", prefix);
+        std::snprintf(adaptivePlanKey, sizeof(adaptivePlanKey), "%s-adaptive-plan", prefix);
+        std::snprintf(adaptiveScreenKey, sizeof(adaptiveScreenKey), "%s-adaptive-screen-ticks",
+                      prefix);
+        std::snprintf(adaptiveVerifyKey, sizeof(adaptiveVerifyKey), "%s-adaptive-verify-quantum",
+                      prefix);
+        std::snprintf(adaptiveReserveKey, sizeof(adaptiveReserveKey), "%s-adaptive-reserve-pct",
+                      prefix);
 
         EbCheckbox::drawSetting(enableKey, "Enable");
         EbCheckbox::drawSetting(overwriteKey, "Overwrite");
@@ -171,6 +186,14 @@ public:
         EbSlider::drawIntSetting(capKey, "Look-Ahead", 0, 240);
         EbSlider::drawIntSetting(slackKey, "Slack", -1, 16);
         EbSlider::drawFloatSetting(latencyKey, "Latency", 0.0f, 2.0f, 2);
+
+        gap();
+        EbCheckbox::drawSetting(adaptiveOwKey, "Adaptive Overwrite");
+        bool const adaptiveOw = EbDesktopMenuBind::getBool(adaptiveOwKey, false);
+        EbCheckbox::drawSetting(adaptivePlanKey, "Adaptive Plan", adaptiveOw);
+        EbSlider::drawIntSetting(adaptiveScreenKey, "Screen Ticks", 8, 64, "", adaptiveOw);
+        EbSlider::drawIntSetting(adaptiveVerifyKey, "Verify Quantum", 8, 64, "", adaptiveOw);
+        EbSlider::drawIntSetting(adaptiveReserveKey, "Reserve %", 0, 40, "%", adaptiveOw);
         (void)title;
     }
 

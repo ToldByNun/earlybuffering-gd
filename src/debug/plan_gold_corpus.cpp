@@ -13,6 +13,7 @@
 #include "../core/assist/planning/opportunity_probe.hpp"
 #include "../core/assist/planning/orb_align.hpp"
 #include "../core/assist/planning/perfect_assist_policy.hpp"
+#include "../config/stage_config.hpp"
 #include "../core/bundle/config_bundle.hpp"
 #include "../core/bundle/config_bundle_codec.hpp"
 #include "../core/bundle/config_bundle_keys.hpp"
@@ -96,6 +97,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
     std::string saveDropReport;
     expect(EbSaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
+    std::string stageAdaptiveReport;
+    expect(EbStageConfig::selfCheck(stageAdaptiveReport), "stage-adaptive-resolve");
     std::string configKeysReport;
     expect(EbConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
     std::string configCodecReport;
