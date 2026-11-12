@@ -72,6 +72,7 @@ public:
     static constexpr float kMenuWidth = 900.0f;
     static constexpr float kMenuHeight = 600.0f;
     // Inset so section cards sit inside the tab — bg shows around the card.
+    // Top and bottom use the same WindowPadding (kContentPadY); no extra end Dummy.
     static constexpr float kContentPadX = 28.0f;
     static constexpr float kContentPadY = 24.0f;
 
@@ -360,8 +361,8 @@ public:
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         EbDesktopMenuPanels::draw(active);
-        // Extra scroll extent so the last rows clear the clip edge.
-        ImGui::Dummy(ImVec2(0.0f, EbDesktopMenuShellState::kContentPadY + 24.0f));
+        // No extra end Dummy — AlwaysUseWindowPadding already mirrors top kContentPadY
+        // at the bottom. (Old Dummy(pad+24) made the scrolled-end gutter ~2× the top.)
 
         // Smooth wheel scroll — target jumps, visual eases.
         float const wheel = EbDesktopMenuShell::takeWheelDelta();

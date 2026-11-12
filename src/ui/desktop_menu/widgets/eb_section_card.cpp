@@ -26,6 +26,12 @@ bool EbSectionCard::begin(char const* id, char const* title) {
         return false;
     }
 
+    // Gap between cards only — not after the last (that doubled bottom scroll pad).
+    float const padY = ImGui::GetStyle().WindowPadding.y;
+    if (ImGui::GetCursorPosY() > padY + 1.0f) {
+        ImGui::Dummy(ImVec2(0.0f, 12.0f));
+    }
+
     ImGui::PushID(id);
 
     ImVec4 border = EbDesktopMenuTheme::outline();
@@ -69,7 +75,6 @@ void EbSectionCard::end() {
     ImGui::PopStyleVar(4);
     ImGui::PopStyleColor(2);
     ImGui::PopID();
-    ImGui::Dummy(ImVec2(0.0f, 12.0f));
     EbSectionCardState::depth() -= 1;
 }
 
