@@ -578,14 +578,10 @@ public:
             return;
         }
 
-        // Esc: cancel keybind capture first, otherwise close the menu.
-        if (EbDesktopMenuShellState::wantOpen() && openE > 0.9f &&
+        // Esc never toggles the menu — only cancels an active keybind capture.
+        if (EbDesktopMenuShellState::wantOpen() && openE > 0.9f && EbKeybind::isCapturing() &&
             ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-            if (EbKeybind::isCapturing()) {
-                EbKeybind::cancelCapture();
-            } else {
-                EbDesktopMenuShell::requestOpen(false);
-            }
+            EbKeybind::cancelCapture();
         }
 
         ImVec2 const winPos = ImGui::GetWindowPos();
