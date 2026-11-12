@@ -28,6 +28,12 @@
 ### Dev Lab Hazard + Hitbox Capture
 - Setting `dev-record-hazards` (default on): `planFinished.witness` stores Top-N hazard id/AABB/type, live/ghost collide rects + overlap counts, and threat-zone geometry (digest stays). Research Preset enables it.
 
+### Dev Lab Continuous / Wave / Hold
+- Player blob schema v2: `jumpHeld` at plan capture.
+- Wave IW seals `wave` on `planFinished` (`proxX` / `nearHazard` / `bestGain` / `earliestLater` / help-only / futile / proximityPass).
+- Hold timeline on fire/outcome: early UP, swallow, injected release ticks.
+- Offline eval seals `simNetClass` onto attempt `eval` and Delay `planFinished`.
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.

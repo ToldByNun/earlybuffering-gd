@@ -369,15 +369,23 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
               (context.orbHint.found || context.spatialHint || c0.activatedRing ||
                context.plan.foresightOrbPad));
 
+        // AP7: seal Wave IW proximity metrics for Dev Lab (not AssistLog-only).
+        context.plan.hasWaveMeta = true;
+        context.plan.waveProxX = proxX;
+        context.plan.waveNearHazard = nearHazard;
+        context.plan.waveEarliestLater = earliestLater;
+
         if (EbLivePlanContracts::waveIwHelpOnlyPass(true, true, d0Safe)) {
             bestDelay = 0;
             context.plan.action = PlanAction::Pass;
             context.plan.delay = context.plan.jumpTick = 0;
             context.plan.nowIsSafe = true;
             context.plan.threatCleared = true;
+            context.plan.waveHelpOnly = true;
             if (EbLivePlanContracts::waveIwProximityPass(true, true, c0.raw.died, nearHazard,
                                                          noOrbTarget, context.plan.foresightOrbPad)) {
                 context.plan.reason = AssistReason::PassWaveProximity;
+                context.plan.waveProximityPass = true;
                 context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveProximity);
                 EbAssistLog::debug(fmt::format(
                     "PLAN id={} IW Pass wave-proximity (help-only d0) prox={:.0f}",
@@ -422,6 +430,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             if (delay > 0)
                 anyAliveLater = true;
         }
+        context.plan.waveBestGain = bestGain;
         bool const idleHoldsEscape = context.plan.idleSafer && anyAliveLater;
         bool const orbIntent =
             context.orbAssist &&
@@ -433,6 +442,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.plan.delay = context.plan.jumpTick = 0;
             context.plan.nowIsSafe = d0Safe;
             context.plan.threatCleared = !c0.raw.died;
+            context.plan.waveFutile = true;
             context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveFutile);
             EbAssistLog::debug(fmt::format(
                 "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",

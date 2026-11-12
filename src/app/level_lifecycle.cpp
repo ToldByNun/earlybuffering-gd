@@ -37,6 +37,7 @@ void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLaye
     controller.m_pendingReleaseArmTick = 0;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     controller.m_outcomePending = false;
     controller.m_attemptTick = 0;
@@ -74,6 +75,7 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_pendingReleaseArmTick = 0;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     controller.m_assistTouchedRun = false;
     controller.m_savesAttempt = 0;
@@ -192,6 +194,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_pendingReleaseContinuous = false;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     controller.m_attemptTick = 0;
     controller.m_inRealUpdate = false;

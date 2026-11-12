@@ -158,6 +158,15 @@ public:
     // Dev Lab AP4: which search branch produced this plan.
     // inputWindow | threatProbe | adaptive | classic | hybridFallthrough
     std::string plannerPath;
+    // Dev Lab AP7: Wave continuous IW proximity / help-only / futile honesty.
+    bool hasWaveMeta = false;
+    float waveProxX = 0.f;
+    bool waveNearHazard = false;
+    float waveBestGain = 0.f;
+    int waveEarliestLater = -1;
+    bool waveHelpOnly = false;
+    bool waveFutile = false;
+    bool waveProximityPass = false;
 
 private:
 };

@@ -123,6 +123,26 @@ public:
     float threatZoneStartX = 0.f;
     float threatZoneEndX = 0.f;
 
+    // Dev Lab AP7: Wave IW proximity / help-only / futile (on planFinished).
+    bool hasWaveMeta = false;
+    float waveProxX = 0.f;
+    bool waveNearHazard = false;
+    float waveBestGain = 0.f;
+    int waveEarliestLater = -1;
+    bool waveHelpOnly = false;
+    bool waveFutile = false;
+    bool waveProximityPass = false;
+
+    // Dev Lab AP7: user hold vs planned hold timeline (fire/outcome).
+    bool hasHoldTimeline = false;
+    int releaseSeenTick = -1;
+    int holdUserUpTick = -1;
+    int holdInjectReleaseTick = -1;
+    bool holdSwallow = false;
+
+    // Dev Lab AP7: optional G10 class stamped after offline eval.
+    std::string simNetClass;
+
     // Dev Lab AP5: attempt-scoped mode/speed/gravity/dual/checkpoint timeline.
     bool hasTimelineMeta = false;
     std::string timelineChange; // seed|mode|speed|gravity|dual|checkpoint

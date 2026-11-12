@@ -250,6 +250,7 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
         controller.m_pendingReleaseContinuous = false;
         controller.m_pendingReleaseUserUpTick = -1;
         controller.m_pendingReleaseMaxExtend = 0;
+        controller.m_pendingReleaseDevPressId = 0;
         EbAssistLog::debug("hold-assist: cancel pending release (re-click)");
     }
 
@@ -336,6 +337,8 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
             controller.m_buffer.releaseSeen = true;
             controller.m_buffer.releaseTick = effectTick;
             controller.m_log.noteInput(effectTick, false);
+            EbDevCycleRecorder::get().noteReleaseSeen(controller.m_buffer.devPressId,
+                                                      controller.m_attemptTick);
             // Early UP does not cancel Delay: stay Buffered, fire still due.
             EbAssistLog::debug(fmt::format(
                 "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} p{}",
@@ -349,6 +352,10 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
                 controller.m_pendingReleaseUserUpTick = controller.m_attemptTick;
                 controller.m_pendingReleaseTick =
                     controller.m_pendingReleaseUserUpTick + controller.m_pendingReleaseMaxExtend;
+            }
+            if (controller.m_pendingReleaseDevPressId > 0) {
+                EbDevCycleRecorder::get().noteHoldSwallow(controller.m_pendingReleaseDevPressId,
+                                                          controller.m_attemptTick);
             }
             EbAssistLog::debug(
                 fmt::format("hold-assist: swallow user release @{} extend≤{} deadline={}",

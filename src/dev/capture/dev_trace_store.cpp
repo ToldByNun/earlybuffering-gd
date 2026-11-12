@@ -386,6 +386,13 @@ bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) 
     for (auto& attempt : this->m_session.attempts) {
         if (attempt.attemptId != attemptId)
             continue;
+        // AP7: stamp G10 class onto matching planFinished (armed Delay) events.
+        if (!eval.simNetClass.empty()) {
+            for (auto& ev : attempt.events) {
+                if (ev.kind == DevEventKind::PlanFinished && ev.plannedDelay > 0)
+                    ev.simNetClass = eval.simNetClass;
+            }
+        }
         attempt.eval = std::move(eval);
         this->sampleResources();
         return this->flush();

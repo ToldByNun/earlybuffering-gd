@@ -86,6 +86,15 @@ Hazard / hitbox on `planFinished.witness` (AP6; `dev-record-hazards`, default on
 | `hitbox` | Live (+ optional ghost) collide rect + overlap counts vs that list |
 | `threatZone` | Plan threat-zone geometry (`startX`/`endX`) |
 
+Continuous / Wave / Hold (AP7):
+
+| Field | Meaning |
+|---|---|
+| `witness.player.jumpHeld` | Jump button held at plan capture (blob schema v2) |
+| `wave` on `planFinished` | IW `proxX` / `nearHazard` / `bestGain` / `earliestLater` / help-only / futile / proximityPass |
+| `holdTimeline` on fire/outcome | `releaseSeenTick`, `userUpTick`, `injectReleaseTick`, `swallow` |
+| `simNetClass` | G10 class on sealed `eval` + Delay `planFinished` after offline eval |
+
 ## Lag / perf
 
 | Tool | Output idea |

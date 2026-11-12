@@ -62,6 +62,10 @@ public:
     void noteHus(int64_t pressId, AssistReason reason, char const* where, int fireTick);
     void noteFire(int64_t pressId, int actualFireTick);
     void noteHoldExtend(int64_t pressId, int holdExtendMax);
+    // AP7: user early-UP while Delay armed / hold swallow / injected release.
+    void noteReleaseSeen(int64_t pressId, int attemptTick);
+    void noteHoldSwallow(int64_t pressId, int attemptTick);
+    void noteHoldInjectRelease(int64_t pressId, int attemptTick);
     // Practice checkpoint: attempt-scoped event + timeline snapshot (AP5).
     void noteCheckpoint(PlayLayer* layer, int attemptTick);
     // Poll P1 mode/speed/gravity/dual; emit modeTransition on change (AP5).
@@ -108,6 +112,11 @@ private:
         int holdExtendMax = -1;
         int actualFireTick = -1;
         int recheckDelta = 0;
+        // AP7 hold timeline
+        int releaseSeenTick = -1;
+        int holdUserUpTick = -1;
+        int holdInjectReleaseTick = -1;
+        bool holdSwallow = false;
 
     private:
     };

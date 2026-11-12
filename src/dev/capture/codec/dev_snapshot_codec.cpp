@@ -108,6 +108,7 @@ matjson::Value EbDevSnapshotCodec::playerBlobToJson(EbDevPlayerBlob const& b) {
     otherIndex["controlsDisabled"] = b.controlsDisabled;
     otherIndex["maybeIsFalling"] = b.maybeIsFalling;
     otherIndex["maybeIsBoosted"] = b.maybeIsBoosted;
+    otherIndex["jumpHeld"] = b.jumpHeld;
     return otherIndex;
 }
 
@@ -163,6 +164,7 @@ void EbDevSnapshotCodec::playerBlobFromJson(matjson::Value const& j, EbDevPlayer
     bo("controlsDisabled", b.controlsDisabled);
     bo("maybeIsFalling", b.maybeIsFalling);
     bo("maybeIsBoosted", b.maybeIsBoosted);
+    bo("jumpHeld", b.jumpHeld);
 }
 
 matjson::Value EbDevSnapshotCodec::witnessToJson(EbDevLiveWitness const& w) {

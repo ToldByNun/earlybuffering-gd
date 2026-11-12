@@ -40,6 +40,8 @@ EbDevAttemptEval EbDevAttemptEval::fromGrid(EbDevEvalEngine::GridReport const& g
     out.plannedDelay = report.plannedDelay;
     out.liveVsEvalMismatch = report.liveVsEvalMismatch;
     out.livePlannedDelay = report.livePlannedDelay;
+    if (report.simNetClass)
+        out.simNetClass = report.simNetClass;
 
     out.overlayLine = report.overlayLine;
     out.samples = grid.samples;
@@ -91,6 +93,8 @@ matjson::Value EbDevAttemptEval::toJson(EbDevAttemptEval const& eval) {
         root["liveVsEvalMismatch"] = true;
         root["livePlannedDelay"] = eval.livePlannedDelay;
     }
+    if (!eval.simNetClass.empty())
+        root["simNetClass"] = eval.simNetClass;
     if (!eval.overlayLine.empty())
         root["overlay"] = eval.overlayLine;
 
@@ -189,6 +193,8 @@ bool EbDevAttemptEval::fromJson(matjson::Value const& j, EbDevAttemptEval& out, 
     out.livePlannedDelay = j.contains("livePlannedDelay")
                                ? static_cast<int>(j["livePlannedDelay"].asInt().unwrapOr(-1))
                                : -1;
+    out.simNetClass =
+        j.contains("simNetClass") ? std::string(j["simNetClass"].asString().unwrapOr("")) : "";
     out.overlayLine =
         j.contains("overlay") ? std::string(j["overlay"].asString().unwrapOr("")) : "";
 

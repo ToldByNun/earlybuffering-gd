@@ -272,6 +272,7 @@ private:
     int m_pendingReleaseUserUpTick = -1; // -1 = user still holding; else let-go tick
     int m_pendingReleaseMaxExtend = 0;   // max ticks to keep Jump down AFTER user-up
     int m_pendingReleaseTick = 0;        // absolute deadline (= userUp + maxExtend)
+    int64_t m_pendingReleaseDevPressId = 0; // Dev Lab hold timeline (AP7)
     float m_lastPlayerX = 0.f;
     GameModeKind m_lastMode = GameModeKind::Cube;
     int m_startSnapshotSlot = -1;

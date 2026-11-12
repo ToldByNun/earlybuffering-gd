@@ -166,6 +166,30 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
             otherIndex["threatZone"] = tz;
         }
     }
+    if (e.hasWaveMeta) {
+        matjson::Value wave = matjson::Value::object();
+        wave["proxX"] = e.waveProxX;
+        wave["nearHazard"] = e.waveNearHazard;
+        wave["bestGain"] = e.waveBestGain;
+        wave["earliestLater"] = e.waveEarliestLater;
+        wave["helpOnly"] = e.waveHelpOnly;
+        wave["futile"] = e.waveFutile;
+        wave["proximityPass"] = e.waveProximityPass;
+        otherIndex["wave"] = wave;
+    }
+    if (e.hasHoldTimeline) {
+        matjson::Value hold = matjson::Value::object();
+        if (e.releaseSeenTick >= 0)
+            hold["releaseSeenTick"] = e.releaseSeenTick;
+        if (e.holdUserUpTick >= 0)
+            hold["userUpTick"] = e.holdUserUpTick;
+        if (e.holdInjectReleaseTick >= 0)
+            hold["injectReleaseTick"] = e.holdInjectReleaseTick;
+        hold["swallow"] = e.holdSwallow;
+        otherIndex["holdTimeline"] = hold;
+    }
+    if (!e.simNetClass.empty())
+        otherIndex["simNetClass"] = e.simNetClass;
     if (e.hasTimelineMeta) {
         if (!e.timelineChange.empty())
             otherIndex["timelineChange"] = e.timelineChange;
@@ -488,5 +512,42 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.playerX =
             j.contains("playerX") ? static_cast<float>(j["playerX"].asDouble().unwrapOr(0.0)) : 0.f;
     }
+    if (j.contains("wave") && j["wave"].isObject()) {
+        auto const& wave = j["wave"];
+        e.hasWaveMeta = true;
+        e.waveProxX =
+            wave.contains("proxX") ? static_cast<float>(wave["proxX"].asDouble().unwrapOr(0.0))
+                                   : 0.f;
+        e.waveNearHazard =
+            wave.contains("nearHazard") ? wave["nearHazard"].asBool().unwrapOr(false) : false;
+        e.waveBestGain = wave.contains("bestGain")
+                             ? static_cast<float>(wave["bestGain"].asDouble().unwrapOr(0.0))
+                             : 0.f;
+        e.waveEarliestLater = wave.contains("earliestLater")
+                                  ? static_cast<int>(wave["earliestLater"].asInt().unwrapOr(-1))
+                                  : -1;
+        e.waveHelpOnly =
+            wave.contains("helpOnly") ? wave["helpOnly"].asBool().unwrapOr(false) : false;
+        e.waveFutile = wave.contains("futile") ? wave["futile"].asBool().unwrapOr(false) : false;
+        e.waveProximityPass =
+            wave.contains("proximityPass") ? wave["proximityPass"].asBool().unwrapOr(false) : false;
+    }
+    if (j.contains("holdTimeline") && j["holdTimeline"].isObject()) {
+        auto const& hold = j["holdTimeline"];
+        e.hasHoldTimeline = true;
+        e.releaseSeenTick = hold.contains("releaseSeenTick")
+                                ? static_cast<int>(hold["releaseSeenTick"].asInt().unwrapOr(-1))
+                                : -1;
+        e.holdUserUpTick = hold.contains("userUpTick")
+                               ? static_cast<int>(hold["userUpTick"].asInt().unwrapOr(-1))
+                               : -1;
+        e.holdInjectReleaseTick =
+            hold.contains("injectReleaseTick")
+                ? static_cast<int>(hold["injectReleaseTick"].asInt().unwrapOr(-1))
+                : -1;
+        e.holdSwallow = hold.contains("swallow") ? hold["swallow"].asBool().unwrapOr(false) : false;
+    }
+    if (j.contains("simNetClass"))
+        e.simNetClass = std::string(j["simNetClass"].asString().unwrapOr(""));
     return true;
 }

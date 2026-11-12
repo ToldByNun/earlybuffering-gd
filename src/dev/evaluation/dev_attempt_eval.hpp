@@ -47,6 +47,9 @@ public:
     bool liveVsEvalMismatch = false;
     int livePlannedDelay = -1;
 
+    // AP7: G10 simEstimate class for this sealed eval (also stamped on planFinished).
+    std::string simNetClass;
+
     std::string overlayLine;
     std::vector<EbDevObjective::Sample> samples;
 

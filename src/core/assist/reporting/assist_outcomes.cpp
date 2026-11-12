@@ -250,6 +250,7 @@ void EbAssistOutcomes::onRealDeath(EbAssistController& controller, PlayLayer* pl
     controller.m_pendingReleaseArmTick = 0;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     {
         EbLagProbe::Scope const state("eb.saveCounterClear");

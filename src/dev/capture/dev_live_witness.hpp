@@ -123,6 +123,8 @@ public:
     bool controlsDisabled = false;
     bool maybeIsFalling = false;
     bool maybeIsBoosted = false;
+    // AP7: continuous / hold honesty at plan capture.
+    bool jumpHeld = false;
 
 private:
 };
@@ -141,7 +143,7 @@ private:
 class EbDevLiveWitness {
 public:
     // Bump when the serializable field list of DevPlayerBlob changes.
-    static constexpr int kPlayerBlobSchemaVersion = 1;
+    static constexpr int kPlayerBlobSchemaVersion = 2;
 
     std::vector<EbDevWitnessCategoryEntry> categories;
     std::unordered_set<int> worldDeps; // DevWitnessCategory as int

@@ -160,6 +160,7 @@ char const* const* EbDevLiveWitness::playerBlobFieldNames(size_t& count) {
         "controlsDisabled",
         "maybeIsFalling",
         "maybeIsBoosted",
+        "jumpHeld",
     };
     count = sizeof(kNames) / sizeof(kNames[0]);
     return kNames;
@@ -276,6 +277,10 @@ void EbDevLiveWitness::fillPlayerBlob(EbDevPlayerBlob& blob, PlayerObject* sourc
     blob.controlsDisabled = source->m_controlsDisabled;
     blob.maybeIsFalling = source->m_maybeIsFalling;
     blob.maybeIsBoosted = source->m_maybeIsBoosted;
+    {
+        auto it = source->m_holdingButtons.find(static_cast<int>(PlayerButton::Jump));
+        blob.jumpHeld = it != source->m_holdingButtons.end() && it->second;
+    }
 }
 
 bool EbDevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {

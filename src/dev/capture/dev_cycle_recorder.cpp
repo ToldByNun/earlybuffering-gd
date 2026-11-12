@@ -217,6 +217,16 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->threatZoneValid = plan.threatZone.valid;
     width->threatZoneStartX = plan.threatZone.startX;
     width->threatZoneEndX = plan.threatZone.endX;
+    if (plan.hasWaveMeta) {
+        width->hasWaveMeta = true;
+        width->waveProxX = plan.waveProxX;
+        width->waveNearHazard = plan.waveNearHazard;
+        width->waveBestGain = plan.waveBestGain;
+        width->waveEarliestLater = plan.waveEarliestLater;
+        width->waveHelpOnly = plan.waveHelpOnly;
+        width->waveFutile = plan.waveFutile;
+        width->waveProximityPass = plan.waveProximityPass;
+    }
     if (player) {
         auto const kind = EbStageConfig::kindOf(player);
         width->gameModeKind = EbStageConfig::kindName(kind);
@@ -433,6 +443,14 @@ void EbDevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
     width->budgetHitAtArm = cycle->budgetHitAtArm;
     width->recheckDelta = cycle->recheckDelta;
     width->holdExtendMax = cycle->holdExtendMax;
+    if (cycle->releaseSeenTick >= 0 || cycle->holdUserUpTick >= 0 || cycle->holdSwallow ||
+        cycle->holdInjectReleaseTick >= 0) {
+        width->hasHoldTimeline = true;
+        width->releaseSeenTick = cycle->releaseSeenTick;
+        width->holdUserUpTick = cycle->holdUserUpTick;
+        width->holdInjectReleaseTick = cycle->holdInjectReleaseTick;
+        width->holdSwallow = cycle->holdSwallow;
+    }
     cycle->actualFireTick = actualFireTick;
     cycle->hasFire = true;
 }
@@ -444,6 +462,47 @@ void EbDevCycleRecorder::noteHoldExtend(int64_t pressId, int holdExtendMax) {
     if (holdExtendMax < 0)
         return;
     cycle->holdExtendMax = holdExtendMax;
+}
+
+void EbDevCycleRecorder::noteReleaseSeen(int64_t pressId, int attemptTick) {
+    auto* cycle = this->tracked(pressId);
+    if (!cycle || !this->isRecording())
+        return;
+    if (cycle->releaseSeenTick < 0)
+        cycle->releaseSeenTick = attemptTick;
+}
+
+void EbDevCycleRecorder::noteHoldSwallow(int64_t pressId, int attemptTick) {
+    auto* cycle = this->tracked(pressId);
+    if (!cycle || !this->isRecording())
+        return;
+    cycle->holdSwallow = true;
+    if (cycle->holdUserUpTick < 0)
+        cycle->holdUserUpTick = attemptTick;
+}
+
+void EbDevCycleRecorder::noteHoldInjectRelease(int64_t pressId, int attemptTick) {
+    auto* cycle = this->tracked(pressId);
+    if (!cycle || !this->isRecording())
+        return;
+    cycle->holdInjectReleaseTick = attemptTick;
+    // Stamp onto the latest fire event if already written.
+    auto* attempt = EbDevTraceStore::get().currentAttempt();
+    if (!attempt)
+        return;
+    for (auto it = attempt->events.rbegin(); it != attempt->events.rend(); ++it) {
+        if (it->pressId != pressId)
+            continue;
+        if (it->kind == DevEventKind::Fire || it->kind == DevEventKind::Outcome) {
+            it->hasHoldTimeline = true;
+            it->releaseSeenTick = cycle->releaseSeenTick;
+            it->holdUserUpTick = cycle->holdUserUpTick;
+            it->holdInjectReleaseTick = attemptTick;
+            it->holdSwallow = cycle->holdSwallow;
+            if (it->kind == DevEventKind::Fire)
+                break;
+        }
+    }
 }
 
 void EbDevCycleRecorder::resetModeTimeline() {
@@ -600,6 +659,14 @@ void EbDevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason
         width->budgetHitAtArm = cycle.budgetHitAtArm;
         width->recheckDelta = cycle.recheckDelta;
         width->holdExtendMax = cycle.holdExtendMax;
+        if (cycle.releaseSeenTick >= 0 || cycle.holdUserUpTick >= 0 || cycle.holdSwallow ||
+            cycle.holdInjectReleaseTick >= 0) {
+            width->hasHoldTimeline = true;
+            width->releaseSeenTick = cycle.releaseSeenTick;
+            width->holdUserUpTick = cycle.holdUserUpTick;
+            width->holdInjectReleaseTick = cycle.holdInjectReleaseTick;
+            width->holdSwallow = cycle.holdSwallow;
+        }
         if (!lived && cycle.hasArm && cycle.actualFireTick >= 0 && attemptTick >= 0) {
             width->deathAfterFire = true;
             width->ticksToDeath = std::max(0, attemptTick - cycle.actualFireTick);
