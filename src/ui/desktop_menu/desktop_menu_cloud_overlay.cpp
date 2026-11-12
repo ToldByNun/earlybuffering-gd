@@ -1,6 +1,7 @@
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_alert.hpp"
 #include "desktop_menu_fonts.hpp"
+#include "desktop_menu_icons.hpp"
 #include "desktop_menu_modal.hpp"
 #include "desktop_menu_motion.hpp"
 #include "desktop_menu_shell.hpp"
@@ -18,6 +19,7 @@
 #include "../../cloud/cloud_config_apply.hpp"
 #include "../../cloud/cloud_config_stats.hpp"
 #include "../../cloud/cloud_config_store.hpp"
+#include "../../cloud/sharing/cloud_config_share.hpp"
 #include "../pause/pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <imgui.h>
@@ -149,6 +151,36 @@ public:
         return value;
     }
 
+    static bool& rateBusy() {
+        static bool value = false;
+        return value;
+    }
+
+    static uint64_t& rateGen() {
+        static uint64_t value = 0;
+        return value;
+    }
+
+    static std::string& shareName() {
+        static std::string value;
+        return value;
+    }
+
+    static std::string& shareAuthor() {
+        static std::string value;
+        return value;
+    }
+
+    static std::string& shareDesc() {
+        static std::string value;
+        return value;
+    }
+
+    static std::string& shareTags() {
+        static std::string value;
+        return value;
+    }
+
     static constexpr float kOpenTau = 0.09f;
     static constexpr float kCloseDuration = 0.20f;
     static constexpr float kCardW = 780.0f;
@@ -156,7 +188,7 @@ public:
     static constexpr float kSlidePx = 14.0f;
     static constexpr float kRailW = 68.0f;
     static constexpr float kContentPad = 20.0f;
-    static constexpr float kBlockH = 74.0f;
+    static constexpr float kBlockH = 68.0f;
     static constexpr float kBlockGap = 8.0f;
     static constexpr int kSortCount = 5;
 
@@ -427,8 +459,212 @@ public:
             });
     }
 
+    static void requestRate(int stars) {
+        auto const* entry = EbCloudConfigIndex::findById(
+            EbCloudConfigService::get().catalog(), EbDesktopCloudOverlayState::selectedId());
+        if (!entry || EbDesktopCloudOverlayState::busyUi() ||
+            EbDesktopCloudOverlayState::rateBusy()) {
+            return;
+        }
+        if (stars < 1 || stars > 5) {
+            return;
+        }
+        if (EbCloudConfigStats::get().myStarsFor(entry->id) == stars) {
+            return;
+        }
+
+        EbDesktopCloudOverlayState::rateBusy() = true;
+        uint64_t const session = EbDesktopCloudOverlayState::sessionGen();
+        uint64_t const generation = ++EbDesktopCloudOverlayState::rateGen();
+        std::string const id = entry->id;
+        EbCloudConfigStats::get().trackRate(
+            id, stars, [session, generation, stars](EbCloudConfigStats::TrackResult const& result) {
+                if (!EbDesktopCloudOverlayCatalog::sessionLive(session) ||
+                    generation != EbDesktopCloudOverlayState::rateGen()) {
+                    return;
+                }
+                EbDesktopCloudOverlayState::rateBusy() = false;
+                if (result.ok || result.duplicate || result.skippedLocal) {
+                    ++EbDesktopCloudOverlayState::statsGen();
+                    if (result.updated) {
+                        EbDesktopCloudOverlayCatalog::setStatus(
+                            fmt::format("Updated {}/5", stars), false);
+                    } else if (result.ok && !result.duplicate && !result.skippedLocal) {
+                        EbDesktopCloudOverlayCatalog::setStatus(
+                            fmt::format("Rated {}/5", stars), false);
+                    }
+                    return;
+                }
+                EbDesktopAlert::info(
+                    "Cloud Configs",
+                    result.error.empty() ? "Could not submit rating." : result.error.c_str());
+            });
+    }
+
 private:
     EbDesktopCloudOverlayInstall() = delete;
+};
+
+class EbDesktopCloudOverlayShare {
+public:
+    static void openPanel() {
+        if (EbDesktopCloudOverlayState::busyUi() || EbDesktopCloudOverlayState::shareOpen()) {
+            return;
+        }
+        EbDesktopCloudOverlayState::shareName() = "Shared Config";
+        EbDesktopCloudOverlayState::shareAuthor().clear();
+        EbDesktopCloudOverlayState::shareDesc().clear();
+        EbDesktopCloudOverlayState::shareTags().clear();
+        EbDesktopCloudOverlayState::shareOpen() = true;
+    }
+
+    static void closePanel() {
+        EbDesktopCloudOverlayState::shareOpen() = false;
+    }
+
+    static void submit() {
+        std::string const name = EbDesktopCloudOverlayState::shareName();
+        if (name.empty()) {
+            EbDesktopAlert::info("Share", "Please enter a name for the pack.");
+            return;
+        }
+
+        auto const tags =
+            EbCloudConfigShare::parseTags(EbDesktopCloudOverlayState::shareTags());
+        auto const shared = EbCloudConfigShare::shareCurrent(
+            name, EbDesktopCloudOverlayState::shareAuthor(),
+            EbDesktopCloudOverlayState::shareDesc(), tags);
+        if (!shared.ok) {
+            EbDesktopAlert::info("Share",
+                                 shared.error.empty() ? "Share failed." : shared.error.c_str());
+            return;
+        }
+
+        closePanel();
+
+        std::string publishLine;
+        if (shared.published) {
+            publishLine = fmt::format(
+                "Sent to catalog.\n{}\n(CDN may take a minute — then Refresh.)\n\n",
+                shared.publishUrl.empty() ? "(see GitHub repo)" : shared.publishUrl);
+        } else if (shared.publishAttempted) {
+            publishLine = fmt::format(
+                "Online submit failed:\n{}\nOutbox still saved.\n\n",
+                shared.publishError.empty() ? "(unknown)" : shared.publishError);
+        } else {
+            publishLine = "Online submit off — outbox/clipboard only.\n\n";
+        }
+
+        std::string tagsLine;
+        if (!shared.tags.empty()) {
+            tagsLine = "Tags: ";
+            for (size_t index = 0; index < shared.tags.size(); ++index) {
+                if (index) {
+                    tagsLine += ", ";
+                }
+                tagsLine += shared.tags[index];
+            }
+            tagsLine += "\n\n";
+        }
+
+        auto const message = fmt::format(
+            "Shared \"{}\" (id: {}).\n\n"
+            "{}"
+            "{}"
+            "Outbox:\n{}\n\n"
+            "{}\n\n"
+            "{}",
+            name, shared.suggestedId, tagsLine, publishLine, shared.outboxPath.string(),
+            shared.clipboardOk ? "Envelope copied to clipboard."
+                               : "Clipboard copy failed — use the outbox file.",
+            EbCloudConfigShare::discordCommunityUrl());
+        EbDesktopAlert::info("Share", message);
+    }
+
+    static void drawFieldLabel(char const* label) {
+        EbDesktopMenuFonts::pushCaps();
+        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+    }
+
+    static void drawForm(float width) {
+        float const padX = 18.0f;
+        float const padY = 16.0f;
+        float const gap = 12.0f;
+        float const innerW = (std::max)(120.0f, width - padX * 2.0f);
+        float const halfW = (std::max)(80.0f, (innerW - gap) * 0.5f);
+
+        ImVec4 border = EbDesktopMenuTheme::outline();
+        border.w = 0.55f;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, EbDesktopMenuTheme::panel());
+        ImGui::PushStyleColor(ImGuiCol_Border, border);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, EbDesktopMenuTheme::frameRounding());
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, EbDesktopMenuTheme::outlineThickness());
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padX, padY));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 8.0f));
+        ImGui::BeginChild("##eb-cloud-share", ImVec2(width, 0.0f),
+                          ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY |
+                              ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+        EbDesktopMenuFonts::pushHeader();
+        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
+        ImGui::TextUnformatted("Share Config");
+        ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        // Two real columns — SameLine+Group was collapsing Author onto Name.
+        float const col0 = ImGui::GetCursorPosX();
+        float const rowY = ImGui::GetCursorPosY();
+        ImGui::SetCursorPos(ImVec2(col0, rowY));
+        drawFieldLabel("NAME");
+        EbTextField::draw("##eb-share-name", EbDesktopCloudOverlayState::shareName(), "My pack",
+                          true, 48, halfW);
+        float const afterLeft = ImGui::GetCursorPosY();
+
+        ImGui::SetCursorPos(ImVec2(col0 + halfW + gap, rowY));
+        drawFieldLabel("AUTHOR");
+        EbTextField::draw("##eb-share-author", EbDesktopCloudOverlayState::shareAuthor(),
+                          "Your name", true, 32, halfW);
+        float const afterRight = ImGui::GetCursorPosY();
+        ImGui::SetCursorPos(ImVec2(col0, (std::max)(afterLeft, afterRight) + 4.0f));
+
+        drawFieldLabel("DESCRIPTION");
+        EbTextField::draw("##eb-share-desc", EbDesktopCloudOverlayState::shareDesc(),
+                          "What does this pack do?", true, 160, innerW);
+
+        drawFieldLabel("TAGS");
+        EbTextField::draw("##eb-share-tags", EbDesktopCloudOverlayState::shareTags(),
+                          "safe, live, beginner", true, 96, innerW);
+
+        std::string const idPreview =
+            fmt::format("id: {}",
+                        EbCloudConfigShare::suggestId(EbDesktopCloudOverlayState::shareName()));
+        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
+        ImGui::TextUnformatted(idPreview.c_str());
+        ImGui::PopStyleColor();
+
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        EbButton::beginRow(2, 10.0f);
+        if (EbButton::draw("##eb-share-cancel", "Cancel")) {
+            closePanel();
+        }
+        if (EbButton::draw("##eb-share-submit", "Share", true, nullptr, true)) {
+            submit();
+        }
+        EbButton::endRow();
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar(4);
+        ImGui::PopStyleColor(2);
+    }
+
+private:
+    EbDesktopCloudOverlayShare() = delete;
 };
 
 class EbDesktopCloudOverlayList {
@@ -622,35 +858,36 @@ public:
             EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered || selected, 0.05f);
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec4 fill = EbDesktopMenuTheme::panel();
-        fill.w = 0.78f;
+        // Match shell section/control density: surface idle, soft accent wash when selected
+        // (not a solid purple slab).
+        ImVec4 fill = EbDesktopMenuTheme::surface();
+        fill.w = 1.0f;
         if (selected) {
-            EbDesktopMenuTheme::drawAccentGlow(drawList, min, max, rounding, 0.34f + 0.16f * heat);
+            EbDesktopMenuTheme::drawAccentGlow(drawList, min, max, rounding, 0.16f + 0.10f * heat);
             ImVec4 accentWash = EbDesktopMenuTheme::accent();
-            accentWash.w = 0.24f;
-            fill = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::panel(), accentWash, 0.95f);
+            accentWash.w = 0.16f;
+            fill = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::panel(), accentWash, 0.32f);
             fill.w = 1.0f;
         } else if (heat > 0.01f) {
-            ImVec4 lift = EbDesktopMenuTheme::surface();
+            ImVec4 lift = EbDesktopMenuTheme::panel();
             lift.w = 1.0f;
-            fill = EbDesktopMenuMotion::lerp4(fill, lift, heat);
-            fill.w = 0.94f;
+            fill = EbDesktopMenuMotion::lerp4(fill, lift, heat * 0.70f);
         }
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(fill), rounding);
 
         ImVec4 stroke = EbDesktopMenuTheme::outline();
-        stroke.w = selected ? 0.75f : (0.32f + 0.40f * heat);
+        stroke.w = selected ? 0.70f : (0.40f + 0.30f * heat);
         if (selected) {
             ImVec4 accentRim = EbDesktopMenuTheme::accentLight();
-            accentRim.w = 0.60f + 0.30f * heat;
-            stroke = EbDesktopMenuMotion::lerp4(stroke, accentRim, 0.90f);
+            accentRim.w = 0.55f + 0.25f * heat;
+            stroke = EbDesktopMenuMotion::lerp4(stroke, accentRim, 0.85f);
         }
         drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
 
         if (selected || active) {
-            drawList->AddRectFilled(ImVec2(min.x + 3.0f, min.y + 10.0f),
-                                    ImVec2(min.x + 6.0f, max.y - 10.0f),
+            drawList->AddRectFilled(ImVec2(min.x + 4.0f, min.y + 12.0f),
+                                    ImVec2(min.x + 7.0f, max.y - 12.0f),
                                     EbDesktopMenuTheme::toU32(active && !selected
                                                                   ? ImVec4(0.40f, 1.0f, 0.55f, 0.90f)
                                                                   : EbDesktopMenuTheme::accentLight()),
@@ -669,33 +906,33 @@ public:
                                         EbDesktopMenuTheme::toU32(warn));
         }
 
-        float const textLeft = min.x + ((selected || active) ? 14.0f : 12.0f);
-        float const textRight = max.x - (cached || update ? 26.0f : 12.0f);
+        float const textLeft = min.x + ((selected || active) ? 16.0f : 14.0f);
+        float const textRight = max.x - (cached || update ? 26.0f : 14.0f);
         ImVec4 const clip(textLeft, min.y + 2.0f, textRight, max.y - 2.0f);
 
         ImVec4 nameColor = EbDesktopMenuTheme::text();
         if (!selected) {
             nameColor = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::muted(), nameColor,
-                                                   0.78f + 0.22f * heat);
+                                                   0.72f + 0.28f * heat);
         }
         float const nameSize = ImGui::GetFontSize();
-        drawList->AddText(ImGui::GetFont(), nameSize, ImVec2(textLeft, min.y + 12.0f),
+        drawList->AddText(ImGui::GetFont(), nameSize, ImVec2(textLeft, min.y + 11.0f),
                           EbDesktopMenuTheme::toU32(nameColor), entry.name.c_str(), nullptr, 0.0f,
                           &clip);
 
         std::string meta =
             entry.author.empty() ? entry.id : fmt::format("{} · {}", entry.author, entry.id);
         ImVec4 muted = EbDesktopMenuTheme::muted();
-        muted.w = 0.88f;
-        drawList->AddText(ImGui::GetFont(), nameSize * 0.90f, ImVec2(textLeft, min.y + 34.0f),
+        muted.w = selected ? 0.92f : 0.82f;
+        drawList->AddText(ImGui::GetFont(), nameSize * 0.88f, ImVec2(textLeft, min.y + 31.0f),
                           EbDesktopMenuTheme::toU32(muted), meta.c_str(), nullptr, 0.0f, &clip);
 
         if (stats.downloads > 0 || stats.ratingCount > 0) {
             ImVec4 statsColor = EbDesktopMenuTheme::muted();
             statsColor.w = 0.92f;
             ImU32 const statsCol = EbDesktopMenuTheme::toU32(statsColor);
-            float const statsSize = nameSize * 0.86f;
-            float const rowY = max.y - 22.0f;
+            float const statsSize = nameSize * 0.84f;
+            float const rowY = max.y - 18.0f;
             float cursorX = textLeft;
             if (stats.downloads > 0) {
                 float const iconSize = 11.0f;
@@ -828,23 +1065,106 @@ public:
         ImGui::PopStyleVar();
     }
 
+    static void drawRateStars(std::string const& packId, float width) {
+        int const mine = EbCloudConfigStats::get().myStarsFor(packId);
+        auto const stats = EbCloudConfigStats::get().statsFor(packId);
+        int filled = 0;
+        if (mine >= 1 && mine <= 5) {
+            filled = mine;
+        } else if (stats.ratingCount > 0) {
+            filled = static_cast<int>(
+                std::lround(static_cast<double>(EbCloudConfigStats::averageRating(stats))));
+            if (filled < 1) {
+                filled = 1;
+            }
+            if (filled > 5) {
+                filled = 5;
+            }
+        }
+
+        bool const enable =
+            !EbDesktopCloudOverlayState::busyUi() && !EbDesktopCloudOverlayState::rateBusy();
+        // Tight cluster — ★ glyphs already pad; keep hit ≈ glyph.
+        float const starSize = ImGui::GetFontSize() * 0.98f;
+        float const gap = 0.0f;
+        float const hit = starSize + 1.0f;
+        ImVec2 const rowMin = ImGui::GetCursorScreenPos();
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        EbDesktopMenuFonts::pushCaps();
+        ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::muted());
+        char const* hint = EbDesktopCloudOverlayState::rateBusy() ? "…"
+                           : mine > 0                             ? "YOURS"
+                                                                  : "RATE";
+        ImGui::TextUnformatted(hint);
+        ImGui::PopStyleColor();
+        EbDesktopMenuFonts::pop();
+        ImGui::SameLine(0.0f, 8.0f);
+
+        float const labelH = ImGui::GetTextLineHeight();
+        ImVec2 starOrigin = ImGui::GetCursorScreenPos();
+        starOrigin.y = rowMin.y + (labelH - hit) * 0.5f;
+        for (int index = 0; index < 5; ++index) {
+            ImGui::PushID(index);
+            ImGui::SetCursorScreenPos(ImVec2(starOrigin.x + static_cast<float>(index) * (hit + gap),
+                                             starOrigin.y));
+            bool const clicked = ImGui::InvisibleButton("##star", ImVec2(hit, hit));
+            bool const hovered = enable && ImGui::IsItemHovered();
+            float const heat =
+                enable ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered, 0.05f)
+                       : 0.0f;
+
+            bool const on = filled > 0 && index < filled;
+            ImVec4 color = on ? ImVec4(1.0f, 0.82f, 0.28f, enable ? 1.0f : 0.55f)
+                              : EbDesktopMenuTheme::muted();
+            if (!on) {
+                color.w = enable ? (0.50f + 0.35f * heat) : 0.32f;
+            } else if (hovered) {
+                color = EbDesktopMenuMotion::lerp4(color, ImVec4(1.0f, 0.92f, 0.55f, 1.0f), heat);
+            }
+            ImVec2 const textSize =
+                ImGui::GetFont()->CalcTextSizeA(starSize, FLT_MAX, 0.0f, "★");
+            ImVec2 const pos(ImGui::GetItemRectMin().x + (hit - textSize.x) * 0.5f,
+                             ImGui::GetItemRectMin().y + (hit - textSize.y) * 0.5f);
+            drawList->AddText(ImGui::GetFont(), starSize, pos, EbDesktopMenuTheme::toU32(color),
+                              "★");
+            if (clicked && enable) {
+                EbDesktopCloudOverlayInstall::requestRate(index + 1);
+            }
+            ImGui::PopID();
+        }
+
+        float const used = ImGui::GetItemRectMax().x - rowMin.x;
+        ImGui::SetCursorScreenPos(ImVec2(rowMin.x, rowMin.y + (std::max)(hit, labelH)));
+        ImGui::Dummy(ImVec2((std::max)(width, used), 0.0f));
+    }
+
     static void drawDetailPane(float width, float height) {
         ImVec2 const min = ImGui::GetCursorScreenPos();
         ImVec2 const max(min.x + width, min.y + height);
         ImDrawList* drawList = ImGui::GetWindowDrawList();
+        // Same chrome as EbSectionCard (panel + outline 0.55 + frame rounding).
         float const rounding = EbDesktopMenuTheme::frameRounding();
+        float const padX = 18.0f;
+        float const padY = 16.0f;
 
         ImVec4 border = EbDesktopMenuTheme::outline();
-        border.w = 0.45f;
+        border.w = 0.55f;
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::panel()),
                                 rounding);
         drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(border), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
 
-        float const footerH = 40.0f;
-        float const bodyH = (std::max)(48.0f, height - footerH - 10.0f);
+        // Footer inset inside the card: stars + Install (section-card spacing).
+        float const starRowH = ImGui::GetFontSize() * 0.98f + 4.0f;
+        float const btnH =
+            (std::max)(34.0f, ImGui::GetFontSize() + 20.0f); // matches EbButton pad
+        float const footerGap = 8.0f;
+        float const footerH = starRowH + footerGap + btnH + padY;
+        float const bodyH = (std::max)(48.0f, height - footerH);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padX, padY));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
         ImGui::BeginChild("##eb-cloud-detail", ImVec2(width, bodyH),
                           ImGuiChildFlags_AlwaysUseWindowPadding,
@@ -857,15 +1177,13 @@ public:
             ImGui::TextUnformatted("Select a pack from the list.");
             ImGui::PopStyleColor();
             ImGui::EndChild();
-            ImGui::PopStyleVar(2);
-            ImGui::SetCursorScreenPos(ImVec2(min.x + 16.0f, max.y - footerH));
-            ImGui::Dummy(ImVec2(width - 32.0f, footerH - 8.0f));
+            ImGui::PopStyleVar(3);
             return;
         }
 
         // Saved mark top-right of the detail card (no background / no status sentence).
         if (isCached(entry->id)) {
-            drawSavedIcon(drawList, ImVec2(max.x - 14.0f, min.y + 12.0f));
+            drawSavedIcon(drawList, ImVec2(max.x - padX + 2.0f, min.y + padY - 2.0f));
         }
 
         // Wrap at content edge (0) — absolute screen wrap was clipping to one line.
@@ -893,7 +1211,6 @@ public:
             ImU32 const statsCol = EbDesktopMenuTheme::toU32(statsColor);
             float const statsSize = ImGui::GetFontSize() * 0.92f;
             float cursorX = rowMin.x;
-            float rowW = 0.0f;
             if (stats.downloads > 0) {
                 float const iconSize = 12.0f;
                 drawDownloadIcon(drawList, ImVec2(cursorX, rowMin.y + 1.0f), iconSize, statsCol);
@@ -913,8 +1230,7 @@ public:
                 cursorX +=
                     ImGui::GetFont()->CalcTextSizeA(statsSize, FLT_MAX, 0.0f, rateText.c_str()).x;
             }
-            rowW = cursorX - rowMin.x;
-            ImGui::Dummy(ImVec2(rowW, statsSize + 2.0f));
+            ImGui::Dummy(ImVec2(cursorX - rowMin.x, statsSize + 2.0f));
         }
 
         if (!entry->description.empty()) {
@@ -970,16 +1286,33 @@ public:
         ImGui::SetScrollY(scrollVisual);
 
         ImGui::EndChild();
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(3);
 
-        ImGui::SetCursorScreenPos(ImVec2(min.x + 16.0f, max.y - footerH));
-        ImGui::PushItemWidth(width - 32.0f);
-        bool const canInstall = verOk && !EbDesktopCloudOverlayState::busyUi();
+        // Footer child clamps EbButton width to the detail card (not full content avail).
+        float const footerTop = max.y - footerH;
+        float const innerW = width - padX * 2.0f;
+        ImVec4 hair = EbDesktopMenuTheme::outline();
+        hair.w = 0.35f;
+        drawList->AddLine(ImVec2(min.x + padX, footerTop - 1.0f),
+                          ImVec2(max.x - padX, footerTop - 1.0f),
+                          EbDesktopMenuTheme::toU32(hair), 1.0f);
+
+        ImGui::SetCursorScreenPos(ImVec2(min.x + padX, footerTop));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, footerGap));
+        ImGui::BeginChild("##eb-cloud-detail-footer", ImVec2(innerW, footerH - padY + 2.0f),
+                          ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar |
+                              ImGuiWindowFlags_NoScrollWithMouse);
+        drawRateStars(entry->id, innerW);
+        bool const canInstall = verOk && !EbDesktopCloudOverlayState::busyUi() &&
+                                !EbDesktopCloudOverlayState::shareOpen();
         char const* installLabel = hasUpdate(*entry) ? "Update" : "Install";
         if (EbButton::draw("##eb-cloud-install", installLabel, canInstall, nullptr, true)) {
             EbDesktopCloudOverlayInstall::requestInstall();
         }
-        ImGui::PopItemWidth();
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
     }
 
 private:
@@ -989,12 +1322,16 @@ private:
 class EbDesktopCloudOverlayDraw {
 public:
     static void finishClose() {
-        EbDesktopCloudOverlayState::shareOpen() = false;
+        EbDesktopCloudOverlayShare::closePanel();
+        EbDesktopCloudOverlayState::shareName().clear();
+        EbDesktopCloudOverlayState::shareAuthor().clear();
+        EbDesktopCloudOverlayState::shareDesc().clear();
+        EbDesktopCloudOverlayState::shareTags().clear();
     }
 
     static void requestDismiss() {
         if (EbDesktopCloudOverlayState::shareOpen()) {
-            EbDesktopCloudOverlayState::shareOpen() = false;
+            EbDesktopCloudOverlayShare::closePanel();
             return;
         }
         EbDesktopCloudOverlayState::wantOpen() = false;
@@ -1083,6 +1420,13 @@ public:
     static void drawBody(float contentW) {
         drawHeader(contentW);
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
+
+        // Nested share form replaces browse chrome; Esc closes share first.
+        if (EbDesktopCloudOverlayState::shareOpen()) {
+            EbDesktopCloudOverlayShare::drawForm(contentW);
+            return;
+        }
+
         EbDesktopCloudOverlayList::drawToolbar(contentW);
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
@@ -1129,6 +1473,23 @@ public:
         drawList->AddRectFilled(ImVec2(railMax.x - 1.0f, railMin.y + 18.0f),
                                 ImVec2(railMax.x, railMax.y - 18.0f),
                                 EbDesktopMenuTheme::toU32(ImVec4(1.0f, 1.0f, 1.0f, 0.08f)));
+
+        // Share on the wave rail — clear of the rounded bottom corner.
+        float const iconSize = 26.0f;
+        float const iconPadBottom = 36.0f;
+        ImVec2 const shareMin(railMin.x + (railW - iconSize) * 0.5f,
+                              railMax.y - iconPadBottom - iconSize);
+        bool const canShare = EbDesktopCloudOverlayState::wantOpen() &&
+                              !EbDesktopCloudOverlayState::busyUi();
+        bool const shareActive = EbDesktopCloudOverlayState::shareOpen();
+        if (EbDesktopMenuIcons::drawShareIcon(shareMin, iconSize, "Share current config", canShare,
+                                              shareActive)) {
+            if (shareActive) {
+                EbDesktopCloudOverlayShare::closePanel();
+            } else {
+                EbDesktopCloudOverlayShare::openPanel();
+            }
+        }
     }
 
     static void drawFrame() {
@@ -1242,8 +1603,14 @@ void EbDesktopCloudOverlay::addWheelDelta(float deltaY) {
 void EbDesktopCloudOverlay::open() {
     EbKeybind::cancelCapture();
     EbDesktopCloudOverlayState::shareOpen() = false;
+    EbDesktopCloudOverlayState::shareName().clear();
+    EbDesktopCloudOverlayState::shareAuthor().clear();
+    EbDesktopCloudOverlayState::shareDesc().clear();
+    EbDesktopCloudOverlayState::shareTags().clear();
     ++EbDesktopCloudOverlayState::sessionGen();
     EbDesktopCloudOverlayState::busyUi() = false;
+    EbDesktopCloudOverlayState::rateBusy() = false;
+    ++EbDesktopCloudOverlayState::rateGen();
     EbDesktopCloudOverlayState::searchQuery().clear();
     EbDesktopCloudOverlayState::wheelDelta() = 0.0f;
     EbDesktopCloudOverlayState::scrollTarget() = 0.0f;
@@ -1263,7 +1630,9 @@ void EbDesktopCloudOverlay::dismiss() {
     EbDesktopCloudOverlayState::shareOpen() = false;
     EbDesktopCloudOverlayState::wantOpen() = false;
     ++EbDesktopCloudOverlayState::sessionGen();
+    ++EbDesktopCloudOverlayState::rateGen();
     EbDesktopCloudOverlayState::busyUi() = false;
+    EbDesktopCloudOverlayState::rateBusy() = false;
 }
 
 bool EbDesktopCloudOverlay::isOpen() {

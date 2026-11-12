@@ -16,6 +16,9 @@ public:
     static void load();
     // Bottom-left link buttons inside the sidebar bounds.
     static void drawSidebarLinks(ImVec2 const& sideMin, float sideWidth, float sideHeight);
+    // Share glyph (eb_share.png, white×tint) — Cloud Configs rail action.
+    static bool drawShareIcon(ImVec2 const& min, float size, char const* tooltip,
+                              bool enabled = true, bool active = false);
     // Horizontal gamemode icon row. Writes 0..kGamemodeCount-1 into *selected.
     // Returns true when the selection changed.
     static bool drawGamemodeBar(int* selected);

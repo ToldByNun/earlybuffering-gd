@@ -24,6 +24,11 @@ public:
         return value;
     }
 
+    static cocos2d::CCTexture2D*& shareTex() {
+        static cocos2d::CCTexture2D* value = nullptr;
+        return value;
+    }
+
     static constexpr char const* kGithubUrl = "https://github.com/ToldByNun/earlybuffering-gd";
     static constexpr char const* kDiscordUrl = "https://discord.gg/QJuTDkmPcf";
     static constexpr float kIconSize = 22.0f;
@@ -136,27 +141,37 @@ public:
         return (ImTextureID)(uintptr_t)texture->getName();
     }
 
-    static bool iconButton(char const* id, cocos2d::CCTexture2D* texture, char const* url,
-                           char const* tooltip) {
-        if (!id || !texture || !url) {
+    static bool tintedIconButton(char const* id, cocos2d::CCTexture2D* texture, float size,
+                                 char const* tooltip, bool enabled, bool active) {
+        if (!id || !texture || size < 4.0f) {
             return false;
         }
 
-        float const size = EbDesktopMenuIconsState::kIconSize;
         ImGui::PushID(id);
-        bool const pressed = ImGui::InvisibleButton("##hit", ImVec2(size, size));
+        bool pressed = false;
+        if (enabled) {
+            pressed = ImGui::InvisibleButton("##hit", ImVec2(size, size));
+        } else {
+            ImGui::Dummy(ImVec2(size, size));
+        }
         EbDesktopMenuTooltip::show(tooltip);
-        bool const hovered = ImGui::IsItemHovered();
-        float const heat = EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered, 0.05f);
+        bool const hovered = enabled && ImGui::IsItemHovered();
+        float const heat =
+            enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered || active, 0.05f)
+                    : 0.0f;
 
         ImVec2 const min = ImGui::GetItemRectMin();
         ImVec2 const max = ImGui::GetItemRectMax();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImTextureID const texId = toImGui(texture);
 
-        ImVec4 tint = EbDesktopMenuMotion::lerp4(ImVec4(1.0f, 1.0f, 1.0f, 0.55f),
-                                                 ImVec4(1.0f, 1.0f, 1.0f, 1.0f), heat);
-        // Minimal 1px drop — same idea as sidebar text shadows.
+        // White source PNG × tint (black glyphs must be whitened at export).
+        ImVec4 idle(1.0f, 1.0f, 1.0f, enabled ? 0.62f : 0.32f);
+        ImVec4 hot = active ? EbDesktopMenuTheme::accentLight() : ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        if (active) {
+            hot.w = enabled ? 1.0f : 0.45f;
+        }
+        ImVec4 tint = EbDesktopMenuMotion::lerp4(idle, hot, heat);
         ImU32 const shadow =
             EbDesktopMenuTheme::toU32(ImVec4(0.0f, 0.0f, 0.0f, 0.28f * tint.w));
         drawList->AddImage(texId, ImVec2(min.x + 1.0f, min.y + 1.0f),
@@ -165,10 +180,22 @@ public:
         drawList->AddImage(texId, min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
                            EbDesktopMenuTheme::toU32(tint));
 
+        ImGui::PopID();
+        return pressed && enabled;
+    }
+
+    static bool iconButton(char const* id, cocos2d::CCTexture2D* texture, char const* url,
+                           char const* tooltip) {
+        if (!id || !texture || !url) {
+            return false;
+        }
+
+        float const size = EbDesktopMenuIconsState::kIconSize;
+        bool const pressed =
+            tintedIconButton(id, texture, size, tooltip, true, false);
         if (pressed) {
             geode::utils::web::openLinkInBrowser(url);
         }
-        ImGui::PopID();
         return pressed;
     }
 
@@ -236,6 +263,19 @@ void EbDesktopMenuIcons::load() {
     if (!EbDesktopMenuIconsState::discordTex()) {
         geode::log::warn("[EarlyBuffer] desktop menu: eb_discord.png missing");
     }
+    // Prefer dedicated file load — atlas UV packing can clip new sprites.
+    {
+        float ignoreW = 0.0f;
+        float ignoreH = 0.0f;
+        auto* fromFile =
+            EbDesktopMenuIconsDraw::textureFromPngFile("eb_share.png", &ignoreW, &ignoreH);
+        EbDesktopMenuIconsState::shareTex() =
+            fromFile ? fromFile
+                     : EbDesktopMenuIconsDraw::textureFromSprite("eb_share.png"_spr);
+    }
+    if (!EbDesktopMenuIconsState::shareTex()) {
+        geode::log::warn("[EarlyBuffer] desktop menu: eb_share.png missing");
+    }
 
     for (int i = 0; i < kGamemodeCount; ++i) {
         float width = 0.0f;
@@ -274,6 +314,13 @@ void EbDesktopMenuIcons::drawSidebarLinks(ImVec2 const& sideMin, float sideWidth
     ImGui::SetCursorScreenPos(cursor);
     EbDesktopMenuIconsDraw::iconButton("##eb-link-discord", EbDesktopMenuIconsState::discordTex(),
                                        EbDesktopMenuIconsState::kDiscordUrl, "Join the Discord");
+}
+
+bool EbDesktopMenuIcons::drawShareIcon(ImVec2 const& min, float size, char const* tooltip,
+                                       bool enabled, bool active) {
+    ImGui::SetCursorScreenPos(min);
+    return EbDesktopMenuIconsDraw::tintedIconButton(
+        "##eb-share-icon", EbDesktopMenuIconsState::shareTex(), size, tooltip, enabled, active);
 }
 
 bool EbDesktopMenuIcons::drawGamemodeBar(int* selected) {

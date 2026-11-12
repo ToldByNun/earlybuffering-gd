@@ -2,7 +2,8 @@
 #define DESKTOP_MENU_CLOUD_OVERLAY_HPP
 
 // Dimmed ImGui Cloud Configs overlay above the desktop shell (AP1+).
-// Esc dismisses (share panel first once AP7 lands). Drawn under EbDesktopMenuModal.
+// 1.6.0: unbound — openCloudConfigs uses classic EbCloudConfigPopup; keep this
+// for a later ship. Esc dismisses share first, then overlay. Drawn under modal.
 class EbDesktopCloudOverlay {
 public:
     static void open();

@@ -112,11 +112,12 @@ void EbPauseConfigActions::importConfig() {
 
 void EbPauseConfigActions::openCloudConfigs() {
 #if defined(EB_DESKTOP_IMGUI)
-    // Desktop ImGui shell already open → themed overlay (keeps immersion).
-    if (EbDesktopMenu::useImGuiShell() && EbDesktopMenu::isOpen()) {
-        EbDesktopCloudOverlay::open();
-        return;
-    }
+    // 1.6.0: keep classic Geode Cloud Configs popup. Desktop ImGui overlay
+    // (EbDesktopCloudOverlay) stays in tree but unbound until a later ship.
+    // if (EbDesktopMenu::useImGuiShell() && EbDesktopMenu::isOpen()) {
+    //     EbDesktopCloudOverlay::open();
+    //     return;
+    // }
 #endif
     EbCloudConfigPopup::open();
 }

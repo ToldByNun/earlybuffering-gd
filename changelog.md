@@ -14,6 +14,7 @@ Release notes: [`releases/v1.6.0.md`](releases/v1.6.0.md).
 - **Accent Color** (`desktop-accent-color`) under UI — drives theme primary + secondary greys + sidebar/widget wave fill.
 - Sidebar wave stays smooth; widget fills use coarser cells (cheaper).
 - Styled ImGui modal for in-shell alerts; keybind capture open/close fixes.
+- Cloud Configs stays on the classic Geode popup for 1.6.0 (desktop ImGui overlay code kept, unbound).
 
 ### Live Adaptive honesty
 - Short Adaptive screen Alive seeds can no longer beat a known later death (esp. d0) when falling through to classic or arming Delay.
