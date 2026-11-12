@@ -13,6 +13,10 @@ public:
     static void endSession(EbShadowSimulator& simulator, PlayLayer* layer);
     static void hideGhost(PlayerObject* player);
 
+    // Drop streak points without HardStreak::reset / CCDrawNode::clear.
+    // Safe only while the owning PlayerObject is still parented.
+    static void clearWaveTrailGeometry(PlayerObject* player);
+
 private:
     EbShadowGhostLifecycle() = delete;
 };

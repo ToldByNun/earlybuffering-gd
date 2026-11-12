@@ -125,8 +125,10 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
 void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* playLayer) {
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;
     EbSelfBakeRecorder::get().onLevelInit(playLayer);
-    controller.resetAttempt(playLayer);
+    // Attach once before resetAttempt. resetAttempt re-attaches only if missing;
+    // a second unconditional attach here caused detach→HardStreak::reset AVs.
     EbShadowSimulator::get().attach(playLayer);
+    controller.resetAttempt(playLayer);
     EbStatusOverlay::attach(playLayer);
     EbTrajectoryVisualizer::get().setEnabled(EbStageConfig::showTrajectory());
     EbTrajectoryVisualizer::get().attach(playLayer);

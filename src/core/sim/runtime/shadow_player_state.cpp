@@ -1,5 +1,6 @@
 #include "shadow_player_state.hpp"
 #include "../shadow_simulator.hpp"
+#include "shadow_ghost_lifecycle.hpp"
 
 void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObject* destination,
                                       PlayerObject* source) {
@@ -7,7 +8,8 @@ void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObje
     auto* state = source->m_waveTrail;
     if (!delay || !state)
         return;
-    delay->reset();
+    // Avoid HardStreak::reset / CCDrawNode::clear on ghost streaks (LevelInit AV).
+    EbShadowGhostLifecycle::clearWaveTrailGeometry(destination);
     delay->m_currentPoint = state->m_currentPoint;
     delay->m_waveSize = state->m_waveSize;
     delay->m_pulseSize = state->m_pulseSize;

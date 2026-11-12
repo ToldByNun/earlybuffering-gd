@@ -2,10 +2,35 @@
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 
+void EbShadowGhostLifecycle::clearWaveTrailGeometry(PlayerObject* player) {
+    if (!player)
+        return;
+    auto* trail = player->m_waveTrail;
+    if (!trail)
+        return;
+    // Owning ghost must still be in the scene graph. After layer teardown /
+    // partial destroy, m_waveTrail can be a dangling HardStreak — HardStreak::reset
+    // → CCDrawNode::clear then AVs (read @ 0xFFFFFFFFFFFFFFFF).
+    if (!player->getParent())
+        return;
+    if (!trail->getParent())
+        return;
+    // Prefer point-array clear over reset()/CCDrawNode::clear — safer on ghost
+    // streaks that were never stroked or were half-torn by other mods.
+    if (trail->m_pointArray) {
+        trail->m_pointArray->removeAllObjects();
+    }
+    trail->m_drawStreak = false;
+}
+
 void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* layer) {
-    simulator.detach();
     if (!layer || !layer->m_objectLayer)
         return;
+    // Idempotent: LevelInit used to attach twice (resetAttempt + onLevelInit).
+    if (simulator.isAttachedTo(layer))
+        return;
+
+    simulator.detach();
 
     auto makeHidden = [&](char const* id) -> PlayerObject* {
         auto* player = PlayerObject::create(1, 1, layer, layer, true);
@@ -83,22 +108,21 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
         if (player->m_touchingRings) {
             player->m_touchingRings->removeAllObjects();
         }
-        if (player->m_waveTrail) {
-            player->m_waveTrail->reset();
-        }
+        // Do NOT HardStreak::reset here — detach always destroys or abandons the
+        // node next; reset on a dying/ghost streak was the LevelInit AV.
         player->setVisible(false);
     };
 
     auto kill = [&](PlayerObject*& player) {
         if (!player)
             return;
-        sanitize(player);
         if (layerDying) {
-            // Parent tree is already tearing down — do not removeFromParent /
-            // release (double-free in ~PlayerObject during setNextScene).
+            // Parent tree is already tearing down — do not touch waveTrail /
+            // removeFromParent / release (double-free in ~PlayerObject).
             player = nullptr;
             return;
         }
+        sanitize(player);
         // Normal quit / reattach: destroy while PlayLayer is still alive.
         if (player->getParent()) {
             player->removeFromParentAndCleanup(true);
@@ -156,9 +180,7 @@ void EbShadowGhostLifecycle::parkGhosts(EbShadowSimulator& simulator) {
         player->m_isDead = false;
         // Wave trail points stay in world space after a sim — clear so leftover
         // streak geometry cannot interact with live collision/debug paths.
-        if (player->m_waveTrail) {
-            player->m_waveTrail->reset();
-        }
+        EbShadowGhostLifecycle::clearWaveTrailGeometry(player);
     };
 
     parkOffLevel(simulator.m_shadow);
@@ -240,7 +262,8 @@ void EbShadowGhostLifecycle::hideGhost(PlayerObject* player) {
     player->setVisible(false);
     player->setOpacity(0);
     player->m_playEffects = false;
-    if (player->m_waveTrail) {
+    // Only mute a live trail — dangling HardStreak after teardown AVs here too.
+    if (player->m_waveTrail && player->getParent() && player->m_waveTrail->getParent()) {
         player->m_waveTrail->setVisible(false);
         player->m_waveTrail->setOpacity(0);
     }
