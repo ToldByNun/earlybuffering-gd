@@ -1,4 +1,5 @@
 #include "desktop_menu_cloud_overlay.hpp"
+#include "desktop_menu_alert.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_modal.hpp"
 #include "desktop_menu_motion.hpp"
@@ -14,8 +15,10 @@
 
 #include "../../cloud/catalog/cloud_config_index.hpp"
 #include "../../cloud/catalog/cloud_config_service.hpp"
+#include "../../cloud/cloud_config_apply.hpp"
 #include "../../cloud/cloud_config_stats.hpp"
 #include "../../cloud/cloud_config_store.hpp"
+#include "../pause/pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <imgui.h>
 #include <algorithm>
@@ -301,6 +304,133 @@ private:
     EbDesktopCloudOverlayCatalog() = delete;
 };
 
+class EbDesktopCloudOverlayInstall {
+public:
+    static std::string liveModVersion() {
+        if (auto* mod = geode::prelude::Mod::get()) {
+            return mod->getVersion().toVString();
+        }
+        return "0.0.0";
+    }
+
+    static void requestInstall() {
+        auto const* entry = EbCloudConfigIndex::findById(
+            EbCloudConfigService::get().catalog(), EbDesktopCloudOverlayState::selectedId());
+        if (!entry || EbDesktopCloudOverlayState::busyUi()) {
+            return;
+        }
+        if (!EbCloudConfigIndex::meetsMinModVersion(*entry, liveModVersion())) {
+            EbDesktopAlert::info("Cloud Configs",
+                                 "This pack needs a newer EarlyBuffer version.");
+            return;
+        }
+
+        std::string const id = entry->id;
+        EbDesktopAlert::confirm(
+            "Install config?",
+            "Replace current EarlyBuffer settings?\nKeybinds and Dev Lab keys stay unchanged.",
+            [id] { doInstall(id); }, {}, "Install", "Cancel");
+    }
+
+    static void doInstall(std::string const& id) {
+        auto const* entryValue =
+            EbCloudConfigIndex::findById(EbCloudConfigService::get().catalog(), id);
+        if (!entryValue) {
+            return;
+        }
+        if (EbDesktopCloudOverlayState::busyUi() || EbCloudConfigService::get().isBusy()) {
+            EbDesktopCloudOverlayCatalog::setStatus("Busy…", false);
+            return;
+        }
+
+        EbDesktopCloudOverlayState::busyUi() = true;
+        uint64_t const session = EbDesktopCloudOverlayState::sessionGen();
+        uint64_t const generation = ++EbDesktopCloudOverlayState::opGen();
+        EbDesktopCloudOverlayCatalog::setStatus("Downloading…", false);
+
+        EbCloudConfigIndex::PackEntry entry = *entryValue;
+        // Force network when the cached body/active sha no longer matches the catalog.
+        bool forceNetwork = false;
+        if (EbCloudConfigStore::get().hasPack(entry.id)) {
+            std::string body;
+            std::string err;
+            if (EbCloudConfigStore::get().readPack(entry.id, body, err)) {
+                EbCloudConfigStore::ActiveInfo active{};
+                if (EbCloudConfigStore::get().readActive(active, err) && active.id == entry.id &&
+                    !active.sha256.empty()) {
+                    forceNetwork = active.sha256 != entry.sha256;
+                } else {
+                    forceNetwork = body.size() != entry.size;
+                }
+            }
+        }
+        EbCloudConfigService::get().fetchPack(
+            id, forceNetwork,
+            [session, generation, entry](EbCloudConfigService::PackFetchResult const& fr) {
+                if (!EbDesktopCloudOverlayCatalog::sessionLive(session) ||
+                    generation != EbDesktopCloudOverlayState::opGen()) {
+                    return;
+                }
+                onPackFetched(fr, entry);
+            });
+    }
+
+    static void onPackFetched(EbCloudConfigService::PackFetchResult const& fr,
+                              EbCloudConfigIndex::PackEntry entry) {
+        EbDesktopCloudOverlayState::busyUi() = false;
+
+        if (fr.busy) {
+            EbDesktopCloudOverlayCatalog::setStatus("Busy…", false);
+            return;
+        }
+        if (fr.cancelled) {
+            EbDesktopCloudOverlayCatalog::setStatus("Cancelled", true);
+            return;
+        }
+        if (!fr.ok) {
+            EbDesktopCloudOverlayCatalog::setStatus("Download failed", true);
+            EbDesktopAlert::info(
+                "Cloud Configs",
+                fr.error.empty() ? "Could not download pack." : fr.error.c_str());
+            return;
+        }
+
+        auto const applied = EbCloudConfigApply::applyPackBody(entry.id, entry.name, entry.sha256,
+                                                               entry.size, fr.body);
+        if (!applied.ok) {
+            EbDesktopCloudOverlayCatalog::setStatus("Install failed", true);
+            EbDesktopAlert::info("Cloud Configs", applied.error.c_str());
+            return;
+        }
+
+        EbDesktopCloudOverlayState::activeId() = entry.id;
+        EbDesktopCloudOverlayCatalog::setStatus(fmt::format("Installed · {}", entry.name), false);
+        trackInstallDownload(entry.id);
+
+        EbPauseActionBridge::afterConfigApplied(fmt::format(
+            "Installed cloud config \"{}\".\nApplied {} settings ({} skipped).", entry.name,
+            applied.stats.applied, applied.stats.skipped));
+    }
+
+    static void trackInstallDownload(std::string const& packId) {
+        uint64_t const session = EbDesktopCloudOverlayState::sessionGen();
+        EbCloudConfigStats::get().trackDownload(
+            packId, [session](EbCloudConfigStats::TrackResult const& result) {
+                if (!EbDesktopCloudOverlayCatalog::sessionLive(session)) {
+                    return;
+                }
+                // Badge refresh is frame-driven from stats cache; bump gens so list
+                // rebuilds stay coherent if we later cache filtered rows.
+                if (result.ok || result.duplicate || result.skippedLocal) {
+                    ++EbDesktopCloudOverlayState::statsGen();
+                }
+            });
+    }
+
+private:
+    EbDesktopCloudOverlayInstall() = delete;
+};
+
 class EbDesktopCloudOverlayList {
 public:
     static std::string toLower(std::string text) {
@@ -451,6 +581,28 @@ public:
         drawList->AddLine(p1, p2, col, 2.0f);
     }
 
+    // Download tray + arrow (trackDownload / catalog download counts).
+    static void drawDownloadIcon(ImDrawList* drawList, ImVec2 const& topLeft, float size,
+                                 ImU32 color) {
+        if (!drawList || size < 4.0f) {
+            return;
+        }
+        float const midX = topLeft.x + size * 0.5f;
+        float const thick = (std::max)(1.4f, size * 0.14f);
+        drawList->AddLine(ImVec2(midX, topLeft.y + size * 0.05f),
+                          ImVec2(midX, topLeft.y + size * 0.52f), color, thick);
+        drawList->AddLine(ImVec2(midX - size * 0.28f, topLeft.y + size * 0.34f),
+                          ImVec2(midX, topLeft.y + size * 0.56f), color, thick);
+        drawList->AddLine(ImVec2(midX + size * 0.28f, topLeft.y + size * 0.34f),
+                          ImVec2(midX, topLeft.y + size * 0.56f), color, thick);
+        drawList->AddLine(ImVec2(topLeft.x + size * 0.12f, topLeft.y + size * 0.70f),
+                          ImVec2(topLeft.x + size * 0.12f, topLeft.y + size * 0.92f), color, thick);
+        drawList->AddLine(ImVec2(topLeft.x + size * 0.12f, topLeft.y + size * 0.92f),
+                          ImVec2(topLeft.x + size * 0.88f, topLeft.y + size * 0.92f), color, thick);
+        drawList->AddLine(ImVec2(topLeft.x + size * 0.88f, topLeft.y + size * 0.92f),
+                          ImVec2(topLeft.x + size * 0.88f, topLeft.y + size * 0.70f), color, thick);
+    }
+
     static void drawPackCard(EbCloudConfigIndex::PackEntry const& entry, int index, float cellW,
                              float cellH) {
         bool const selected = entry.id == EbDesktopCloudOverlayState::selectedId();
@@ -539,22 +691,29 @@ public:
                           EbDesktopMenuTheme::toU32(muted), meta.c_str(), nullptr, 0.0f, &clip);
 
         if (stats.downloads > 0 || stats.ratingCount > 0) {
-            std::string bits;
-            if (stats.downloads > 0) {
-                bits += formatDlBadge(stats.downloads);
-                bits += " dl";
-            }
-            if (stats.ratingCount > 0) {
-                if (!bits.empty()) {
-                    bits += "  ";
-                }
-                bits += fmt::format("{:.1f}★", EbCloudConfigStats::averageRating(stats));
-            }
             ImVec4 statsColor = EbDesktopMenuTheme::muted();
             statsColor.w = 0.92f;
-            drawList->AddText(ImGui::GetFont(), nameSize * 0.86f, ImVec2(textLeft, max.y - 20.0f),
-                              EbDesktopMenuTheme::toU32(statsColor), bits.c_str(), nullptr, 0.0f,
-                              &clip);
+            ImU32 const statsCol = EbDesktopMenuTheme::toU32(statsColor);
+            float const statsSize = nameSize * 0.86f;
+            float const rowY = max.y - 22.0f;
+            float cursorX = textLeft;
+            if (stats.downloads > 0) {
+                float const iconSize = 11.0f;
+                drawDownloadIcon(drawList, ImVec2(cursorX, rowY + 1.0f), iconSize, statsCol);
+                cursorX += iconSize + 4.0f;
+                std::string const dlText = formatDlBadge(stats.downloads);
+                drawList->AddText(ImGui::GetFont(), statsSize, ImVec2(cursorX, rowY), statsCol,
+                                  dlText.c_str(), nullptr, 0.0f, &clip);
+                cursorX +=
+                    ImGui::GetFont()->CalcTextSizeA(statsSize, FLT_MAX, 0.0f, dlText.c_str()).x +
+                    10.0f;
+            }
+            if (stats.ratingCount > 0) {
+                std::string const rateText =
+                    fmt::format("{:.1f}★", EbCloudConfigStats::averageRating(stats));
+                drawList->AddText(ImGui::GetFont(), statsSize, ImVec2(cursorX, rowY), statsCol,
+                                  rateText.c_str(), nullptr, 0.0f, &clip);
+            }
         }
 
         if (pressed) {
@@ -682,9 +841,12 @@ public:
         drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(border), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());
 
+        float const footerH = 40.0f;
+        float const bodyH = (std::max)(48.0f, height - footerH - 10.0f);
+
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
-        ImGui::BeginChild("##eb-cloud-detail", ImVec2(width, height),
+        ImGui::BeginChild("##eb-cloud-detail", ImVec2(width, bodyH),
                           ImGuiChildFlags_AlwaysUseWindowPadding,
                           ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -696,6 +858,8 @@ public:
             ImGui::PopStyleColor();
             ImGui::EndChild();
             ImGui::PopStyleVar(2);
+            ImGui::SetCursorScreenPos(ImVec2(min.x + 16.0f, max.y - footerH));
+            ImGui::Dummy(ImVec2(width - 32.0f, footerH - 8.0f));
             return;
         }
 
@@ -720,6 +884,39 @@ public:
         ImGui::TextWrapped("%s", entry->id.c_str());
         ImGui::PopStyleColor();
 
+        auto const stats = EbCloudConfigStats::get().statsFor(entry->id);
+        if (stats.downloads > 0 || stats.ratingCount > 0) {
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            ImVec2 const rowMin = ImGui::GetCursorScreenPos();
+            ImVec4 statsColor = EbDesktopMenuTheme::muted();
+            statsColor.w = 0.92f;
+            ImU32 const statsCol = EbDesktopMenuTheme::toU32(statsColor);
+            float const statsSize = ImGui::GetFontSize() * 0.92f;
+            float cursorX = rowMin.x;
+            float rowW = 0.0f;
+            if (stats.downloads > 0) {
+                float const iconSize = 12.0f;
+                drawDownloadIcon(drawList, ImVec2(cursorX, rowMin.y + 1.0f), iconSize, statsCol);
+                cursorX += iconSize + 5.0f;
+                std::string const dlText = formatDlBadge(stats.downloads);
+                drawList->AddText(ImGui::GetFont(), statsSize, ImVec2(cursorX, rowMin.y), statsCol,
+                                  dlText.c_str());
+                cursorX +=
+                    ImGui::GetFont()->CalcTextSizeA(statsSize, FLT_MAX, 0.0f, dlText.c_str()).x +
+                    12.0f;
+            }
+            if (stats.ratingCount > 0) {
+                std::string const rateText =
+                    fmt::format("{:.1f}★", EbCloudConfigStats::averageRating(stats));
+                drawList->AddText(ImGui::GetFont(), statsSize, ImVec2(cursorX, rowMin.y), statsCol,
+                                  rateText.c_str());
+                cursorX +=
+                    ImGui::GetFont()->CalcTextSizeA(statsSize, FLT_MAX, 0.0f, rateText.c_str()).x;
+            }
+            rowW = cursorX - rowMin.x;
+            ImGui::Dummy(ImVec2(rowW, statsSize + 2.0f));
+        }
+
         if (!entry->description.empty()) {
             ImGui::Dummy(ImVec2(0.0f, 10.0f));
             ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
@@ -735,6 +932,17 @@ public:
             } else if (hasUpdate(*entry)) {
                 ImGui::TextUnformatted("Update available");
             }
+            ImGui::PopStyleColor();
+        }
+
+        bool const verOk =
+            EbCloudConfigIndex::meetsMinModVersion(*entry,
+                                                   EbDesktopCloudOverlayInstall::liveModVersion());
+        if (!verOk) {
+            ImGui::Dummy(ImVec2(0.0f, 10.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::danger());
+            ImGui::TextWrapped("Needs newer EarlyBuffer (%s).",
+                               entry->minModVersion.empty() ? "?" : entry->minModVersion.c_str());
             ImGui::PopStyleColor();
         }
 
@@ -763,6 +971,15 @@ public:
 
         ImGui::EndChild();
         ImGui::PopStyleVar(2);
+
+        ImGui::SetCursorScreenPos(ImVec2(min.x + 16.0f, max.y - footerH));
+        ImGui::PushItemWidth(width - 32.0f);
+        bool const canInstall = verOk && !EbDesktopCloudOverlayState::busyUi();
+        char const* installLabel = hasUpdate(*entry) ? "Update" : "Install";
+        if (EbButton::draw("##eb-cloud-install", installLabel, canInstall, nullptr, true)) {
+            EbDesktopCloudOverlayInstall::requestInstall();
+        }
+        ImGui::PopItemWidth();
     }
 
 private:

@@ -10,7 +10,8 @@ class EbDesktopMenuModal {
 public:
     static void showInfo(std::string title, std::string body);
     static void showConfirm(std::string title, std::string body, std::function<void()> onYes,
-                            std::function<void()> onNo = {});
+                            std::function<void()> onNo = {}, char const* yesLabel = "Yes",
+                            char const* noLabel = "Cancel");
 
     static bool isOpen();
     // True while visible or closing — host keeps ImGui up if needed.

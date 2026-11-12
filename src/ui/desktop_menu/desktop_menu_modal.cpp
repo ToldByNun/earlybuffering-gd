@@ -65,6 +65,16 @@ public:
         return value;
     }
 
+    static std::string& yesLabel() {
+        static std::string value = "Yes";
+        return value;
+    }
+
+    static std::string& noLabel() {
+        static std::string value = "Cancel";
+        return value;
+    }
+
     static constexpr float kOpenTau = 0.09f;
     static constexpr float kCloseDuration = 0.20f; // cubic close — lands on 0, no opaque hang
     static constexpr float kCardW = 420.0f;
@@ -86,6 +96,8 @@ public:
         EbDesktopMenuModalState::kind() = EbDesktopMenuModalState::Kind::None;
         EbDesktopMenuModalState::title().clear();
         EbDesktopMenuModalState::body().clear();
+        EbDesktopMenuModalState::yesLabel() = "Yes";
+        EbDesktopMenuModalState::noLabel() = "Cancel";
         clearCallbacks();
     }
 
@@ -253,10 +265,11 @@ public:
         // Content region is card-inner width — EbButton no longer spans the screen.
         if (EbDesktopMenuModalState::kind() == EbDesktopMenuModalState::Kind::Confirm) {
             EbButton::beginRow(2);
-            if (EbButton::draw("##eb-modal-no", "Cancel")) {
+            if (EbButton::draw("##eb-modal-no", EbDesktopMenuModalState::noLabel().c_str())) {
                 acceptNo();
             }
-            if (EbButton::draw("##eb-modal-yes", "Yes")) {
+            if (EbButton::draw("##eb-modal-yes", EbDesktopMenuModalState::yesLabel().c_str(), true,
+                              nullptr, true)) {
                 acceptYes();
             }
             EbButton::endRow();
@@ -284,17 +297,24 @@ void EbDesktopMenuModal::showInfo(std::string title, std::string body) {
     EbDesktopMenuModalState::kind() = EbDesktopMenuModalState::Kind::Info;
     EbDesktopMenuModalState::title() = std::move(title);
     EbDesktopMenuModalState::body() = std::move(body);
+    EbDesktopMenuModalState::yesLabel() = "Yes";
+    EbDesktopMenuModalState::noLabel() = "Cancel";
     EbDesktopMenuModalState::onYes() = {};
     EbDesktopMenuModalState::onNo() = {};
     EbDesktopMenuModalState::wantOpen() = true;
 }
 
 void EbDesktopMenuModal::showConfirm(std::string title, std::string body,
-                                     std::function<void()> onYes, std::function<void()> onNo) {
+                                     std::function<void()> onYes, std::function<void()> onNo,
+                                     char const* yesLabel, char const* noLabel) {
     EbKeybind::cancelCapture();
     EbDesktopMenuModalState::kind() = EbDesktopMenuModalState::Kind::Confirm;
     EbDesktopMenuModalState::title() = std::move(title);
     EbDesktopMenuModalState::body() = std::move(body);
+    EbDesktopMenuModalState::yesLabel() =
+        yesLabel && yesLabel[0] != '\0' ? yesLabel : "Yes";
+    EbDesktopMenuModalState::noLabel() =
+        noLabel && noLabel[0] != '\0' ? noLabel : "Cancel";
     EbDesktopMenuModalState::onYes() = std::move(onYes);
     EbDesktopMenuModalState::onNo() = std::move(onNo);
     EbDesktopMenuModalState::wantOpen() = true;
@@ -324,7 +344,7 @@ void EbDesktopMenuModal::dismiss() {
 void EbDesktopMenuModal::showInfo(std::string, std::string) {}
 
 void EbDesktopMenuModal::showConfirm(std::string, std::string, std::function<void()>,
-                                     std::function<void()>) {}
+                                     std::function<void()>, char const*, char const*) {}
 
 bool EbDesktopMenuModal::isOpen() {
     return false;

@@ -24,9 +24,7 @@ void EbDesktopAlert::confirm(std::string const& title, std::string const& body,
     char const* no = noLabel && noLabel[0] != '\0' ? noLabel : "Cancel";
 #if defined(EB_DESKTOP_IMGUI)
     if (EbDesktopMenu::useImGuiShell() && EbDesktopMenu::isOpen()) {
-        (void)yes;
-        (void)no;
-        EbDesktopMenuModal::showConfirm(title, body, std::move(onYes), std::move(onNo));
+        EbDesktopMenuModal::showConfirm(title, body, std::move(onYes), std::move(onNo), yes, no);
         return;
     }
 #endif
