@@ -1,5 +1,6 @@
 #include "desktop_menu.hpp"
 #include "desktop_menu_bind.hpp"
+#include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
 #include "desktop_menu_modal.hpp"
@@ -160,7 +161,7 @@ public:
                         return geode::ListenerResult::Propagate;
                     }
                     feedImGui(data);
-                    if (EbDesktopMenuModal::isOpen()) {
+                    if (EbDesktopMenuModal::isOpen() || EbDesktopCloudOverlay::isOpen()) {
                         return geode::ListenerResult::Stop;
                     }
                     if (EbKeybind::isCapturing()) {
@@ -224,14 +225,17 @@ void EbDesktopMenu::install() {
                 return;
             }
             // Force capture flags while capturing so imgui-cocos also treats keys as UI.
-            if ((EbKeybind::isCapturing() || EbDesktopMenuModal::isOpen()) &&
+            if ((EbKeybind::isCapturing() || EbDesktopMenuModal::isOpen() ||
+                 EbDesktopCloudOverlay::isOpen()) &&
                 ImGui::GetCurrentContext()) {
                 ImGui::SetNextFrameWantCaptureKeyboard(true);
             }
             EbDesktopMenuShell::draw();
+            EbDesktopCloudOverlay::draw();
             EbDesktopMenuModal::draw();
             if (!EbDesktopMenuShell::shouldKeepVisible() &&
-                !EbDesktopMenuModal::shouldKeepVisible()) {
+                !EbDesktopMenuModal::shouldKeepVisible() &&
+                !EbDesktopCloudOverlay::shouldKeepVisible()) {
                 ImGuiCocos::get().setVisible(false);
             }
         });
@@ -250,11 +254,13 @@ void EbDesktopMenu::setOpen(bool open) {
         ImGuiCocos::get().setVisible(true);
     } else {
         EbKeybind::cancelCapture();
+        EbDesktopCloudOverlay::dismiss();
         EbDesktopMenuModal::dismiss();
     }
     EbDesktopMenuShell::requestOpen(open);
     if (!open && !EbDesktopMenuShell::shouldKeepVisible() &&
-        !EbDesktopMenuModal::shouldKeepVisible()) {
+        !EbDesktopMenuModal::shouldKeepVisible() &&
+        !EbDesktopCloudOverlay::shouldKeepVisible()) {
         ImGuiCocos::get().setVisible(false);
     }
 }
