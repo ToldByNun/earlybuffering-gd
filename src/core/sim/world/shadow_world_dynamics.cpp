@@ -2,6 +2,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
+#include "../../assist/contracts/live_plan_contracts.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../shadow_simulator.hpp"
 #include "../sim_collision_policy.hpp"
@@ -150,7 +151,17 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
     if (!store.loaded() || !store.hasTracks())
         return;
 
+    // Assist Pack AP-L3: plan soft wall already spent — skip cull/sort/apply for
+    // this tick (Grief 942-track apply was still burning after wallExceeded).
+    if (EbLivePlanContracts::liveTwApplySkippedForPlanWall(simulator.planWallExceeded()))
+        return;
+
     EbLagProbe::Scope const lagScope("eb.trigger.apply");
+
+    size_t const maxApply = EbLivePlanContracts::liveTwApplyMaxPerTick(
+        store.trackCount(), simulator.m_bakeOffline, EbShadowSimulator::kMaxApplyPerTick);
+    int const applyBudgetUs = EbLivePlanContracts::liveTwApplyBudgetUs(
+        store.trackCount(), simulator.m_bakeOffline, EbShadowSimulator::kApplyBudgetUs);
 
     float const gx = ghost ? ghost->getPositionX() : 0.f;
     class EbTriggerApplyCandidate {
@@ -191,12 +202,15 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
     auto const wall0 = std::chrono::steady_clock::now();
     size_t applied = 0;
     for (auto const& c : cands) {
-        if (applied >= EbShadowSimulator::kMaxApplyPerTick)
+        if (applied >= maxApply)
+            break;
+        // Soft wall can trip mid-sort apply; stop further TW writes this tick.
+        if (EbLivePlanContracts::liveTwApplySkippedForPlanWall(simulator.planWallExceeded()))
             break;
         auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
                                              std::chrono::steady_clock::now() - wall0)
                                              .count();
-        if (elapsedMicroseconds >= EbShadowSimulator::kApplyBudgetUs)
+        if (elapsedMicroseconds >= applyBudgetUs)
             break;
 
         auto* object = c.st->obj;

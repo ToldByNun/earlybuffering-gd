@@ -12,6 +12,11 @@
 - Spatial orb hint stays cheap and only skips when the wall is already gone; mid-run AP-L1 still aborts in-flight baseline/orb ticks.
 - PlanGold `assist-pack-ap-l2-prepare-reserve`.
 
+### Assist Pack AP-L3 — Live TW apply under wall pressure
+- `applyTriggerWorldAtTick` no-ops when the Live plan soft wall is already spent (before cull/sort).
+- Live presses with ≥200 TW tracks use half apply caps (48 objs / 175µs); offline bake keeps full 96 / 350µs.
+- PlanGold `assist-pack-ap-l3-live-tw`.
+
 ### Assist Pack AP1 — Fair Depth
 - Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
 - Input-window re-sims shallow ready seeds when budget remains; otherwise `pass-budget` + `budget-not-reached`.

@@ -49,6 +49,25 @@ bool EbLivePlanContracts::prepareHeavyWorkAllowed(int remUs, int reserveUs, bool
     return remUs >= reserveUs;
 }
 
+bool EbLivePlanContracts::liveTwApplySkippedForPlanWall(bool planWallExceeded) {
+    return planWallExceeded;
+}
+
+size_t EbLivePlanContracts::liveTwApplyMaxPerTick(size_t trackCount, bool bakeOffline,
+                                                   size_t fullCap) {
+    size_t const cap = fullCap > 0 ? fullCap : 1;
+    if (bakeOffline || trackCount < static_cast<size_t>(kLiveTwTightenTrackFloor))
+        return cap;
+    return std::max<size_t>(1, cap / 2);
+}
+
+int EbLivePlanContracts::liveTwApplyBudgetUs(size_t trackCount, bool bakeOffline, int fullBudgetUs) {
+    int const budget = fullBudgetUs > 0 ? fullBudgetUs : 1;
+    if (bakeOffline || trackCount < static_cast<size_t>(kLiveTwTightenTrackFloor))
+        return budget;
+    return std::max(1, budget / 2);
+}
+
 int EbLivePlanContracts::currentFallthroughClassicBudgetUs(int remUs, int ticksLeft) {
     if (remUs > 0)
         return remUs;
@@ -308,6 +327,15 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
                !prepareHeavyWorkAllowed(4000, 4085, false) &&
                prepareHeavyWorkAllowed(0, 4085, true),
            "prepare-heavy-allowed");
+    expect(kLiveTwTightenTrackFloor == 200, "live-tw-track-floor");
+    expect(liveTwApplySkippedForPlanWall(true) && !liveTwApplySkippedForPlanWall(false),
+           "live-tw-wall-skip");
+    expect(liveTwApplyMaxPerTick(942, false, 96) == 48 &&
+               liveTwApplyMaxPerTick(942, true, 96) == 96 &&
+               liveTwApplyMaxPerTick(50, false, 96) == 96,
+           "live-tw-max-per-tick");
+    expect(liveTwApplyBudgetUs(942, false, 350) == 175 && liveTwApplyBudgetUs(942, true, 350) == 350,
+           "live-tw-budget-us");
     expect(std::fabs(kLandedScoreEps - 8.f) < 1e-6f, "landed-eps");
 
     expect(currentClassicBudgetUs(4000) == 4000, "classic-keep");

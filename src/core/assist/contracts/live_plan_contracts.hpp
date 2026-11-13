@@ -1,6 +1,7 @@
 #ifndef LIVE_PLAN_CONTRACTS_HPP
 #define LIVE_PLAN_CONTRACTS_HPP
 
+#include <cstddef>
 #include <string>
 
 // 1.5.1 AP0–AP4 — pure Live plan contracts (no PlayLayer).
@@ -17,6 +18,8 @@ public:
     static constexpr int kMidRunWallPollTicks = 4;
     // Assist Pack AP-L2: skip prepare baseline/orb when remUs below this floor.
     static constexpr int kPrepareMinRemUs = 1500;
+    // Assist Pack AP-L3: live TW apply half-caps when ready tracks ≥ this.
+    static constexpr int kLiveTwTightenTrackFloor = 200;
     // Matches EbShadowSimulator::kFutileEndXGain — landed noise / tie band.
     static constexpr float kLandedScoreEps = 8.f;
     // Continuous IW Wave short planCap floor (matches AssistHorizon::shortCaps).
@@ -41,6 +44,12 @@ public:
     static int prepareReserveUs(int budgetUs, bool continuousInputWindow);
     // Heavy prepare (baseline / orb scan) allowed when unlimited or remUs >= reserve.
     static bool prepareHeavyWorkAllowed(int remUs, int reserveUs, bool wallUnlimited);
+
+    // Assist Pack AP-L3: skip TW apply for this physics tick when plan soft wall is spent.
+    static bool liveTwApplySkippedForPlanWall(bool planWallExceeded);
+    // Live (non-bake) half-cap when trackCount ≥ floor; bake always keeps fullCap.
+    static size_t liveTwApplyMaxPerTick(size_t trackCount, bool bakeOffline, size_t fullCap);
+    static int liveTwApplyBudgetUs(size_t trackCount, bool bakeOffline, int fullBudgetUs);
 
     // Current Adaptive fallthrough when remUs<=0 but ticks remain → 1µs.
     static int currentFallthroughClassicBudgetUs(int remUs, int ticksLeft);
