@@ -36,6 +36,8 @@ Assist Pack AP2 (Screen→Verify steal): same scorer — expect `budgetHitWithSu
 
 Assist Pack AP4 (False Hopeless): Gate selfCheck A4 shallow-Alive → `PassBudget`; A7 uniform death stays Hopeless; PlanGold `assist-pack-ap4-false-hopeless`; pack KPI `hopelessWithAliveShort` ↓.
 
+Assist Pack AP3 (Weak d0-safe, tightened): only survive/endX lead blocks sticky d0-safe (bare under-horizon does not — `research_20261113_023017` starved Delay). PlanGold `assist-pack-ap3-weak-d0safe`.
+
 ## Docs site
 
 ```bash

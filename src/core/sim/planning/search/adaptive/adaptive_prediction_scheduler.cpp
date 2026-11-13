@@ -1,4 +1,5 @@
 #include "adaptive_prediction_scheduler.hpp"
+#include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
@@ -60,14 +61,19 @@ EbAdaptivePredictionScheduler::Decision EbAdaptivePredictionScheduler::choose(In
     }
 
     // d0 already proved through horizon and nothing must-search → Pass.
+    // Assist Pack AP3: under-horizon / endX-leading later Alive blocks terminal
+    // StopPassD0Safe so verify / classic can finish the screen.
     if (!in.mustDelaySearch && d0.autonomousAlive && !d0.terminalDied && !d0.terminalUnknown &&
         (d0.ticksSimulated >= cap || d0.terminalAliveCap)) {
         bool laterBetter = false;
         for (int delay = 1; delay <= in.limit; ++delay) {
             auto const& slot = in.slots[delay];
-            if (!slot.autonomousAlive || slot.terminalDied)
+            if (!slot.autonomousAlive || slot.terminalDied || slot.terminalUnknown)
                 continue;
-            if (slot.autonomousSurviveTicks > d0.autonomousSurviveTicks + in.closeGapTicks) {
+            bool const underHorizon = !slot.terminalAliveCap && slot.ticksSimulated < cap;
+            if (EbLivePlanContracts::laterAliveBlocksPassD0Safe(
+                    true, underHorizon, slot.autonomousSurviveTicks, d0.autonomousSurviveTicks,
+                    in.closeGapTicks, slot.endX, d0.endX)) {
                 laterBetter = true;
                 break;
             }
@@ -174,14 +180,31 @@ bool EbAdaptivePredictionScheduler::selfCheck(std::string& report) {
     slots[0].ticksSimulated = 64;
     slots[0].terminalAliveCap = true;
     slots[0].autonomousSurviveTicks = 64;
+    slots[0].endX = 100.f;
     slots[2].terminalDied = false;
     slots[2].autonomousAlive = true;
     slots[2].ticksSimulated = 20;
     slots[2].autonomousSurviveTicks = 20;
     slots[2].verifyGrants = 0;
+    slots[2].endX = 100.f;
     Input d0SafeIn = hopelessIn;
     d0SafeIn.mustDelaySearch = false;
+    // Under-horizon later with no endX/survive lead → sticky PassD0Safe (AP3 tight).
     expect(choose(d0SafeIn).kind == ActionKind::StopPassD0Safe, "d0-safe");
+    // Clear endX lead on under-horizon later → keep verifying, not terminal.
+    slots[2].endX = 120.f;
+    expect(choose(d0SafeIn).kind == ActionKind::ContinueVerify, "ap3-endx-lead-verify");
+    expect(choose(d0SafeIn).delay == 2, "ap3-verify-later");
+    slots[2].endX = 100.f;
+    // Peer also at horizon, no endX/survive lead → sticky PassD0Safe.
+    slots[2].ticksSimulated = 64;
+    slots[2].terminalAliveCap = true;
+    slots[2].autonomousSurviveTicks = 64;
+    expect(choose(d0SafeIn).kind == ActionKind::StopPassD0Safe, "d0-safe-peers-horizon");
+    // Restore under-horizon later for the verify-continue cases below.
+    slots[2].ticksSimulated = 20;
+    slots[2].terminalAliveCap = false;
+    slots[2].autonomousSurviveTicks = 20;
 
     slots[0].ticksSimulated = 10;
     slots[0].terminalAliveCap = false;

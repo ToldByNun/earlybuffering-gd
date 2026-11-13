@@ -119,6 +119,17 @@ public:
     // Uniform same-crash death (A7) still allows Hopeless when anyLaterAlive=false.
     static bool hopelessBlockedByLivingLater(bool d0Died, bool anyLaterAlive);
 
+    // Assist Pack AP3 (tightened): later Alive blocks terminal PassD0Safe only with a
+    // clear surviveTicks lead or endX lead — NOT merely because it is under-horizon
+    // (blanket under-horizon starved Delay arms: research_20261113_023017).
+    static bool laterAliveBlocksPassD0Safe(bool laterAutonomousAlive, bool laterUnderHorizon,
+                                           int laterSurviveTicks, int d0SurviveTicks,
+                                           int closeGapTicks, float laterEndX, float d0EndX);
+
+    // Gate: proven d0 + later Living that is unproven AND endX-leading → PassBudget.
+    // Unproven later without an endX lead must not demote every PassD0Safe.
+    static bool weakD0SafeNeedsFallthrough(bool anyLaterUnprovenEndXLead);
+
     static bool selfCheck(std::string& report);
 
 private:

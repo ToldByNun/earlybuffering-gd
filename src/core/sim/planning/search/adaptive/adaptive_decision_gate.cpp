@@ -188,6 +188,29 @@ EbAdaptiveDecisionGate::Result EbAdaptiveDecisionGate::decide(Input const& in) {
     }
 
     if (best == 0) {
+        // Assist Pack AP3 (tight): sticky PassD0Safe unless a later Living is
+        // unproven AND clearly endX-leading — bare shallow peers must not starve Delay.
+        bool anyLaterUnprovenEndXLead = false;
+        for (int delay = 1; delay <= in.limit; ++delay) {
+            auto const& c = in.cands[static_cast<size_t>(delay)];
+            if (!(c.autonomousAlive && !c.terminalDied && !c.terminalUnknown))
+                continue;
+            if (hasHazardProgress(c, d0, cap, proofTicks))
+                continue;
+            if (EbLivePlanContracts::laterAliveBlocksPassD0Safe(
+                    true, c.ticksSimulated < cap && !c.terminalAliveCap, c.autonomousSurviveTicks,
+                    d0.autonomousSurviveTicks, 8, c.endX, d0.endX)) {
+                anyLaterUnprovenEndXLead = true;
+                break;
+            }
+        }
+        if (EbLivePlanContracts::weakD0SafeNeedsFallthrough(anyLaterUnprovenEndXLead)) {
+            out.action = PlanAction::Pass;
+            out.reason = AssistReason::PassBudget;
+            out.delay = 0;
+            out.nowIsSafe = false;
+            return out;
+        }
         out.action = PlanAction::Pass;
         out.reason = AssistReason::PassD0Safe;
         out.delay = 0;
@@ -510,6 +533,36 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     cands[3].deathTick = 5;
     expect(decide(provenD0In).reason == AssistReason::PassD0Safe, "proven-d0-alone");
     expect(decide(provenD0In).action == PlanAction::Pass, "proven-d0-pass");
+
+    // Assist Pack AP3: shallow later without endX lead → sticky PassD0Safe (keep Assist).
+    cands[0] = CandView{};
+    cands[0].screened = true;
+    cands[0].autonomousAlive = true;
+    cands[0].ticksSimulated = 96;
+    cands[0].terminalAliveCap = true;
+    cands[0].endX = 2620.f;
+    for (int delay = 1; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].autonomousAlive = true;
+        cands[delay].ticksSimulated = 18;
+        cands[delay].autonomousSurviveTicks = 18;
+        cands[delay].endX = 2620.f; // no clear endX lead
+    }
+    Input weakD0In = deadIn;
+    weakD0In.modelCap = 96;
+    weakD0In.screenProofTicks = 18;
+    weakD0In.robustK = 0;
+    weakD0In.budgetHitIncomplete = false;
+    expect(!hasHazardProgress(cands[1], cands[0], 96, 18), "ap3-shallow-no-progress");
+    expect(decide(weakD0In).reason == AssistReason::PassD0Safe, "ap3-shallow-tie-sticky");
+    // Clear endX lead on unproven later → PassBudget fallthrough.
+    for (int delay = 1; delay <= 4; ++delay)
+        cands[delay].endX = 2630.f;
+    auto const weakD0Out = decide(weakD0In);
+    expect(weakD0Out.reason == AssistReason::PassBudget, "ap3-weak-d0-budget");
+    expect(weakD0Out.reason != AssistReason::PassD0Safe, "ap3-weak-d0-not-sticky");
+    expect(weakD0Out.action == PlanAction::Pass, "ap3-weak-d0-pass");
 
     // AP4: Delay with activation → requireOrb + DelayOrb.
     cands[0] = CandView{};

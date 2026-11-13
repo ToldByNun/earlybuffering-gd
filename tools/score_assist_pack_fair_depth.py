@@ -63,9 +63,13 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
     stolen_sum = 0
     stolen_presses = 0
     surv_presses = 0
+    # Assist Pack AP3 — weak sticky d0-safe
+    d0_safe = 0
+    d0_safe_with_underselect = 0  # pass-d0-safe on attempt with planned=0, bestSurv>0
 
     for att in data.get("attempts") or []:
         ev = att.get("eval") or {}
+        att_underselect_zero = False
         if ev.get("valid"):
             sealed += 1
             planned = ev.get("plannedDelay")
@@ -75,6 +79,7 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
                     underselect_any += 1
                 if planned == 0 and best > 0:
                     underselect_zero += 1
+                    att_underselect_zero = True
             if str(ev.get("simNetClass") or "").lower() == "caused":
                 caused += 1
 
@@ -83,6 +88,10 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
                 continue
             pf_down += 1
             reason = str(evn.get("assistReason") or "")
+            if reason.startswith("pass-d0-safe"):
+                d0_safe += 1
+                if att_underselect_zero:
+                    d0_safe_with_underselect += 1
             notes = evn.get("candNotes") or []
             survivors = int(evn.get("adaptiveSurvivors") or 0)
             stolen = int(evn.get("adaptiveStolenScreenTicks") or 0)
@@ -138,18 +147,22 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
         "stolenTicksSum": stolen_sum,
         "survivorPresses": surv_presses,
         "meanStolenWhenSurvivors": (stolen_sum / surv_presses) if surv_presses > 0 else None,
+        "d0Safe": d0_safe,
+        "d0SafeWithUnderselect": d0_safe_with_underselect,
     }
 
 
 # Primary KPIs: lower is better (except budgetNotReachedAliveShort which may rise
 # as not-viable migrates — we treat the false-hopeless / underselect pair as primary).
 # AP2: budgetHitWithSurvivors should fall once Screen→Verify steal lands.
+# AP3: d0SafeWithUnderselect should fall once weak PassD0Safe is demoted.
 PRIMARY_LOWER = (
     "hopelessWithAliveShort",
     "notViableAliveShort",
     "underselectZero",
     "caused",
     "budgetHitWithSurvivors",
+    "d0SafeWithUnderselect",
 )
 
 

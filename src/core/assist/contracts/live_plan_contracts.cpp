@@ -193,6 +193,24 @@ bool EbLivePlanContracts::hopelessBlockedByLivingLater(bool d0Died, bool anyLate
     return d0Died && anyLaterAlive;
 }
 
+bool EbLivePlanContracts::laterAliveBlocksPassD0Safe(bool laterAutonomousAlive,
+                                                     bool laterUnderHorizon, int laterSurviveTicks,
+                                                     int d0SurviveTicks, int closeGapTicks,
+                                                     float laterEndX, float d0EndX) {
+    (void)laterUnderHorizon; // kept in signature for call-site honesty / future soft use
+    if (!laterAutonomousAlive)
+        return false;
+    if (laterSurviveTicks > d0SurviveTicks + std::max(0, closeGapTicks))
+        return true;
+    if ((laterEndX - d0EndX) > kLandedScoreEps)
+        return true;
+    return false;
+}
+
+bool EbLivePlanContracts::weakD0SafeNeedsFallthrough(bool anyLaterUnprovenEndXLead) {
+    return anyLaterUnprovenEndXLead;
+}
+
 bool EbLivePlanContracts::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -293,6 +311,17 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(hopelessBlockedByLivingLater(true, true), "ap4-a4-blocked");
     expect(!hopelessBlockedByLivingLater(true, false), "ap4-a7-allowed");
     expect(!hopelessBlockedByLivingLater(false, true), "ap4-d0-alive-n/a");
+
+    // Assist Pack AP3 — only survive/endX lead blocks (not bare under-horizon).
+    expect(!laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f),
+           "ap3-under-horizon-alone-ok");
+    expect(laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f), "ap3-under-horizon-endx");
+    expect(laterAliveBlocksPassD0Safe(true, false, 110, 96, 8, 100.f, 100.f), "ap3-survive-lead");
+    expect(laterAliveBlocksPassD0Safe(true, false, 96, 96, 8, 109.f, 100.f), "ap3-endx-lead");
+    expect(!laterAliveBlocksPassD0Safe(true, false, 96, 96, 8, 103.f, 100.f), "ap3-no-weak-lead");
+    expect(!laterAliveBlocksPassD0Safe(false, true, 18, 96, 8, 200.f, 100.f), "ap3-dead-later");
+    expect(weakD0SafeNeedsFallthrough(true), "ap3-gate-ft");
+    expect(!weakD0SafeNeedsFallthrough(false), "ap3-gate-stick");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

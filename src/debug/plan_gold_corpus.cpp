@@ -188,6 +188,12 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbLivePlanContracts::hopelessBlockedByLivingLater(true, true) &&
                !EbLivePlanContracts::hopelessBlockedByLivingLater(true, false),
            "assist-pack-ap4-false-hopeless");
+    // Assist Pack AP3 (tight): endX/survive lead blocks PassD0Safe; bare under-horizon does not.
+    expect(!EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f) &&
+               EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f) &&
+               EbLivePlanContracts::weakD0SafeNeedsFallthrough(true) &&
+               !EbLivePlanContracts::weakD0SafeNeedsFallthrough(false),
+           "assist-pack-ap3-weak-d0safe");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

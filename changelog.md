@@ -17,6 +17,11 @@
 - Dying d0 + any later Living (even shallow / not hazard-proven) → `pass-budget` + classic fallthrough, never `pass-hopeless` (A4).
 - Uniform lethal grids (A7 same-crash) still `pass-hopeless`. Gate + IW + classic selection; PlanGold `assist-pack-ap4-false-hopeless`; KPI `hopelessWithAliveShort`.
 
+### Assist Pack AP3 — Weak d0-safe not terminal
+- `StopPassD0Safe` / sticky `PassD0Safe` yield only on clear later surviveTicks or endX lead → verify / `pass-budget` fallthrough.
+- **Tightened after `research_20261113_023017`:** bare under-horizon later Alive must not demote every d0-safe (was starving Delay arms 11→4).
+- Parity still sticks only true `PassD0Safe`. PlanGold `assist-pack-ap3-weak-d0safe`.
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 
