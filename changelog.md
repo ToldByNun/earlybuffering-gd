@@ -36,6 +36,11 @@
 - Floor is now `model.cap` (`discreteIwObservationFloor`); classic IW applies the same discrete 96−limit clamp as Adaptive before prove ticks.
 - PlanGold `assist-pack-ap7-iw-floor`; KPI `underselectZero` / `budgetHitWithSurvivors` on Silent Hoveropolis early cube.
 
+### Assist Pack AP3c — Probe Past Horizon + Micro-Window (toggleable)
+- **`assist-probe-past-horizon`** (default on): wall-only PassD0Safe with later Alive → Adaptive fallthrough + IW extends prove by 24 ticks; if d0 dies, re-rank later. Off = sticky PassD0Safe like before.
+- **`assist-micro-window`** (default on): Max Assist ≤8 ticks → any endX lead may beat Pass-now. Off = previous large-lead-only behavior on tiny windows.
+- Either toggle alone; both off ≈ prior feel. PlanGold `assist-pack-ap3c-toggles`.
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 - Pause→Editor→Save&Play: detach abandons ghost pointers when `m_hostLayer` is no longer the live `PlayLayer` (no `removeFromParent` on dangling ghosts).

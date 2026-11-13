@@ -169,6 +169,18 @@
 			"min": 0,
 			"max": 40
 		},
+		"assist-probe-past-horizon": {
+			"type": "bool",
+			"name": "Probe Past Horizon",
+			"description": "AP3c: when jump-now looks safe only because the sim hit the prove wall, run a short extra probe before PassD0Safe. Catches spike-gap / ledge timings where death is 1–few ticks past the wall. Off = previous sticky PassD0Safe (no extra sims).",
+			"default": true
+		},
+		"assist-micro-window": {
+			"type": "bool",
+			"name": "Micro-Window Assist",
+			"description": "AP3c: when Max Assist is tiny (≤8 ticks / ~2 frames), still prefer a later Alive delay with any endX lead over sticky Pass-now. On = helps 1–2 frame cube windows. Off = previous large-lead-only / PassD0Safe behavior for small windows.",
+			"default": true
+		},
 		"title-scope": {
 			"type": "title",
 			"name": "Where Assist Runs",

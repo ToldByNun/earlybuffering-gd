@@ -44,6 +44,8 @@ Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-fee
 
 Assist Pack AP7 (IW observation floor): discrete floor = `model.cap` (not `limit+cap`); classic matches Adaptive `96−limit` clamp. Fixes cube early `pass-budget` with Alive later. PlanGold `assist-pack-ap7-iw-floor`.
 
+Assist Pack AP3c (toggleable): `assist-probe-past-horizon` (extend prove before PassD0Safe) + `assist-micro-window` (tiny Max Assist endX prefer). PlanGold `assist-pack-ap3c-toggles`. Both off ≈ pre-AP3c feel.
+
 ## Docs site
 
 ```bash

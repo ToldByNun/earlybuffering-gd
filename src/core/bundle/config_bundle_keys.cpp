@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[177] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[179] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
@@ -62,6 +62,8 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[177] = {
     {"adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
     {"adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
     {"adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
+    {"assist-probe-past-horizon", EbConfigBundleKeys::Kind::Bool},
+    {"assist-micro-window", EbConfigBundleKeys::Kind::Bool},
     {"auto-tune", EbConfigBundleKeys::Kind::Bool},
     {"self-bake", EbConfigBundleKeys::Kind::Bool},
     {"self-bake-normal", EbConfigBundleKeys::Kind::Bool},
@@ -216,7 +218,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 177, "count-177");
+    expect(EbConfigBundleKeysTable::kEntryCount == 179, "count-179");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,

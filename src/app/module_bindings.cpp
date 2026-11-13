@@ -190,6 +190,8 @@ void EbModuleBindings::registerSettings() {
     watchInt("robust-k");
     watchBool("robust-jitter");
     watchBool("adaptive-plan");
+    watchBool("assist-probe-past-horizon");
+    watchBool("assist-micro-window");
     watchInt("adaptive-screen-ticks");
     watchInt("adaptive-verify-quantum");
     watchInt("adaptive-reserve-pct");

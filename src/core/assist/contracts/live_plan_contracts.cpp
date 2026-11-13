@@ -174,6 +174,25 @@ int EbLivePlanContracts::discreteIwObservationFloor(int modelCap) {
     return std::max(1, modelCap);
 }
 
+bool EbLivePlanContracts::d0AtProveWall(bool d0Alive, bool d0Landed, int d0TicksRan,
+                                        int proveFloorTicks) {
+    if (!d0Alive || d0Landed || d0TicksRan <= 0)
+        return false;
+    return d0TicksRan >= std::max(1, proveFloorTicks);
+}
+
+bool EbLivePlanContracts::horizonProbeBlocksPassD0Safe(bool probeEnabled, bool d0AtWall,
+                                                       bool anyLaterAlive) {
+    return probeEnabled && d0AtWall && anyLaterAlive;
+}
+
+bool EbLivePlanContracts::microWindowPreferLater(bool microEnabled, int limitTicks,
+                                                 float laterEndX, float d0EndX) {
+    if (!microEnabled || limitTicks <= 0 || limitTicks > kMicroWindowMaxAssistTicks)
+        return false;
+    return laterEndX > d0EndX + 1e-3f;
+}
+
 bool EbLivePlanContracts::depthTruncatedAlive(bool died, bool unknown, int ticksRan,
                                               int honestFloorTicks) {
     if (died || unknown || ticksRan <= 0) {
@@ -351,6 +370,18 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(discreteIwObservationFloor(92) == 92, "ap7-floor-cap");
     expect(discreteIwObservationFloor(0) == 1, "ap7-floor-min");
     expect(discreteIwObservationFloor(158) == 158, "ap7-floor-unclamped");
+
+    // Assist Pack AP3c — horizon probe / micro-window contracts.
+    expect(d0AtProveWall(true, false, 96, 92), "ap3c-at-wall");
+    expect(!d0AtProveWall(true, true, 96, 92), "ap3c-landed-not-wall");
+    expect(!d0AtProveWall(true, false, 40, 92), "ap3c-under-wall");
+    expect(horizonProbeBlocksPassD0Safe(true, true, true), "ap3c-probe-block");
+    expect(!horizonProbeBlocksPassD0Safe(false, true, true), "ap3c-probe-off");
+    expect(!horizonProbeBlocksPassD0Safe(true, true, false), "ap3c-probe-no-later");
+    expect(microWindowPreferLater(true, 4, 110.f, 100.f), "ap3c-micro-prefer");
+    expect(!microWindowPreferLater(false, 4, 110.f, 100.f), "ap3c-micro-off");
+    expect(!microWindowPreferLater(true, 12, 110.f, 100.f), "ap3c-micro-large-window");
+    expect(!microWindowPreferLater(true, 4, 100.f, 100.f), "ap3c-micro-no-lead");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

@@ -1,4 +1,5 @@
 #include "shadow_plan_input_window.hpp"
+#include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/assist_log.hpp"
 #include "../../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../../assist/contracts/assist_verdict.hpp"
@@ -524,6 +525,93 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
                 context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
             return true;
+        }
+    }
+
+    // Assist Pack AP3c — Micro-Window + Probe Past Horizon (each setting-gated).
+    // Discrete only: Wave/ship keep their own help-only / earliest paths above.
+    if (!continuous && bestDelay == 0 && context.candReady[0]) {
+        auto const& c0ref = context.cands[0];
+        bool const d0AliveNow = !c0ref.raw.died && !c0ref.raw.unknown &&
+                                !c0ref.raw.unknownTrunc && !c0ref.toggleUnknown;
+        int const proveFloor =
+            EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
+        bool const atWall = EbLivePlanContracts::d0AtProveWall(
+            d0AliveNow, c0ref.raw.landedAfterAction, c0ref.raw.ticksRan, proveFloor);
+
+        bool anyLaterAlive = false;
+        for (int delay = 1; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            auto const& cand = context.cands[static_cast<size_t>(delay)];
+            bool const unknown =
+                cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
+            if (!cand.raw.died && !unknown && cand.raw.ticksRan > 0)
+                anyLaterAlive = true;
+        }
+
+        // Micro-Window: tiny Max Assist → any endX lead may beat Pass-now.
+        if (d0AliveNow && EbStageConfig::assistMicroWindow()) {
+            int microBest = -1;
+            float microEnd = c0ref.endX;
+            for (int delay = 1; delay <= context.limit; ++delay) {
+                if (!context.candReady[static_cast<size_t>(delay)])
+                    continue;
+                auto const& cand = context.cands[static_cast<size_t>(delay)];
+                bool const unknown =
+                    cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
+                if (cand.raw.died || unknown || cand.raw.ticksRan <= 0)
+                    continue;
+                if (!EbLivePlanContracts::microWindowPreferLater(
+                        true, context.limit, cand.endX, c0ref.endX))
+                    continue;
+                if (microBest < 0 || cand.endX > microEnd) {
+                    microBest = delay;
+                    microEnd = cand.endX;
+                }
+            }
+            if (microBest > 0)
+                bestDelay = microBest;
+        }
+
+        // Probe Past Horizon: wall-safe d0 + later Alive → extend prove; if d0
+        // dies, re-rank later Alive under the extended cap.
+        if (bestDelay == 0 &&
+            EbLivePlanContracts::horizonProbeBlocksPassD0Safe(
+                EbStageConfig::assistProbePastHorizon(), atWall, anyLaterAlive) &&
+            context.tickBudget > 0 && !context.wallExceeded()) {
+            int const savedCap = context.model.cap;
+            context.model.cap =
+                savedCap + EbLivePlanContracts::kPostHorizonProbeTicks;
+            context.candReady[0] = 0;
+            if (ingest(0, context.evalDelay(0, -1))) {
+                auto const& probed = context.cands[0];
+                if (probed.raw.died) {
+                    bestDelay = -1;
+                    bestSurviveBin = -1;
+                    bestTicksRan = -1;
+                    bestScore = 0.f;
+                    bestLanded = false;
+                    context.plan.viableDelays.clear();
+                    for (int delay = 1; delay <= context.limit; ++delay) {
+                        if (context.wallExceeded() || context.tickBudget <= 0) {
+                            context.plan.budgetHit = true;
+                            break;
+                        }
+                        if (!context.candReady[static_cast<size_t>(delay)])
+                            continue;
+                        auto const& ready = context.cands[static_cast<size_t>(delay)];
+                        bool const unknown = ready.raw.unknown || ready.raw.unknownTrunc ||
+                                             ready.toggleUnknown;
+                        if (ready.raw.died || unknown)
+                            continue;
+                        context.candReady[static_cast<size_t>(delay)] = 0;
+                        if (!ingest(delay, context.evalDelay(delay, -1)))
+                            break;
+                    }
+                }
+            }
+            context.model.cap = savedCap;
         }
     }
 

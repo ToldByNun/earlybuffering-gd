@@ -178,6 +178,11 @@ public:
     static int adaptiveScreenTicks();
     static int adaptiveVerifyQuantum();
     static int adaptiveReservePct();
+    // Assist Pack AP3c — each toggleable independently (both off ≈ prior 1:1 feel).
+    // Probe: extra ticks past prove wall before sticky PassD0Safe.
+    static bool assistProbePastHorizon();
+    // Micro: small Max Assist windows may still prefer a later Alive endX lead.
+    static bool assistMicroWindow();
     // Kind-resolved Adaptive (mode overwrite → mode knobs, else Main).
     static bool adaptivePlanFor(GameModeKind kind);
     static int adaptiveScreenTicksFor(GameModeKind kind);
@@ -344,6 +349,8 @@ private:
     static int s_cachedAdaptiveScreenTicks;
     static int s_cachedAdaptiveVerifyQuantum;
     static int s_cachedAdaptiveReservePct;
+    static bool s_cachedAssistProbePastHorizon;
+    static bool s_cachedAssistMicroWindow;
     static std::string s_cachedAssistVerify;
     static int s_cachedTickBudget;
     static bool s_cachedAssistOnlyPractice;

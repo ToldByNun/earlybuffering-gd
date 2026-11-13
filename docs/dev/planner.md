@@ -45,7 +45,7 @@ Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` 
 | Wave continuous IW cap | **AP3a:** `max(lookAhead, short AssistHorizon)`; Wave ≥32 |
 | Wave help-only / prox | **AP3b:** d0 Alive → Pass; proximity/futile on IW; earliest clear Delay |
 | Orbs under IW | **AP4:** spatial hint + budget-capped scan; DelayOrb handoff; dash/toggle |
-| Micro-window cube | **AP3c (later):** 1-tick / 1-frame cube arming |
+| Micro-window / false d0-safe | **AP3c:** `assist-micro-window` + `assist-probe-past-horizon` (each off = prior 1:1) |
 | Landed rank | Later only if score gain >8px → **AP2 (skipped for now):** Eval-aligned |
 
 Live press always takes input-window (`requireAliveForDelay`) — G1 AssistPick orb band is bypassed until AP3.

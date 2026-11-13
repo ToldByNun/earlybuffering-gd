@@ -76,6 +76,10 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "robust-jitter", false);
     EbStageConfigImplementation::s_cachedAdaptivePlan =
         EbStageConfigImplementation::readBool(mod, "adaptive-plan", true);
+    EbStageConfigImplementation::s_cachedAssistProbePastHorizon =
+        EbStageConfigImplementation::readBool(mod, "assist-probe-past-horizon", true);
+    EbStageConfigImplementation::s_cachedAssistMicroWindow =
+        EbStageConfigImplementation::readBool(mod, "assist-micro-window", true);
     EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
     EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum =

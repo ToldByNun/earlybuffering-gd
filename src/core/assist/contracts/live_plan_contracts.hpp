@@ -111,6 +111,18 @@ public:
     // Adaptive 96−limit clamp / budget truncation (Silent Hoveropolis cube).
     static int discreteIwObservationFloor(int modelCap);
 
+    // Assist Pack AP3c — Probe Past Horizon / Micro-Window (each setting-gated).
+    static constexpr int kPostHorizonProbeTicks = 24;
+    static constexpr int kMicroWindowMaxAssistTicks = 8; // ~2 frames @ 240 TPS
+
+    // d0 Alive only by hitting the prove wall (not landed) — death may sit past it.
+    static bool d0AtProveWall(bool d0Alive, bool d0Landed, int d0TicksRan, int proveFloorTicks);
+    // When probe enabled: wall-safe d0 + any later Alive → do not sticky PassD0Safe.
+    static bool horizonProbeBlocksPassD0Safe(bool probeEnabled, bool d0AtWall, bool anyLaterAlive);
+    // When micro enabled and limit is tiny: any positive endX lead may beat Pass-now.
+    static bool microWindowPreferLater(bool microEnabled, int limitTicks, float laterEndX,
+                                       float d0EndX);
+
     // Alive run stopped before the honest observation floor (budget / quantum),
     // not a real death. Callers must pass !died && !unknown already when useful;
     // this helper still guards those flags.

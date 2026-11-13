@@ -1,4 +1,5 @@
 #include "adaptive_decision_gate.hpp"
+#include "../../../../../config/stage_config.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include <algorithm>
 #include <cmath>
@@ -210,6 +211,29 @@ EbAdaptiveDecisionGate::Result EbAdaptiveDecisionGate::decide(Input const& in) {
             out.delay = 0;
             out.nowIsSafe = false;
             return out;
+        }
+        // Assist Pack AP3c: prove-wall PassD0Safe with later Alive → PassBudget
+        // so classic IW can probe past the horizon (setting-gated).
+        {
+            bool anyLaterAlive = false;
+            for (int delay = 1; delay <= in.limit; ++delay) {
+                auto const& c = in.cands[static_cast<size_t>(delay)];
+                if (c.autonomousAlive && !c.terminalDied && !c.terminalUnknown) {
+                    anyLaterAlive = true;
+                    break;
+                }
+            }
+            bool const atWall =
+                EbLivePlanContracts::d0AtProveWall(true, false, d0.ticksSimulated, cap) ||
+                d0.terminalAliveCap;
+            if (EbLivePlanContracts::horizonProbeBlocksPassD0Safe(
+                    EbStageConfig::assistProbePastHorizon(), atWall, anyLaterAlive)) {
+                out.action = PlanAction::Pass;
+                out.reason = AssistReason::PassBudget;
+                out.delay = 0;
+                out.nowIsSafe = false;
+                return out;
+            }
         }
         out.action = PlanAction::Pass;
         out.reason = AssistReason::PassD0Safe;
@@ -555,8 +579,9 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     weakD0In.robustK = 0;
     weakD0In.budgetHitIncomplete = false;
     expect(!hasHazardProgress(cands[1], cands[0], 96, 18), "ap3-shallow-no-progress");
-    expect(decide(weakD0In).reason == AssistReason::PassD0Safe, "ap3-shallow-tie-sticky");
-    // Clear endX lead on unproven later → PassBudget fallthrough.
+    // AP3c probe (default on): wall-safe d0 + later Alive → PassBudget, not sticky.
+    expect(decide(weakD0In).reason == AssistReason::PassBudget, "ap3c-probe-shallow-budget");
+    // Clear endX lead on unproven later → still PassBudget fallthrough.
     for (int delay = 1; delay <= 4; ++delay)
         cands[delay].endX = 2630.f;
     auto const weakD0Out = decide(weakD0In);

@@ -63,6 +63,8 @@ int EbStageConfigImplementation::s_cachedSmartHorizon = 0;
 int EbStageConfigImplementation::s_cachedRobustK = 0;
 bool EbStageConfigImplementation::s_cachedRobustJitter = false;
 bool EbStageConfigImplementation::s_cachedAdaptivePlan = true;
+bool EbStageConfigImplementation::s_cachedAssistProbePastHorizon = true;
+bool EbStageConfigImplementation::s_cachedAssistMicroWindow = true;
 int EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = 24;
 int EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum = 16;
 int EbStageConfigImplementation::s_cachedAdaptiveReservePct = 15;
@@ -588,6 +590,14 @@ bool EbStageConfig::robustJitter() {
 bool EbStageConfig::adaptivePlan() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAdaptivePlan;
+}
+bool EbStageConfig::assistProbePastHorizon() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistProbePastHorizon;
+}
+bool EbStageConfig::assistMicroWindow() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistMicroWindow;
 }
 int EbStageConfig::adaptiveScreenTicks() {
     EbStageConfigImplementation::ensureCache();

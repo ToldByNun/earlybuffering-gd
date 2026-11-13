@@ -1,4 +1,5 @@
 #include "adaptive_prediction_scheduler.hpp"
+#include "../../../../../config/stage_config.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include <algorithm>
 #include <cmath>
@@ -78,7 +79,24 @@ EbAdaptivePredictionScheduler::Decision EbAdaptivePredictionScheduler::choose(In
                 break;
             }
         }
+        // Assist Pack AP3c: wall-safe d0 + later Alive → keep verifying / fall
+        // through instead of terminal PassD0Safe (setting-gated).
         if (!laterBetter) {
+            bool anyLaterAlive = false;
+            for (int delay = 1; delay <= in.limit; ++delay) {
+                auto const& slot = in.slots[delay];
+                if (slot.autonomousAlive && !slot.terminalDied && !slot.terminalUnknown) {
+                    anyLaterAlive = true;
+                    break;
+                }
+            }
+            bool const atWall = EbLivePlanContracts::d0AtProveWall(
+                true, false, d0.ticksSimulated, cap);
+            if (EbLivePlanContracts::horizonProbeBlocksPassD0Safe(
+                    EbStageConfig::assistProbePastHorizon(), atWall, anyLaterAlive)) {
+                out.kind = ActionKind::FallThrough;
+                return out;
+            }
             out.kind = ActionKind::StopPassD0Safe;
             return out;
         }
@@ -189,18 +207,24 @@ bool EbAdaptivePredictionScheduler::selfCheck(std::string& report) {
     slots[2].endX = 100.f;
     Input d0SafeIn = hopelessIn;
     d0SafeIn.mustDelaySearch = false;
-    // Under-horizon later with no endX/survive lead → sticky PassD0Safe (AP3 tight).
-    expect(choose(d0SafeIn).kind == ActionKind::StopPassD0Safe, "d0-safe");
+    // AP3c probe (default on): wall-safe d0 + later Alive → FallThrough, not sticky.
+    expect(choose(d0SafeIn).kind == ActionKind::FallThrough, "ap3c-probe-ft");
     // Clear endX lead on under-horizon later → keep verifying, not terminal.
     slots[2].endX = 120.f;
     expect(choose(d0SafeIn).kind == ActionKind::ContinueVerify, "ap3-endx-lead-verify");
     expect(choose(d0SafeIn).delay == 2, "ap3-verify-later");
     slots[2].endX = 100.f;
-    // Peer also at horizon, no endX/survive lead → sticky PassD0Safe.
+    // Peer also at horizon — probe still falls through (later Alive at wall).
     slots[2].ticksSimulated = 64;
     slots[2].terminalAliveCap = true;
     slots[2].autonomousSurviveTicks = 64;
-    expect(choose(d0SafeIn).kind == ActionKind::StopPassD0Safe, "d0-safe-peers-horizon");
+    expect(choose(d0SafeIn).kind == ActionKind::FallThrough, "ap3c-probe-peers-ft");
+    // No later Alive → sticky PassD0Safe even with probe on.
+    slots[2].terminalDied = true;
+    slots[2].autonomousAlive = false;
+    expect(choose(d0SafeIn).kind == ActionKind::StopPassD0Safe, "ap3c-probe-alone-sticky");
+    slots[2].terminalDied = false;
+    slots[2].autonomousAlive = true;
     // Restore under-horizon later for the verify-continue cases below.
     slots[2].ticksSimulated = 20;
     slots[2].terminalAliveCap = false;

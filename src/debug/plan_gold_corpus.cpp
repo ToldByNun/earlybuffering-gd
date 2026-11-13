@@ -203,6 +203,12 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbLivePlanContracts::discreteIwObservationFloor(92) == 92 &&
                EbLivePlanContracts::discreteIwObservationFloor(0) == 1,
            "assist-pack-ap7-iw-floor");
+    // Assist Pack AP3c: probe blocks wall PassD0Safe; micro prefers endX in tiny windows.
+    expect(EbLivePlanContracts::horizonProbeBlocksPassD0Safe(true, true, true) &&
+               !EbLivePlanContracts::horizonProbeBlocksPassD0Safe(false, true, true) &&
+               EbLivePlanContracts::microWindowPreferLater(true, 4, 110.f, 100.f) &&
+               !EbLivePlanContracts::microWindowPreferLater(true, 12, 110.f, 100.f),
+           "assist-pack-ap3c-toggles");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);
