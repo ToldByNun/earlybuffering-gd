@@ -96,8 +96,16 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
     simulator.m_savedTransforms.clear();
     // gd::map: `= {}` is ambiguous on libstdc++/Android — use clear().
     simulator.m_savedActivatedIDs.clear();
-    // Clear host first so a nested evacuate (if any) sees "not attached".
+    // Capture host before clear — nested evacuate must see "not attached".
+    auto* const previousHost = simulator.m_hostLayer;
     simulator.m_hostLayer = nullptr;
+
+    // Pause→Editor→Save&Play (and similar): PlayLayer is destroyed while ghost
+    // pointers may still sit on the simulator. Touching those PlayerObjects
+    // (getParent / removeFromParent) AVs with read @ 0xFFFFFFFFFFFFFFFF.
+    // Only destroy when the recorded host is still the live PlayLayer.
+    auto* const livePlay = PlayLayer::get();
+    bool const abandonGhosts = layerDying || previousHost != livePlay;
 
     auto sanitize = [](PlayerObject* player) {
         if (!player)
@@ -116,14 +124,13 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
     auto kill = [&](PlayerObject*& player) {
         if (!player)
             return;
-        if (layerDying) {
-            // Parent tree is already tearing down — do not touch waveTrail /
-            // removeFromParent / release (double-free in ~PlayerObject).
+        if (abandonGhosts) {
+            // Parent tree gone / wrong layer — drop the pointer only.
             player = nullptr;
             return;
         }
         sanitize(player);
-        // Normal quit / reattach: destroy while PlayLayer is still alive.
+        // Normal quit / same-layer reattach: destroy while PlayLayer is alive.
         if (player->getParent()) {
             player->removeFromParentAndCleanup(true);
         }

@@ -38,6 +38,7 @@
 
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
+- Pause→Editor→Save&Play: detach abandons ghost pointers when `m_hostLayer` is no longer the live `PlayLayer` (no `removeFromParent` on dangling ghosts).
 
 ### Dev Lab UX
 - Desktop Dev tab uses normal section cards (same chrome as Main/Assist): **Now → Setup → Setup Extras → Record → Eval → Save → Compare → Danger**.
