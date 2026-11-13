@@ -570,6 +570,54 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return true;
         }
 
+        // Assist Pack AP-M1: lethal later that still progresses past dying d0
+        // (later deathTick / ticks / endX) → Delay, never PassWaveFutile.
+        int progressDelay = -1;
+        float progressScore = 0.f;
+        bool anyLaterProgress = false;
+        int laterReadyCount = 0;
+        if (c0.raw.died) {
+            for (int delay = 1; delay <= context.limit; ++delay) {
+                if (!context.candReady[static_cast<size_t>(delay)])
+                    continue;
+                ++laterReadyCount;
+                auto const& cand = context.cands[static_cast<size_t>(delay)];
+                if (!EbLivePlanContracts::waveIwLaterProgressBeatsD0(
+                        true, c0.raw.deathTick, c0.raw.ticksRan, c0.endX, true, cand.raw.died,
+                        cand.raw.deathTick, cand.raw.ticksRan, cand.endX))
+                    continue;
+                anyLaterProgress = true;
+                float const score =
+                    cand.endX - context.latencyWeight * static_cast<float>(delay);
+                if (progressDelay < 0 || score > progressScore) {
+                    progressDelay = delay;
+                    progressScore = score;
+                }
+            }
+        } else {
+            for (int delay = 1; delay <= context.limit; ++delay) {
+                if (context.candReady[static_cast<size_t>(delay)])
+                    ++laterReadyCount;
+            }
+        }
+        if (progressDelay > 0) {
+            bestDelay = progressDelay;
+            context.plan.delay = context.plan.jumpTick = progressDelay;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = true;
+            context.plan.reason = AssistReason::DelayThreat;
+            context.plan.action = PlanAction::Delay;
+            if (!context.plan.viableDelays.empty()) {
+                context.plan.dMin = context.plan.viableDelays.front();
+                context.plan.dMax = context.plan.viableDelays.back();
+            }
+            context.publishLedger(progressDelay, false, context.ledgerEarlyExit());
+            EbAssistLog::debug(fmt::format(
+                "PLAN id={} IW DelayThreat wave-progress d={} score={:.1f}", context.plan.planId,
+                progressDelay, progressScore));
+            return true;
+        }
+
         int bestBin = 0;
         float bestGain = 0.f;
         float const baseEnd = c0.endX;
@@ -589,12 +637,29 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 anyAliveLater = true;
         }
         context.plan.waveBestGain = bestGain;
+        bool const anyAliveSaveFromD0Death = c0.raw.died && anyAliveLater;
         bool const idleHoldsEscape = context.plan.idleSafer && anyAliveLater;
         bool const orbIntent =
             context.orbAssist &&
             (context.orbHint.found || context.spatialHint || context.plan.foresightOrbPad);
-        if (EbLivePlanContracts::waveIwFutilePass(true, true, false, idleHoldsEscape, orbIntent,
-                                                  bestBin, bestGain, context.plan.foresightOrbPad)) {
+        // AP-M1: incomplete later band without budgetHit → PassBudget, not futile.
+        if (EbLivePlanContracts::waveIwPreferPassBudgetOverFutile(
+                d0HasRunTruth, context.plan.budgetHit, laterReadyCount, context.limit)) {
+            context.plan.action = PlanAction::Pass;
+            context.plan.reason = AssistReason::PassBudget;
+            context.plan.budgetHit = true;
+            context.plan.delay = context.plan.jumpTick = 0;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = false;
+            context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
+            EbAssistLog::debug(fmt::format(
+                "PLAN id={} IW PassBudget wave-incomplete-band ready={}/{}", context.plan.planId,
+                laterReadyCount, context.limit));
+            return true;
+        }
+        if (EbLivePlanContracts::waveIwFutilePass(true, true, anyAliveSaveFromD0Death,
+                                                  idleHoldsEscape, orbIntent, bestBin, bestGain,
+                                                  context.plan.foresightOrbPad, anyLaterProgress)) {
             context.plan.action = PlanAction::Pass;
             context.plan.delay = context.plan.jumpTick = 0;
             // Assist Pack AP-L4: budget/wall starve mid-band is PassBudget, not futile.

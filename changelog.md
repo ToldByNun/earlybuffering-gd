@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.2 (dev)
+
+### Assist Pack AP-M1 — Wave false-futile → Delay / PassBudget
+- Classic Wave IW no longer `pass-wave-futile` when a later delay still progresses past a dying d0 (later `deathTick` / `ticksRan` / endX ≥ 8px) — arms `DelayThreat` instead (River-class miss vs Adaptive).
+- Incomplete later band without `budgetHit` → `pass-budget`, never futile. Alive-save / progress flags passed honestly (no hardcoded false).
+- PlanGold `assist-pack-ap-m1-wave-false-futile`. Fixture: `research_20261113_223527` (River OFF).
+
 ## v1.6.1
 
 **Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).

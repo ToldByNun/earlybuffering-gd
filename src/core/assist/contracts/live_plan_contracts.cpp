@@ -184,9 +184,10 @@ bool EbLivePlanContracts::waveIwProximityPass(bool isWave, bool pressDown, bool 
 
 bool EbLivePlanContracts::waveIwFutilePass(bool isWave, bool pressDown, bool anyAliveSaveFromD0Death,
                                            bool idleHoldsEscape, bool orbIntent, int bestSurviveBin,
-                                           float bestEndXGain, bool foresightOrbPad) {
+                                           float bestEndXGain, bool foresightOrbPad,
+                                           bool anyLaterProgress) {
     if (!pressDown || !isWave || anyAliveSaveFromD0Death || idleHoldsEscape || orbIntent ||
-        foresightOrbPad)
+        foresightOrbPad || anyLaterProgress)
         return false;
     if (bestSurviveBin > 0)
         return false;
@@ -204,6 +205,31 @@ bool EbLivePlanContracts::waveIwFutileHonest(bool d0HasRunTruth, bool budgetHitI
 bool EbLivePlanContracts::waveIwSkipLaterBandForStarve(bool d0DeadWithTruth,
                                                        bool prepareHeavyStillOk) {
     return d0DeadWithTruth && !prepareHeavyStillOk;
+}
+
+bool EbLivePlanContracts::waveIwLaterProgressBeatsD0(bool d0Died, int d0DeathTick, int d0TicksRan,
+                                                     float d0EndX, bool laterReady, bool laterDied,
+                                                     int laterDeathTick, int laterTicksRan,
+                                                     float laterEndX) {
+    if (!d0Died || !laterReady)
+        return false;
+    // Alive later is handled by the Alive Delay path — still counts as progress.
+    if (!laterDied)
+        return true;
+    if (laterDeathTick >= 0 && d0DeathTick >= 0 && laterDeathTick > d0DeathTick)
+        return true;
+    if (laterTicksRan > d0TicksRan)
+        return true;
+    return (laterEndX - d0EndX) >= kLandedScoreEps;
+}
+
+bool EbLivePlanContracts::waveIwPreferPassBudgetOverFutile(bool d0HasRunTruth, bool budgetHit,
+                                                           int laterReadyCount, int limit) {
+    if (!d0HasRunTruth || budgetHit)
+        return false;
+    if (limit <= 0)
+        return false;
+    return laterReadyCount < limit;
 }
 
 int EbLivePlanContracts::waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay) {
@@ -468,6 +494,16 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(waveIwFutilePass(true, true, false, false, false, 0, 3.f, false), "wave-iw-futile");
     expect(!waveIwFutilePass(true, true, true, false, false, 0, 3.f, false), "wave-iw-futile-save");
     expect(!waveIwFutilePass(true, true, false, false, false, 1, 3.f, false), "wave-iw-futile-bin");
+    expect(!waveIwFutilePass(true, true, false, false, false, 0, 3.f, false, true),
+           "wave-iw-futile-progress");
+    expect(waveIwLaterProgressBeatsD0(true, 24, 25, 100.f, true, true, 26, 27, 104.f) &&
+               !waveIwLaterProgressBeatsD0(true, 24, 25, 100.f, true, true, 24, 25, 100.f) &&
+               waveIwLaterProgressBeatsD0(true, 4, 5, 100.f, true, false, -1, 48, 200.f),
+           "wave-iw-later-progress");
+    expect(waveIwPreferPassBudgetOverFutile(true, false, 3, 8) &&
+               !waveIwPreferPassBudgetOverFutile(true, true, 3, 8) &&
+               !waveIwPreferPassBudgetOverFutile(true, false, 8, 8),
+           "wave-iw-incomplete-band");
     expect(waveIwD0HasRunTruth(true, 12) && !waveIwD0HasRunTruth(true, 0) &&
                !waveIwD0HasRunTruth(false, 12),
            "wave-iw-d0-truth");

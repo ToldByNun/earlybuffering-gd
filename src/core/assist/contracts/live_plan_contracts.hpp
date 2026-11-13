@@ -113,16 +113,25 @@ public:
     // Alive d0 + hazard proximity + no orb → PassWaveProximity (not phase Delay).
     static bool waveIwProximityPass(bool isWave, bool pressDown, bool d0Died, bool nearHazard,
                                     bool noOrbTarget, bool foresightOrbPad);
-    // No Alive save from a dying d0 / no useful bin·gain → PassWaveFutile.
+    // No Alive save from a dying d0 / no useful bin·gain / no later progress →
+    // PassWaveFutile. Assist Pack AP-M1: anyLaterProgress blocks futile.
     static bool waveIwFutilePass(bool isWave, bool pressDown, bool anyAliveSaveFromD0Death,
                                  bool idleHoldsEscape, bool orbIntent, int bestSurviveBin,
-                                 float bestEndXGain, bool foresightOrbPad);
+                                 float bestEndXGain, bool foresightOrbPad,
+                                 bool anyLaterProgress = false);
     // Assist Pack AP-L4: d0 was actually simulated (not synthetic ledger).
     static bool waveIwD0HasRunTruth(bool candReady0, int d0TicksRan);
     // PassWaveFutile only with d0 run truth and no budget/wall starve mid-band.
     static bool waveIwFutileHonest(bool d0HasRunTruth, bool budgetHitIncomplete);
     // Dying d0 + remUs below continuous prepare reserve → skip later-band scan.
     static bool waveIwSkipLaterBandForStarve(bool d0DeadWithTruth, bool prepareHeavyStillOk);
+    // Assist Pack AP-M1: later cand beats dying d0 on death clock / ticks / endX.
+    static bool waveIwLaterProgressBeatsD0(bool d0Died, int d0DeathTick, int d0TicksRan,
+                                           float d0EndX, bool laterReady, bool laterDied,
+                                           int laterDeathTick, int laterTicksRan, float laterEndX);
+    // Assist Pack AP-M1: incomplete later band without budgetHit must not claim futile.
+    static bool waveIwPreferPassBudgetOverFutile(bool d0HasRunTruth, bool budgetHit,
+                                                 int laterReadyCount, int limit);
     // Choose armed delay: help-only → 0; else earliest later safe (−1 = none).
     static int waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay);
     // Assist Pack AP5: when d0 is unsafe, prefer the score-best later safe delay

@@ -220,6 +220,15 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                !EbLivePlanContracts::lagWarningShouldNotify(false, 9000, true) &&
                !EbLivePlanContracts::lagWarningShouldNotify(true, 3000, false),
            "assist-pack-ap-l7-lag-toast");
+    // Assist Pack AP-M1: later progress past dying d0 blocks PassWaveFutile.
+    expect(EbLivePlanContracts::waveIwLaterProgressBeatsD0(true, 24, 25, 100.f, true, true, 26, 27,
+                                                           104.f) &&
+               !EbLivePlanContracts::waveIwLaterProgressBeatsD0(true, 24, 25, 100.f, true, true, 24,
+                                                                25, 100.f) &&
+               !EbLivePlanContracts::waveIwFutilePass(true, true, false, false, false, 0, 3.f, false,
+                                                      true) &&
+               EbLivePlanContracts::waveIwPreferPassBudgetOverFutile(true, false, 3, 8),
+           "assist-pack-ap-m1-wave-false-futile");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

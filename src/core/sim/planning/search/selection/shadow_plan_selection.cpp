@@ -52,8 +52,17 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
         float const baseEnd = context.cands[0].endX;
         bool anySavesFromD0Death = false;
         bool anyAliveLater = false;
+        bool anyLaterProgress = false;
+        auto const& d0cand = context.cands[0];
         for (int delay = 0; delay <= context.limit; ++delay) {
             auto const& candidate = context.cands[static_cast<size_t>(delay)];
+            if (delay > 0 &&
+                EbLivePlanContracts::waveIwLaterProgressBeatsD0(
+                    d0cand.raw.died, d0cand.raw.deathTick, d0cand.raw.ticksRan, d0cand.endX, true,
+                    candidate.raw.died, candidate.raw.deathTick, candidate.raw.ticksRan,
+                    candidate.endX)) {
+                anyLaterProgress = true;
+            }
             bool const aliveWorthy = candidate.viable && !candidate.raw.died;
             if (!aliveWorthy)
                 continue;
@@ -64,13 +73,14 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
                 bestGain = gain;
             if (delay > 0) {
                 anyAliveLater = true;
-                if (context.cands[0].raw.died)
+                if (d0cand.raw.died)
                     anySavesFromD0Death = true;
             }
         }
         // idleSafer skips futile Pass only when an Alive later escape exists.
+        // AP-M1: later progress past dying d0 also blocks PassWaveFutile.
         bool const idleHoldsEscape = context.plan.idleSafer && anyAliveLater;
-        if (!anySavesFromD0Death && !idleHoldsEscape &&
+        if (!anySavesFromD0Death && !idleHoldsEscape && !anyLaterProgress &&
             context.simulator.shouldWaveFutileDelayPass(isWave, context.orbIntent, bestBin,
                                                         bestGain, context.plan.foresightOrbPad,
                                                         context.down)) {

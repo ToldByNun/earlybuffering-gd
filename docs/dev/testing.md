@@ -46,6 +46,8 @@ Assist Pack AP-L6 (classic probe-before-band): discrete IW AP3c horizon probe af
 
 Assist Pack AP-L7 (lag notification): once per level on hitch ceiling / `budgetHit`; PlanGold `assist-pack-ap-l7-lag-toast`.
 
+Assist Pack AP-M1 (wave false-futile → Delay): later progress past dying d0 → DelayThreat; incomplete band → PassBudget. PlanGold `assist-pack-ap-m1-wave-false-futile`. Re-pack River OFF `research_20261113_223527` — expect `pass-wave-futile@press` ↓ and Delay↑.
+
 Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-feel; InterveneGate at pick remains.
 
 Assist Pack AP7 (IW observation floor): discrete floor = `model.cap` (not `limit+cap`); classic matches Adaptive `96−limit` clamp. Fixes cube early `pass-budget` with Alive later. PlanGold `assist-pack-ap7-iw-floor`.
