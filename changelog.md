@@ -23,6 +23,11 @@
 - TW tracks ≥200: Adaptive Wave screen quantum halved (min 4) so shell leaves remUs sooner.
 - PlanGold `assist-pack-ap-m7-adaptive-wave-fallthrough`. Fixtures: Grief ON `research_20261113_224158`, River ON `research_20261113_223742`.
 
+### Assist Pack AP-M4 — Ball false PassHopeless
+- Classic discrete IW + selection: later run-alive (incl. ball `landedAfterAction`) blocks `PassHopeless` → `PassBudget` (selection no longer skips landed peers).
+- Ball incomplete later band without `budgetHit` (`candidatesTried &lt; limit+1`) cannot seal Hopeless — prefix/peak mid-band cuts become PassBudget; full-band uniform lethal (A7) stays Hopeless.
+- PlanGold `assist-pack-ap-m4-ball-false-hopeless`. Fixture: `research_20261113_223344` (Hoveropolis OFF).
+
 ## v1.6.1
 
 **Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).

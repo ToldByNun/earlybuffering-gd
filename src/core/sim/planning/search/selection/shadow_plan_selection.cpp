@@ -463,32 +463,34 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
         }
     }
 
-    // Assist Pack AP1/AP4: no pick + depth-truncated Alive OR dying d0 + later
-    // Alive → PassBudget, not Hopeless (A7 uniform death stays Hopeless).
+    // Assist Pack AP1/AP4/AP-M4: no pick + depth-truncated / later run-alive
+    // (incl. ball landed) / incomplete ball band → PassBudget, not Hopeless.
     if (context.chosen < 0) {
         int const honestFloor =
             EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
-        bool anyLaterAlive = false;
+        bool anyLaterRunAlive = false;
         bool anyDepthTrunc = false;
         for (int delay = 0; delay <= context.limit; ++delay) {
             if (!context.candReady[static_cast<size_t>(delay)])
                 continue;
             auto const& cand = context.cands[static_cast<size_t>(delay)];
-            if (cand.raw.landedAfterAction)
-                continue;
             bool const unknown =
                 cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
             if (EbLivePlanContracts::depthTruncatedAlive(cand.raw.died, unknown,
                                                          cand.raw.ticksRan, honestFloor)) {
                 anyDepthTrunc = true;
             }
-            if (delay > 0 && !cand.raw.died && !unknown && cand.raw.ticksRan > 0)
-                anyLaterAlive = true;
+            if (delay > 0 &&
+                EbLivePlanContracts::discreteIwLaterRunAliveForHopeless(cand.raw.died, unknown,
+                                                                        cand.raw.ticksRan))
+                anyLaterRunAlive = true;
         }
         bool const d0Died =
             context.candReady[0] && context.cands[0].raw.died && !context.cands[0].raw.unknown;
-        if (anyDepthTrunc ||
-            EbLivePlanContracts::hopelessBlockedByLivingLater(d0Died, anyLaterAlive)) {
+        bool const isBall = context.real && context.real->m_isBall;
+        if (EbLivePlanContracts::discreteIwHopelessMustFallthrough(
+                d0Died, anyLaterRunAlive, anyDepthTrunc, isBall, context.plan.budgetHit,
+                context.plan.candidatesTried, context.limit)) {
             context.plan.budgetHit = true;
         }
     }

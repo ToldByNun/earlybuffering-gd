@@ -249,6 +249,14 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(false, 0, 2000) == 0 &&
                EbLivePlanContracts::adaptiveWaveScreenTicksForTw(24, 942) == 12,
            "assist-pack-ap-m7-adaptive-wave-fallthrough");
+    // Assist Pack AP-M4: ball later run-alive / incomplete band → PassBudget.
+    expect(EbLivePlanContracts::discreteIwLaterRunAliveForHopeless(false, false, 18) &&
+               EbLivePlanContracts::ballIwIncompleteBandBlocksHopeless(true, false, 2, 12) &&
+               EbLivePlanContracts::discreteIwHopelessMustFallthrough(true, true, false, true,
+                                                                      false, 13, 12) &&
+               !EbLivePlanContracts::discreteIwHopelessMustFallthrough(true, false, false, true,
+                                                                       false, 13, 12),
+           "assist-pack-ap-m4-ball-false-hopeless");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

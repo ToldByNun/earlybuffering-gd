@@ -830,25 +830,29 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     if (context.plan.budgetHit && bestDelay < 0)
         context.plan.reason = AssistReason::PassBudget;
-    // Assist Pack AP1/AP4: depth-truncated Alive OR dying d0 + any later Alive
-    // blocks dishonest PassHopeless (A4 miss → PassBudget / fallthrough).
+    // Assist Pack AP1/AP4/AP-M4: depth-truncated Alive, dying d0 + later run-alive
+    // (incl. ball landed), or incomplete ball band → PassBudget, never Hopeless.
     if (bestDelay < 0 && context.plan.reason == AssistReason::PassHopeless) {
-        bool anyLaterAlive = false;
+        bool anyLaterRunAlive = false;
         for (int delay = 1; delay <= context.limit; ++delay) {
             if (!context.candReady[static_cast<size_t>(delay)])
                 continue;
             auto const& cand = context.cands[static_cast<size_t>(delay)];
             bool const unknown =
                 cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
-            if (!cand.raw.died && !unknown && cand.raw.ticksRan > 0) {
-                anyLaterAlive = true;
+            // Do not skip landedAfterAction — stopAtBallLanding peers still count.
+            if (EbLivePlanContracts::discreteIwLaterRunAliveForHopeless(cand.raw.died, unknown,
+                                                                       cand.raw.ticksRan)) {
+                anyLaterRunAlive = true;
                 break;
             }
         }
         bool const d0Died =
             context.candReady[0] && context.cands[0].raw.died && !context.cands[0].raw.unknown;
-        if (EbLivePlanContracts::hopelessBlockedByDepthTruncation(anyDepthTruncated, false) ||
-            EbLivePlanContracts::hopelessBlockedByLivingLater(d0Died, anyLaterAlive)) {
+        bool const isBall = context.real && context.real->m_isBall;
+        if (EbLivePlanContracts::discreteIwHopelessMustFallthrough(
+                d0Died, anyLaterRunAlive, anyDepthTruncated, isBall, context.plan.budgetHit,
+                context.plan.candidatesTried, context.limit)) {
             context.plan.budgetHit = true;
             context.plan.reason = AssistReason::PassBudget;
             context.plan.action = PlanAction::Pass;

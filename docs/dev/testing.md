@@ -54,6 +54,8 @@ Assist Pack AP-M3 (cube underselect): classic discrete probe-extended d0 yields 
 
 Assist Pack AP-M7 (Adaptive Wave fallthrough): Wave zero-survivor Adaptive → classic IW; remUs gift + fresh wall when shared wall spent; TW≥200 halves screen quantum. PlanGold `assist-pack-ap-m7-adaptive-wave-fallthrough`. Re-pack Grief ON `research_20261113_224158` — expect `hybridFallthrough` ↑ / Delay&gt;0 without planUs disaster; River ON `223742` Delay ≥12 / futile low.
 
+Assist Pack AP-M4 (ball false Hopeless): later run-alive / incomplete ball band → PassBudget; landed peers count. PlanGold `assist-pack-ap-m4-ball-false-hopeless`. Re-pack Hoveropolis OFF `research_20261113_223344` — expect `pass-hopeless@press` ↓, Delay not↓, `caused` flat.
+
 Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-feel; InterveneGate at pick remains.
 
 Assist Pack AP7 (IW observation floor): discrete floor = `model.cap` (not `limit+cap`); classic matches Adaptive `96−limit` clamp. Fixes cube early `pass-budget` with Alive later. PlanGold `assist-pack-ap7-iw-floor`.

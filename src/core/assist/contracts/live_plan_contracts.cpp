@@ -415,6 +415,29 @@ bool EbLivePlanContracts::hopelessBlockedByLivingLater(bool d0Died, bool anyLate
     return d0Died && anyLaterAlive;
 }
 
+bool EbLivePlanContracts::discreteIwLaterRunAliveForHopeless(bool died, bool unknown,
+                                                            int ticksRan) {
+    return !died && !unknown && ticksRan > 0;
+}
+
+bool EbLivePlanContracts::ballIwIncompleteBandBlocksHopeless(bool isBall, bool budgetHit,
+                                                             int candidatesTried, int limit) {
+    if (!isBall || budgetHit || limit < 1)
+        return false;
+    // Full 0..limit ingest (or budgetHit) required before honest PassHopeless.
+    return candidatesTried < (limit + 1);
+}
+
+bool EbLivePlanContracts::discreteIwHopelessMustFallthrough(
+    bool d0Died, bool anyLaterRunAlive, bool anyDepthTruncatedAlive, bool isBall, bool budgetHit,
+    int candidatesTried, int limit) {
+    if (hopelessBlockedByDepthTruncation(anyDepthTruncatedAlive, false))
+        return true;
+    if (hopelessBlockedByLivingLater(d0Died, anyLaterRunAlive))
+        return true;
+    return ballIwIncompleteBandBlocksHopeless(isBall, budgetHit, candidatesTried, limit);
+}
+
 bool EbLivePlanContracts::laterAliveBlocksPassD0Safe(bool laterAutonomousAlive,
                                                      bool laterUnderHorizon, int laterSurviveTicks,
                                                      int d0SurviveTicks, int closeGapTicks,
@@ -616,6 +639,20 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(hopelessBlockedByLivingLater(true, true), "ap4-a4-blocked");
     expect(!hopelessBlockedByLivingLater(true, false), "ap4-a7-allowed");
     expect(!hopelessBlockedByLivingLater(false, true), "ap4-d0-alive-n/a");
+
+    // Assist Pack AP-M4 — ball run-alive / incomplete band vs A7 complete lethal.
+    expect(discreteIwLaterRunAliveForHopeless(false, false, 18), "ap-m4-run-alive");
+    expect(!discreteIwLaterRunAliveForHopeless(true, false, 18), "ap-m4-died");
+    expect(ballIwIncompleteBandBlocksHopeless(true, false, 2, 12), "ap-m4-incomplete");
+    expect(!ballIwIncompleteBandBlocksHopeless(true, false, 13, 12), "ap-m4-complete-band");
+    expect(!ballIwIncompleteBandBlocksHopeless(true, true, 2, 12), "ap-m4-budget-hit-ok");
+    expect(!ballIwIncompleteBandBlocksHopeless(false, false, 2, 12), "ap-m4-cube-n/a");
+    expect(discreteIwHopelessMustFallthrough(true, true, false, true, false, 13, 12),
+           "ap-m4-living-later");
+    expect(discreteIwHopelessMustFallthrough(true, false, false, true, false, 2, 12),
+           "ap-m4-incomplete-ft");
+    expect(!discreteIwHopelessMustFallthrough(true, false, false, true, false, 13, 12),
+           "ap-m4-a7-full-lethal");
 
     // Assist Pack AP3 — only survive/endX lead blocks (not bare under-horizon).
     expect(!laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f),

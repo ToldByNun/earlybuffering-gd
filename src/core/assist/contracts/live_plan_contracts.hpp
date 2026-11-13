@@ -239,6 +239,17 @@ public:
     // Uniform same-crash death (A7) still allows Hopeless when anyLaterAlive=false.
     static bool hopelessBlockedByLivingLater(bool d0Died, bool anyLaterAlive);
 
+    // Assist Pack AP-M4 — Ball false Hopeless. Raw run-alive (not viable/surviveBin);
+    // ball landed laters count. Incomplete ball band without budgetHit must not
+    // seal PassHopeless (prefix/peak cut mid-band → PassBudget).
+    static bool discreteIwLaterRunAliveForHopeless(bool died, bool unknown, int ticksRan);
+    static bool ballIwIncompleteBandBlocksHopeless(bool isBall, bool budgetHit,
+                                                   int candidatesTried, int limit);
+    static bool discreteIwHopelessMustFallthrough(bool d0Died, bool anyLaterRunAlive,
+                                                  bool anyDepthTruncatedAlive, bool isBall,
+                                                  bool budgetHit, int candidatesTried,
+                                                  int limit);
+
     // Assist Pack AP3 (tightened): later Alive blocks terminal PassD0Safe only with a
     // clear surviveTicks lead or endX lead — NOT merely because it is under-horizon
     // (blanket under-horizon starved Delay arms: research_20261113_023017).
