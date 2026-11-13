@@ -235,6 +235,13 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(true, 0, 12) &&
                !EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(false, 0, 12),
            "assist-pack-ap-m6-adaptive-remus-gift");
+    // Assist Pack AP-M3: probe-extended d0 yields to floor-reached later Alive.
+    expect(EbLivePlanContracts::discreteIwProbeExtendedD0Alive(true, 120, 96, true) &&
+               EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true, true) &&
+               !EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true, false) &&
+               !EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f,
+                                                                100.f),
+           "assist-pack-ap-m3-cube-underselect");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

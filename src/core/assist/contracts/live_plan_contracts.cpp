@@ -336,6 +336,19 @@ bool EbLivePlanContracts::microWindowPreferLater(bool microEnabled, int limitTic
     return laterEndX > d0EndX + 1e-3f;
 }
 
+bool EbLivePlanContracts::discreteIwProbeExtendedD0Alive(bool d0Alive, int d0TicksRan,
+                                                         int observationFloorTicks,
+                                                         bool ranHorizonProbe) {
+    if (!d0Alive || !ranHorizonProbe || d0TicksRan <= 0)
+        return false;
+    return d0TicksRan > std::max(1, observationFloorTicks);
+}
+
+bool EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(
+    bool discreteIw, bool probeExtendedD0, bool laterAliveAtObservationFloor) {
+    return discreteIw && probeExtendedD0 && laterAliveAtObservationFloor;
+}
+
 bool EbLivePlanContracts::depthTruncatedAlive(bool died, bool unknown, int ticksRan,
                                               int honestFloorTicks) {
     if (died || unknown || ticksRan <= 0) {
@@ -595,6 +608,16 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(!microWindowPreferLater(false, 4, 110.f, 100.f), "ap3c-micro-off");
     expect(!microWindowPreferLater(true, 12, 110.f, 100.f), "ap3c-micro-large-window");
     expect(!microWindowPreferLater(true, 4, 100.f, 100.f), "ap3c-micro-no-lead");
+
+    // Assist Pack AP-M3 — probe-extended d0 vs floor-reached later Alive.
+    expect(discreteIwProbeExtendedD0Alive(true, 120, 96, true), "ap-m3-probe-ext");
+    expect(!discreteIwProbeExtendedD0Alive(true, 96, 96, true), "ap-m3-at-floor");
+    expect(!discreteIwProbeExtendedD0Alive(true, 120, 96, false), "ap-m3-no-probe");
+    expect(!discreteIwProbeExtendedD0Alive(false, 120, 96, true), "ap-m3-d0-dead");
+    expect(discreteIwLivingBandDemotesPassD0Safe(true, true, true), "ap-m3-living-band");
+    expect(!discreteIwLivingBandDemotesPassD0Safe(true, true, false), "ap-m3-shallow-ok");
+    expect(!discreteIwLivingBandDemotesPassD0Safe(false, true, true), "ap-m3-not-discrete");
+    expect(!discreteIwLivingBandDemotesPassD0Safe(true, false, true), "ap-m3-not-extended");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

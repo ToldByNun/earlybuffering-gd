@@ -195,6 +195,16 @@ public:
     static bool microWindowPreferLater(bool microEnabled, int limitTicks, float laterEndX,
                                        float d0EndX);
 
+    // Assist Pack AP-M3 — Classic discrete: AP-L6 probe can leave d0 Alive at
+    // observationFloor+24 while the later band is restored to observationFloor.
+    // Probe-inflated endX must not sticky PassD0Safe against floor-reached later
+    // Alive (Slaughterhouse cube underselect). Bare under-horizon Alone still
+    // does not demote (AP3 tighten preserved).
+    static bool discreteIwProbeExtendedD0Alive(bool d0Alive, int d0TicksRan,
+                                               int observationFloorTicks, bool ranHorizonProbe);
+    static bool discreteIwLivingBandDemotesPassD0Safe(bool discreteIw, bool probeExtendedD0,
+                                                      bool laterAliveAtObservationFloor);
+
     // Alive run stopped before the honest observation floor (budget / quantum),
     // not a real death. Callers must pass !died && !unknown already when useful;
     // this helper still guards those flags.

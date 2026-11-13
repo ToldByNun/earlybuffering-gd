@@ -50,6 +50,8 @@ Assist Pack AP-M1 (wave false-futile → Delay): later progress past dying d0 �
 
 Assist Pack AP-M6 (Adaptive remUs gift): discrete Adaptive abort after empty Alive screen; shell hit does not poison classic budgetHit when remUs remains. PlanGold `assist-pack-ap-m6-adaptive-remus-gift`. Re-pack Hoveropolis ON `research_20261113_223430` — expect `budgetHit` ↓ toward OFF, Delay ≥ OFF.
 
+Assist Pack AP-M3 (cube underselect): classic discrete probe-extended d0 yields to floor-reached later Alive (endX−λ). PlanGold `assist-pack-ap-m3-cube-underselect`. Re-pack Cube OFF `research_20261113_223848` — expect sticky `pass-d0-safe@plan` ↓, Delay↑; Hoveropolis OFF underselect not↑.
+
 Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-feel; InterveneGate at pick remains.
 
 Assist Pack AP7 (IW observation floor): discrete floor = `model.cap` (not `limit+cap`); classic matches Adaptive `96−limit` clamp. Fixes cube early `pass-budget` with Alive later. PlanGold `assist-pack-ap7-iw-floor`.

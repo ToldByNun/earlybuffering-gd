@@ -718,6 +718,43 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 bestDelay = microBest;
         }
 
+        // Assist Pack AP-M3: AP-L6 probe can leave d0 Alive past observation
+        // floor (+24) while the later band is restored to floor — probe-inflated
+        // endX sticky PassD0Safe. Prefer best floor-reached later by endX−λ
+        // (micro does not apply at ticks-all=12). Shallow under-horizon alone
+        // still does not demote (AP3).
+        if (ranHorizonProbe && bestDelay == 0 && d0AliveNow) {
+            int const obsFloor =
+                EbLivePlanContracts::discreteIwObservationFloor(savedCapForProbe);
+            bool const probeExt = EbLivePlanContracts::discreteIwProbeExtendedD0Alive(
+                d0AliveNow, c0ref.raw.ticksRan, obsFloor, true);
+            if (probeExt) {
+                int bandBest = -1;
+                float bandScore = 0.f;
+                for (int delay = 1; delay <= context.limit; ++delay) {
+                    if (!context.candReady[static_cast<size_t>(delay)])
+                        continue;
+                    auto const& cand = context.cands[static_cast<size_t>(delay)];
+                    bool const unknown =
+                        cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
+                    if (cand.raw.died || unknown || cand.raw.ticksRan <= 0)
+                        continue;
+                    bool const atFloor = cand.raw.ticksRan >= obsFloor;
+                    if (!EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true,
+                                                                                    atFloor))
+                        continue;
+                    float const score =
+                        cand.endX - context.latencyWeight * static_cast<float>(delay);
+                    if (bandBest < 0 || score > bandScore) {
+                        bandBest = delay;
+                        bandScore = score;
+                    }
+                }
+                if (bandBest > 0)
+                    bestDelay = bandBest;
+            }
+        }
+
         // Fallback probe only if pre-band probe did not run (setting flipped /
         // landed-not-wall path) and band still left remUs — preserves AP3c when
         // later Alive appears only after the band.

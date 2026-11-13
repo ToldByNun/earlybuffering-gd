@@ -12,6 +12,11 @@
 - Adaptive shell soft-abort no longer stamps classic `budgetHit` while fallthrough remUs &gt; 0 (was poisoning Hoveropolis hybridFallthrough).
 - PlanGold `assist-pack-ap-m6-adaptive-remus-gift`. Fixture: `research_20261113_223430` (Hoveropolis ON).
 
+### Assist Pack AP-M3 — Cube underselect / sticky PassD0Safe
+- Classic discrete IW: after AP-L6 probe-before-band leaves d0 Alive past the observation floor (+24) while the later band is restored to floor, probe-inflated endX no longer sticky `PassD0Safe` when any later Alive reached the floor — prefer best later by endX−λ (micro-window does not apply at `ticks-all=12`).
+- Bare under-horizon later Alone still does not demote (AP3 tighten preserved).
+- PlanGold `assist-pack-ap-m3-cube-underselect`. Fixture: `research_20261113_223848` (Cube OFF).
+
 ## v1.6.1
 
 **Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).
