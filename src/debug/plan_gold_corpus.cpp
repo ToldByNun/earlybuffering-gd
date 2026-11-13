@@ -184,6 +184,15 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&
                !EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18),
            "assist-pack-ap1-fair-depth-a4");
+    // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
+    {
+        auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);
+        int const before = env.totalLeft();
+        int const screen = env.screenLeft;
+        expect(env.stealScreenToVerify() == screen && env.screenLeft == 0 &&
+                   env.totalLeft() == before,
+               "assist-pack-ap2-screen-steal");
+    }
     // 1.5.1 AP1: Adaptive + classic Live both clamp simUs=0 → hitch ceiling.
     expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs &&
                EbLivePlanContracts::intendedLiveBudgetUs(0) ==

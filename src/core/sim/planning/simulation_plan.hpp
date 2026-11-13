@@ -155,6 +155,7 @@ public:
     int adaptiveScreenedCount = 0;    // delays that received a screen quantum
     int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
     int adaptiveVerifyGrants = 0;     // Phase C verify quanta granted
+    int adaptiveStolenScreenTicks = 0; // Assist Pack AP2: Screen→Verify steal count
     // Dev Lab AP4: which search branch produced this plan.
     // inputWindow | threatProbe | adaptive | classic | hybridFallthrough
     std::string plannerPath;

@@ -181,6 +181,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 plan.budgetHit = true;
                 return;
             }
+            // Assist Pack AP2: prefix-death skips must not charge Screen ticks
+            // (mark screened/dead only — budget stays for living survivors / verify).
             if (EbPrefixSim::shouldSkipAfterPrefixDeath(delay, prefixDeathTick)) {
                 auto& skipped = slots[static_cast<size_t>(delay)];
                 skipped.bindDelay(delay);
@@ -250,13 +252,26 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             if (EbPrefixSim::sameCrashShouldStop(sameCrashStreak))
                 break;
             if (envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen) <= 0) {
-                plan.budgetHit = true;
+                // Screen empty with Living survivors is not a hard miss — AP2 will
+                // verify with the remaining Verify/Reserve pool (and any steal).
+                if (survivors <= 0)
+                    plan.budgetHit = true;
                 break;
             }
             runScreenDelay(delay);
+            // Assist Pack AP2: d0 already dead + later Alive → stop screening more
+            // doomed delays; steal leftover Screen into Verify for the save.
+            if (slots[0].terminalDied && survivors > 0) {
+                envelope.stealScreenToVerify();
+                break;
+            }
         }
 
         survivors = countSurvivors(slots, limit);
+        // Assist Pack AP2: any Living survivors → leftover Screen becomes Verify
+        // (fixed 30% screen share must not starve hazard-progress proof).
+        if (survivors > 0)
+            envelope.stealScreenToVerify();
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
@@ -265,6 +280,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             fallClassic = true;
             plan.budgetHit = true;
         } else if (hopelessScreen(slots, limit, screened, survivors)) {
+            // No Verify on uniformly dead slots — fallthrough keeps sharedTicks.
             earlyPass = true;
             earlyReason = AssistReason::PassHopeless;
         } else if (survivors > 0) {
@@ -385,6 +401,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     plan.adaptiveScreenedCount = screened;
     plan.adaptiveSurvivors = survivors;
     plan.adaptiveVerifyGrants = verifyGrants;
+    plan.adaptiveStolenScreenTicks = envelope.stolenScreenToVerify;
 
     auto runClassicFallthrough = [&]() -> EbSimPlan {
         plan.adaptiveFellThrough = true;
@@ -482,6 +499,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         classicPlan.adaptiveScreenedCount = plan.adaptiveScreenedCount;
         classicPlan.adaptiveSurvivors = plan.adaptiveSurvivors;
         classicPlan.adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
+        classicPlan.adaptiveStolenScreenTicks = plan.adaptiveStolenScreenTicks;
         classicPlan.plannerPath = "hybridFallthrough";
         return classicPlan;
     };

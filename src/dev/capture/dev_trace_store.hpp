@@ -109,6 +109,7 @@ public:
     int adaptiveScreenedCount = 0;
     int adaptiveSurvivors = 0;
     int adaptiveVerifyGrants = 0;
+    int adaptiveStolenScreenTicks = 0;
     std::vector<int> viableDelays;
     bool requireHold = false;
     int releaseAfter = -1;

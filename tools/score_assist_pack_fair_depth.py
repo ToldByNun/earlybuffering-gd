@@ -57,6 +57,12 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
     underselect_zero = 0  # planned=0, bestSurv>0
     underselect_any = 0  # planned < bestSurv (both numeric)
     caused = 0
+    # Assist Pack AP2 — Screen→Verify steal
+    budget_hit = 0
+    budget_hit_with_survivors = 0
+    stolen_sum = 0
+    stolen_presses = 0
+    surv_presses = 0
 
     for att in data.get("attempts") or []:
         ev = att.get("eval") or {}
@@ -78,6 +84,17 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
             pf_down += 1
             reason = str(evn.get("assistReason") or "")
             notes = evn.get("candNotes") or []
+            survivors = int(evn.get("adaptiveSurvivors") or 0)
+            stolen = int(evn.get("adaptiveStolenScreenTicks") or 0)
+            if survivors > 0:
+                surv_presses += 1
+            if stolen > 0:
+                stolen_presses += 1
+                stolen_sum += stolen
+            if evn.get("budgetHit"):
+                budget_hit += 1
+                if survivors > 0:
+                    budget_hit_with_survivors += 1
             d0 = next((n for n in notes if int(n.get("delay") or -1) == 0), None)
             death_floor = None
             if d0 is not None and int(d0.get("deathTick") or -1) > 0:
@@ -115,16 +132,24 @@ def score_session(data: dict[str, Any]) -> dict[str, Any]:
         "underselectAny": underselect_any,
         "caused": caused,
         "underselectZeroRate": rate(underselect_zero, max(1, sealed)),
+        "budgetHit": budget_hit,
+        "budgetHitWithSurvivors": budget_hit_with_survivors,
+        "stolenPresses": stolen_presses,
+        "stolenTicksSum": stolen_sum,
+        "survivorPresses": surv_presses,
+        "meanStolenWhenSurvivors": (stolen_sum / surv_presses) if surv_presses > 0 else None,
     }
 
 
 # Primary KPIs: lower is better (except budgetNotReachedAliveShort which may rise
 # as not-viable migrates — we treat the false-hopeless / underselect pair as primary).
+# AP2: budgetHitWithSurvivors should fall once Screen→Verify steal lands.
 PRIMARY_LOWER = (
     "hopelessWithAliveShort",
     "notViableAliveShort",
     "underselectZero",
     "caused",
+    "budgetHitWithSurvivors",
 )
 
 

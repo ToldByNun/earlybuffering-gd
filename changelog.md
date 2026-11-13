@@ -8,6 +8,11 @@
 - `surviveBin` compares only at comparable depth (`fairDepthPreferCand`); unequal depth uses score/endX, not bin crush.
 - Proof harness: PlanGold `assist-pack-ap1-fair-depth-a4` + `LivePlanContracts`/`DevRejectLedger` selfChecks; offline `tools/test_fair_depth_ap1.cpp` / parity-smoke A4 mirrors; pack KPI `tools/score_assist_pack_fair_depth.py` (baseline `research_20261113_001322` → new Research Pack).
 
+### Assist Pack AP2 — Screen→Verify Steal
+- After Living survivors (or d0-dead + later Alive mid-screen): leftover Screen ticks move into Verify — no extra budget, no Max-Assist raise.
+- Prefix-death skips still do not charge Screen; empty Screen with survivors is not a hard `budgetHit`.
+- Sealed on `planFinished.adaptiveStolenScreenTicks`; PlanGold + `AdaptiveBudgetController` selfCheck; pack KPI `budgetHitWithSurvivors` / `stolenPresses`.
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 

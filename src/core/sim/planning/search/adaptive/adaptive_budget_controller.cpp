@@ -54,6 +54,19 @@ int EbAdaptiveBudgetController::Envelope::takeQuantum(Phase phase) const {
     return left;
 }
 
+int EbAdaptiveBudgetController::Envelope::stealScreenToVerify() {
+    int const move = std::max(0, screenLeft);
+    if (move <= 0)
+        return 0;
+    screenLeft = 0;
+    verifyLeft += move;
+    // Keep totals consistent for overlays / selfCheck (screenTicks may shrink).
+    screenTicks = std::max(0, screenTicks - move);
+    verifyTicks += move;
+    stolenScreenToVerify += move;
+    return move;
+}
+
 EbAdaptiveBudgetController::Envelope EbAdaptiveBudgetController::plan(
     int tickCeiling, int usCeiling, float emaUsPerTick, int screenQuantum, int verifyQuantum,
     int reservePct) {
@@ -198,6 +211,29 @@ bool EbAdaptiveBudgetController::selfCheck(std::string& report) {
 
     // Three-limit invariant: plan() has no Max Assist / horizon parameters to raise.
     expect(full.screenQuantum == 24 && full.verifyQuantum == 16, "quanta");
+
+    // Assist Pack AP2 — Screen→Verify steal (no extra ticks).
+    {
+        Envelope stealEnv = plan(1000, 0, 0.f, 24, 16, 0);
+        int const totalBefore = stealEnv.totalLeft();
+        int const screenBefore = stealEnv.screenLeft;
+        int const verifyBefore = stealEnv.verifyLeft;
+        expect(screenBefore > 0, "ap2-screen-nonzero");
+        int const stolen = stealEnv.stealScreenToVerify();
+        expect(stolen == screenBefore, "ap2-stolen-all");
+        expect(stealEnv.screenLeft == 0, "ap2-screen-empty");
+        expect(stealEnv.verifyLeft == verifyBefore + screenBefore, "ap2-verify-gained");
+        expect(stealEnv.totalLeft() == totalBefore, "ap2-no-extra-ticks");
+        expect(stealEnv.stolenScreenToVerify == stolen, "ap2-diag");
+        expect(stealEnv.stealScreenToVerify() == 0, "ap2-steal-idempotent");
+        // Partial spend then steal remainder.
+        Envelope partial = plan(1000, 0, 0.f, 24, 16, 0);
+        expect(partial.spend(Phase::Screen, 50), "ap2-partial-spend");
+        int const rem = partial.screenLeft;
+        int const v0 = partial.verifyLeft;
+        expect(partial.stealScreenToVerify() == rem, "ap2-partial-steal");
+        expect(partial.screenLeft == 0 && partial.verifyLeft == v0 + rem, "ap2-partial-verify");
+    }
 
     if (fails == 0)
         report = "AdaptiveBudgetController OK";

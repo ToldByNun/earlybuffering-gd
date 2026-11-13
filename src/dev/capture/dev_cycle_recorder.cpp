@@ -204,6 +204,7 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->adaptiveScreenedCount = plan.adaptiveScreenedCount;
     width->adaptiveSurvivors = plan.adaptiveSurvivors;
     width->adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
+    width->adaptiveStolenScreenTicks = plan.adaptiveStolenScreenTicks;
     width->viableDelays = plan.viableDelays;
     width->requireHold = plan.requireHold;
     width->releaseAfter = plan.releaseAfter;

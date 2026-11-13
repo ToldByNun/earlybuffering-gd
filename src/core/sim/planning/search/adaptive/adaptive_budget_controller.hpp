@@ -39,6 +39,14 @@ public:
         bool spend(Phase phase, int ticks);
         int takeQuantum(Phase phase) const;
 
+        // Assist Pack AP2: move remaining Screen into Verify (no extra ticks).
+        // Call once Living survivors exist so verify can prove hazard progress
+        // instead of finishing a fixed 30% screen share. Returns stolen count.
+        int stealScreenToVerify();
+
+        // Diagnostic: ticks moved by stealScreenToVerify (this envelope).
+        int stolenScreenToVerify = 0;
+
     private:
     };
 

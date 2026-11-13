@@ -142,6 +142,7 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["adaptiveScreenedCount"] = e.adaptiveScreenedCount;
         otherIndex["adaptiveSurvivors"] = e.adaptiveSurvivors;
         otherIndex["adaptiveVerifyGrants"] = e.adaptiveVerifyGrants;
+        otherIndex["adaptiveStolenScreenTicks"] = e.adaptiveStolenScreenTicks;
         if (!e.viableDelays.empty()) {
             std::vector<matjson::Value> vd;
             vd.reserve(e.viableDelays.size());
@@ -451,6 +452,10 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.adaptiveVerifyGrants =
             j.contains("adaptiveVerifyGrants")
                 ? static_cast<int>(j["adaptiveVerifyGrants"].asInt().unwrapOr(0))
+                : 0;
+        e.adaptiveStolenScreenTicks =
+            j.contains("adaptiveStolenScreenTicks")
+                ? static_cast<int>(j["adaptiveStolenScreenTicks"].asInt().unwrapOr(0))
                 : 0;
         if (j.contains("viableDelays") && j["viableDelays"].isArray()) {
             for (auto const& item : j["viableDelays"].asArray().unwrap()) {
