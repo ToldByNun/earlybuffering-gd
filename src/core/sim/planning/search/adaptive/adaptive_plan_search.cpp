@@ -9,6 +9,7 @@
 #include "../../../../../debug/perf_trace.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/planning/assist_horizon.hpp"
+#include "../../../../trigger_world/trigger_world_store.hpp"
 #include "../../../prefix_sim.hpp"
 #include "../../../sim_session_guard.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -126,6 +127,12 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     }
     bool const continuousControl = real->m_isDart || real->m_isShip || real->m_isSwing;
     bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
+    // Assist Pack AP-M7: TW-heavy Wave — smaller screen quantum so Adaptive
+    // shell leaves remUs for classic continuous IW fallthrough.
+    if (real->m_isDart && continuousControl) {
+        envelope.screenQuantum = EbLivePlanContracts::adaptiveWaveScreenTicksForTw(
+            envelope.screenQuantum, EbTriggerWorldStore::get().trackCount());
+    }
     auto const wall0 = std::chrono::steady_clock::now();
     // Assist Pack AP-L1/L5: Adaptive soft wall leaves fallthrough µs on the
     // shared press budget. Discrete IW (ball/cube) reserves ~half so classic
@@ -288,9 +295,13 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             fallClassic = true;
             plan.budgetHit = true;
         } else if (EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(
-                       inputWindow && !continuousControl, survivors, screened)) {
+                       inputWindow && !continuousControl, survivors, screened) ||
+                   EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(
+                       real->m_isDart, continuousControl, survivors)) {
             // Assist Pack AP-M6: discrete Adaptive found no Alive — stop here and
             // gift remaining shared remUs to classic (do not burn Verify / gate).
+            // Assist Pack AP-M7: Wave Adaptive with zero survivors → classic IW
+            // (Grief-class PassBudget seal without hybrid Delay search).
             fallClassic = true;
             plan.adaptiveAbortedForFallthrough = true;
         } else if (hopelessScreen(slots, limit, screened, survivors)) {
@@ -430,8 +441,19 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             auto const elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                                      std::chrono::steady_clock::now() - wall0)
                                      .count();
-            fallthroughRemUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
-                options.budgetUs - static_cast<int>(elapsed), classicOpts.tickBudget);
+            int const remUs = options.budgetUs - static_cast<int>(elapsed);
+            bool const waveNeedsClassic =
+                EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(
+                    real->m_isDart, continuousControl, plan.adaptiveSurvivors);
+            // Assist Pack AP-M7: Wave zero-survivor gift — classic continuous IW
+            // still gets the reserved slice after TW-heavy Adaptive overspend.
+            // Non-Wave keeps AP-L5 (no remUs invent past shared wall).
+            fallthroughRemUs =
+                waveNeedsClassic
+                    ? EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(
+                          true, remUs, fallthroughReserveUs)
+                    : EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+                          remUs, classicOpts.tickBudget);
             if (fallthroughRemUs <= 0) {
                 // Shared press wall spent — no remUs floor stack past sim-budget-us.
                 EbSimPlan out = plan;
@@ -443,11 +465,19 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 out.adaptiveAbortedForFallthrough = plan.adaptiveAbortedForFallthrough;
                 return out;
             }
-            // Reuse Adaptive wall0 + full press budget so classic IW honors the
-            // same deadline (Adaptive soft-aborted earlier via shell reserve).
-            classicOpts.budgetUs = options.budgetUs;
-            classicOpts.reusePlanWall = true;
-            classicOpts.planWall0 = wall0;
+            if (EbLivePlanContracts::adaptiveWaveFallthroughUsesFreshWall(waveNeedsClassic,
+                                                                          remUs)) {
+                // Gifted slice starts a fresh classic wall — reusePlanWall is already
+                // past options.budgetUs on Grief-class overspend.
+                classicOpts.budgetUs = fallthroughRemUs;
+                classicOpts.reusePlanWall = false;
+            } else {
+                // Reuse Adaptive wall0 + full press budget so classic IW honors the
+                // same deadline (Adaptive soft-aborted earlier via shell reserve).
+                classicOpts.budgetUs = options.budgetUs;
+                classicOpts.reusePlanWall = true;
+                classicOpts.planWall0 = wall0;
+            }
         }
 
         // Seed classic with Adaptive terminal / horizon-proven / observation-
@@ -692,6 +722,10 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
     expect(!EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(2000) &&
                EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(true, 0, 8),
            "ap-m6-remus-gift");
+    expect(EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(true, true, 0) &&
+               EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(true, 0, 2000) == 2000 &&
+               EbLivePlanContracts::adaptiveWaveFallthroughUsesFreshWall(true, 0),
+           "ap-m7-wave-fallthrough");
     expect(!EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(true),
            "ap-l5-ball-no-obs-seed");
     expect(EbLivePlanContracts::peakDeathMarksSkippedNotDead(), "peak-death-skip-not-dead");

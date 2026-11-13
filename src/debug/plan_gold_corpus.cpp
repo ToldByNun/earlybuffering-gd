@@ -242,6 +242,13 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                !EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f,
                                                                 100.f),
            "assist-pack-ap-m3-cube-underselect");
+    // Assist Pack AP-M7: Wave zero-survivor Adaptive gifts classic IW remUs.
+    expect(EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(true, true, 0) &&
+               EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(true, 0, 2000) == 2000 &&
+               EbLivePlanContracts::adaptiveWaveFallthroughUsesFreshWall(true, 0) &&
+               EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(false, 0, 2000) == 0 &&
+               EbLivePlanContracts::adaptiveWaveScreenTicksForTw(24, 942) == 12,
+           "assist-pack-ap-m7-adaptive-wave-fallthrough");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

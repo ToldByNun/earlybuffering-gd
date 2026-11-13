@@ -86,6 +86,19 @@ public:
     static bool adaptiveAbortToFallthroughAfterScreen(bool discreteLiveIw, int survivors,
                                                       int screened);
 
+    // Assist Pack AP-M7 — Continuous Wave Adaptive with zero Autonomous survivors
+    // must still run classic continuous IW (Grief: Adaptive overspent the shared
+    // wall before any screen progress; River already finds Delay via hybrid).
+    static bool adaptiveWaveZeroSurvivorsNeedsClassicIw(bool isWave, bool continuousControl,
+                                                        int survivors);
+    // Gift fallthroughReserveUs when Wave needs classic IW but shared remUs is gone.
+    static int adaptiveWaveFallthroughGiftUs(bool needsClassicIw, int remUs,
+                                             int fallthroughReserveUs);
+    // Fresh classic soft wall for the gift (reusePlanWall would already be spent).
+    static bool adaptiveWaveFallthroughUsesFreshWall(bool needsClassicIw, int remUs);
+    // TW-heavy Wave: shrink Adaptive screen quantum so shell leaves remUs for IW.
+    static int adaptiveWaveScreenTicksForTw(int adaptiveScreenTicks, size_t twTrackCount);
+
     // --- Landed ranking (input-window ball) --------------------------------
 
     // Current 1.5.1-dev overshoot: later wins only if score gain > eps.

@@ -134,6 +134,33 @@ bool EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(bool discreteLiv
     return discreteLiveIw && screened > 0 && survivors <= 0;
 }
 
+bool EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(bool isWave,
+                                                                  bool continuousControl,
+                                                                  int survivors) {
+    return isWave && continuousControl && survivors <= 0;
+}
+
+int EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(bool needsClassicIw, int remUs,
+                                                       int fallthroughReserveUs) {
+    if (remUs > 0)
+        return remUs;
+    if (!needsClassicIw)
+        return 0;
+    return std::max(0, fallthroughReserveUs);
+}
+
+bool EbLivePlanContracts::adaptiveWaveFallthroughUsesFreshWall(bool needsClassicIw, int remUs) {
+    return needsClassicIw && remUs <= 0;
+}
+
+int EbLivePlanContracts::adaptiveWaveScreenTicksForTw(int adaptiveScreenTicks,
+                                                      size_t twTrackCount) {
+    int const ticks = std::max(1, adaptiveScreenTicks);
+    if (twTrackCount < static_cast<size_t>(kLiveTwTightenTrackFloor))
+        return ticks;
+    return std::max(4, ticks / 2);
+}
+
 bool EbLivePlanContracts::currentLandedPreferLater(float bestScore, float candScore, int bestDelay,
                                                    int candDelay) {
     float const gain = candScore - bestScore;
@@ -477,6 +504,19 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
                !adaptiveAbortToFallthroughAfterScreen(true, 1, 9) &&
                !adaptiveAbortToFallthroughAfterScreen(false, 0, 9),
            "ap-m6-abort-after-screen");
+    expect(adaptiveWaveZeroSurvivorsNeedsClassicIw(true, true, 0) &&
+               !adaptiveWaveZeroSurvivorsNeedsClassicIw(true, true, 1) &&
+               !adaptiveWaveZeroSurvivorsNeedsClassicIw(false, true, 0) &&
+               !adaptiveWaveZeroSurvivorsNeedsClassicIw(true, false, 0),
+           "ap-m7-wave-needs-classic");
+    expect(adaptiveWaveFallthroughGiftUs(true, 1500, 2000) == 1500 &&
+               adaptiveWaveFallthroughGiftUs(true, 0, 2000) == 2000 &&
+               adaptiveWaveFallthroughGiftUs(false, 0, 2000) == 0 &&
+               adaptiveWaveFallthroughUsesFreshWall(true, 0) &&
+               !adaptiveWaveFallthroughUsesFreshWall(true, 500) &&
+               adaptiveWaveScreenTicksForTw(24, 50) == 24 &&
+               adaptiveWaveScreenTicksForTw(24, 200) == 12,
+           "ap-m7-wave-fallthrough-gift");
     expect(adaptiveShellBudgetUs(8170, adaptiveFallthroughReserveUs(8170, true)) == 4085,
            "ap-l5-shell-discrete");
     expect(adaptiveFallthroughSeedsObservationCleared(false), "ap-l5-seed-cube");

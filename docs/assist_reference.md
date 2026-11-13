@@ -44,6 +44,8 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Assist Pack AP-M3 (cube underselect):** Classic discrete IW after AP-L6 probe: probe-extended d0 Alive (ticks past observation floor) does not sticky `PassD0Safe` when a later Alive reached the floor — Delay by best endX−λ. PlanGold `assist-pack-ap-m3-cube-underselect`.
 
+**Assist Pack AP-M7 (Adaptive Wave fallthrough):** Wave Adaptive with zero survivors falls through to classic continuous IW; if shared remUs is already gone (TW-heavy Grief), gift fallthrough reserve as a fresh classic wall. TW≥200 halves Adaptive screen quantum. PlanGold `assist-pack-ap-m7-adaptive-wave-fallthrough`.
+
 **Assist Pack AP-L7 (lag warning notification):** `lag-warning-toast` / Lag Warning (UI → Notifications, default on) shows a bottom-left card once per level when a Live click feels hitchy (`planUs ≥` hitch ceiling or `budgetHit`) — independent of `show-overlay` and of sim-budget-us. PlanGold `assist-pack-ap-l7-lag-toast`.
 
 **Assist Pack AP-L6 (classic IW probe-before-band):** Discrete Live IW runs AP3c Probe Past Horizon after d0 / before the 1..limit band so wall-starved bands cannot skip the +24 prove extend. Wave stays on AP-L4 paths. PlanGold `assist-pack-ap-l6-probe-before-band`.

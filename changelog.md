@@ -17,6 +17,12 @@
 - Bare under-horizon later Alone still does not demote (AP3 tighten preserved).
 - PlanGold `assist-pack-ap-m3-cube-underselect`. Fixture: `research_20261113_223848` (Cube OFF).
 
+### Assist Pack AP-M7 — Adaptive Wave fallthrough Delay
+- Continuous Wave Adaptive with zero Autonomous survivors always aborts to classic continuous IW (do not seal Adaptive-only `PassBudget`).
+- When TW-heavy Adaptive overspent the shared wall (`remUs≤0`), gift the continuous fallthrough reserve as a fresh classic soft wall so hybrid IW can still search Delay (Grief-class `plannerPath=adaptive` / screened=0 miss).
+- TW tracks ≥200: Adaptive Wave screen quantum halved (min 4) so shell leaves remUs sooner.
+- PlanGold `assist-pack-ap-m7-adaptive-wave-fallthrough`. Fixtures: Grief ON `research_20261113_224158`, River ON `research_20261113_223742`.
+
 ## v1.6.1
 
 **Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).
