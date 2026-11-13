@@ -224,6 +224,10 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                    EbLivePlanContracts::currentClassicBudgetUs(0) &&
                EbLivePlanContracts::currentAdaptiveBudgetUs(0) == 0,
            "live-hitch-ceiling");
+    expect(EbLivePlanContracts::kMidRunWallPollTicks == EbShadowSimulator::kMidRunWallPollTicks &&
+               EbLivePlanContracts::shouldPollMidRunWall(0) &&
+               EbLivePlanContracts::midRunWallExceeded(8000, 8000),
+           "assist-pack-ap-l1-mid-run-wall");
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
                EbLivePlanContracts::kFallthroughRemUsFloor,
            "live-hitch-ceiling-remus");

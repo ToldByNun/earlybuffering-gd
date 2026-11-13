@@ -48,16 +48,13 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
         return output;
     };
 
-    auto spend = [&]() -> bool {
-        if (!tickBudgetLeft)
-            return false;
-        if (*tickBudgetLeft <= 0)
-            return true;
-        --(*tickBudgetLeft);
-        return false;
+    auto spend = [&](int tickIndex) -> bool {
+        return simulator.spendPlanTick(tickBudgetLeft, tickIndex);
     };
 
     if (delay > 0) {
+        if (simulator.markPlanWallIfExceeded())
+            return finish(r);
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase;
         simulator.stepPreCollide(layer, shadowPlayer, deltaTime);
@@ -80,7 +77,7 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
     }
 
     for (int tick = 0; tick < maxTicks; ++tick) {
-        if (spend())
+        if (spend(tick))
             break;
         float const stepDt = (tick == 0) ? firstDt : deltaTime;
         r.ticksRan = tick + 1;
@@ -224,17 +221,12 @@ EbShadowSimulator::RunResult EbShadowCandidateRunner::runTrajectoryOne(
         return output;
     };
 
-    auto spend = [&]() -> bool {
-        if (!tickBudgetLeft)
-            return false;
-        if (*tickBudgetLeft <= 0)
-            return true;
-        --(*tickBudgetLeft);
-        return false;
+    auto spend = [&](int tickIndex) -> bool {
+        return simulator.spendPlanTick(tickBudgetLeft, tickIndex);
     };
 
     for (int tick = 0; tick < maxTicks; ++tick) {
-        if (spend())
+        if (spend(tick))
             break;
         float const stepDt = (tick == 0) ? firstDt : deltaTime;
         r.ticksRan = tick + 1;
@@ -327,11 +319,8 @@ EbShadowCandidateRunner::runBaseline(EbShadowSimulator& simulator, PlayLayer* la
 
     int const maxTicks = std::max(1, model.cap);
     for (int tick = 0; tick < maxTicks; ++tick) {
-        if (tickBudgetLeft) {
-            if (*tickBudgetLeft <= 0)
-                break;
-            --(*tickBudgetLeft);
-        }
+        if (simulator.spendPlanTick(tickBudgetLeft, tick))
+            break;
         float const stepDt = (tick == 0) ? firstDt : deltaTime;
         simulator.m_simAbsTick = simulator.m_simTickBase + tick;
         simulator.stepPhysics(layer, shadowPlayer, stepDt, deltaTime);
@@ -377,11 +366,8 @@ EbShadowCandidateRunner::scanOrbWindow(EbShadowSimulator& simulator, PlayLayer* 
 
     simulator.m_orbScanning = true;
     for (int tick = 0; tick < scanTicks; ++tick) {
-        if (tickBudgetLeft) {
-            if (*tickBudgetLeft <= 0)
-                break;
-            --(*tickBudgetLeft);
-        }
+        if (simulator.spendPlanTick(tickBudgetLeft, tick))
+            break;
         float const stepDt = (tick == 0) ? firstDt : deltaTime;
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase + tick;

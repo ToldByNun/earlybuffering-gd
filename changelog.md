@@ -2,6 +2,11 @@
 
 ## v1.6.1 (dev)
 
+### Assist Pack AP-L1 — Mid-run hard wall abort
+- Soft `sim-budget-us` / hitch ceiling is now polled **inside** `runOne` / baseline / orb scan / Adaptive quanta / idle-prefix (every 4 ticks), not only between candidates.
+- One expensive Wave/TW sim can no longer run to full horizon after the press wall is already spent (Grief-class ~16ms with `candidatesTried=0`).
+- PlanGold `assist-pack-ap-l1-mid-run-wall` + `LivePlanContracts` mid-run poll selfCheck.
+
 ### Assist Pack AP1 — Fair Depth
 - Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
 - Input-window re-sims shallow ready seeds when budget remains; otherwise `pass-budget` + `budget-not-reached`.

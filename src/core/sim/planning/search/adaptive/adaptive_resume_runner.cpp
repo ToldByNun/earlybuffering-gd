@@ -94,17 +94,17 @@ EbShadowSimulator::RunResult EbAdaptiveResumeRunner::runQuantum(
         return output;
     };
 
-    auto spend = [&]() -> bool {
-        if (!tickBudgetLeft)
-            return false;
-        if (*tickBudgetLeft <= 0)
-            return true;
-        --(*tickBudgetLeft);
-        return false;
+    auto spend = [&](int tickIndex) -> bool {
+        return simulator.spendPlanTick(tickBudgetLeft, tickIndex);
     };
 
     // Fresh delay>0 pre-collide only when starting from tick 0 (mirrors runOne).
     if (!resuming && delay > 0 && startTick == 0) {
+        if (simulator.markPlanWallIfExceeded()) {
+            r = finishSegment(r);
+            slot.applyQuantumResult(r, -1, 0, simulator.m_simAbsTick, false, false, false, false);
+            return r;
+        }
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase;
         simulator.stepPreCollide(layer, shadowPlayer, deltaTime);
@@ -132,7 +132,7 @@ EbShadowSimulator::RunResult EbAdaptiveResumeRunner::runQuantum(
 
     EbShadowSimulator::RunResult segment{};
     for (int tick = startTick; tick < endTick; ++tick) {
-        if (spend())
+        if (spend(tick))
             break;
         float const stepDt = (tick == 0) ? firstDt : deltaTime;
         int const segmentTick = tick - startTick;

@@ -23,14 +23,8 @@ EbShadowDelayVerifier::verifyDelay(EbShadowSimulator& simulator, PlayLayer* laye
         options.tickBudget > 0 ? options.tickBudget : EbShadowSimulator::kDefaultTickBudget;
     int const tickBudgetStart = tickBudget;
     auto const wall0 = std::chrono::steady_clock::now();
-    auto wallExceeded = [&]() -> bool {
-        if (options.budgetUs <= 0)
-            return false;
-        auto elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
-                                       std::chrono::steady_clock::now() - wall0)
-                                       .count();
-        return elapsedMicroseconds >= options.budgetUs;
-    };
+    simulator.beginPlanWall(wall0, options.budgetUs);
+    auto wallExceeded = [&]() -> bool { return simulator.markPlanWallIfExceeded(); };
     auto fillSpent = [&]() {
         out.ticksSpent = std::max(0, tickBudgetStart - tickBudget);
         out.usSpent = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(

@@ -19,6 +19,18 @@ int EbLivePlanContracts::intendedLiveBudgetUs(int configuredBudgetUs) {
     return kHitchCeilingUs;
 }
 
+bool EbLivePlanContracts::shouldPollMidRunWall(int tickIndex) {
+    if (tickIndex < 0)
+        return false;
+    return (tickIndex % kMidRunWallPollTicks) == 0;
+}
+
+bool EbLivePlanContracts::midRunWallExceeded(int budgetUs, long long elapsedUs) {
+    if (budgetUs <= 0)
+        return false;
+    return elapsedUs >= budgetUs;
+}
+
 int EbLivePlanContracts::currentFallthroughClassicBudgetUs(int remUs, int ticksLeft) {
     if (remUs > 0)
         return remUs;
@@ -264,6 +276,12 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
 
     expect(kHitchCeilingUs == 8000, "hitch-ceiling");
     expect(kFallthroughRemUsFloor == 2000, "remus-floor");
+    expect(kMidRunWallPollTicks == 4, "mid-run-wall-poll");
+    expect(shouldPollMidRunWall(0) && shouldPollMidRunWall(4) && !shouldPollMidRunWall(1),
+           "mid-run-wall-poll-ticks");
+    expect(midRunWallExceeded(8000, 8000) && !midRunWallExceeded(8000, 7999) &&
+               !midRunWallExceeded(0, 99999),
+           "mid-run-wall-exceeded");
     expect(std::fabs(kLandedScoreEps - 8.f) < 1e-6f, "landed-eps");
 
     expect(currentClassicBudgetUs(4000) == 4000, "classic-keep");

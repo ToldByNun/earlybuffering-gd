@@ -52,6 +52,8 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
     if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;
     wall0 = std::chrono::steady_clock::now();
+    // Assist Pack AP-L1: mid-run soft-wall abort shares this press clock.
+    simulator.beginPlanWall(wall0, options.budgetUs);
 }
 
 EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
@@ -69,12 +71,8 @@ EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
 }
 
 bool EbShadowPlanContext::wallExceeded() const {
-    if (options.budgetUs <= 0)
-        return false;
-    auto elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
-                                   std::chrono::steady_clock::now() - wall0)
-                                   .count();
-    return elapsedMicroseconds >= options.budgetUs;
+    // Assist Pack AP-L1: shared mid-run latch + soft-wall clock from beginPlanWall.
+    return simulator.planWallExceeded();
 }
 
 bool EbShadowPlanContext::linkedDual() const {
@@ -170,6 +168,9 @@ EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int release
     auto result = runEngine(real, delayValue, releaseAfter, zone.valid ? &zone : nullptr);
     simulator.resetCaptureForNextRun(layer);
     ++plan.candidatesTried;
+    // Assist Pack AP-L1: mid-run soft-wall abort must surface as budgetHit.
+    if (simulator.planWallHit())
+        plan.budgetHit = true;
     candidate.raw = result;
     candidate.diedBeforeAction = result.diedBeforeAction;
     candidate.activatedRing = result.activatedRing;

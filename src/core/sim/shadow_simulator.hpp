@@ -13,6 +13,7 @@ class EbSimulationCandidate;
 #include "planning/simulation_plan.hpp"
 #include "shadow_run_result.hpp"
 #include <Geode/Geode.hpp>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -38,6 +39,8 @@ public:
     static constexpr int DEV_EVAL_SLOTS = 2;
     static constexpr float kClusterGapX = 50.f;
     static constexpr int kWindowMarginK = 1;
+    // Assist Pack AP-L1: poll soft wall every N physics ticks inside one run.
+    static constexpr int kMidRunWallPollTicks = 4;
     static constexpr int kDefaultTickBudget = 4000;
     // Wave zigzag: hazard AABB within this ahead-X (+ auto from limit) → Pass.
     static constexpr float kHazardProximityXMin = 70.f;
@@ -405,6 +408,18 @@ public:
     };
     static Model modelFor(PlayerObject* player, int limit, float capMul = 1.f);
 
+    // Assist Pack AP-L1 — Live soft-wall for mid-run abort (budgetUs<=0 = off).
+    // Bound for the current plan session; cleared in endSession.
+    void beginPlanWall(std::chrono::steady_clock::time_point wall0, int budgetUs);
+    void clearPlanWall();
+    bool planWallHit() const;
+    bool planWallExceeded() const;
+    // Sticky: if soft wall elapsed, latch planWallHit and return true.
+    bool markPlanWallIfExceeded();
+    // Decrement tick budget (if any) and poll wall every kMidRunWallPollTicks.
+    // Returns true when the runner must abort this tick.
+    bool spendPlanTick(int* tickBudgetLeft, int tickIndex);
+
     class OrbWindow {
     public:
         bool found = false;
@@ -601,6 +616,11 @@ private:
     static constexpr size_t kMaxApplyPerTick = 96;
     static constexpr float kApplyMarginX = 420.f;
     static constexpr int kApplyBudgetUs = 350;
+
+    // Assist Pack AP-L1: soft-wall clock for the active plan session.
+    std::chrono::steady_clock::time_point m_planWall0{};
+    int m_planWallBudgetUs = 0;
+    bool m_planWallHit = false;
 };
 
 #endif

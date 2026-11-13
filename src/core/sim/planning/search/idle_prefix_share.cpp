@@ -283,17 +283,12 @@ public:
             return output;
         };
 
-        auto spend = [&]() -> bool {
-            if (!tickBudgetLeft)
-                return false;
-            if (*tickBudgetLeft <= 0)
-                return true;
-            --(*tickBudgetLeft);
-            return false;
+        auto spend = [&](int tickIndex) -> bool {
+            return simulator.spendPlanTick(tickBudgetLeft, tickIndex);
         };
 
         for (int tick = delay; tick < maxTicks; ++tick) {
-            if (spend())
+            if (spend(tick))
                 break;
             float const stepDt = (tick == 0) ? firstDt : deltaTime;
             r.ticksRan = tick + 1;
@@ -500,11 +495,8 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
     }
 
     int idleTicksDone = 0;
-    auto spend = [&]() -> bool {
-        if (context.tickBudget <= 0)
-            return true;
-        --context.tickBudget;
-        return false;
+    auto spend = [&](int tickIndex) -> bool {
+        return context.simulator.spendPlanTick(&context.tickBudget, tickIndex);
     };
 
     for (int delay = 1; delay <= context.limit; ++delay) {
@@ -518,11 +510,11 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
         }
 
         while (idleTicksDone < delay) {
-            if (spend()) {
+            int const tick = idleTicksDone;
+            if (spend(tick)) {
                 context.plan.budgetHit = true;
                 break;
             }
-            int const tick = idleTicksDone;
             float const stepDt = (tick == 0) ? firstDt : deltaTime;
             simulator.m_orbOverlapTick = false;
             simulator.m_simAbsTick = simulator.m_simTickBase + tick;

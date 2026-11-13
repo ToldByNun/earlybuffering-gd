@@ -13,6 +13,8 @@ public:
     static constexpr int kHitchCeilingUs = 8000;
     // Adaptive→classic fallthrough floor when wall spent but ticks remain (µs).
     static constexpr int kFallthroughRemUsFloor = 2000;
+    // Assist Pack AP-L1: mid-run soft-wall poll interval inside one candidate sim.
+    static constexpr int kMidRunWallPollTicks = 4;
     // Matches EbShadowSimulator::kFutileEndXGain — landed noise / tie band.
     static constexpr float kLandedScoreEps = 8.f;
     // Continuous IW Wave short planCap floor (matches AssistHorizon::shortCaps).
@@ -26,6 +28,11 @@ public:
     static int currentAdaptiveBudgetUs(int configuredBudgetUs);
     // Intended 1.5.1 (AP1): both paths clamp 0 → hitch ceiling.
     static int intendedLiveBudgetUs(int configuredBudgetUs);
+
+    // Assist Pack AP-L1: poll soft wall on tickIndex 0,4,8,… inside one run.
+    static bool shouldPollMidRunWall(int tickIndex);
+    // True when budgetUs>0 and elapsedUs has reached the soft wall.
+    static bool midRunWallExceeded(int budgetUs, long long elapsedUs);
 
     // Current Adaptive fallthrough when remUs<=0 but ticks remain → 1µs.
     static int currentFallthroughClassicBudgetUs(int remUs, int ticksLeft);

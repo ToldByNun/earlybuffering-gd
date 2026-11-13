@@ -122,14 +122,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         return plan;
     }
     auto const wall0 = std::chrono::steady_clock::now();
-    auto wallExceeded = [&]() -> bool {
-        if (envelope.budgetUs <= 0)
-            return false;
-        auto const elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                                 std::chrono::steady_clock::now() - wall0)
-                                 .count();
-        return elapsed >= envelope.budgetUs;
-    };
+    // Assist Pack AP-L1: Adaptive quanta abort mid-run on the same soft wall.
+    simulator.beginPlanWall(wall0, envelope.budgetUs);
+    auto wallExceeded = [&]() -> bool { return simulator.markPlanWallIfExceeded(); };
 
     EbShadowSimulator::Model model = EbShadowSimulator::modelFor(real, limit, options.capMul);
     model.continuePastClear = options.requireAliveForDelay;
