@@ -21,7 +21,7 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 `src/debug/plan_gold_corpus.cpp` — synthetic planner gold cases. Extend when Pass/Delay contracts change.
 
-**v1.6.0** keeps the v1.5.1 planner contracts (AP0–AP1 / AP3a–AP3b / AP4: hitch / remUs / Wave IW floor + help-only/prox / orb-under-IW) and adds the desktop ImGui shell + deflate-only ship packages. Deferred from 1.5.1: AP2 landed ranking, AP3c micro-window.
+**v1.6.1** keeps the v1.5.1 / v1.6.0 planner contracts (AP0–AP1 / AP3a–AP3b / AP4 hitch / remUs / Wave IW / orbs-under-IW) plus Assist Pack AP-L1–L7 soft-wall honesty, desktop ImGui shell, and deflate-only ship packages.
 
 ## Adaptive smoke
 

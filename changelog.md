@@ -1,6 +1,10 @@
 # Changelog
 
-## v1.6.1 (dev)
+## v1.6.1
+
+**Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).
+
+Release notes: [`releases/v1.6.1.md`](releases/v1.6.1.md).
 
 ### Assist Pack AP-L1 — Mid-run hard wall abort
 - Soft `sim-budget-us` / hitch ceiling is now polled **inside** `runOne` / baseline / orb scan / Adaptive quanta / idle-prefix (every 4 ticks), not only between candidates.

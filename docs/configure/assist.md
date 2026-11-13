@@ -1,6 +1,6 @@
 # Assist settings
 
-**v1.6.0** Assist tab covers **where** assist may run (practice / percent / off-ranges — formerly Scope) and **how** the planner thinks.
+**v1.6.x** Assist tab covers **where** assist may run (practice / percent / off-ranges — formerly Scope) and **how** the planner thinks.
 
 ## Where it runs
 

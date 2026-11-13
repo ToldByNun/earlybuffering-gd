@@ -1,6 +1,6 @@
 # eb-cloud-submit (Vercel)
 
-This service supports Cloud Configs (shipped since EarlyBuffer **v1.4.3**; current line **v1.6.0**). In-game entry: **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config. See [the cloud system documentation](../../docs/cloud_configs.md) for the currently configured endpoints.
+This service supports Cloud Configs (shipped since EarlyBuffer **v1.4.3**; current line **v1.6.1**). In-game entry: **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config. See [the cloud system documentation](../../docs/cloud_configs.md) for the currently configured endpoints.
 
 Public endpoints for EarlyBuffer cloud configs (Share submit + download/rating stats). The GitHub token stays in Vercel Environment Variables — **never** in the mod package or player settings.
 

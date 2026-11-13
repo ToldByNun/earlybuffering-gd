@@ -33,7 +33,7 @@ You still click. EarlyBuffer only holds a slightly early jump and fires it on th
 <br/>
 
 <strong>Not on the Geode Index.</strong> Install from <a href="https://github.com/ToldByNun/earlybuffering-gd/releases">GitHub Releases</a> only.<br/>
-<strong>Last 2.2081 line</strong> — v1.6.0 does not support newer Geometry Dash builds.
+<strong>Last 2.2081 line</strong> — v1.6.1 does not support newer Geometry Dash builds.
 
 </div>
 
@@ -84,13 +84,14 @@ Also built in:
 - **Orbs / Wave / CPS budgets** — algorithm limits you can tune
 - **Learning** — optional per-level bias (off by default)
 - **Trigger World Bake** — cache static movers so the shadow sim can collide them
-- **Cloud Configs** — browse / rate / install / share community settings packs (classic Geode popup in v1.6.0)
+- **Cloud Configs** — browse / rate / install / share community settings packs (classic Geode popup in v1.6.x)
+- **Lag Warning** — once-per-level ImGui card when a Live click feels hitchy (UI → Notifications)
 
 Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_reference.md) · player docs: [site](https://ToldByNun.github.io/earlybuffering-gd/)
 
 ---
 
-## Desktop settings (v1.6.0)
+## Desktop settings (v1.6.1)
 
 On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
 
@@ -123,7 +124,7 @@ See [Cloud Configs](docs/cloud_configs.md).
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.6.0** |
+| Version | **1.6.1** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows · macOS · iOS · Android |
 | License | [MIT](LICENSE) |

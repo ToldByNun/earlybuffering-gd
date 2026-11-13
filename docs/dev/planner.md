@@ -35,7 +35,7 @@ Stopping at first safe on ball was a real footgun (Eval `bestSurv` ≠ Live pick
 
 Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` — ticksRan grows with delay.
 
-**1.5.1 / 1.6.0 contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`):
+**1.5.1 / 1.6.x contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`; AP-L1–L7 on **1.6.1**):
 
 | Topic | Status |
 |---|---|
@@ -86,7 +86,7 @@ Bake `findNear` → `BakeVerifier` → only trust if clears threat and **not** `
 
 When changing input planning, run the recorded Wave regression the project expects (`AGENTS.md`).
 
-## Per-tick cost notes (1.5.1 / 1.6.0)
+## Per-tick cost notes (1.5.1 / 1.6.x)
 
 - Group membership for capture is a sidetable built in `beginCapture`
 - TW apply caches last written pose on `SavedTransform` and skips redundant writes
