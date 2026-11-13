@@ -15,6 +15,8 @@ public:
     static constexpr int kFallthroughRemUsFloor = 2000;
     // Assist Pack AP-L1: mid-run soft-wall poll interval inside one candidate sim.
     static constexpr int kMidRunWallPollTicks = 4;
+    // Assist Pack AP-L2: skip prepare baseline/orb when remUs below this floor.
+    static constexpr int kPrepareMinRemUs = 1500;
     // Matches EbShadowSimulator::kFutileEndXGain — landed noise / tie band.
     static constexpr float kLandedScoreEps = 8.f;
     // Continuous IW Wave short planCap floor (matches AssistHorizon::shortCaps).
@@ -33,6 +35,12 @@ public:
     static bool shouldPollMidRunWall(int tickIndex);
     // True when budgetUs>0 and elapsedUs has reached the soft wall.
     static bool midRunWallExceeded(int budgetUs, long long elapsedUs);
+
+    // Assist Pack AP-L2: µs to keep for IW after prepare. budgetUs<=0 → 0 (unlimited).
+    // Continuous Live IW reserves max(kPrepareMinRemUs, budgetUs/2); else min floor.
+    static int prepareReserveUs(int budgetUs, bool continuousInputWindow);
+    // Heavy prepare (baseline / orb scan) allowed when unlimited or remUs >= reserve.
+    static bool prepareHeavyWorkAllowed(int remUs, int reserveUs, bool wallUnlimited);
 
     // Current Adaptive fallthrough when remUs<=0 but ticks remain → 1µs.
     static int currentFallthroughClassicBudgetUs(int remUs, int ticksLeft);

@@ -27,6 +27,8 @@ private:
     friend class EbIdlePrefixShare;
     friend class EbIdlePrefixForkState;
     bool wallExceeded() const;
+    // Soft-wall µs left (−1 = unlimited). 0 when wall already hit/spent.
+    int wallRemUs() const;
     bool linkedDual() const;
     EbShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,
                                          EbThreatZone const* zonePointer);

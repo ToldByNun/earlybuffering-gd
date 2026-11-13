@@ -75,6 +75,18 @@ bool EbShadowPlanContext::wallExceeded() const {
     return simulator.planWallExceeded();
 }
 
+int EbShadowPlanContext::wallRemUs() const {
+    if (options.budgetUs <= 0)
+        return -1;
+    if (simulator.planWallHit())
+        return 0;
+    auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
+                                         std::chrono::steady_clock::now() - wall0)
+                                         .count();
+    int const rem = options.budgetUs - static_cast<int>(elapsedMicroseconds);
+    return rem > 0 ? rem : 0;
+}
+
 bool EbShadowPlanContext::linkedDual() const {
     if (!layer || !layer->m_player2 || !real)
         return false;

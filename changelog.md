@@ -7,6 +7,11 @@
 - One expensive Wave/TW sim can no longer run to full horizon after the press wall is already spent (Grief-class ~16ms with `candidatesTried=0`).
 - PlanGold `assist-pack-ap-l1-mid-run-wall` + `LivePlanContracts` mid-run poll selfCheck.
 
+### Assist Pack AP-L2 — Prepare wall reserve
+- `prepare()` skips Wave baseline / orb scans when soft-wall remUs is below a reserve (continuous IW: `max(1500, budgetUs/2)`; discrete: 1500µs) so IW still gets headroom.
+- Spatial orb hint stays cheap and only skips when the wall is already gone; mid-run AP-L1 still aborts in-flight baseline/orb ticks.
+- PlanGold `assist-pack-ap-l2-prepare-reserve`.
+
 ### Assist Pack AP1 — Fair Depth
 - Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
 - Input-window re-sims shallow ready seeds when budget remains; otherwise `pass-budget` + `budget-not-reached`.

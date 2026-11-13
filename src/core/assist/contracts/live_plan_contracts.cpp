@@ -31,6 +31,24 @@ bool EbLivePlanContracts::midRunWallExceeded(int budgetUs, long long elapsedUs) 
     return elapsedUs >= budgetUs;
 }
 
+int EbLivePlanContracts::prepareReserveUs(int budgetUs, bool continuousInputWindow) {
+    if (budgetUs <= 0)
+        return 0;
+    if (continuousInputWindow)
+        return std::max(kPrepareMinRemUs, budgetUs / 2);
+    return kPrepareMinRemUs;
+}
+
+bool EbLivePlanContracts::prepareHeavyWorkAllowed(int remUs, int reserveUs, bool wallUnlimited) {
+    if (wallUnlimited)
+        return true;
+    if (remUs <= 0)
+        return false;
+    if (reserveUs <= 0)
+        return true;
+    return remUs >= reserveUs;
+}
+
 int EbLivePlanContracts::currentFallthroughClassicBudgetUs(int remUs, int ticksLeft) {
     if (remUs > 0)
         return remUs;
@@ -282,6 +300,14 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(midRunWallExceeded(8000, 8000) && !midRunWallExceeded(8000, 7999) &&
                !midRunWallExceeded(0, 99999),
            "mid-run-wall-exceeded");
+    expect(kPrepareMinRemUs == 1500, "prepare-min-rem");
+    expect(prepareReserveUs(0, true) == 0 && prepareReserveUs(8170, true) == 4085 &&
+               prepareReserveUs(8170, false) == kPrepareMinRemUs,
+           "prepare-reserve");
+    expect(prepareHeavyWorkAllowed(5000, 4085, false) &&
+               !prepareHeavyWorkAllowed(4000, 4085, false) &&
+               prepareHeavyWorkAllowed(0, 4085, true),
+           "prepare-heavy-allowed");
     expect(std::fabs(kLandedScoreEps - 8.f) < 1e-6f, "landed-eps");
 
     expect(currentClassicBudgetUs(4000) == 4000, "classic-keep");

@@ -228,6 +228,11 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::shouldPollMidRunWall(0) &&
                EbLivePlanContracts::midRunWallExceeded(8000, 8000),
            "assist-pack-ap-l1-mid-run-wall");
+    expect(EbLivePlanContracts::kPrepareMinRemUs == 1500 &&
+               EbLivePlanContracts::prepareReserveUs(8170, true) == 4085 &&
+               EbLivePlanContracts::prepareReserveUs(8170, false) == 1500 &&
+               !EbLivePlanContracts::prepareHeavyWorkAllowed(4000, 4085, false),
+           "assist-pack-ap-l2-prepare-reserve");
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
                EbLivePlanContracts::kFallthroughRemUsFloor,
            "live-hitch-ceiling-remus");
