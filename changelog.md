@@ -22,6 +22,11 @@
 - **Tightened after `research_20261113_023017`:** bare under-horizon later Alive must not demote every d0-safe (was starving Delay arms 11→4).
 - Parity still sticks only true `PassD0Safe`. PlanGold `assist-pack-ap3-weak-d0safe`.
 
+### Assist Pack AP5 — endX/λ among survivors
+- Continuous IW (ship/swing): full-band endX−λ / fair-depth rank (no earliest-safe early exit); Wave help-only unchanged, Wave saves use score peak.
+- Landed ball: Eval-aligned `intendedLandedPreferLater`. Classic v1: clear endX lead can beat sticky d0 Pass; among dying-d0 survivors prefer score peak over latest-only.
+- PlanGold `assist-pack-ap5-endx-rank`; KPI `underselectZero` / `underselectAny`.
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 

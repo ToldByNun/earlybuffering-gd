@@ -72,6 +72,14 @@ public:
                                  float bestEndXGain, bool foresightOrbPad);
     // Choose armed delay: help-only → 0; else earliest later safe (−1 = none).
     static int waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay);
+    // Assist Pack AP5: when d0 is unsafe, prefer the score-best later safe delay
+    // (endX − λ·delay) over earliest-only. Help-only still returns 0.
+    static int waveIwChooseDelayByScore(bool d0ObservationSafe, int bestScoreLaterSafeDelay,
+                                        int earliestLaterSafeDelay);
+
+    // Assist Pack AP5: continuous IW (ship/swing) ranks full survivor band by
+    // endX−λ / fair depth — not first-safe early exit.
+    static bool continuousIwRanksByEndX();
     // Cheap coast baseline under continuous IW (idleSafer) is allowed.
     static bool waveIwBaselineCoastAllowed(bool inputWindow, bool continuousControl, bool pressDown);
 

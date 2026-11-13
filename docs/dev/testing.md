@@ -38,6 +38,8 @@ Assist Pack AP4 (False Hopeless): Gate selfCheck A4 shallow-Alive → `PassBudge
 
 Assist Pack AP3 (Weak d0-safe, tightened): only survive/endX lead blocks sticky d0-safe (bare under-horizon does not — `research_20261113_023017` starved Delay). PlanGold `assist-pack-ap3-weak-d0safe`.
 
+Assist Pack AP5 (endX/λ survivors): continuous IW ranks by endX not earliest; Wave save score peak; landed intended prefer; classic clear endX lead vs d0. PlanGold `assist-pack-ap5-endx-rank`.
+
 ## Docs site
 
 ```bash

@@ -270,14 +270,86 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
             context.plan.idleSafer ? 1 : 0, context.plan.longForesightNeedSearch ? 1 : 0,
             context.plan.ascentUseful ? 1 : 0));
     } else {
-        // v1: d0 viable → Pass. Else latest ±k-robust in window (miss-assist wait).
+        // v1: d0 viable → Pass, unless Assist Pack AP5 finds a clear endX−λ later
+        // survivor at comparable depth (cube/ball under-select vs sealed bestSurv).
+        // Else latest ±k-robust in window (miss-assist wait).
         if (context.cands[0].viable) {
-            context.chosen = pickWithJitterTop2([&]() { return context.cands[0].viable ? 0 : -1; });
-            if (context.chosen == 0) {
-                context.doPass = true;
-                context.plan.threatCleared = true;
-                context.plan.nowIsSafe = true;
-            } else {
+            auto const& d0cand = context.cands[0];
+            int const depthFloor =
+                std::max(1, context.options.adaptiveScreenTicks > 0
+                                ? context.options.adaptiveScreenTicks
+                                : 24);
+            int scoreBestLater = -1;
+            float bestLaterScore = 0.f;
+            for (int delay = 1; delay <= context.limit; ++delay) {
+                auto const& cand = context.cands[static_cast<size_t>(delay)];
+                if (!cand.viable || cand.raw.died)
+                    continue;
+                float const d0Score = d0cand.endX;
+                float const candScore =
+                    cand.endX - context.latencyWeight * static_cast<float>(delay);
+                if (!EbLivePlanContracts::fairDepthPreferCand(
+                        d0cand.raw.ticksRan, d0cand.surviveBin, d0Score, cand.raw.ticksRan,
+                        cand.surviveBin, candScore, depthFloor)) {
+                    continue;
+                }
+                if (scoreBestLater < 0 || candScore > bestLaterScore) {
+                    scoreBestLater = delay;
+                    bestLaterScore = candScore;
+                }
+            }
+            bool const clearEndXLead =
+                scoreBestLater > 0 &&
+                context.cands[static_cast<size_t>(scoreBestLater)].endX >
+                    d0cand.endX + EbShadowSimulator::kFutileEndXGain;
+            if (clearEndXLead &&
+                EbPerfectAssistPolicy::interveneOk(/*d0Ok=*/true, /*ascentUseful=*/true,
+                                                   /*improves=*/true)) {
+                context.chosen = pickWithJitterTop2([&]() { return scoreBestLater; });
+                if (context.chosen == scoreBestLater) {
+                    context.doPass = false;
+                    applyChosenMeta(context.chosen);
+                }
+            }
+            if (context.chosen < 0 || context.doPass || context.chosen == 0) {
+                context.chosen =
+                    pickWithJitterTop2([&]() { return context.cands[0].viable ? 0 : -1; });
+                if (context.chosen == 0) {
+                    context.doPass = true;
+                    context.plan.threatCleared = true;
+                    context.plan.nowIsSafe = true;
+                } else {
+                    std::vector<int> pool;
+                    for (int delay = 0; delay <= context.limit; ++delay)
+                        pool.push_back(delay);
+                    context.chosen =
+                        pickWithJitterTop2([&]() { return pickLatestRobust(pool, false); });
+                    applyChosenMeta(context.chosen);
+                }
+            }
+        } else {
+            // Assist Pack AP5: among Alive survivors prefer endX−λ peak, not only latest.
+            int scoreBest = -1;
+            float bestSc = 0.f;
+            for (int delay = 1; delay <= context.limit; ++delay) {
+                auto const& cand = context.cands[static_cast<size_t>(delay)];
+                if (!cand.viable || cand.raw.died)
+                    continue;
+                float const sc = cand.endX - context.latencyWeight * static_cast<float>(delay);
+                if (scoreBest < 0 || sc > bestSc) {
+                    scoreBest = delay;
+                    bestSc = sc;
+                }
+            }
+            if (scoreBest > 0) {
+                context.chosen = pickWithJitterTop2([&]() {
+                    return context.cands[static_cast<size_t>(scoreBest)].viable ? scoreBest : -1;
+                });
+                if (context.chosen == scoreBest) {
+                    applyChosenMeta(context.chosen);
+                }
+            }
+            if (context.chosen < 0) {
                 std::vector<int> pool;
                 for (int delay = 0; delay <= context.limit; ++delay)
                     pool.push_back(delay);
@@ -285,12 +357,6 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
                     pickWithJitterTop2([&]() { return pickLatestRobust(pool, false); });
                 applyChosenMeta(context.chosen);
             }
-        } else {
-            std::vector<int> pool;
-            for (int delay = 0; delay <= context.limit; ++delay)
-                pool.push_back(delay);
-            context.chosen = pickWithJitterTop2([&]() { return pickLatestRobust(pool, false); });
-            applyChosenMeta(context.chosen);
         }
     }
 

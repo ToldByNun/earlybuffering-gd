@@ -111,6 +111,22 @@ int EbLivePlanContracts::waveIwChooseDelay(bool d0ObservationSafe, int earliestL
     return -1;
 }
 
+int EbLivePlanContracts::waveIwChooseDelayByScore(bool d0ObservationSafe,
+                                                  int bestScoreLaterSafeDelay,
+                                                  int earliestLaterSafeDelay) {
+    if (d0ObservationSafe)
+        return 0;
+    if (bestScoreLaterSafeDelay > 0)
+        return bestScoreLaterSafeDelay;
+    if (earliestLaterSafeDelay > 0)
+        return earliestLaterSafeDelay;
+    return -1;
+}
+
+bool EbLivePlanContracts::continuousIwRanksByEndX() {
+    return true;
+}
+
 bool EbLivePlanContracts::waveIwBaselineCoastAllowed(bool inputWindow, bool continuousControl,
                                                      bool pressDown) {
     if (!pressDown)
@@ -270,6 +286,10 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(waveIwChooseDelay(true, 5) == 0, "wave-iw-choose-help");
     expect(waveIwChooseDelay(false, 3) == 3, "wave-iw-choose-earliest");
     expect(waveIwChooseDelay(false, -1) == -1, "wave-iw-choose-none");
+    expect(waveIwChooseDelayByScore(true, 7, 3) == 0, "ap5-wave-help");
+    expect(waveIwChooseDelayByScore(false, 7, 3) == 7, "ap5-wave-score");
+    expect(waveIwChooseDelayByScore(false, -1, 3) == 3, "ap5-wave-fallback");
+    expect(continuousIwRanksByEndX(), "ap5-continuous-endx");
     expect(waveIwProximityPass(true, true, false, true, true, false), "wave-iw-prox-pass");
     expect(!waveIwProximityPass(true, true, true, true, true, false), "wave-iw-prox-need-alive-d0");
     expect(!waveIwProximityPass(true, true, false, true, true, true), "wave-iw-prox-orb-blocks");

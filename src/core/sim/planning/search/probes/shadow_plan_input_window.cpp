@@ -111,13 +111,6 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         if (delayValue > 0)
             context.plan.viableDelays.push_back(delayValue);
 
-        if (continuous) {
-            if (bestDelay >= 0)
-                return;
-            bestDelay = delayValue;
-            return;
-        }
-
         int const surviveTicks = EbShadowSurvivalRules::rankingSurviveTicks(candidate.raw);
         int const surviveBin = EbShadowSurvivalRules::surviveBinOf(surviveTicks);
         float const score =
@@ -125,10 +118,30 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         bool const landed = candidate.raw.landedAfterAction;
         int const ticksRan = candidate.raw.ticksRan;
 
-        // Ball stopAtBallLanding makes ticksRan ≈ delay + flight, so later delays
-        // inflate surviveBin without surviving longer after the press. Rank landed
-        // cands by score only, and require a clear endX gain to prefer a later Delay
-        // (Grief Live d=7 vs Eval bestSurv=0).
+        // Assist Pack AP5: continuous (ship/swing) ranks the full survivor band by
+        // endX−λ / fair depth — not first-safe. Wave help-only still overrides later.
+        if (continuous && EbLivePlanContracts::continuousIwRanksByEndX()) {
+            if (bestDelay < 0 ||
+                EbLivePlanContracts::fairDepthPreferCand(bestTicksRan, bestSurviveBin, bestScore,
+                                                         ticksRan, surviveBin, score,
+                                                         fairDepthFloor)) {
+                bestDelay = delayValue;
+                bestSurviveBin = surviveBin;
+                bestScore = score;
+                bestTicksRan = ticksRan;
+                bestLanded = false;
+            }
+            return;
+        }
+        if (continuous) {
+            if (bestDelay >= 0)
+                return;
+            bestDelay = delayValue;
+            return;
+        }
+
+        // Ball stopAtBallLanding: rank by Eval-aligned score (Assist Pack AP5 /
+        // intended landed), not inflated surviveBin.
         if (landed) {
             if (bestDelay < 0) {
                 bestDelay = delayValue;
@@ -146,10 +159,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 bestLanded = true;
                 return;
             }
-            float const gain = score - bestScore;
-            if (gain > EbShadowSimulator::kFutileEndXGain ||
-                (std::fabs(gain) <= EbShadowSimulator::kFutileEndXGain &&
-                 delayValue < bestDelay)) {
+            if (EbLivePlanContracts::intendedLandedPreferLater(bestScore, score, bestDelay,
+                                                               delayValue)) {
                 bestDelay = delayValue;
                 bestSurviveBin = surviveBin;
                 bestScore = score;
@@ -158,8 +169,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return;
         }
 
-        // Assist Pack AP1: do not let a deep d0 bin beat a quantum-only later
-        // survivor on surviveBin alone (unequal eval depth).
+        // Assist Pack AP1/AP5: fair depth then endX−λ among discrete survivors.
         if (bestDelay < 0 ||
             EbLivePlanContracts::fairDepthPreferCand(bestTicksRan, bestSurviveBin, bestScore,
                                                      ticksRan, surviveBin, score, fairDepthFloor)) {
@@ -251,7 +261,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.candReady[static_cast<size_t>(delayValue)] = 0;
                 if (!ingest(delayValue, context.evalDelay(delayValue, -1)))
                     break;
-                if (continuous && bestDelay >= 0) {
+                // Assist Pack AP5: no earliest-safe early exit when ranking by endX.
+                if (continuous && bestDelay >= 0 &&
+                    !EbLivePlanContracts::continuousIwRanksByEndX()) {
                     context.ledgerEarliestSafeExit = true;
                     break;
                 }
@@ -286,7 +298,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             }
             if (safe)
                 considerSafe(delayValue, context.cands[static_cast<size_t>(delayValue)]);
-            if (continuous && bestDelay >= 0) {
+            if (continuous && bestDelay >= 0 && !EbLivePlanContracts::continuousIwRanksByEndX()) {
                 context.ledgerEarliestSafeExit = true;
                 break;
             }
@@ -295,7 +307,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
         if (!ingest(delayValue, context.evalDelay(delayValue, -1)))
             break;
-        if (continuous && bestDelay >= 0) {
+        if (continuous && bestDelay >= 0 && !EbLivePlanContracts::continuousIwRanksByEndX()) {
             context.ledgerEarliestSafeExit = true;
             break;
         }
@@ -400,16 +412,26 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             c0.raw.died ? c0.raw.deathX : c0.endX);
 
         int earliestLater = -1;
+        int bestScoreLater = -1;
+        float bestLaterScore = 0.f;
         for (int delay = 1; delay <= context.limit; ++delay) {
             if (!context.candReady[static_cast<size_t>(delay)])
                 continue;
             auto const& cand = context.cands[static_cast<size_t>(delay)];
-            if (cand.viable && !cand.raw.died) {
+            if (!(cand.viable && !cand.raw.died))
+                continue;
+            if (earliestLater < 0)
                 earliestLater = delay;
-                break;
+            float const score =
+                cand.endX - context.latencyWeight * static_cast<float>(delay);
+            if (bestScoreLater < 0 || score > bestLaterScore) {
+                bestScoreLater = delay;
+                bestLaterScore = score;
             }
         }
-        int const chosen = EbLivePlanContracts::waveIwChooseDelay(d0Safe, earliestLater);
+        // Assist Pack AP5: when saving from a dying d0, prefer endX−λ peak.
+        int const chosen =
+            EbLivePlanContracts::waveIwChooseDelayByScore(d0Safe, bestScoreLater, earliestLater);
 
         float const proxX = std::clamp(static_cast<float>(context.limit + 4) * 5.5f,
                                        EbShadowSimulator::kHazardProximityXMin,

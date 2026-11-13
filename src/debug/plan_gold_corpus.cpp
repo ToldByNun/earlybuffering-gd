@@ -194,6 +194,11 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::weakD0SafeNeedsFallthrough(true) &&
                !EbLivePlanContracts::weakD0SafeNeedsFallthrough(false),
            "assist-pack-ap3-weak-d0safe");
+    // Assist Pack AP5: continuous ranks by endX; wave save prefers score peak.
+    expect(EbLivePlanContracts::continuousIwRanksByEndX() &&
+               EbLivePlanContracts::waveIwChooseDelayByScore(false, 7, 3) == 7 &&
+               EbLivePlanContracts::waveIwChooseDelayByScore(true, 7, 3) == 0,
+           "assist-pack-ap5-endx-rank");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);
