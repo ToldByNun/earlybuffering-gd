@@ -270,4 +270,4 @@ If step 2 fails with **missing file**, the `.geode` lacks the iOS binary — reb
 
 ## CI note
 
-Multi-platform CI builds Windows, macOS, iOS, and Android. The iOS job runs `geode_package_check.py --require ios` (signature gate) after build. Local Android NDK builds above do not require running CI; local iOS builds need a macOS host + Geode iOS binaries.
+Multi-platform CI builds Windows, macOS, iOS, and Android. The iOS job runs `geode_package_check.py --require ios` (signature gate) after build. Each platform job also uploads `earlybuffer-{win|mac|ios|android32|android64}-{sha}` for local re-merge (see `docs/dev/build.md`). Local Android NDK builds above do not require running CI; local iOS builds need a macOS host + Geode iOS binaries.

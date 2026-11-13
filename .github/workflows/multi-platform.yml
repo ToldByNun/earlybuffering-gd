@@ -28,16 +28,21 @@ jobs:
       matrix:
         config:
           - name: Windows
+            slug: win
             os: windows-latest
           - name: macOS
+            slug: mac
             os: macos-latest
           - name: iOS
+            slug: ios
             os: macos-latest
             target: iOS
           - name: Android32
+            slug: android32
             os: ubuntu-latest
             target: Android32
           - name: Android64
+            slug: android64
             os: ubuntu-latest
             target: Android64
 
@@ -48,6 +53,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build the mod
+        id: modbuild
         uses: geode-sdk/build-geode-mod@main
         with:
           combine: true
@@ -59,13 +65,48 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PKG=$(find . -name 'audesign.earlybuffer.geode' -type f | head -n 1)
+          PKG=$(find "${{ steps.modbuild.outputs.build-output }}" -name 'audesign.earlybuffer.geode' -type f | head -n 1)
+          if [[ -z "${PKG}" ]]; then
+            PKG=$(find . -name 'audesign.earlybuffer.geode' -type f | head -n 1)
+          fi
           if [[ -z "${PKG}" ]]; then
             echo "ERROR: no audesign.earlybuffer.geode after iOS build"
             exit 1
           fi
           echo "Checking ${PKG}"
           python3 tools/geode_package_check.py "${PKG}" --require ios --check-ios-sign
+
+      # geode-sdk/build-geode-mod also uploads geode-build-* (combine feed), but those
+      # nested uploads are not reliably downloadable later. Keep our own copies.
+      - name: Stage platform package
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${{ steps.modbuild.outputs.build-output }}"
+          mkdir -p platform-out
+          PKG=""
+          if [[ -n "${OUT}" ]]; then
+            PKG=$(find "${OUT}" -name 'audesign.earlybuffer.geode' -type f | head -n 1 || true)
+          fi
+          if [[ -z "${PKG}" ]]; then
+            PKG=$(find . -name 'audesign.earlybuffer.geode' -type f | head -n 1 || true)
+          fi
+          if [[ -z "${PKG}" ]]; then
+            echo "ERROR: no audesign.earlybuffer.geode to stage"
+            exit 1
+          fi
+          cp "${PKG}" "platform-out/audesign.earlybuffer.geode"
+          echo "Staged ${PKG} ($(wc -c < platform-out/audesign.earlybuffer.geode) bytes)"
+          ls -la platform-out
+
+      - name: Upload platform package
+        uses: actions/upload-artifact@v4
+        with:
+          name: earlybuffer-${{ matrix.config.slug }}-${{ github.sha }}
+          path: platform-out/audesign.earlybuffer.geode
+          if-no-files-found: error
+          retention-days: 30
 
   package:
     name: Package builds
@@ -103,3 +144,4 @@ jobs:
           name: earlybuffer-${{ github.sha }}
           path: ${{ steps.build.outputs.build-output }}
           if-no-files-found: error
+          retention-days: 30
