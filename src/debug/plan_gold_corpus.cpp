@@ -239,6 +239,17 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::liveTwApplyMaxPerTick(942, true, 96) == 96 &&
                EbLivePlanContracts::liveTwApplySkippedForPlanWall(true),
            "assist-pack-ap-l3-live-tw");
+    expect(EbLivePlanContracts::waveIwD0HasRunTruth(true, 8) &&
+               EbLivePlanContracts::waveIwFutileHonest(true, false) &&
+               !EbLivePlanContracts::waveIwFutileHonest(true, true) &&
+               EbLivePlanContracts::waveIwSkipLaterBandForStarve(true, false),
+           "assist-pack-ap-l4-wave-honesty");
+    expect(EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true) == 4085 &&
+               EbLivePlanContracts::adaptiveShellBudgetUs(
+                   8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085 &&
+               !EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(true) &&
+               EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(false),
+           "assist-pack-ap-l5-adaptive-fallthrough");
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
                EbLivePlanContracts::kFallthroughRemUsFloor,
            "live-hitch-ceiling-remus");

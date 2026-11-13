@@ -17,6 +17,17 @@
 - Live presses with ≥200 TW tracks use half apply caps (48 objs / 175µs); offline bake keeps full 96 / 350µs.
 - PlanGold `assist-pack-ap-l3-live-tw`.
 
+### Assist Pack AP-L4 — Wave honesty when starved
+- Unevaluated Wave (`candidatesTried=0` / no d0 run truth) → `pass-budget`, never synthetic `pass-wave-futile`.
+- Dying d0 + remUs below continuous prepare reserve → skip later-band endX scan; mark budgetHit.
+- Real `pass-wave-futile` only when d0 was simulated and the band was not wall-starved mid-scan.
+- PlanGold `assist-pack-ap-l4-wave-honesty`.
+
+### Assist Pack AP-L5 — Adaptive→classic fallthrough wall + ball honesty
+- Adaptive soft wall leaves fallthrough µs on the shared press budget; screen/verify also keep `reserveTicks` (no stacked remUs past `sim-budget-us`). Discrete IW (ball/cube) reserves ~half budget so classic fallthrough can finish (~3.8ms Hoveropolis); continuous keeps `kFallthroughRemUsFloor`.
+- Ball: do not seed observation-cleared Alive into fallthrough (sticky `pass-d0-safe` with `candidatesTried≤2` vs classic Delay). Adaptive sets `stopAtBallLanding` like classic IW.
+- PlanGold `assist-pack-ap-l5-adaptive-fallthrough`. Packs: classic `research_20261113_192611` vs Adaptive `research_20261113_192707` (Silent Hoveropolis ball).
+
 ### Assist Pack AP1 — Fair Depth
 - Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
 - Input-window re-sims shallow ready seeds when budget remains; otherwise `pass-budget` + `budget-not-reached`.

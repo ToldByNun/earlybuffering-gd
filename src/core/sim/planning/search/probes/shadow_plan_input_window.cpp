@@ -230,6 +230,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         return true;
     };
 
+    bool const isWave = context.real && context.real->m_isDart;
+
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
         context.plan.budgetHit = true;
@@ -239,12 +241,29 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         return true;
     }
 
-    if (!dual && !context.useTrajEngine && context.limit >= 1 && !context.plan.budgetHit &&
-        context.plan.reason != AssistReason::PassHardUnknown) {
+    // Assist Pack AP-L4: dying Wave d0 + remUs below continuous reserve → do not
+    // burn the rest of the press on a full later-band endX scan; PassBudget later.
+    bool skipLaterBand = false;
+    if (isWave && continuous && context.down && context.candReady[0]) {
+        auto const& d0 = context.cands[0];
+        bool const d0DeadTruth =
+            d0.raw.died && d0.raw.ticksRan > 0 && !d0.raw.unknown && !d0.raw.unknownTrunc;
+        int const laterReserve = EbLivePlanContracts::prepareReserveUs(context.options.budgetUs,
+                                                                        true);
+        bool const laterOk = EbLivePlanContracts::prepareHeavyWorkAllowed(
+            context.wallRemUs(), laterReserve, context.options.budgetUs <= 0);
+        if (EbLivePlanContracts::waveIwSkipLaterBandForStarve(d0DeadTruth, laterOk)) {
+            context.plan.budgetHit = true;
+            skipLaterBand = true;
+        }
+    }
+
+    if (!skipLaterBand && !dual && !context.useTrajEngine && context.limit >= 1 &&
+        !context.plan.budgetHit && context.plan.reason != AssistReason::PassHardUnknown) {
         EbIdlePrefixShare::evaluateAscending(context);
     }
 
-    for (int delayValue = 1; delayValue <= context.limit; ++delayValue) {
+    for (int delayValue = 1; !skipLaterBand && delayValue <= context.limit; ++delayValue) {
         if (context.plan.reason == AssistReason::PassHardUnknown)
             break;
         if (context.wallExceeded() || context.tickBudget <= 0) {
@@ -316,9 +335,10 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    bool const isWave = context.real && context.real->m_isDart;
     auto const& c0 = context.cands[0];
     bool const d0Safe = context.candReady[0] && c0.viable && !c0.raw.died;
+    bool const d0HasRunTruth = EbLivePlanContracts::waveIwD0HasRunTruth(
+        context.candReady[0] != 0, context.candReady[0] ? c0.raw.ticksRan : 0);
 
     // AP4 — Orb-intent handoff (before Wave help-only / Alive ranking).
     // Classic selection never runs after IW returns — recover G1 earliest±k.
@@ -409,6 +429,20 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     if (isWave && context.down && continuous &&
         context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown) {
+        // Assist Pack AP-L4: unevaluated / starved Wave → PassBudget, never fake futile.
+        if (!d0HasRunTruth) {
+            context.plan.action = PlanAction::Pass;
+            context.plan.reason = AssistReason::PassBudget;
+            context.plan.budgetHit = true;
+            context.plan.delay = context.plan.jumpTick = 0;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = false;
+            context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
+            EbAssistLog::debug(fmt::format(
+                "PLAN id={} IW PassBudget wave-starved (no d0 run truth)", context.plan.planId));
+            return true;
+        }
+
         context.plan.idleSafer = context.simulator.classifyIdleSafer(
             true, true, context.plan.baselineDeathTick >= 0, context.plan.baselineDeathTick,
             context.plan.baselineDeathX, c0.raw.died, c0.raw.died ? c0.raw.deathTick : -1,
@@ -515,15 +549,27 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         if (EbLivePlanContracts::waveIwFutilePass(true, true, false, idleHoldsEscape, orbIntent,
                                                   bestBin, bestGain, context.plan.foresightOrbPad)) {
             context.plan.action = PlanAction::Pass;
-            context.plan.reason = AssistReason::PassWaveFutile;
             context.plan.delay = context.plan.jumpTick = 0;
-            context.plan.nowIsSafe = d0Safe;
-            context.plan.threatCleared = !c0.raw.died;
-            context.plan.waveFutile = true;
-            context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveFutile);
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
-                context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
+            // Assist Pack AP-L4: budget/wall starve mid-band is PassBudget, not futile.
+            if (EbLivePlanContracts::waveIwFutileHonest(d0HasRunTruth, context.plan.budgetHit)) {
+                context.plan.reason = AssistReason::PassWaveFutile;
+                context.plan.nowIsSafe = d0Safe;
+                context.plan.threatCleared = !c0.raw.died;
+                context.plan.waveFutile = true;
+                context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveFutile);
+                EbAssistLog::debug(fmt::format(
+                    "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
+                    context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
+            } else {
+                context.plan.reason = AssistReason::PassBudget;
+                context.plan.budgetHit = true;
+                context.plan.nowIsSafe = false;
+                context.plan.threatCleared = false;
+                context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
+                EbAssistLog::debug(fmt::format(
+                    "PLAN id={} IW PassBudget wave-starved (futile shape without honest band)",
+                    context.plan.planId));
+            }
             return true;
         }
     }

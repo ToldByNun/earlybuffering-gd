@@ -56,6 +56,17 @@ public:
     // Intended AP1: remUs>0 keep remUs; else if ticksLeft>0 → floor.
     static int intendedFallthroughClassicBudgetUs(int remUs, int ticksLeft);
 
+    // Assist Pack AP-L5: Adaptive soft wall leaves fallthroughReserveUs on the
+    // shared press budget (no remUs floor stacked past sim-budget-us).
+    static int adaptiveShellBudgetUs(int fullBudgetUs, int fallthroughReserveUs);
+    // µs reserved for classic fallthrough before Adaptive spends the press wall.
+    // Continuous: kFallthroughRemUsFloor. Discrete IW (ball/cube): ≥ half budget
+    // (Hoveropolis classic ball IW median ~3.8ms @ simUs=8170).
+    static int adaptiveFallthroughReserveUs(int fullBudgetUs, bool discreteInputWindow);
+    // Observation-cleared Alive seeds skip on ball — sticky PassD0Safe vs classic
+    // stopAtBallLanding Delay ranking (Hoveropolis research_20261113_192707).
+    static bool adaptiveFallthroughSeedsObservationCleared(bool isBall);
+
     // --- Landed ranking (input-window ball) --------------------------------
 
     // Current 1.5.1-dev overshoot: later wins only if score gain > eps.
@@ -94,6 +105,12 @@ public:
     static bool waveIwFutilePass(bool isWave, bool pressDown, bool anyAliveSaveFromD0Death,
                                  bool idleHoldsEscape, bool orbIntent, int bestSurviveBin,
                                  float bestEndXGain, bool foresightOrbPad);
+    // Assist Pack AP-L4: d0 was actually simulated (not synthetic ledger).
+    static bool waveIwD0HasRunTruth(bool candReady0, int d0TicksRan);
+    // PassWaveFutile only with d0 run truth and no budget/wall starve mid-band.
+    static bool waveIwFutileHonest(bool d0HasRunTruth, bool budgetHitIncomplete);
+    // Dying d0 + remUs below continuous prepare reserve → skip later-band scan.
+    static bool waveIwSkipLaterBandForStarve(bool d0DeadWithTruth, bool prepareHeavyStillOk);
     // Choose armed delay: help-only → 0; else earliest later safe (−1 = none).
     static int waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay);
     // Assist Pack AP5: when d0 is unsafe, prefer the score-best later safe delay

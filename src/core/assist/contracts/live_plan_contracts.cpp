@@ -84,6 +84,30 @@ int EbLivePlanContracts::intendedFallthroughClassicBudgetUs(int remUs, int ticks
     return 0;
 }
 
+int EbLivePlanContracts::adaptiveShellBudgetUs(int fullBudgetUs, int fallthroughReserveUs) {
+    if (fullBudgetUs <= 0)
+        return 0;
+    int const reserve = std::max(0, fallthroughReserveUs);
+    if (reserve >= fullBudgetUs)
+        return 1;
+    return fullBudgetUs - reserve;
+}
+
+int EbLivePlanContracts::adaptiveFallthroughReserveUs(int fullBudgetUs,
+                                                      bool discreteInputWindow) {
+    if (fullBudgetUs <= 0)
+        return 0;
+    if (!discreteInputWindow)
+        return kFallthroughRemUsFloor;
+    int const half = fullBudgetUs / 2;
+    int const prepareFloor = prepareReserveUs(fullBudgetUs, false);
+    return std::max(kFallthroughRemUsFloor, std::max(prepareFloor * 2, half));
+}
+
+bool EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(bool isBall) {
+    return !isBall;
+}
+
 bool EbLivePlanContracts::currentLandedPreferLater(float bestScore, float candScore, int bestDelay,
                                                    int candDelay) {
     float const gain = candScore - bestScore;
@@ -150,6 +174,19 @@ bool EbLivePlanContracts::waveIwFutilePass(bool isWave, bool pressDown, bool any
     if (bestSurviveBin > 0)
         return false;
     return !(bestEndXGain >= kLandedScoreEps);
+}
+
+bool EbLivePlanContracts::waveIwD0HasRunTruth(bool candReady0, int d0TicksRan) {
+    return candReady0 && d0TicksRan > 0;
+}
+
+bool EbLivePlanContracts::waveIwFutileHonest(bool d0HasRunTruth, bool budgetHitIncomplete) {
+    return d0HasRunTruth && !budgetHitIncomplete;
+}
+
+bool EbLivePlanContracts::waveIwSkipLaterBandForStarve(bool d0DeadWithTruth,
+                                                       bool prepareHeavyStillOk) {
+    return d0DeadWithTruth && !prepareHeavyStillOk;
 }
 
 int EbLivePlanContracts::waveIwChooseDelay(bool d0ObservationSafe, int earliestLaterSafeDelay) {
@@ -350,6 +387,16 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(currentFallthroughClassicBudgetUs(0, 0) == 0, "ft-rem-done");
     expect(intendedFallthroughClassicBudgetUs(0, 100) == kFallthroughRemUsFloor, "ft-rem-floor");
     expect(intendedFallthroughClassicBudgetUs(900, 50) == 900, "ft-rem-intended-keep");
+    expect(adaptiveShellBudgetUs(8170, kFallthroughRemUsFloor) == 6170, "ap-l5-shell-wall");
+    expect(adaptiveShellBudgetUs(1500, kFallthroughRemUsFloor) == 1, "ap-l5-shell-tiny");
+    expect(adaptiveShellBudgetUs(0, kFallthroughRemUsFloor) == 0, "ap-l5-shell-unlimited");
+    expect(adaptiveFallthroughReserveUs(8170, false) == kFallthroughRemUsFloor,
+           "ap-l5-ft-reserve-cont");
+    expect(adaptiveFallthroughReserveUs(8170, true) == 4085, "ap-l5-ft-reserve-discrete");
+    expect(adaptiveShellBudgetUs(8170, adaptiveFallthroughReserveUs(8170, true)) == 4085,
+           "ap-l5-shell-discrete");
+    expect(adaptiveFallthroughSeedsObservationCleared(false), "ap-l5-seed-cube");
+    expect(!adaptiveFallthroughSeedsObservationCleared(true), "ap-l5-seed-ball");
 
     // Current overshoot: +3px does not beat d0; intended Eval-aligned does.
     expect(!currentLandedPreferLater(100.f, 103.f, 0, 5), "cur-landed-gate");
@@ -391,6 +438,15 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(waveIwFutilePass(true, true, false, false, false, 0, 3.f, false), "wave-iw-futile");
     expect(!waveIwFutilePass(true, true, true, false, false, 0, 3.f, false), "wave-iw-futile-save");
     expect(!waveIwFutilePass(true, true, false, false, false, 1, 3.f, false), "wave-iw-futile-bin");
+    expect(waveIwD0HasRunTruth(true, 12) && !waveIwD0HasRunTruth(true, 0) &&
+               !waveIwD0HasRunTruth(false, 12),
+           "wave-iw-d0-truth");
+    expect(waveIwFutileHonest(true, false) && !waveIwFutileHonest(true, true) &&
+               !waveIwFutileHonest(false, false),
+           "wave-iw-futile-honest");
+    expect(waveIwSkipLaterBandForStarve(true, false) && !waveIwSkipLaterBandForStarve(true, true) &&
+               !waveIwSkipLaterBandForStarve(false, false),
+           "wave-iw-skip-later-starve");
     expect(waveIwBaselineCoastAllowed(true, true, true), "wave-iw-baseline-coast");
     expect(!waveIwBaselineCoastAllowed(true, false, true), "wave-iw-baseline-discrete-skip");
     expect(waveIwBaselineCoastAllowed(false, false, true), "wave-iw-baseline-classic");
