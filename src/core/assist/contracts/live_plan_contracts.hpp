@@ -114,6 +114,11 @@ public:
     static bool hopelessBlockedByDepthTruncation(bool anyDepthTruncatedAlive,
                                                  bool anyObservationSafeDelay);
 
+    // Assist Pack AP4: PassHopeless only when d0 is dead AND no later Alive exists
+    // (shallow counts). Living later grid → PassBudget / fallthrough, never Hopeless.
+    // Uniform same-crash death (A7) still allows Hopeless when anyLaterAlive=false.
+    static bool hopelessBlockedByLivingLater(bool d0Died, bool anyLaterAlive);
+
     static bool selfCheck(std::string& report);
 
 private:

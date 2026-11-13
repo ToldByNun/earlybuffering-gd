@@ -34,6 +34,8 @@ Assist Pack AP1 before/after:
 
 Assist Pack AP2 (Screen→Verify steal): same scorer — expect `budgetHitWithSurvivors` ↓ and `stolenPresses` / `adaptiveStolenScreenTicks` ↑ on survivor presses; PlanGold `assist-pack-ap2-screen-steal`.
 
+Assist Pack AP4 (False Hopeless): Gate selfCheck A4 shallow-Alive → `PassBudget`; A7 uniform death stays Hopeless; PlanGold `assist-pack-ap4-false-hopeless`; pack KPI `hopelessWithAliveShort` ↓.
+
 ## Docs site
 
 ```bash

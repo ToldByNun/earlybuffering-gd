@@ -521,14 +521,30 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     if (context.plan.budgetHit && bestDelay < 0)
         context.plan.reason = AssistReason::PassBudget;
-    // Assist Pack AP1: depth-truncated Alive blocks dishonest PassHopeless.
-    if (bestDelay < 0 &&
-        EbLivePlanContracts::hopelessBlockedByDepthTruncation(anyDepthTruncated, false) &&
-        context.plan.reason == AssistReason::PassHopeless) {
-        context.plan.budgetHit = true;
-        context.plan.reason = AssistReason::PassBudget;
-        context.plan.action = PlanAction::Pass;
-        context.plan.delay = 0;
+    // Assist Pack AP1/AP4: depth-truncated Alive OR dying d0 + any later Alive
+    // blocks dishonest PassHopeless (A4 miss → PassBudget / fallthrough).
+    if (bestDelay < 0 && context.plan.reason == AssistReason::PassHopeless) {
+        bool anyLaterAlive = false;
+        for (int delay = 1; delay <= context.limit; ++delay) {
+            if (!context.candReady[static_cast<size_t>(delay)])
+                continue;
+            auto const& cand = context.cands[static_cast<size_t>(delay)];
+            bool const unknown =
+                cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
+            if (!cand.raw.died && !unknown && cand.raw.ticksRan > 0) {
+                anyLaterAlive = true;
+                break;
+            }
+        }
+        bool const d0Died =
+            context.candReady[0] && context.cands[0].raw.died && !context.cands[0].raw.unknown;
+        if (EbLivePlanContracts::hopelessBlockedByDepthTruncation(anyDepthTruncated, false) ||
+            EbLivePlanContracts::hopelessBlockedByLivingLater(d0Died, anyLaterAlive)) {
+            context.plan.budgetHit = true;
+            context.plan.reason = AssistReason::PassBudget;
+            context.plan.action = PlanAction::Pass;
+            context.plan.delay = 0;
+        }
     }
     // AP4: hopeless with toggle overlap → named PassToggleUnknown.
     if (bestDelay < 0 && context.sawToggleUnknown &&

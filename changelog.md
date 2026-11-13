@@ -13,6 +13,10 @@
 - Prefix-death skips still do not charge Screen; empty Screen with survivors is not a hard `budgetHit`.
 - Sealed on `planFinished.adaptiveStolenScreenTicks`; PlanGold + `AdaptiveBudgetController` selfCheck; pack KPI `budgetHitWithSurvivors` / `stolenPresses`.
 
+### Assist Pack AP4 — False Hopeless
+- Dying d0 + any later Living (even shallow / not hazard-proven) → `pass-budget` + classic fallthrough, never `pass-hopeless` (A4).
+- Uniform lethal grids (A7 same-crash) still `pass-hopeless`. Gate + IW + classic selection; PlanGold `assist-pack-ap4-false-hopeless`; KPI `hopelessWithAliveShort`.
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 

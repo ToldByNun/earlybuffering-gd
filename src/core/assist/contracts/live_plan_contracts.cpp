@@ -189,6 +189,10 @@ bool EbLivePlanContracts::hopelessBlockedByDepthTruncation(bool anyDepthTruncate
     return anyDepthTruncatedAlive;
 }
 
+bool EbLivePlanContracts::hopelessBlockedByLivingLater(bool d0Died, bool anyLaterAlive) {
+    return d0Died && anyLaterAlive;
+}
+
 bool EbLivePlanContracts::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;
@@ -285,6 +289,10 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(fairDepthPreferCand(18, 0, 100.f, 20, 1, 101.f, 24), "fair-depth-both-shallow-bin");
     expect(hopelessBlockedByDepthTruncation(true, false), "hopeless-blocked-trunc");
     expect(!hopelessBlockedByDepthTruncation(false, false), "hopeless-ok-empty");
+    // Assist Pack AP4 — A4 living later vs A7 uniform lethal.
+    expect(hopelessBlockedByLivingLater(true, true), "ap4-a4-blocked");
+    expect(!hopelessBlockedByLivingLater(true, false), "ap4-a7-allowed");
+    expect(!hopelessBlockedByLivingLater(false, true), "ap4-d0-alive-n/a");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

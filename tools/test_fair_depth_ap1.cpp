@@ -48,6 +48,8 @@ int main() {
            "a4-d0-dead-not-trunc");
     expect(EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false),
            "a4-hopeless-blocked");
+    expect(EbLivePlanContracts::hopelessBlockedByLivingLater(true, true), "a4-living-later-blocked");
+    expect(!EbLivePlanContracts::hopelessBlockedByLivingLater(true, false), "a7-uniform-allowed");
 
     // Seed honesty still requires covering death to count as proven Alive (AP10).
     expect(!EbLivePlanContracts::adaptiveSeedCountsAlive(laterTicks, quantum, d0Death, modelCap),

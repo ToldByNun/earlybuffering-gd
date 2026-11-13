@@ -184,6 +184,10 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&
                !EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18),
            "assist-pack-ap1-fair-depth-a4");
+    // Assist Pack AP4: living later blocks Hopeless; uniform death (A7) allows it.
+    expect(EbLivePlanContracts::hopelessBlockedByLivingLater(true, true) &&
+               !EbLivePlanContracts::hopelessBlockedByLivingLater(true, false),
+           "assist-pack-ap4-false-hopeless");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

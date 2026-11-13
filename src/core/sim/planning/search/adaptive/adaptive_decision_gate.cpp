@@ -167,7 +167,23 @@ EbAdaptiveDecisionGate::Result EbAdaptiveDecisionGate::decide(Input const& in) {
             out.reason = AssistReason::PassBudget;
             return out;
         }
-        out.reason = in.budgetHitIncomplete ? AssistReason::PassBudget : AssistReason::PassHopeless;
+        // Assist Pack AP4: dying d0 + any later Living (even shallow / not yet
+        // hazard-proven) is incomplete search — never PassHopeless (A4 miss).
+        // Uniform dead grids (A7) still Hopeless below.
+        bool anyLaterAlive = false;
+        for (int delay = 1; delay <= in.limit; ++delay) {
+            auto const& c = in.cands[static_cast<size_t>(delay)];
+            if (c.autonomousAlive && !c.terminalDied && !c.terminalUnknown) {
+                anyLaterAlive = true;
+                break;
+            }
+        }
+        if (EbLivePlanContracts::hopelessBlockedByLivingLater(d0.terminalDied, anyLaterAlive) ||
+            in.budgetHitIncomplete) {
+            out.reason = AssistReason::PassBudget;
+            return out;
+        }
+        out.reason = AssistReason::PassHopeless;
         return out;
     }
 
@@ -407,6 +423,40 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     auto const softDeadOut = decide(softDeadIn);
     expect(softDeadOut.action == PlanAction::Pass, "soft-dead-pass");
     expect(softDeadOut.reason == AssistReason::PassHopeless, "soft-dead-hopeless");
+
+    // Assist Pack AP4 — A4: dying d0 + shallow later Alive (no hazard proof yet)
+    // must be PassBudget (fallthrough), never PassHopeless.
+    for (int delay = 0; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].terminalDied = true;
+        cands[delay].deathTick = 54;
+        cands[delay].ticksSimulated = 55;
+        cands[delay].endX = 50.f;
+    }
+    cands[1].terminalDied = false;
+    cands[1].autonomousAlive = true;
+    cands[1].deathTick = -1;
+    cands[1].ticksSimulated = 18;
+    cands[1].autonomousSurviveTicks = 18;
+    cands[1].endX = 80.f;
+    cands[2].terminalDied = false;
+    cands[2].autonomousAlive = true;
+    cands[2].deathTick = -1;
+    cands[2].ticksSimulated = 43;
+    cands[2].autonomousSurviveTicks = 43;
+    cands[2].endX = 90.f;
+    Input a4In = deadIn;
+    a4In.budgetHitIncomplete = false;
+    a4In.screenProofTicks = 18;
+    a4In.modelCap = 96;
+    a4In.robustK = 0;
+    expect(!hasHazardProgress(cands[1], cands[0], 96, 18), "ap4-a4-no-progress-18");
+    expect(!hasHazardProgress(cands[2], cands[0], 96, 18), "ap4-a4-no-progress-43");
+    auto const a4Out = decide(a4In);
+    expect(a4Out.action == PlanAction::Pass, "ap4-a4-pass");
+    expect(a4Out.reason == AssistReason::PassBudget, "ap4-a4-budget");
+    expect(a4Out.reason != AssistReason::PassHopeless, "ap4-a4-not-hopeless");
 
     // Zone-cleared Alive at short ticks still Delay-worthy vs dead d0.
     cands[0] = CandView{};

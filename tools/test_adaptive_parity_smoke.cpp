@@ -124,6 +124,12 @@ int AdaptiveParitySmokeTests::run() {
     expect(!depthTruncatedAlive(true, false, 55, 54), "ap1-a4-d0-dead");
     expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18), "ap1-a4-no-bin-steal");
     expect(fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 18), "ap1-a4-score-gain");
+    // Assist Pack AP4 — living later vs uniform lethal.
+    auto const hopelessBlockedByLivingLater = [](bool d0Died, bool anyLaterAlive) {
+        return d0Died && anyLaterAlive;
+    };
+    expect(hopelessBlockedByLivingLater(true, true), "ap4-a4-blocked");
+    expect(!hopelessBlockedByLivingLater(true, false), "ap4-a7-allowed");
 
     if (!ok)
         ++fails;
