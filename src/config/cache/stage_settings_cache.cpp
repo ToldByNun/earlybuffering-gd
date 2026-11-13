@@ -30,6 +30,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "lag-probe", false);
     EbStageConfigImplementation::s_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     EbStageConfigImplementation::s_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
+    EbStageConfigImplementation::s_cachedLagWarningToast =
+        EbStageConfigImplementation::readBool(mod, "lag-warning-toast", true);
     EbStageConfigImplementation::s_cachedShowTrajectory =
         EbStageConfigImplementation::readBool(mod, "show-trajectory", false);
     EbStageConfigImplementation::s_cachedShowBakePath =

@@ -209,6 +209,17 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::microWindowPreferLater(true, 4, 110.f, 100.f) &&
                !EbLivePlanContracts::microWindowPreferLater(true, 12, 110.f, 100.f),
            "assist-pack-ap3c-toggles");
+    // Assist Pack AP-L6: discrete IW runs horizon probe before the later band.
+    expect(EbLivePlanContracts::discreteIwProbeBeforeBand(false, true, true) &&
+               !EbLivePlanContracts::discreteIwProbeBeforeBand(true, true, true) &&
+               !EbLivePlanContracts::discreteIwProbeBeforeBand(false, false, true),
+           "assist-pack-ap-l6-probe-before-band");
+    // Assist Pack AP-L7: lag notification on hitch ceiling / budgetHit (not budget %).
+    expect(EbLivePlanContracts::lagWarningShouldNotify(true, 9000, false) &&
+               EbLivePlanContracts::lagWarningShouldNotify(true, 1000, true) &&
+               !EbLivePlanContracts::lagWarningShouldNotify(false, 9000, true) &&
+               !EbLivePlanContracts::lagWarningShouldNotify(true, 3000, false),
+           "assist-pack-ap-l7-lag-toast");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

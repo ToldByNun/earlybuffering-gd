@@ -3,10 +3,11 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[179] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[180] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
+    {"lag-warning-toast", EbConfigBundleKeys::Kind::Bool},
     {"debug-logging", EbConfigBundleKeys::Kind::Bool},
     {"perf-trace", EbConfigBundleKeys::Kind::Bool},
     {"lag-probe", EbConfigBundleKeys::Kind::Bool},
@@ -218,7 +219,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 179, "count-179");
+    expect(EbConfigBundleKeysTable::kEntryCount == 180, "count-180");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,

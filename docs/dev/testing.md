@@ -42,6 +42,10 @@ Assist Pack AP5 (endX/λ survivors): continuous IW ranks by endX not earliest; W
 
 Assist Pack AP-L5 (soft-wall honesty): shared Adaptive+fallthrough `wall0`; no remUs floor stack; classic 4k soft-wall floor; discrete IW ~half-budget shell reserve; ball skips observation-cleared seeds. PlanGold `assist-pack-ap-l5-adaptive-fallthrough`.
 
+Assist Pack AP-L6 (classic probe-before-band): discrete IW AP3c horizon probe after d0 / before 1..limit; PlanGold `assist-pack-ap-l6-probe-before-band`. Re-pack Cataclysm/Grief/Hoveropolis with `adaptive-plan=false`.
+
+Assist Pack AP-L7 (lag notification): once per level on hitch ceiling / `budgetHit`; PlanGold `assist-pack-ap-l7-lag-toast`.
+
 Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-feel; InterveneGate at pick remains.
 
 Assist Pack AP7 (IW observation floor): discrete floor = `model.cap` (not `limit+cap`); classic matches Adaptive `96−limit` clamp. Fixes cube early `pass-budget` with Alive later. PlanGold `assist-pack-ap7-iw-floor`.

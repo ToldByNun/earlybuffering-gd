@@ -6,6 +6,7 @@
 #include "../../../dev/capture/dev_clock_contract.hpp"
 #include "../../../dev/capture/dev_cycle_recorder.hpp"
 #include "../../../dev/capture/dev_trace_store.hpp"
+#include "../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../ui/feedback/save_feedback.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
@@ -100,6 +101,12 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
     {
         EbPerfTrace::Scope const scope("saveFeedbackTick");
         EbSaveFeedback::get().onPhysicsTick();
+    }
+    {
+        EbPerfTrace::Scope const scope("lagWarningToast");
+        // Same seconds clock as sim EMA — raw GD step units (~0.25) would
+        // burn the 5s hold in ~20 physics ticks (~instant despawn).
+        EbLagWarningToast::get().onPhysicsTick(secDt > 0.f ? secDt : EbAssistClock::kNominalSimDt);
     }
     {
         EbPerfTrace::Scope const scope("selfBakeIdle");

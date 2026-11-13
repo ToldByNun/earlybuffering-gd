@@ -202,6 +202,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
     {"title-ui", SettingsCategory::UI},
     {"desktop-accent-color", SettingsCategory::UI},
     {"show-overlay", SettingsCategory::UI},
+    {"lag-warning-toast", SettingsCategory::UI},
     {"show-pause-hub", SettingsCategory::UI},
     {"show-pause-bake", SettingsCategory::UI},
     {"desktop-classic-settings", SettingsCategory::UI},

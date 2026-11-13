@@ -22,6 +22,7 @@
 #include "../../contracts/assist_verdict.hpp"
 #include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
+#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
 #include <algorithm>
@@ -243,6 +244,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    EbLagWarningToast::get().notify(plan.planUs, opts.budgetUs, plan.budgetHit);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     EbDevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);

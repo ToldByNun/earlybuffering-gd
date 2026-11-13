@@ -18,6 +18,7 @@
 #include "../../../sim/planning/simulation_plan.hpp"
 #include "../../../sim/shadow_simulator.hpp"
 #include "../../../sim/sim_trust.hpp"
+#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../trigger_world/trigger_world_baker.hpp"
 #include "../../../trigger_world/trigger_world_store.hpp"
 #include "../../assist_controller.hpp"
@@ -306,6 +307,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     plan.planUs = planUs;
+    EbLagWarningToast::get().notify(planUs, opts.budgetUs, plan.budgetHit);
     EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
     // Classic coverage proxy until Adaptive reports real fully-verified counts.
     int const fullyVerified = plan.budgetHit ? 0 : std::max(0, plan.candidatesTried);

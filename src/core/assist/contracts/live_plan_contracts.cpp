@@ -90,6 +90,17 @@ int EbLivePlanContracts::intendedLiveSoftWallFloorUs(int budgetUs) {
     return budgetUs;
 }
 
+bool EbLivePlanContracts::lagWarningShouldNotify(bool enabled, int planUs, bool budgetHit) {
+    if (!enabled)
+        return false;
+    if (budgetHit)
+        return true;
+    // Absolute feel bar — not tied to the user's sim-budget-us setting.
+    if (planUs >= kHitchCeilingUs)
+        return true;
+    return false;
+}
+
 int EbLivePlanContracts::adaptiveShellBudgetUs(int fullBudgetUs, int fallthroughReserveUs) {
     if (fullBudgetUs <= 0)
         return 0;
@@ -278,6 +289,11 @@ bool EbLivePlanContracts::horizonProbeBlocksPassD0Safe(bool probeEnabled, bool d
     return probeEnabled && d0AtWall && anyLaterAlive;
 }
 
+bool EbLivePlanContracts::discreteIwProbeBeforeBand(bool continuous, bool probeEnabled,
+                                                    bool d0AtWall) {
+    return !continuous && probeEnabled && d0AtWall;
+}
+
 bool EbLivePlanContracts::microWindowPreferLater(bool microEnabled, int limitTicks,
                                                  float laterEndX, float d0EndX) {
     if (!microEnabled || limitTicks <= 0 || limitTicks > kMicroWindowMaxAssistTicks)
@@ -396,6 +412,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(intendedLiveSoftWallFloorUs(0) == 0, "ap-l5-soft-wall-unlimited");
     expect(intendedLiveSoftWallFloorUs(2500) == kLiveSoftWallFloorUs, "ap-l5-soft-wall-floor");
     expect(intendedLiveSoftWallFloorUs(8170) == 8170, "ap-l5-soft-wall-keep");
+    expect(lagWarningShouldNotify(true, 9000, false), "ap-l7-note-hitch");
+    expect(lagWarningShouldNotify(true, 1000, true), "ap-l7-note-budget-hit");
+    expect(!lagWarningShouldNotify(false, 9000, true), "ap-l7-note-off");
+    expect(!lagWarningShouldNotify(true, 3000, false), "ap-l7-note-quiet");
+    expect(lagWarningShouldNotify(true, kHitchCeilingUs, false), "ap-l7-note-ceiling");
     expect(adaptiveShellBudgetUs(8170, kFallthroughRemUsFloor) == 6170, "ap-l5-shell-wall");
     expect(adaptiveShellBudgetUs(1500, kFallthroughRemUsFloor) == 1, "ap-l5-shell-tiny");
     expect(adaptiveShellBudgetUs(0, kFallthroughRemUsFloor) == 0, "ap-l5-shell-unlimited");
@@ -515,6 +536,10 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(horizonProbeBlocksPassD0Safe(true, true, true), "ap3c-probe-block");
     expect(!horizonProbeBlocksPassD0Safe(false, true, true), "ap3c-probe-off");
     expect(!horizonProbeBlocksPassD0Safe(true, true, false), "ap3c-probe-no-later");
+    expect(discreteIwProbeBeforeBand(false, true, true), "ap-l6-probe-before-band");
+    expect(!discreteIwProbeBeforeBand(true, true, true), "ap-l6-probe-not-continuous");
+    expect(!discreteIwProbeBeforeBand(false, false, true), "ap-l6-probe-off");
+    expect(!discreteIwProbeBeforeBand(false, true, false), "ap-l6-probe-not-wall");
     expect(microWindowPreferLater(true, 4, 110.f, 100.f), "ap3c-micro-prefer");
     expect(!microWindowPreferLater(false, 4, 110.f, 100.f), "ap3c-micro-off");
     expect(!microWindowPreferLater(true, 12, 110.f, 100.f), "ap3c-micro-large-window");

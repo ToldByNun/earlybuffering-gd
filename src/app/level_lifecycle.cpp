@@ -5,6 +5,7 @@
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
 #include "../dev/capture/dev_cycle_recorder.hpp"
+#include "../ui/feedback/lag_warning_toast.hpp"
 #include "../ui/feedback/save_feedback.hpp"
 #include "../ui/feedback/save_frame_counter.hpp"
 #include "../ui/overlays/status_overlay.hpp"
@@ -132,6 +133,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbShadowSimulator::get().attach(playLayer);
     controller.resetAttempt(playLayer);
     EbStatusOverlay::attach(playLayer);
+    EbLagWarningToast::get().attach(playLayer);
     EbTrajectoryVisualizer::get().setEnabled(EbStageConfig::showTrajectory());
     EbTrajectoryVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
@@ -162,6 +164,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     // Prefer live detach (removeFromParent) while PlayLayer exists.
     bool const layerAlive = playLayer != nullptr;
     EbSaveFrameCounter::get().detach(!layerAlive);
+    EbLagWarningToast::get().detach(!layerAlive);
     EbTrajectoryVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);

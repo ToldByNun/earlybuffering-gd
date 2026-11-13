@@ -1392,6 +1392,12 @@
 			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
 			"default": false
 		},
+		"lag-warning-toast": {
+			"type": "bool",
+			"name": "Lag Warning",
+			"description": "Once per level, shows a bottom-left notification when a Live assist click feels hitchy (≥8ms plan or soft-wall hit). Independent of In-Level Overlay and of your sim-budget setting. Off = silent.",
+			"default": true
+		},
 		"show-pause-hub": {
 			"type": "bool",
 			"name": "Pause EB Button",

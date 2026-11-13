@@ -37,6 +37,7 @@ bool EbStageConfigImplementation::s_cachedPerfTrace = true;
 bool EbStageConfigImplementation::s_cachedLagProbe = true;
 bool EbStageConfigImplementation::s_cachedSafeMode = false;
 bool EbStageConfigImplementation::s_cachedShowOverlay = true;
+bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
 bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
 bool EbStageConfigImplementation::s_cachedShowBakePath = false;
 bool EbStageConfigImplementation::s_cachedShowPauseBake = true;
@@ -443,6 +444,10 @@ bool EbStageConfig::blocksProgressSaves(bool assistTouchedRun) {
 bool EbStageConfig::showOverlay() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowOverlay;
+}
+bool EbStageConfig::lagWarningToast() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedLagWarningToast;
 }
 bool EbStageConfig::showTrajectory() {
     EbStageConfigImplementation::ensureCache();

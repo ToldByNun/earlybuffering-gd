@@ -23,6 +23,16 @@
 - Real `pass-wave-futile` only when d0 was simulated and the band was not wall-starved mid-scan.
 - PlanGold `assist-pack-ap-l4-wave-honesty`.
 
+### Assist Pack AP-L7 — Lag warning notification
+- Setting `lag-warning-toast` / **Lag Warning** (default on) under Desktop UI → Notifications; independent of In-Level Overlay.
+- Once per level: bottom-left **ImGui** card using desktop shell theme (panel + grey outline, caps title) when a Live click feels hitchy (`planUs ≥ 8ms` or `budgetHit`). 5s hold + fade; NoInputs so play continues.
+- PlanGold `assist-pack-ap-l7-lag-toast`.
+
+### Assist Pack AP-L6 — Classic-without-Adaptive quality (probe-before-band)
+- Discrete Live IW runs AP3c **Probe Past Horizon** after d0 / **before** the 1..limit band so mid-band wall spend cannot starve the +24 prove extend (Cataclysm cube sticky `pass-d0-safe` class).
+- If the probe finds d0 death past the wall, the later band ranks under the extended cap; Micro-Window stays post-band. Wave/ship paths unchanged (AP-L4).
+- PlanGold `assist-pack-ap-l6-probe-before-band`.
+
 ### Assist Pack AP-L5 — Adaptive + classic soft-wall honesty
 - Shared press `wall0`: Adaptive→classic fallthrough reuses the Adaptive clock + full `sim-budget-us` (`reusePlanWall`); no fresh wall and **no remUs floor stack** past the press budget.
 - Adaptive soft wall leaves fallthrough µs / `reserveTicks` on that shared budget. Discrete IW (ball/cube) reserves ~half (~3.8ms Hoveropolis); continuous keeps `kFallthroughRemUsFloor` as shell reserve only.

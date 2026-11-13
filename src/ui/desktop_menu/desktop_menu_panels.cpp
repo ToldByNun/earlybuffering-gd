@@ -246,6 +246,11 @@ public:
         }
         EbSectionCard::end();
 
+        if (EbSectionCard::begin("ui-notifications", "Notifications")) {
+            EbCheckbox::drawSetting("lag-warning-toast", "Lag Warning");
+        }
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ui-diag", "Diagnostics")) {
             EbCheckbox::drawSetting("debug-logging", "Debug Logging");
             EbCheckbox::drawSetting("perf-trace", "Perf Trace");

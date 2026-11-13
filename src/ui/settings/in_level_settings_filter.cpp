@@ -124,6 +124,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("show-pause-hub") == SettingsCategory::UI, "cat-hub-ui");
     expect(categoryForKey("desktop-classic-settings") == SettingsCategory::UI, "cat-classic-ui");
     expect(categoryForKey("show-overlay") == SettingsCategory::UI, "cat-overlay-ui");
+    expect(categoryForKey("lag-warning-toast") == SettingsCategory::UI, "cat-lag-toast-ui");
     expect(categoryForKey("title-ui") == SettingsCategory::UI, "cat-title-ui");
     expect(categoryForKey("title-scope") == SettingsCategory::Assist, "cat-title-scope-assist");
     expect(categoryForKey("assist-only-practice") == SettingsCategory::Assist, "cat-practice-assist");
@@ -167,7 +168,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
         expect(candidate != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-224");
+    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-225");
 
     for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
         auto const candidate = categoryForKey(it->key);

@@ -81,6 +81,8 @@ public:
     static bool showPauseBake(); // pause-screen status lines
     // Pause top-right button → Geode openSettingsPopup (later: hub).
     static bool showPauseHub();
+    // Assist Pack AP-L7: bottom-left hitch toast (UI → Notifications).
+    static bool lagWarningToast();
     // Independent save-feedback toggles (sound / icon flash / frame counter).
     static bool saveFeedbackSound();
     static bool saveFeedbackIcon(); // Save Feedback Color (icon flash)
@@ -320,6 +322,7 @@ private:
     static bool s_cachedLagProbe;
     static bool s_cachedSafeMode;
     static bool s_cachedShowOverlay;
+    static bool s_cachedLagWarningToast;
     static bool s_cachedShowTrajectory;
     static bool s_cachedShowBakePath;
     static bool s_cachedShowPauseBake;

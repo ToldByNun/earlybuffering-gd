@@ -166,6 +166,7 @@ void EbModuleBindings::registerSettings() {
     });
     watchBool("show-pause-bake");
     watchBool("show-pause-hub");
+    watchBool("lag-warning-toast");
     watchBool("auto-tune");
     watchBool("self-bake");
     watchBool("self-bake-normal");

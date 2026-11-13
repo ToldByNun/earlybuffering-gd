@@ -64,6 +64,10 @@ public:
     // budgetUs<=0 (unlimited / hitch-clamp input) unchanged.
     static int intendedLiveSoftWallFloorUs(int budgetUs);
 
+    // Assist Pack AP-L7: lag notification gate — feel hitch (planUs ≥ hitch
+    // ceiling) or budgetHit; independent of configured sim-budget-us.
+    static bool lagWarningShouldNotify(bool enabled, int planUs, bool budgetHit);
+
     // Assist Pack AP-L5: Adaptive soft wall leaves fallthroughReserveUs on the
     // shared press budget (no remUs floor stacked past sim-budget-us).
     static int adaptiveShellBudgetUs(int fullBudgetUs, int fallthroughReserveUs);
@@ -168,6 +172,9 @@ public:
     static bool d0AtProveWall(bool d0Alive, bool d0Landed, int d0TicksRan, int proveFloorTicks);
     // When probe enabled: wall-safe d0 + any later Alive → do not sticky PassD0Safe.
     static bool horizonProbeBlocksPassD0Safe(bool probeEnabled, bool d0AtWall, bool anyLaterAlive);
+    // Assist Pack AP-L6: run d0 horizon probe after d0 / before the 1..limit band
+    // so mid-band wall spend cannot starve AP3c (discrete only; Wave stays AP-L4).
+    static bool discreteIwProbeBeforeBand(bool continuous, bool probeEnabled, bool d0AtWall);
     // When micro enabled and limit is tiny: any positive endX lead may beat Pass-now.
     static bool microWindowPreferLater(bool microEnabled, int limitTicks, float laterEndX,
                                        float d0EndX);

@@ -258,6 +258,50 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
+    // Assist Pack AP-L6 — AP3c probe-before-band (discrete only).
+    // Horizon probe runs after d0 / before 1..limit so mid-band wall spend cannot
+    // starve the +24 prove extend (Cataclysm cube sticky PassD0Safe class).
+    int savedCapForProbe = context.model.cap;
+    bool keepExtendedCapForBand = false;
+    bool ranHorizonProbe = false;
+    if (!skipLaterBand && !continuous && context.candReady[0] && context.down &&
+        context.plan.reason != AssistReason::PassHardUnknown &&
+        context.plan.reason != AssistReason::PassToggleUnknown && context.tickBudget > 0 &&
+        !context.wallExceeded()) {
+        auto const& c0probe = context.cands[0];
+        bool const d0AliveProbe = !c0probe.raw.died && !c0probe.raw.unknown &&
+                                  !c0probe.raw.unknownTrunc && !c0probe.toggleUnknown;
+        int const proveFloor =
+            EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
+        bool const atWall = EbLivePlanContracts::d0AtProveWall(
+            d0AliveProbe, c0probe.raw.landedAfterAction, c0probe.raw.ticksRan, proveFloor);
+        if (EbLivePlanContracts::discreteIwProbeBeforeBand(
+                continuous, EbStageConfig::assistProbePastHorizon(), atWall)) {
+            ranHorizonProbe = true;
+            context.model.cap =
+                savedCapForProbe + EbLivePlanContracts::kPostHorizonProbeTicks;
+            context.candReady[0] = 0;
+            if (ingest(0, context.evalDelay(0, -1))) {
+                auto const& probed = context.cands[0];
+                if (probed.raw.died) {
+                    // Death past prove wall — band must rank later Delay under
+                    // the extended cap (restore after the 1..limit scan).
+                    bestDelay = -1;
+                    bestSurviveBin = -1;
+                    bestTicksRan = -1;
+                    bestScore = 0.f;
+                    bestLanded = false;
+                    context.plan.viableDelays.clear();
+                    keepExtendedCapForBand = true;
+                } else {
+                    context.model.cap = savedCapForProbe;
+                }
+            } else {
+                context.model.cap = savedCapForProbe;
+            }
+        }
+    }
+
     if (!skipLaterBand && !dual && !context.useTrajEngine && context.limit >= 1 &&
         !context.plan.budgetHit && context.plan.reason != AssistReason::PassHardUnknown) {
         EbIdlePrefixShare::evaluateAscending(context);
@@ -334,6 +378,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             break;
         }
     }
+
+    if (keepExtendedCapForBand)
+        context.model.cap = savedCapForProbe;
 
     auto const& c0 = context.cands[0];
     bool const d0Safe = context.candReady[0] && c0.viable && !c0.raw.died;
@@ -574,27 +621,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    // Assist Pack AP3c — Micro-Window + Probe Past Horizon (each setting-gated).
+    // Assist Pack AP3c — Micro-Window (post-band). Probe Past Horizon runs
+    // AP-L6 probe-before-band above so wall-starved bands cannot skip it.
     // Discrete only: Wave/ship keep their own help-only / earliest paths above.
     if (!continuous && bestDelay == 0 && context.candReady[0]) {
         auto const& c0ref = context.cands[0];
         bool const d0AliveNow = !c0ref.raw.died && !c0ref.raw.unknown &&
                                 !c0ref.raw.unknownTrunc && !c0ref.toggleUnknown;
-        int const proveFloor =
-            EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
-        bool const atWall = EbLivePlanContracts::d0AtProveWall(
-            d0AliveNow, c0ref.raw.landedAfterAction, c0ref.raw.ticksRan, proveFloor);
-
-        bool anyLaterAlive = false;
-        for (int delay = 1; delay <= context.limit; ++delay) {
-            if (!context.candReady[static_cast<size_t>(delay)])
-                continue;
-            auto const& cand = context.cands[static_cast<size_t>(delay)];
-            bool const unknown =
-                cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
-            if (!cand.raw.died && !unknown && cand.raw.ticksRan > 0)
-                anyLaterAlive = true;
-        }
 
         // Micro-Window: tiny Max Assist → any endX lead may beat Pass-now.
         if (d0AliveNow && EbStageConfig::assistMicroWindow()) {
@@ -620,44 +653,60 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 bestDelay = microBest;
         }
 
-        // Probe Past Horizon: wall-safe d0 + later Alive → extend prove; if d0
-        // dies, re-rank later Alive under the extended cap.
-        if (bestDelay == 0 &&
-            EbLivePlanContracts::horizonProbeBlocksPassD0Safe(
-                EbStageConfig::assistProbePastHorizon(), atWall, anyLaterAlive) &&
-            context.tickBudget > 0 && !context.wallExceeded()) {
-            int const savedCap = context.model.cap;
-            context.model.cap =
-                savedCap + EbLivePlanContracts::kPostHorizonProbeTicks;
-            context.candReady[0] = 0;
-            if (ingest(0, context.evalDelay(0, -1))) {
-                auto const& probed = context.cands[0];
-                if (probed.raw.died) {
-                    bestDelay = -1;
-                    bestSurviveBin = -1;
-                    bestTicksRan = -1;
-                    bestScore = 0.f;
-                    bestLanded = false;
-                    context.plan.viableDelays.clear();
-                    for (int delay = 1; delay <= context.limit; ++delay) {
-                        if (context.wallExceeded() || context.tickBudget <= 0) {
-                            context.plan.budgetHit = true;
-                            break;
+        // Fallback probe only if pre-band probe did not run (setting flipped /
+        // landed-not-wall path) and band still left remUs — preserves AP3c when
+        // later Alive appears only after the band.
+        if (!ranHorizonProbe && bestDelay == 0) {
+            int const proveFloor =
+                EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
+            bool const atWall = EbLivePlanContracts::d0AtProveWall(
+                d0AliveNow, c0ref.raw.landedAfterAction, c0ref.raw.ticksRan, proveFloor);
+            bool anyLaterAlive = false;
+            for (int delay = 1; delay <= context.limit; ++delay) {
+                if (!context.candReady[static_cast<size_t>(delay)])
+                    continue;
+                auto const& cand = context.cands[static_cast<size_t>(delay)];
+                bool const unknown =
+                    cand.raw.unknown || cand.raw.unknownTrunc || cand.toggleUnknown;
+                if (!cand.raw.died && !unknown && cand.raw.ticksRan > 0)
+                    anyLaterAlive = true;
+            }
+            if (EbLivePlanContracts::horizonProbeBlocksPassD0Safe(
+                    EbStageConfig::assistProbePastHorizon(), atWall, anyLaterAlive) &&
+                context.tickBudget > 0 && !context.wallExceeded()) {
+                int const savedCap = context.model.cap;
+                context.model.cap =
+                    savedCap + EbLivePlanContracts::kPostHorizonProbeTicks;
+                context.candReady[0] = 0;
+                if (ingest(0, context.evalDelay(0, -1))) {
+                    auto const& probed = context.cands[0];
+                    if (probed.raw.died) {
+                        bestDelay = -1;
+                        bestSurviveBin = -1;
+                        bestTicksRan = -1;
+                        bestScore = 0.f;
+                        bestLanded = false;
+                        context.plan.viableDelays.clear();
+                        for (int delay = 1; delay <= context.limit; ++delay) {
+                            if (context.wallExceeded() || context.tickBudget <= 0) {
+                                context.plan.budgetHit = true;
+                                break;
+                            }
+                            if (!context.candReady[static_cast<size_t>(delay)])
+                                continue;
+                            auto const& ready = context.cands[static_cast<size_t>(delay)];
+                            bool const unknown = ready.raw.unknown || ready.raw.unknownTrunc ||
+                                                 ready.toggleUnknown;
+                            if (ready.raw.died || unknown)
+                                continue;
+                            context.candReady[static_cast<size_t>(delay)] = 0;
+                            if (!ingest(delay, context.evalDelay(delay, -1)))
+                                break;
                         }
-                        if (!context.candReady[static_cast<size_t>(delay)])
-                            continue;
-                        auto const& ready = context.cands[static_cast<size_t>(delay)];
-                        bool const unknown = ready.raw.unknown || ready.raw.unknownTrunc ||
-                                             ready.toggleUnknown;
-                        if (ready.raw.died || unknown)
-                            continue;
-                        context.candReady[static_cast<size_t>(delay)] = 0;
-                        if (!ingest(delay, context.evalDelay(delay, -1)))
-                            break;
                     }
                 }
+                context.model.cap = savedCap;
             }
-            context.model.cap = savedCap;
         }
     }
 
