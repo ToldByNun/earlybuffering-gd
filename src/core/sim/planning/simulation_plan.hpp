@@ -6,6 +6,7 @@
 #include "../../assist/contracts/assist_verdict.hpp"
 #include "simulation_candidate.hpp"
 #include <Geode/Geode.hpp>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -80,6 +81,10 @@ public:
     int adaptiveScreenTicks = 24;   // Phase A/B short quantum per candidate
     int adaptiveVerifyQuantum = 16; // Phase C extend grant size
     int adaptiveReservePct = 15;    // Phase D / tie reserve of Dynamic Plan Tick Budget
+    // Assist Pack AP-L5: Adaptive→classic fallthrough reuses the press soft-wall
+    // clock (no fresh wall0 / no remUs floor stacked past sim-budget-us).
+    bool reusePlanWall = false;
+    std::chrono::steady_clock::time_point planWall0{};
 
 private:
 };

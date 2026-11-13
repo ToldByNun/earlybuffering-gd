@@ -247,11 +247,13 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true) == 4085 &&
                EbLivePlanContracts::adaptiveShellBudgetUs(
                    8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085 &&
+               EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) == 0 &&
+               EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
+                   EbLivePlanContracts::kLiveSoftWallFloorUs &&
                !EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(true) &&
                EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(false),
            "assist-pack-ap-l5-adaptive-fallthrough");
-    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
-               EbLivePlanContracts::kFallthroughRemUsFloor,
+    expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,
            "live-hitch-ceiling-remus");
     // 1.5.1 AP3a: Wave continuous IW floor (≥32), not bare Max Assist limit.
     expect(EbLivePlanContracts::kWaveHorizonFloor == 32 &&

@@ -68,21 +68,20 @@ int AdaptiveParitySmokeTests::run() {
         return EbLivePlanContracts::kHitchCeilingUs;
     };
     auto const intendedFallthroughClassicBudgetUs = [](int remUs, int ticksLeft) {
-        if (remUs > 0)
-            return remUs;
-        if (ticksLeft > 0)
-            return EbLivePlanContracts::kFallthroughRemUsFloor;
-        return 0;
+        (void)ticksLeft;
+        return remUs > 0 ? remUs : 0;
     };
 
     expect(EbLivePlanContracts::kHitchCeilingUs == 8000, "hitch-ceiling-const");
     expect(intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,
            "adaptive-zero-wall-clamped");
     expect(intendedLiveBudgetUs(4000) == 4000, "adaptive-zero-wall-keep");
-    expect(intendedFallthroughClassicBudgetUs(0, 100) == EbLivePlanContracts::kFallthroughRemUsFloor,
-           "fallthrough-remus-floor");
+    expect(intendedFallthroughClassicBudgetUs(0, 100) == 0, "ap-l5-fallthrough-no-stack");
     expect(intendedFallthroughClassicBudgetUs(900, 50) == 900, "fallthrough-remus-keep");
     expect(intendedFallthroughClassicBudgetUs(0, 0) == 0, "fallthrough-remus-done");
+    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
+               EbLivePlanContracts::kLiveSoftWallFloorUs,
+           "ap-l5-classic-soft-wall-floor");
     expect(EbLivePlanContracts::kFallthroughRemUsFloor >= 2000, "fallthrough-remus-threshold");
 
     // AP3b — Wave IW help-only still Passes when d0 clears (not unlimited Delay).

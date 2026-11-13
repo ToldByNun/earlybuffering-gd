@@ -423,26 +423,23 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             auto const elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                                      std::chrono::steady_clock::now() - wall0)
                                      .count();
-            // Shared press wall: remUs vs full sim-budget-us (Adaptive already
-            // left fallthroughReserveUs on the Adaptive soft wall).
-            int const remUs = options.budgetUs - static_cast<int>(elapsed);
+            int const remUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+                options.budgetUs - static_cast<int>(elapsed), classicOpts.tickBudget);
             if (remUs <= 0) {
-                if (classicOpts.tickBudget <= 0) {
-                    EbSimPlan out = plan;
-                    out.action = PlanAction::Pass;
-                    out.reason = AssistReason::PassBudget;
-                    out.budgetHit = true;
-                    out.adaptiveFellThrough = true;
-                    out.adaptiveShell = true;
-                    return out;
-                }
-                // Safety floor only when Adaptive somehow overran the shared wall.
-                classicOpts.budgetUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
-                    0, classicOpts.tickBudget);
-            } else {
-                classicOpts.budgetUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
-                    remUs, classicOpts.tickBudget);
+                // Shared press wall spent — no remUs floor stack past sim-budget-us.
+                EbSimPlan out = plan;
+                out.action = PlanAction::Pass;
+                out.reason = AssistReason::PassBudget;
+                out.budgetHit = true;
+                out.adaptiveFellThrough = true;
+                out.adaptiveShell = true;
+                return out;
             }
+            // Reuse Adaptive wall0 + full press budget so classic IW honors the
+            // same deadline (Adaptive soft-aborted earlier via shell reserve).
+            classicOpts.budgetUs = options.budgetUs;
+            classicOpts.reusePlanWall = true;
+            classicOpts.planWall0 = wall0;
         }
 
         // Seed classic with Adaptive terminal / horizon-proven / observation-
@@ -505,6 +502,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             classicOpts.seedCandidates.push_back(seeded);
         }
 
+        int const adaptiveTried = plan.candidatesTried;
+        bool const adaptiveBudgetHit = plan.budgetHit;
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
                                                      firstDt, classicOpts);
         classicPlan.adaptiveShell = true;
@@ -513,6 +512,10 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         classicPlan.adaptiveSurvivors = plan.adaptiveSurvivors;
         classicPlan.adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
         classicPlan.adaptiveStolenScreenTicks = plan.adaptiveStolenScreenTicks;
+        // Dev Lab honesty: Adaptive screen/verify work counts toward the press.
+        classicPlan.candidatesTried += adaptiveTried;
+        if (adaptiveBudgetHit)
+            classicPlan.budgetHit = true;
         classicPlan.plannerPath = "hybridFallthrough";
         return classicPlan;
     };
@@ -663,11 +666,13 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
     // 1.5.1 AP1 hitch policy (wired at fallthrough / press planner).
     expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,
            "adaptive-zero-wall-clamped");
-    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 50) ==
-               EbLivePlanContracts::kFallthroughRemUsFloor,
-           "fallthrough-remus-floor");
+    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 50) == 0,
+           "ap-l5-fallthrough-no-stack");
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(1500, 50) == 1500,
            "fallthrough-remus-keep");
+    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
+               EbLivePlanContracts::kLiveSoftWallFloorUs,
+           "ap-l5-classic-soft-wall-floor");
     expect(EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true) == 4085 &&
                EbLivePlanContracts::adaptiveShellBudgetUs(
                    8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085,

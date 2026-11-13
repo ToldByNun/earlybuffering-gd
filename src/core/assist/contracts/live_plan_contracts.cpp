@@ -77,11 +77,17 @@ int EbLivePlanContracts::currentFallthroughClassicBudgetUs(int remUs, int ticksL
 }
 
 int EbLivePlanContracts::intendedFallthroughClassicBudgetUs(int remUs, int ticksLeft) {
-    if (remUs > 0)
-        return remUs;
-    if (ticksLeft > 0)
-        return kFallthroughRemUsFloor;
-    return 0;
+    (void)ticksLeft;
+    // AP-L5: shared press wall — never invent µs past sim-budget-us.
+    return remUs > 0 ? remUs : 0;
+}
+
+int EbLivePlanContracts::intendedLiveSoftWallFloorUs(int budgetUs) {
+    if (budgetUs <= 0)
+        return budgetUs;
+    if (budgetUs < kLiveSoftWallFloorUs)
+        return kLiveSoftWallFloorUs;
+    return budgetUs;
 }
 
 int EbLivePlanContracts::adaptiveShellBudgetUs(int fullBudgetUs, int fallthroughReserveUs) {
@@ -385,8 +391,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(currentFallthroughClassicBudgetUs(1500, 100) == 1500, "ft-rem-keep");
     expect(currentFallthroughClassicBudgetUs(0, 100) == 1, "ft-rem-one-today");
     expect(currentFallthroughClassicBudgetUs(0, 0) == 0, "ft-rem-done");
-    expect(intendedFallthroughClassicBudgetUs(0, 100) == kFallthroughRemUsFloor, "ft-rem-floor");
+    expect(intendedFallthroughClassicBudgetUs(0, 100) == 0, "ap-l5-ft-rem-no-stack");
     expect(intendedFallthroughClassicBudgetUs(900, 50) == 900, "ft-rem-intended-keep");
+    expect(intendedLiveSoftWallFloorUs(0) == 0, "ap-l5-soft-wall-unlimited");
+    expect(intendedLiveSoftWallFloorUs(2500) == kLiveSoftWallFloorUs, "ap-l5-soft-wall-floor");
+    expect(intendedLiveSoftWallFloorUs(8170) == 8170, "ap-l5-soft-wall-keep");
     expect(adaptiveShellBudgetUs(8170, kFallthroughRemUsFloor) == 6170, "ap-l5-shell-wall");
     expect(adaptiveShellBudgetUs(1500, kFallthroughRemUsFloor) == 1, "ap-l5-shell-tiny");
     expect(adaptiveShellBudgetUs(0, kFallthroughRemUsFloor) == 0, "ap-l5-shell-unlimited");

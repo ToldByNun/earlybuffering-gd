@@ -40,7 +40,7 @@ Assist Pack AP3 (Weak d0-safe, tightened): only survive/endX lead blocks sticky 
 
 Assist Pack AP5 (endX/λ survivors): continuous IW ranks by endX not earliest; Wave save score peak; landed intended prefer; classic clear endX lead vs d0. PlanGold `assist-pack-ap5-endx-rank`.
 
-Assist Pack AP-L5 (Adaptive fallthrough + ball): shell wall leaves fallthrough µs; ball skips observation-cleared seeds; PlanGold `assist-pack-ap-l5-adaptive-fallthrough`. Compare packs `research_20261113_192611` (classic) vs `research_20261113_192707` (Adaptive ball sticky PassD0Safe).
+Assist Pack AP-L5 (soft-wall honesty): shared Adaptive+fallthrough `wall0`; no remUs floor stack; classic 4k soft-wall floor; discrete IW ~half-budget shell reserve; ball skips observation-cleared seeds. PlanGold `assist-pack-ap-l5-adaptive-fallthrough`.
 
 Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-feel; InterveneGate at pick remains.
 

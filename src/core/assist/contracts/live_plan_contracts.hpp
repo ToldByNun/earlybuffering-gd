@@ -12,8 +12,11 @@ class EbLivePlanContracts {
 public:
     // Soft wall hitch ceiling when user sets sim-budget-us=0 (µs).
     static constexpr int kHitchCeilingUs = 8000;
-    // Adaptive→classic fallthrough floor when wall spent but ticks remain (µs).
+    // Adaptive shell / continuous fallthrough reserve floor (µs) — not a stack
+    // past sim-budget-us once the shared press wall is spent (AP-L5).
     static constexpr int kFallthroughRemUsFloor = 2000;
+    // Live soft-wall floor for Adaptive and classic (assist_press_planner).
+    static constexpr int kLiveSoftWallFloorUs = 4000;
     // Assist Pack AP-L1: mid-run soft-wall poll interval inside one candidate sim.
     static constexpr int kMidRunWallPollTicks = 4;
     // Assist Pack AP-L2: skip prepare baseline/orb when remUs below this floor.
@@ -53,8 +56,13 @@ public:
 
     // Current Adaptive fallthrough when remUs<=0 but ticks remain → 1µs.
     static int currentFallthroughClassicBudgetUs(int remUs, int ticksLeft);
-    // Intended AP1: remUs>0 keep remUs; else if ticksLeft>0 → floor.
+    // Assist Pack AP-L5: remUs>0 keep remUs; remUs≤0 → 0 (no floor stack past
+    // the shared press wall). Shell reserve is adaptiveFallthroughReserveUs.
     static int intendedFallthroughClassicBudgetUs(int remUs, int ticksLeft);
+
+    // Assist Pack AP-L5: raise low Live soft walls to kLiveSoftWallFloorUs.
+    // budgetUs<=0 (unlimited / hitch-clamp input) unchanged.
+    static int intendedLiveSoftWallFloorUs(int budgetUs);
 
     // Assist Pack AP-L5: Adaptive soft wall leaves fallthroughReserveUs on the
     // shared press budget (no remUs floor stacked past sim-budget-us).

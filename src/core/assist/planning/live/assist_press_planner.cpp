@@ -262,10 +262,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicksFor(kind);
     opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantumFor(kind);
     opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
-    // Adaptive screen+verify needs a usable soft wall; raise floor (never
-    // override unlimited 0, never lower a higher user setting).
-    if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
-        opts.budgetUs = 4000;
+    // Assist Pack AP-L5: classic and Adaptive share the same Live soft-wall
+    // floor (never override unlimited 0, never lower a higher user setting).
+    opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
     // 1.5.1 AP1: sim-budget-us=0 → hitch ceiling for classic AND Adaptive Live
     // (EbLivePlanContracts). Stops Adaptive unlimited freezes on small levels.
     opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);

@@ -51,8 +51,14 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
     robustK = EbShadowSurvivalRules::clampRobustKToWindow(robustK, limit);
     if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;
-    wall0 = std::chrono::steady_clock::now();
-    // Assist Pack AP-L1: mid-run soft-wall abort shares this press clock.
+    // Assist Pack AP-L1/L5: mid-run soft-wall abort shares this press clock.
+    // Adaptive→classic fallthrough reuses Adaptive's wall0 + full press budgetUs
+    // so remUs is never reinvented past sim-budget-us.
+    if (options.reusePlanWall) {
+        wall0 = options.planWall0;
+    } else {
+        wall0 = std::chrono::steady_clock::now();
+    }
     simulator.beginPlanWall(wall0, options.budgetUs);
 }
 

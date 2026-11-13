@@ -65,7 +65,7 @@ When `adaptive-plan` is on:
 1. **Screen** delays with short quanta  
 2. **Verify** promising delays (resume / rebuild checkpoints)  
 3. **DecisionGate** — honest Pass/Delay  
-4. Else **classic fallthrough** with **remaining** tick/µs budget (not a second full envelope)
+4. Else **classic fallthrough** on the **same** press soft wall (`reusePlanWall` + leftover ticks; AP-L5 — not a second full envelope / no remUs floor stack)
 
 Do **not** re-inflate “peak” survive ticks across verify segments — current quantum is the truth.
 

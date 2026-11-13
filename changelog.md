@@ -23,10 +23,12 @@
 - Real `pass-wave-futile` only when d0 was simulated and the band was not wall-starved mid-scan.
 - PlanGold `assist-pack-ap-l4-wave-honesty`.
 
-### Assist Pack AP-L5 — Adaptive→classic fallthrough wall + ball honesty
-- Adaptive soft wall leaves fallthrough µs on the shared press budget; screen/verify also keep `reserveTicks` (no stacked remUs past `sim-budget-us`). Discrete IW (ball/cube) reserves ~half budget so classic fallthrough can finish (~3.8ms Hoveropolis); continuous keeps `kFallthroughRemUsFloor`.
-- Ball: do not seed observation-cleared Alive into fallthrough (sticky `pass-d0-safe` with `candidatesTried≤2` vs classic Delay). Adaptive sets `stopAtBallLanding` like classic IW.
-- PlanGold `assist-pack-ap-l5-adaptive-fallthrough`. Packs: classic `research_20261113_192611` vs Adaptive `research_20261113_192707` (Silent Hoveropolis ball).
+### Assist Pack AP-L5 — Adaptive + classic soft-wall honesty
+- Shared press `wall0`: Adaptive→classic fallthrough reuses the Adaptive clock + full `sim-budget-us` (`reusePlanWall`); no fresh wall and **no remUs floor stack** past the press budget.
+- Adaptive soft wall leaves fallthrough µs / `reserveTicks` on that shared budget. Discrete IW (ball/cube) reserves ~half (~3.8ms Hoveropolis); continuous keeps `kFallthroughRemUsFloor` as shell reserve only.
+- Classic Live gets the same **4000µs soft-wall floor** Adaptive already had (`intendedLiveSoftWallFloorUs`).
+- Fallthrough merges Adaptive `candidatesTried` (+ Adaptive `budgetHit`) for Dev Lab honesty. Ball: no observation-cleared Alive seeds; Adaptive sets `stopAtBallLanding`.
+- PlanGold `assist-pack-ap-l5-adaptive-fallthrough`. Packs: classic `research_20261113_192611` vs Adaptive `research_20261113_192707`.
 
 ### Assist Pack AP1 — Fair Depth
 - Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
