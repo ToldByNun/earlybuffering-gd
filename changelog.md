@@ -27,6 +27,15 @@
 - Landed ball: Eval-aligned `intendedLandedPreferLater`. Classic v1: clear endX lead can beat sticky d0 Pass; among dying-d0 survivors prefer score peak over latest-only.
 - PlanGold `assist-pack-ap5-endx-rank`; KPI `underselectZero` / `underselectAny`.
 
+### Assist Pack AP6 — Harm Guard (discarded)
+- Refused Delay arm when proven d0-safe and Delay died / no clear endX improve.
+- **Discarded:** cut Delay rate hard (`press-harm-guard`, ~23→4 arms) against assist-feel goal; `caused` was already ~0 after AP3–5. InterveneGate at pick time remains.
+
+### Assist Pack AP7 — Discrete IW observation floor
+- Cube/ball IW treated Alive@~96 as truncated because floor was `limit+model.cap` while Adaptive clamps to `96−limit` (+ prove) — → sticky `pass-budget` with dying d0 + living later.
+- Floor is now `model.cap` (`discreteIwObservationFloor`); classic IW applies the same discrete 96−limit clamp as Adaptive before prove ticks.
+- PlanGold `assist-pack-ap7-iw-floor`; KPI `underselectZero` / `budgetHitWithSurvivors` on Silent Hoveropolis early cube.
+
 ### Crash fix
 - Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
 

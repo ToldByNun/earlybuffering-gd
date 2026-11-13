@@ -456,7 +456,8 @@ bool EbShadowPlanSelection::choose(EbShadowPlanContext& context) {
     // Assist Pack AP1/AP4: no pick + depth-truncated Alive OR dying d0 + later
     // Alive → PassBudget, not Hopeless (A7 uniform death stays Hopeless).
     if (context.chosen < 0) {
-        int const honestFloor = std::max(1, context.limit + context.model.cap);
+        int const honestFloor =
+            EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
         bool anyLaterAlive = false;
         bool anyDepthTrunc = false;
         for (int delay = 0; delay <= context.limit; ++delay) {

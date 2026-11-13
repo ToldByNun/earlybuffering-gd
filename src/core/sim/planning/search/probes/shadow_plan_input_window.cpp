@@ -58,12 +58,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return EbLivePlanContracts::adaptiveHonestAliveMinTicks(quantum, knownDeathTick(),
                                                                     context.model.cap);
         }
-        return std::max(1, context.limit + context.model.cap);
+        // Assist Pack AP7: prove horizon only — limit+cap was unreachable for
+        // discrete cube after Adaptive 96−limit clamp / budget truncation.
+        return EbLivePlanContracts::discreteIwObservationFloor(context.model.cap);
     };
     auto const complete = [&](EbShadowSimulator::RunResult const& result, int delayValue = -1) {
         bool const unknown = result.unknown || result.unknownTrunc || result.toggleUnknown;
         if (EbMissAssistContracts::survivesObservation(result.died, unknown, result.ticksRan,
-                                                       context.limit + context.model.cap,
+                                                       observationFloor(delayValue),
                                                        result.landedAfterAction)) {
             return true;
         }

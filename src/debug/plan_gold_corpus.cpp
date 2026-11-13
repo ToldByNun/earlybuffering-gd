@@ -199,6 +199,10 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::waveIwChooseDelayByScore(false, 7, 3) == 7 &&
                EbLivePlanContracts::waveIwChooseDelayByScore(true, 7, 3) == 0,
            "assist-pack-ap5-endx-rank");
+    // Assist Pack AP7: discrete IW floor is model.cap (reachable), not limit+cap.
+    expect(EbLivePlanContracts::discreteIwObservationFloor(92) == 92 &&
+               EbLivePlanContracts::discreteIwObservationFloor(0) == 1,
+           "assist-pack-ap7-iw-floor");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

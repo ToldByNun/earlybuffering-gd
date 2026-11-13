@@ -170,6 +170,10 @@ bool EbLivePlanContracts::adaptiveSeedCountsAlive(int ticksRan, int screenQuantu
     return ticksRan >= adaptiveHonestAliveMinTicks(screenQuantum, knownDeathTick, modelCap);
 }
 
+int EbLivePlanContracts::discreteIwObservationFloor(int modelCap) {
+    return std::max(1, modelCap);
+}
+
 bool EbLivePlanContracts::depthTruncatedAlive(bool died, bool unknown, int ticksRan,
                                               int honestFloorTicks) {
     if (died || unknown || ticksRan <= 0) {
@@ -342,6 +346,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(!laterAliveBlocksPassD0Safe(false, true, 18, 96, 8, 200.f, 100.f), "ap3-dead-later");
     expect(weakD0SafeNeedsFallthrough(true), "ap3-gate-ft");
     expect(!weakD0SafeNeedsFallthrough(false), "ap3-gate-stick");
+
+    // Assist Pack AP7 — observation floor is model.cap, not limit+cap.
+    expect(discreteIwObservationFloor(92) == 92, "ap7-floor-cap");
+    expect(discreteIwObservationFloor(0) == 1, "ap7-floor-min");
+    expect(discreteIwObservationFloor(158) == 158, "ap7-floor-unclamped");
 
     if (fails == 0) {
         report = "LivePlanContracts selfCheck OK";

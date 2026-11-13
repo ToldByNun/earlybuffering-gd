@@ -106,6 +106,11 @@ public:
 
     // --- Fair depth before ranking / Hopeless (Assist Pack AP1) -------------
 
+    // Assist Pack AP7: discrete IW observation floor is the prove horizon
+    // (model.cap), not limit+cap. limit+cap is often unreachable after the
+    // Adaptive 96−limit clamp / budget truncation (Silent Hoveropolis cube).
+    static int discreteIwObservationFloor(int modelCap);
+
     // Alive run stopped before the honest observation floor (budget / quantum),
     // not a real death. Callers must pass !died && !unknown already when useful;
     // this helper still guards those flags.

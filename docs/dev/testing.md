@@ -40,6 +40,10 @@ Assist Pack AP3 (Weak d0-safe, tightened): only survive/endX lead blocks sticky 
 
 Assist Pack AP5 (endX/λ survivors): continuous IW ranks by endX not earliest; Wave save score peak; landed intended prefer; classic clear endX lead vs d0. PlanGold `assist-pack-ap5-endx-rank`.
 
+Assist Pack AP6 (Harm Guard): **discarded** — starved Delay arms vs assist-feel; InterveneGate at pick remains.
+
+Assist Pack AP7 (IW observation floor): discrete floor = `model.cap` (not `limit+cap`); classic matches Adaptive `96−limit` clamp. Fixes cube early `pass-budget` with Alive later. PlanGold `assist-pack-ap7-iw-floor`.
+
 ## Docs site
 
 ```bash

@@ -25,6 +25,23 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
                     options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
     plan.trajectoryEngine = useTrajEngine;
     model.continuePastClear = options.requireAliveForDelay;
+    // Align classic IW with Adaptive discrete clamp (Assist Pack AP7): without a
+    // manual mode/look-ahead cap, cube/ball horizons stay inside the ~96 tick
+    // band so observation floors stay reachable after prove ticks.
+    {
+        bool const continuousControl =
+            real && (real->m_isDart || real->m_isShip || real->m_isSwing);
+        bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
+        if (inputWindow && real && EbStageConfig::paramsFor(real).cap == 0 &&
+            EbStageConfig::lookAheadCap() == 0) {
+            if (continuousControl) {
+                model.cap = EbAssistHorizon::continuousInputWindowCap(
+                    EbStageConfig::kindOf(real), limit, options.capMul);
+            } else {
+                model.cap = std::min(model.cap, std::max(1, 96 - limit));
+            }
+        }
+    }
     // Live Delay proof: run a few ticks past the nominal horizon so a death on
     // the next frame after hitCap is not declared Safe (session Dump-SP class).
     if (options.requireAliveForDelay && model.cap > 0) {
