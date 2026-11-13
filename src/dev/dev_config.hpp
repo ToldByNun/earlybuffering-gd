@@ -24,6 +24,10 @@ public:
     static bool freezeWorld();
     // When recording: kill explore / verify-AB randomness (default on).
     static bool disableRandom();
+    // Top-N hazard AABB + plan-time hitbox on witness (AP6; default on).
+    static bool recordHazards();
+    // Optional sealed-eval delay trajectories (AP8; default off — heavy).
+    static bool recordTraj();
 
     // --- Eval ---
     static bool evalOnDeath();
@@ -71,6 +75,8 @@ private:
     static bool s_devCountEmptyAttempts;
     static bool s_devFreezeWorld;
     static bool s_devDisableRandom;
+    static bool s_devRecordHazards;
+    static bool s_devRecordTraj;
     static bool s_devEvalOnDeath;
     static EbDevConfig::EvalGrid s_devEvalGrid;
     static int s_devEvalHorizon;

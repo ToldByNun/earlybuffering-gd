@@ -10,7 +10,7 @@ Open settings from **Geode → EarlyBuffer** or pause → **EB**.
 | Bake | Import / bake actions, trigger world |
 | [Modes](/configure/modes) | Icon picker + per game-mode overwrite windows |
 | Visual | Trajectory / bake path + save feedback |
-| UI | Accent Color, overlay / pause chrome, light diagnostics |
+| UI | Accent Color, overlay / pause chrome, Lag Warning, light diagnostics |
 | [Keys](/configure/keys) | Hotkeys |
 | Dev | Session / eval / overlay tools (for debugging) |
 

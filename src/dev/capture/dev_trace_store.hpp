@@ -2,6 +2,7 @@
 #define DEV_TRACE_STORE_HPP
 
 #include "../diagnostics/dev_resource_stats.hpp"
+#include "../evaluation/dev_attempt_eval.hpp"
 #include "../evaluation/dev_reject_ledger.hpp"
 #include "../evaluation/dev_state_diff.hpp"
 #include "dev_clock_contract.hpp"
@@ -22,7 +23,9 @@ enum class DevEventKind {
     Hus,
     Fire,
     Checkpoint,
-    Outcome
+    Outcome,
+    // Attempt-scoped (pressId=0): mode / speed / gravity / dual transitions.
+    ModeTransition
 };
 
 enum class DevEventSource { Live = 0, Bake };
@@ -89,6 +92,67 @@ public:
     bool adaptiveShell = false;
     bool adaptiveFellThrough = false;
 
+    // Dev Lab AP4: planner-branch + resolved mode params on planFinished.
+    bool hasPlannerMeta = false;
+    std::string plannerPath;
+    std::string gameModeKind;
+    bool continuous = false;
+    bool inputWindow = false;
+    int modeTicks = 0;
+    int modeCap = 0;
+    int modeSlack = 0;
+    float modeLatencyWeight = 0.f;
+    bool modeAdaptivePlan = false;
+    int modeAdaptiveScreenTicks = 0;
+    int modeAdaptiveVerifyQuantum = 0;
+    int modeAdaptiveReservePct = 0;
+    int adaptiveScreenedCount = 0;
+    int adaptiveSurvivors = 0;
+    int adaptiveVerifyGrants = 0;
+    int adaptiveStolenScreenTicks = 0;
+    std::vector<int> viableDelays;
+    bool requireHold = false;
+    int releaseAfter = -1;
+    int releaseEarliest = -1;
+    int releaseLatest = -1;
+    bool idleSafer = false;
+    bool ascentUseful = false;
+    bool usedOrbWindow = false;
+    bool foresightOrbPad = false;
+    bool longForesightNeedSearch = false;
+    bool threatZoneValid = false;
+    float threatZoneStartX = 0.f;
+    float threatZoneEndX = 0.f;
+
+    // Dev Lab AP7: Wave IW proximity / help-only / futile (on planFinished).
+    bool hasWaveMeta = false;
+    float waveProxX = 0.f;
+    bool waveNearHazard = false;
+    float waveBestGain = 0.f;
+    int waveEarliestLater = -1;
+    bool waveHelpOnly = false;
+    bool waveFutile = false;
+    bool waveProximityPass = false;
+
+    // Dev Lab AP7: user hold vs planned hold timeline (fire/outcome).
+    bool hasHoldTimeline = false;
+    int releaseSeenTick = -1;
+    int holdUserUpTick = -1;
+    int holdInjectReleaseTick = -1;
+    bool holdSwallow = false;
+
+    // Dev Lab AP7: optional G10 class stamped after offline eval.
+    std::string simNetClass;
+
+    // Dev Lab AP5: attempt-scoped mode/speed/gravity/dual/checkpoint timeline.
+    bool hasTimelineMeta = false;
+    std::string timelineChange; // seed|mode|speed|gravity|dual|checkpoint
+    std::string fromGameModeKind;
+    float playerSpeed = 0.f;
+    bool upsideDown = false;
+    bool dual = false;
+    float playerX = 0.f;
+
 private:
 };
 
@@ -101,6 +165,8 @@ public:
     // True when seal counted toward the rolling window (pressObserved / empty-count).
     bool counted = false;
     std::vector<EbDevDecisionEvent> events;
+    // Offline counterfactual eval (AP3) — optional; written by Eval Last/Session/On-Death.
+    EbDevAttemptEval eval{};
 
 private:
 };
@@ -173,6 +239,8 @@ public:
     // Seal current attempt, bump recordingsDone when it counts, rolling-trim, flush.
     // Never auto-stops the session — keeps only the last recordingsTarget counted attempts.
     bool sealAttempt(std::string endReason, bool countTowardTarget);
+    // Attach offline eval grid to an attempt and flush (AP3).
+    bool sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval);
     bool flush();
     void closeSession();
 

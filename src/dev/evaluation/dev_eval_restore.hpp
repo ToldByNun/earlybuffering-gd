@@ -18,6 +18,11 @@ public:
     EbDevClockContract::Stamp clock{};
     std::vector<int> orbIds;
     std::vector<EbDevObjectPose> moverPoses;
+    // AP9: contact parity bookkeeping (not applied as pointer refs on ghosts).
+    EbDevContactSnap contact{};
+    bool hasContact = false;
+    EbDevContactSnap dualContact{};
+    bool hasDualContact = false;
     std::string triggerStoreKey;
     int triggerStoreVersion = 0;
     int triggerApplyTick = -1;
@@ -49,6 +54,9 @@ public:
     static void noteMoversPosesWritten(EbDevEvalRestore& r, std::vector<EbDevObjectPose> const& poses,
                                        uint64_t digest = 0);
     static void noteCollisionFlagsPartial(EbDevEvalRestore& r);
+    // AP9: stamp contact scalars onto restore (CollisionFlags stays Partial).
+    static void noteContactWritten(EbDevEvalRestore& r, EbDevContactSnap const& snap,
+                                   bool dual = false);
 
     static bool selfCheck(std::string& report);
 

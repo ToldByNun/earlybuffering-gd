@@ -26,7 +26,7 @@ export default defineConfig({
       { text: 'Problems', link: '/troubleshoot/' },
       { text: 'Dev', link: '/dev/' },
       {
-        text: 'v1.6.0',
+        text: 'v1.6.1',
         items: [
           { text: 'GitHub', link: 'https://github.com/ToldByNun/earlybuffering-gd' },
           { text: 'Releases', link: 'https://github.com/ToldByNun/earlybuffering-gd/releases' },
@@ -154,7 +154,7 @@ export default defineConfig({
       provider: 'local',
     },
     editLink: {
-      pattern: 'https://github.com/ToldByNun/earlybuffering-gd/edit/earlybuffer-1.6.0-dev/docs/:path',
+      pattern: 'https://github.com/ToldByNun/earlybuffering-gd/edit/earlybuffer-1.6.1-dev/docs/:path',
       text: 'Edit this page on GitHub',
     },
     footer: {

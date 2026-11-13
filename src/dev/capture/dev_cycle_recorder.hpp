@@ -1,6 +1,7 @@
 #ifndef DEV_CYCLE_RECORDER_HPP
 #define DEV_CYCLE_RECORDER_HPP
 
+#include "../../config/stage_config.hpp"
 #include "../../core/assist/contracts/assist_verdict.hpp"
 #include "../../core/sim/shadow_simulator.hpp"
 #include "dev_clock_contract.hpp"
@@ -61,7 +62,14 @@ public:
     void noteHus(int64_t pressId, AssistReason reason, char const* where, int fireTick);
     void noteFire(int64_t pressId, int actualFireTick);
     void noteHoldExtend(int64_t pressId, int holdExtendMax);
-    void noteCheckpoint(int attemptTick);
+    // AP7: user early-UP while Delay armed / hold swallow / injected release.
+    void noteReleaseSeen(int64_t pressId, int attemptTick);
+    void noteHoldSwallow(int64_t pressId, int attemptTick);
+    void noteHoldInjectRelease(int64_t pressId, int attemptTick);
+    // Practice checkpoint: attempt-scoped event + timeline snapshot (AP5).
+    void noteCheckpoint(PlayLayer* layer, int attemptTick);
+    // Poll P1 mode/speed/gravity/dual; emit modeTransition on change (AP5).
+    void pollModeTimeline(PlayLayer* layer, int attemptTick);
 
     // Append outcome for every open cycle in the current attempt, then seal+flush.
     // countTowardTarget follows DevConfig::countEmptyAttempts / has events.
@@ -104,6 +112,11 @@ private:
         int holdExtendMax = -1;
         int actualFireTick = -1;
         int recheckDelta = 0;
+        // AP7 hold timeline
+        int releaseSeenTick = -1;
+        int holdUserUpTick = -1;
+        int holdInjectReleaseTick = -1;
+        bool holdSwallow = false;
 
     private:
     };
@@ -115,9 +128,26 @@ private:
                                int64_t planId, AssistReason reason, char const* where);
     void writeOutcomesForOpenCycles(std::string const& endReason, bool lived, int attemptTick);
     bool shouldCountAttempt() const;
+    void resetModeTimeline();
+    void fillTimelineMeta(EbDevDecisionEvent& ev, PlayLayer* layer, PlayerObject* player,
+                          char const* change, char const* fromKind) const;
+    EbDevDecisionEvent* appendAttemptScoped(DevEventKind kind, int attemptTick,
+                                            char const* reason);
+
+    class ModeTimelineState {
+    public:
+        bool known = false;
+        EbStageConfig::GameModeKind mode = EbStageConfig::GameModeKind::Cube;
+        float playerSpeed = 0.f;
+        bool upsideDown = false;
+        bool dual = false;
+
+    private:
+    };
 
     int64_t m_activePressId = 0;
     std::unordered_map<int64_t, TrackedCycle> m_cycles;
+    ModeTimelineState m_modeTimeline{};
 };
 
 #endif

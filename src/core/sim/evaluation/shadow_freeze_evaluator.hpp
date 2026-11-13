@@ -14,7 +14,8 @@ public:
     static void finishEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer);
     static EbShadowSimulator::EvalFromFreezeResult
     evalDelayFromFreeze(EbShadowSimulator& simulator, PlayLayer* layer, EbDevLiveWitness const& witness,
-                        int delay, int horizonTicks, bool down, int* tickBudgetLeft);
+                        int delay, int horizonTicks, bool down, int* tickBudgetLeft,
+                        bool captureTraj = false);
     static EbShadowSimulator::EvalFromFreezeResult
     replayActualFire(EbShadowSimulator& simulator, PlayLayer* layer, EbDevLiveWitness const& witness,
                      int actualFireTickAbs, int horizonTicks, bool down, int* tickBudgetLeft);

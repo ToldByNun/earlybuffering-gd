@@ -3,6 +3,7 @@
 #include "../../../debug/perf_trace.hpp"
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
+#include "shadow_ghost_lifecycle.hpp"
 #include <cstdint>
 
 bool EbShadowSectionSafety::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* object) {
@@ -230,9 +231,7 @@ void EbShadowSectionSafety::evacuateGhosts(EbShadowSimulator& simulator, GJBaseG
         player->m_position = cocos2d::CCPoint{0.f, 105.f};
         player->m_yVelocity = 0.0;
         player->m_isDead = false;
-        if (player->m_waveTrail) {
-            player->m_waveTrail->reset();
-        }
+        EbShadowGhostLifecycle::clearWaveTrailGeometry(player);
         if (player->m_touchingRings) {
             player->m_touchingRings->removeAllObjects();
         }

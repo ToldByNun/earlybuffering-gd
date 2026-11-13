@@ -12,6 +12,8 @@ public:
     static void devClearTraces();
     static void devDumpDiag();
     static void devCopyReport();
+    static void devExportResearchPack();
+    static void devCompareSessions();
 
 private:
     EbPauseDevActions() = delete;

@@ -2,18 +2,43 @@
 
 For debugging assist picks vs reality.
 
+## Recommended capture workflow
+
+1. Dev tab → **Apply Research Preset** (Record + Candidates + Freeze World + Hazards + Eval On Death + Overlay + Disable Random).
+2. **Start Recording** in the level → die / complete a few attempts (Eval On Death seals offline eval).
+3. **Export Research Pack** → send the clipboard folder path.
+4. Optional: **Compare Sessions** after several sessions on the same levelKey.
+
+Optional heavy toggles (not in Research Preset): `dev-record-traj`.
+
+### Crash note
+
+Level enter / re-attach used to AV in `HardStreak::reset` when tearing down sim ghosts (`m_waveTrail`). Current builds skip streak `reset()` on detach and attach once before `resetAttempt`. If you still see a ghost/waveTrail crash on enter, grab **Dump Diag** + the session JSON — not a Research Pack alone.
+
 ## Session JSON
 
 Typical path (Windows):
 
 `%LocalAppData%\GeometryDash\geode\mods\audesign.earlybuffer\devtraces\session-*.json`
 
-Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, …) with:
+Contains attempts → events (`pressObserved`, `planFinished`, `gatePass`, `modeTransition`, …) with:
 
 - `assistReason`, `plannedDelay`
-- `candNotes` (chosen / rejected / skipped + reject codes)
-- `witness` (player blob, trigger ready tracks, clock / midStep)
+- `candNotes` (chosen / rejected / skipped + reject codes; when evaluated also `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass`)
+- `plannerPath` + `gameModeKind` + `modeParams` + hold/threat honesty on `planFinished`
+- attempt-scoped `modeTransition` / `checkpoint` timeline (`timelineChange`, mode/speed/gravity/dual flags)
+- `witness` (player blob, trigger ready tracks, clock / midStep; with Record Hazards also `hazards[]` / `hitbox` / `threatZone`; AP9 also `contact` / `dualContact` collide scalars + honest Dual/Orbs status)
 - `attribution` (e.g. `best-surviving-absent`)
+
+After **Eval Last / Eval Session / Eval On Death**, each evaluated attempt also gets an additive `eval` object:
+
+- fidelity / claims / objective / grid / horizon / tail
+- `bestSurvivingDelay` / `bestEvaluatedDelay` (when claims allow)
+- `samples[]` with `delay`, `survivedPrimary`, `deathTick`, `endX`, `unknown`, `budgetHit`, tail fields, `ticksRan`
+- `overlay` line for that seal
+- optional `trajectories[]` when `dev-record-traj` (AP8; default off)
+
+Research Pack copies this sealed session as `session.json`.
 
 ## Report line
 
@@ -41,9 +66,68 @@ If Live armed `d=2` but `bestSurv=5`, check whether Live **skipped** later delay
 | `peak-death-cut` | Discrete input-window stopped after survivor then acted death (AP1 wires honest skips) |
 | `not-viable` | Really rejected **or** legacy opaque skip |
 
-Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1 / 1.6.0.
+Empty `skip=not-viable` without a named cut usually means unevaluated leftovers — file a bug if you still see that after 1.5.1 / 1.6.x.
 
 `planFinished` may also carry hitch/Adaptive cost bits: `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
+
+Planner-branch honesty (AP4):
+
+| Field | Meaning |
+|---|---|
+| `plannerPath` | `inputWindow` / `threatProbe` / `adaptive` / `classic` / `hybridFallthrough` |
+| `gameModeKind` | Resolved mode id at plan time (`cube`…`swing`) |
+| `modeParams` | ticks / cap / λ / Adaptive quanta for that mode |
+| `viableDelays` / hold / `threatZone` | Plan honesty for Continuous / Wave research |
+| `candNotes[].survivalClass` | `alive` / `landing` / `recoverable` / `late-crash` / `lethal` |
+
+Mode-transition timeline (AP5; `pressId=0`, not part of a press chain):
+
+| `kind` / `timelineChange` | Meaning |
+|---|---|
+| `modeTransition` / `seed` | First snapshot when recording sees P1 |
+| `modeTransition` / `mode` | Gamemode portal change (`fromGameModeKind` → `gameModeKind`) |
+| `modeTransition` / `speed` | Speed portal (`playerSpeed`) |
+| `modeTransition` / `gravity` | Gravity flip (`upsideDown`) |
+| `modeTransition` / `dual` | Dual on/off |
+| `checkpoint` / `checkpoint` | Practice checkpoint load (tick reset) |
+
+Hazard / hitbox on `planFinished.witness` (AP6; `dev-record-hazards`, default on):
+
+| Field | Meaning |
+|---|---|
+| `hazardDigest` | Fast neighborhood hash (always when recording) |
+| `hazards[]` | Top-N nearby hazard `id` / `type` / AABB (`ox,oy,ow,oh`) |
+| `hitbox` | Live (+ optional ghost) collide rect + overlap counts vs that list |
+| `threatZone` | Plan threat-zone geometry (`startX`/`endX`) |
+
+Continuous / Wave / Hold (AP7):
+
+| Field | Meaning |
+|---|---|
+| `witness.player.jumpHeld` | Jump button held at plan capture (blob schema v2) |
+| `wave` on `planFinished` | IW `proxX` / `nearHazard` / `bestGain` / `earliestLater` / help-only / futile / proximityPass |
+| `holdTimeline` on fire/outcome | `releaseSeenTick`, `userUpTick`, `injectReleaseTick`, `swallow` |
+| `simNetClass` | G10 class on sealed `eval` + Delay `planFinished` after offline eval |
+
+Optional delay trajectories (AP8; `dev-record-traj`, **default off** — heavy):
+
+| Field | Meaning |
+|---|---|
+| `eval.trajectories[].role` | `chosen` / `bestSurv` / `bestEval` (unique delays only) |
+| `eval.trajectories[].delay` | Counterfactual delay that was re-simmed at seal |
+| `eval.trajectories[].survivalClass` | Coarse final class (`alive` / `lethal`) |
+| `eval.trajectories[].points[]` | `(tick,x,y,vy,alive,unknown,survivalClass)` — capped ~96 pts |
+
+Not enabled by Research Preset; turn on only when you need path plots.
+
+Dual / Orbs / CollisionFlags (AP9 — no silent `absent`):
+
+| Field / rule | Meaning |
+|---|---|
+| `worldDeps` includes `dual` | Whenever dual mode is on — even if P2 is missing (`categories.dual=absent` → gate `missingDual`) |
+| `worldDeps` includes `orbs` | Orb-window / requireOrb / foresight — empty `orbIds:[]` stays `partial` → eval `approx` |
+| `contact` / `dualContact` | Collide scalars + object uniqueIds (not pointers) for ghost-hitbox research |
+| fidelity | Dual unrestored hard-fails under `requireDeps`; orbs/contact gaps → `playerOnlyApproximated` with claims |
 
 ## Lag / perf
 
@@ -56,6 +140,67 @@ Empty `skip=not-viable` without a named cut usually means unevaluated leftovers 
 ## Resource stats
 
 Newer builds can attach RAM/CPU-ish stats to sessions/reports (if present in that package). Older `v1.5.0` traces may lack them.
+
+## Research pack
+
+Dev tab **Export Research Pack** (or `dev-export-research-pack-action`) is one click:
+runs **Eval Session** (fallback Eval Last), then writes:
+
+`%LocalAppData%\GeometryDash\geode\mods\audesign.earlybuffer\research\research_<stamp>\`
+
+Clipboard gets the **pack folder path** (send that folder).
+
+| File | Contents |
+|---|---|
+| `MANIFEST.json` | Schema, session/level ids, file list |
+| `session.json` | Open session or newest `devtraces/session-*.json` |
+| `report.txt` / `report.json` | Last eval overlay + structured `jsonLine` |
+| `settings_fingerprint.txt` | Compact assist/dev fingerprint |
+| `config.json` | Portable settings, keybinds omitted |
+| `README.txt` | Pack legend |
+
+Bake bugs still use **Dump All Diag** (`diag/full_*`), not the research pack.
+
+## Session compare (AP11)
+
+Dev tab **Compare** (or `dev-compare-sessions-action`):
+
+- Settings: `dev-compare-last-n` (default 5) + `dev-compare-same-level` (default on)
+- Reads newest → older `devtraces/session-*.json`
+- Scores newest vs **median of the older N−1**
+- Writes `devtraces/compare_<stamp>.json` + alert summary; clipboard = compare file path
+
+| Verdict | Meaning |
+|---|---|
+| `gained` | Majority of valid metrics improved |
+| `flat` | Within noise band (≈2% abs / 5% rel) |
+| `regressed` | Majority worsened |
+
+Tracked deltas (higher better unless noted): live↔eval match rate, bestSurv share, fidelity reproduced share, gatePass rate, mean chosen endX; **lower better:** death-after-fire, median ticks-to-death, hopeless, budget-hit, simNet harm share.
+
+## Offline CLI tools
+
+No game required. Point at Mod-Save `devtraces/` or a Research Pack folder.
+
+### Scan one session / pack
+
+```bash
+python tools/scan_devlab_assists.py path/to/session-….json
+python tools/scan_devlab_assists.py path/to/research/research_<stamp>
+python tools/scan_devlab_assists.py path/to/devtraces
+```
+
+Prints kind/reason buckets, plannerPath, sealed-eval fidelity + **live↔bestSurv mismatches**, mode-transition timeline, planFinished / delayArm / fire rows.
+
+### Compare many sessions (Gain / Flat / Regress)
+
+```bash
+python tools/compare_devlab_sessions.py --dir <devtraces> --last 5
+python tools/compare_devlab_sessions.py --dir <devtraces> --last 5 --level-key <key>
+python tools/compare_devlab_sessions.py --dir <devtraces> --last 5 --any-level
+```
+
+Writes `compare_<stamp>.json` next to the sessions (same schema as in-game Compare).
 
 ## Code owners
 

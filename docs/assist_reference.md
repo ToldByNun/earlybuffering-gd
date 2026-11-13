@@ -1,10 +1,10 @@
 # EarlyBuffer Assist Reference
 
-## Cloud Configs in v1.6.0
+## Cloud Configs in v1.6.x
 
-Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.0** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
+Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.x** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.6.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.6.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -30,7 +30,21 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Adaptive budget (AP3):** `EbAdaptiveBudgetController::plan` uses `tick-budget` (platform-clamped) as the hard Dynamic Plan Tick allowance and splits into screen / verify / reserve (`adaptive-reserve-pct`, screen share 30% of the non-reserve pool). `sim-budget-us` stays a soft runtime wall (plus EMA suggestion for diagnostics) — it must not shrink hard ticks (that starved Live into PassBudget). Quanta: `adaptive-screen-ticks` / `adaptive-verify-quantum`.
 
-**Adaptive planner (AP4–AP6 + AP10 honesty):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`; Modes may overwrite Adaptive knobs). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic) — uncapped fallthrough after that wall is spent is still expensive when ticks remain. `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0). **AP10:** a short screen-quantum Alive seed must **not** beat a known later death (esp. d0 `deathTick`); seed / gate / IW require `ticksRan` covering that death clock (capped by look-ahead). Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) with remaining ticks + remUs floor 2000µs and honesty-cleared Alive seeds. Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-seed-before-d0-death-rejected`, `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
+**Assist Pack AP-L1 (mid-run wall):** soft `budgetUs` is also polled **inside** each candidate / baseline / orb / Adaptive quantum (every 4 physics ticks via `EbShadowSimulator::spendPlanTick`). Between-candidate `wallExceeded` alone could let one Wave+TW `runOne` blow past the hitch ceiling (~16ms on Grief with `candidatesTried=0`).
+
+**Assist Pack AP-L2 (prepare reserve):** classic `prepare()` will not start Wave baseline / orb window scans when remUs is below the IW reserve (`max(1500µs, budgetUs/2)` on continuous Live IW; else 1500µs). Stops prepare from starving IW on Trigger-World-heavy waves.
+
+**Assist Pack AP-L3 (live TW pressure):** `applyTriggerWorldAtTick` returns immediately if the plan soft wall is spent; Live with ≥200 tracks uses half per-tick apply caps (bake unchanged).
+
+**Assist Pack AP-L4 (wave starve honesty):** Wave IW never labels unevaluated / wall-starved presses as `pass-wave-futile` — those are `pass-budget`. Honest futile still requires d0 run truth and a completed (non-budgetHit) band.
+
+**Assist Pack AP-L7 (lag warning notification):** `lag-warning-toast` / Lag Warning (UI → Notifications, default on) shows a bottom-left card once per level when a Live click feels hitchy (`planUs ≥` hitch ceiling or `budgetHit`) — independent of `show-overlay` and of sim-budget-us. PlanGold `assist-pack-ap-l7-lag-toast`.
+
+**Assist Pack AP-L6 (classic IW probe-before-band):** Discrete Live IW runs AP3c Probe Past Horizon after d0 / before the 1..limit band so wall-starved bands cannot skip the +24 prove extend. Wave stays on AP-L4 paths. PlanGold `assist-pack-ap-l6-probe-before-band`.
+
+**Assist Pack AP-L5 (Adaptive + classic soft-wall honesty):** Adaptive and classic fallthrough share one press `wall0` / `sim-budget-us` deadline (`reusePlanWall`) — no remUs floor stacked past the press. Adaptive soft-aborts earlier via shell reserve (discrete IW ~half budget; continuous `kFallthroughRemUsFloor`). Classic Live soft-wall floor matches Adaptive (`kLiveSoftWallFloorUs` = 4000). Fallthrough merges Adaptive `candidatesTried`. Ball: no observation-cleared Alive seeds; Adaptive `stopAtBallLanding`. PlanGold `assist-pack-ap-l5-adaptive-fallthrough`.
+
+**Adaptive planner (AP4–AP6 + AP10 honesty + Assist Pack AP1 fair depth):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`; Modes may overwrite Adaptive knobs). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic) — uncapped fallthrough after that wall is spent is still expensive when ticks remain. `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0). **AP10:** a short screen-quantum Alive seed must **not** beat a known later death (esp. d0 `deathTick`); seed / gate / IW require `ticksRan` covering that death clock (capped by look-ahead). **Assist Pack AP1:** truncated Alive is `pass-budget` / `budget-not-reached`, never opaque `not-viable` / `pass-hopeless`; IW re-sims shallow ready seeds when budget remains; `surviveBin` ranks only at comparable depth. **Assist Pack AP2:** leftover Screen steals into Verify once Living survivors exist (or d0-dead + later Alive mid-screen); `adaptiveStolenScreenTicks` on `planFinished`; no Max-Assist / tick-budget raise. **Assist Pack AP4:** dying d0 + any later Living → `pass-budget` (not `pass-hopeless`); uniform lethal grids stay hopeless. **Assist Pack AP3:** sticky `PassD0Safe` yields only on later survive/endX lead (not bare under-horizon); otherwise verify or `pass-budget` fallthrough. **Assist Pack AP5:** continuous/ship IW ranks survivors by endX−λ (not earliest-safe); Wave saves prefer score peak; landed ball Eval-aligned; classic may Delay on clear endX lead over sticky d0. **Assist Pack AP7:** discrete IW observation floor is `model.cap` (not `limit+cap`); classic IW uses the same `96−limit` discrete clamp as Adaptive so Alive@~96 can arm Delay. **Assist Pack AP3c:** `assist-probe-past-horizon` / `assist-micro-window` (independent; both off ≈ prior feel) — probe extends prove before sticky PassD0Safe; micro prefers later endX on ≤8-tick windows. (AP6 harm-guard discarded — starved Delay feel.) Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) on the **same** press soft wall (`reusePlanWall`) with leftover work ticks + shell-reserved headroom and honesty-cleared Alive seeds (ball: no observation-cleared seeds — AP-L5). Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-seed-before-d0-death-rejected`, `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
 
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
@@ -113,7 +127,7 @@ JSON v1: `{ version, key, tps, tracks: [{ uniqueId, objectId, kind, ready, keys:
 
 **Commit 4 (TW empty):** Init can race `objectLayer` → WaitObjects then Collect; empty on-disk cache is discarded as miss; `kickIfStaleEmpty` rebuilds when children appear; non-spawn StaticMove/Rotate/Scale/Toggle bake at **t=0** (touch still skipped); Bake Map **`waitUntilReady`** (≤45s) before validate — loud Fail if effects existed but 0 tracks. Incomplete empty is **not** written to `triggers/*.json`.
 
-`ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
+`ShadowSimulator::beginCapture` snapshots ready Static* (+ dynamic targets for restore). `applyTriggerWorldAtTick` / optional `applyLiveDynamicNear` before collide — **near ghost X first** (~±420), capped (~96 objects / ~350µs); far tracks hold last pose. **AP-L3:** Live skips apply when plan soft wall is spent; ≥200 tracks → half caps (48 / 175µs). Bake offline keeps full caps. LagProbe: `eb.triggerBake.load|build|save`, `eb.trigger.capture|apply|restore`, `triggerWorld.checkpoint`.
 
 Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/**1049**/**1594**/1347/1585/1817). Camera/pulse/song → `Ignore`. Group-follow → `StaticMove`; player-coupled → `DynamicFollow`; touch → `DynamicOther`.
 
@@ -130,7 +144,7 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.6.0**). Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.6.1**). Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
 
 **Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 
@@ -150,11 +164,14 @@ Every `mod.json` key (including `title-*` and `custom:eb-action`) maps to exactl
 
 ## Dev Lab diagnostics (session JSON)
 
-With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir.
+With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir. Full schema + Research Pack / Compare / CLI: [`docs/dev/traces.md`](dev/traces.md).
+
+**Research workflow (1.6.1):** Apply Research Preset → Record → die a few times → **Export Research Pack** (one folder on clipboard). Optional **Compare Sessions** for Gain/Flat/Regress on the same `levelKey`. Offline: `tools/scan_devlab_assists.py` (session or pack) and `tools/compare_devlab_sessions.py`.
 
 | Field | Where | Meaning |
 |-------|--------|---------|
 | `settingsFingerprint` | session root | Compact stage/mode/pick/ticks/safe/orbs/budgets/trigger-bake/learning summary (always filled on session start / level meta refresh) |
+| `eval` | attempt (after Eval) | Sealed samples + fidelity + `bestSurvivingDelay` / `bestEvaluatedDelay` |
 | `witness.triggerReadyTracks` / `triggerTrackCount` | `planFinished` | Store ready vs total tracks |
 | `witness.triggerBakeEffects` / `triggerBakeChildren` / `triggerCollectedEffects` | `planFinished` | Last bake: effects that produced keys, object-layer children, collected EffectGameObjects |
 | `witness.triggerSkipFollow` / `SkipDynamic` / `SkipNonSpawn` | `planFinished` | Last bake skip counters |
@@ -237,6 +254,7 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | perf-trace | bool | false | | | Main — section timings; spikes → console + `earlybuffer-perf.log` in mod save dir |
 | lag-probe | bool | false | | | Main — death/reset/checkpoint episodes → `earlybuffer-lagprobe.log` |
 | show-overlay | bool | false | | | Main |
+| lag-warning-toast | bool | true | | | UI → Notifications — once-per-level lag card; independent of overlay / sim-budget |
 | show-trajectory | bool | false | | | Visual — HOLD/coast ghosts; **v2** also LongForesight horizon + yellow prediction windows + dark-green best path |
 | show-bake-path | bool | false | | | Visual — green BakeMap **press windows** near player (no connector line; release marks omitted) |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
@@ -260,7 +278,7 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | cps-limit | int | 0 | 0 | 40 | Algorithm — 0=off |
 | min-click-interval-ms | int | 0 | 0 | 500 | Algorithm — skip assist only |
 | assist-orbs | bool | true | | | Algorithm |
-| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock. **Live** (classic + Adaptive) maps 0→8000µs hitch ceiling (Grief-class freezes). Adaptive Live floor 4000 when set &gt;0. Adaptive→classic fallthrough remUs floor 2000µs when ticks remain. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
+| sim-budget-us | int | 4000 | 0 | 10000 | Algorithm — soft wall-clock. **Live** (classic + Adaptive) maps 0→8000µs hitch ceiling (Grief-class freezes). Polled mid-run every 4 ticks (AP-L1) as well as between candidates. Adaptive Live floor 4000 when set &gt;0. Adaptive→classic fallthrough remUs floor 2000µs when ticks remain. HUS replan uses `max(200, sim/2)`. **Mobile** clamp ≤2000 (0 stays 0) via `PlatformLimits` |
 | tick-budget | int | 4000 | 500 | 20000 | Algorithm — hard tick sum; exhaust=Pass. Hybrid: verify+Live share one press envelope (verify ≤1200 first + Live reserve). HUS / Live arm verify keep `max(200, tick/4)`. **Mobile** (`PlatformLimits::isConstrainedDevice` = Android+iOS): clamp ≤2000 |
 | assist-press | bool | true | | | Algorithm |
 | assist-release | bool | true | | | Algorithm |

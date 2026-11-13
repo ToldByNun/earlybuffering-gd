@@ -67,6 +67,14 @@ public:
         bool verifyFailed = false;
         int surviveBin = 0;
         float endX = 0.f;
+        // AP4: structured run truth (from candidate.raw + ModeSurvival).
+        bool hasRunTruth = false;
+        int deathTick = -1;
+        int ticksRan = 0;
+        bool unknown = false;
+        bool budgetHit = false;
+        int surviveTicks = 0;
+        std::string survivalClass;
 
     private:
     };
@@ -112,6 +120,14 @@ public:
         float latencyTerm = 0.f;
         bool threatCleared = false;
         float score = 0.f;
+        // AP4: structured run truth alongside scores/rejects.
+        bool hasRunTruth = false;
+        int deathTick = -1;
+        int ticksRan = 0;
+        bool unknown = false;
+        bool budgetHit = false;
+        int surviveTicks = 0;
+        std::string survivalClass;
 
     private:
     };

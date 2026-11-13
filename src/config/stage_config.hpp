@@ -81,6 +81,8 @@ public:
     static bool showPauseBake(); // pause-screen status lines
     // Pause top-right button → Geode openSettingsPopup (later: hub).
     static bool showPauseHub();
+    // Assist Pack AP-L7: bottom-left hitch toast (UI → Notifications).
+    static bool lagWarningToast();
     // Independent save-feedback toggles (sound / icon flash / frame counter).
     static bool saveFeedbackSound();
     static bool saveFeedbackIcon(); // Save Feedback Color (icon flash)
@@ -178,6 +180,11 @@ public:
     static int adaptiveScreenTicks();
     static int adaptiveVerifyQuantum();
     static int adaptiveReservePct();
+    // Assist Pack AP3c — each toggleable independently (both off ≈ prior 1:1 feel).
+    // Probe: extra ticks past prove wall before sticky PassD0Safe.
+    static bool assistProbePastHorizon();
+    // Micro: small Max Assist windows may still prefer a later Alive endX lead.
+    static bool assistMicroWindow();
     // Kind-resolved Adaptive (mode overwrite → mode knobs, else Main).
     static bool adaptivePlanFor(GameModeKind kind);
     static int adaptiveScreenTicksFor(GameModeKind kind);
@@ -315,6 +322,7 @@ private:
     static bool s_cachedLagProbe;
     static bool s_cachedSafeMode;
     static bool s_cachedShowOverlay;
+    static bool s_cachedLagWarningToast;
     static bool s_cachedShowTrajectory;
     static bool s_cachedShowBakePath;
     static bool s_cachedShowPauseBake;
@@ -344,6 +352,8 @@ private:
     static int s_cachedAdaptiveScreenTicks;
     static int s_cachedAdaptiveVerifyQuantum;
     static int s_cachedAdaptiveReservePct;
+    static bool s_cachedAssistProbePastHorizon;
+    static bool s_cachedAssistMicroWindow;
     static std::string s_cachedAssistVerify;
     static int s_cachedTickBudget;
     static bool s_cachedAssistOnlyPractice;

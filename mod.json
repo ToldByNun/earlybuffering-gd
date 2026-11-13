@@ -8,7 +8,7 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.6.0",
+	"version": "v1.6.1",
 	"developer": "Audesign",
 	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -168,6 +168,18 @@
 			"default": 15,
 			"min": 0,
 			"max": 40
+		},
+		"assist-probe-past-horizon": {
+			"type": "bool",
+			"name": "Probe Past Horizon",
+			"description": "AP3c: when jump-now looks safe only because the sim hit the prove wall, run a short extra probe before PassD0Safe. Catches spike-gap / ledge timings where death is 1–few ticks past the wall. Off = previous sticky PassD0Safe (no extra sims).",
+			"default": true
+		},
+		"assist-micro-window": {
+			"type": "bool",
+			"name": "Micro-Window Assist",
+			"description": "AP3c: when Max Assist is tiny (≤8 ticks / ~2 frames), still prefer a later Alive delay with any endX lead over sticky Pass-now. On = helps 1–2 frame cube windows. Off = previous large-lead-only / PassD0Safe behavior for small windows.",
+			"default": true
 		},
 		"title-scope": {
 			"type": "title",
@@ -1380,6 +1392,12 @@
 			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
 			"default": false
 		},
+		"lag-warning-toast": {
+			"type": "bool",
+			"name": "Lag Warning",
+			"description": "Once per level, shows a bottom-left notification when a Live assist click feels hitchy (≥8ms plan or soft-wall hit). Independent of In-Level Overlay and of your sim-budget setting. Off = silent.",
+			"default": true
+		},
 		"show-pause-hub": {
 			"type": "bool",
 			"name": "Pause EB Button",
@@ -1466,7 +1484,7 @@
 		"title-dev": {
 			"type": "title",
 			"name": "Dev Lab",
-			"description": "Developer forensics: record assist decision traces, evaluate counterfactual delays, export reports. Not for normal play — leave recording off unless you are debugging timing."
+			"description": "Developer forensics workflow: Capture preset → Record → Eval → Pack/Compare. Record assist decision traces and counterfactual delays. Not for normal play — leave recording off unless debugging."
 		},
 		"title-dev-session": {
 			"type": "title",
@@ -1498,6 +1516,18 @@
 			"name": "Dev Freeze World",
 			"description": "Capture nearby object poses / restoreable world state for high-fidelity eval (Commit 2 LOCK default on). Off = player+clock digest only (playerOnlyApproximated). Heavier CPU/IO when on.",
 			"default": true
+		},
+		"dev-record-hazards": {
+			"type": "bool",
+			"name": "Dev Record Hazards",
+			"description": "On planFinished, store Top-N nearby hazard id/AABB/type plus live/ghost collide rects and threat-zone geometry in the witness (AP6). Digest remains. Default on with Freeze World research presets. Off keeps sessions thinner.",
+			"default": true
+		},
+		"dev-record-traj": {
+			"type": "bool",
+			"name": "Dev Record Trajectories",
+			"description": "On offline eval seal, re-simulate chosen + bestSurv (+ bestEval when distinct) delays and store per-tick (tick,x,y,vy,alive,unknown,survivalClass) samples under eval.trajectories (AP8). Default off — heavy CPU/JSON. Research-only opt-in; not part of Research Preset.",
+			"default": false
 		},
 		"dev-disable-random": {
 			"type": "bool",
@@ -1585,6 +1615,25 @@
 			"description": "Show Dev Lab overlay lines while a session is active or a report is available. Off = no HUD.",
 			"default": false
 		},
+		"title-dev-compare": {
+			"type": "title",
+			"name": "Dev Session Compare",
+			"description": "Compare the last N sealed session-*.json files under devtraces/ (Gain / Flat / Regress)."
+		},
+		"dev-compare-last-n": {
+			"type": "int",
+			"name": "Dev Compare Last N",
+			"description": "How many recent sealed sessions to include in Compare Sessions (newest vs median of older). Default 5, max 20.",
+			"default": 5,
+			"min": 2,
+			"max": 20
+		},
+		"dev-compare-same-level": {
+			"type": "bool",
+			"name": "Dev Compare Same Level",
+			"description": "When on, Compare Sessions only uses sessions that share the newest session's levelKey (or the open session's level). Default on.",
+			"default": true
+		},
 		"title-dev-actions": {
 			"type": "title",
 			"name": "Dev Actions",
@@ -1629,8 +1678,20 @@
 		"dev-copy-report-action": {
 			"type": "custom:eb-action",
 			"name": "Copy Last Dev Report",
-			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard.",
+			"description": "Copies the last Dev overlay line (fid / bestSurv / bestEval / obj / ideal) to the clipboard. Also writes earlybuffer-dev-report.txt (+ .json when available).",
 			"button-text": "copy"
+		},
+		"dev-export-research-pack-action": {
+			"type": "custom:eb-action",
+			"name": "Export Research Pack",
+			"description": "One click: runs Eval Session (or Eval Last), then writes research/research_<stamp>/ with MANIFEST, session.json, report.txt/json, fingerprint, config.json (no keybinds). Copies the pack folder path to the clipboard.",
+			"button-text": "pack"
+		},
+		"dev-compare-sessions-action": {
+			"type": "custom:eb-action",
+			"name": "Compare Sessions",
+			"description": "Compares the last N sealed session-*.json under devtraces/ (newest vs median of older). Writes compare_<stamp>.json and shows gained/flat/regressed with driving metrics. Copies the compare file path.",
+			"button-text": "compare"
 		},
 		"title-dev-diag": {
 			"type": "title",

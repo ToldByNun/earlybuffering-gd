@@ -62,6 +62,8 @@
 #include "../dev/evaluation/dev_state_diff.hpp"
 #include "../dev/reporting/dev_diag_dump.hpp"
 #include "../dev/reporting/dev_report.hpp"
+#include "../dev/reporting/dev_research_pack.hpp"
+#include "../dev/reporting/dev_session_compare.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
 #include <fmt/format.h>
 
@@ -171,16 +173,98 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     expect(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk");
     std::string diagDumpReport;
     expect(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
+    std::string researchPackReport;
+    expect(EbDevResearchPack::selfCheck(researchPackReport), "dev-research-pack");
+    std::string sessionCompareReport;
+    expect(EbDevSessionCompare::selfCheck(sessionCompareReport), "dev-session-compare");
     std::string livePlanReport;
     expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
+    // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
+    expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
+               EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&
+               !EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18),
+           "assist-pack-ap1-fair-depth-a4");
+    // Assist Pack AP4: living later blocks Hopeless; uniform death (A7) allows it.
+    expect(EbLivePlanContracts::hopelessBlockedByLivingLater(true, true) &&
+               !EbLivePlanContracts::hopelessBlockedByLivingLater(true, false),
+           "assist-pack-ap4-false-hopeless");
+    // Assist Pack AP3 (tight): endX/survive lead blocks PassD0Safe; bare under-horizon does not.
+    expect(!EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f) &&
+               EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f) &&
+               EbLivePlanContracts::weakD0SafeNeedsFallthrough(true) &&
+               !EbLivePlanContracts::weakD0SafeNeedsFallthrough(false),
+           "assist-pack-ap3-weak-d0safe");
+    // Assist Pack AP5: continuous ranks by endX; wave save prefers score peak.
+    expect(EbLivePlanContracts::continuousIwRanksByEndX() &&
+               EbLivePlanContracts::waveIwChooseDelayByScore(false, 7, 3) == 7 &&
+               EbLivePlanContracts::waveIwChooseDelayByScore(true, 7, 3) == 0,
+           "assist-pack-ap5-endx-rank");
+    // Assist Pack AP7: discrete IW floor is model.cap (reachable), not limit+cap.
+    expect(EbLivePlanContracts::discreteIwObservationFloor(92) == 92 &&
+               EbLivePlanContracts::discreteIwObservationFloor(0) == 1,
+           "assist-pack-ap7-iw-floor");
+    // Assist Pack AP3c: probe blocks wall PassD0Safe; micro prefers endX in tiny windows.
+    expect(EbLivePlanContracts::horizonProbeBlocksPassD0Safe(true, true, true) &&
+               !EbLivePlanContracts::horizonProbeBlocksPassD0Safe(false, true, true) &&
+               EbLivePlanContracts::microWindowPreferLater(true, 4, 110.f, 100.f) &&
+               !EbLivePlanContracts::microWindowPreferLater(true, 12, 110.f, 100.f),
+           "assist-pack-ap3c-toggles");
+    // Assist Pack AP-L6: discrete IW runs horizon probe before the later band.
+    expect(EbLivePlanContracts::discreteIwProbeBeforeBand(false, true, true) &&
+               !EbLivePlanContracts::discreteIwProbeBeforeBand(true, true, true) &&
+               !EbLivePlanContracts::discreteIwProbeBeforeBand(false, false, true),
+           "assist-pack-ap-l6-probe-before-band");
+    // Assist Pack AP-L7: lag notification on hitch ceiling / budgetHit (not budget %).
+    expect(EbLivePlanContracts::lagWarningShouldNotify(true, 9000, false) &&
+               EbLivePlanContracts::lagWarningShouldNotify(true, 1000, true) &&
+               !EbLivePlanContracts::lagWarningShouldNotify(false, 9000, true) &&
+               !EbLivePlanContracts::lagWarningShouldNotify(true, 3000, false),
+           "assist-pack-ap-l7-lag-toast");
+    // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
+    {
+        auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);
+        int const before = env.totalLeft();
+        int const screen = env.screenLeft;
+        expect(env.stealScreenToVerify() == screen && env.screenLeft == 0 &&
+                   env.totalLeft() == before,
+               "assist-pack-ap2-screen-steal");
+    }
     // 1.5.1 AP1: Adaptive + classic Live both clamp simUs=0 → hitch ceiling.
     expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs &&
                EbLivePlanContracts::intendedLiveBudgetUs(0) ==
                    EbLivePlanContracts::currentClassicBudgetUs(0) &&
                EbLivePlanContracts::currentAdaptiveBudgetUs(0) == 0,
            "live-hitch-ceiling");
-    expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) ==
-               EbLivePlanContracts::kFallthroughRemUsFloor,
+    expect(EbLivePlanContracts::kMidRunWallPollTicks == EbShadowSimulator::kMidRunWallPollTicks &&
+               EbLivePlanContracts::shouldPollMidRunWall(0) &&
+               EbLivePlanContracts::midRunWallExceeded(8000, 8000),
+           "assist-pack-ap-l1-mid-run-wall");
+    expect(EbLivePlanContracts::kPrepareMinRemUs == 1500 &&
+               EbLivePlanContracts::prepareReserveUs(8170, true) == 4085 &&
+               EbLivePlanContracts::prepareReserveUs(8170, false) == 1500 &&
+               !EbLivePlanContracts::prepareHeavyWorkAllowed(4000, 4085, false),
+           "assist-pack-ap-l2-prepare-reserve");
+    expect(EbLivePlanContracts::kLiveTwTightenTrackFloor == 200 &&
+               EbLivePlanContracts::liveTwApplyMaxPerTick(942, false, 96) == 48 &&
+               EbLivePlanContracts::liveTwApplyBudgetUs(942, false, 350) == 175 &&
+               EbLivePlanContracts::liveTwApplyMaxPerTick(942, true, 96) == 96 &&
+               EbLivePlanContracts::liveTwApplySkippedForPlanWall(true),
+           "assist-pack-ap-l3-live-tw");
+    expect(EbLivePlanContracts::waveIwD0HasRunTruth(true, 8) &&
+               EbLivePlanContracts::waveIwFutileHonest(true, false) &&
+               !EbLivePlanContracts::waveIwFutileHonest(true, true) &&
+               EbLivePlanContracts::waveIwSkipLaterBandForStarve(true, false),
+           "assist-pack-ap-l4-wave-honesty");
+    expect(EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true) == 4085 &&
+               EbLivePlanContracts::adaptiveShellBudgetUs(
+                   8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085 &&
+               EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) == 0 &&
+               EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
+                   EbLivePlanContracts::kLiveSoftWallFloorUs &&
+               !EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(true) &&
+               EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(false),
+           "assist-pack-ap-l5-adaptive-fallthrough");
+    expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,
            "live-hitch-ceiling-remus");
     // 1.5.1 AP3a: Wave continuous IW floor (≥32), not bare Max Assist limit.
     expect(EbLivePlanContracts::kWaveHorizonFloor == 32 &&

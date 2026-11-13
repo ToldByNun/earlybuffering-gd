@@ -63,7 +63,58 @@ void EbShadowSimulator::beginSession(PlayLayer* layer) {
 }
 
 void EbShadowSimulator::endSession(PlayLayer* layer) {
-    return EbShadowGhostLifecycle::endSession(*this, layer);
+    EbShadowGhostLifecycle::endSession(*this, layer);
+    clearPlanWall();
+}
+
+void EbShadowSimulator::beginPlanWall(std::chrono::steady_clock::time_point wall0, int budgetUs) {
+    m_planWall0 = wall0;
+    m_planWallBudgetUs = budgetUs > 0 ? budgetUs : 0;
+    m_planWallHit = false;
+}
+
+void EbShadowSimulator::clearPlanWall() {
+    m_planWallBudgetUs = 0;
+    m_planWallHit = false;
+}
+
+bool EbShadowSimulator::planWallHit() const {
+    return m_planWallHit;
+}
+
+bool EbShadowSimulator::planWallExceeded() const {
+    if (m_planWallHit)
+        return true;
+    if (m_planWallBudgetUs <= 0)
+        return false;
+    auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
+                                         std::chrono::steady_clock::now() - m_planWall0)
+                                         .count();
+    return elapsedMicroseconds >= m_planWallBudgetUs;
+}
+
+bool EbShadowSimulator::markPlanWallIfExceeded() {
+    if (!planWallExceeded())
+        return false;
+    m_planWallHit = true;
+    return true;
+}
+
+bool EbShadowSimulator::spendPlanTick(int* tickBudgetLeft, int tickIndex) {
+    if (tickBudgetLeft) {
+        if (*tickBudgetLeft <= 0)
+            return true;
+        --(*tickBudgetLeft);
+    }
+    if (m_planWallHit)
+        return true;
+    if (m_planWallBudgetUs <= 0)
+        return false;
+    if (tickIndex < 0)
+        return false;
+    if ((tickIndex % kMidRunWallPollTicks) != 0)
+        return false;
+    return markPlanWallIfExceeded();
 }
 
 gd::vector<GameObject*>& EbShadowSimulator::collisionFilterScratch() {
@@ -365,9 +416,10 @@ void EbShadowSimulator::finishEvalWorldRestore(PlayLayer* layer) {
 
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowSimulator::evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const& witness, int delay,
-                                     int horizonTicks, bool down, int* tickBudgetLeft) {
+                                     int horizonTicks, bool down, int* tickBudgetLeft,
+                                     bool captureTraj) {
     return EbShadowFreezeEvaluator::evalDelayFromFreeze(*this, layer, witness, delay, horizonTicks,
-                                                      down, tickBudgetLeft);
+                                                      down, tickBudgetLeft, captureTraj);
 }
 
 EbShadowSimulator::EvalFromFreezeResult

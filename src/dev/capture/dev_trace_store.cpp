@@ -44,6 +44,8 @@ char const* EbDevTraceStore::kindId(DevEventKind kind) {
         return "checkpoint";
     case DevEventKind::Outcome:
         return "outcome";
+    case DevEventKind::ModeTransition:
+        return "modeTransition";
     }
     return "pressObserved";
 }
@@ -87,6 +89,10 @@ bool EbDevTraceStore::parseKind(std::string const& s, DevEventKind& out) {
     }
     if (s == "outcome") {
         out = DevEventKind::Outcome;
+        return true;
+    }
+    if (s == "modeTransition") {
+        out = DevEventKind::ModeTransition;
         return true;
     }
     return false;
@@ -297,8 +303,16 @@ EbDevDecisionEvent* EbDevTraceStore::appendEvent(EbDevDecisionEvent event) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed)
         return nullptr;
-    if (event.pressId <= 0)
+    bool const attemptScoped = event.kind == DevEventKind::Checkpoint ||
+                               event.kind == DevEventKind::ModeTransition;
+    if (event.pressId <= 0 && !attemptScoped)
         return nullptr;
+    if (attemptScoped) {
+        // Attempt timeline — not part of a press parent chain.
+        event.pressId = 0;
+        event.cycleId = 0;
+        event.parentEventId = 0;
+    }
 
     if (event.eventId <= 0) {
         event.eventId = this->nextEventId();
@@ -306,7 +320,7 @@ EbDevDecisionEvent* EbDevTraceStore::appendEvent(EbDevDecisionEvent event) {
     if (event.attemptId <= 0) {
         event.attemptId = attempt->attemptId;
     }
-    if (event.cycleId <= 0) {
+    if (event.cycleId <= 0 && !attemptScoped) {
         event.cycleId = event.pressId;
     }
     // Plan time is the usual Dynamic hitch window — sample RAM/CPU there.
@@ -364,6 +378,26 @@ bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget)
     }
     this->sampleResources();
     return this->flush();
+}
+
+bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) {
+    if (!this->m_open || attemptId <= 0)
+        return false;
+    for (auto& attempt : this->m_session.attempts) {
+        if (attempt.attemptId != attemptId)
+            continue;
+        // AP7: stamp G10 class onto matching planFinished (armed Delay) events.
+        if (!eval.simNetClass.empty()) {
+            for (auto& ev : attempt.events) {
+                if (ev.kind == DevEventKind::PlanFinished && ev.plannedDelay > 0)
+                    ev.simNetClass = eval.simNetClass;
+            }
+        }
+        attempt.eval = std::move(eval);
+        this->sampleResources();
+        return this->flush();
+    }
+    return false;
 }
 
 bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {

@@ -1,4 +1,5 @@
 #include "adaptive_decision_gate.hpp"
+#include "../../../../../config/stage_config.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include <algorithm>
 #include <cmath>
@@ -167,11 +168,73 @@ EbAdaptiveDecisionGate::Result EbAdaptiveDecisionGate::decide(Input const& in) {
             out.reason = AssistReason::PassBudget;
             return out;
         }
-        out.reason = in.budgetHitIncomplete ? AssistReason::PassBudget : AssistReason::PassHopeless;
+        // Assist Pack AP4: dying d0 + any later Living (even shallow / not yet
+        // hazard-proven) is incomplete search — never PassHopeless (A4 miss).
+        // Uniform dead grids (A7) still Hopeless below.
+        bool anyLaterAlive = false;
+        for (int delay = 1; delay <= in.limit; ++delay) {
+            auto const& c = in.cands[static_cast<size_t>(delay)];
+            if (c.autonomousAlive && !c.terminalDied && !c.terminalUnknown) {
+                anyLaterAlive = true;
+                break;
+            }
+        }
+        if (EbLivePlanContracts::hopelessBlockedByLivingLater(d0.terminalDied, anyLaterAlive) ||
+            in.budgetHitIncomplete) {
+            out.reason = AssistReason::PassBudget;
+            return out;
+        }
+        out.reason = AssistReason::PassHopeless;
         return out;
     }
 
     if (best == 0) {
+        // Assist Pack AP3 (tight): sticky PassD0Safe unless a later Living is
+        // unproven AND clearly endX-leading — bare shallow peers must not starve Delay.
+        bool anyLaterUnprovenEndXLead = false;
+        for (int delay = 1; delay <= in.limit; ++delay) {
+            auto const& c = in.cands[static_cast<size_t>(delay)];
+            if (!(c.autonomousAlive && !c.terminalDied && !c.terminalUnknown))
+                continue;
+            if (hasHazardProgress(c, d0, cap, proofTicks))
+                continue;
+            if (EbLivePlanContracts::laterAliveBlocksPassD0Safe(
+                    true, c.ticksSimulated < cap && !c.terminalAliveCap, c.autonomousSurviveTicks,
+                    d0.autonomousSurviveTicks, 8, c.endX, d0.endX)) {
+                anyLaterUnprovenEndXLead = true;
+                break;
+            }
+        }
+        if (EbLivePlanContracts::weakD0SafeNeedsFallthrough(anyLaterUnprovenEndXLead)) {
+            out.action = PlanAction::Pass;
+            out.reason = AssistReason::PassBudget;
+            out.delay = 0;
+            out.nowIsSafe = false;
+            return out;
+        }
+        // Assist Pack AP3c: prove-wall PassD0Safe with later Alive → PassBudget
+        // so classic IW can probe past the horizon (setting-gated).
+        {
+            bool anyLaterAlive = false;
+            for (int delay = 1; delay <= in.limit; ++delay) {
+                auto const& c = in.cands[static_cast<size_t>(delay)];
+                if (c.autonomousAlive && !c.terminalDied && !c.terminalUnknown) {
+                    anyLaterAlive = true;
+                    break;
+                }
+            }
+            bool const atWall =
+                EbLivePlanContracts::d0AtProveWall(true, false, d0.ticksSimulated, cap) ||
+                d0.terminalAliveCap;
+            if (EbLivePlanContracts::horizonProbeBlocksPassD0Safe(
+                    EbStageConfig::assistProbePastHorizon(), atWall, anyLaterAlive)) {
+                out.action = PlanAction::Pass;
+                out.reason = AssistReason::PassBudget;
+                out.delay = 0;
+                out.nowIsSafe = false;
+                return out;
+            }
+        }
         out.action = PlanAction::Pass;
         out.reason = AssistReason::PassD0Safe;
         out.delay = 0;
@@ -408,6 +471,40 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     expect(softDeadOut.action == PlanAction::Pass, "soft-dead-pass");
     expect(softDeadOut.reason == AssistReason::PassHopeless, "soft-dead-hopeless");
 
+    // Assist Pack AP4 — A4: dying d0 + shallow later Alive (no hazard proof yet)
+    // must be PassBudget (fallthrough), never PassHopeless.
+    for (int delay = 0; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].terminalDied = true;
+        cands[delay].deathTick = 54;
+        cands[delay].ticksSimulated = 55;
+        cands[delay].endX = 50.f;
+    }
+    cands[1].terminalDied = false;
+    cands[1].autonomousAlive = true;
+    cands[1].deathTick = -1;
+    cands[1].ticksSimulated = 18;
+    cands[1].autonomousSurviveTicks = 18;
+    cands[1].endX = 80.f;
+    cands[2].terminalDied = false;
+    cands[2].autonomousAlive = true;
+    cands[2].deathTick = -1;
+    cands[2].ticksSimulated = 43;
+    cands[2].autonomousSurviveTicks = 43;
+    cands[2].endX = 90.f;
+    Input a4In = deadIn;
+    a4In.budgetHitIncomplete = false;
+    a4In.screenProofTicks = 18;
+    a4In.modelCap = 96;
+    a4In.robustK = 0;
+    expect(!hasHazardProgress(cands[1], cands[0], 96, 18), "ap4-a4-no-progress-18");
+    expect(!hasHazardProgress(cands[2], cands[0], 96, 18), "ap4-a4-no-progress-43");
+    auto const a4Out = decide(a4In);
+    expect(a4Out.action == PlanAction::Pass, "ap4-a4-pass");
+    expect(a4Out.reason == AssistReason::PassBudget, "ap4-a4-budget");
+    expect(a4Out.reason != AssistReason::PassHopeless, "ap4-a4-not-hopeless");
+
     // Zone-cleared Alive at short ticks still Delay-worthy vs dead d0.
     cands[0] = CandView{};
     cands[0].screened = true;
@@ -460,6 +557,37 @@ bool EbAdaptiveDecisionGate::selfCheck(std::string& report) {
     cands[3].deathTick = 5;
     expect(decide(provenD0In).reason == AssistReason::PassD0Safe, "proven-d0-alone");
     expect(decide(provenD0In).action == PlanAction::Pass, "proven-d0-pass");
+
+    // Assist Pack AP3: shallow later without endX lead → sticky PassD0Safe (keep Assist).
+    cands[0] = CandView{};
+    cands[0].screened = true;
+    cands[0].autonomousAlive = true;
+    cands[0].ticksSimulated = 96;
+    cands[0].terminalAliveCap = true;
+    cands[0].endX = 2620.f;
+    for (int delay = 1; delay <= 4; ++delay) {
+        cands[delay] = CandView{};
+        cands[delay].screened = true;
+        cands[delay].autonomousAlive = true;
+        cands[delay].ticksSimulated = 18;
+        cands[delay].autonomousSurviveTicks = 18;
+        cands[delay].endX = 2620.f; // no clear endX lead
+    }
+    Input weakD0In = deadIn;
+    weakD0In.modelCap = 96;
+    weakD0In.screenProofTicks = 18;
+    weakD0In.robustK = 0;
+    weakD0In.budgetHitIncomplete = false;
+    expect(!hasHazardProgress(cands[1], cands[0], 96, 18), "ap3-shallow-no-progress");
+    // AP3c probe (default on): wall-safe d0 + later Alive → PassBudget, not sticky.
+    expect(decide(weakD0In).reason == AssistReason::PassBudget, "ap3c-probe-shallow-budget");
+    // Clear endX lead on unproven later → still PassBudget fallthrough.
+    for (int delay = 1; delay <= 4; ++delay)
+        cands[delay].endX = 2630.f;
+    auto const weakD0Out = decide(weakD0In);
+    expect(weakD0Out.reason == AssistReason::PassBudget, "ap3-weak-d0-budget");
+    expect(weakD0Out.reason != AssistReason::PassD0Safe, "ap3-weak-d0-not-sticky");
+    expect(weakD0Out.action == PlanAction::Pass, "ap3-weak-d0-pass");
 
     // AP4: Delay with activation → requireOrb + DelayOrb.
     cands[0] = CandView{};

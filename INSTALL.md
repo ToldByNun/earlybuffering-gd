@@ -1,6 +1,6 @@
 # Build & install
 
-Release **v1.6.0** targets GD **2.2081**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use. Adaptive Plan lives under Assist / Main settings (`adaptive-plan`).
+Release **v1.6.1** targets GD **2.2081**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use. Adaptive Plan lives under Assist / Main settings (`adaptive-plan`).
 
 ## Requirements
 

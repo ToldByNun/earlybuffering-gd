@@ -1,11 +1,15 @@
 #include "dev_live_witness.hpp"
+#include "../../core/level/section_object_walk.hpp"
 #include "../../core/sim/shadow_simulator.hpp"
 #include "../../core/trigger_world/trigger_world_baker.hpp"
 #include "../../core/trigger_world/trigger_world_store.hpp"
+#include "../dev_config.hpp"
 #include <Geode/Geode.hpp>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fmt/format.h>
+#include <vector>
 
 uint64_t EbDevLiveWitnessImplementation::fnv1aMix(uint64_t hash, uint64_t value) {
     hash ^= value;
@@ -156,6 +160,7 @@ char const* const* EbDevLiveWitness::playerBlobFieldNames(size_t& count) {
         "controlsDisabled",
         "maybeIsFalling",
         "maybeIsBoosted",
+        "jumpHeld",
     };
     count = sizeof(kNames) / sizeof(kNames[0]);
     return kNames;
@@ -204,14 +209,15 @@ bool EbDevLiveWitness::hasWorldDep(EbDevLiveWitness const& w, DevWitnessCategory
     return w.worldDeps.count(static_cast<int>(candidate)) > 0;
 }
 
-void EbDevLiveWitness::fillWorldDeps(EbDevLiveWitness& w, EbSimPlan const& plan, bool dualActive) {
+void EbDevLiveWitness::fillWorldDeps(EbDevLiveWitness& w, EbSimPlan const& plan, bool dualMode) {
     w.worldDeps.clear();
     // player + clock always.
     w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Player));
     w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Clock));
     w.worldDeps.insert(static_cast<int>(DevWitnessCategory::CollisionFlags));
 
-    if (dualActive) {
+    // AP9: dual mode tags Dual even when P2 pointer is missing (honest Absent).
+    if (dualMode) {
         w.worldDeps.insert(static_cast<int>(DevWitnessCategory::Dual));
     }
     if (plan.usedOrbWindow || plan.requireOrb || plan.foresightOrbPad) {
@@ -272,6 +278,37 @@ void EbDevLiveWitness::fillPlayerBlob(EbDevPlayerBlob& blob, PlayerObject* sourc
     blob.controlsDisabled = source->m_controlsDisabled;
     blob.maybeIsFalling = source->m_maybeIsFalling;
     blob.maybeIsBoosted = source->m_maybeIsBoosted;
+    {
+        auto it = source->m_holdingButtons.find(static_cast<int>(PlayerButton::Jump));
+        blob.jumpHeld = it != source->m_holdingButtons.end() && it->second;
+    }
+}
+
+void EbDevLiveWitness::fillContactSnap(EbDevContactSnap& snap, PlayerObject* source) {
+    snap = {};
+    if (!source)
+        return;
+    snap.present = true;
+    snap.maybeIsColliding = source->m_maybeIsColliding;
+    snap.collidingWithLeft = source->m_collidingWithLeft;
+    snap.collidingWithRight = source->m_collidingWithRight;
+    snap.lastCollisionBottom = source->m_lastCollisionBottom;
+    snap.lastCollisionTop = source->m_lastCollisionTop;
+    snap.lastCollisionLeft = source->m_lastCollisionLeft;
+    snap.lastCollisionRight = source->m_lastCollisionRight;
+    snap.collidedTopMinY = source->m_collidedTopMinY;
+    snap.collidedBottomMaxY = source->m_collidedBottomMaxY;
+    snap.collidedLeftMaxX = source->m_collidedLeftMaxX;
+    snap.collidedRightMinX = source->m_collidedRightMinX;
+    snap.snapDistance = source->m_snapDistance;
+    snap.groundYVelocity = source->m_groundYVelocity;
+    snap.groundObjectMaterial = source->m_groundObjectMaterial;
+    snap.collidedObjectId = source->m_collidedObject ? source->m_collidedObject->m_uniqueID : 0;
+    snap.lastGroundObjectId =
+        source->m_lastGroundObject ? source->m_lastGroundObject->m_uniqueID : 0;
+    snap.objectSnappedToId = source->m_objectSnappedTo ? source->m_objectSnappedTo->m_uniqueID : 0;
+    snap.isOnIce = source->m_isOnIce;
+    snap.isSliding = source->m_isSliding;
 }
 
 bool EbDevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {
@@ -330,6 +367,114 @@ uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject
     return height;
 }
 
+void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
+                                        PlayerObject* player, float radiusX) {
+    w.hazards.clear();
+    w.hasHazards = false;
+    if (!layer || !player || radiusX <= 0.f)
+        return;
+
+    float const playerX = player->getPositionX();
+    float const playerY = player->getPositionY();
+    float const yReach = player->m_isShip || player->m_isDart || player->m_isSwing ? 120.f : 80.f;
+
+    std::vector<EbDevHazardSnap> found;
+    auto consider = [&](GameObject* object) {
+        if (!EbDevLiveWitnessImplementation::hazardLikeObject(object) || object->m_uniqueID == 0)
+            return;
+        float const objectX = object->getPositionX();
+        float const objectY = object->getPositionY();
+        if (objectX < playerX - 20.f || objectX > playerX + radiusX)
+            return;
+        if (std::fabs(objectY - playerY) > yReach)
+            return;
+        auto const rect = object->getObjectRect();
+        EbDevHazardSnap snap;
+        snap.uniqueId = object->m_uniqueID;
+        snap.objectType = static_cast<int>(object->m_objectType);
+        snap.x = objectX;
+        snap.y = objectY;
+        snap.aabb.x = rect.origin.x;
+        snap.aabb.y = rect.origin.y;
+        snap.aabb.w = rect.size.width;
+        snap.aabb.h = rect.size.height;
+        float const dx = objectX - playerX;
+        float const dy = objectY - playerY;
+        snap.dist2 = dx * dx + dy * dy;
+        found.push_back(snap);
+    };
+
+    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
+        for (unsigned index = 0; index < children->count(); ++index) {
+            consider(EbSectionObjectWalk::asGameObject(children->objectAtIndex(index)));
+        }
+    }
+    EbSectionObjectWalk::forEachInSections(layer, consider);
+
+    std::sort(found.begin(), found.end(), [](EbDevHazardSnap const& a, EbDevHazardSnap const& b) {
+        if (a.dist2 != b.dist2)
+            return a.dist2 < b.dist2;
+        return a.uniqueId < b.uniqueId;
+    });
+    std::vector<EbDevHazardSnap> unique;
+    unique.reserve(std::min(found.size(), static_cast<size_t>(kMaxHazardSnaps)));
+    for (auto const& snap : found) {
+        bool seen = false;
+        for (auto const& existing : unique) {
+            if (existing.uniqueId == snap.uniqueId) {
+                seen = true;
+                break;
+            }
+        }
+        if (seen)
+            continue;
+        unique.push_back(snap);
+        if (static_cast<int>(unique.size()) >= kMaxHazardSnaps)
+            break;
+    }
+    w.hazards = std::move(unique);
+    w.hasHazards = true;
+}
+
+void EbDevLiveWitness::captureHitboxSnap(EbDevLiveWitness& w, PlayLayer* layer,
+                                       PlayerObject* player) {
+    w.hitbox = {};
+    w.hasHitbox = false;
+    if (!player)
+        return;
+
+    auto const live = player->getObjectRect();
+    w.hitbox.present = true;
+    w.hitbox.live.x = live.origin.x;
+    w.hitbox.live.y = live.origin.y;
+    w.hitbox.live.w = live.size.width;
+    w.hitbox.live.h = live.size.height;
+
+    auto& sim = EbShadowSimulator::get();
+    PlayerObject* ghost = nullptr;
+    if (layer && sim.isAttachedTo(layer))
+        ghost = sim.shadow();
+    if (ghost) {
+        auto const ghostRect = ghost->getObjectRect();
+        w.hitbox.hasGhost = true;
+        w.hitbox.ghost.x = ghostRect.origin.x;
+        w.hitbox.ghost.y = ghostRect.origin.y;
+        w.hitbox.ghost.w = ghostRect.size.width;
+        w.hitbox.ghost.h = ghostRect.size.height;
+    }
+
+    auto overlaps = [](EbDevAabb const& a, EbDevAabb const& b) -> bool {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    };
+    for (auto const& hazard : w.hazards) {
+        if (overlaps(w.hitbox.live, hazard.aabb))
+            ++w.hitbox.hazardOverlapLive;
+        if (w.hitbox.hasGhost && overlaps(w.hitbox.ghost, hazard.aabb))
+            ++w.hitbox.hazardOverlapGhost;
+    }
+    w.hasHitbox = true;
+}
+
 EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
                                        PlayerObject* player2, EbSimPlan const& plan,
                                        EbDevClockContract::Stamp const& clock, int effectTick,
@@ -342,22 +487,34 @@ EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* playe
 
     // --- player ---
     fillPlayerBlob(w.player, player);
+    w.contact = {};
+    w.hasContact = false;
     if (w.player.present) {
         setCategory(w, DevWitnessCategory::Player, DevWitnessStatus::Restored);
-        // Copied bool/ground flags are in the blob; pointer collision refs absent.
+        // Bool/ground flags live in the blob; pointer refs → uniqueId contact snap (AP9).
+        fillContactSnap(w.contact, player);
+        w.hasContact = w.contact.present;
         setCategory(w, DevWitnessCategory::CollisionFlags, DevWitnessStatus::Partial);
     } else {
         setCategory(w, DevWitnessCategory::Player, DevWitnessStatus::Absent);
         setCategory(w, DevWitnessCategory::CollisionFlags, DevWitnessStatus::Absent);
     }
 
-    // --- dual ---
-    bool const dualActive = player2 != nullptr && layer && layer->m_gameState.m_isDualMode;
-    if (dualActive && player2) {
+    // --- dual (AP9: dual mode without P2 → worldDep + Absent, never silent) ---
+    bool const dualMode = layer && layer->m_gameState.m_isDualMode;
+    w.dualContact = {};
+    w.hasDualContact = false;
+    if (dualMode && player2) {
         fillPlayerBlob(w.dual, player2);
         setCategory(w, DevWitnessCategory::Dual,
                     w.dual.present ? DevWitnessStatus::Restored : DevWitnessStatus::Absent);
+        if (w.dual.present) {
+            fillContactSnap(w.dualContact, player2);
+            w.hasDualContact = w.dualContact.present;
+        }
     } else {
+        w.dual = {};
+        // dualMode without P2: Absent + still tagged in worldDeps (below).
         setCategory(w, DevWitnessCategory::Dual, DevWitnessStatus::Absent);
     }
 
@@ -429,11 +586,22 @@ EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* playe
 
     // --- movers / hazard digest ---
     // Hashes are ALWAYS DigestOnly. Poses (freeze-world) can be Restored.
+    // AP6: optional Top-N hazard AABB + plan-time hitbox when recordHazards.
     w.moverPoses.clear();
+    w.hazards.clear();
+    w.hasHazards = false;
+    w.hasHitbox = false;
+    w.hasThreatZone = plan.threatZone.valid;
+    w.threatZoneStartX = plan.threatZone.startX;
+    w.threatZoneEndX = plan.threatZone.endX;
     if (player && layer) {
         float const radius = 160.f;
         w.hazardDigest = hashHazardNeighborhood(layer, player, radius);
         w.hasHazardDigest = true;
+        if (EbDevConfig::recordHazards()) {
+            captureHazardSnaps(w, layer, player, radius);
+            captureHitboxSnap(w, layer, player);
+        }
 
         if (freezeWorld) {
             auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
@@ -484,7 +652,7 @@ EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* playe
         setCategory(w, DevWitnessCategory::Movers, DevWitnessStatus::Absent);
     }
 
-    fillWorldDeps(w, plan, dualActive);
+    fillWorldDeps(w, plan, dualMode);
     w.valid = true;
     return w;
 }
@@ -533,7 +701,7 @@ bool EbDevLiveWitness::selfCheck(std::string& report) {
         expect(!hasWorldDep(width, DevWitnessCategory::Dual), "dep-no-dual");
     }
 
-    // worldDeps: foresight orb pad tags orbs; dualActive tags dual.
+    // worldDeps: foresight orb pad tags orbs; dualMode tags dual even without P2.
     {
         EbDevLiveWitness width;
         width.freezeWorld = false;
@@ -544,6 +712,7 @@ bool EbDevLiveWitness::selfCheck(std::string& report) {
         expect(hasWorldDep(width, DevWitnessCategory::Orbs), "dep-foresight");
         expect(hasWorldDep(width, DevWitnessCategory::Dual), "dep-dual");
         expect(hasWorldDep(width, DevWitnessCategory::Movers), "dep-movers-digest");
+        expect(hasWorldDep(width, DevWitnessCategory::CollisionFlags), "dep-flags");
     }
 
     // Hashes alone stay DigestOnly; freeze-world poses may be Restored.

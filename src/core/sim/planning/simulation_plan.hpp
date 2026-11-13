@@ -6,6 +6,8 @@
 #include "../../assist/contracts/assist_verdict.hpp"
 #include "simulation_candidate.hpp"
 #include <Geode/Geode.hpp>
+#include <chrono>
+#include <string>
 #include <vector>
 
 enum class PlanAction {
@@ -79,6 +81,10 @@ public:
     int adaptiveScreenTicks = 24;   // Phase A/B short quantum per candidate
     int adaptiveVerifyQuantum = 16; // Phase C extend grant size
     int adaptiveReservePct = 15;    // Phase D / tie reserve of Dynamic Plan Tick Budget
+    // Assist Pack AP-L5: Adaptive→classic fallthrough reuses the press soft-wall
+    // clock (no fresh wall0 / no remUs floor stacked past sim-budget-us).
+    bool reusePlanWall = false;
+    std::chrono::steady_clock::time_point planWall0{};
 
 private:
 };
@@ -154,6 +160,19 @@ public:
     int adaptiveScreenedCount = 0;    // delays that received a screen quantum
     int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
     int adaptiveVerifyGrants = 0;     // Phase C verify quanta granted
+    int adaptiveStolenScreenTicks = 0; // Assist Pack AP2: Screen→Verify steal count
+    // Dev Lab AP4: which search branch produced this plan.
+    // inputWindow | threatProbe | adaptive | classic | hybridFallthrough
+    std::string plannerPath;
+    // Dev Lab AP7: Wave continuous IW proximity / help-only / futile honesty.
+    bool hasWaveMeta = false;
+    float waveProxX = 0.f;
+    bool waveNearHazard = false;
+    float waveBestGain = 0.f;
+    int waveEarliestLater = -1;
+    bool waveHelpOnly = false;
+    bool waveFutile = false;
+    bool waveProximityPass = false;
 
 private:
 };

@@ -33,6 +33,91 @@ public:
 private:
 };
 
+// Dev Lab AP6: axis-aligned rect (GameObject::getObjectRect).
+class EbDevAabb {
+public:
+    float x = 0.f;
+    float y = 0.f;
+    float w = 0.f;
+    float h = 0.f;
+
+private:
+};
+
+// Top-N hazard neighborhood (id/type/AABB) for offline ghost-hitbox research.
+class EbDevHazardSnap {
+public:
+    int uniqueId = 0;
+    int objectType = 0;
+    float x = 0.f;
+    float y = 0.f;
+    EbDevAabb aabb{};
+    float dist2 = 0.f;
+
+private:
+};
+
+// Plan-time collide rects (live + optional shadow) + overlap counts vs hazard list.
+class EbDevHitboxSnap {
+public:
+    bool present = false;
+    EbDevAabb live{};
+    bool hasGhost = false;
+    EbDevAabb ghost{};
+    int hazardOverlapLive = 0;
+    int hazardOverlapGhost = 0;
+
+private:
+};
+
+// AP9: serializable contact / collide scalars (pointer refs → uniqueId only).
+// Keeps CollisionFlags Partial honest without a full diag dump.
+class EbDevContactSnap {
+public:
+    bool present = false;
+    bool maybeIsColliding = false;
+    bool collidingWithLeft = false;
+    bool collidingWithRight = false;
+    bool lastCollisionBottom = false;
+    bool lastCollisionTop = false;
+    bool lastCollisionLeft = false;
+    bool lastCollisionRight = false;
+    float collidedTopMinY = 0.f;
+    float collidedBottomMaxY = 0.f;
+    float collidedLeftMaxX = 0.f;
+    float collidedRightMinX = 0.f;
+    float snapDistance = 0.f;
+    float groundYVelocity = 0.f;
+    int groundObjectMaterial = 0;
+    int collidedObjectId = 0;
+    int lastGroundObjectId = 0;
+    int objectSnappedToId = 0;
+    bool isOnIce = false;
+    bool isSliding = false;
+
+private:
+};
+
+inline bool operator==(EbDevContactSnap const& a, EbDevContactSnap const& b) {
+    return a.present == b.present && a.maybeIsColliding == b.maybeIsColliding &&
+           a.collidingWithLeft == b.collidingWithLeft &&
+           a.collidingWithRight == b.collidingWithRight &&
+           a.lastCollisionBottom == b.lastCollisionBottom &&
+           a.lastCollisionTop == b.lastCollisionTop && a.lastCollisionLeft == b.lastCollisionLeft &&
+           a.lastCollisionRight == b.lastCollisionRight &&
+           a.collidedTopMinY == b.collidedTopMinY && a.collidedBottomMaxY == b.collidedBottomMaxY &&
+           a.collidedLeftMaxX == b.collidedLeftMaxX && a.collidedRightMinX == b.collidedRightMinX &&
+           a.snapDistance == b.snapDistance && a.groundYVelocity == b.groundYVelocity &&
+           a.groundObjectMaterial == b.groundObjectMaterial &&
+           a.collidedObjectId == b.collidedObjectId && a.lastGroundObjectId == b.lastGroundObjectId &&
+           a.objectSnappedToId == b.objectSnappedToId && a.isOnIce == b.isOnIce &&
+           a.isSliding == b.isSliding;
+}
+
+inline bool operator!=(EbDevContactSnap const& a, EbDevContactSnap const& b) {
+    return !(a == b);
+}
+
 inline bool operator==(EbDevObjectPose const& a, EbDevObjectPose const& b) {
     return a.uniqueId == b.uniqueId && a.x == b.x && a.y == b.y && a.rotation == b.rotation &&
            a.scaleX == b.scaleX && a.scaleY == b.scaleY && a.active == b.active;
@@ -86,6 +171,8 @@ public:
     bool controlsDisabled = false;
     bool maybeIsFalling = false;
     bool maybeIsBoosted = false;
+    // AP7: continuous / hold honesty at plan capture.
+    bool jumpHeld = false;
 
 private:
 };
@@ -104,7 +191,7 @@ private:
 class EbDevLiveWitness {
 public:
     // Bump when the serializable field list of DevPlayerBlob changes.
-    static constexpr int kPlayerBlobSchemaVersion = 1;
+    static constexpr int kPlayerBlobSchemaVersion = 2;
 
     std::vector<EbDevWitnessCategoryEntry> categories;
     std::unordered_set<int> worldDeps; // DevWitnessCategory as int
@@ -130,6 +217,20 @@ public:
     uint64_t playerBlobSchema = 0;
     uint64_t hazardDigest = 0;
     bool hasHazardDigest = false;
+    // AP6: structured hazard neighborhood + hitbox (when recordHazards).
+    static constexpr int kMaxHazardSnaps = 24;
+    std::vector<EbDevHazardSnap> hazards;
+    bool hasHazards = false;
+    EbDevHitboxSnap hitbox{};
+    bool hasHitbox = false;
+    // AP9: contact/collide parity (always when player present).
+    EbDevContactSnap contact{};
+    bool hasContact = false;
+    EbDevContactSnap dualContact{};
+    bool hasDualContact = false;
+    bool hasThreatZone = false;
+    float threatZoneStartX = 0.f;
+    float threatZoneEndX = 0.f;
     bool freezeWorld = false;
     bool valid = false;
 
@@ -150,8 +251,9 @@ public:
                                   EbSimPlan const& plan, EbDevClockContract::Stamp const& clock,
                                   int effectTick, bool freezeWorld);
 
-    // worldDeps from SimPlan flags + dual presence (not post-death heuristics).
-    static void fillWorldDeps(EbDevLiveWitness& w, EbSimPlan const& plan, bool dualActive);
+    // worldDeps from SimPlan flags + dual mode (not post-death heuristics).
+    // dualMode tags Dual even when P2 is missing → honest Absent, not silent.
+    static void fillWorldDeps(EbDevLiveWitness& w, EbSimPlan const& plan, bool dualMode);
 
     static bool selfCheck(std::string& report);
 
@@ -159,9 +261,13 @@ public:
 
 private:
     static void fillPlayerBlob(EbDevPlayerBlob& blob, PlayerObject* source);
+    static void fillContactSnap(EbDevContactSnap& snap, PlayerObject* source);
     static void setCategory(EbDevLiveWitness& w, DevWitnessCategory candidate,
                             DevWitnessStatus status, uint64_t digest = 0);
     static uint64_t hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player, float radiusX);
+    static void captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer, PlayerObject* player,
+                                   float radiusX);
+    static void captureHitboxSnap(EbDevLiveWitness& w, PlayLayer* layer, PlayerObject* player);
 };
 
 #include <Geode/Geode.hpp>

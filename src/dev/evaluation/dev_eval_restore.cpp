@@ -100,6 +100,19 @@ void EbDevEvalRestore::noteCollisionFlagsPartial(EbDevEvalRestore& r) {
     setCategory(r, DevWitnessCategory::CollisionFlags, DevWitnessStatus::Partial);
 }
 
+void EbDevEvalRestore::noteContactWritten(EbDevEvalRestore& r, EbDevContactSnap const& snap,
+                                          bool dual) {
+    if (dual) {
+        r.dualContact = snap;
+        r.hasDualContact = snap.present;
+    } else {
+        r.contact = snap;
+        r.hasContact = snap.present;
+        if (snap.present)
+            noteCollisionFlagsPartial(r);
+    }
+}
+
 bool EbDevEvalRestore::selfCheck(std::string& report) {
     report.clear();
     int fails = 0;

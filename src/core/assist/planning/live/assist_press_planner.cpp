@@ -18,6 +18,7 @@
 #include "../../../sim/planning/simulation_plan.hpp"
 #include "../../../sim/shadow_simulator.hpp"
 #include "../../../sim/sim_trust.hpp"
+#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../trigger_world/trigger_world_baker.hpp"
 #include "../../../trigger_world/trigger_world_store.hpp"
 #include "../../assist_controller.hpp"
@@ -262,10 +263,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicksFor(kind);
     opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantumFor(kind);
     opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
-    // Adaptive screen+verify needs a usable soft wall; raise floor (never
-    // override unlimited 0, never lower a higher user setting).
-    if (opts.adaptivePlan && opts.budgetUs > 0 && opts.budgetUs < 4000)
-        opts.budgetUs = 4000;
+    // Assist Pack AP-L5: classic and Adaptive share the same Live soft-wall
+    // floor (never override unlimited 0, never lower a higher user setting).
+    opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
     // 1.5.1 AP1: sim-budget-us=0 → hitch ceiling for classic AND Adaptive Live
     // (EbLivePlanContracts). Stops Adaptive unlimited freezes on small levels.
     opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
@@ -307,6 +307,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     plan.planUs = planUs;
+    EbLagWarningToast::get().notify(planUs, opts.budgetUs, plan.budgetHit);
     EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
     // Classic coverage proxy until Adaptive reports real fully-verified counts.
     int const fullyVerified = plan.budgetHit ? 0 : std::max(0, plan.candidatesTried);

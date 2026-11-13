@@ -166,6 +166,7 @@ void EbModuleBindings::registerSettings() {
     });
     watchBool("show-pause-bake");
     watchBool("show-pause-hub");
+    watchBool("lag-warning-toast");
     watchBool("auto-tune");
     watchBool("self-bake");
     watchBool("self-bake-normal");
@@ -190,6 +191,8 @@ void EbModuleBindings::registerSettings() {
     watchInt("robust-k");
     watchBool("robust-jitter");
     watchBool("adaptive-plan");
+    watchBool("assist-probe-past-horizon");
+    watchBool("assist-micro-window");
     watchInt("adaptive-screen-ticks");
     watchInt("adaptive-verify-quantum");
     watchInt("adaptive-reserve-pct");
@@ -208,6 +211,8 @@ void EbModuleBindings::registerSettings() {
     watchInt("dev-record-count");
     watchBool("dev-count-empty-attempts");
     watchBool("dev-freeze-world");
+    watchBool("dev-record-hazards");
+    watchBool("dev-record-traj");
     watchBool("dev-disable-random");
     watchBool("dev-eval-on-death");
     watchInt("dev-eval-horizon");
@@ -216,6 +221,8 @@ void EbModuleBindings::registerSettings() {
     watchBool("dev-record-cands");
     watchInt("dev-eval-tick-budget");
     watchBool("dev-overlay");
+    watchInt("dev-compare-last-n");
+    watchBool("dev-compare-same-level");
     geode::prelude::listenForSettingChanges<std::string>(
         "dev-eval-grid", [](std::string) { EbModuleBindings::onAnySetting(); });
     geode::prelude::listenForSettingChanges<std::string>(

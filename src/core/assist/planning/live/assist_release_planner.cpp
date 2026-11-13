@@ -20,7 +20,9 @@
 #include "../../../trigger_world/trigger_world_store.hpp"
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
+#include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
+#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
 #include <algorithm>
@@ -215,6 +217,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         opts.capMul *= 0.85f;
     }
     opts.maxBranches = 4;
+    // Assist Pack AP-L5: same Live soft-wall floor as press planner.
+    opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
+    opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();
@@ -239,6 +244,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    EbLagWarningToast::get().notify(plan.planUs, opts.budgetUs, plan.budgetHit);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
     EbDevCycleRecorder::get().notePlanFinished(plan, effectTick, limit, clock, playLayer, player);

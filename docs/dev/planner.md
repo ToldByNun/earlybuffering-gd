@@ -35,7 +35,7 @@ Stopping at first safe on ball was a real footgun (Eval `bestSurv` ≠ Live pick
 
 Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` — ticksRan grows with delay.
 
-**1.5.1 / 1.6.0 contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`):
+**1.5.1 / 1.6.x contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`; AP-L1–L7 on **1.6.1**):
 
 | Topic | Status |
 |---|---|
@@ -45,7 +45,7 @@ Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` 
 | Wave continuous IW cap | **AP3a:** `max(lookAhead, short AssistHorizon)`; Wave ≥32 |
 | Wave help-only / prox | **AP3b:** d0 Alive → Pass; proximity/futile on IW; earliest clear Delay |
 | Orbs under IW | **AP4:** spatial hint + budget-capped scan; DelayOrb handoff; dash/toggle |
-| Micro-window cube | **AP3c (later):** 1-tick / 1-frame cube arming |
+| Micro-window / false d0-safe | **AP3c:** `assist-micro-window` + `assist-probe-past-horizon` (each off = prior 1:1) |
 | Landed rank | Later only if score gain >8px → **AP2 (skipped for now):** Eval-aligned |
 
 Live press always takes input-window (`requireAliveForDelay`) — G1 AssistPick orb band is bypassed until AP3.
@@ -65,7 +65,7 @@ When `adaptive-plan` is on:
 1. **Screen** delays with short quanta  
 2. **Verify** promising delays (resume / rebuild checkpoints)  
 3. **DecisionGate** — honest Pass/Delay  
-4. Else **classic fallthrough** with **remaining** tick/µs budget (not a second full envelope)
+4. Else **classic fallthrough** on the **same** press soft wall (`reusePlanWall` + leftover ticks; AP-L5 — not a second full envelope / no remUs floor stack)
 
 Do **not** re-inflate “peak” survive ticks across verify segments — current quantum is the truth.
 
@@ -86,7 +86,7 @@ Bake `findNear` → `BakeVerifier` → only trust if clears threat and **not** `
 
 When changing input planning, run the recorded Wave regression the project expects (`AGENTS.md`).
 
-## Per-tick cost notes (1.5.1 / 1.6.0)
+## Per-tick cost notes (1.5.1 / 1.6.x)
 
 - Group membership for capture is a sidetable built in `beginCapture`
 - TW apply caches last written pose on `SavedTransform` and skips redundant writes

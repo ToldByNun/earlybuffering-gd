@@ -64,11 +64,17 @@ void EbShadowFreezeEvaluator::applyEvalWorldRestore(EbShadowSimulator& simulator
     simulator.m_savedTransforms.clear();
     simulator.m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
 
-    // --- Dual ghost ---
+    // --- Dual ghost (AP9: Dual worldDep without blob stays Absent — honest) ---
     if (witness.dual.present && simulator.m_evalGhosts[1]) {
         simulator.applyPlayerBlob(simulator.m_evalGhosts[1], witness.dual);
         EbDevEvalRestore::noteDualWritten(restore, witness.dual);
+        if (witness.hasDualContact)
+            EbDevEvalRestore::noteContactWritten(restore, witness.dualContact, true);
     }
+
+    // --- Contact parity bookkeeping (no pointer restore onto ghosts) ---
+    if (witness.hasContact)
+        EbDevEvalRestore::noteContactWritten(restore, witness.contact, false);
 
     // --- Orbs: set activated ID set + mark matching objects claimed ---
     {
@@ -203,7 +209,8 @@ void EbShadowFreezeEvaluator::finishEvalWorldRestore(EbShadowSimulator& simulato
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayLayer* layer,
                                            EbDevLiveWitness const& witness, int delay,
-                                           int horizonTicks, bool down, int* tickBudgetLeft) {
+                                           int horizonTicks, bool down, int* tickBudgetLeft,
+                                           bool captureTraj) {
     EbShadowSimulator::EvalFromFreezeResult out;
     out.evalSimPathId = DevSimPathId::EvalDelayFromFreeze;
     simulator.m_evalAbort = false;
@@ -264,6 +271,19 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
         return false;
     };
 
+    auto pushTraj = [&](int tick) {
+        if (!captureTraj)
+            return;
+        EbShadowSimulator::TrajSample sample;
+        sample.tick = tick;
+        sample.x = ghost->getPositionX();
+        sample.y = ghost->getPositionY();
+        sample.vy = static_cast<float>(ghost->m_yVelocity);
+        sample.alive = !simulator.m_dead;
+        sample.unknown = simulator.m_unknown;
+        out.traj.push_back(sample);
+    };
+
     if (delay > 0) {
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase;
@@ -274,10 +294,12 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
             out.died = true;
             out.deathTick = 0;
             out.endX = ghost->getPositionX();
+            pushTraj(0);
         } else if (simulator.m_unknown) {
             out.ticksRan = 1;
             out.unknown = true;
             out.endX = ghost->getPositionX();
+            pushTraj(0);
         }
     }
 
@@ -319,6 +341,7 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
         }
 
         simulator.stepPhysics(layer, ghost, stepDt, witness.clock.simDt);
+        pushTraj(tick);
         if (simulator.m_dead) {
             out.died = true;
             out.deathTick = tick;

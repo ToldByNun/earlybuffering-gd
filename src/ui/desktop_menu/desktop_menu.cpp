@@ -7,6 +7,7 @@
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_keybind.hpp"
+#include "../feedback/lag_warning_toast.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -224,6 +225,7 @@ void EbDesktopMenu::install() {
             EbDesktopMenuTheme::apply();
         })
         .draw([] {
+            bool const lagNote = EbLagWarningToast::wantsDraw();
             if (!ImGuiCocos::get().isVisible()) {
                 return;
             }
@@ -236,9 +238,10 @@ void EbDesktopMenu::install() {
             EbDesktopMenuShell::draw();
             EbDesktopCloudOverlay::draw();
             EbDesktopMenuModal::draw();
+            EbLagWarningToast::draw();
             if (!EbDesktopMenuShell::shouldKeepVisible() &&
                 !EbDesktopMenuModal::shouldKeepVisible() &&
-                !EbDesktopCloudOverlay::shouldKeepVisible()) {
+                !EbDesktopCloudOverlay::shouldKeepVisible() && !lagNote) {
                 ImGuiCocos::get().setVisible(false);
             }
         });

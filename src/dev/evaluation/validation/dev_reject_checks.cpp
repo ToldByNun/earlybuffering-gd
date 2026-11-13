@@ -149,6 +149,38 @@ bool EbDevRejectChecks::selfCheck(std::string& report) {
                "peak-death-skip");
     }
 
+    // Assist Pack AP1: depth-truncated Alive → budget-not-reached, never not-viable.
+    {
+        EbDevRejectLedger::BuildInput in;
+        in.limit = 2;
+        in.chosenDelay = 0;
+        in.doPass = true;
+        in.snaps.resize(3);
+        in.snaps[0].evaluated = true;
+        in.snaps[0].viable = false;
+        in.snaps[0].deathTick = 54;
+        in.snaps[0].ticksRan = 55;
+        in.snaps[0].hasRunTruth = true;
+        in.snaps[1].evaluated = true;
+        in.snaps[1].viable = false;
+        in.snaps[1].budgetHit = true;
+        in.snaps[1].ticksRan = 18;
+        in.snaps[1].deathTick = -1;
+        in.snaps[1].hasRunTruth = true;
+        in.snaps[1].endX = 10.f;
+        in.snaps[2].evaluated = true;
+        in.snaps[2].viable = false;
+        in.snaps[2].budgetHit = true;
+        in.snaps[2].ticksRan = 18;
+        in.snaps[2].hasRunTruth = true;
+        auto ledger = EbDevRejectLedger::build(in);
+        expect(ledger.notes[1].rejectCode == EbDevRejectLedger::RejectCode::BudgetNotReached,
+               "ap1-depth-budget");
+        expect(std::strcmp(EbDevRejectLedger::rejectCodeId(ledger.notes[1].rejectCode),
+                           "budget-not-reached") == 0,
+               "ap1-depth-id");
+    }
+
     // Truncation: codes remain past kMaxCandNotes, scores drop.
     {
         EbDevRejectLedger::BuildInput in;

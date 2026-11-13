@@ -53,8 +53,11 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
     simulator.m_simAbsTick = -1;
     EbSimSessionGuard session(simulator, layer);
     prepare(context);
-    if (EbShadowPlanInputWindow::evaluate(context))
+    if (EbShadowPlanInputWindow::evaluate(context)) {
+        if (plan.plannerPath.empty())
+            plan.plannerPath = "inputWindow";
         return plan;
+    }
     bool const trustLong = context.real && EbSimTrust::get().okAt(context.real->getPositionX());
     auto const horizonCaps = EbAssistHorizon::resolve(
         context.real ? EbStageConfig::kindOf(context.real) : GameModeKind::Cube, trustLong,
@@ -66,12 +69,20 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
 
     context.scoreHorizon = horizonCaps.scoreHorizon;
 
-    if (EbShadowPlanThreatProbe::evaluate(context))
+    if (EbShadowPlanThreatProbe::evaluate(context)) {
+        if (plan.plannerPath.empty())
+            plan.plannerPath = "threatProbe";
         return plan;
+    }
     EbShadowPlanCandidateSearch::evaluate(context);
-    if (EbShadowPlanSelection::choose(context))
+    if (EbShadowPlanSelection::choose(context)) {
+        if (plan.plannerPath.empty())
+            plan.plannerPath = "classic";
         return plan;
+    }
     EbShadowPlanResult::publish(context);
+    if (plan.plannerPath.empty())
+        plan.plannerPath = "classic";
     return plan;
 }
 
@@ -100,14 +111,31 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
             context.model.cap = std::min(context.model.cap, std::max(1, 96 - context.limit));
         }
     }
+    // Assist Pack AP-L2: keep soft-wall headroom for IW — baseline/orb scans must
+    // not burn the whole press (Grief TW baseline alone was ~15ms / candidatesTried=0).
+    int const prepareReserve = EbLivePlanContracts::prepareReserveUs(
+        context.options.budgetUs, context.inputWindow && continuousControl);
+    bool const wallUnlimited = context.options.budgetUs <= 0;
+    auto prepareHeavyOk = [&]() -> bool {
+        if (context.wallExceeded()) {
+            context.plan.budgetHit = true;
+            return false;
+        }
+        return EbLivePlanContracts::prepareHeavyWorkAllowed(context.wallRemUs(), prepareReserve,
+                                                            wallUnlimited);
+    };
+
     // Classic always coasts. Continuous Live IW also runs a cheap baseline so
     // idleSafer can steer Wave help-only / futile (AP3b) without leaving IW.
     if (EbLivePlanContracts::waveIwBaselineCoastAllowed(context.inputWindow, continuousControl,
-                                                        context.down)) {
+                                                        context.down) &&
+        prepareHeavyOk()) {
         auto base = context.simulator.runBaseline(context.layer, context.real, context.down,
                                                   context.deltaTime, context.firstDt, context.model,
                                                   &context.tickBudget);
         context.simulator.resetCaptureForNextRun(context.layer);
+        if (context.wallExceeded())
+            context.plan.budgetHit = true;
         if (base.died) {
             context.plan.baselineDeathTick = base.deathTick;
             context.plan.baselineDeathObject = base.deathObject;
@@ -118,16 +146,17 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     context.orbAssist = EbStageConfig::assistOrbs() && context.down;
     context.orbHint = {};
     context.spatialHint = false;
-    // AP4: spatial hint always when orbs on (even under Live IW). Budget-capped
-    // scanOrbWindow also runs under IW (was classic-only).
+    // AP4: spatial hint always when orbs on (even under Live IW). Cheap — only
+    // skip when the soft wall is already gone (not the prepare reserve).
     if (context.orbAssist &&
-        EbLivePlanContracts::intendedSpatialOrbHintAllowed(context.orbAssist)) {
+        EbLivePlanContracts::intendedSpatialOrbHintAllowed(context.orbAssist) &&
+        !context.wallExceeded()) {
         context.spatialHint = context.simulator.spatialOrbHint(context.layer, context.real,
                                                                context.limit, context.deltaTime);
         context.plan.foresightOrbPad = context.spatialHint;
     }
     bool const orbScanBudgetOk =
-        context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe;
+        context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe && prepareHeavyOk();
     if (context.orbAssist &&
         EbLivePlanContracts::intendedOrbWindowScanAllowed(context.orbAssist, context.inputWindow,
                                                           orbScanBudgetOk)) {
@@ -136,15 +165,19 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
             context.layer, context.real, context.down, scanTicks, context.deltaTime,
             context.firstDt, &context.tickBudget, false);
         context.simulator.resetCaptureForNextRun(context.layer);
+        if (context.wallExceeded())
+            context.plan.budgetHit = true;
         // Press-to-reach: second scan with Jump held if coast missed (budget-capped).
         if (!context.orbHint.found &&
-            context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe) {
+            context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe && prepareHeavyOk()) {
             int const reachTicks =
                 EbOpportunityProbe::pressReachScanTicks(context.limit, context.model.slack);
             auto held = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
                                                         reachTicks, context.deltaTime,
                                                         context.firstDt, &context.tickBudget, true);
             context.simulator.resetCaptureForNextRun(context.layer);
+            if (context.wallExceeded())
+                context.plan.budgetHit = true;
             if (held.found) {
                 context.orbHint = held;
             }

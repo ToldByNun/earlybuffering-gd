@@ -30,6 +30,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "lag-probe", false);
     EbStageConfigImplementation::s_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     EbStageConfigImplementation::s_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
+    EbStageConfigImplementation::s_cachedLagWarningToast =
+        EbStageConfigImplementation::readBool(mod, "lag-warning-toast", true);
     EbStageConfigImplementation::s_cachedShowTrajectory =
         EbStageConfigImplementation::readBool(mod, "show-trajectory", false);
     EbStageConfigImplementation::s_cachedShowBakePath =
@@ -76,6 +78,10 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "robust-jitter", false);
     EbStageConfigImplementation::s_cachedAdaptivePlan =
         EbStageConfigImplementation::readBool(mod, "adaptive-plan", true);
+    EbStageConfigImplementation::s_cachedAssistProbePastHorizon =
+        EbStageConfigImplementation::readBool(mod, "assist-probe-past-horizon", true);
+    EbStageConfigImplementation::s_cachedAssistMicroWindow =
+        EbStageConfigImplementation::readBool(mod, "assist-micro-window", true);
     EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
     EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum =

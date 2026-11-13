@@ -1,4 +1,5 @@
 #include "dev_session_codec.hpp"
+#include "../../evaluation/dev_attempt_eval.hpp"
 #include "../dev_trace_store.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
@@ -51,6 +52,9 @@ matjson::Value EbDevSessionCodec::sessionToJsonValue(EbDevSessionFile const& ses
             evs.push_back(EbDevTraceStoreImplementation::eventToJson(e));
         }
         aj["events"] = evs;
+        if (a.eval.valid) {
+            aj["eval"] = EbDevAttemptEval::toJson(a.eval);
+        }
         attempts.push_back(std::move(aj));
     }
     root["attempts"] = attempts;
@@ -142,6 +146,13 @@ bool EbDevSessionCodec::sessionFromJsonString(std::string const& body, EbDevSess
                     return false;
                 }
                 a.events.push_back(std::move(e));
+            }
+        }
+        if (aj.contains("eval") && aj["eval"].isObject()) {
+            std::string eerr;
+            if (!EbDevAttemptEval::fromJson(aj["eval"], a.eval, eerr)) {
+                err = eerr.empty() ? "bad-eval" : eerr;
+                return false;
             }
         }
         out.attempts.push_back(std::move(a));

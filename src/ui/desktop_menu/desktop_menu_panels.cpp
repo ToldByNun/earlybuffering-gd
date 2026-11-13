@@ -1,5 +1,6 @@
 #include "desktop_menu_panels.hpp"
 #include "desktop_menu_bind.hpp"
+#include "desktop_menu_dev_panel.hpp"
 #include "desktop_menu_icons.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
@@ -55,6 +56,8 @@ public:
         if (EbSectionCard::begin("main-adaptive", "Adaptive Prediction")) {
             // Defaults / fallback when a mode's Adaptive Overwrite is off.
             EbCheckbox::drawSetting("adaptive-plan", "Adaptive Plan");
+            EbCheckbox::drawSetting("assist-probe-past-horizon", "Probe Past Horizon");
+            EbCheckbox::drawSetting("assist-micro-window", "Micro-Window Assist");
             EbSlider::drawIntSetting("adaptive-screen-ticks", "Screen Ticks", 8, 64);
             EbSlider::drawIntSetting("adaptive-verify-quantum", "Verify Quantum", 8, 64);
             EbSlider::drawIntSetting("adaptive-reserve-pct", "Reserve %", 0, 40, "%");
@@ -243,6 +246,11 @@ public:
         }
         EbSectionCard::end();
 
+        if (EbSectionCard::begin("ui-notifications", "Notifications")) {
+            EbCheckbox::drawSetting("lag-warning-toast", "Lag Warning");
+        }
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ui-diag", "Diagnostics")) {
             EbCheckbox::drawSetting("debug-logging", "Debug Logging");
             EbCheckbox::drawSetting("perf-trace", "Perf Trace");
@@ -264,62 +272,7 @@ public:
     }
 
     static void drawDev() {
-        if (EbSectionCard::begin("dev-session", "Session")) {
-            EbCheckbox::drawSetting("dev-record-enable", "Record Enable");
-            EbSlider::drawIntSetting("dev-record-count", "Record Count", 1, 50);
-            EbCheckbox::drawSetting("dev-count-empty-attempts", "Count Empty Attempts");
-            EbCheckbox::drawSetting("dev-freeze-world", "Freeze World");
-            EbCheckbox::drawSetting("dev-disable-random", "Disable Random");
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("dev-eval", "Eval")) {
-            EbCheckbox::drawSetting("dev-eval-on-death", "Eval On Death");
-            {
-                char const* gridOpts[] = {"full", "band", "sparse"};
-                char const* gridLabels[] = {"Full", "Band", "Sparse"};
-                EbDropdown::drawSetting("dev-eval-grid", "Eval Grid", gridOpts, 3, gridLabels);
-            }
-            EbSlider::drawIntSetting("dev-eval-horizon", "Eval Horizon", 1, 320);
-            EbSlider::drawIntSetting("dev-eval-tail", "Eval Tail", 0, 320);
-            {
-                char const* objOpts[] = {"survive_then_endx_v1", "planner_mirror_v1",
-                                         "horizon_clear_v1"};
-                char const* objLabels[] = {"Survive then EndX", "Planner Mirror", "Horizon Clear"};
-                EbDropdown::drawSetting("dev-objective", "Objective", objOpts, 3, objLabels);
-            }
-            EbCheckbox::drawSetting("dev-eval-require-deps", "Require Deps");
-            EbCheckbox::drawSetting("dev-record-cands", "Record Candidates");
-            EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000);
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("dev-overlay", "Overlay")) {
-            EbCheckbox::drawSetting("dev-overlay", "Dev Overlay");
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("dev-actions", "Actions")) {
-            EbButton::drawAction("dev-start-record-action", "Start Recording");
-            gap();
-            EbButton::drawAction("dev-stop-record-action", "Stop Recording");
-            gap();
-            EbButton::drawAction("dev-eval-last-action", "Eval Last Attempt");
-            gap();
-            EbButton::drawAction("dev-eval-session-action", "Eval Session");
-            gap();
-            EbButton::drawAction("dev-export-session-action", "Export Session");
-            gap();
-            EbButton::drawAction("dev-clear-traces-action", "Clear Traces");
-            gap();
-            EbButton::drawAction("dev-copy-report-action", "Copy Last Report");
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("dev-diag", "Diagnostics")) {
-            EbButton::drawAction("dev-dump-diag-action", "Dump All Diag");
-        }
-        EbSectionCard::end();
+        EbDesktopMenuDevPanel::draw();
     }
 
 private:

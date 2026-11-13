@@ -43,6 +43,10 @@ void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller, 
         controller.m_pendingReleaseUserUpTick = controller.m_attemptTick;
         controller.m_pendingReleaseTick =
             controller.m_pendingReleaseUserUpTick + controller.m_pendingReleaseMaxExtend;
+        if (controller.m_pendingReleaseDevPressId > 0) {
+            EbDevCycleRecorder::get().noteHoldSwallow(controller.m_pendingReleaseDevPressId,
+                                                      controller.m_attemptTick);
+        }
         EbAssistLog::debug(fmt::format(
             "hold-assist: user-up @{} extend≤{} deadline={}", controller.m_pendingReleaseUserUpTick,
             controller.m_pendingReleaseMaxExtend, controller.m_pendingReleaseTick));
@@ -59,6 +63,7 @@ void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller, 
         controller.m_pendingReleaseContinuous = false;
         controller.m_pendingReleaseUserUpTick = -1;
         controller.m_pendingReleaseMaxExtend = 0;
+        controller.m_pendingReleaseDevPressId = 0;
         return;
     }
 
@@ -67,14 +72,19 @@ void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller, 
         return;
     }
 
+    int64_t const holdPressId = controller.m_pendingReleaseDevPressId;
     controller.m_pendingRelease = false;
     controller.m_pendingReleaseHold = false;
     controller.m_pendingReleaseContinuous = false;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_injecting = true;
     playLayer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, playerOne);
     controller.m_injecting = false;
+    if (holdPressId > 0) {
+        EbDevCycleRecorder::get().noteHoldInjectRelease(holdPressId, controller.m_attemptTick);
+    }
     EbAssistLog::debug(fmt::format("hold-assist: injected release @{} (p{}) [extend done]",
                                  controller.m_attemptTick, playerOne ? 1 : 2));
 }
@@ -239,6 +249,7 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
             controller.m_pendingReleaseP1 = player1;
             controller.m_pendingReleaseArmTick = controller.m_attemptTick;
             controller.m_pendingReleaseUserUpTick = controller.m_attemptTick;
+            controller.m_pendingReleaseDevPressId = devPressId;
             if (queuedHold > 0) {
                 // Queued click hold: inject stays down for planned ticks despite early UP.
                 controller.m_pendingReleaseHold = requireHold || releaseAfter > 0;
@@ -272,6 +283,7 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
             controller.m_pendingReleaseUserUpTick = -1;
             controller.m_pendingReleaseMaxExtend = extend;
             controller.m_pendingReleaseTick = 0; // set on user-up
+            controller.m_pendingReleaseDevPressId = devPressId;
             EbAssistLog::debug(fmt::format(
                 "hold-assist: arm extend-after-release max={} @fire={} hold={} cont={}", extend,
                 controller.m_attemptTick, requireHold ? 1 : 0, continuous ? 1 : 0));

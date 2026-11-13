@@ -1,5 +1,137 @@
 # Changelog
 
+## v1.6.1
+
+**Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).
+
+Release notes: [`releases/v1.6.1.md`](releases/v1.6.1.md).
+
+### Assist Pack AP-L1 — Mid-run hard wall abort
+- Soft `sim-budget-us` / hitch ceiling is now polled **inside** `runOne` / baseline / orb scan / Adaptive quanta / idle-prefix (every 4 ticks), not only between candidates.
+- One expensive Wave/TW sim can no longer run to full horizon after the press wall is already spent (Grief-class ~16ms with `candidatesTried=0`).
+- PlanGold `assist-pack-ap-l1-mid-run-wall` + `LivePlanContracts` mid-run poll selfCheck.
+
+### Assist Pack AP-L2 — Prepare wall reserve
+- `prepare()` skips Wave baseline / orb scans when soft-wall remUs is below a reserve (continuous IW: `max(1500, budgetUs/2)`; discrete: 1500µs) so IW still gets headroom.
+- Spatial orb hint stays cheap and only skips when the wall is already gone; mid-run AP-L1 still aborts in-flight baseline/orb ticks.
+- PlanGold `assist-pack-ap-l2-prepare-reserve`.
+
+### Assist Pack AP-L3 — Live TW apply under wall pressure
+- `applyTriggerWorldAtTick` no-ops when the Live plan soft wall is already spent (before cull/sort).
+- Live presses with ≥200 TW tracks use half apply caps (48 objs / 175µs); offline bake keeps full 96 / 350µs.
+- PlanGold `assist-pack-ap-l3-live-tw`.
+
+### Assist Pack AP-L4 — Wave honesty when starved
+- Unevaluated Wave (`candidatesTried=0` / no d0 run truth) → `pass-budget`, never synthetic `pass-wave-futile`.
+- Dying d0 + remUs below continuous prepare reserve → skip later-band endX scan; mark budgetHit.
+- Real `pass-wave-futile` only when d0 was simulated and the band was not wall-starved mid-scan.
+- PlanGold `assist-pack-ap-l4-wave-honesty`.
+
+### Assist Pack AP-L7 — Lag warning notification
+- Setting `lag-warning-toast` / **Lag Warning** (default on) under Desktop UI → Notifications; independent of In-Level Overlay.
+- Once per level: bottom-left **ImGui** card using desktop shell theme (panel + grey outline, caps title) when a Live click feels hitchy (`planUs ≥ 8ms` or `budgetHit`). 5s hold + fade; NoInputs so play continues.
+- PlanGold `assist-pack-ap-l7-lag-toast`.
+
+### Assist Pack AP-L6 — Classic-without-Adaptive quality (probe-before-band)
+- Discrete Live IW runs AP3c **Probe Past Horizon** after d0 / **before** the 1..limit band so mid-band wall spend cannot starve the +24 prove extend (Cataclysm cube sticky `pass-d0-safe` class).
+- If the probe finds d0 death past the wall, the later band ranks under the extended cap; Micro-Window stays post-band. Wave/ship paths unchanged (AP-L4).
+- PlanGold `assist-pack-ap-l6-probe-before-band`.
+
+### Assist Pack AP-L5 — Adaptive + classic soft-wall honesty
+- Shared press `wall0`: Adaptive→classic fallthrough reuses the Adaptive clock + full `sim-budget-us` (`reusePlanWall`); no fresh wall and **no remUs floor stack** past the press budget.
+- Adaptive soft wall leaves fallthrough µs / `reserveTicks` on that shared budget. Discrete IW (ball/cube) reserves ~half (~3.8ms Hoveropolis); continuous keeps `kFallthroughRemUsFloor` as shell reserve only.
+- Classic Live gets the same **4000µs soft-wall floor** Adaptive already had (`intendedLiveSoftWallFloorUs`).
+- Fallthrough merges Adaptive `candidatesTried` (+ Adaptive `budgetHit`) for Dev Lab honesty. Ball: no observation-cleared Alive seeds; Adaptive sets `stopAtBallLanding`.
+- PlanGold `assist-pack-ap-l5-adaptive-fallthrough`. Packs: classic `research_20261113_192611` vs Adaptive `research_20261113_192707`.
+
+### Assist Pack AP1 — Fair Depth
+- Truncated Alive (short `ticksRan` vs honest floor / known death) is no longer ranked or ledger'd as opaque `not-viable` / `pass-hopeless`.
+- Input-window re-sims shallow ready seeds when budget remains; otherwise `pass-budget` + `budget-not-reached`.
+- `surviveBin` compares only at comparable depth (`fairDepthPreferCand`); unequal depth uses score/endX, not bin crush.
+- Proof harness: PlanGold `assist-pack-ap1-fair-depth-a4` + `LivePlanContracts`/`DevRejectLedger` selfChecks; offline `tools/test_fair_depth_ap1.cpp` / parity-smoke A4 mirrors; pack KPI `tools/score_assist_pack_fair_depth.py` (baseline `research_20261113_001322` → new Research Pack).
+
+### Assist Pack AP2 — Screen→Verify Steal
+- After Living survivors (or d0-dead + later Alive mid-screen): leftover Screen ticks move into Verify — no extra budget, no Max-Assist raise.
+- Prefix-death skips still do not charge Screen; empty Screen with survivors is not a hard `budgetHit`.
+- Sealed on `planFinished.adaptiveStolenScreenTicks`; PlanGold + `AdaptiveBudgetController` selfCheck; pack KPI `budgetHitWithSurvivors` / `stolenPresses`.
+
+### Assist Pack AP4 — False Hopeless
+- Dying d0 + any later Living (even shallow / not hazard-proven) → `pass-budget` + classic fallthrough, never `pass-hopeless` (A4).
+- Uniform lethal grids (A7 same-crash) still `pass-hopeless`. Gate + IW + classic selection; PlanGold `assist-pack-ap4-false-hopeless`; KPI `hopelessWithAliveShort`.
+
+### Assist Pack AP3 — Weak d0-safe not terminal
+- `StopPassD0Safe` / sticky `PassD0Safe` yield only on clear later surviveTicks or endX lead → verify / `pass-budget` fallthrough.
+- **Tightened after `research_20261113_023017`:** bare under-horizon later Alive must not demote every d0-safe (was starving Delay arms 11→4).
+- Parity still sticks only true `PassD0Safe`. PlanGold `assist-pack-ap3-weak-d0safe`.
+
+### Assist Pack AP5 — endX/λ among survivors
+- Continuous IW (ship/swing): full-band endX−λ / fair-depth rank (no earliest-safe early exit); Wave help-only unchanged, Wave saves use score peak.
+- Landed ball: Eval-aligned `intendedLandedPreferLater`. Classic v1: clear endX lead can beat sticky d0 Pass; among dying-d0 survivors prefer score peak over latest-only.
+- PlanGold `assist-pack-ap5-endx-rank`; KPI `underselectZero` / `underselectAny`.
+
+### Assist Pack AP6 — Harm Guard (discarded)
+- Refused Delay arm when proven d0-safe and Delay died / no clear endX improve.
+- **Discarded:** cut Delay rate hard (`press-harm-guard`, ~23→4 arms) against assist-feel goal; `caused` was already ~0 after AP3–5. InterveneGate at pick time remains.
+
+### Assist Pack AP7 — Discrete IW observation floor
+- Cube/ball IW treated Alive@~96 as truncated because floor was `limit+model.cap` while Adaptive clamps to `96−limit` (+ prove) — → sticky `pass-budget` with dying d0 + living later.
+- Floor is now `model.cap` (`discreteIwObservationFloor`); classic IW applies the same discrete 96−limit clamp as Adaptive before prove ticks.
+- PlanGold `assist-pack-ap7-iw-floor`; KPI `underselectZero` / `budgetHitWithSurvivors` on Silent Hoveropolis early cube.
+
+### Assist Pack AP3c — Probe Past Horizon + Micro-Window (toggleable)
+- **`assist-probe-past-horizon`** (default on): wall-only PassD0Safe with later Alive → Adaptive fallthrough + IW extends prove by 24 ticks; if d0 dies, re-rank later. Off = sticky PassD0Safe like before.
+- **`assist-micro-window`** (default on): Max Assist ≤8 ticks → any endX lead may beat Pass-now. Off = previous large-lead-only behavior on tiny windows.
+- Either toggle alone; both off ≈ prior feel. PlanGold `assist-pack-ap3c-toggles`.
+
+### Crash fix
+- Level enter / re-attach no longer AVs in `HardStreak::reset` → `CCDrawNode::clear` when tearing down sim ghosts (`m_waveTrail` dangling or half-init). Ghost detach skips `reset()`; park/evacuate clear streak points safely. `attach` is idempotent; LevelInit attaches once before `resetAttempt`.
+- Pause→Editor→Save&Play: detach abandons ghost pointers when `m_hostLayer` is no longer the live `PlayLayer` (no `removeFromParent` on dangling ghosts).
+
+### Dev Lab UX
+- Desktop Dev tab uses normal section cards (same chrome as Main/Assist): **Now → Setup → Setup Extras → Record → Eval → Save → Compare → Danger**.
+- One Record toggle; Eval settings + Eval Last/Session in an Eval section (no TreeNode foldouts).
+- Save = Research Pack (primary) + Copy Report / Session Path / Dump Diag. Clear Traces confirms.
+
+### Dev Lab Research Pack
+- **Export Research Pack** = one click: Eval Session (else Eval Last) → `research/research_<stamp>/` (`MANIFEST`, `session.json`, `report.txt`/`json`, fingerprint, `config.json` without keybinds) → clipboard = pack folder path.
+- Copy Report also writes `earlybuffer-dev-report.json` when structured `jsonLine` exists.
+
+### Dev Lab Eval Seal
+- Offline eval seals an `eval` object onto each attempt in `session-*.json` (samples + objective + fidelity + overlay) and flushes. Covers Eval Last / Session / On-Death.
+
+### Dev Lab Planner-Branch + Candidate Truth
+- `planFinished` stamps `plannerPath`, `gameModeKind`, resolved `modeParams`, Adaptive honesty, `viableDelays`, hold window, threat-zone summary.
+- `candNotes` carry structured `deathTick` / `ticksRan` / `unknown` / `budgetHit` / `surviveTicks` / `survivalClass` (beside scores/rejects).
+
+### Dev Lab Mode-Transition Timeline
+- Attempt-scoped `modeTransition` / `checkpoint` events (`pressId=0`): seed + mode/speed/gravity/dual changes with tick, `gameModeKind`, `playerSpeed`, `upsideDown`, `dual`, `playerX`.
+- Fixes checkpoint append (was rejected by pressId gate).
+
+### Dev Lab Hazard + Hitbox Capture
+- Setting `dev-record-hazards` (default on): `planFinished.witness` stores Top-N hazard id/AABB/type, live/ghost collide rects + overlap counts, and threat-zone geometry (digest stays). Research Preset enables it.
+
+### Dev Lab Continuous / Wave / Hold
+- Player blob schema v2: `jumpHeld` at plan capture.
+- Wave IW seals `wave` on `planFinished` (`proxX` / `nearHazard` / `bestGain` / `earliestLater` / help-only / futile / proximityPass).
+- Hold timeline on fire/outcome: early UP, swallow, injected release ticks.
+- Offline eval seals `simNetClass` onto attempt `eval` and Delay `planFinished`.
+
+### Dev Lab Optional Trajectories
+- Setting `dev-record-traj` (default **off**): on eval seal, re-sim chosen + bestSurv (+ bestEval when distinct) and store per-tick pose samples under `eval.trajectories`. Heavy — not part of Research Preset.
+
+### Dev Lab Dual / Orbs / CollisionFlags
+- Dual mode always tags `worldDeps.dual` (missing P2 → honest `absent` + gate `missingDual`, no silent skip).
+- Orbs dep always serializes `orbIds` (possibly `[]`); empty/partial → `playerOnlyApproximated`.
+- Witness `contact` / `dualContact` collide scalars + object ids for hitbox research; mismatch soft-fails fidelity.
+
+### Dev Lab Session Compare
+- Compare Last N (default 5, same levelKey): newest sealed session vs median of older → **gained / flat / regressed** with driving metrics.
+- Writes `devtraces/compare_<stamp>.json`; Dev tab **Compare Sessions** + CLI `tools/compare_devlab_sessions.py`.
+
+### Dev Lab Docs + Scan CLI
+- `docs/dev/traces.md`: Research Preset workflow, crash note, Pack/Compare legend, offline CLI.
+- `tools/scan_devlab_assists.py` accepts Research Pack folders + sealed-eval mismatch / mode-timeline summary (no hardcoded session paths).
+
 ## v1.6.0
 
 **Desktop ImGui settings shell + packaging honesty** (still GD **2.2081** only). Multi-platform package: Windows + macOS + iOS + Android32/64.
@@ -30,32 +162,32 @@ Release notes: [`releases/v1.6.0.md`](releases/v1.6.0.md).
 
 Release notes: [`releases/v1.5.1.md`](releases/v1.5.1.md).
 
-Ships AP0–AP1 / AP3a–AP3b / AP4 from the 1.5.1 plan. **Deferred:** AP2 landed ranking rewrite, AP3c micro-window cube / triple-jump polish.
+**Deferred:** landed ranking rewrite, micro-window cube / triple-jump polish.
 
-### AP4 — Orbs under input-window
+### Orbs under input-window
 - Live IW runs cheap `spatialOrbHint` whenever Orbs are on, plus budget-capped `scanOrbWindow` (coast + press-reach).
 - After cand fill: orb-intent → earliest±k activation band as `DelayOrb` / `requireOrb` / `dMin`–`dMax` candNotes (before Wave help-only).
 - Dash hold salvage (`releaseAfter=40`) and toggle → `PassToggleUnknown` on the IW path.
 - Adaptive Gate Delay with activation sets `requireOrb` + DelayOrb honestly.
 - PlanGold: `orb-under-input-window`, `orb-dash-hold-iw`, `pass-toggle-unknown-iw`.
 
-### AP3b — Live IW Wave anti-phase + help-only
+### Live IW Wave anti-phase + help-only
 - Continuous Wave IW no longer skips classic anti-phase: **help-only** (d0 Alive → `PassD0Safe`, never Delay to pad endX), **proximity** (`PassWaveProximity`), **futile** (`PassWaveFutile`), earliest later Alive Delay when d0 dies.
 - Cheap baseline coast under continuous IW for `idleSafer`. PlanGold: `wave-iw-help-only`, `wave-iw-prox-pass`.
 
-### AP3a — Wave horizon floor
+### Wave horizon floor
 - Continuous Live IW / Adaptive no longer overwrite look-ahead with bare Max Assist limit.
 - Cap = `max(continuousLookAhead, short AssistHorizon planCap)`; Wave short floor **32** ticks (`EbLivePlanContracts::kWaveHorizonFloor`).
 - `kPostCapProveTicks` still appended after the floor. PlanGold: `wave-horizon-floor`. Wave regression retargeted + legacy short-horizon dual assert.
 
-### AP1 — Hitch (small levels)
+### Hitch (small levels)
 - Live `sim-budget-us=0` → **8000µs** hitch ceiling for classic **and** Adaptive (`EbLivePlanContracts::intendedLiveBudgetUs`).
 - Adaptive→classic fallthrough uses remUs floor **2000µs** when the wall is spent but ticks remain (was `budgetUs=1`).
 - Fallthrough seeds observation-cleared Alive screens (not only terminal/horizon); IW accepts those seeds at screen quantum.
 - Discrete peak-death cut marks leftovers `Skipped`/`peak-death-cut` only — no fake-dead clones; IW does not re-`evalDelay` them.
 - PlanGold: `live-hitch-ceiling`. Adaptive parity smoke: `adaptive-zero-wall-clamped`, `fallthrough-remus-floor`.
 
-### AP0 — Live plan contracts (no behavior change)
+### Live plan contracts (no behavior change)
 - Ledger: `peak-death-cut` reject code + `EarlyExit::PeakDeath`.
 - Pure `EbLivePlanContracts` locks current vs intended hitch / landed-rank / peak-death / orb-under-IW tables. PlanGold: `live-plan-contracts`.
 - DevTrace `planFinished` adds `planUs`, `budgetHit`, `candidatesTried`, `adaptiveShell`, `adaptiveFellThrough`.
@@ -72,7 +204,7 @@ Ships AP0–AP1 / AP3a–AP3b / AP4 from the 1.5.1 plan. **Deferred:** AP2 lande
 
 ### Live click hitch (`sim-budget-us=0`)
 - Classic Live no longer treats `sim-budget-us=0` as a multi-frame freeze: soft wall clamps to **8000µs** per press.
-- **AP1:** Adaptive Live uses the same hitch ceiling; peak-death leftovers stay honest Skipped (see AP1 above).
+- Adaptive Live uses the same hitch ceiling; peak-death leftovers stay honest Skipped.
 
 ### Dynamic / Adaptive throughput (no budget cuts)
 - Phase C verify rebuilds past Adaptive screen depth on the first cold grant, then keeps the checkpoint for resume-extend (no more short 0..N re-runs that never extend).

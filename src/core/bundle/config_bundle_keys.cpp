@@ -3,10 +3,11 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[173] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[180] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
+    {"lag-warning-toast", EbConfigBundleKeys::Kind::Bool},
     {"debug-logging", EbConfigBundleKeys::Kind::Bool},
     {"perf-trace", EbConfigBundleKeys::Kind::Bool},
     {"lag-probe", EbConfigBundleKeys::Kind::Bool},
@@ -62,6 +63,8 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[173] = {
     {"adaptive-screen-ticks", EbConfigBundleKeys::Kind::Int},
     {"adaptive-verify-quantum", EbConfigBundleKeys::Kind::Int},
     {"adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
+    {"assist-probe-past-horizon", EbConfigBundleKeys::Kind::Bool},
+    {"assist-micro-window", EbConfigBundleKeys::Kind::Bool},
     {"auto-tune", EbConfigBundleKeys::Kind::Bool},
     {"self-bake", EbConfigBundleKeys::Kind::Bool},
     {"self-bake-normal", EbConfigBundleKeys::Kind::Bool},
@@ -167,6 +170,8 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[173] = {
     {"dev-record-count", EbConfigBundleKeys::Kind::Int},
     {"dev-count-empty-attempts", EbConfigBundleKeys::Kind::Bool},
     {"dev-freeze-world", EbConfigBundleKeys::Kind::Bool},
+    {"dev-record-hazards", EbConfigBundleKeys::Kind::Bool},
+    {"dev-record-traj", EbConfigBundleKeys::Kind::Bool},
     {"dev-disable-random", EbConfigBundleKeys::Kind::Bool},
     {"dev-eval-on-death", EbConfigBundleKeys::Kind::Bool},
     {"dev-eval-grid", EbConfigBundleKeys::Kind::String},
@@ -176,7 +181,9 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[173] = {
     {"dev-eval-require-deps", EbConfigBundleKeys::Kind::Bool},
     {"dev-record-cands", EbConfigBundleKeys::Kind::Bool},
     {"dev-eval-tick-budget", EbConfigBundleKeys::Kind::Int},
-    {"dev-overlay", EbConfigBundleKeys::Kind::Bool}};
+    {"dev-overlay", EbConfigBundleKeys::Kind::Bool},
+    {"dev-compare-last-n", EbConfigBundleKeys::Kind::Int},
+    {"dev-compare-same-level", EbConfigBundleKeys::Kind::Bool}};
 
 EbConfigBundleKeys::Entry const* EbConfigBundleKeys::begin() {
     return EbConfigBundleKeysTable::kEntries;
@@ -212,7 +219,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 173, "count-173");
+    expect(EbConfigBundleKeysTable::kEntryCount == 180, "count-180");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,

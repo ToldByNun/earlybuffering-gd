@@ -5,6 +5,7 @@
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
 #include "../dev/capture/dev_cycle_recorder.hpp"
+#include "../ui/feedback/lag_warning_toast.hpp"
 #include "../ui/feedback/save_feedback.hpp"
 #include "../ui/feedback/save_frame_counter.hpp"
 #include "../ui/overlays/status_overlay.hpp"
@@ -37,13 +38,14 @@ void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLaye
     controller.m_pendingReleaseArmTick = 0;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     controller.m_outcomePending = false;
     controller.m_attemptTick = 0;
     controller.m_startSnapshotTaken = false;
     controller.m_startSnapshotSlot = -1;
     EbClickIntentGuard::get().reset();
-    EbDevCycleRecorder::get().noteCheckpoint(0);
+    EbDevCycleRecorder::get().noteCheckpoint(playLayer, 0);
     EbLagProbe::get().mark("triggerWorld.checkpoint", "keep store / no rebuild / attemptTick=0");
 }
 
@@ -74,6 +76,7 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_pendingReleaseArmTick = 0;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     controller.m_assistTouchedRun = false;
     controller.m_savesAttempt = 0;
@@ -125,9 +128,12 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
 void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* playLayer) {
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;
     EbSelfBakeRecorder::get().onLevelInit(playLayer);
-    controller.resetAttempt(playLayer);
+    // Attach once before resetAttempt. resetAttempt re-attaches only if missing;
+    // a second unconditional attach here caused detach→HardStreak::reset AVs.
     EbShadowSimulator::get().attach(playLayer);
+    controller.resetAttempt(playLayer);
     EbStatusOverlay::attach(playLayer);
+    EbLagWarningToast::get().attach(playLayer);
     EbTrajectoryVisualizer::get().setEnabled(EbStageConfig::showTrajectory());
     EbTrajectoryVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
@@ -158,6 +164,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     // Prefer live detach (removeFromParent) while PlayLayer exists.
     bool const layerAlive = playLayer != nullptr;
     EbSaveFrameCounter::get().detach(!layerAlive);
+    EbLagWarningToast::get().detach(!layerAlive);
     EbTrajectoryVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);
@@ -190,6 +197,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_pendingReleaseContinuous = false;
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
+    controller.m_pendingReleaseDevPressId = 0;
     controller.m_pendingReleaseTick = 0;
     controller.m_attemptTick = 0;
     controller.m_inRealUpdate = false;

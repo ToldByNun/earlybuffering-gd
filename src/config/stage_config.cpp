@@ -37,6 +37,7 @@ bool EbStageConfigImplementation::s_cachedPerfTrace = true;
 bool EbStageConfigImplementation::s_cachedLagProbe = true;
 bool EbStageConfigImplementation::s_cachedSafeMode = false;
 bool EbStageConfigImplementation::s_cachedShowOverlay = true;
+bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
 bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
 bool EbStageConfigImplementation::s_cachedShowBakePath = false;
 bool EbStageConfigImplementation::s_cachedShowPauseBake = true;
@@ -63,6 +64,8 @@ int EbStageConfigImplementation::s_cachedSmartHorizon = 0;
 int EbStageConfigImplementation::s_cachedRobustK = 0;
 bool EbStageConfigImplementation::s_cachedRobustJitter = false;
 bool EbStageConfigImplementation::s_cachedAdaptivePlan = true;
+bool EbStageConfigImplementation::s_cachedAssistProbePastHorizon = true;
+bool EbStageConfigImplementation::s_cachedAssistMicroWindow = true;
 int EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = 24;
 int EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum = 16;
 int EbStageConfigImplementation::s_cachedAdaptiveReservePct = 15;
@@ -442,6 +445,10 @@ bool EbStageConfig::showOverlay() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowOverlay;
 }
+bool EbStageConfig::lagWarningToast() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedLagWarningToast;
+}
 bool EbStageConfig::showTrajectory() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowTrajectory;
@@ -588,6 +595,14 @@ bool EbStageConfig::robustJitter() {
 bool EbStageConfig::adaptivePlan() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAdaptivePlan;
+}
+bool EbStageConfig::assistProbePastHorizon() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistProbePastHorizon;
+}
+bool EbStageConfig::assistMicroWindow() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAssistMicroWindow;
 }
 int EbStageConfig::adaptiveScreenTicks() {
     EbStageConfigImplementation::ensureCache();

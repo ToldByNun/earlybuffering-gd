@@ -68,21 +68,20 @@ int AdaptiveParitySmokeTests::run() {
         return EbLivePlanContracts::kHitchCeilingUs;
     };
     auto const intendedFallthroughClassicBudgetUs = [](int remUs, int ticksLeft) {
-        if (remUs > 0)
-            return remUs;
-        if (ticksLeft > 0)
-            return EbLivePlanContracts::kFallthroughRemUsFloor;
-        return 0;
+        (void)ticksLeft;
+        return remUs > 0 ? remUs : 0;
     };
 
     expect(EbLivePlanContracts::kHitchCeilingUs == 8000, "hitch-ceiling-const");
     expect(intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,
            "adaptive-zero-wall-clamped");
     expect(intendedLiveBudgetUs(4000) == 4000, "adaptive-zero-wall-keep");
-    expect(intendedFallthroughClassicBudgetUs(0, 100) == EbLivePlanContracts::kFallthroughRemUsFloor,
-           "fallthrough-remus-floor");
+    expect(intendedFallthroughClassicBudgetUs(0, 100) == 0, "ap-l5-fallthrough-no-stack");
     expect(intendedFallthroughClassicBudgetUs(900, 50) == 900, "fallthrough-remus-keep");
     expect(intendedFallthroughClassicBudgetUs(0, 0) == 0, "fallthrough-remus-done");
+    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
+               EbLivePlanContracts::kLiveSoftWallFloorUs,
+           "ap-l5-classic-soft-wall-floor");
     expect(EbLivePlanContracts::kFallthroughRemUsFloor >= 2000, "fallthrough-remus-threshold");
 
     // AP3b — Wave IW help-only still Passes when d0 clears (not unlimited Delay).
@@ -93,6 +92,43 @@ int AdaptiveParitySmokeTests::run() {
     expect(isWave && pressDown && d0Safe, "wave-iw-help-only");
     int const chosen = d0Safe ? 0 : 4;
     expect(chosen == 0, "wave-iw-help-not-delay");
+
+    // Assist Pack AP1 — fair depth (frozen A4 from research_20261113_001322).
+    // Mirrors EbLivePlanContracts helpers fmt-free so this binary stays link-light.
+    // Full selfCheck + ledger live in PlanGold / tools/test_fair_depth_ap1.cpp.
+    auto const depthTruncatedAlive = [](bool died, bool unknown, int ticksRan,
+                                        int honestFloorTicks) {
+        if (died || unknown || ticksRan <= 0)
+            return false;
+        int const floor = honestFloorTicks > 1 ? honestFloorTicks : 1;
+        return ticksRan < floor;
+    };
+    auto const fairDepthPreferCand = [](int bestTicks, int bestBin, float bestScore, int candTicks,
+                                        int candBin, float candScore, int depthFloor) {
+        int const floor = depthFloor > 1 ? depthFloor : 1;
+        bool const bestDeep = bestTicks >= floor;
+        bool const candDeep = candTicks >= floor;
+        if (candDeep == bestDeep) {
+            if (candBin != bestBin)
+                return candBin > bestBin;
+            return candScore > bestScore;
+        }
+        if (!candDeep && bestDeep)
+            return (candScore - bestScore) > EbLivePlanContracts::kLandedScoreEps;
+        return true;
+    };
+    // A4: d0 deathTick=54, later Alive ticks 43/18 were not-viable + pass-hopeless.
+    expect(depthTruncatedAlive(false, false, 43, 54), "ap1-a4-later-43-trunc");
+    expect(depthTruncatedAlive(false, false, 18, 54), "ap1-a4-later-18-trunc");
+    expect(!depthTruncatedAlive(true, false, 55, 54), "ap1-a4-d0-dead");
+    expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18), "ap1-a4-no-bin-steal");
+    expect(fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 18), "ap1-a4-score-gain");
+    // Assist Pack AP4 — living later vs uniform lethal.
+    auto const hopelessBlockedByLivingLater = [](bool d0Died, bool anyLaterAlive) {
+        return d0Died && anyLaterAlive;
+    };
+    expect(hopelessBlockedByLivingLater(true, true), "ap4-a4-blocked");
+    expect(!hopelessBlockedByLivingLater(true, false), "ap4-a7-allowed");
 
     if (!ok)
         ++fails;

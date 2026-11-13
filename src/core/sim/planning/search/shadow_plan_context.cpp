@@ -10,6 +10,7 @@
 #include "../simulation_plan.hpp"
 #include <algorithm>
 #include <chrono>
+#include <fmt/format.h>
 
 EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer,
                                      PlayerObject* real, bool down, int limit, float deltaTime,
@@ -24,6 +25,23 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
                     options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
     plan.trajectoryEngine = useTrajEngine;
     model.continuePastClear = options.requireAliveForDelay;
+    // Align classic IW with Adaptive discrete clamp (Assist Pack AP7): without a
+    // manual mode/look-ahead cap, cube/ball horizons stay inside the ~96 tick
+    // band so observation floors stay reachable after prove ticks.
+    {
+        bool const continuousControl =
+            real && (real->m_isDart || real->m_isShip || real->m_isSwing);
+        bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
+        if (inputWindow && real && EbStageConfig::paramsFor(real).cap == 0 &&
+            EbStageConfig::lookAheadCap() == 0) {
+            if (continuousControl) {
+                model.cap = EbAssistHorizon::continuousInputWindowCap(
+                    EbStageConfig::kindOf(real), limit, options.capMul);
+            } else {
+                model.cap = std::min(model.cap, std::max(1, 96 - limit));
+            }
+        }
+    }
     // Live Delay proof: run a few ticks past the nominal horizon so a death on
     // the next frame after hitCap is not declared Safe (session Dump-SP class).
     if (options.requireAliveForDelay && model.cap > 0) {
@@ -33,7 +51,15 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
     robustK = EbShadowSurvivalRules::clampRobustKToWindow(robustK, limit);
     if (EbStageConfig::assistVerifyAb())
         tickBudget *= 2;
-    wall0 = std::chrono::steady_clock::now();
+    // Assist Pack AP-L1/L5: mid-run soft-wall abort shares this press clock.
+    // Adaptive→classic fallthrough reuses Adaptive's wall0 + full press budgetUs
+    // so remUs is never reinvented past sim-budget-us.
+    if (options.reusePlanWall) {
+        wall0 = options.planWall0;
+    } else {
+        wall0 = std::chrono::steady_clock::now();
+    }
+    simulator.beginPlanWall(wall0, options.budgetUs);
 }
 
 EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
@@ -51,12 +77,20 @@ EbDevRejectLedger::EarlyExit EbShadowPlanContext::ledgerEarlyExit() const {
 }
 
 bool EbShadowPlanContext::wallExceeded() const {
+    // Assist Pack AP-L1: shared mid-run latch + soft-wall clock from beginPlanWall.
+    return simulator.planWallExceeded();
+}
+
+int EbShadowPlanContext::wallRemUs() const {
     if (options.budgetUs <= 0)
-        return false;
-    auto elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
-                                   std::chrono::steady_clock::now() - wall0)
-                                   .count();
-    return elapsedMicroseconds >= options.budgetUs;
+        return -1;
+    if (simulator.planWallHit())
+        return 0;
+    auto const elapsedMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(
+                                         std::chrono::steady_clock::now() - wall0)
+                                         .count();
+    int const rem = options.budgetUs - static_cast<int>(elapsedMicroseconds);
+    return rem > 0 ? rem : 0;
 }
 
 bool EbShadowPlanContext::linkedDual() const {
@@ -112,6 +146,22 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         s.verifyFailed = candidate.verifyFailed;
         s.surviveBin = candidate.surviveBin;
         s.endX = candidate.endX;
+        // AP4: structured candidate truth for offline multi-mode research.
+        s.hasRunTruth = true;
+        s.deathTick = candidate.raw.deathTick;
+        s.ticksRan = candidate.raw.ticksRan;
+        s.unknown = candidate.raw.unknown || candidate.raw.unknownTrunc;
+        s.surviveTicks = candidate.surviveTicks;
+        // Assist Pack AP1: depth-truncated Alive (short ticksRan, not dead) is a
+        // budget/depth issue — never classify as opaque not-viable in the ledger.
+        bool const aliveShort = !candidate.raw.died && !candidate.raw.unknown &&
+                                !candidate.raw.unknownTrunc && candidate.raw.ticksRan > 0 &&
+                                candidate.raw.ticksRan < model.cap;
+        s.budgetHit =
+            (plan.budgetHit && aliveShort) || (aliveShort && !candidate.viable);
+        auto const cls = EbModeSurvival::classify(
+            EbShadowSurvivalRules::survivalInputFrom(candidate.raw, zone, model, real));
+        s.survivalClass = EbModeSurvival::classId(cls);
     }
     auto ledger = EbDevRejectLedger::build(in);
     for (auto& note : ledger.notes) {
@@ -136,6 +186,9 @@ EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int release
     auto result = runEngine(real, delayValue, releaseAfter, zone.valid ? &zone : nullptr);
     simulator.resetCaptureForNextRun(layer);
     ++plan.candidatesTried;
+    // Assist Pack AP-L1: mid-run soft-wall abort must surface as budgetHit.
+    if (simulator.planWallHit())
+        plan.budgetHit = true;
     candidate.raw = result;
     candidate.diedBeforeAction = result.diedBeforeAction;
     candidate.activatedRing = result.activatedRing;

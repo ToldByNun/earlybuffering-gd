@@ -114,6 +114,14 @@ void EbActionButtonSettingImplementation::fireSettingAction(std::string const& k
         EbPauseActionBridge::devDumpDiag();
         return;
     }
+    if (key == "dev-export-research-pack-action") {
+        EbPauseActionBridge::devExportResearchPack();
+        return;
+    }
+    if (key == "dev-compare-sessions-action") {
+        EbPauseActionBridge::devCompareSessions();
+        return;
+    }
 }
 
 geode::Result<std::shared_ptr<geode::prelude::SettingV3>>

@@ -6,6 +6,7 @@
 #include "../../../dev/capture/dev_clock_contract.hpp"
 #include "../../../dev/capture/dev_cycle_recorder.hpp"
 #include "../../../dev/capture/dev_trace_store.hpp"
+#include "../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../ui/feedback/save_feedback.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
@@ -102,6 +103,12 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         EbSaveFeedback::get().onPhysicsTick();
     }
     {
+        EbPerfTrace::Scope const scope("lagWarningToast");
+        // Same seconds clock as sim EMA — raw GD step units (~0.25) would
+        // burn the 5s hold in ~20 physics ticks (~instant despawn).
+        EbLagWarningToast::get().onPhysicsTick(secDt > 0.f ? secDt : EbAssistClock::kNominalSimDt);
+    }
+    {
         EbPerfTrace::Scope const scope("selfBakeIdle");
         EbSelfBakeRecorder::get().onPhysicsTick(playLayer);
     }
@@ -149,6 +156,11 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         controller.m_modeSpider = playerOne->m_isSpider;
         controller.m_modeSwing = playerOne->m_isSwing;
         controller.m_modeKnown = true;
+
+        {
+            EbPerfTrace::Scope const scope("devModeTimeline");
+            EbDevCycleRecorder::get().pollModeTimeline(playLayer, controller.m_attemptTick);
+        }
 
         if (modeChanged && controller.m_buffer.state != BufferState::Idle) {
             EbAssistLog::debug("mode change → delivering buffered input");
@@ -245,6 +257,7 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
         controller.m_pendingReleaseContinuous = false;
         controller.m_pendingReleaseUserUpTick = -1;
         controller.m_pendingReleaseMaxExtend = 0;
+        controller.m_pendingReleaseDevPressId = 0;
         EbAssistLog::debug("hold-assist: cancel pending release (re-click)");
     }
 
@@ -331,6 +344,8 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
             controller.m_buffer.releaseSeen = true;
             controller.m_buffer.releaseTick = effectTick;
             controller.m_log.noteInput(effectTick, false);
+            EbDevCycleRecorder::get().noteReleaseSeen(controller.m_buffer.devPressId,
+                                                      controller.m_attemptTick);
             // Early UP does not cancel Delay: stay Buffered, fire still due.
             EbAssistLog::debug(fmt::format(
                 "buffer: early UP → releaseSeen=1 stay Buffered fireTick={} attempt={} p{}",
@@ -344,6 +359,10 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
                 controller.m_pendingReleaseUserUpTick = controller.m_attemptTick;
                 controller.m_pendingReleaseTick =
                     controller.m_pendingReleaseUserUpTick + controller.m_pendingReleaseMaxExtend;
+            }
+            if (controller.m_pendingReleaseDevPressId > 0) {
+                EbDevCycleRecorder::get().noteHoldSwallow(controller.m_pendingReleaseDevPressId,
+                                                          controller.m_attemptTick);
             }
             EbAssistLog::debug(
                 fmt::format("hold-assist: swallow user release @{} extend≤{} deadline={}",
