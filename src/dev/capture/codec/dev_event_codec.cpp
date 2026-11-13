@@ -121,6 +121,7 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["candidatesTried"] = e.candidatesTried;
         otherIndex["adaptiveShell"] = e.adaptiveShell;
         otherIndex["adaptiveFellThrough"] = e.adaptiveFellThrough;
+        otherIndex["adaptiveAbortedForFallthrough"] = e.adaptiveAbortedForFallthrough;
     }
     if (e.hasPlannerMeta) {
         if (!e.plannerPath.empty())
@@ -390,7 +391,7 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         }
     }
     if (j.contains("planUs") || j.contains("candidatesTried") || j.contains("adaptiveShell") ||
-        j.contains("adaptiveFellThrough") ||
+        j.contains("adaptiveFellThrough") || j.contains("adaptiveAbortedForFallthrough") ||
         (j.contains("budgetHit") && e.kind == DevEventKind::PlanFinished)) {
         e.hasPlanCost = true;
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
@@ -403,6 +404,10 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.adaptiveFellThrough = j.contains("adaptiveFellThrough")
                                     ? j["adaptiveFellThrough"].asBool().unwrapOr(false)
                                     : false;
+        e.adaptiveAbortedForFallthrough =
+            j.contains("adaptiveAbortedForFallthrough")
+                ? j["adaptiveAbortedForFallthrough"].asBool().unwrapOr(false)
+                : false;
     }
     if (j.contains("plannerPath") || j.contains("modeParams") || j.contains("viableDelays") ||
         j.contains("inputWindow") || j.contains("threatZone") ||

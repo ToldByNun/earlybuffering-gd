@@ -125,6 +125,15 @@ bool EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(bool isBall
     return !isBall;
 }
 
+bool EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(int fallthroughRemUs) {
+    return fallthroughRemUs <= 0;
+}
+
+bool EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(bool discreteLiveIw, int survivors,
+                                                                int screened) {
+    return discreteLiveIw && screened > 0 && survivors <= 0;
+}
+
 bool EbLivePlanContracts::currentLandedPreferLater(float bestScore, float candScore, int bestDelay,
                                                    int candDelay) {
     float const gain = candScore - bestScore;
@@ -449,6 +458,12 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(adaptiveFallthroughReserveUs(8170, false) == kFallthroughRemUsFloor,
            "ap-l5-ft-reserve-cont");
     expect(adaptiveFallthroughReserveUs(8170, true) == 4085, "ap-l5-ft-reserve-discrete");
+    expect(!adaptiveShellHitPoisonsFallthrough(1000) && adaptiveShellHitPoisonsFallthrough(0),
+           "ap-m6-shell-poison");
+    expect(adaptiveAbortToFallthroughAfterScreen(true, 0, 9) &&
+               !adaptiveAbortToFallthroughAfterScreen(true, 1, 9) &&
+               !adaptiveAbortToFallthroughAfterScreen(false, 0, 9),
+           "ap-m6-abort-after-screen");
     expect(adaptiveShellBudgetUs(8170, adaptiveFallthroughReserveUs(8170, true)) == 4085,
            "ap-l5-shell-discrete");
     expect(adaptiveFallthroughSeedsObservationCleared(false), "ap-l5-seed-cube");

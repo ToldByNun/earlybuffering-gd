@@ -78,6 +78,13 @@ public:
     // Observation-cleared Alive seeds skip on ball — sticky PassD0Safe vs classic
     // stopAtBallLanding Delay ranking (Hoveropolis research_20261113_192707).
     static bool adaptiveFallthroughSeedsObservationCleared(bool isBall);
+    // Assist Pack AP-M6: Adaptive shell wall / tick miss must not stamp classic
+    // budgetHit when fallthrough still has remUs on the shared press wall.
+    static bool adaptiveShellHitPoisonsFallthrough(int fallthroughRemUs);
+    // Discrete Live IW: after screen with zero Autonomous Alive → abort Adaptive
+    // immediately and gift remaining remUs to classic fallthrough.
+    static bool adaptiveAbortToFallthroughAfterScreen(bool discreteLiveIw, int survivors,
+                                                      int screened);
 
     // --- Landed ranking (input-window ball) --------------------------------
 

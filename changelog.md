@@ -7,6 +7,11 @@
 - Incomplete later band without `budgetHit` → `pass-budget`, never futile. Alive-save / progress flags passed honestly (no hardcoded false).
 - PlanGold `assist-pack-ap-m1-wave-false-futile`. Fixture: `research_20261113_223527` (River OFF).
 
+### Assist Pack AP-M6 — Adaptive remUs gift / soft-abort to fallthrough
+- Discrete Adaptive (ball/cube): after screen with zero Autonomous Alive, abort Adaptive immediately (`adaptiveAbortedForFallthrough`) and gift remaining shared remUs to classic IW — no Verify/gate burn.
+- Adaptive shell soft-abort no longer stamps classic `budgetHit` while fallthrough remUs &gt; 0 (was poisoning Hoveropolis hybridFallthrough).
+- PlanGold `assist-pack-ap-m6-adaptive-remus-gift`. Fixture: `research_20261113_223430` (Hoveropolis ON).
+
 ## v1.6.1
 
 **Assist Pack soft-wall honesty (AP-L1–L7)** on the v1.6.0 desktop ImGui / deflate packaging line (still GD **2.2081** only).

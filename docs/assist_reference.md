@@ -40,6 +40,8 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Assist Pack AP-M1 (wave false-futile → Delay):** When d0 is dying and no Alive later exists, a later delay that still progresses (later `deathTick` / more `ticksRan` / endX gain ≥ `kLandedScoreEps`) arms `DelayThreat` instead of `pass-wave-futile`. Incomplete later band without `budgetHit` → `pass-budget`. PlanGold `assist-pack-ap-m1-wave-false-futile`.
 
+**Assist Pack AP-M6 (Adaptive remUs gift):** Discrete Adaptive aborts to classic fallthrough after screen when survivors=0 (`adaptiveAbortedForFallthrough`). Adaptive shell soft-abort does not poison classic `budgetHit` while fallthrough remUs &gt; 0. PlanGold `assist-pack-ap-m6-adaptive-remus-gift`.
+
 **Assist Pack AP-L7 (lag warning notification):** `lag-warning-toast` / Lag Warning (UI → Notifications, default on) shows a bottom-left card once per level when a Live click feels hitchy (`planUs ≥` hitch ceiling or `budgetHit`) — independent of `show-overlay` and of sim-budget-us. PlanGold `assist-pack-ap-l7-lag-toast`.
 
 **Assist Pack AP-L6 (classic IW probe-before-band):** Discrete Live IW runs AP3c Probe Past Horizon after d0 / before the 1..limit band so wall-starved bands cannot skip the +24 prove extend. Wave stays on AP-L4 paths. PlanGold `assist-pack-ap-l6-probe-before-band`.

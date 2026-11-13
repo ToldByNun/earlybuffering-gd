@@ -287,6 +287,12 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
             fallClassic = true;
             plan.budgetHit = true;
+        } else if (EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(
+                       inputWindow && !continuousControl, survivors, screened)) {
+            // Assist Pack AP-M6: discrete Adaptive found no Alive — stop here and
+            // gift remaining shared remUs to classic (do not burn Verify / gate).
+            fallClassic = true;
+            plan.adaptiveAbortedForFallthrough = true;
         } else if (hopelessScreen(slots, limit, screened, survivors)) {
             // No Verify on uniformly dead slots — fallthrough keeps sharedTicks.
             earlyPass = true;
@@ -419,13 +425,14 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         // Assist Pack AP-L5: leftover Adaptive work ticks + reserved fallthrough
         // bucket (never restart a full Stage ceiling — that was ~2× Dynamic).
         classicOpts.tickBudget = std::max(0, sharedTicks) + fallthroughReserveTicks;
+        int fallthroughRemUs = 0;
         if (options.budgetUs > 0) {
             auto const elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                                      std::chrono::steady_clock::now() - wall0)
                                      .count();
-            int const remUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+            fallthroughRemUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
                 options.budgetUs - static_cast<int>(elapsed), classicOpts.tickBudget);
-            if (remUs <= 0) {
+            if (fallthroughRemUs <= 0) {
                 // Shared press wall spent — no remUs floor stack past sim-budget-us.
                 EbSimPlan out = plan;
                 out.action = PlanAction::Pass;
@@ -433,6 +440,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 out.budgetHit = true;
                 out.adaptiveFellThrough = true;
                 out.adaptiveShell = true;
+                out.adaptiveAbortedForFallthrough = plan.adaptiveAbortedForFallthrough;
                 return out;
             }
             // Reuse Adaptive wall0 + full press budget so classic IW honors the
@@ -508,13 +516,17 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                                                      firstDt, classicOpts);
         classicPlan.adaptiveShell = true;
         classicPlan.adaptiveFellThrough = true;
+        classicPlan.adaptiveAbortedForFallthrough = plan.adaptiveAbortedForFallthrough;
         classicPlan.adaptiveScreenedCount = plan.adaptiveScreenedCount;
         classicPlan.adaptiveSurvivors = plan.adaptiveSurvivors;
         classicPlan.adaptiveVerifyGrants = plan.adaptiveVerifyGrants;
         classicPlan.adaptiveStolenScreenTicks = plan.adaptiveStolenScreenTicks;
         // Dev Lab honesty: Adaptive screen/verify work counts toward the press.
         classicPlan.candidatesTried += adaptiveTried;
-        if (adaptiveBudgetHit)
+        // Assist Pack AP-M6: Adaptive shell soft-abort is a remUs gift — do not
+        // poison classic IW with budgetHit while fallthrough still has wall left.
+        if (adaptiveBudgetHit &&
+            EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(fallthroughRemUs))
             classicPlan.budgetHit = true;
         classicPlan.plannerPath = "hybridFallthrough";
         return classicPlan;
@@ -677,6 +689,9 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
                EbLivePlanContracts::adaptiveShellBudgetUs(
                    8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085,
            "ap-l5-shell-discrete");
+    expect(!EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(2000) &&
+               EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(true, 0, 8),
+           "ap-m6-remus-gift");
     expect(!EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(true),
            "ap-l5-ball-no-obs-seed");
     expect(EbLivePlanContracts::peakDeathMarksSkippedNotDead(), "peak-death-skip-not-dead");

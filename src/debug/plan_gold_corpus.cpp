@@ -229,6 +229,12 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                                                       true) &&
                EbLivePlanContracts::waveIwPreferPassBudgetOverFutile(true, false, 3, 8),
            "assist-pack-ap-m1-wave-false-futile");
+    // Assist Pack AP-M6: Adaptive shell soft-abort gifts remUs to classic.
+    expect(!EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(1500) &&
+               EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(0) &&
+               EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(true, 0, 12) &&
+               !EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(false, 0, 12),
+           "assist-pack-ap-m6-adaptive-remus-gift");
     // Assist Pack AP2: Screen→Verify steal keeps total ticks (no raise).
     {
         auto env = EbAdaptiveBudgetController::plan(1000, 0, 0.f, 24, 16, 0);

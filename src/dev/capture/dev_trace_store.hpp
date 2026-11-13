@@ -91,6 +91,7 @@ public:
     int candidatesTried = 0;
     bool adaptiveShell = false;
     bool adaptiveFellThrough = false;
+    bool adaptiveAbortedForFallthrough = false;
 
     // Dev Lab AP4: planner-branch + resolved mode params on planFinished.
     bool hasPlannerMeta = false;

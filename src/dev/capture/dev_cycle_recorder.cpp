@@ -197,6 +197,7 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->candidatesTried = plan.candidatesTried;
     width->adaptiveShell = plan.adaptiveShell;
     width->adaptiveFellThrough = plan.adaptiveFellThrough;
+    width->adaptiveAbortedForFallthrough = plan.adaptiveAbortedForFallthrough;
     // Dev Lab AP4: planner branch + resolved ModeParams + hold/threat honesty.
     width->hasPlannerMeta = true;
     width->plannerPath = plan.plannerPath;

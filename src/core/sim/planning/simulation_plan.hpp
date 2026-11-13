@@ -157,6 +157,8 @@ public:
     // Adaptive Prediction Planner shell (AP4+). Classic plans leave these false/0.
     bool adaptiveShell = false;       // Adaptive A/B/C ran under adaptive-plan
     bool adaptiveFellThrough = false; // needed DecisionGate/classic (until AP6 owns Delay)
+    // Assist Pack AP-M6: Adaptive aborted after screen (no Alive) to gift remUs.
+    bool adaptiveAbortedForFallthrough = false;
     int adaptiveScreenedCount = 0;    // delays that received a screen quantum
     int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
     int adaptiveVerifyGrants = 0;     // Phase C verify quanta granted
