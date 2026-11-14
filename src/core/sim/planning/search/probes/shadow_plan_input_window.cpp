@@ -11,6 +11,7 @@
 #include "../../../shadow_simulator.hpp"
 #include "../../shadow_survival_rules.hpp"
 #include "../../simulation_candidate.hpp"
+#include "../../spider_continuation.hpp"
 #include "../idle_prefix_share.hpp"
 #include "../shadow_plan_context.hpp"
 #include <algorithm>
@@ -55,8 +56,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         return known;
     };
     auto const observationFloor = [&](int delayValue) -> int {
-        if (context.real && (context.real->m_isDart || context.real->m_isBird ||
-                             EbStageConfig::kindOf(context.real) == GameModeKind::Cube))
+        if (context.real &&
+            (context.real->m_isDart || context.real->m_isBird || context.real->m_isSpider ||
+             EbStageConfig::kindOf(context.real) == GameModeKind::Cube))
             return context.model.cap;
 
         int const quantum = std::max(1, context.options.adaptiveScreenTicks);
@@ -82,8 +84,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         // Adaptive→classic seed: Alive only if screen quantum AND any known
         // longer death clock are covered (AP10 — no short seed over d0 death).
-        if (delayValue >= 0 && wasSeeded(delayValue) && !context.real->m_isBird && !result.died &&
-            !unknown && result.ticksRan > 0) {
+        if (delayValue >= 0 && wasSeeded(delayValue) && !context.real->m_isBird &&
+            !context.real->m_isSpider && !result.died && !unknown && result.ticksRan > 0) {
             int const quantum = std::max(1, context.options.adaptiveScreenTicks);
             return EbLivePlanContracts::adaptiveSeedCountsAlive(
                 result.ticksRan, quantum, knownDeathTick(), context.model.cap);
@@ -435,14 +437,16 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // prefix scan spends the wall on early flaps that hit the same obstacle.
     // Keep the existing horizon and unknown checks for every candidate.
     bool const isCube = context.real && EbStageConfig::kindOf(context.real) == GameModeKind::Cube;
-    bool const turnRescue =
-        context.real &&
-        (((context.real->m_isBird || context.real->m_isBall || isCube) && context.down) ||
-         isWave) &&
-        !dual && !context.orbHint.found && !context.spatialHint && !context.plan.foresightOrbPad &&
-        context.limit > 1 && context.candReady[0] && context.cands[0].raw.died &&
-        !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
-        !context.cands[0].raw.toggleUnknown;
+    bool const turnRescue = context.real &&
+                            (((context.real->m_isBird || context.real->m_isBall ||
+                               context.real->m_isSpider || isCube) &&
+                              context.down) ||
+                             isWave) &&
+                            !dual && !context.orbHint.found && !context.spatialHint &&
+                            !context.plan.foresightOrbPad && context.limit > 1 &&
+                            context.candReady[0] && context.cands[0].raw.died &&
+                            !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
+                            !context.cands[0].raw.toggleUnknown;
     if (turnRescue) {
         int idleBoundary = -1;
         int const middle = std::max(1, context.limit / 2);
@@ -452,6 +456,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             for (int index = 0; index < 3; ++index) {
                 int const probe = EbLivePlanContracts::cubeRescueProbe(context.limit, index);
                 if (probes.empty() || probes.back() != probe)
+                    probes.push_back(probe);
+            }
+        }
+        if (context.real->m_isSpider) {
+            probes.clear();
+            for (int index = 0; index < 4; ++index) {
+                int const probe = EbSpiderContinuation::probe(context.limit, index);
+                if (std::ranges::find(probes, probe) == probes.end())
                     probes.push_back(probe);
             }
         }
@@ -479,6 +491,39 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown)
                 idleBoundary =
                     EbSubtickTiming::ufoBoundaryDelay(candidate.raw.deathTick, context.limit);
+            // Spider: a successful teleport can require the player's next click
+            // before the full horizon. Prove that continuation with native physics.
+            if (context.real->m_isSpider && context.down && !context.useTrajEngine &&
+                candidate.raw.died && !candidate.raw.diedBeforeAction && !candidate.raw.unknown &&
+                !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown) {
+                for (int lead : {16, 8}) {
+                    int const nextPress = candidate.raw.deathTick - lead;
+                    if (!EbSpiderContinuation::allowed(context.cands[0].raw.deathTick, probe,
+                                                       candidate.raw.deathTick, nextPress))
+                        continue;
+                    if (context.wallExceeded() || context.tickBudget <= 0)
+                        break;
+                    auto recoveryModel = context.model;
+                    recoveryModel.probeSpiderContinuation = true;
+                    auto recovery = context.simulator.runOne(
+                        context.layer, context.real, true, probe, context.limit, context.deltaTime,
+                        context.firstDt, recoveryModel, nextPress - probe, nullptr,
+                        &context.tickBudget);
+                    context.simulator.resetCaptureForNextRun(context.layer);
+                    ++context.plan.candidatesTried;
+                    if (context.simulator.planWallHit())
+                        context.plan.budgetHit = true;
+                    bool const unknown =
+                        recovery.unknown || recovery.unknownTrunc || recovery.toggleUnknown;
+                    if (EbSpiderContinuation::verified(recovery.died, unknown, recovery.ticksRan,
+                                                       context.model.cap, recovery.followupJumped,
+                                                       nextPress)) {
+                        candidate.recoveryPressTick = nextPress;
+                        candidate.endX = recovery.endX;
+                        break;
+                    }
+                }
+            }
             // A delayed release may clear this corner and still need the player's
             // next press. Verify that continuation rather than assuming it works.
             auto const& baseline = context.cands[0].raw;
@@ -1153,6 +1198,15 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.plan.delay = 0;
     }
 
+    if (context.real->m_isSpider && bestDelay > 0 &&
+        context.cands[static_cast<size_t>(bestDelay)].recoveryPressTick >= 0) {
+        // Keep this verified timing paired with its continuation proof. Neither
+        // learning nor single-click jitter may substitute a different delay.
+        context.plan.guardOriginalDelay = bestDelay;
+        context.plan.guardProbeIncomplete = true;
+        context.plan.viableDelays = {bestDelay};
+        context.plan.dMin = context.plan.dMax = bestDelay;
+    }
     context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
                           context.ledgerEarlyExit());
     return true;

@@ -136,6 +136,20 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
                 shadowPlayer->releaseButton(PlayerButton::Jump);
                 shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
             }
+        } else if (acted && down && real->m_isSpider && model.probeSpiderContinuation &&
+                   releaseAfter > 1) {
+            if (tick == delay + 1) {
+                shadowPlayer->releaseButton(PlayerButton::Jump);
+                shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+                tapReleased = true;
+            } else if (tick == delay + releaseAfter) {
+                simulator.m_jumped = false;
+                shadowPlayer->pushButton(PlayerButton::Jump);
+                shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
+            } else if (tick == delay + releaseAfter + 1) {
+                shadowPlayer->releaseButton(PlayerButton::Jump);
+                shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+            }
         } else if (acted && !down && real->m_isDart && releaseAfter >= 0 && !tapReleased &&
                    tick == delay + releaseAfter) {
             // Recovery probe only: a possible next player press, never injected.
@@ -209,6 +223,10 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             r.unknownTick = tick;
             return finish(r);
         }
+
+        if (model.probeSpiderContinuation && real->m_isSpider && releaseAfter > 1 &&
+            tick >= delay + releaseAfter && simulator.m_jumped)
+            r.followupJumped = true;
 
         if (model.stopAtBallLanding && acted && shadowPlayer->m_isBall) {
             bool const grounded = shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2;

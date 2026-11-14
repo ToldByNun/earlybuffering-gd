@@ -126,3 +126,8 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/test_orb_continuation.hpp
 tools/fixtures/orb_window_starvation.json
 !/tools/fixtures/ufo_orb_chain.json
+
+!/tools/test_spider_continuation.cpp
+!/tools/test_spider_continuation.hpp
+!/tools/fixtures/spider_continuation.json
+tools/fixtures/spider_continuation.json

@@ -116,7 +116,8 @@ bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisi
 
     for (auto const& note : planEv.candNotes) {
         if (note.delay == planEv.plannedDelay &&
-            note.detail.find("conditional-orb-chain=true") != std::string::npos) {
+            (note.detail.find("conditional-orb-chain=true") != std::string::npos ||
+             note.detail.find("conditional-spider-chain=true") != std::string::npos)) {
             // This grid contains only one input. It cannot judge a proof that
             // explicitly includes a second player orb press.
             grid.objectivePartial = true;

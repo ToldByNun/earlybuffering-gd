@@ -405,6 +405,7 @@ public:
         bool tapRelease = false;
         bool stopAtBallLanding = false;
         bool probeOrbContinuation = false;
+        bool probeSpiderContinuation = false;
         int cap = 48;
         int slack = 2;
         // Live Delay-worthy: after zone clear keep sim until death / cap

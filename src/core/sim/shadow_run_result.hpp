@@ -8,6 +8,7 @@
 class EbShadowRunResult {
 public:
     bool landedAfterAction = false;
+    bool followupJumped = false;
     bool died = false;
     bool diedBeforeAction = false;
     bool jumped = false;

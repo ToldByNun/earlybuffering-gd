@@ -180,6 +180,8 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
             note.survivalClass = "recoverable";
             if (run.orbContinuationTick >= 0)
                 note.detail += " conditional-orb-chain=true";
+            else if (real->m_isSpider)
+                note.detail += " conditional-spider-chain=true";
         }
 
         note.detail += fmt::format(" ticks={} died={} deathTick={} unknown={} ballLanding={}",
