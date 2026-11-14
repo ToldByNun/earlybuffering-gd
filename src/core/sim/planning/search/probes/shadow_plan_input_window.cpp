@@ -232,10 +232,27 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     bool const isWave = context.real && context.real->m_isDart;
 
+    // AP04: Adaptive seeds already belong to this input and world capture.
+    // Reuse completed evaluations, but rebuild shallow Alive results before
+    // accepting them at the classic observation floor.
+    auto evaluateCandidate = [&](int delayValue) {
+        auto const index = static_cast<size_t>(delayValue);
+        auto const& cached = context.cands[index].raw;
+        bool const finished = cached.died || cached.unknown || cached.unknownTrunc ||
+                              cached.toggleUnknown || cached.ticksRan >= context.model.cap;
+        if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue)) {
+            ++context.plan.reusedCandidateCount;
+            context.plan.reusedCandidateTicks += context.cands[index].raw.ticksRan;
+            return context.cands[index];
+        }
+        context.candReady[index] = 0;
+        return context.evalDelay(delayValue, -1);
+    };
+
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
         context.plan.budgetHit = true;
-    } else if (!ingest(0, context.evalDelay(0, -1))) {
+    } else if (!ingest(0, evaluateCandidate(0))) {
         context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
                               context.ledgerEarlyExit());
         return true;
@@ -281,7 +298,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.model.cap =
                 savedCapForProbe + EbLivePlanContracts::kPostHorizonProbeTicks;
             context.candReady[0] = 0;
-            if (ingest(0, context.evalDelay(0, -1))) {
+            if (ingest(0, evaluateCandidate(0))) {
                 auto const& probed = context.cands[0];
                 if (probed.raw.died) {
                     // Death past prove wall — band must rank later Delay under
@@ -317,8 +334,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.plan.budgetHit = true;
                 break;
             }
-            context.candReady[static_cast<size_t>(probe)] = 0;
-            if (!ingest(probe, context.evalDelay(probe, -1)) || bestDelay > 0)
+            if (!ingest(probe, evaluateCandidate(probe)) || bestDelay > 0)
                 break;
         }
         // Refine toward the earliest fully verified flap. Keep the verified
@@ -329,8 +345,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.plan.budgetHit = true;
                 break;
             }
-            context.candReady[static_cast<size_t>(earlier)] = 0;
-            if (!ingest(earlier, context.evalDelay(earlier, -1)))
+            if (!ingest(earlier, evaluateCandidate(earlier)))
                 break;
             if (context.cands[static_cast<size_t>(earlier)].viable) {
                 bestDelay = earlier;
@@ -819,7 +834,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.model.cap =
                     savedCap + EbLivePlanContracts::kPostHorizonProbeTicks;
                 context.candReady[0] = 0;
-                if (ingest(0, context.evalDelay(0, -1))) {
+                if (ingest(0, evaluateCandidate(0))) {
                     auto const& probed = context.cands[0];
                     if (probed.raw.died) {
                         bestDelay = -1;

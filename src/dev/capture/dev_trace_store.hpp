@@ -91,6 +91,8 @@ public:
     int fallthroughSetupUs = 0;
     int classicSearchUs = 0;
     int adaptiveSeedCount = 0;
+    int reusedCandidateCount = 0;
+    int reusedCandidateTicks = 0;
     bool budgetHit = false;
     int candidatesTried = 0;
     bool adaptiveShell = false;

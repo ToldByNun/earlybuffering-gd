@@ -125,6 +125,8 @@ public:
     int fallthroughSetupUs = 0;
     int classicSearchUs = 0;
     int adaptiveSeedCount = 0;
+    int reusedCandidateCount = 0;
+    int reusedCandidateTicks = 0;
     bool activatedRing = false;
     bool usedOrbWindow = false;
     bool foresightOrbPad = false; // TravelForesight orb/pad in travel cone
