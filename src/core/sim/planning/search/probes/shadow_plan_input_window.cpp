@@ -302,6 +302,45 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
+    // AP03: probe a useful part of the UFO flap window before the ascending
+    // prefix scan spends the wall on early flaps that hit the same obstacle.
+    // Keep the existing horizon and unknown checks for every candidate.
+    bool const ufoRescue =
+        context.real && context.real->m_isBird && context.down && !dual && !context.orbHint.found &&
+        !context.spatialHint && !context.plan.foresightOrbPad && context.limit > 1 &&
+        context.candReady[0] && context.cands[0].raw.died && !context.cands[0].raw.unknown &&
+        !context.cands[0].raw.unknownTrunc && !context.cands[0].raw.toggleUnknown;
+    if (ufoRescue) {
+        int const middle = std::max(1, context.limit / 2);
+        for (int probe : {middle, context.limit}) {
+            if (context.wallExceeded() || context.tickBudget <= 0) {
+                context.plan.budgetHit = true;
+                break;
+            }
+            context.candReady[static_cast<size_t>(probe)] = 0;
+            if (!ingest(probe, context.evalDelay(probe, -1)) || bestDelay > 0)
+                break;
+        }
+        // Refine toward the earliest fully verified flap. Keep the verified
+        // rescue if the remaining wall expires during refinement.
+        int const rescueDelay = bestDelay;
+        for (int earlier = 1; rescueDelay > 0 && earlier < rescueDelay; ++earlier) {
+            if (context.wallExceeded() || context.tickBudget <= 0) {
+                context.plan.budgetHit = true;
+                break;
+            }
+            context.candReady[static_cast<size_t>(earlier)] = 0;
+            if (!ingest(earlier, context.evalDelay(earlier, -1)))
+                break;
+            if (context.cands[static_cast<size_t>(earlier)].viable) {
+                bestDelay = earlier;
+                break;
+            }
+        }
+        if (bestDelay > 0)
+            skipLaterBand = true;
+    }
+
     if (!skipLaterBand && !dual && !context.useTrajEngine && context.limit >= 1 &&
         !context.plan.budgetHit && context.plan.reason != AssistReason::PassHardUnknown) {
         EbIdlePrefixShare::evaluateAscending(context);
