@@ -11,6 +11,7 @@
 #include "../../../bake/bake_verifier.hpp"
 #include "../../../diagnostics/assist_real_metrics.hpp"
 #include "../../../diagnostics/divergence_tracker.hpp"
+#include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
@@ -31,18 +32,18 @@
 #include <cstdlib>
 
 bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLayer* playLayer,
-                                       PlayerObject* player, bool player1, int effectTick,
-                                       float firstDt, EbDevClockContract::Stamp const& clockIn) {
+                                         PlayerObject* player, bool player1, int effectTick,
+                                         float firstDt, EbDevClockContract::Stamp const& clockIn) {
     EbDevClockContract::Stamp clock = clockIn;
 
     // Same rules as purple bake viz: wave/ship/swing/robot, else dash/holdAssist only.
     // Cube/ball/ufo/spider normal UP → Pass (no false release ASSIST).
     if (!controller.shouldPlanRelease(playLayer, player, player1, effectTick)) {
         EbAssistLog::debug(fmt::format("release: discrete-skip mode={} dashing={} holdAssistBake=0",
-                                     EbStageConfig::kindName(EbStageConfig::kindOf(player)),
-                                     player && player->m_isDashing ? 1 : 0));
+                                       EbStageConfig::kindName(EbStageConfig::kindOf(player)),
+                                       player && player->m_isDashing ? 1 : 0));
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassReleaseDiscrete,
-                                             "release-discrete-skip");
+                                               "release-discrete-skip");
         controller.noteVerdict(AssistReason::PassReleaseDiscrete, "release-discrete-skip");
         controller.updateOverlay();
         return true;
@@ -93,16 +94,16 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         return bakeRet;
 
     EbLagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
-                           fmt::format("vfy={} remTick={} remUs={}", hybridVerifyAttempted ? 1 : 0,
-                                       pressBudget.tickLeft,
-                                       pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
+                             fmt::format("vfy={} remTick={} remUs={}",
+                                         hybridVerifyAttempted ? 1 : 0, pressBudget.tickLeft,
+                                         pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
 
     auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = EbLevelProfile::get();
     int const slot = player1 ? 0 : 1;
-    bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(playLayer, player, limit,
-                                                                          controller.m_simDt);
+    bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(
+        playLayer, player, limit, controller.m_simDt);
     bool nearBake = EbAssistControllerImplementation::nearBakeWindowHint(
         player, player1, false, effectTick, controller.m_simDt,
         shareHybrid ? &hybridReuse : nullptr);
@@ -165,9 +166,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     // Other continuous modes retain their existing rhythm filter.
     bool const continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
     if (continuous && !player->m_isDart && !mustDelaySearch) {
-        if (EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
+        if (EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb,
+                                                        nearBake)) {
             EbAssistLog::debug(fmt::format("intent: spam Pass release (mode={}, tick={})",
-                                         EbStageConfig::kindName(kind), effectTick));
+                                           EbStageConfig::kindName(kind), effectTick));
             EbDevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
             controller.noteVerdict(AssistReason::PassSpam, "release-spam");
             controller.updateOverlay();
@@ -184,7 +186,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
                     fmt::format("learned: low trust @{} (release)", EbLevelProfile::spotBucket(x)));
                 EbAssistLearning::decaySpot(kind, x);
                 EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust,
-                                                     "release-low-trust");
+                                                       "release-low-trust");
                 controller.noteVerdict(AssistReason::PassLowTrust, "release-low-trust");
                 controller.updateOverlay();
                 return true;
@@ -235,7 +237,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     opts.requireAliveForDelay = true;
     bool const spamDenseRel = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
     EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
-                                                          spamDenseRel);
+                                                            spamDenseRel);
     if (!hybridVerifyAttempted) {
         EbAssistControllerImplementation::fillBakePreferBand(
             opts, player, player1, false, effectTick, limit, controller.m_attemptTick,
@@ -245,12 +247,21 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
+    auto& phaseMeter = EbSimTickCostMeter::get();
+    auto const worldBefore = phaseMeter.worldTotalUs();
+    auto const updateBefore = phaseMeter.updateTotalUs();
+    auto const collisionBefore = phaseMeter.collisionTotalUs();
+    auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     auto plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
-                                            firstDt, opts);
+                                              firstDt, opts);
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    plan.physicsCalls = static_cast<int>(phaseMeter.physicsTotalCount() - callsBefore);
+    plan.physicsWorldUs = static_cast<int>(phaseMeter.worldTotalUs() - worldBefore);
+    plan.physicsUpdateUs = static_cast<int>(phaseMeter.updateTotalUs() - updateBefore);
+    plan.physicsCollisionUs = static_cast<int>(phaseMeter.collisionTotalUs() - collisionBefore);
     EbLagWarningToast::get().notify(plan.planUs, opts.budgetUs, plan.budgetHit);
     clock.liveSimPathId = DevSimPathId::Plan;
     clock.effectTick = effectTick;
@@ -288,14 +299,15 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
             bool const spamDense =
                 EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
             if (EbAssistLearning::allowHistogramExplore(kind, spot->histN, spamDense, bakePrefer,
-                                                      spot->diedAfterAssist)) {
-                bool const freezeRand = EbDevConfig::recordEnable() && EbDevConfig::disableRandom() &&
+                                                        spot->diedAfterAssist)) {
+                bool const freezeRand = EbDevConfig::recordEnable() &&
+                                        EbDevConfig::disableRandom() &&
                                         EbDevCycleRecorder::get().isRecording();
                 if (!freezeRand) {
                     off += (std::rand() % 3) - 1;
                 }
                 EbAssistLog::debug(fmt::format("learn: hist explore ±1 release @{} histN={}",
-                                             EbLevelProfile::spotBucket(x), spot->histN));
+                                               EbLevelProfile::spotBucket(x), spot->histN));
             }
             if (spot->diedAfterAssist > 0 && off < 1) {
                 off = 1;

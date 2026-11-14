@@ -34,8 +34,8 @@
 #include <cstdlib>
 
 bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* playLayer,
-                                   PlayerObject* player, bool player1, int effectTick,
-                                   float firstDt, EbDevClockContract::Stamp const& clockIn) {
+                                     PlayerObject* player, bool player1, int effectTick,
+                                     float firstDt, EbDevClockContract::Stamp const& clockIn) {
     EbDevClockContract::Stamp clock = clockIn;
     int const limit = controller.activeLimit(player);
     if (limit <= 0) {
@@ -98,16 +98,16 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
 
     // Times Live fallthrough (verify already paid / skipped). Standalone LagProbe.
     EbLagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
-                           fmt::format("vfy={} remTick={} remUs={}", hybridVerifyAttempted ? 1 : 0,
-                                       pressBudget.tickLeft,
-                                       pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
+                             fmt::format("vfy={} remTick={} remUs={}",
+                                         hybridVerifyAttempted ? 1 : 0, pressBudget.tickLeft,
+                                         pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
 
     auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = EbLevelProfile::get();
     int const slot = player1 ? 0 : 1;
-    bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(playLayer, player, limit,
-                                                                          controller.m_simDt);
+    bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(
+        playLayer, player, limit, controller.m_simDt);
     // After Hybrid bake verify rejected the window, do not treat near-bake as
     // spam override — that forced full Live on every ~5 CPS click (main-thread hitch).
     // Reuse findNear result from tryBakeAssist when present (no second lookup).
@@ -188,7 +188,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     if (!player->m_isBird && !mustDelaySearch &&
         EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
         EbAssistLog::debug(fmt::format("intent: spam Pass (mode={}, tick={})",
-                                     EbStageConfig::kindName(kind), effectTick));
+                                       EbStageConfig::kindName(kind), effectTick));
         EbSimPlan dummy;
         dummy.action = PlanAction::Pass;
         dummy.reason = AssistReason::PassSpam;
@@ -209,13 +209,15 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                 spot->trust < EbLevelProfile::TRUST_PASS_THRESHOLD &&
                 !EbAssistLearning::shouldExploreDespiteLowTrust(spot->trust)) {
                 EbAssistLog::debug(fmt::format("learned: low trust @{} (trust {:.2f}, n={})",
-                                             EbLevelProfile::spotBucket(x), spot->trust, spot->n));
+                                               EbLevelProfile::spotBucket(x), spot->trust,
+                                               spot->n));
                 EbAssistLearning::decaySpot(kind, x);
                 EbSimPlan dummy;
                 dummy.action = PlanAction::Pass;
                 dummy.reason = AssistReason::PassLowTrust;
                 dummy.firstDeathTick = -1;
-                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust, "press-low-trust");
+                EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLowTrust,
+                                                       "press-low-trust");
                 controller.noteVerdict(AssistReason::PassLowTrust, "press-low-trust");
                 controller.recordDecision(playLayer, player, true, dummy, effectTick, 0, limit);
                 controller.updateOverlay();
@@ -283,7 +285,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
     EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
-                                                          spamDense);
+                                                            spamDense);
     // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
     // Otherwise reuse findNear window fields from tryBakeAssist.
     if (!hybridVerifyAttempted) {
@@ -296,6 +298,11 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
+    auto& phaseMeter = EbSimTickCostMeter::get();
+    auto const worldBefore = phaseMeter.worldTotalUs();
+    auto const updateBefore = phaseMeter.updateTotalUs();
+    auto const collisionBefore = phaseMeter.collisionTotalUs();
+    auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
     // After Hybrid verify, skip when wall remainder is tight.
@@ -303,14 +310,18 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
         useSequence = false;
     }
-    auto plan = useSequence ? EbShadowSimulator::get().planSequence(playLayer, player, true, limit,
-                                                                  controller.m_simDt, firstDt, opts)
+    auto plan = useSequence ? EbShadowSimulator::get().planSequence(
+                                  playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
                             : EbShadowSimulator::get().plan(playLayer, player, true, limit,
-                                                          controller.m_simDt, firstDt, opts);
+                                                            controller.m_simDt, firstDt, opts);
     int const planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     plan.planUs = planUs;
+    plan.physicsCalls = static_cast<int>(phaseMeter.physicsTotalCount() - callsBefore);
+    plan.physicsWorldUs = static_cast<int>(phaseMeter.worldTotalUs() - worldBefore);
+    plan.physicsUpdateUs = static_cast<int>(phaseMeter.updateTotalUs() - updateBefore);
+    plan.physicsCollisionUs = static_cast<int>(phaseMeter.collisionTotalUs() - collisionBefore);
     EbLagWarningToast::get().notify(planUs, opts.budgetUs, plan.budgetHit);
     EbAssistPerfStats::get().notePlan(planUs, plan.budgetHit);
     // Classic coverage proxy until Adaptive reports real fully-verified counts.
@@ -366,15 +377,16 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             bool const spamDense =
                 EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
             if (EbAssistLearning::allowHistogramExplore(kind, spot->histN, spamDense, bakePrefer,
-                                                      spot->diedAfterAssist)) {
+                                                        spot->diedAfterAssist)) {
                 // Dev recording + disable-random: keep live/eval deterministic.
-                bool const freezeRand = EbDevConfig::recordEnable() && EbDevConfig::disableRandom() &&
+                bool const freezeRand = EbDevConfig::recordEnable() &&
+                                        EbDevConfig::disableRandom() &&
                                         EbDevCycleRecorder::get().isRecording();
                 if (!freezeRand) {
                     off += (std::rand() % 3) - 1;
                 }
                 EbAssistLog::debug(fmt::format("learn: hist explore ±1 @{} histN={}",
-                                             EbLevelProfile::spotBucket(x), spot->histN));
+                                               EbLevelProfile::spotBucket(x), spot->histN));
             }
             // After assist deaths at this spot, nudge later — never pull earlier.
             if (spot->diedAfterAssist > 0 && off < 1) {
@@ -385,7 +397,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         // Miss-assist: learning must not undo the planner wait (caused +N then die).
         if (delay < plannedDelay) {
             EbAssistLog::debug(fmt::format("learn: floor delay {}→{} (never earlier than plan)",
-                                         delay, plannedDelay));
+                                           delay, plannedDelay));
             delay = plannedDelay;
             learningFloored = true;
         }
@@ -403,7 +415,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             delay = 1;
         learningNudged = (delay != plannedDelay) && !learningFloored;
         if (learningNudged || learningFloored) {
-            EbDevCycleRecorder::get().noteLearningOnPlan(plannedDelay, delay, learningFloored, false);
+            EbDevCycleRecorder::get().noteLearningOnPlan(plannedDelay, delay, learningFloored,
+                                                         false);
         }
     }
 
@@ -436,7 +449,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Commit 13: wrong-orb reject — activation outside intended window.
     if (plan.requireOrb && EbOrbAlign::wrongOrbReject(delay, plan.dMin, plan.dMax)) {
         EbAssistLog::debug(fmt::format("ASSIST wrong-orb reject delay={} win=[{},{}] → Pass", delay,
-                                     plan.dMin, plan.dMax));
+                                       plan.dMin, plan.dMax));
         EbSimPlan pass = plan;
         pass.action = PlanAction::Pass;
         pass.delay = 0;
@@ -491,12 +504,12 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     }
 
     EbAssistLog::debug(fmt::format("ASSIST press +{} ticks id={} ring={} hold={} rel=[{},{}]@{} "
-                                 "win=[{},{}] fire={} jump={} orb={}",
-                                 delay, plan.planId, plan.activatedRing, plan.requireHold,
-                                 plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter,
-                                 controller.m_buffer.dMin, controller.m_buffer.dMax,
-                                 controller.m_buffer.fireTick, controller.m_buffer.expectedJumpTick,
-                                 plan.requireOrb ? 1 : 0));
+                                   "win=[{},{}] fire={} jump={} orb={}",
+                                   delay, plan.planId, plan.activatedRing, plan.requireHold,
+                                   plan.releaseEarliest, plan.releaseLatest, plan.releaseAfter,
+                                   controller.m_buffer.dMin, controller.m_buffer.dMax,
+                                   controller.m_buffer.fireTick,
+                                   controller.m_buffer.expectedJumpTick, plan.requireOrb ? 1 : 0));
     AssistReason delayReason = plan.reason;
     if (!EbAssistVerdict::isDelay(delayReason)) {
         delayReason = EbAssistVerdict::inferDelayReason(

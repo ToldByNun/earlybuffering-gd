@@ -1,11 +1,30 @@
-#include "../../app/class_manager.hpp"
 #include "sim_tick_cost_meter.hpp"
+#include "../../app/class_manager.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
 EbSimTickCostMeter& EbSimTickCostMeter::get() {
     return EbClassManager::get().service<EbSimTickCostMeter>();
+}
+
+void EbSimTickCostMeter::notePhysicsPhases(int worldUs, int updateUs, int collisionUs) {
+    m_worldTotalUs += worldUs;
+    m_updateTotalUs += updateUs;
+    m_collisionTotalUs += collisionUs;
+    ++m_physicsTotalCount;
+}
+long long EbSimTickCostMeter::worldTotalUs() const {
+    return m_worldTotalUs;
+}
+long long EbSimTickCostMeter::updateTotalUs() const {
+    return m_updateTotalUs;
+}
+long long EbSimTickCostMeter::collisionTotalUs() const {
+    return m_collisionTotalUs;
+}
+long long EbSimTickCostMeter::physicsTotalCount() const {
+    return m_physicsTotalCount;
 }
 
 void EbSimTickCostMeter::notePhysicsTick(int micros) {

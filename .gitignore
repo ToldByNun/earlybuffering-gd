@@ -140,3 +140,4 @@ tools/fixtures/spider_continuation.json
 !/releases/README.md
 !/releases/CHECKLIST.md
 /releases
+docs/dev/performance_ap_plan.md

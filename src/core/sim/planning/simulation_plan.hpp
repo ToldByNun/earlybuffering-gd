@@ -123,6 +123,10 @@ public:
     bool budgetHit = false;
     // Wall µs spent in plan()/planSequence (filled by Live press/release planners).
     int planUs = 0;
+    int physicsCalls = 0;
+    int physicsWorldUs = 0;
+    int physicsUpdateUs = 0;
+    int physicsCollisionUs = 0;
     int worldCaptureUs = 0;
     int prepareUs = 0;
     int guardOriginalDelay = -1;

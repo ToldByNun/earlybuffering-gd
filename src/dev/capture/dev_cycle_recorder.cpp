@@ -195,6 +195,10 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->plannedFirePhase = plan.firePhase;
     cycle->plannedFirePhase = plan.firePhase;
     width->planUs = plan.planUs;
+    width->physicsCalls = plan.physicsCalls;
+    width->physicsWorldUs = plan.physicsWorldUs;
+    width->physicsUpdateUs = plan.physicsUpdateUs;
+    width->physicsCollisionUs = plan.physicsCollisionUs;
     width->worldCaptureUs = plan.worldCaptureUs;
     width->prepareUs = plan.prepareUs;
     width->guardOriginalDelay = plan.guardOriginalDelay;
