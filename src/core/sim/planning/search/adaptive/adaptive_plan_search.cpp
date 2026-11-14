@@ -630,6 +630,11 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                                                       gate.reason))
         return runClassicFallthrough();
 
+    // AP05: the classic Wave path verifies the full observation horizon for
+    // both input edges and reuses completed Adaptive seeds.
+    if (real->m_isDart && gate.action == PlanAction::Delay)
+        return runClassicFallthrough();
+
     if (gate.action == PlanAction::Delay && gate.delay > 0) {
         plan.viableDelays.clear();
         for (int delay = 0; delay <= limit; ++delay) {

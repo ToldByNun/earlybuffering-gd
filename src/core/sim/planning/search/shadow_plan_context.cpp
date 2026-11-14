@@ -168,6 +168,12 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         if (note.delay < 0 || note.delay > limit || !candReady[note.delay])
             continue;
         auto const& run = cands[note.delay].raw;
+        if (cands[note.delay].recoveryPressTick >= 0) {
+            note.detail += fmt::format(" conditional-next-player-press={} recovery-verified=true",
+                                       cands[note.delay].recoveryPressTick);
+            note.survivalClass = "recoverable";
+        }
+
         note.detail += fmt::format(" ticks={} died={} deathTick={} unknown={} ballLanding={}",
                                    run.ticksRan, run.died, run.deathTick,
                                    run.unknown || run.unknownTrunc, run.landedAfterAction);

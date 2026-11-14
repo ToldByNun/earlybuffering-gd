@@ -54,6 +54,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         return known;
     };
     auto const observationFloor = [&](int delayValue) -> int {
+        if (context.real && context.real->m_isDart)
+            return context.model.cap;
+
         int const quantum = std::max(1, context.options.adaptiveScreenTicks);
         if (delayValue >= 0 && wasSeeded(delayValue)) {
             return EbLivePlanContracts::adaptiveHonestAliveMinTicks(quantum, knownDeathTick(),
@@ -65,6 +68,11 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     };
     auto const complete = [&](EbShadowSimulator::RunResult const& result, int delayValue = -1) {
         bool const unknown = result.unknown || result.unknownTrunc || result.toggleUnknown;
+        if (context.real && context.real->m_isDart) {
+            return EbLivePlanContracts::waveTurnVerified(result.died, unknown, result.ticksRan,
+                                                         context.model.cap);
+        }
+
         if (EbMissAssistContracts::survivesObservation(result.died, unknown, result.ticksRan,
                                                        observationFloor(delayValue),
                                                        result.landedAfterAction)) {
@@ -190,7 +198,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return false;
         }
         bool dead = candidate.raw.died;
-        bool safe = complete(candidate.raw, delayValue);
+        bool safe = complete(candidate.raw, delayValue) || candidate.recoveryPressTick >= 0;
         if (!safe && isDepthTruncated(candidate.raw, delayValue))
             anyDepthTruncated = true;
         if (dual && !dead) {
@@ -319,28 +327,55 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    // AP03: probe a useful part of the UFO flap window before the ascending
+    // AP03/AP05: probe a useful part of the turn window before the ascending
     // prefix scan spends the wall on early flaps that hit the same obstacle.
     // Keep the existing horizon and unknown checks for every candidate.
-    bool const ufoRescue =
-        context.real && context.real->m_isBird && context.down && !dual && !context.orbHint.found &&
-        !context.spatialHint && !context.plan.foresightOrbPad && context.limit > 1 &&
-        context.candReady[0] && context.cands[0].raw.died && !context.cands[0].raw.unknown &&
-        !context.cands[0].raw.unknownTrunc && !context.cands[0].raw.toggleUnknown;
-    if (ufoRescue) {
+    bool const turnRescue = context.real && ((context.real->m_isBird && context.down) || isWave) &&
+                            !dual && !context.orbHint.found && !context.spatialHint &&
+                            !context.plan.foresightOrbPad && context.limit > 1 &&
+                            context.candReady[0] && context.cands[0].raw.died &&
+                            !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
+                            !context.cands[0].raw.toggleUnknown;
+    if (turnRescue) {
         int const middle = std::max(1, context.limit / 2);
         for (int probe : {middle, context.limit}) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
             }
-            if (!ingest(probe, evaluateCandidate(probe)) || bestDelay > 0)
+            auto candidate = evaluateCandidate(probe);
+            // A delayed release may clear this corner and still need the player's
+            // next press. Verify that continuation rather than assuming it works.
+            auto const& baseline = context.cands[0].raw;
+            if (isWave && !context.down && !context.useTrajEngine && candidate.raw.died &&
+                !candidate.raw.diedBeforeAction && !candidate.raw.unknown &&
+                !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown && baseline.died) {
+                for (int lead : {8, 12, 16}) {
+                    int const nextPress = candidate.raw.deathTick - lead;
+                    if (!EbLivePlanContracts::waveRecoveryProbeAllowed(baseline.deathTick, probe,
+                                                                       nextPress))
+                        continue;
+                    if (context.wallExceeded() || context.tickBudget <= 0)
+                        break;
+                    auto recovery = context.runEngine(context.real, probe, nextPress - probe,
+                                                      context.zone.valid ? &context.zone : nullptr);
+                    context.simulator.resetCaptureForNextRun(context.layer);
+                    ++context.plan.candidatesTried;
+                    if (context.simulator.planWallHit())
+                        context.plan.budgetHit = true;
+                    if (complete(recovery, probe)) {
+                        candidate.recoveryPressTick = nextPress;
+                        break;
+                    }
+                }
+            }
+            if (!ingest(probe, candidate) || (!isWave && bestDelay > 0))
                 break;
         }
         // Refine toward the earliest fully verified flap. Keep the verified
         // rescue if the remaining wall expires during refinement.
         int const rescueDelay = bestDelay;
-        for (int earlier = 1; rescueDelay > 0 && earlier < rescueDelay; ++earlier) {
+        for (int earlier = 1; !isWave && rescueDelay > 0 && earlier < rescueDelay; ++earlier) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
@@ -352,7 +387,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 break;
             }
         }
-        if (bestDelay > 0)
+        if (!isWave && bestDelay > 0)
             skipLaterBand = true;
     }
 
@@ -390,7 +425,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 continue;
             }
             bool dead = ready.raw.died;
-            bool safe = complete(ready.raw, delayValue);
+            bool safe = complete(ready.raw, delayValue) || ready.recoveryPressTick >= 0;
             if (!safe && isDepthTruncated(ready.raw, delayValue))
                 anyDepthTruncated = true;
             if (dual && !dead) {
@@ -527,8 +562,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     // AP3b — Wave continuous IW: help-only / proximity / earliest / futile.
     // Classic selection never runs after IW returns, so anti-phase lives here.
-    if (isWave && context.down && continuous &&
-        context.plan.reason != AssistReason::PassHardUnknown &&
+    if (isWave && continuous && context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown) {
         // Assist Pack AP-L4: unevaluated / starved Wave → PassBudget, never fake futile.
         if (!d0HasRunTruth) {
@@ -545,7 +579,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
 
         context.plan.idleSafer = context.simulator.classifyIdleSafer(
-            true, true, context.plan.baselineDeathTick >= 0, context.plan.baselineDeathTick,
+            true, context.down, context.plan.baselineDeathTick >= 0, context.plan.baselineDeathTick,
             context.plan.baselineDeathX, c0.raw.died, c0.raw.died ? c0.raw.deathTick : -1,
             c0.raw.died ? c0.raw.deathX : c0.endX);
 
@@ -556,7 +590,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             if (!context.candReady[static_cast<size_t>(delay)])
                 continue;
             auto const& cand = context.cands[static_cast<size_t>(delay)];
-            if (!(cand.viable && !cand.raw.died))
+            if (!(cand.viable && (!cand.raw.died || cand.recoveryPressTick >= 0)))
                 continue;
             if (earliestLater < 0)
                 earliestLater = delay;
@@ -568,8 +602,22 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             }
         }
         // Assist Pack AP5: when saving from a dying d0, prefer endX−λ peak.
-        int const chosen =
+        int chosen =
             EbLivePlanContracts::waveIwChooseDelayByScore(d0Safe, bestScoreLater, earliestLater);
+        // Prefer the earliest verified interior tick of a safe window. A
+        // boundary-only turn has no timing margin even if its ghost survives.
+        for (int delay = 2; !d0Safe && delay < context.limit; ++delay) {
+            auto verified = [&](int candidateDelay) {
+                auto const index = static_cast<size_t>(candidateDelay);
+                return context.candReady[index] && context.cands[index].viable &&
+                       complete(context.cands[index].raw, candidateDelay);
+            };
+            if (EbLivePlanContracts::waveTurnHasMargin(verified(delay - 1), verified(delay),
+                                                       verified(delay + 1))) {
+                chosen = delay;
+                break;
+            }
+        }
 
         float const proxX = std::clamp(static_cast<float>(context.limit + 4) * 5.5f,
                                        EbShadowSimulator::kHazardProximityXMin,
@@ -626,8 +674,6 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
         // Assist Pack AP-M1: lethal later that still progresses past dying d0
         // (later deathTick / ticks / endX) → Delay, never PassWaveFutile.
-        int progressDelay = -1;
-        float progressScore = 0.f;
         bool anyLaterProgress = false;
         int laterReadyCount = 0;
         if (c0.raw.died) {
@@ -641,12 +687,6 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                         cand.raw.deathTick, cand.raw.ticksRan, cand.endX))
                     continue;
                 anyLaterProgress = true;
-                float const score =
-                    cand.endX - context.latencyWeight * static_cast<float>(delay);
-                if (progressDelay < 0 || score > progressScore) {
-                    progressDelay = delay;
-                    progressScore = score;
-                }
             }
         } else {
             for (int delay = 1; delay <= context.limit; ++delay) {
@@ -654,23 +694,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                     ++laterReadyCount;
             }
         }
-        if (progressDelay > 0) {
-            bestDelay = progressDelay;
-            context.plan.delay = context.plan.jumpTick = progressDelay;
-            context.plan.nowIsSafe = false;
-            context.plan.threatCleared = true;
-            context.plan.reason = AssistReason::DelayThreat;
-            context.plan.action = PlanAction::Delay;
-            if (!context.plan.viableDelays.empty()) {
-                context.plan.dMin = context.plan.viableDelays.front();
-                context.plan.dMax = context.plan.viableDelays.back();
-            }
-            context.publishLedger(progressDelay, false, context.ledgerEarlyExit());
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} IW DelayThreat wave-progress d={} score={:.1f}", context.plan.planId,
-                progressDelay, progressScore));
-            return true;
-        }
+        // A later collision alone does not prove that a player can recover.
+        // Keep the diagnostic progress evidence, but only verified survivors arm.
 
         int bestBin = 0;
         float bestGain = 0.f;
@@ -680,7 +705,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             if (!context.candReady[static_cast<size_t>(delay)])
                 continue;
             auto const& cand = context.cands[static_cast<size_t>(delay)];
-            if (!(cand.viable && !cand.raw.died))
+            if (!(cand.viable && (!cand.raw.died || cand.recoveryPressTick >= 0)))
                 continue;
             if (cand.surviveBin > bestBin)
                 bestBin = cand.surviveBin;

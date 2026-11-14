@@ -93,6 +93,12 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
                 shadowPlayer->releaseButton(PlayerButton::Jump);
                 shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
             }
+        } else if (acted && !down && real->m_isDart && releaseAfter >= 0 && !tapReleased &&
+                   tick == delay + releaseAfter) {
+            // Recovery probe only: a possible next player press, never injected.
+            tapReleased = true;
+            shadowPlayer->pushButton(PlayerButton::Jump);
+            shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
         } else if (acted && down) {
             if (releaseAfter >= 0 && !tapReleased && tick == delay + releaseAfter) {
                 tapReleased = true;

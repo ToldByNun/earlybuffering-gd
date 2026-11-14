@@ -129,6 +129,22 @@ public:
     // --- Wave IW help-only / anti-phase (AP3b) ------------------------------
 
     // d0 observation-safe / Alive → Pass (never Delay just to pad endX).
+    static constexpr bool waveRecoveryProbeAllowed(int baselineDeathTick, int delay,
+                                                   int nextPressTick) {
+        return baselineDeathTick >= 0 && delay > 0 && nextPressTick > baselineDeathTick &&
+               nextPressTick >= delay + 8;
+    }
+
+    static constexpr bool waveTurnHasMargin(bool previousSafe, bool currentSafe, bool nextSafe) {
+        return previousSafe && currentSafe && nextSafe;
+    }
+
+    // AP05: a short Alive screen or a later collision is not a verified turn.
+    static constexpr bool waveTurnVerified(bool died, bool unknown, int ticksRan,
+                                           int observationFloor) {
+        return !died && !unknown && observationFloor > 0 && ticksRan >= observationFloor;
+    }
+
     static bool waveIwHelpOnlyPass(bool isWave, bool pressDown, bool d0ObservationSafe);
     // Alive d0 + hazard proximity + no orb → PassWaveProximity (not phase Delay).
     static bool waveIwProximityPass(bool isWave, bool pressDown, bool d0Died, bool nearHazard,

@@ -160,10 +160,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         }
     }
 
-    // Continuous spam: do not delay releases (would steal hold rhythm) unless
-    // PerfectAssist demands a Delay-search (orb/bake opportunity).
+    // Wave releases must reach the survival search even during fast turns.
+    // Other continuous modes retain their existing rhythm filter.
     bool const continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-    if (continuous && !mustDelaySearch) {
+    if (continuous && !player->m_isDart && !mustDelaySearch) {
         if (EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
             EbAssistLog::debug(fmt::format("intent: spam Pass release (mode={}, tick={})",
                                          EbStageConfig::kindName(kind), effectTick));
@@ -224,6 +224,12 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();
     opts.mustDelaySearch = mustDelaySearch;
+    // Releases use the same per-mode Adaptive settings as presses.
+    opts.adaptivePlan = EbStageConfig::adaptivePlanFor(kind);
+    opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicksFor(kind);
+    opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantumFor(kind);
+    opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
+
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
     bool const spamDenseRel = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);

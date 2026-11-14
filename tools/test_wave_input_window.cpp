@@ -44,6 +44,40 @@ int WaveInputWindowRegressionTests::run() {
         {151, {62, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 10, 10}, 0},
     };
     int failures = 0;
+    // Recorded release 024444/A3: immediate death 3, d4 death 45.
+    // A probe at 37 leaves eight ticks to react and is reachable after d4.
+    failures += !EbLivePlanContracts::waveRecoveryProbeAllowed(3, 4, 37);
+    failures += EbLivePlanContracts::waveRecoveryProbeAllowed(40, 4, 37);
+    failures += EbLivePlanContracts::waveRecoveryProbeAllowed(3, 4, 10);
+    failures += EbLivePlanContracts::waveRecoveryProbeAllowed(-1, 4, 37);
+
+    failures += EbLivePlanContracts::waveTurnHasMargin(false, true, true);
+    failures += EbLivePlanContracts::waveTurnHasMargin(true, true, false);
+    failures += EbLivePlanContracts::waveTurnHasMargin(true, false, true);
+    failures += !EbLivePlanContracts::waveTurnHasMargin(true, true, true);
+    // With an eight-tick window and verified survivors d4..8, d5 is the
+    // earliest interior turn. The first survivor d4 has no left margin.
+    int interiorTurn = -1;
+    for (int delay = 2; delay < 8; ++delay) {
+        if (EbLivePlanContracts::waveTurnHasMargin(delay - 1 >= 4, delay >= 4, delay + 1 >= 4)) {
+            interiorTurn = delay;
+            break;
+        }
+    }
+    failures += interiorTurn != 5;
+
+    // AP05 recorded A2: d1 dies at 24, while d4..8 survive the eval and tail.
+    int const recordedDeaths[] = {23, 24, 26, 28, -1, -1, -1, -1, -1};
+    for (int delay = 0; delay <= 8; ++delay) {
+        bool const died = recordedDeaths[delay] >= 0;
+        int const ticks = died ? recordedDeaths[delay] + 1 : 96;
+        failures += EbLivePlanContracts::waveTurnVerified(died, false, ticks, 96) != (delay >= 4);
+    }
+    failures += EbLivePlanContracts::waveTurnVerified(false, false, 12, 96);
+    failures += EbLivePlanContracts::waveTurnVerified(false, true, 96, 96);
+    failures += EbLivePlanContracts::waveTurnVerified(false, false, 95, 96);
+    failures += !EbLivePlanContracts::waveTurnVerified(false, false, 96, 96);
+
     for (auto const& input : inputs) {
         int const chosen = chooseRecordedDelay(input, horizon);
         if (chosen != input.expectedDelay || chooseRecordedDelay(input, 96) != -1) {
