@@ -3,6 +3,7 @@
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
 #include "../../assist/contracts/live_plan_contracts.hpp"
+#include "../../trigger_world/trigger_motion_anchor.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../shadow_simulator.hpp"
 #include "../sim_collision_policy.hpp"
@@ -120,6 +121,8 @@ void EbShadowWorldDynamics::applyLiveDynamicNear(EbShadowSimulator& simulator, P
                 saved->appliedScaleY == pose.scaleY;
             if (!sameCached) {
                 (void)EbTriggerWorldStore::writePoseIfChanged(object, pose);
+                if (saved && saved->sectioned)
+                    layer->updateObjectSection(object);
                 if (saved) {
                     saved->dirty = true;
                     saved->hasAppliedPose = true;
@@ -140,6 +143,7 @@ void EbShadowWorldDynamics::applyLiveDynamicNear(EbShadowSimulator& simulator, P
 void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator, PlayLayer* layer,
                                                   int absTick, PlayerObject* ghost) {
     simulator.m_triggerWorldAppliedThisTick = false;
+    simulator.m_triggerWorldAppliedIds.clear();
     if (!layer || absTick < 0)
         return;
     if (!EbStageConfig::triggerBake())
@@ -164,12 +168,19 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         store.trackCount(), simulator.m_bakeOffline, EbShadowSimulator::kApplyBudgetUs);
 
     float const gx = ghost ? ghost->getPositionX() : 0.f;
+    float const gy = ghost ? ghost->getPositionY() : 0.f;
+    int const storeTick =
+        simulator.m_triggerWorldTimeOffset +
+        (simulator.m_poseRemapDt > 0.f ? store.remapLiveTick(absTick, simulator.m_poseRemapDt)
+                                       : store.remapLiveTick(absTick));
+
     class EbTriggerApplyCandidate {
     public:
         EbShadowSimulator::SavedTransform const* st = nullptr;
         float dist = 0.f;
         // Named isNear — Windows headers define `near` as a macro.
         bool isNear = false;
+        EbTriggerPose pose{};
 
     private:
     };
@@ -180,13 +191,31 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         auto* object = st.obj;
         if (!object || object->m_uniqueID != st.uniqueId)
             continue;
+        EbTriggerPose pose{};
+        bool const sampled =
+            st.track ? EbTriggerWorldStore::sampleTrackAtStoreTick(*st.track, storeTick, pose)
+                     : store.samplePoseAtStoreTick(st.uniqueId, storeTick, pose);
+        if (!sampled)
+            continue;
+        if (st.hasTrackReference) {
+            EbTriggerPose live{};
+            live.x = st.x;
+            live.y = st.y;
+            live.rotation = st.rotation;
+            live.scaleX = st.scaleX;
+            live.scaleY = st.scaleY;
+            live.active = st.nodeVisible;
+            pose = EbTriggerMotionAnchor::project(live, st.trackReference, pose);
+        }
         float const distNow = std::fabs(object->getPositionX() - gx);
         float const distBase = std::fabs(st.x - gx);
-        float const dist = std::min(distNow, distBase);
+        // Include incoming objects even when editor/capture positions are far.
+        float const dist = std::min({distNow, distBase, std::fabs(pose.x - gx)});
         if (dist > kCullMarginX)
             continue;
         EbTriggerApplyCandidate c;
         c.st = &st;
+        c.pose = pose;
         c.dist = dist;
         c.isNear = dist <= EbShadowSimulator::kApplyMarginX;
         cands.push_back(c);
@@ -214,15 +243,7 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
             break;
 
         auto* object = c.st->obj;
-        EbTriggerPose pose{};
-        bool ok = false;
-        if (simulator.m_poseRemapDt > 0.f) {
-            ok = store.samplePose(c.st->uniqueId, absTick, simulator.m_poseRemapDt, pose);
-        } else {
-            ok = store.samplePose(c.st->uniqueId, absTick, pose);
-        }
-        if (!ok)
-            continue;
+        auto const& pose = c.pose;
         bool const sameCached =
             c.st->hasAppliedPose && c.st->appliedActive == pose.active &&
             c.st->appliedX == pose.x && c.st->appliedY == pose.y &&
@@ -230,6 +251,8 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
             c.st->appliedScaleY == pose.scaleY;
         if (!sameCached) {
             (void)EbTriggerWorldStore::writePoseIfChanged(object, pose);
+            if (c.st->sectioned)
+                layer->updateObjectSection(object);
             c.st->dirty = true;
             c.st->hasAppliedPose = true;
             c.st->appliedActive = pose.active;
@@ -239,7 +262,18 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
             c.st->appliedScaleX = pose.scaleX;
             c.st->appliedScaleY = pose.scaleY;
         }
+        simulator.m_triggerWorldAppliedIds.insert(c.st->uniqueId);
         ++applied;
+    }
+    // A budget-limited incoming object must not silently retain a stale pose
+    // inside the ghost's collision corridor.
+    for (auto const& candidate : cands) {
+        if (simulator.m_triggerWorldAppliedIds.contains(candidate.st->uniqueId))
+            continue;
+        if (std::fabs(candidate.pose.x - gx) <= 96.f && std::fabs(candidate.pose.y - gy) <= 96.f) {
+            simulator.m_unknown = true;
+            break;
+        }
     }
     // Far / over-budget tracks hold last written pose (or capture baseline).
     simulator.m_triggerWorldAppliedThisTick = true;

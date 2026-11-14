@@ -10,6 +10,7 @@
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 #include <algorithm>
+#include <cmath>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -64,13 +65,23 @@ static void collectObjectLayerSolids(PlayLayer* layer, std::vector<GameObject*>&
 
 void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer) {
     simulator.m_savedTransforms.clear();
+    simulator.m_transformCaptureLayer = layer;
     if (!layer || !EbStageConfig::triggerBake())
         return;
 
     auto& store = EbTriggerWorldStore::get();
+    simulator.m_triggerWorldTimeOffset = 0;
+    if (layer->m_startPosObject) {
+        float const startSeconds =
+            layer->timeForPos(layer->m_startPosObject->getPosition(), 0, 0, false, -1);
+        simulator.m_triggerWorldTimeOffset =
+            static_cast<int>(std::lround(std::max(0.f, startSeconds) * store.data().tps));
+    }
+
     EbLagProbe::Scope const scope("eb.trigger.capture");
 
     // Collect uniqueIds we may move this sim (ready static bake tracks).
+    std::unordered_map<int, EbTriggerTrack const*> tracks;
     std::unordered_set<int> wanted;
     if (store.loaded() && store.hasTracks()) {
         wanted.reserve(store.trackCount());
@@ -80,6 +91,7 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
             if (!EbTriggerClassify::isStatic(track.kind))
                 continue;
             wanted.insert(track.uniqueId);
+            tracks.emplace(track.uniqueId, &track);
         }
     }
     if (wanted.empty())
@@ -101,12 +113,21 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
         EbShadowSimulator::SavedTransform st;
         st.uniqueId = uid;
         st.obj = object;
+        st.sectioned = object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0;
         st.x = object->getPositionX();
         st.y = object->getPositionY();
         st.rotation = object->getRotation();
         st.scaleX = object->getScaleX();
         st.scaleY = object->getScaleY();
         st.nodeVisible = object->isVisible();
+        st.track = tracks.at(uid);
+        int const captureTick =
+            simulator.m_poseRemapDt > 0.f
+                ? store.remapLiveTick(simulator.m_simTickBase, simulator.m_poseRemapDt)
+                : store.remapLiveTick(simulator.m_simTickBase);
+        st.hasTrackReference = EbTriggerWorldStore::sampleTrackAtStoreTick(
+            *st.track, captureTick + simulator.m_triggerWorldTimeOffset, st.trackReference);
+
         st.dirty = false;
         st.hasAppliedPose = false;
         simulator.m_savedTransforms.push_back(st);
@@ -269,6 +290,7 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
             EbShadowSimulator::SavedTransform st;
             st.uniqueId = object->m_uniqueID;
             st.obj = object;
+            st.sectioned = object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0;
             st.x = object->getPositionX();
             st.y = object->getPositionY();
             st.rotation = object->getRotation();
@@ -310,6 +332,8 @@ void EbShadowWorldCapture::resetTriggerTransforms(EbShadowSimulator& simulator) 
         object->setScaleX(st.scaleX);
         object->setScaleY(st.scaleY);
         object->setVisible(st.nodeVisible);
+        if (st.sectioned && simulator.m_transformCaptureLayer)
+            simulator.m_transformCaptureLayer->updateObjectSection(object);
     }
 }
 
@@ -318,6 +342,7 @@ void EbShadowWorldCapture::restoreTriggerTransforms(EbShadowSimulator& simulator
     (void)layer;
     simulator.resetTriggerTransforms();
     simulator.m_savedTransforms.clear();
+    simulator.m_transformCaptureLayer = nullptr;
 }
 
 void EbShadowWorldCapture::beginCapture(EbShadowSimulator& simulator, PlayLayer* layer) {
@@ -404,6 +429,7 @@ void EbShadowWorldCapture::resetCaptureForNextRun(EbShadowSimulator& simulator, 
     EbToggleOrbSim::get().restore();
     simulator.resetTriggerTransforms();
     simulator.m_triggerWorldAppliedThisTick = false;
+    simulator.m_triggerWorldAppliedIds.clear();
     simulator.m_liveDynamicAppliedIds.clear();
 
     for (auto const& s : simulator.m_saved) {
@@ -443,6 +469,7 @@ void EbShadowWorldCapture::restoreCapture(EbShadowSimulator& simulator, PlayLaye
     simulator.m_liveDynamicAppliedIds.clear();
     simulator.m_toggleUnknownHit = false;
     simulator.m_triggerWorldAppliedThisTick = false;
+    simulator.m_triggerWorldAppliedIds.clear();
 
     for (auto const& s : simulator.m_saved) {
         if (!s.obj)

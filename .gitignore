@@ -102,3 +102,5 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/test_cube_rescue.cpp
 !/tools/test_cube_rescue.hpp
 !/tools/fixtures/cube_rescue_ap07.json
+!/tools/test_trigger_motion.cpp
+!/tools/test_trigger_motion.hpp

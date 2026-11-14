@@ -73,6 +73,16 @@ bool EbTriggerWorldChecks::selfCheck(std::string& report) {
            "at-last");
     expect(store.samplePoseAtStoreTick(42, 99, output) && output.x == 150.f, "past-last-hold");
     expect(!store.samplePoseAtStoreTick(999, 10, output), "missing-id");
+    // Replacing tracks with the same count must invalidate the lookup index.
+    auto original = store.data();
+    auto replacement = original;
+    replacement.tracks[0].uniqueId = 43;
+    store.setData(std::move(replacement));
+    expect(!store.samplePoseAtStoreTick(42, 10, output), "replaced-id-gone");
+    expect(store.samplePoseAtStoreTick(43, 10, output), "replacement-id-ready");
+    store.setData(std::move(original));
+    expect(store.samplePoseAtStoreTick(42, 10, output), "restored-id-ready");
+
     expect(!store.samplePoseAtStoreTick(99, 0, output), "not-ready");
 
     // Remap: store @ 240tps, live simDt = 1/120 → live 100 → store 200.

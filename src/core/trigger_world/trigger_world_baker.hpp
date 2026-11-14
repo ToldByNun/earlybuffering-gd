@@ -143,6 +143,7 @@ private:
     size_t m_childIndex = 0;
     size_t m_childCount = 0;
     size_t m_effectIndex = 0;
+    bool m_effectsSorted = false;
     size_t m_secOuter = 0;
     size_t m_secInner = 0;
     size_t m_secSlot = 0;

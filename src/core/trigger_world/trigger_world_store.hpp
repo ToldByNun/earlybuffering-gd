@@ -2,28 +2,16 @@
 #define TRIGGER_WORLD_STORE_HPP
 
 #include "trigger_classify.hpp"
+#include "trigger_pose.hpp"
 #include <Geode/Geode.hpp>
 #include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class GJGameLevel;
 class GameObject;
 class PlayLayer;
-
-// One sampled pose for a moved/rotated/scaled object at an absolute attempt tick.
-class EbTriggerPose {
-public:
-    int tick = 0;
-    float x = 0.f;
-    float y = 0.f;
-    float rotation = 0.f;
-    float scaleX = 1.f;
-    float scaleY = 1.f;
-    bool active = true;
-
-private:
-};
 
 // Sparse keyframe track for one GameObject (keyed by m_uniqueID).
 class EbTriggerTrack {
@@ -52,7 +40,7 @@ private:
 // Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
 class EbTriggerWorldStore {
 public:
-    static constexpr int kFileVersion = 1;
+    static constexpr int kFileVersion = 2;
     // Soft ceiling: refuse NEW tracks/keys with AssistLog — never silent drop under soft.
     static constexpr size_t kSoftMaxTracks = 100000;
     static constexpr size_t kSoftMaxKeysPerTrack = 32768;
@@ -127,6 +115,8 @@ public:
     bool samplePose(int uniqueId, int liveAbsTick, float liveSimDt, EbTriggerPose& out) const;
     // Sample with an already-remapped store tick (tests / bakers).
     bool samplePoseAtStoreTick(int uniqueId, int storeTick, EbTriggerPose& out) const;
+    static bool sampleTrackAtStoreTick(EbTriggerTrack const& track, int storeTick,
+                                       EbTriggerPose& out);
 
     // Write a sampled pose onto a live GameObject (position/rot/scale/visible).
     static void writePose(GameObject* object, EbTriggerPose const& pose);
@@ -175,6 +165,8 @@ private:
     static ClampResult clampData(EbTriggerWorldData& data);
 
     EbTriggerWorldData m_data;
+    mutable std::unordered_map<int, size_t> m_trackIndex;
+    mutable bool m_trackIndexValid = false;
     bool m_loaded = false;
     mutable bool m_dirty = false;
     bool m_softcapHit = false;

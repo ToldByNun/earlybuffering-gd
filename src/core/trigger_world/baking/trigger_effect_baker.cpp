@@ -62,6 +62,16 @@ int EbTriggerEffectBaker::durationTicks(float durationSec, double tps) {
     return std::max(0, ticks);
 }
 
+int EbTriggerEffectBaker::activationTick(PlayLayer* layer, EffectGameObject* effect, double tps) {
+    if (!layer || !effect)
+        return 0;
+    if (effect->m_isSpawnTriggered)
+        return durationTicks(effect->m_spawnTriggerDelay, tps);
+    float const seconds = layer->timeForPos(effect->getPosition(), effect->m_ordValue,
+                                            effect->m_channelValue, false, -1);
+    return durationTicks(seconds, tps);
+}
+
 bool EbTriggerEffectBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind) {
     if (!effect)
         return false;
@@ -175,12 +185,23 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
     auto targets = owner.objectsInGroup(groupId);
     if (targets.empty())
         return;
+    // Spawn delays are relative to their activating event, not level zero.
+    // Keep unresolved chains explicit until that event timeline is modeled.
+    if (effect->m_isSpawnTriggered) {
+        for (auto* target : targets) {
+            auto* track = owner.ensureTrack(target, TriggerKind::DynamicOther);
+            if (!track)
+                continue;
+            track->kind = TriggerKind::DynamicOther;
+            track->ready = false;
+        }
+        return;
+    }
 
     // Spawn-triggered: use spawn delay. Non-spawn (Commit 4): start-of-level t=0
     // — previously skipped all non-spawn → empty TW on many levels (e.g. id_80045794).
     bool const spawn = effect->m_isSpawnTriggered;
-    int const startTick =
-        spawn ? EbTriggerWorldBaker::durationTicks(effect->m_spawnTriggerDelay, owner.m_tps) : 0;
+    int const startTick = activationTick(owner.m_layer, effect, owner.m_tps);
     if (!spawn)
         ++owner.m_bakedStartTimed;
     int const dur = EbTriggerWorldBaker::durationTicks(effect->m_duration, owner.m_tps);
@@ -254,6 +275,15 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
         auto* track = owner.ensureTrack(object, kind);
         if (!track)
             break;
+        // Overlapping transforms require composition beyond this static baker.
+        // Preserve an explicit unknown track rather than publish a false path.
+        if (track->kind == TriggerKind::DynamicOther)
+            continue;
+        if (!track->keys.empty() && track->keys.back().tick > startTick) {
+            track->kind = TriggerKind::DynamicOther;
+            track->ready = false;
+            continue;
+        }
         EbTargetBake tb;
         tb.obj = object;
         tb.start = owner.m_live[object->m_uniqueID];
@@ -288,10 +318,7 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
     }
 
     int const endTick = startTick + std::max(0, dur);
-    int step = 1;
-    if (dur > 0) {
-        step = std::max(1, dur / 16);
-    }
+    int const step = 1;
 
     for (auto& tb : bakes) {
         auto* track = owner.ensureTrack(tb.obj, kind);
@@ -310,10 +337,21 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
         for (int tick = startTick + step; tick < endTick; tick += step) {
             if (track->keys.size() >= EbTriggerWorldStore::kHardMaxKeysPerTrack)
                 break;
-            float const u = static_cast<float>(tick - startTick) / static_cast<float>(dur);
+            float const fraction = static_cast<float>(tick - startTick) / static_cast<float>(dur);
+            float const u = GameToolbox::getEasedValue(
+                fraction, static_cast<int>(effect->m_easingType), effect->m_easingRate);
             EbTriggerWorldBaker::LivePose mid = tb.start;
             mid.x = tb.start.x + (tb.end.x - tb.start.x) * u;
             mid.y = tb.start.y + (tb.end.y - tb.start.y) * u;
+            if (kind == TriggerKind::StaticRotate) {
+                float const degrees =
+                    effect->m_rotationDegrees + 360.f * static_cast<float>(effect->m_times360);
+                float const angle = degrees * u * 0.017453292519943295f;
+                float const offsetX = tb.start.x - center.x;
+                float const offsetY = tb.start.y - center.y;
+                mid.x = center.x + offsetX * std::cos(angle) - offsetY * std::sin(angle);
+                mid.y = center.y + offsetX * std::sin(angle) + offsetY * std::cos(angle);
+            }
             mid.rotation = tb.start.rotation + (tb.end.rotation - tb.start.rotation) * u;
             mid.scaleX = tb.start.scaleX + (tb.end.scaleX - tb.start.scaleX) * u;
             mid.scaleY = tb.start.scaleY + (tb.end.scaleY - tb.start.scaleY) * u;

@@ -10,6 +10,7 @@ class EbSimulationCandidate;
 #include "../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../assist/contracts/assist_verdict.hpp"
 #include "../replay/replay_import.hpp"
+#include "../trigger_world/trigger_world_store.hpp"
 #include "planning/simulation_plan.hpp"
 #include "shadow_run_result.hpp"
 #include <Geode/Geode.hpp>
@@ -26,6 +27,10 @@ class EbSimulationCandidate;
 class EbShadowSimulator {
 public:
     using RunResult = EbShadowRunResult;
+
+    bool triggerWorldPoseApplied(int uniqueId) const {
+        return m_triggerWorldAppliedThisTick && m_triggerWorldAppliedIds.contains(uniqueId);
+    }
 
     static constexpr int SNAPSHOT_SLOTS = 16;
     // Slot 0 is immortal attempt-start (bake). Plan/traj ring uses 1..13.
@@ -482,6 +487,11 @@ private:
     public:
         int uniqueId = 0;
         GameObject* obj = nullptr;
+        bool sectioned = false;
+        EbTriggerTrack const* track = nullptr; // Capture-session lifetime only.
+        EbTriggerPose trackReference{};
+        bool hasTrackReference = false;
+
         float x = 0.f;
         float y = 0.f;
         float rotation = 0.f;
@@ -590,6 +600,9 @@ private:
     std::unordered_map<int, UnknownHistBin> m_unknownHistMap;
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;
+    std::unordered_set<int> m_triggerWorldAppliedIds;
+    int m_triggerWorldTimeOffset = 0;
+    PlayLayer* m_transformCaptureLayer = nullptr;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
     // Absolute attempt tick for the current sim step (−1 = do not apply bake).
     int m_simAbsTick = -1;

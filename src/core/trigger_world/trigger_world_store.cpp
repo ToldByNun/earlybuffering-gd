@@ -1,5 +1,5 @@
-#include "../../app/class_manager.hpp"
 #include "trigger_world_store.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../assist/assist_clock.hpp"
 #include "../assist/assist_controller.hpp"
@@ -8,6 +8,7 @@
 #include "trigger_classify.hpp"
 #include "validation/trigger_world_checks.hpp"
 #include <Geode/utils/file.hpp>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fmt/format.h>
@@ -105,6 +106,8 @@ void EbTriggerWorldStore::noteSoftcap(char const* where) {
 }
 
 void EbTriggerWorldStore::clear() {
+    this->m_trackIndex.clear();
+    this->m_trackIndexValid = false;
     this->m_data = {};
     this->m_loaded = false;
     this->m_dirty = false;
@@ -162,6 +165,8 @@ void EbTriggerWorldStore::save() const {
 }
 
 void EbTriggerWorldStore::setData(EbTriggerWorldData data) {
+    this->m_trackIndex.clear();
+    this->m_trackIndexValid = false;
     auto const clamp = EbTriggerWorldStore::clampData(data);
     if (clamp.softTracks || clamp.softKeys) {
         this->noteSoftcap(clamp.hardTracks || clamp.hardKeys ? "hard-clamp" : "setData");
@@ -198,11 +203,16 @@ void EbTriggerWorldStore::discardCacheFile() const {
 }
 
 EbTriggerTrack const* EbTriggerWorldStore::findTrack(int uniqueId) const {
-    for (auto const& track : this->m_data.tracks) {
-        if (track.uniqueId == uniqueId)
-            return &track;
+    if (!this->m_trackIndexValid) {
+        this->m_trackIndex.reserve(this->m_data.tracks.size());
+        for (size_t index = 0; index < this->m_data.tracks.size(); ++index)
+            this->m_trackIndex.emplace(this->m_data.tracks[index].uniqueId, index);
+        this->m_trackIndexValid = true;
     }
-    return nullptr;
+    auto const found = this->m_trackIndex.find(uniqueId);
+    if (found == this->m_trackIndex.end())
+        return nullptr;
+    return &this->m_data.tracks[found->second];
 }
 
 size_t EbTriggerWorldStore::readyTrackCount() const {
@@ -227,27 +237,19 @@ int EbTriggerWorldStore::remapLiveTick(int liveAbsTick, float liveSimDt) const {
 
 bool EbTriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick, EbTriggerPose& out) const {
     auto const* track = this->findTrack(uniqueId);
-    if (!track || !track->ready || track->keys.empty())
+    if (!track)
         return false;
+    return sampleTrackAtStoreTick(*track, storeTick, out);
+}
 
-    // keys assumed sorted ascending by tick (baker writes them that way).
-    auto const& keys = track->keys;
-    // Before first key: leave capture baseline (caller skips write).
-    if (storeTick < keys.front().tick)
+bool EbTriggerWorldStore::sampleTrackAtStoreTick(EbTriggerTrack const& track, int storeTick,
+                                                 EbTriggerPose& out) {
+    if (!track.ready || track.keys.empty() || storeTick < track.keys.front().tick)
         return false;
-    if (storeTick >= keys.back().tick) {
-        out = keys.back();
-        return true;
-    }
-
-    // Last key with tick <= storeTick (hold). Linear lerp optional later.
-    EbTriggerPose const* best = &keys.front();
-    for (auto const& key : keys) {
-        if (key.tick > storeTick)
-            break;
-        best = &key;
-    }
-    out = *best;
+    auto const after =
+        std::upper_bound(track.keys.begin(), track.keys.end(), storeTick,
+                         [](int tick, EbTriggerPose const& key) { return tick < key.tick; });
+    out = *std::prev(after);
     return true;
 }
 
@@ -390,5 +392,7 @@ geode::Result<> EbTriggerWorldStore::writeFile() const {
 }
 
 geode::Result<> EbTriggerWorldStore::readFile() {
+    this->m_trackIndex.clear();
+    this->m_trackIndexValid = false;
     return EbTriggerWorldCodec::readFile(*this);
 }

@@ -4,10 +4,12 @@
 #include "../../../debug/perf_trace.hpp"
 #include "../../level/section_object_walk.hpp"
 #include "../trigger_world_baker.hpp"
+#include "trigger_effect_baker.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
+#include <unordered_map>
 
 void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
     if (!owner.m_running)
@@ -175,6 +177,19 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
         }
 
         if (owner.m_phase == EbTriggerWorldBaker::Phase::Bake) {
+            if (!owner.m_effectsSorted) {
+                std::unordered_map<EffectGameObject*, int> activationTicks;
+                activationTicks.reserve(owner.m_effects.size());
+                for (auto* effect : owner.m_effects)
+                    activationTicks.emplace(effect, EbTriggerEffectBaker::activationTick(
+                                                        owner.m_layer, effect, owner.m_tps));
+                std::stable_sort(owner.m_effects.begin(), owner.m_effects.end(),
+                                 [&](EffectGameObject* left, EffectGameObject* right) {
+                                     return activationTicks.at(left) < activationTicks.at(right);
+                                 });
+                owner.m_effectsSorted = true;
+            }
+
             size_t count = 0;
             while (owner.m_effectIndex < owner.m_effects.size() &&
                    count < EbTriggerWorldBaker::kEffectsPerSlice && !budgetHit()) {

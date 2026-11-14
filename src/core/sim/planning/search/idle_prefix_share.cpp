@@ -223,7 +223,15 @@ public:
                 transform.obj->setScaleX(pose.scaleX);
                 transform.obj->setScaleY(pose.scaleY);
                 transform.obj->setVisible(pose.nodeVisible);
+                if (transform.sectioned && layer)
+                    layer->updateObjectSection(transform.obj);
             }
+            // Fork restore can itself move an object away from the captured
+            // live pose, even when the continuation performs no further write.
+            transform.dirty = pose.x != transform.x || pose.y != transform.y ||
+                              pose.rotation != transform.rotation ||
+                              pose.scaleX != transform.scaleX || pose.scaleY != transform.scaleY ||
+                              pose.nodeVisible != transform.nodeVisible;
             transform.hasAppliedPose = pose.hasAppliedPose;
             transform.appliedX = pose.appliedX;
             transform.appliedY = pose.appliedY;

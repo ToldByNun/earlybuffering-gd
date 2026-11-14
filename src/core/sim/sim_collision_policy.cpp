@@ -115,9 +115,13 @@ SimObjectAction EbSimCollisionPolicy::classify(GameObject* object) {
 
         if (EbStageConfig::triggerBake()) {
             // Ready static bake track + apply this sim tick → Include (active only).
-            if (sim.triggerWorldAppliedThisTick()) {
+            {
                 auto const* track = EbTriggerWorldStore::get().findTrack(object->m_uniqueID);
+                if (track && track->kind == TriggerKind::DynamicOther)
+                    return SimObjectAction::UnknownOnOverlap;
                 if (track && track->ready && EbTriggerClassify::isStatic(track->kind)) {
+                    if (!sim.triggerWorldPoseApplied(object->m_uniqueID))
+                        return SimObjectAction::UnknownOnOverlap;
                     // writePose(inactive) clears visibility/poweredOn — do not Include.
                     auto* effectObject = geode::prelude::typeinfo_cast<EnhancedGameObject*>(object);
                     if (!object->isVisible() || (effectObject && !effectObject->m_poweredOn)) {

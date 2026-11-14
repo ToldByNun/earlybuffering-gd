@@ -53,6 +53,7 @@ void EbTriggerWorldBaker::clearJob() {
     this->m_childIndex = 0;
     this->m_childCount = 0;
     this->m_effectIndex = 0;
+    this->m_effectsSorted = false;
     this->m_secOuter = 0;
     this->m_secInner = 0;
     this->m_secSlot = 0;

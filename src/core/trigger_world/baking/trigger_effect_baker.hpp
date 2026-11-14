@@ -13,6 +13,7 @@ public:
     static EbTriggerPose toKey(int tick, EbTriggerWorldBaker::LivePose const& live);
     static void pushKey(EbTriggerTrack& track, int tick, EbTriggerWorldBaker::LivePose const& live);
     static int durationTicks(float durationSec, double tps);
+    static int activationTick(PlayLayer* layer, EffectGameObject* effect, double tps);
     static bool isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind);
     static cocos2d::CCPoint
     groupCenter(int groupId, std::vector<GameObject*> const& objects,
