@@ -394,6 +394,10 @@ public:
 
     static void fillPrefixDeath(EbShadowPlanContext& context, int fromDelay, int prefixDeathTick) {
         for (int delay = fromDelay; delay <= context.limit; ++delay) {
+            // Completed probes belong to this same input/world. An idle-spine
+            // shortcut must not overwrite a measured orb activation or seed.
+            if (context.candReady[static_cast<size_t>(delay)])
+                continue;
             EbSimulationCandidate skip;
             skip.delay = delay;
             skip.diedBeforeAction = true;

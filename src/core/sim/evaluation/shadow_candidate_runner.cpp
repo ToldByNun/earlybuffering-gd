@@ -1,9 +1,11 @@
 #include "shadow_candidate_runner.hpp"
 #include "../planning/ball_landing_tracker.hpp"
+#include "../planning/orb_continuation.hpp"
 #include "../planning/simulation_plan.hpp"
 #include "../shadow_simulator.hpp"
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 EbShadowSimulator::RunResult
 EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
@@ -33,13 +35,30 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
+    EbOrbContinuation orbContinuation;
+    std::unordered_set<int> firstOrbIds;
+    bool capturedFirstOrbs = false;
+    bool const probeOrbContinuation = model.probeOrbContinuation && real->m_isBird && down;
+    simulator.m_collectOrbContacts = probeOrbContinuation;
+    simulator.m_orbContacts.clear();
     EbBallLandingTracker ballLanding;
     ballLanding.reset(shadowPlayer->m_isUpsideDown);
     int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
 
     auto finish = [&](EbShadowSimulator::RunResult output) {
+        simulator.m_collectOrbContacts = false;
+        simulator.m_orbContacts.clear();
         output.activatedRing = simulator.m_activatedRing;
         output.ringCount = simulator.m_ringCount;
+        if (probeOrbContinuation && orbContinuation.attempted()) {
+            bool const verified = !output.died && !output.unknown && !output.unknownTrunc &&
+                                  !simulator.m_toggleUnknownHit && output.ticksRan >= model.cap &&
+                                  orbContinuation.verified(output.ringCount, output.ticksRan);
+            if (verified)
+                output.orbContinuationTick = orbContinuation.pressTick();
+            else
+                output.unknownTrunc = true;
+        }
         output.endX = shadowPlayer->getPositionX();
         output.wasDashing = shadowPlayer->m_isDashing;
         output.toggleUnknown = simulator.m_toggleUnknownHit;
@@ -137,6 +156,40 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
                     tapReleased = true;
                     shadowPlayer->releaseButton(PlayerButton::Jump);
                 }
+            }
+        }
+
+        if (probeOrbContinuation && acted && simulator.m_ringCount > 0 &&
+            !shadowPlayer->m_isDashing) {
+            bool freshOrb = false;
+            if (!capturedFirstOrbs) {
+                capturedFirstOrbs = true;
+                for (auto* ring : simulator.m_orbContacts) {
+                    if (ring)
+                        firstOrbIds.insert(ring->m_uniqueID);
+                }
+            }
+            // Ring collisions are intercepted during simulation; native
+            // m_touchingRings is therefore not a reliable ghost contact list.
+            if (!firstOrbIds.empty()) {
+                for (auto* ring : simulator.m_orbContacts) {
+                    if (ring && !firstOrbIds.contains(ring->m_uniqueID) &&
+                        !shadowPlayer->m_touchedRings.count(ring->m_uniqueID) &&
+                        !ring->m_claimTouch && !ring->m_activated) {
+                        freshOrb = true;
+                        break;
+                    }
+                }
+            }
+            auto const input = orbContinuation.next(tick, simulator.m_ringCount, freshOrb);
+            if (input == EbOrbContinuation::Input::Release) {
+                shadowPlayer->releaseButton(PlayerButton::Jump);
+                shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = false;
+                tapReleased = true;
+            } else if (input == EbOrbContinuation::Input::Press) {
+                // Possible next PLAYER input, never scheduled into the real game.
+                shadowPlayer->pushButton(PlayerButton::Jump);
+                shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = true;
             }
         }
 

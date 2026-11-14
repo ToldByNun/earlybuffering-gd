@@ -404,6 +404,7 @@ public:
         bool continuous = false;
         bool tapRelease = false;
         bool stopAtBallLanding = false;
+        bool probeOrbContinuation = false;
         int cap = 48;
         int slack = 2;
         // Live Delay-worthy: after zone clear keep sim until death / cap
@@ -599,6 +600,8 @@ private:
     bool m_collectUnknownHist = false;
     bool m_activatedRing = false;
     int m_ringCount = 0;
+    bool m_collectOrbContacts = false;
+    std::vector<RingObject*> m_orbContacts;
     GameObject* m_deathObject = nullptr;
     // objectId → bin while m_collectUnknownHist (cleared each bake timeline).
     std::unordered_map<int, UnknownHistBin> m_unknownHistMap;

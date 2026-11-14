@@ -59,6 +59,9 @@ void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* 
     if (!shadow || !ring || (shadow != simulator.m_shadow && shadow != simulator.m_evalActive))
         return;
 
+    if (simulator.m_collectOrbContacts)
+        simulator.m_orbContacts.push_back(ring);
+
     // Real GD: orbs only fire while Jump is held. Without this, wait-ticks before a
     // delayed press claim the orb early and every orb prediction is wrong.
     int const jumpIdx = static_cast<int>(PlayerButton::Jump);
@@ -137,6 +140,8 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
                                   PlayerObject* state, float stepDt, float deltaTime,
                                   bool splitPrefix, cocos2d::CCPoint const* tickStart) {
     auto const tickWallStart = std::chrono::steady_clock::now();
+    if (simulator.m_collectOrbContacts)
+        simulator.m_orbContacts.clear();
     simulator.m_triggerWorldAppliedThisTick = false;
     simulator.m_liveDynamicAppliedIds.clear();
     if (simulator.m_simAbsTick >= 0) {

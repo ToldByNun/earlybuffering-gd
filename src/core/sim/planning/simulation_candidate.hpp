@@ -6,7 +6,7 @@
 class EbSimulationCandidate {
 public:
     int delay = 0;
-    int recoveryPressTick = -1; // Conditional Wave continuation, relative to this input.
+    int recoveryPressTick = -1; // Conditional next player press, relative to this input.
 
     bool viable = false;
     bool diedBeforeAction = false;

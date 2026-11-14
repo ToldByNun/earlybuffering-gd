@@ -115,3 +115,14 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/test_subtick_timing.hpp
 !/tools/fixtures/ufo_cbf_window.json
 !/tools/fixtures/ufo_boundary_starvation.json
+
+!/tools/test_geode_package_check.py
+
+!/tools/test_orb_probe_order.cpp
+!/tools/test_orb_probe_order.hpp
+!/tools/fixtures/orb_window_starvation.json
+
+!/tools/test_orb_continuation.cpp
+!/tools/test_orb_continuation.hpp
+tools/fixtures/orb_window_starvation.json
+!/tools/fixtures/ufo_orb_chain.json

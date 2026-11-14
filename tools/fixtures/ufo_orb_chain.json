@@ -1,0 +1,226 @@
+{
+  "source": "C:\\Users\\mikaj\\AppData\\Local\\GeometryDash\\geode\\mods\\audesign.earlybuffer\\research\\research_20261114_120419\\session.json",
+  "sha256": "c190a6e57bd27e538bbc4f5fab9ab03b9ed11ddbea3a20e130861ff5354e8b0b",
+  "nativeReplayAvailable": false,
+  "purpose": "Frozen UFO orb budget failures; surviving conditional continuation must be established in game, not inferred from this archive.",
+  "cases": [
+    {
+      "attemptId": 23,
+      "pressId": 84,
+      "reason": "pass-budget@plan",
+      "planUs": 4178,
+      "usedOrbWindow": true,
+      "candidates": [
+        {
+          "delay": 0,
+          "status": "chosen",
+          "rejectCode": "chosen",
+          "detail": "d=0 ticks=27 died=true deathTick=26 unknown=false ballLanding=false",
+          "surviveBin": 1,
+          "endX": 10944.466796875,
+          "latencyTerm": 0,
+          "threatCleared": false,
+          "score": 10944.466796875,
+          "deathTick": 26,
+          "ticksRan": 27,
+          "unknown": false,
+          "budgetHit": false,
+          "surviveTicks": 27,
+          "survivalClass": "lethal"
+        },
+        {
+          "delay": 1,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 2,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 3,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 4,
+          "status": "rejected",
+          "rejectCode": "budget-not-reached",
+          "detail": "budget-not-reached bin=1 endX=10962.3 ticks=44 died=false deathTick=-1 unknown=false ballLanding=false",
+          "surviveBin": 1,
+          "endX": 10962.263671875,
+          "latencyTerm": 1.399999976158142,
+          "threatCleared": false,
+          "score": 10960.86328125,
+          "deathTick": -1,
+          "ticksRan": 44,
+          "unknown": false,
+          "budgetHit": true,
+          "surviveTicks": 44,
+          "survivalClass": "alive"
+        },
+        {
+          "delay": 5,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 6,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 7,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 8,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 9,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 10,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 11,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 12,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        }
+      ]
+    },
+    {
+      "attemptId": 29,
+      "pressId": 99,
+      "reason": "pass-budget@plan",
+      "planUs": 4077,
+      "usedOrbWindow": true,
+      "candidates": [
+        {
+          "delay": 0,
+          "status": "chosen",
+          "rejectCode": "chosen",
+          "detail": "d=0 ticks=64 died=true deathTick=63 unknown=false ballLanding=false",
+          "surviveBin": 2,
+          "endX": 10987.3935546875,
+          "latencyTerm": 0,
+          "threatCleared": false,
+          "score": 10987.3935546875,
+          "deathTick": 63,
+          "ticksRan": 64,
+          "unknown": false,
+          "budgetHit": false,
+          "surviveTicks": 64,
+          "survivalClass": "lethal"
+        },
+        {
+          "delay": 1,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 2,
+          "status": "rejected",
+          "rejectCode": "budget-not-reached",
+          "detail": "budget-not-reached bin=0 endX=10928.8 ticks=8 died=false deathTick=-1 unknown=false ballLanding=false",
+          "surviveBin": 0,
+          "endX": 10928.7685546875,
+          "latencyTerm": 0.699999988079071,
+          "threatCleared": false,
+          "score": 10928.068359375,
+          "deathTick": -1,
+          "ticksRan": 8,
+          "unknown": false,
+          "budgetHit": true,
+          "surviveTicks": 8,
+          "survivalClass": "alive"
+        },
+        {
+          "delay": 3,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 4,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 5,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 6,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 7,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 8,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 9,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 10,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 11,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        },
+        {
+          "delay": 12,
+          "status": "skipped",
+          "rejectCode": "budget-not-reached",
+          "detail": "skip=budget-not-reached"
+        }
+      ]
+    }
+  ]
+}

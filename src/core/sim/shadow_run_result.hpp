@@ -18,6 +18,7 @@ public:
     bool zoneCleared = false;
     bool wasDashing = false;
     int ringCount = 0;
+    int orbContinuationTick = -1;
     int jumpTick = -1;
     int deathTick = -1;
     int unknownTick = -1;

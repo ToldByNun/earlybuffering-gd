@@ -74,7 +74,7 @@ jobs:
             exit 1
           fi
           echo "Checking ${PKG}"
-          python3 tools/geode_package_check.py "${PKG}" --require ios --check-ios-sign
+          python3 tools/geode_package_check.py "${PKG}" --require ios --check-ios-sign --check-install-name
 
       # geode-sdk/build-geode-mod also uploads geode-build-* (combine feed), but those
       # nested uploads are not reliably downloadable later. Keep our own copies.
@@ -125,7 +125,10 @@ jobs:
           # entries — keep classic deflate for ship packages.
           zstd: false
 
-      - name: Gate package (binaries + no zstd)
+      - name: Test package validation
+        run: python3 tools/test_geode_package_check.py
+
+      - name: Gate package (binaries + no zstd + iOS filename)
         shell: bash
         run: |
           set -euo pipefail
@@ -137,7 +140,7 @@ jobs:
           echo "Checking ${PKG}"
           python3 tools/geode_package_check.py "${PKG}" \
             --require win --require android64 --require android32 --require mac --require ios \
-            --forbid-zstd
+            --forbid-zstd --check-install-name
 
       - uses: actions/upload-artifact@v4
         with:

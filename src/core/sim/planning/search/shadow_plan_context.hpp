@@ -33,7 +33,8 @@ private:
     EbShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,
                                          EbThreatZone const* zonePointer);
     void publishLedger(int chosenDelay, bool doPassFlag, EbDevRejectLedger::EarlyExit early);
-    EbSimulationCandidate evalDelay(int delayValue, int releaseAfter);
+    EbSimulationCandidate evalDelay(int delayValue, int releaseAfter,
+                                    bool probeOrbContinuation = false);
     void finalizeViable(EbSimulationCandidate& candidate, int releaseAfter);
     bool jitterOk(int delay, int releaseAfter, bool force = false);
     void guardSelectedTick();

@@ -183,6 +183,7 @@ def check_package(
     mod_id: str | None,
     check_ios_sign: bool = False,
     forbid_zstd: bool = False,
+    check_install_name: bool = False,
 ) -> int:
     if not path.is_file():
         print(f"ERROR: package not found: {path}", file=sys.stderr)
@@ -215,6 +216,14 @@ def check_package(
                     f"using mod id '{resolved_id}'",
                     file=sys.stderr,
                 )
+
+            if check_install_name and path.name != resolved_id + ".geode":
+                print(
+                    f"FAIL: iOS launcher import requires filename '{resolved_id}.geode'; "
+                    f"got '{path.name}'. It derives the binary name from the archive "
+                    "filename, so version suffixes and download suffixes break import."
+                )
+                return 1
 
             present = list_binaries(zf, resolved_id)
             zstd_entries = list_zstd_entries(zf)
@@ -355,6 +364,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--check-install-name",
+        action="store_true",
+        help="Require exact {mod_id}.geode filename for iOS launcher file import",
+    )
+    p.add_argument(
         "--forbid-zstd",
         action="store_true",
         help=(
@@ -388,6 +402,7 @@ def main(argv: list[str] | None = None) -> int:
         args.mod_id,
         args.check_ios_sign,
         args.forbid_zstd,
+        args.check_install_name,
     )
 
 

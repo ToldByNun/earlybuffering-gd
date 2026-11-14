@@ -178,6 +178,8 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
             note.detail += fmt::format(" conditional-next-player-press={} recovery-verified=true",
                                        cands[note.delay].recoveryPressTick);
             note.survivalClass = "recoverable";
+            if (run.orbContinuationTick >= 0)
+                note.detail += " conditional-orb-chain=true";
         }
 
         note.detail += fmt::format(" ticks={} died={} deathTick={} unknown={} ballLanding={}",
@@ -188,20 +190,31 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
     plan.candNotesTruncated = ledger.truncated;
 }
 
-EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int releaseAfter) {
+EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int releaseAfter,
+                                                     bool probeOrbContinuation) {
     EbSimulationCandidate candidate;
     candidate.delay = delayValue;
     if (tickBudget <= 0 || wallExceeded()) {
         plan.budgetHit = true;
         return candidate;
     }
-    auto result = runEngine(real, delayValue, releaseAfter, zone.valid ? &zone : nullptr);
+    EbShadowSimulator::RunResult result;
+    if (probeOrbContinuation && real->m_isBird && down && !useTrajEngine && !linkedDual()) {
+        auto continuationModel = model;
+        continuationModel.probeOrbContinuation = true;
+        result = simulator.runOne(layer, real, down, delayValue, limit, deltaTime, firstDt,
+                                  continuationModel, releaseAfter, zone.valid ? &zone : nullptr,
+                                  &tickBudget);
+    } else {
+        result = runEngine(real, delayValue, releaseAfter, zone.valid ? &zone : nullptr);
+    }
     simulator.resetCaptureForNextRun(layer);
     ++plan.candidatesTried;
     // Assist Pack AP-L1: mid-run soft-wall abort must surface as budgetHit.
     if (simulator.planWallHit())
         plan.budgetHit = true;
     candidate.raw = result;
+    candidate.recoveryPressTick = result.orbContinuationTick;
     candidate.diedBeforeAction = result.diedBeforeAction;
     candidate.activatedRing = result.activatedRing;
     candidate.unknownTrunc = result.unknownTrunc;

@@ -298,7 +298,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
-        if (options.allowSubtick && real->m_isBird) {
+        if (real->m_isBird && (options.allowSubtick || (down && EbStageConfig::assistOrbs()))) {
             fallClassic = true;
             plan.adaptiveAbortedForFallthrough = true;
         } else if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {

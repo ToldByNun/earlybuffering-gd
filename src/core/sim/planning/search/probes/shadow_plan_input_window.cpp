@@ -5,6 +5,7 @@
 #include "../../../../assist/contracts/assist_verdict.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
+#include "../../../../assist/contracts/orb_probe_order.hpp"
 #include "../../../../assist/contracts/subtick_timing.hpp"
 #include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../shadow_simulator.hpp"
@@ -81,8 +82,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         // Adaptive→classic seed: Alive only if screen quantum AND any known
         // longer death clock are covered (AP10 — no short seed over d0 death).
-        if (delayValue >= 0 && wasSeeded(delayValue) && !result.died && !unknown &&
-            result.ticksRan > 0) {
+        if (delayValue >= 0 && wasSeeded(delayValue) && !context.real->m_isBird && !result.died &&
+            !unknown && result.ticksRan > 0) {
             int const quantum = std::max(1, context.options.adaptiveScreenTicks);
             return EbLivePlanContracts::adaptiveSeedCountsAlive(
                 result.ticksRan, quantum, knownDeathTick(), context.model.cap);
@@ -220,6 +221,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         if (delayValue == 0) {
             context.plan.firstDeathTick = candidate.raw.deathTick;
             context.plan.firstDeathObject = candidate.raw.deathObject;
+            if (!dead && !safe && context.orbAssist && context.orbHint.found &&
+                context.real->m_isBird && !candidate.raw.unknown && !candidate.raw.unknownTrunc &&
+                !candidate.raw.toggleUnknown) {
+                // Intentional baseline screen: leave room for the measured orb
+                // window. An incomplete baseline is never considered safe.
+                return true;
+            }
             if (!dead && !safe) {
                 // AP4: toggle overlap → named Pass (not opaque HardUnknown).
                 context.plan.reason = (candidate.toggleUnknown || context.sawToggleUnknown)
@@ -255,10 +263,19 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
         context.plan.budgetHit = true;
-    } else if (!ingest(0, evaluateCandidate(0))) {
-        context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
-                              context.ledgerEarlyExit());
-        return true;
+    } else {
+        int const savedCap = context.model.cap;
+        bool const orbScreen = context.orbAssist && context.orbHint.found &&
+                               context.real->m_isBird && !dual && !context.useTrajEngine;
+        if (orbScreen)
+            context.model.cap = std::min(savedCap, 12);
+        auto baseline = evaluateCandidate(0);
+        context.model.cap = savedCap;
+        if (!ingest(0, baseline)) {
+            context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
+                                  context.ledgerEarlyExit());
+            return true;
+        }
     }
 
     // Assist Pack AP-L4: dying Wave d0 + remUs below continuous reserve → do not
@@ -275,6 +292,32 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         if (EbLivePlanContracts::waveIwSkipLaterBandForStarve(d0DeadTruth, laterOk)) {
             context.plan.budgetHit = true;
             skipLaterBand = true;
+        }
+    }
+
+    // Orb scans already measured a reachable activation band. Verify that band
+    // before unrelated early flaps/flips consume the wall. Every candidate still
+    // needs the normal survival proof; Ball ground/fallback selection stays below.
+    if (context.orbAssist && context.orbHint.found && !dual &&
+        (context.real->m_isBird || context.real->m_isBall)) {
+        auto const order =
+            EbOrbProbeOrder::window(context.orbHint.first, context.orbHint.last, context.limit);
+        for (int delay : order) {
+            if (context.wallExceeded() || context.tickBudget <= 0) {
+                context.plan.budgetHit = true;
+                break;
+            }
+            auto candidateResult = context.real->m_isBird && !context.useTrajEngine
+                                       ? context.evalDelay(delay, -1, true)
+                                       : evaluateCandidate(delay);
+            if (!ingest(delay, candidateResult))
+                break;
+            auto const& candidate = context.cands[static_cast<size_t>(delay)];
+            if (!candidate.viable || !candidate.raw.activatedRing)
+                continue;
+            if (context.real->m_isBird)
+                skipLaterBand = true;
+            break;
         }
     }
 
@@ -682,6 +725,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                     context.plan.threatCleared = true;
                     context.plan.requireOrb = true;
                     context.plan.activatedRing = true;
+                    if (win.raw.orbContinuationTick >= 0) {
+                        // The nominal proof includes the next player orb press.
+                        // Integer jitter probes must not silently omit it.
+                        context.plan.guardOriginalDelay = pick.chosen;
+                        context.plan.guardProbeIncomplete = true;
+                        context.plan.viableDelays = {pick.chosen};
+                        actMin = actMax = pick.chosen;
+                    }
                     context.plan.requireHold = win.requireHold;
                     context.plan.releaseAfter = win.releaseAfter;
                     context.plan.dMin = actMin;
