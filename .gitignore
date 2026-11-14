@@ -141,3 +141,7 @@ tools/fixtures/spider_continuation.json
 !/releases/CHECKLIST.md
 /releases
 docs/dev/performance_ap_plan.md
+
+!/tools/test_frame_plan_budget.cpp
+
+!/tools/test_frame_plan_budget.hpp

@@ -4,8 +4,9 @@
 #include <algorithm>
 
 EbBakeVerifier::Result EbBakeVerifier::verify(PlayLayer* layer, PlayerObject* player, bool down,
-                                          int delayTicks, int limit, float deltaTime, float firstDt,
-                                          EbPressSimBudget* shared) {
+                                              int delayTicks, int limit, float deltaTime,
+                                              float firstDt, EbPressSimBudget* shared,
+                                              bool reserveForLive) {
     Result out;
     if (!layer || !player || limit < 0 || deltaTime <= 0.f)
         return out;
@@ -18,12 +19,14 @@ EbBakeVerifier::Result EbBakeVerifier::verify(PlayLayer* layer, PlayerObject* pl
 
     if (shared) {
         int const tickDraw =
-            std::min(std::max(0, shared->tickLeft - kHybridLiveReserveTicks), kVerifyTickCap);
+            std::min(std::max(0, shared->tickLeft - (reserveForLive ? kHybridLiveReserveTicks : 0)),
+                     kVerifyTickCap);
         opts.tickBudget = tickDraw;
         if (shared->usUnlimited) {
             opts.budgetUs = 0; // user opted out of wall cap
         } else {
-            int const usDraw = std::max(0, shared->usLeft - kHybridLiveReserveUs);
+            int const usDraw =
+                std::max(0, shared->usLeft - (reserveForLive ? kHybridLiveReserveUs : 0));
             // Never pass 0 into PlanOptions here — that means unlimited.
             opts.budgetUs = std::max(1, usDraw);
         }

@@ -9,7 +9,9 @@
 #include "../../sim/shadow_simulator.hpp"
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
+#include "../contracts/live_plan_contracts.hpp"
 #include "../contracts/subtick_timing.hpp"
+#include "../planning/live/live_frame_budget_scope.hpp"
 #include <algorithm>
 
 float EbAssistBufferRuntime::substepPrefix(EbAssistController& controller, PlayerObject* player,
@@ -36,7 +38,8 @@ void EbAssistBufferRuntime::fireSubstep(EbAssistController& controller, PlayerOb
     controller.fireBuffered(layer, player, false);
 }
 
-void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLayer* layer, bool down) {
+void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLayer* layer,
+                                   bool down) {
     if (!layer)
         return;
     controller.m_assistTouchedRun = true;
@@ -51,7 +54,8 @@ void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLay
     controller.m_injecting = false;
 }
 
-void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller, PlayLayer* playLayer) {
+void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller,
+                                                PlayLayer* playLayer) {
     if (!controller.m_pendingRelease || !playLayer)
         return;
 
@@ -112,11 +116,11 @@ void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller, 
         EbDevCycleRecorder::get().noteHoldInjectRelease(holdPressId, controller.m_attemptTick);
     }
     EbAssistLog::debug(fmt::format("hold-assist: injected release @{} (p{}) [extend done]",
-                                 controller.m_attemptTick, playerOne ? 1 : 2));
+                                   controller.m_attemptTick, playerOne ? 1 : 2));
 }
 
 void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLayer* playLayer,
-                                       PlayerObject* player, bool allowRecheck) {
+                                         PlayerObject* player, bool allowRecheck) {
     int const elapsed = controller.m_attemptTick - controller.m_buffer.pressTick;
     int const remaining = controller.m_buffer.limit - elapsed;
 
@@ -124,14 +128,18 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
     // Force paths (CPS / mode-change / HUS deadline) pass allowRecheck=false.
     if (allowRecheck && controller.m_buffer.fireTick > controller.m_attemptTick && remaining > 0) {
         EbAssistLog::debug(fmt::format("fireBuffered: not due yet attempt={} fire={} — wait",
-                                     controller.m_attemptTick, controller.m_buffer.fireTick));
+                                       controller.m_attemptTick, controller.m_buffer.fireTick));
         return;
     }
 
+    EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
+    int const frameLimitUs =
+        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
     // Skipped for CPS / mode-change force-fire.
     if (allowRecheck && !controller.m_buffer.fixedFireTick && player && remaining > 0 &&
-        controller.m_buffer.rechecks < 2 && controller.m_simDt > 0.f) {
+        controller.m_buffer.rechecks < 2 && controller.m_simDt > 0.f &&
+        frameScope.remaining(frameLimitUs) > 0) {
         int const absMin = controller.m_buffer.dMin >= 0
                                ? controller.m_buffer.pressTick + controller.m_buffer.dMin
                                : controller.m_buffer.pressTick;
@@ -147,7 +155,7 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
             controller.m_buffer.fireTick = absMin;
             ++controller.m_buffer.rechecks;
             EbDevCycleRecorder::get().noteRecheck(controller.m_buffer.devPressId, oldFire, absMin,
-                                                "orb-dmin");
+                                                  "orb-dmin");
             if (EbStageConfig::debugLogging() || EbStageConfig::perfTrace()) {
                 auto const detail =
                     fmt::format("recheck: oldFire={}→newFire={} (orb-dMin wait tick={})", oldFire,
@@ -173,10 +181,15 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
             opts.assistEngine = EbStageConfig::effectiveAssistEngine();
             opts.requireAliveForDelay = true;
             EbAssistControllerImplementation::fillPlanRobustLatency(opts, player,
-                                                                  controller.m_dtVarEma, true);
-            auto re =
-                EbShadowSimulator::get().plan(playLayer, player, controller.m_buffer.down, remaining,
-                                            controller.m_simDt, controller.m_simDt, opts);
+                                                                    controller.m_dtVarEma, true);
+            EbSimPlan re;
+            int const remainingFrameUs = frameScope.remaining(frameLimitUs);
+            if (remainingFrameUs > 0) {
+                opts.budgetUs = remainingFrameUs;
+                re = EbShadowSimulator::get().plan(playLayer, player, controller.m_buffer.down,
+                                                   remaining, controller.m_simDt,
+                                                   controller.m_simDt, opts);
+            }
 
             // Surviving Delay only — never slide into a lethal / hopeless replan.
             bool const planOk = re.action == PlanAction::Delay && re.delay > 0 && !re.budgetHit &&
@@ -205,7 +218,7 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
                     controller.m_buffer.expectedJumpTick = controller.m_attemptTick + jumpRel;
                     controller.m_buffer.planDelay = re.delay;
                     EbDevCycleRecorder::get().noteRecheck(controller.m_buffer.devPressId, oldFire,
-                                                        accepted, "slide");
+                                                          accepted, "slide");
                     if (EbStageConfig::debugLogging() || EbStageConfig::perfTrace()) {
                         auto const detail =
                             fmt::format("recheck: oldFire={}→newFire={} jump={} Δ={} (tick={})",
@@ -249,7 +262,7 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
         controller.m_dafWatch = true;
     }
     EbAssistLog::printSavedPress(delayed, controller.m_buffer.pressTick, controller.m_attemptTick,
-                               controller.m_buffer.limit, controller.estimatedTps());
+                                 controller.m_buffer.limit, controller.estimatedTps());
     if (delayed > 0 && (EbStageConfig::saveFeedbackSound() || EbStageConfig::saveFeedbackIcon() ||
                         EbStageConfig::saveFeedbackCounter())) {
         EbSaveFeedback::get().onSave(playLayer, player, delayed);

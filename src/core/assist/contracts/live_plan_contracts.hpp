@@ -15,8 +15,6 @@ public:
     // Adaptive shell / continuous fallthrough reserve floor (µs) — not a stack
     // past sim-budget-us once the shared press wall is spent (AP-L5).
     static constexpr int kFallthroughRemUsFloor = 2000;
-    // Live soft-wall floor for Adaptive and classic (assist_press_planner).
-    static constexpr int kLiveSoftWallFloorUs = 4000;
     // Assist Pack AP-L1: mid-run soft-wall poll interval inside one candidate sim.
     static constexpr int kMidRunWallPollTicks = 4;
     // Assist Pack AP-L2: skip prepare baseline/orb when remUs below this floor.
@@ -60,7 +58,7 @@ public:
     // the shared press wall). Shell reserve is adaptiveFallthroughReserveUs.
     static int intendedFallthroughClassicBudgetUs(int remUs, int ticksLeft);
 
-    // Assist Pack AP-L5: raise low Live soft walls to kLiveSoftWallFloorUs.
+    // AP-P05: preserve explicit low Live budgets.
     // budgetUs<=0 (unlimited / hitch-clamp input) unchanged.
     static int intendedLiveSoftWallFloorUs(int budgetUs);
 
@@ -210,7 +208,8 @@ public:
     // endX−λ / fair depth — not first-safe early exit.
     static bool continuousIwRanksByEndX();
     // Cheap coast baseline under continuous IW (idleSafer) is allowed.
-    static bool waveIwBaselineCoastAllowed(bool inputWindow, bool continuousControl, bool pressDown);
+    static bool waveIwBaselineCoastAllowed(bool inputWindow, bool continuousControl,
+                                           bool pressDown);
 
     // --- Orbs under input-window -------------------------------------------
 
@@ -227,8 +226,7 @@ public:
     // death at knownDeathTick. screenQuantum = Adaptive screen floor. modelCap>0
     // clamps the requirement (cannot demand past the look-ahead wall).
     // knownDeathTick<=0 → quantum alone.
-    static int adaptiveHonestAliveMinTicks(int screenQuantum, int knownDeathTick,
-                                           int modelCap = 0);
+    static int adaptiveHonestAliveMinTicks(int screenQuantum, int knownDeathTick, int modelCap = 0);
     // Seeded / screen Alive counts only when ticksRan covers the honest floor.
     static bool adaptiveSeedCountsAlive(int ticksRan, int screenQuantum, int knownDeathTick,
                                         int modelCap = 0);
@@ -290,12 +288,11 @@ public:
     // ball landed laters count. Incomplete ball band without budgetHit must not
     // seal PassHopeless (prefix/peak cut mid-band → PassBudget).
     static bool discreteIwLaterRunAliveForHopeless(bool died, bool unknown, int ticksRan);
-    static bool ballIwIncompleteBandBlocksHopeless(bool isBall, bool budgetHit,
-                                                   int candidatesTried, int limit);
+    static bool ballIwIncompleteBandBlocksHopeless(bool isBall, bool budgetHit, int candidatesTried,
+                                                   int limit);
     static bool discreteIwHopelessMustFallthrough(bool d0Died, bool anyLaterRunAlive,
                                                   bool anyDepthTruncatedAlive, bool isBall,
-                                                  bool budgetHit, int candidatesTried,
-                                                  int limit);
+                                                  bool budgetHit, int candidatesTried, int limit);
 
     // Assist Pack AP3 (tightened): later Alive blocks terminal PassD0Safe only with a
     // clear surviveTicks lead or endX lead — NOT merely because it is under-horizon

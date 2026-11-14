@@ -333,7 +333,7 @@ public:
     };
     ReplayResult replay(PlayLayer* layer, int snapshotSlot, int startTick,
                         std::vector<EbInputEvent> const& timeline, float deltaTime, int maxTicks,
-                        bool shiftActionBy = false, int actionShift = 0);
+                        bool shiftActionBy = false, int actionShift = 0, int budgetUs = 0);
 
     // Optional per-frame bake/diag trace (filled when traceFrames=true).
     class BakeFrameTrace {

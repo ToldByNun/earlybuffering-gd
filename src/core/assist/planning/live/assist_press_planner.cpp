@@ -29,6 +29,7 @@
 #include "../../input/click_intent_guard.hpp"
 #include "../orb_align.hpp"
 #include "../perfect_assist_policy.hpp"
+#include "live_frame_budget_scope.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -50,6 +51,17 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         bool const trusted = EbSimTrust::get().okAt(xOpp);
         EbAssistRealMetrics::get().noteOpportunity(trusted);
     }
+
+    EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
+    int const frameLimitUs =
+        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+    auto passFrameBudget = [&]() {
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
+        controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
+        return true;
+    };
+    if (frameScope.remaining(frameLimitUs) <= 0)
+        return passFrameBudget();
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
     // Commit 11: reasons via PerfectAssistPolicy / SimTrust (same tokens).
@@ -79,20 +91,16 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Hybrid: one press wall/tick envelope for bake verify + Live fallthrough.
     EbPressSimBudget pressBudget;
     pressBudget.tickLeft = EbStageConfig::tickBudgetPerPress();
-    {
-        int const fullUs = EbStageConfig::simBudgetUs();
-        pressBudget.usUnlimited = (fullUs <= 0);
-        pressBudget.usLeft = pressBudget.usUnlimited ? 0 : fullUs;
-    }
+    pressBudget.usUnlimited = false;
+    pressBudget.usLeft = frameScope.remaining(frameLimitUs);
     bool const shareHybrid = EbStageConfig::assistMode() == AssistMode::Hybrid;
 
     bool bakeHandled = false;
     bool hybridVerifyAttempted = false;
     EbHybridPressReuse hybridReuse{};
     bool const bakeRet = controller.tryBakeAssist(
-        playLayer, player, player1, true, effectTick, firstDt, bakeHandled,
-        shareHybrid ? &pressBudget : nullptr, shareHybrid ? &hybridVerifyAttempted : nullptr,
-        shareHybrid ? &hybridReuse : nullptr);
+        playLayer, player, player1, true, effectTick, firstDt, bakeHandled, &pressBudget,
+        shareHybrid ? &hybridVerifyAttempted : nullptr, shareHybrid ? &hybridReuse : nullptr);
     if (bakeHandled)
         return bakeRet;
 
@@ -266,8 +274,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicksFor(kind);
     opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantumFor(kind);
     opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
-    // Assist Pack AP-L5: classic and Adaptive share the same Live soft-wall
-    // floor (never override unlimited 0, never lower a higher user setting).
+    // Preserve explicitly configured small budgets for classic and Adaptive.
     opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
     // 1.5.1 AP1: sim-budget-us=0 → hitch ceiling for classic AND Adaptive Live
     // (EbLivePlanContracts). Stops Adaptive unlimited freezes on small levels.
@@ -298,6 +305,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
+    int const remainingFrameUs = frameScope.remaining(frameLimitUs);
+    if (remainingFrameUs <= 0)
+        return passFrameBudget();
+    opts.budgetUs = std::min(opts.budgetUs, remainingFrameUs);
     auto& phaseMeter = EbSimTickCostMeter::get();
     auto const worldBefore = phaseMeter.worldTotalUs();
     auto const updateBefore = phaseMeter.updateTotalUs();
@@ -318,6 +329,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     plan.planUs = planUs;
+    plan.renderFrame = static_cast<long long>(frameScope.frame());
+    plan.frameBudgetUs = frameLimitUs;
+    plan.frameSpentBeforeUs = frameScope.spentBeforeUs();
+    plan.plannerBudgetUs = opts.budgetUs;
     plan.physicsCalls = static_cast<int>(phaseMeter.physicsTotalCount() - callsBefore);
     plan.physicsWorldUs = static_cast<int>(phaseMeter.worldTotalUs() - worldBefore);
     plan.physicsUpdateUs = static_cast<int>(phaseMeter.updateTotalUs() - updateBefore);
@@ -428,22 +443,29 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // when plannedDelay is kept as-is, ShadowSimulator::plan already verified it.
     bool armVerifyOk = true;
     if (delay > 0 && delay != plannedDelay && controller.m_simDt > 0.f) {
-        float const firstStepDelta =
-            (firstDt > 0.f && firstDt <= controller.m_simDt) ? firstDt : controller.m_simDt;
-        EbPlanOptions vopts = opts;
-        vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 4);
-        vopts.budgetUs = EbStageConfig::husReplanBudgetUs();
-        vopts.maxBranches = 0;
-        vopts.smartDepth = 1;
-        auto const vr = EbShadowSimulator::get().verifyDelay(
-            playLayer, player, true, delay, limit, controller.m_simDt, firstStepDelta, vopts);
-        if (!vr.ok) {
-            EbAssistLog::debug(
-                fmt::format("ASSIST learning shift {}→{} verify-fail → keep plannedDelay={}",
-                            plannedDelay, delay, plannedDelay));
+        int const learningBudgetUs = frameScope.remaining(frameLimitUs);
+        if (learningBudgetUs <= 0) {
             delay = plannedDelay;
+        } else {
+            float const firstStepDelta =
+                (firstDt > 0.f && firstDt <= controller.m_simDt) ? firstDt : controller.m_simDt;
+            EbPlanOptions vopts = opts;
+            vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 4);
+            vopts.budgetUs = std::min(
+                EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::husReplanBudgetUs()),
+                learningBudgetUs);
+            vopts.maxBranches = 0;
+            vopts.smartDepth = 1;
+            auto const vr = EbShadowSimulator::get().verifyDelay(
+                playLayer, player, true, delay, limit, controller.m_simDt, firstStepDelta, vopts);
+            if (!vr.ok) {
+                EbAssistLog::debug(
+                    fmt::format("ASSIST learning shift {}→{} verify-fail → keep plannedDelay={}",
+                                plannedDelay, delay, plannedDelay));
+                delay = plannedDelay;
+            }
+            armVerifyOk = vr.ok;
         }
-        armVerifyOk = vr.ok;
     }
 
     // Commit 13: wrong-orb reject — activation outside intended window.

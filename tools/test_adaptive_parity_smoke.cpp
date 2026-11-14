@@ -79,9 +79,8 @@ int AdaptiveParitySmokeTests::run() {
     expect(intendedFallthroughClassicBudgetUs(0, 100) == 0, "ap-l5-fallthrough-no-stack");
     expect(intendedFallthroughClassicBudgetUs(900, 50) == 900, "fallthrough-remus-keep");
     expect(intendedFallthroughClassicBudgetUs(0, 0) == 0, "fallthrough-remus-done");
-    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
-               EbLivePlanContracts::kLiveSoftWallFloorUs,
-           "ap-l5-classic-soft-wall-floor");
+    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) == 2500,
+           "ap-p05-small-budget-preserved");
     expect(EbLivePlanContracts::kFallthroughRemUsFloor >= 2000, "fallthrough-remus-threshold");
 
     // AP3b — Wave IW help-only still Passes when d0 clears (not unlimited Delay).
@@ -121,8 +120,10 @@ int AdaptiveParitySmokeTests::run() {
     expect(depthTruncatedAlive(false, false, 43, 54), "ap1-a4-later-43-trunc");
     expect(depthTruncatedAlive(false, false, 18, 54), "ap1-a4-later-18-trunc");
     expect(!depthTruncatedAlive(true, false, 55, 54), "ap1-a4-d0-dead");
-    expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 18), "ap1-a4-no-bin-steal");
-    expect(fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 18), "ap1-a4-score-gain");
+    expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, 24), "ap1-a4-no-bin-steal");
+    expect(fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 24), "ap1-a4-score-gain");
+    expect(!fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, 18),
+           "equal-depth-floor-preserves-bin-order");
     // Assist Pack AP4 — living later vs uniform lethal.
     auto const hopelessBlockedByLivingLater = [](bool d0Died, bool anyLaterAlive) {
         return d0Died && anyLaterAlive;

@@ -13,13 +13,15 @@
 #include "../../assist_clock.hpp"
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
+#include "../../contracts/live_plan_contracts.hpp"
+#include "live_frame_budget_scope.hpp"
 #include <algorithm>
 #include <cmath>
 
 bool EbAssistBakeReuse::tryBakeAssist(EbAssistController& controller, PlayLayer* playLayer,
-                                    PlayerObject* player, bool player1, bool down, int effectTick,
-                                    float firstDt, bool& handled, EbPressSimBudget* sharedBudget,
-                                    bool* verifyAttempted, EbHybridPressReuse* reuse) {
+                                      PlayerObject* player, bool player1, bool down, int effectTick,
+                                      float firstDt, bool& handled, EbPressSimBudget* sharedBudget,
+                                      bool* verifyAttempted, EbHybridPressReuse* reuse) {
     handled = false;
     if (verifyAttempted)
         *verifyAttempted = false;
@@ -115,7 +117,8 @@ bool EbAssistBakeReuse::tryBakeAssist(EbAssistController& controller, PlayLayer*
         if (bakeOnly) {
             handled = true;
             controller.m_lastBakeHint = spatialNear ? "MISS no-window" : "no window";
-            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBakeNoWindow, "bake-no-window");
+            EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBakeNoWindow,
+                                                   "bake-no-window");
             controller.noteVerdict(AssistReason::PassBakeNoWindow, "bake-no-window");
             return true;
         }
@@ -183,8 +186,8 @@ bool EbAssistBakeReuse::tryBakeAssist(EbAssistController& controller, PlayLayer*
                 logMissBakeWin("limit-before-earliest", win, earliestTick, latestTick, delay,
                                approxFrame);
                 EbAssistLog::info(fmt::format("MISS-BAKE-WIN limit-before-earliest need={} lim={} "
-                                            "effectT={} eT={} — refuse early fire",
-                                            delay, limit, effectTick, earliestTick));
+                                              "effectT={} eT={} — refuse early fire",
+                                              delay, limit, effectTick, earliestTick));
                 return fallThroughOrPass("limit before earliest", AssistReason::PassBakeNoWindow);
             }
         } else if (effectTick < nominalTick) {
@@ -229,9 +232,21 @@ bool EbAssistBakeReuse::tryBakeAssist(EbAssistController& controller, PlayLayer*
             return;
         }
         EbLagProbe::Scope const hyVerify(hybrid ? "eb.hybrid.verify" : nullptr,
-                                       fmt::format("d={} lim={} cache=0", delay, limit));
+                                         fmt::format("d={} lim={} cache=0", delay, limit));
+        if (sharedBudget) {
+            int const limitUs =
+                EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+            int const remainingUs = controller.m_framePlanBudget.remaining(
+                limitUs, EbLiveFrameBudgetScope::nowUs(), EbLiveFrameBudgetScope::kExitReserveUs);
+            sharedBudget->usLeft = std::min(sharedBudget->usLeft, remainingUs);
+            if (sharedBudget->usLeft <= 0) {
+                outVr = {};
+                outVr.budgetHit = true;
+                return;
+            }
+        }
         outVr = EbBakeVerifier::verify(playLayer, player, down, delay, limit, controller.m_simDt,
-                                     firstStepDelta, hybrid ? sharedBudget : nullptr);
+                                       firstStepDelta, sharedBudget, hybrid);
         if (hybrid) {
             EbHybridVerifyCache::get().put(cacheKey, playerX, outVr);
         }
@@ -255,9 +270,9 @@ bool EbAssistBakeReuse::tryBakeAssist(EbAssistController& controller, PlayLayer*
             runVerify(0, vr0);
             if (vr0.ok) {
                 EbAssistLog::info(fmt::format("MISS-BAKE-WIN verify-fail→salvage-d0 {} delayWas={} "
-                                            "pX={:.1f} clickX={:.1f} eF={} lF={}",
-                                            down ? "press" : "release", delay, playerX, win->x,
-                                            win->earliest, win->latest));
+                                              "pX={:.1f} clickX={:.1f} eF={} lF={}",
+                                              down ? "press" : "release", delay, playerX, win->x,
+                                              win->earliest, win->latest));
                 delay = 0;
                 vr = vr0;
                 if (reuse)
@@ -279,12 +294,12 @@ bool EbAssistBakeReuse::tryBakeAssist(EbAssistController& controller, PlayLayer*
                 // invent an earlier fire via PassHopeless→HUS (session early assist).
                 handled = true;
                 controller.m_lastBakeHint = fmt::format("MISS {} → pass (before-nom)", why);
-                EbAssistLog::info(fmt::format("MISS-BAKE-WIN {} before-nominal → Pass (no Live/HUS) "
-                                            "effectT={} nT={} eF={} lF={}",
-                                            why, effectTick, nominalTick, win->earliest,
-                                            win->latest));
+                EbAssistLog::info(
+                    fmt::format("MISS-BAKE-WIN {} before-nominal → Pass (no Live/HUS) "
+                                "effectT={} nT={} eF={} lF={}",
+                                why, effectTick, nominalTick, win->earliest, win->latest));
                 EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBakeVerifyFail,
-                                                     "verify-before-nominal");
+                                                       "verify-before-nominal");
                 controller.noteVerdict(AssistReason::PassBakeVerifyFail, "verify-before-nominal");
                 controller.updateOverlay();
                 return true;

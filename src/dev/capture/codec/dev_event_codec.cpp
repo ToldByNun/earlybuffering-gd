@@ -119,6 +119,11 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     }
     if (e.hasPlanCost) {
         otherIndex["planUs"] = e.planUs;
+        otherIndex["renderFrame"] = e.renderFrame;
+        otherIndex["frameBudgetUs"] = e.frameBudgetUs;
+        otherIndex["frameSpentBeforeUs"] = e.frameSpentBeforeUs;
+        otherIndex["plannerBudgetUs"] = e.plannerBudgetUs;
+
         otherIndex["physicsCalls"] = e.physicsCalls;
         otherIndex["physicsWorldUs"] = e.physicsWorldUs;
         otherIndex["physicsUpdateUs"] = e.physicsUpdateUs;
@@ -431,6 +436,16 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.physicsCollisionUs = j.contains("physicsCollisionUs")
                                    ? static_cast<int>(j["physicsCollisionUs"].asInt().unwrapOr(0))
                                    : 0;
+        e.renderFrame = j.contains("renderFrame") ? j["renderFrame"].asInt().unwrapOr(0) : 0;
+        e.frameBudgetUs = j.contains("frameBudgetUs")
+                              ? static_cast<int>(j["frameBudgetUs"].asInt().unwrapOr(0))
+                              : 0;
+        e.frameSpentBeforeUs = j.contains("frameSpentBeforeUs")
+                                   ? static_cast<int>(j["frameSpentBeforeUs"].asInt().unwrapOr(0))
+                                   : 0;
+        e.plannerBudgetUs = j.contains("plannerBudgetUs")
+                                ? static_cast<int>(j["plannerBudgetUs"].asInt().unwrapOr(0))
+                                : 0;
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
         e.worldCaptureUs = j.contains("worldCaptureUs")
                                ? static_cast<int>(j["worldCaptureUs"].asInt().unwrapOr(0))

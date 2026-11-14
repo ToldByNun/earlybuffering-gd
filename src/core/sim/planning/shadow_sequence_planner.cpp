@@ -9,13 +9,23 @@
 #include "shadow_survival_rules.hpp"
 #include "simulation_plan.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <vector>
 
 EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, PlayLayer* layer,
-                                            PlayerObject* real, bool down, int limit,
-                                            float deltaTime, float firstDt,
-                                            EbPlanOptions const& options) {
+                                                PlayerObject* real, bool down, int limit,
+                                                float deltaTime, float firstDt,
+                                                EbPlanOptions const& options) {
+    auto const sequenceStart = std::chrono::steady_clock::now();
+    auto remainingUs = [&]() {
+        if (options.budgetUs <= 0)
+            return 0;
+        auto const elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                                 std::chrono::steady_clock::now() - sequenceStart)
+                                 .count();
+        return static_cast<int>(std::max(0LL, static_cast<long long>(options.budgetUs) - elapsed));
+    };
     auto single = simulator.plan(layer, real, down, limit, deltaTime, firstDt, options);
     int const depth = std::clamp(options.smartDepth, 1, 3);
 
@@ -47,14 +57,18 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
     int horizon = options.smartHorizon;
     if (horizon <= 0) {
         bool const trustOk = EbSimTrust::get().okAt(real->getPositionX());
-        horizon = EbAssistHorizon::resolve(EbStageConfig::kindOf(real), trustOk, limit, options.capMul,
-                                         0, EbStageConfig::lookAheadCap())
+        horizon = EbAssistHorizon::resolve(EbStageConfig::kindOf(real), trustOk, limit,
+                                           options.capMul, 0, EbStageConfig::lookAheadCap())
                       .scoreHorizon;
         horizon = std::max(horizon, model.cap);
     }
     horizon = std::clamp(horizon, 32, 320);
     int comboBudget = std::clamp(options.smartCombos, 8, 256);
 
+    if (options.budgetUs > 0 && remainingUs() <= 0) {
+        single.budgetHit = true;
+        return single;
+    }
     int slot = simulator.captureSnapshot(real);
     if (slot < 0)
         return single;
@@ -84,8 +98,8 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
     bool const player2 = layer && layer->m_player2 && real == layer->m_player2;
     int const chainDepth = std::max(0, depth - 1);
     auto followUps = (EbBakeMap::get().loaded() && chainDepth > 0)
-                         ? EbBakeMap::get().nextClicksAfter(real->getPositionX(), true, player2, kind,
-                                                          std::min(chainDepth, 2))
+                         ? EbBakeMap::get().nextClicksAfter(real->getPositionX(), true, player2,
+                                                            kind, std::min(chainDepth, 2))
                          : std::vector<EbBakedClick const*>{};
 
     float const speed =
@@ -109,6 +123,10 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
     for (int d0 : allowed) {
         if (combos >= comboBudget)
             break;
+        if (options.budgetUs > 0 && remainingUs() <= 0) {
+            single.budgetHit = true;
+            break;
+        }
 
         if (useBakeChain) {
             std::vector<EbInputEvent> tl;
@@ -125,7 +143,8 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
                     continue;
                 pushTap(tl, tFollow, tap);
             }
-            auto rr = simulator.replay(layer, slot, 0, tl, deltaTime, horizon, false, 0);
+            auto rr = simulator.replay(layer, slot, 0, tl, deltaTime, horizon, false, 0,
+                                       options.budgetUs > 0 ? std::max(1, remainingUs()) : 0);
             ++combos;
             bool const survived = EbShadowSurvivalRules::exitSurvivedHonest(rr.died, rr.unknown);
             int sc = survived ? 100000 : rr.deathTick * 50;
@@ -150,7 +169,8 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
             // Single-press exit probe: which first delay actually clears ahead?
             std::vector<EbInputEvent> tl;
             pushTap(tl, d0, tap);
-            auto rr = simulator.replay(layer, slot, 0, tl, deltaTime, horizon, false, 0);
+            auto rr = simulator.replay(layer, slot, 0, tl, deltaTime, horizon, false, 0,
+                                       options.budgetUs > 0 ? std::max(1, remainingUs()) : 0);
             ++combos;
             bool const survived = EbShadowSurvivalRules::exitSurvivedHonest(rr.died, rr.unknown);
             int sc = survived ? 100000 : rr.deathTick * 50;
@@ -164,10 +184,15 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
         }
         if (depth >= 2) {
             for (int d1 = d0 + minGap; d1 < horizon && combos < comboBudget; d1 += step) {
+                if (options.budgetUs > 0 && remainingUs() <= 0) {
+                    single.budgetHit = true;
+                    break;
+                }
                 std::vector<EbInputEvent> tl2;
                 pushTap(tl2, d0, tap);
                 pushTap(tl2, d1, tap);
-                auto rr2 = simulator.replay(layer, slot, 0, tl2, deltaTime, horizon, false, 0);
+                auto rr2 = simulator.replay(layer, slot, 0, tl2, deltaTime, horizon, false, 0,
+                                            options.budgetUs > 0 ? std::max(1, remainingUs()) : 0);
                 ++combos;
                 bool const survived2 =
                     EbShadowSurvivalRules::exitSurvivedHonest(rr2.died, rr2.unknown);
@@ -183,12 +208,14 @@ EbSimPlan EbShadowSequencePlanner::planSequence(EbShadowSimulator& simulator, Pl
         }
     }
 
+    if (options.budgetUs > 0 && remainingUs() <= 0)
+        single.budgetHit = true;
     single.smartDepthUsed = depth;
     single.smartCombosUsed = combos;
     // Only accept a predicted exit that actually survived the horizon.
     if (!best.found || !best.survived) {
         EbAssistLog::debug(fmt::format("planSequence id={} no surviving exit — keep plan delay={}",
-                                     single.planId, single.delay));
+                                       single.planId, single.delay));
         return single;
     }
     if (std::find(allowed.begin(), allowed.end(), best.d0) == allowed.end())

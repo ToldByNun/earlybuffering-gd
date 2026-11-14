@@ -58,7 +58,7 @@ public:
     // and deduct spent. nullptr (Replay/Brute): independent caps as before.
     static Result verify(PlayLayer* layer, PlayerObject* player, bool down, int delayTicks,
                          int limit, float deltaTime, float firstDt,
-                         EbPressSimBudget* shared = nullptr);
+                         EbPressSimBudget* shared = nullptr, bool reserveForLive = true);
 
 private:
 };

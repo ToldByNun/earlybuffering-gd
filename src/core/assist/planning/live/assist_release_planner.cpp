@@ -27,6 +27,7 @@
 #include "../../contracts/selected_tick_guard.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
+#include "live_frame_budget_scope.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -56,6 +57,17 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         return true;
     }
 
+    EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
+    int const frameLimitUs =
+        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+    auto passFrameBudget = [&]() {
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
+        controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
+        return true;
+    };
+    if (frameScope.remaining(frameLimitUs) <= 0)
+        return passFrameBudget();
+
     // GhostParity / SpotTrust: hard Pass before bake (same honesty as press).
     {
         float const xGate = player->getPositionX();
@@ -76,20 +88,16 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
 
     EbPressSimBudget pressBudget;
     pressBudget.tickLeft = EbStageConfig::tickBudgetPerPress();
-    {
-        int const fullUs = EbStageConfig::simBudgetUs();
-        pressBudget.usUnlimited = (fullUs <= 0);
-        pressBudget.usLeft = pressBudget.usUnlimited ? 0 : fullUs;
-    }
+    pressBudget.usUnlimited = false;
+    pressBudget.usLeft = frameScope.remaining(frameLimitUs);
     bool const shareHybrid = EbStageConfig::assistMode() == AssistMode::Hybrid;
 
     bool bakeHandled = false;
     bool hybridVerifyAttempted = false;
     EbHybridPressReuse hybridReuse{};
     bool const bakeRet = controller.tryBakeAssist(
-        playLayer, player, player1, false, effectTick, firstDt, bakeHandled,
-        shareHybrid ? &pressBudget : nullptr, shareHybrid ? &hybridVerifyAttempted : nullptr,
-        shareHybrid ? &hybridReuse : nullptr);
+        playLayer, player, player1, false, effectTick, firstDt, bakeHandled, &pressBudget,
+        shareHybrid ? &hybridVerifyAttempted : nullptr, shareHybrid ? &hybridReuse : nullptr);
     if (bakeHandled)
         return bakeRet;
 
@@ -220,7 +228,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         opts.capMul *= 0.85f;
     }
     opts.maxBranches = 4;
-    // Assist Pack AP-L5: same Live soft-wall floor as press planner.
+    // Preserve the same explicit budget policy as press planning.
     opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
     opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
     opts.attemptStartTick = effectTick;
@@ -247,6 +255,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         opts.seedThreatZone = hybridReuse.verifyThreat;
     }
 
+    int const remainingFrameUs = frameScope.remaining(frameLimitUs);
+    if (remainingFrameUs <= 0)
+        return passFrameBudget();
+    opts.budgetUs = std::min(opts.budgetUs, remainingFrameUs);
     auto& phaseMeter = EbSimTickCostMeter::get();
     auto const worldBefore = phaseMeter.worldTotalUs();
     auto const updateBefore = phaseMeter.updateTotalUs();
@@ -258,6 +270,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    plan.renderFrame = static_cast<long long>(frameScope.frame());
+    plan.frameBudgetUs = frameLimitUs;
+    plan.frameSpentBeforeUs = frameScope.spentBeforeUs();
+    plan.plannerBudgetUs = opts.budgetUs;
     plan.physicsCalls = static_cast<int>(phaseMeter.physicsTotalCount() - callsBefore);
     plan.physicsWorldUs = static_cast<int>(phaseMeter.worldTotalUs() - worldBefore);
     plan.physicsUpdateUs = static_cast<int>(phaseMeter.updateTotalUs() - updateBefore);

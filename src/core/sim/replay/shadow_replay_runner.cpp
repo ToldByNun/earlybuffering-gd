@@ -5,13 +5,15 @@
 #include "../shadow_simulator.hpp"
 #include "../sim_session_guard.hpp"
 #include <algorithm>
+#include <chrono>
 #include <vector>
 
-EbShadowSimulator::ReplayResult EbShadowReplayRunner::replay(EbShadowSimulator& simulator,
-                                                         PlayLayer* layer, int slot, int startTick,
-                                                         std::vector<EbInputEvent> const& timeline,
-                                                         float deltaTime, int maxTicks,
-                                                         bool shiftActionBy, int actionShift) {
+EbShadowSimulator::ReplayResult
+EbShadowReplayRunner::replay(EbShadowSimulator& simulator, PlayLayer* layer, int slot,
+                             int startTick, std::vector<EbInputEvent> const& timeline,
+                             float deltaTime, int maxTicks, bool shiftActionBy, int actionShift,
+                             int budgetUs) {
+    auto const wallStart = std::chrono::steady_clock::now();
     EbShadowSimulator::ReplayResult out;
     auto* snap = simulator.snapshotSlot(slot);
     if (!layer || !snap || !simulator.m_shadow || deltaTime <= 0.f || maxTicks <= 0)
@@ -49,6 +51,12 @@ EbShadowSimulator::ReplayResult EbShadowReplayRunner::replay(EbShadowSimulator& 
         EbSimSessionGuard session(*(&simulator), layer);
 
         for (int tick = 0; tick < maxTicks; ++tick) {
+            if (budgetUs > 0 && std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::steady_clock::now() - wallStart)
+                                        .count() >= budgetUs) {
+                out.unknown = true;
+                break;
+            }
             int const absTick = startTick + tick;
             simulator.m_simAbsTick = absTick;
 
@@ -80,10 +88,12 @@ EbShadowSimulator::ReplayResult EbShadowReplayRunner::replay(EbShadowSimulator& 
     return out;
 }
 
-EbShadowSimulator::BakeRunResult EbShadowReplayRunner::runBakeTimeline(
-    EbShadowSimulator& simulator, PlayLayer* layer, int slot, std::vector<EbReplayEvent> const& events,
-    float deltaTime, int untilFrame, int sampleFrame, bool applyP2ToShadow, bool traceFrames,
-    bool parkReals, int substeps, std::function<bool(int frame)> onFrame) {
+EbShadowSimulator::BakeRunResult
+EbShadowReplayRunner::runBakeTimeline(EbShadowSimulator& simulator, PlayLayer* layer, int slot,
+                                      std::vector<EbReplayEvent> const& events, float deltaTime,
+                                      int untilFrame, int sampleFrame, bool applyP2ToShadow,
+                                      bool traceFrames, bool parkReals, int substeps,
+                                      std::function<bool(int frame)> onFrame) {
     EbShadowSimulator::BakeRunResult out;
     auto* snap = simulator.snapshotSlot(slot);
     if (!layer || !snap || !simulator.m_shadow || deltaTime <= 0.f || untilFrame < 0)
@@ -270,10 +280,10 @@ EbShadowSimulator::BakeRunResult EbShadowReplayRunner::runBakeTimeline(
     return out;
 }
 
-EbShadowSimulator::PathSample EbShadowReplayRunner::samplePath(EbShadowSimulator& simulator,
-                                                           PlayLayer* layer, int slot,
-                                                           std::vector<EbReplayEvent> const& events,
-                                                           float deltaTime, int untilFrame) {
+EbShadowSimulator::PathSample
+EbShadowReplayRunner::samplePath(EbShadowSimulator& simulator, PlayLayer* layer, int slot,
+                                 std::vector<EbReplayEvent> const& events, float deltaTime,
+                                 int untilFrame) {
     EbShadowSimulator::PathSample out;
     auto* snap = simulator.snapshotSlot(slot);
     if (!layer || !snap || !simulator.m_shadow || deltaTime <= 0.f || untilFrame < 0)

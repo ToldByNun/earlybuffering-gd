@@ -768,9 +768,8 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
            "ap-l5-fallthrough-no-stack");
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(1500, 50) == 1500,
            "fallthrough-remus-keep");
-    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
-               EbLivePlanContracts::kLiveSoftWallFloorUs,
-           "ap-l5-classic-soft-wall-floor");
+    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) == 2500,
+           "ap-p05-small-budget-preserved");
     expect(EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true) == 4085 &&
                EbLivePlanContracts::adaptiveShellBudgetUs(
                    8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085,

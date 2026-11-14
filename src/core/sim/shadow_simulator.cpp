@@ -393,9 +393,10 @@ EbSimPlan EbShadowSimulator::planSequence(PlayLayer* layer, PlayerObject* real, 
 EbShadowSimulator::ReplayResult EbShadowSimulator::replay(PlayLayer* layer, int slot, int startTick,
                                                           std::vector<EbInputEvent> const& timeline,
                                                           float deltaTime, int maxTicks,
-                                                          bool shiftActionBy, int actionShift) {
+                                                          bool shiftActionBy, int actionShift,
+                                                          int budgetUs) {
     return EbShadowReplayRunner::replay(*this, layer, slot, startTick, timeline, deltaTime,
-                                        maxTicks, shiftActionBy, actionShift);
+                                        maxTicks, shiftActionBy, actionShift, budgetUs);
 }
 
 EbShadowSimulator::BakeRunResult EbShadowSimulator::runBakeTimeline(
