@@ -99,3 +99,6 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/fixtures/wave_release_recovery.json
 !/tools/test_ball_landing.cpp
 !/tools/test_ball_landing.hpp
+!/tools/test_cube_rescue.cpp
+!/tools/test_cube_rescue.hpp
+!/tools/fixtures/cube_rescue_ap07.json

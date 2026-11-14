@@ -1,9 +1,16 @@
 #include "test_ball_landing.hpp"
+#include "../src/core/assist/contracts/live_plan_contracts.hpp"
 #include "../src/core/sim/planning/ball_landing_tracker.hpp"
 #include <iostream>
 
 int BallLandingRegression::run() {
     int failures = 0;
+    failures += !EbLivePlanContracts::ballOrbFallbackAllowed(true, true, false, true);
+    failures += EbLivePlanContracts::ballOrbFallbackAllowed(true, true, true, true);
+    failures += EbLivePlanContracts::ballOrbFallbackAllowed(true, true, false, false);
+    failures += EbLivePlanContracts::ballOrbFallbackAllowed(true, false, false, true);
+    failures += EbLivePlanContracts::ballOrbFallbackAllowed(false, true, false, true);
+
     for (bool initialGravity : {false, true}) {
         EbBallLandingTracker landing;
         landing.reset(initialGravity);

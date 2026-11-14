@@ -129,6 +129,23 @@ public:
     // --- Wave IW help-only / anti-phase (AP3b) ------------------------------
 
     // d0 observation-safe / Alive → Pass (never Delay just to pad endX).
+    static constexpr bool ballOrbFallbackAllowed(bool isBall, bool orbAssist, bool hasStableLanding,
+                                                 bool groundSearchComplete) {
+        return isBall && orbAssist && !hasStableLanding && groundSearchComplete;
+    }
+
+    // AP07: reach middle/late Cube windows before ascending dead prefixes
+    // consume the wall. The caller still verifies every proposed delay.
+    static constexpr int cubeRescueProbe(int limit, int index) {
+        if (limit <= 1 || index < 0 || index > 2)
+            return -1;
+        if (index == 0)
+            return limit / 2;
+        if (index == 1)
+            return limit - limit / 4;
+        return limit;
+    }
+
     static constexpr bool waveRecoveryProbeAllowed(int baselineDeathTick, int delay,
                                                    int nextPressTick) {
         return baselineDeathTick >= 0 && delay > 0 && nextPressTick > baselineDeathTick &&
