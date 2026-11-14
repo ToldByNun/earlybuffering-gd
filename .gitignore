@@ -87,3 +87,12 @@ node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 /tools
+docs/dev/assist_verbesserungsplan.md
+
+!/tools/
+/tools/*
+!/tools/test_recorded_misses_ap01.py
+!/tools/fixtures/
+/tools/fixtures/*
+!/tools/fixtures/recorded_misses_ap01.json
+!/tools/report_planner_cost_ap02.py

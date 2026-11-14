@@ -1,5 +1,5 @@
-#include "../../app/class_manager.hpp"
 #include "dev_cycle_recorder.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../core/platform/platform_limits.hpp"
 #include "../../debug/lag_probe.hpp"
@@ -47,7 +47,7 @@ EbDevCycleRecorder::TrackedCycle* EbDevCycleRecorder::ensureActiveTracked() {
 }
 
 int64_t EbDevCycleRecorder::beginPress(int playerIndex, bool down, int effectTick, int pressTick,
-                                     DevEventSource source) {
+                                       DevEventSource source) {
     this->clearActive();
     if (!this->isRecording())
         return 0;
@@ -85,8 +85,8 @@ int64_t EbDevCycleRecorder::beginPress(int playerIndex, bool down, int effectTic
 }
 
 EbDevDecisionEvent* EbDevCycleRecorder::appendTo(TrackedCycle& cycle, DevEventKind kind,
-                                             int64_t parentEventId, int64_t planId,
-                                             AssistReason reason, char const* where) {
+                                                 int64_t parentEventId, int64_t planId,
+                                                 AssistReason reason, char const* where) {
     if (!this->isRecording())
         return nullptr;
     if (parentEventId <= 0 && kind != DevEventKind::PressObserved)
@@ -137,8 +137,8 @@ void EbDevCycleRecorder::noteGatePass(AssistReason reason, char const* where) {
 }
 
 void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick, int limit,
-                                        EbDevClockContract::Stamp const& clock, PlayLayer* layer,
-                                        PlayerObject* player) {
+                                          EbDevClockContract::Stamp const& clock, PlayLayer* layer,
+                                          PlayerObject* player) {
     (void)limit;
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive())
@@ -166,8 +166,8 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
     bool const freezeOnRecord = true;
     width->witness = EbDevLiveWitness::capture(layer, player, player2, plan,
-                                             width->hasClockStamp ? width->clockStamp : clock,
-                                             effectTick, freezeOnRecord);
+                                               width->hasClockStamp ? width->clockStamp : clock,
+                                               effectTick, freezeOnRecord);
     width->hasWitness = width->witness.valid;
 
     // Commit 8: suppress claims early when the witness alone is notReproducible.
@@ -193,6 +193,10 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     // 1.5.1 AP0: hitch / Adaptive shell cost bits (additive; no plan behavior change).
     width->hasPlanCost = true;
     width->planUs = plan.planUs;
+    width->adaptiveWorkUs = plan.adaptiveWorkUs;
+    width->fallthroughSetupUs = plan.fallthroughSetupUs;
+    width->classicSearchUs = plan.classicSearchUs;
+    width->adaptiveSeedCount = plan.adaptiveSeedCount;
     width->budgetHit = plan.budgetHit;
     width->candidatesTried = plan.candidatesTried;
     width->adaptiveShell = plan.adaptiveShell;
@@ -263,7 +267,7 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
 }
 
 void EbDevCycleRecorder::noteLearningOnPlan(int plannedDelay, int finalDelay, bool floored,
-                                          bool verifyRefused) {
+                                            bool verifyRefused) {
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive())
         return;
@@ -341,8 +345,8 @@ void EbDevCycleRecorder::notePassThrough(AssistReason reason, char const* where)
 }
 
 int64_t EbDevCycleRecorder::noteDelayArm(AssistReason reason, char const* where, int plannedDelay,
-                                       int plannedFireTick, int planId, DevEventSource source,
-                                       DelayArmMeta meta) {
+                                         int plannedFireTick, int planId, DevEventSource source,
+                                         DelayArmMeta meta) {
     auto* cycle = this->ensureActiveTracked();
     if (!cycle || !this->canWriteActive())
         return 0;
@@ -382,7 +386,7 @@ int64_t EbDevCycleRecorder::noteDelayArm(AssistReason reason, char const* where,
 }
 
 void EbDevCycleRecorder::noteRecheck(int64_t pressId, int oldFireTick, int newFireTick,
-                                   char const* where) {
+                                     char const* where) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
         return;
@@ -409,7 +413,7 @@ void EbDevCycleRecorder::noteRecheck(int64_t pressId, int oldFireTick, int newFi
 }
 
 void EbDevCycleRecorder::noteHus(int64_t pressId, AssistReason reason, char const* where,
-                               int fireTick) {
+                                 int fireTick) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
         return;
@@ -512,8 +516,8 @@ void EbDevCycleRecorder::resetModeTimeline() {
 }
 
 void EbDevCycleRecorder::fillTimelineMeta(EbDevDecisionEvent& ev, PlayLayer* layer,
-                                        PlayerObject* player, char const* change,
-                                        char const* fromKind) const {
+                                          PlayerObject* player, char const* change,
+                                          char const* fromKind) const {
     ev.hasTimelineMeta = true;
     ev.timelineChange = change ? change : "";
     if (fromKind && fromKind[0] != '\0')
@@ -530,7 +534,7 @@ void EbDevCycleRecorder::fillTimelineMeta(EbDevDecisionEvent& ev, PlayLayer* lay
 }
 
 EbDevDecisionEvent* EbDevCycleRecorder::appendAttemptScoped(DevEventKind kind, int attemptTick,
-                                                          char const* reason) {
+                                                            char const* reason) {
     if (!this->isRecording())
         return nullptr;
     EbDevDecisionEvent ev;
@@ -605,8 +609,8 @@ void EbDevCycleRecorder::pollModeTimeline(PlayLayer* layer, int attemptTick) {
         this->m_modeTimeline.playerSpeed = speed;
     }
     if (upsideDown != this->m_modeTimeline.upsideDown) {
-        auto* written =
-            this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick, "timeline-gravity");
+        auto* written = this->appendAttemptScoped(DevEventKind::ModeTransition, attemptTick,
+                                                  "timeline-gravity");
         if (written)
             this->fillTimelineMeta(*written, layer, player, "gravity",
                                    EbStageConfig::kindName(this->m_modeTimeline.mode));
@@ -623,7 +627,7 @@ void EbDevCycleRecorder::pollModeTimeline(PlayLayer* layer, int attemptTick) {
 }
 
 void EbDevCycleRecorder::writeOutcomesForOpenCycles(std::string const& endReason, bool lived,
-                                                  int attemptTick) {
+                                                    int attemptTick) {
     if (!this->isRecording())
         return;
     for (auto& pair : this->m_cycles) {
@@ -700,7 +704,8 @@ bool EbDevCycleRecorder::shouldCountAttempt() const {
     return false;
 }
 
-bool EbDevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool lived, int attemptTick) {
+bool EbDevCycleRecorder::sealAttemptWithOutcomes(std::string endReason, bool lived,
+                                                 int attemptTick) {
     if (!EbDevConfig::recordEnable())
         return false;
     auto& store = EbDevTraceStore::get();
@@ -781,7 +786,8 @@ bool EbDevCycleRecorder::selfCheck(std::string& report) {
         if (opened) {
             expect(store.beginAttempt(0), "begin-attempt");
             // Without recordEnable, beginPress no-ops — still exercise store chain.
-            expect(rec.beginPress(0, true, 10, 10) == 0 || EbDevConfig::recordEnable(), "begin-gate");
+            expect(rec.beginPress(0, true, 10, 10) == 0 || EbDevConfig::recordEnable(),
+                   "begin-gate");
             store.closeSession();
             auto path = store.tracesDir() / "session-cycle-selfcheck5.json";
             std::error_code ec;

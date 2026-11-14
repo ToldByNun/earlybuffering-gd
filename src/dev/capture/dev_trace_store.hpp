@@ -87,6 +87,10 @@ public:
     // 1.5.1 AP0: hitch / Adaptive shell diagnostics on planFinished (additive JSON).
     bool hasPlanCost = false;
     int planUs = 0;
+    int adaptiveWorkUs = 0;
+    int fallthroughSetupUs = 0;
+    int classicSearchUs = 0;
+    int adaptiveSeedCount = 0;
     bool budgetHit = false;
     int candidatesTried = 0;
     bool adaptiveShell = false;
@@ -300,7 +304,7 @@ public:
     static bool eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e, std::string& err);
     static matjson::Value sessionToJsonValue(EbDevSessionFile const& session);
     static EbDevDecisionEvent makeEv(DevEventKind kind, int64_t eventId, int64_t attemptId,
-                                   int64_t pressId, int64_t parent, int64_t planId);
+                                     int64_t pressId, int64_t parent, int64_t planId);
 
 private:
     friend class EbDevTraceValidation;

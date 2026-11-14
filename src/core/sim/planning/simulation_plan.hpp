@@ -121,6 +121,10 @@ public:
     bool budgetHit = false;
     // Wall µs spent in plan()/planSequence (filled by Live press/release planners).
     int planUs = 0;
+    int adaptiveWorkUs = 0;
+    int fallthroughSetupUs = 0;
+    int classicSearchUs = 0;
+    int adaptiveSeedCount = 0;
     bool activatedRing = false;
     bool usedOrbWindow = false;
     bool foresightOrbPad = false; // TravelForesight orb/pad in travel cone
@@ -159,9 +163,9 @@ public:
     bool adaptiveFellThrough = false; // needed DecisionGate/classic (until AP6 owns Delay)
     // Assist Pack AP-M6: Adaptive aborted after screen (no Alive) to gift remUs.
     bool adaptiveAbortedForFallthrough = false;
-    int adaptiveScreenedCount = 0;    // delays that received a screen quantum
-    int adaptiveSurvivors = 0;        // screened delays still autonomous-alive after screen
-    int adaptiveVerifyGrants = 0;     // Phase C verify quanta granted
+    int adaptiveScreenedCount = 0;     // delays that received a screen quantum
+    int adaptiveSurvivors = 0;         // screened delays still autonomous-alive after screen
+    int adaptiveVerifyGrants = 0;      // Phase C verify quanta granted
     int adaptiveStolenScreenTicks = 0; // Assist Pack AP2: Screen→Verify steal count
     // Dev Lab AP4: which search branch produced this plan.
     // inputWindow | threatProbe | adaptive | classic | hybridFallthrough

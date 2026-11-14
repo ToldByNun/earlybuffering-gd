@@ -1,10 +1,4 @@
 #include "adaptive_plan_search.hpp"
-#include "adaptive_budget_controller.hpp"
-#include "adaptive_candidate_slot.hpp"
-#include "adaptive_decision_gate.hpp"
-#include "adaptive_parity_policy.hpp"
-#include "adaptive_prediction_scheduler.hpp"
-#include "adaptive_resume_runner.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
@@ -15,6 +9,12 @@
 #include "../../shadow_survival_rules.hpp"
 #include "../../simulation_candidate.hpp"
 #include "../shadow_plan_search.hpp"
+#include "adaptive_budget_controller.hpp"
+#include "adaptive_candidate_slot.hpp"
+#include "adaptive_decision_gate.hpp"
+#include "adaptive_parity_policy.hpp"
+#include "adaptive_prediction_scheduler.hpp"
+#include "adaptive_resume_runner.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
@@ -150,11 +150,12 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     // semantics with fallthrough ranking (was unset → false). Dual linked
     // exclusion stays in classic prepare; Adaptive solo Live is the ship path.
     model.stopAtBallLanding = inputWindow && real->m_isBall;
-    if (inputWindow && EbStageConfig::paramsFor(real).cap == 0 && EbStageConfig::lookAheadCap() == 0) {
+    if (inputWindow && EbStageConfig::paramsFor(real).cap == 0 &&
+        EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {
             // AP3a: same Wave/ship floor as classic continuous IW.
-            model.cap = EbAssistHorizon::continuousInputWindowCap(
-                EbStageConfig::kindOf(real), limit, options.capMul);
+            model.cap = EbAssistHorizon::continuousInputWindowCap(EbStageConfig::kindOf(real),
+                                                                  limit, options.capMul);
         } else {
             model.cap = std::min(model.cap, std::max(1, 96 - limit));
         }
@@ -211,9 +212,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 return;
             }
 
-            int const quantum =
-                std::min(envelope.takeQuantum(EbAdaptiveBudgetController::Phase::Screen),
-                         sharedTicks);
+            int const quantum = std::min(
+                envelope.takeQuantum(EbAdaptiveBudgetController::Phase::Screen), sharedTicks);
             if (quantum <= 0) {
                 plan.budgetHit = true;
                 return;
@@ -238,15 +238,16 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 plan.firstDeathTick = slot.deathTick;
                 plan.firstDeathObject = slot.lastRaw.deathObject;
                 if (!threatZone.valid) {
-                    threatZone = simulator.buildThreatZone(layer, slot.deathX, slot.lastRaw.deathObject);
+                    threatZone =
+                        simulator.buildThreatZone(layer, slot.deathX, slot.lastRaw.deathObject);
                     plan.threatZone = threatZone;
                 }
             }
-            prefixDeathTick = EbPrefixSim::mergePrefixDeathTick(
-                prefixDeathTick, slot.deathTick, slot.lastRaw.diedBeforeAction);
-            sameCrashStreak = EbPrefixSim::updateSameCrashStreak(
-                sameCrashStreak, prevDeathTick, slot.deathTick, slot.terminalDied,
-                slot.lastRaw.diedBeforeAction);
+            prefixDeathTick = EbPrefixSim::mergePrefixDeathTick(prefixDeathTick, slot.deathTick,
+                                                                slot.lastRaw.diedBeforeAction);
+            sameCrashStreak = EbPrefixSim::updateSameCrashStreak(sameCrashStreak, prevDeathTick,
+                                                                 slot.deathTick, slot.terminalDied,
+                                                                 slot.lastRaw.diedBeforeAction);
             if (slot.terminalDied)
                 prevDeathTick = slot.deathTick;
             if (slot.autonomousAlive)
@@ -290,8 +291,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
-        if (screened <= 0 ||
-            (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
+        if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
             fallClassic = true;
             plan.budgetHit = true;
         } else if (EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(
@@ -322,7 +322,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 schedIn.limit = limit;
                 schedIn.modelCap = model.cap;
                 schedIn.verifyLeft = envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Verify);
-                schedIn.reserveLeft = envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Reserve);
+                schedIn.reserveLeft =
+                    envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Reserve);
                 schedIn.mustDelaySearch = options.mustDelaySearch;
                 auto const decision = EbAdaptivePredictionScheduler::choose(schedIn);
 
@@ -392,12 +393,13 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 int const ticksBefore = sharedTicks;
                 EbThreatZone const* zonePtr = threatZone.valid ? &threatZone : nullptr;
                 EbAdaptiveResumeRunner::runQuantum(simulator, layer, real, down, limit, deltaTime,
-                                                   useFirstDt, model, -1, zonePtr, &sharedTicks, slot,
-                                                   quantum);
+                                                   useFirstDt, model, -1, zonePtr, &sharedTicks,
+                                                   slot, quantum);
                 int const spent = std::max(0, ticksBefore - sharedTicks);
                 // Hard sharedTicks pay for rebuild+extend; phase bucket only the
                 // new extend (rebuild was already charged during Screen).
-                int const phaseCharge = rebuildTicks > 0 ? std::max(0, spent - rebuildTicks) : spent;
+                int const phaseCharge =
+                    rebuildTicks > 0 ? std::max(0, spent - rebuildTicks) : spent;
                 envelope.spend(phase, phaseCharge);
                 ++slot.verifyGrants;
                 ++verifyGrants;
@@ -429,6 +431,11 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     plan.adaptiveStolenScreenTicks = envelope.stolenScreenToVerify;
 
     auto runClassicFallthrough = [&]() -> EbSimPlan {
+        auto const fallthroughStart = std::chrono::steady_clock::now();
+        plan.adaptiveWorkUs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::microseconds>(fallthroughStart - wall0)
+                .count());
+
         plan.adaptiveFellThrough = true;
         noteStats(stats);
         EbPlanOptions classicOpts = options;
@@ -448,12 +455,11 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             // Assist Pack AP-M7: Wave zero-survivor gift — classic continuous IW
             // still gets the reserved slice after TW-heavy Adaptive overspend.
             // Non-Wave keeps AP-L5 (no remUs invent past shared wall).
-            fallthroughRemUs =
-                waveNeedsClassic
-                    ? EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(
-                          true, remUs, fallthroughReserveUs)
-                    : EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
-                          remUs, classicOpts.tickBudget);
+            fallthroughRemUs = waveNeedsClassic
+                                   ? EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(
+                                         true, remUs, fallthroughReserveUs)
+                                   : EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+                                         remUs, classicOpts.tickBudget);
             if (fallthroughRemUs <= 0) {
                 // Shared press wall spent — no remUs floor stack past sim-budget-us.
                 EbSimPlan out = plan;
@@ -510,8 +516,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 continue;
             bool const terminal = slot.terminalDied || slot.terminalUnknown;
             bool const horizonProven =
-                slot.autonomousAlive &&
-                (slot.terminalAliveCap || slot.ticksSimulated >= modelCap);
+                slot.autonomousAlive && (slot.terminalAliveCap || slot.ticksSimulated >= modelCap);
             // Observation-cleared Alive: screen quantum + honesty vs known death.
             // Ball: skip — shallow/landing seeds sticky PassD0Safe and block
             // classic stopAtBallLanding Delay ranking (AP-L5).
@@ -542,8 +547,18 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         int const adaptiveTried = plan.candidatesTried;
         bool const adaptiveBudgetHit = plan.budgetHit;
+        auto const classicStart = std::chrono::steady_clock::now();
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
-                                                     firstDt, classicOpts);
+                                                   firstDt, classicOpts);
+        classicPlan.adaptiveWorkUs = plan.adaptiveWorkUs;
+        classicPlan.fallthroughSetupUs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::microseconds>(classicStart - fallthroughStart)
+                .count());
+        classicPlan.classicSearchUs =
+            static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                 std::chrono::steady_clock::now() - classicStart)
+                                 .count());
+        classicPlan.adaptiveSeedCount = static_cast<int>(classicOpts.seedCandidates.size());
         classicPlan.adaptiveShell = true;
         classicPlan.adaptiveFellThrough = true;
         classicPlan.adaptiveAbortedForFallthrough = plan.adaptiveAbortedForFallthrough;
@@ -587,8 +602,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         views[static_cast<size_t>(delay)] =
             EbAdaptiveDecisionGate::fromSlot(slots[static_cast<size_t>(delay)]);
 
-    int const proofTicks =
-        options.adaptiveScreenTicks > 0 ? options.adaptiveScreenTicks : 24;
+    int const proofTicks = options.adaptiveScreenTicks > 0 ? options.adaptiveScreenTicks : 24;
     EbAdaptiveDecisionGate::Input gateIn;
     gateIn.cands = views.data();
     gateIn.limit = limit;

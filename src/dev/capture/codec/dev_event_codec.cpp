@@ -117,6 +117,10 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     }
     if (e.hasPlanCost) {
         otherIndex["planUs"] = e.planUs;
+        otherIndex["adaptiveWorkUs"] = e.adaptiveWorkUs;
+        otherIndex["fallthroughSetupUs"] = e.fallthroughSetupUs;
+        otherIndex["classicSearchUs"] = e.classicSearchUs;
+        otherIndex["adaptiveSeedCount"] = e.adaptiveSeedCount;
         otherIndex["budgetHit"] = e.budgetHit;
         otherIndex["candidatesTried"] = e.candidatesTried;
         otherIndex["adaptiveShell"] = e.adaptiveShell;
@@ -212,7 +216,8 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     return otherIndex;
 }
 
-bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e, std::string& err) {
+bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e,
+                                    std::string& err) {
     e = {};
     e.eventId = j.contains("eventId") ? j["eventId"].asInt().unwrapOr(0) : 0;
     e.attemptId = j.contains("attemptId") ? j["attemptId"].asInt().unwrapOr(0) : 0;
@@ -276,7 +281,8 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
     }
     if (j.contains("clock")) {
         std::string clockErr;
-        if (!EbDevTraceStoreImplementation::clockStampFromJson(j["clock"], e.clockStamp, clockErr)) {
+        if (!EbDevTraceStoreImplementation::clockStampFromJson(j["clock"], e.clockStamp,
+                                                               clockErr)) {
             err = clockErr.empty() ? "bad-clock" : clockErr;
             return false;
         }
@@ -352,17 +358,16 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                                       : false;
                 n.score = static_cast<float>(nj["score"].asDouble().unwrapOr(0.0));
             }
-            if (nj.contains("deathTick") || nj.contains("ticksRan") || nj.contains("surviveTicks") ||
-                nj.contains("survivalClass")) {
+            if (nj.contains("deathTick") || nj.contains("ticksRan") ||
+                nj.contains("surviveTicks") || nj.contains("survivalClass")) {
                 n.hasRunTruth = true;
                 n.deathTick = nj.contains("deathTick")
                                   ? static_cast<int>(nj["deathTick"].asInt().unwrapOr(-1))
                                   : -1;
-                n.ticksRan =
-                    nj.contains("ticksRan") ? static_cast<int>(nj["ticksRan"].asInt().unwrapOr(0))
-                                            : 0;
-                n.unknown =
-                    nj.contains("unknown") ? nj["unknown"].asBool().unwrapOr(false) : false;
+                n.ticksRan = nj.contains("ticksRan")
+                                 ? static_cast<int>(nj["ticksRan"].asInt().unwrapOr(0))
+                                 : 0;
+                n.unknown = nj.contains("unknown") ? nj["unknown"].asBool().unwrapOr(false) : false;
                 n.budgetHit =
                     nj.contains("budgetHit") ? nj["budgetHit"].asBool().unwrapOr(false) : false;
                 n.surviveTicks = nj.contains("surviveTicks")
@@ -395,6 +400,18 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         (j.contains("budgetHit") && e.kind == DevEventKind::PlanFinished)) {
         e.hasPlanCost = true;
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
+        e.adaptiveWorkUs = j.contains("adaptiveWorkUs")
+                               ? static_cast<int>(j["adaptiveWorkUs"].asInt().unwrapOr(0))
+                               : 0;
+        e.fallthroughSetupUs = j.contains("fallthroughSetupUs")
+                                   ? static_cast<int>(j["fallthroughSetupUs"].asInt().unwrapOr(0))
+                                   : 0;
+        e.classicSearchUs = j.contains("classicSearchUs")
+                                ? static_cast<int>(j["classicSearchUs"].asInt().unwrapOr(0))
+                                : 0;
+        e.adaptiveSeedCount = j.contains("adaptiveSeedCount")
+                                  ? static_cast<int>(j["adaptiveSeedCount"].asInt().unwrapOr(0))
+                                  : 0;
         e.budgetHit = j.contains("budgetHit") ? j["budgetHit"].asBool().unwrapOr(false) : false;
         e.candidatesTried = j.contains("candidatesTried")
                                 ? static_cast<int>(j["candidatesTried"].asInt().unwrapOr(0))
@@ -417,8 +434,7 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
             e.plannerPath = std::string(j["plannerPath"].asString().unwrapOr(""));
         if (j.contains("gameModeKind"))
             e.gameModeKind = std::string(j["gameModeKind"].asString().unwrapOr(""));
-        e.continuous =
-            j.contains("continuous") ? j["continuous"].asBool().unwrapOr(false) : false;
+        e.continuous = j.contains("continuous") ? j["continuous"].asBool().unwrapOr(false) : false;
         e.inputWindow =
             j.contains("inputWindow") ? j["inputWindow"].asBool().unwrapOr(false) : false;
         if (j.contains("modeParams") && j["modeParams"].isObject()) {
@@ -429,9 +445,10 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                 mode.contains("cap") ? static_cast<int>(mode["cap"].asInt().unwrapOr(0)) : 0;
             e.modeSlack =
                 mode.contains("slack") ? static_cast<int>(mode["slack"].asInt().unwrapOr(0)) : 0;
-            e.modeLatencyWeight = mode.contains("latencyWeight")
-                                      ? static_cast<float>(mode["latencyWeight"].asDouble().unwrapOr(0.0))
-                                      : 0.f;
+            e.modeLatencyWeight =
+                mode.contains("latencyWeight")
+                    ? static_cast<float>(mode["latencyWeight"].asDouble().unwrapOr(0.0))
+                    : 0.f;
             e.modeAdaptivePlan = mode.contains("adaptivePlan")
                                      ? mode["adaptivePlan"].asBool().unwrapOr(false)
                                      : false;
@@ -448,9 +465,10 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                     ? static_cast<int>(mode["adaptiveReservePct"].asInt().unwrapOr(0))
                     : 0;
         }
-        e.adaptiveScreenedCount = j.contains("adaptiveScreenedCount")
-                                      ? static_cast<int>(j["adaptiveScreenedCount"].asInt().unwrapOr(0))
-                                      : 0;
+        e.adaptiveScreenedCount =
+            j.contains("adaptiveScreenedCount")
+                ? static_cast<int>(j["adaptiveScreenedCount"].asInt().unwrapOr(0))
+                : 0;
         e.adaptiveSurvivors = j.contains("adaptiveSurvivors")
                                   ? static_cast<int>(j["adaptiveSurvivors"].asInt().unwrapOr(0))
                                   : 0;
@@ -490,14 +508,12 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
                                         : false;
         if (j.contains("threatZone") && j["threatZone"].isObject()) {
             auto const& tz = j["threatZone"];
-            e.threatZoneValid =
-                tz.contains("valid") ? tz["valid"].asBool().unwrapOr(false) : false;
+            e.threatZoneValid = tz.contains("valid") ? tz["valid"].asBool().unwrapOr(false) : false;
             e.threatZoneStartX = tz.contains("startX")
                                      ? static_cast<float>(tz["startX"].asDouble().unwrapOr(0.0))
                                      : 0.f;
-            e.threatZoneEndX = tz.contains("endX")
-                                   ? static_cast<float>(tz["endX"].asDouble().unwrapOr(0.0))
-                                   : 0.f;
+            e.threatZoneEndX =
+                tz.contains("endX") ? static_cast<float>(tz["endX"].asDouble().unwrapOr(0.0)) : 0.f;
         }
     }
     if (j.contains("timelineChange") || e.kind == DevEventKind::ModeTransition ||
@@ -516,8 +532,7 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.playerSpeed = j.contains("playerSpeed")
                             ? static_cast<float>(j["playerSpeed"].asDouble().unwrapOr(0.0))
                             : 0.f;
-        e.upsideDown =
-            j.contains("upsideDown") ? j["upsideDown"].asBool().unwrapOr(false) : false;
+        e.upsideDown = j.contains("upsideDown") ? j["upsideDown"].asBool().unwrapOr(false) : false;
         e.dual = j.contains("dual") ? j["dual"].asBool().unwrapOr(false) : false;
         e.playerX =
             j.contains("playerX") ? static_cast<float>(j["playerX"].asDouble().unwrapOr(0.0)) : 0.f;
@@ -525,9 +540,9 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
     if (j.contains("wave") && j["wave"].isObject()) {
         auto const& wave = j["wave"];
         e.hasWaveMeta = true;
-        e.waveProxX =
-            wave.contains("proxX") ? static_cast<float>(wave["proxX"].asDouble().unwrapOr(0.0))
-                                   : 0.f;
+        e.waveProxX = wave.contains("proxX")
+                          ? static_cast<float>(wave["proxX"].asDouble().unwrapOr(0.0))
+                          : 0.f;
         e.waveNearHazard =
             wave.contains("nearHazard") ? wave["nearHazard"].asBool().unwrapOr(false) : false;
         e.waveBestGain = wave.contains("bestGain")
