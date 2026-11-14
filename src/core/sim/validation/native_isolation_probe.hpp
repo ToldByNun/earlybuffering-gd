@@ -2,6 +2,7 @@
 #define NATIVE_ISOLATION_PROBE_HPP
 
 #include <Geode/Geode.hpp>
+#include <iosfwd>
 #include <string>
 
 class EbShadowSimulator;
@@ -11,6 +12,7 @@ public:
     static std::string run();
     static bool creatingWorld();
     static EbShadowSimulator* activeSimulator();
+    static void recordRingApplication(RingObject* ring, char const* event, PlayerObject* player);
 
 private:
     static void moveFixtureObject(PlayLayer* layer, GameObject* object,
@@ -28,6 +30,9 @@ private:
         bool orbContact = false;
         bool jumpHeld = false;
         bool orbOverlap = false;
+        bool blockActive = false;
+        bool toggleModeled = false;
+        bool initialBlockActive = false;
         float movingX = 0.f;
         float movingY = 0.f;
         int objectId = -1;
@@ -39,6 +44,7 @@ private:
     private:
     };
 
+    static thread_local std::ostream* s_ringLog;
     static thread_local bool s_creating;
     static thread_local EbShadowSimulator* s_active;
 };

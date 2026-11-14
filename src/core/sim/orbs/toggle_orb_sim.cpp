@@ -110,6 +110,8 @@ bool EbToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObj
 
     int const oid = hit->m_objectID;
     bool const toggleOrb = EbTriggerClassify::isToggleOrbId(oid);
+    if (toggleOrb && !shadow->m_holdingButtons[static_cast<int>(PlayerButton::Jump)])
+        return false;
 
     // Effect fields (group / activate / touch) live on EffectGameObject.
     auto* effect = geode::prelude::typeinfo_cast<EffectGameObject*>(hit);
@@ -138,18 +140,21 @@ bool EbToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObj
     int const groupId = effect->m_targetGroupID;
     bool const activateGroup = effect->m_activateGroup;
 
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
+    // Native group membership also contains objects parented below node containers.
+    auto* members = layer->getGroup(groupId);
+    if (!members)
+        members = layer->m_objects;
+    if (!members)
         return false;
 
     size_t flipped = 0;
-    for (unsigned index = 0; index < children->count(); ++index) {
+    for (unsigned index = 0; index < members->count(); ++index) {
         if (flipped >= kMaxFlipMembers)
             break;
         if (this->m_snaps.size() >= kMaxFlipMembers)
             break;
 
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+        auto* object = geode::prelude::typeinfo_cast<GameObject*>(members->objectAtIndex(index));
         if (!object)
             continue;
         if (geode::prelude::typeinfo_cast<PlayerObject*>(object))

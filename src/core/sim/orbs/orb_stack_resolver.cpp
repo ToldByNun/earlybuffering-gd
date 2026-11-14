@@ -6,6 +6,7 @@
 #include "../foresight/travel_foresight.hpp"
 #include "../shadow_simulator.hpp"
 #include "../validation/native_isolation_probe.hpp"
+#include "../world/shadow_world_capture.hpp"
 #include "toggle_orb_sim.hpp"
 #include <cmath>
 #include <fmt/format.h>
@@ -109,17 +110,17 @@ void EbOrbStackResolver::noteTouch(PlayerObject* shadow, RingObject* ring, bool 
 
 int EbOrbStackResolver::fireNormalOrbsAt(PlayLayer* layer, PlayerObject* shadow,
                                          GameObject* toggleHit) {
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
+    if (!layer || !shadow)
         return 0;
-
     int const jumpIdx = static_cast<int>(PlayerButton::Jump);
     if (!shadow->m_holdingButtons[jumpIdx])
         return 0;
+    auto& simulator = EbShadowSimulator::get();
+    EbShadowWorldCapture::refreshObjectIndex(simulator, layer);
 
     int applied = 0;
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+    for (auto const& effect : simulator.m_captureEffects) {
+        auto* object = effect.data();
         if (!object || object == toggleHit)
             continue;
         if (!EbOrbStackResolver::isJumpOrDashRing(object))
@@ -153,14 +154,17 @@ int EbOrbStackResolver::fireNormalOrbsAt(PlayLayer* layer, PlayerObject* shadow,
 }
 
 int EbOrbStackResolver::fireTogglesAt(PlayLayer* layer, PlayerObject* shadow, GameObject* jumpHit) {
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
+    if (!layer || !shadow)
         return 0;
+    if (!shadow->m_holdingButtons[static_cast<int>(PlayerButton::Jump)])
+        return 0;
+    auto& simulator = EbShadowSimulator::get();
+    EbShadowWorldCapture::refreshObjectIndex(simulator, layer);
 
     int applied = 0;
     auto& toggleSim = EbToggleOrbSim::get();
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+    for (auto const& effect : simulator.m_captureEffects) {
+        auto* object = effect.data();
         if (!object || object == jumpHit)
             continue;
         if (!EbTriggerClassify::isToggleOrbId(object->m_objectID))

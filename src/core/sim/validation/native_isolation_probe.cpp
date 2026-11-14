@@ -1,5 +1,7 @@
 #include "native_isolation_probe.hpp"
 #include "../orbs/orb_stack_resolver.hpp"
+#include "../orbs/toggle_orb_sim.hpp"
+#include "../runtime/native_action_context.hpp"
 #include "../runtime/native_memory_guard.hpp"
 #include "../shadow_simulator.hpp"
 #include <Geode/Geode.hpp>
@@ -11,10 +13,12 @@
 #include <cmath>
 #include <exception>
 #include <latch>
+#include <memory>
 #include <sstream>
 #include <thread>
 #include <vector>
 
+thread_local std::ostream* EbNativeIsolationProbe::s_ringLog = nullptr;
 thread_local bool EbNativeIsolationProbe::s_creating = false;
 thread_local EbShadowSimulator* EbNativeIsolationProbe::s_active = nullptr;
 
@@ -25,14 +29,30 @@ EbShadowSimulator* EbNativeIsolationProbe::activeSimulator() {
     return s_active;
 }
 
+void EbNativeIsolationProbe::recordRingApplication(RingObject* ring, char const* event,
+                                                   PlayerObject* player) {
+    if (!s_ringLog || !ring || !s_active)
+        return;
+    *s_ringLog << event << " uid=" << ring->m_uniqueID << " oid=" << ring->m_objectID
+               << " count=" << s_active->m_ringCount << " claim=" << ring->m_claimTouch
+               << " activated=" << ring->m_activated << " multiSetting=" << ring->m_isMultiActivate
+               << " multiCapability=" << ring->canAllowMultiActivate()
+               << " effectiveMulti=" << ring->canMultiActivate(player && player->m_isPlatformer)
+               << " applyingDepth=" << s_active->m_ringApplications.size()
+               << " touched=" << (player && player->m_touchedRings.count(ring->m_uniqueID) > 0)
+               << std::endl;
+}
+
 bool EbNativeIsolationProbe::TickResult::matches(TickResult const& other) const {
     return std::isfinite(x) && std::isfinite(y) && std::isfinite(other.x) &&
            std::isfinite(other.y) && x == other.x && y == other.y && velocity == other.velocity &&
            grounded == other.grounded && upsideDown == other.upsideDown && dead == other.dead &&
            ringCount == other.ringCount && orbContact == other.orbContact &&
            jumpHeld == other.jumpHeld && orbOverlap == other.orbOverlap &&
-           movingX == other.movingX && movingY == other.movingY && objectId == other.objectId &&
-           objectX == other.objectX && objectY == other.objectY;
+           blockActive == other.blockActive && toggleModeled == other.toggleModeled &&
+           initialBlockActive == other.initialBlockActive && movingX == other.movingX &&
+           movingY == other.movingY && objectId == other.objectId && objectX == other.objectX &&
+           objectY == other.objectY;
 }
 
 void EbNativeIsolationProbe::moveFixtureObject(PlayLayer* layer, GameObject* object,
@@ -58,8 +78,8 @@ std::string EbNativeIsolationProbe::run() {
     auto* level = GJGameLevel::create();
     level->m_levelName = "EarlyBuffer isolation";
     level->m_levelString = "kA2,0,kA3,0,kA4,0,kA6,0,kA7,0,kA8,0,kA9,0,kA10,0;"
-                           "1,1,2,150,3,90;1,1,2,180,3,90;1,1,2,210,3,90;"
-                           "1,8,2,300,3,15;1,36,2,90,3,105;";
+                           "1,1,2,150,3,90,57,1;1,1,2,180,3,90;1,1,2,210,3,90;"
+                           "1,8,2,300,3,15;1,36,2,90,3,105;1,1594,2,90,3,105,51,1;";
     auto* savedPlay = manager->m_playLayer;
     auto* savedGame = manager->m_gameLayer;
     EbShadowSimulator firstSim;
@@ -128,6 +148,7 @@ std::string EbNativeIsolationProbe::run() {
     std::array<PlayLayer*, 3> fixtureWorlds{first, second, mainWorld};
     std::array<GameObject*, 3> movingBlocks{};
     std::array<RingObject*, 3> fixtureOrbs{};
+    std::array<RingObject*, 3> toggleOrbs{};
     std::array<cocos2d::CCPoint, 3> blockOrigins{};
     bool fixtureReady = true;
     for (int world = 0; world < 3; ++world) {
@@ -135,13 +156,16 @@ std::string EbNativeIsolationProbe::run() {
         if (objects) {
             for (unsigned index = 0; index < objects->count(); ++index) {
                 auto* object = static_cast<GameObject*>(objects->objectAtIndex(index));
-                if (object->m_objectID == 1 && !movingBlocks[world])
+                if (object->m_objectID == 1 && object->belongsToGroup(1) && !movingBlocks[world])
                     movingBlocks[world] = object;
                 if (object->m_objectID == 36 && !fixtureOrbs[world])
                     fixtureOrbs[world] = geode::prelude::typeinfo_cast<RingObject*>(object);
+                if (object->m_objectID == 1594 && !toggleOrbs[world])
+                    toggleOrbs[world] = geode::prelude::typeinfo_cast<RingObject*>(object);
             }
         }
-        if (!movingBlocks[world] || !fixtureOrbs[world]) {
+        if (!movingBlocks[world] || !fixtureOrbs[world] || !toggleOrbs[world] ||
+            toggleOrbs[world]->m_targetGroupID != 1) {
             fixtureReady = false;
             continue;
         }
@@ -151,6 +175,8 @@ std::string EbNativeIsolationProbe::run() {
         moveFixtureObject(fixtureWorlds[world], block, blockOrigins[world]);
         // Place the ring in the trajectory; only native collision may report a contact.
         moveFixtureObject(fixtureWorlds[world], fixtureOrbs[world],
+                          cocos2d::CCPoint{static_cast<float>(world * 30), 105.f});
+        moveFixtureObject(fixtureWorlds[world], toggleOrbs[world],
                           cocos2d::CCPoint{static_cast<float>(world * 30), 105.f});
     }
     if (!fixtureReady) {
@@ -166,19 +192,44 @@ std::string EbNativeIsolationProbe::run() {
         s_active = nullptr;
         manager->m_playLayer = savedPlay;
         manager->m_gameLayer = savedGame;
-        return "INCONCLUSIVE: fixture block or native yellow orb was not loaded.";
+        return "INCONCLUSIVE: fixture group-1 block, yellow orb or target-group-1 toggle orb was "
+               "not loaded.";
     }
+    std::array<std::unique_ptr<cocos2d::CCActionManager>, 3> actionManagers;
+    for (auto& actionManager : actionManagers)
+        actionManager = std::make_unique<cocos2d::CCActionManager>();
+    auto const actionCallsBefore = EbNativeActionContext::redirectedCalls();
+    std::vector<std::pair<cocos2d::CCNode*, unsigned int>> menuActions;
+    auto collectMenuActions = [&](auto&& self, cocos2d::CCNode* node) -> void {
+        if (!node)
+            return;
+        menuActions.emplace_back(node, node->numberOfRunningActions());
+        if (auto* children = node->getChildren()) {
+            for (unsigned index = 0; index < children->count(); ++index)
+                self(self, static_cast<cocos2d::CCNode*>(children->objectAtIndex(index)));
+        }
+    };
+    collectMenuActions(collectMenuActions,
+                       cocos2d::CCDirector::sharedDirector()->getRunningScene());
+    std::array<std::array<std::ostringstream, 3>, 2> applicationLogs;
     std::atomic<int> activeNative{0};
     std::atomic<int> mainOverlapTicks{0};
     std::atomic<int> overlappingEntries{0};
     auto simulate = [&](PlayLayer* layer, EbShadowSimulator& simulator,
                         std::vector<RunTrace>& traces, int world, bool parallel) {
+        EbNativeActionContext actionContext(actionManagers[world].get());
         s_active = &simulator;
         simulator.m_collectOrbContacts = true;
         simulator.m_savedActivatedIDs = layer->m_gameState.m_activatedObjectIDs;
         for (auto& trace : traces) {
+            actionManagers[world]->removeAllActions();
+            s_ringLog =
+                &trace == &traces.front() ? &applicationLogs[parallel ? 1 : 0][world] : nullptr;
             simulator.resetCaptureForNextRun(layer);
             EbOrbStackResolver::get().begin();
+            bool const initialBlockActive =
+                movingBlocks[world]->isVisible() &&
+                !EbToggleOrbSim::get().isModeled(movingBlocks[world]->m_uniqueID);
             EbShadowSimulator::tryRemoveFromSection(layer, simulator.m_shadow);
             simulator.copyPlayerState(simulator.m_shadow, layer->m_player1);
             // Distinct starting positions expose cross-world state contamination.
@@ -202,6 +253,10 @@ std::string EbNativeIsolationProbe::run() {
                 float const displacement = static_cast<float>((tick + world * 7) % 32) - 16.f;
                 moveFixtureObject(layer, block,
                                   blockOrigins[world] + cocos2d::CCPoint{0.f, displacement});
+                auto& toggleState = EbToggleOrbSim::get();
+                if (toggleState.isModeled(block->m_uniqueID))
+                    EbToggleOrbSim::applyCollisionActive(
+                        block, toggleState.isModeledActive(block->m_uniqueID));
                 // World 1 presses immediately. World 2 waits one collision tick.
                 if ((world == 1 && tick == 0) || (world == 2 && tick == 1)) {
                     simulator.m_shadow->pushButton(PlayerButton::Jump);
@@ -240,6 +295,9 @@ std::string EbNativeIsolationProbe::run() {
                               fixtureOrbs[world]) != simulator.m_orbContacts.end();
                 result.orbOverlap =
                     player->getObjectRect().intersectsRect(fixtureOrbs[world]->getObjectRect());
+                result.initialBlockActive = initialBlockActive;
+                result.blockActive = block->isVisible();
+                result.toggleModeled = EbToggleOrbSim::get().isModeled(block->m_uniqueID);
                 result.movingX = block->getPositionX();
                 result.movingY = block->getPositionY();
                 if (auto* object = simulator.m_deathObject) {
@@ -256,6 +314,7 @@ std::string EbNativeIsolationProbe::run() {
         simulator.m_collectOrbContacts = false;
         simulator.m_orbContacts.clear();
         moveFixtureObject(layer, movingBlocks[world], blockOrigins[world]);
+        s_ringLog = nullptr;
         s_active = nullptr;
     };
     auto const mainThread = std::this_thread::get_id();
@@ -297,9 +356,11 @@ std::string EbNativeIsolationProbe::run() {
                     simulate(layers[world], *simulators[world], workerTrace[world], world, true);
                 } catch (std::exception const& error) {
                     workerErrors[world] = error.what();
+                    s_ringLog = nullptr;
                     s_active = nullptr;
                 } catch (...) {
                     workerErrors[world] = "Unhandled native worker exception";
+                    s_ringLog = nullptr;
                     s_active = nullptr;
                 }
             });
@@ -335,6 +396,9 @@ std::string EbNativeIsolationProbe::run() {
     int verifiedOrbRuns = 0;
     int detectedOrbRuns = 0;
     int delayedOrbRuns = 0;
+    int matchingToggleRuns = 0;
+    int matchingRestoredRuns = 0;
+    int matchingIdleToggleRuns = 0;
     std::array<int, 3> referenceDeaths{};
     std::array<int, 3> comparedRuns{};
     int firstDifference = -1;
@@ -367,6 +431,12 @@ std::string EbNativeIsolationProbe::run() {
                 }
             } else {
                 ++comparedRuns[world];
+                if (left[0].initialBlockActive)
+                    ++matchingRestoredRuns;
+                if (world != 0 && left.back().toggleModeled && !left.back().blockActive)
+                    ++matchingToggleRuns;
+                if (world == 2 && !left[0].toggleModeled && left[0].blockActive)
+                    ++matchingIdleToggleRuns;
                 if (world != 0 && left.back().ringCount == 1)
                     ++verifiedOrbRuns;
                 bool const detected =
@@ -384,6 +454,8 @@ std::string EbNativeIsolationProbe::run() {
             }
         }
     }
+    for (auto& actionManager : actionManagers)
+        actionManager->removeAllActions();
     mainWorld->cleanup();
     first->cleanup();
     second->cleanup();
@@ -397,8 +469,14 @@ std::string EbNativeIsolationProbe::run() {
     s_active = nullptr;
     manager->m_playLayer = savedPlay;
     manager->m_gameLayer = savedGame;
+    bool menuActionsUnchanged = true;
+    for (auto const& entry : menuActions) {
+        if (entry.first->numberOfRunningActions() != entry.second)
+            menuActionsUnchanged = false;
+    }
+    auto const isolatedActionCalls = EbNativeActionContext::redirectedCalls() - actionCallsBefore;
     std::ostringstream report;
-    report << "AP-P03 native orb collision + delayed press" << std::endl
+    report << "AP-P03 stacked toggle orb + group restore" << std::endl
            << "Distinct worker threads: "
            << ((ranOnWorker[0] && ranOnWorker[1] && workerIds[0] != workerIds[1]) ? "yes" : "no")
            << std::endl
@@ -412,7 +490,13 @@ std::string EbNativeIsolationProbe::run() {
            << "Matching activated-orb runs: " << verifiedOrbRuns << std::endl
            << "Matching native-contact runs: " << detectedOrbRuns << std::endl
            << "Matching delayed-press runs: " << delayedOrbRuns << std::endl
+           << "Matching toggled-group runs: " << matchingToggleRuns << std::endl
+           << "Matching restored-start runs: " << matchingRestoredRuns << std::endl
+           << "Matching idle-no-toggle runs: " << matchingIdleToggleRuns << std::endl
            << "Reference physics ticks: " << referenceTicks << std::endl
+           << "Main-menu action counts unchanged: " << (menuActionsUnchanged ? "yes" : "no")
+           << std::endl
+           << "Redirected private action calls: " << isolatedActionCalls << std::endl
            << "Global world pointers unchanged: " << (worldPointersUnchanged ? "yes" : "no")
            << std::endl
            << "Serial ms (three worlds): "
@@ -442,12 +526,14 @@ std::string EbNativeIsolationProbe::run() {
                << std::endl;
     }
     bool const passed =
-        differences == 0 && collisions + survivals == 3000 && verifiedOrbRuns == 2000 &&
-        detectedOrbRuns == 2000 && delayedOrbRuns == 1000 && referenceTicks > 3000 &&
-        overlappingEntries.load() > 0 && mainOverlapTicks.load() > 0 && worldPointersUnchanged &&
-        ranOnWorker[0] && ranOnWorker[1] && workerIds[0] != workerIds[1] &&
-        workerErrors[0].empty() && workerErrors[1].empty() && workerErrors[2].empty();
-    report << (passed ? "Concurrent native-orb-contact fixture parity passed."
+        menuActionsUnchanged && isolatedActionCalls > 0 && differences == 0 &&
+        collisions + survivals == 3000 && verifiedOrbRuns == 2000 && detectedOrbRuns == 2000 &&
+        delayedOrbRuns == 1000 && matchingToggleRuns == 2000 && matchingRestoredRuns == 3000 &&
+        matchingIdleToggleRuns == 1000 && referenceTicks > 3000 && overlappingEntries.load() > 0 &&
+        mainOverlapTicks.load() > 0 && worldPointersUnchanged && ranOnWorker[0] && ranOnWorker[1] &&
+        workerIds[0] != workerIds[1] && workerErrors[0].empty() && workerErrors[1].empty() &&
+        workerErrors[2].empty();
+    report << (passed ? "Concurrent toggle-group/restore fixture parity passed."
                       : "INCONCLUSIVE / FAILED: concurrent fixture criteria unmet.")
            << std::endl
            << "Main thread simulated a third native fixture during worker execution." << std::endl
@@ -457,11 +543,24 @@ std::string EbNativeIsolationProbe::run() {
     for (int world = 0; world < 3; ++world) {
         auto* ring = fixtureOrbs[world];
         auto const rect = ring->getObjectRect();
+        auto* members = fixtureWorlds[world]->getGroup(1);
+        report << std::endl
+               << "Group world=" << world << " nativeMembers=" << (members ? members->count() : 0)
+               << " blockDirectChild="
+               << (movingBlocks[world]->getParent() == fixtureWorlds[world]->m_objectLayer)
+               << " toggleDirectChild="
+               << (toggleOrbs[world]->getParent() == fixtureWorlds[world]->m_objectLayer);
         report << std::endl
                << "Orb world=" << world << " node=" << ring->getPositionX() << ","
                << ring->getPositionY() << " native=" << ring->m_positionX << ","
                << ring->m_positionY << " rect=" << rect.origin.x << "," << rect.origin.y << ","
                << rect.size.width << "," << rect.size.height;
+    }
+    report << std::endl << "First-run orb application events:" << std::endl;
+    for (int execution = 0; execution < 2; ++execution) {
+        for (int world = 0; world < 3; ++world)
+            report << "world=" << world << " concurrent=" << execution << std::endl
+                   << applicationLogs[execution][world].str();
     }
     report << std::endl << "First-run tick evidence (reference / concurrent):" << std::endl;
     for (int world = 0; world < 3; ++world) {
@@ -471,14 +570,21 @@ std::string EbNativeIsolationProbe::run() {
                 auto const& result = trace[tick];
                 report << "world=" << world << " concurrent=" << execution << " tick=" << tick
                        << " pos=" << result.x << "," << result.y << " vy=" << result.velocity
-                       << " held=" << result.jumpHeld << " overlap=" << result.orbOverlap
-                       << " contact=" << result.orbContact << " rings=" << result.ringCount
-                       << " dead=" << result.dead << " deathOid=" << result.objectId << std::endl;
+                       << " blockActive=" << result.blockActive
+                       << " toggle=" << result.toggleModeled
+                       << " restored=" << result.initialBlockActive << " held=" << result.jumpHeld
+                       << " overlap=" << result.orbOverlap << " contact=" << result.orbContact
+                       << " rings=" << result.ringCount << " dead=" << result.dead
+                       << " deathOid=" << result.objectId << std::endl;
             }
         }
     }
     // All worker threads have joined and all Cocos evidence has been copied.
     // Drain the diagnostic pool now, rather than leaving it to the frame pool.
+    for (auto& actionManager : actionManagers) {
+        actionManager->removeAllActions();
+        actionManager.reset();
+    }
     memoryGuard.drain();
     auto const guardedAutoreleases = EbNativeMemoryGuard::autoreleaseCount() - autoreleasesBefore;
     report << std::endl

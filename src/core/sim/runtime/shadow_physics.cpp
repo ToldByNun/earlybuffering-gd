@@ -2,6 +2,8 @@
 #include "../../assist/assist_clock.hpp"
 #include "../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../shadow_simulator.hpp"
+#include "../validation/native_isolation_probe.hpp"
+#include <algorithm>
 #include <chrono>
 
 void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* player,
@@ -72,8 +74,18 @@ void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* 
         return;
     }
 
+    EbNativeIsolationProbe::recordRingApplication(ring, "request", shadow);
+    // Stacked contact callbacks can re-enter before the native jump returns
+    // and before the claim below has been committed.
+    if (std::find(simulator.m_ringApplications.begin(), simulator.m_ringApplications.end(), ring) !=
+        simulator.m_ringApplications.end()) {
+        EbNativeIsolationProbe::recordRingApplication(ring, "blocked-reentrant", shadow);
+        return;
+    }
+
+    // Use GD effective multi-activation policy, including platformer settings.
     // Already used this run (and not multi-activate) → one jump only.
-    bool const multi = ring->m_isMultiActivate || ring->canAllowMultiActivate();
+    bool const multi = ring->canMultiActivate(shadow->m_isPlatformer);
     if (!multi && (ring->m_claimTouch || ring->m_activated))
         return;
     if (!multi && shadow->m_touchedRings.count(ring->m_uniqueID))
@@ -82,23 +94,29 @@ void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* 
     simulator.noteActivated(ring);
     simulator.m_activatedRing = true;
     ++simulator.m_ringCount;
+    EbNativeIsolationProbe::recordRingApplication(ring, "accepted", shadow);
 
     // Real orb physics. Re-entrancy flag lets the ringJump hook call the original.
     // VFX hooks (spawnCircle, activateObject visuals, particles) stay blocked.
     // RAII so a throw / early exit never leaves m_applyingRing stuck (iOS live path).
     class EbApplyingRingGuard {
     public:
-        bool& flag;
-        explicit EbApplyingRingGuard(bool& f) : flag(f) {
-            flag = true;
+        EbApplyingRingGuard(bool& flag, std::vector<RingObject*>& applications, RingObject* ring)
+            : m_flag(flag), m_previous(flag), m_applications(applications) {
+            m_applications.push_back(ring);
+            m_flag = true;
         }
         ~EbApplyingRingGuard() {
-            flag = false;
+            m_applications.pop_back();
+            m_flag = m_previous;
         }
 
     private:
+        bool& m_flag;
+        bool m_previous;
+        std::vector<RingObject*>& m_applications;
     };
-    EbApplyingRingGuard applyingGuard(simulator.m_applyingRing);
+    EbApplyingRingGuard applyingGuard(simulator.m_applyingRing, simulator.m_ringApplications, ring);
     shadow->ringJump(ring, false);
 
     // Claim for the rest of this run so collision doesn't re-boost every tick.
@@ -113,6 +131,7 @@ void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* 
             ring->m_activatedByPlayer1 = true;
         shadow->m_touchedRings.insert(ring->m_uniqueID);
     }
+    EbNativeIsolationProbe::recordRingApplication(ring, "completed", shadow);
     shadow->m_touchedRing = true;
     shadow->m_hasEverHitRing = true;
 }

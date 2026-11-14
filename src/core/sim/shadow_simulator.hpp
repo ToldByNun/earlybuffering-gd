@@ -459,6 +459,7 @@ private:
     friend class EbShadowWorldDynamics;
     friend class EbShadowPlayerState;
     friend class EbShadowPhysics;
+    friend class EbOrbStackResolver;
     friend class EbShadowCandidateRunner;
     friend class EbIdlePrefixShare;
     friend class EbIdlePrefixForkState;
@@ -588,6 +589,7 @@ private:
     bool m_simulating = false;
     bool m_bakeOffline = false;
     bool m_applyingRing = false;
+    std::vector<RingObject*> m_ringApplications;
     bool m_orbScanning = false;
     bool m_orbOverlapTick = false;
     // Set when a ghost destroyPlayer was swallowed; cleared on real death / reset.
