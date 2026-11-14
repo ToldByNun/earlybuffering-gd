@@ -88,6 +88,9 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
     simulator.m_simAbsTick = -1;
     simulator.m_simTickBase = 0;
     simulator.m_triggerOriginLayer = nullptr;
+    simulator.m_captureObjects.clear();
+    simulator.m_captureEffects.clear();
+    simulator.m_captureIndexKey.reset();
     simulator.m_transformCaptureLayer = nullptr;
     simulator.m_triggerWorldAppliedIds.clear();
     simulator.m_poseRemapDt = -1.f;

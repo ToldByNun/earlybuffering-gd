@@ -107,3 +107,5 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/test_selected_tick_guard.cpp
 !/tools/test_selected_tick_guard.hpp
 !/tools/fixtures/wave_capture_starvation.json
+!/tools/test_capture_index.cpp
+!/tools/test_capture_index.hpp

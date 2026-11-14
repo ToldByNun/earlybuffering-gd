@@ -1,16 +1,9 @@
 #include "level_lifecycle.hpp"
-#include "../core/assist/runtime/assist_lifecycle.hpp"
 #include "../config/stage_config.hpp"
-#include "../debug/assist_log.hpp"
-#include "../debug/lag_probe.hpp"
-#include "../debug/perf_trace.hpp"
-#include "../dev/capture/dev_cycle_recorder.hpp"
-#include "../ui/feedback/lag_warning_toast.hpp"
-#include "../ui/feedback/save_feedback.hpp"
-#include "../ui/feedback/save_frame_counter.hpp"
-#include "../ui/overlays/status_overlay.hpp"
-#include "../ui/visualizers/bake_path_visualizer.hpp"
-#include "../ui/visualizers/trajectory_visualizer.hpp"
+#include "../core/assist/assist_clock.hpp"
+#include "../core/assist/assist_controller.hpp"
+#include "../core/assist/input/click_intent_guard.hpp"
+#include "../core/assist/runtime/assist_lifecycle.hpp"
 #include "../core/bake/bake_map.hpp"
 #include "../core/bake/bake_verifier.hpp"
 #include "../core/bake/hybrid_verify_cache.hpp"
@@ -21,11 +14,19 @@
 #include "../core/learning/level_profile.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
+#include "../core/sim/world/shadow_world_capture.hpp"
 #include "../core/trigger_world/trigger_world_baker.hpp"
 #include "../core/trigger_world/trigger_world_store.hpp"
-#include "../core/assist/assist_clock.hpp"
-#include "../core/assist/assist_controller.hpp"
-#include "../core/assist/input/click_intent_guard.hpp"
+#include "../debug/assist_log.hpp"
+#include "../debug/lag_probe.hpp"
+#include "../debug/perf_trace.hpp"
+#include "../dev/capture/dev_cycle_recorder.hpp"
+#include "../ui/feedback/lag_warning_toast.hpp"
+#include "../ui/feedback/save_feedback.hpp"
+#include "../ui/feedback/save_frame_counter.hpp"
+#include "../ui/overlays/status_overlay.hpp"
+#include "../ui/visualizers/bake_path_visualizer.hpp"
+#include "../ui/visualizers/trajectory_visualizer.hpp"
 
 void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLayer* playLayer) {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
@@ -142,6 +143,8 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
         EbLevelProfile::get().loadForLevel(playLayer->m_level);
         EbBakeMap::get().loadForLevel(playLayer->m_level);
         EbTriggerWorldBaker::get().loadOrBuild(playLayer);
+        // Build structural lookup tables during setup, ahead of user clicks.
+        EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator::get(), playLayer);
         // Movers / TW tracks → dynamic-labelled TrustRate floor (G7b).
         bool const dynamicLabelled = EbTriggerWorldStore::get().hasTracks();
         EbAssistRealMetrics::get().setLevelKey(EbLevelProfile::get().key(), dynamicLabelled);

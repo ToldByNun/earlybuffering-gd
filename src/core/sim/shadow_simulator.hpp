@@ -13,6 +13,7 @@ class EbSimulationCandidate;
 #include "../trigger_world/trigger_world_store.hpp"
 #include "planning/simulation_plan.hpp"
 #include "shadow_run_result.hpp"
+#include "world/capture_index_key.hpp"
 #include <Geode/Geode.hpp>
 #include <chrono>
 #include <cstdint>
@@ -600,6 +601,10 @@ private:
     std::unordered_map<int, UnknownHistBin> m_unknownHistMap;
     std::vector<SavedObject> m_saved;
     std::vector<SavedTransform> m_savedTransforms;
+    std::unordered_map<int, geode::Ref<GameObject>> m_captureObjects;
+    std::vector<geode::Ref<EffectGameObject>> m_captureEffects;
+    EbCaptureIndexKey m_captureIndexKey;
+
     std::unordered_set<int> m_triggerWorldAppliedIds;
     int m_triggerWorldTimeOffset = 0;
     PlayLayer* m_triggerOriginLayer = nullptr;

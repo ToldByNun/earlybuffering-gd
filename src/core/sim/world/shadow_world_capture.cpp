@@ -50,6 +50,38 @@ public:
 private:
 };
 
+void EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator& simulator, PlayLayer* layer) {
+    if (!layer)
+        return;
+    auto* source = layer->m_objects;
+    if (!source && layer->m_objectLayer)
+        source = layer->m_objectLayer->getChildren();
+    if (!source)
+        return;
+    if (simulator.m_captureIndexKey.matches(layer, source, source->count()))
+        return;
+    simulator.m_captureObjects.clear();
+    simulator.m_captureEffects.clear();
+    simulator.m_captureObjects.reserve(source->count());
+    auto consider = [&](GameObject* object) {
+        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
+            return;
+        if (!simulator.m_captureObjects.emplace(object->m_uniqueID, object).second)
+            return;
+        if (auto* effect = geode::prelude::typeinfo_cast<EffectGameObject*>(object))
+            simulator.m_captureEffects.emplace_back(effect);
+    };
+    // Preserve the original object-layer order for bounded dynamic jobs.
+    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
+        for (unsigned index = 0; index < children->count(); ++index)
+            consider(geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index)));
+    }
+    for (unsigned index = 0; index < source->count(); ++index)
+        consider(geode::prelude::typeinfo_cast<GameObject*>(source->objectAtIndex(index)));
+    EbSectionObjectWalk::forEachInSections(layer, consider);
+    simulator.m_captureIndexKey.bind(layer, source, source->count());
+}
+
 void EbShadowWorldCapture::refreshTimeOrigin(EbShadowSimulator& simulator, PlayLayer* layer) {
     if (!layer)
         return;
@@ -86,38 +118,24 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
 
     EbLagProbe::Scope const scope("eb.trigger.capture");
 
-    // Collect uniqueIds we may move this sim (ready static bake tracks).
-    std::unordered_map<int, EbTriggerTrack const*> tracks;
-    std::unordered_set<int> wanted;
-    if (store.loaded() && store.hasTracks()) {
-        wanted.reserve(store.trackCount());
-        for (auto const& track : store.data().tracks) {
-            if (!track.ready || track.keys.empty())
-                continue;
-            if (!EbTriggerClassify::isStatic(track.kind))
-                continue;
-            wanted.insert(track.uniqueId);
-            tracks.emplace(track.uniqueId, &track);
-        }
-    }
-    if (wanted.empty())
+    refreshObjectIndex(simulator, layer);
+    if (!store.loaded() || !store.hasTracks())
         return;
-
-    std::unordered_set<int> seen;
-    seen.reserve(wanted.size());
-    simulator.m_savedTransforms.reserve(std::min(wanted.size(), static_cast<size_t>(4096)));
-
-    auto consider = [&](GameObject* object) {
-        if (!object)
-            return;
-        int const uid = object->m_uniqueID;
-        if (wanted.find(uid) == wanted.end())
-            return;
-        if (!seen.insert(uid).second)
-            return;
-
+    int const captureTick =
+        (simulator.m_poseRemapDt > 0.f
+             ? store.remapLiveTick(simulator.m_simTickBase, simulator.m_poseRemapDt)
+             : store.remapLiveTick(simulator.m_simTickBase)) +
+        simulator.m_triggerWorldTimeOffset;
+    simulator.m_savedTransforms.reserve(std::min(store.trackCount(), static_cast<size_t>(4096)));
+    for (auto const& track : store.data().tracks) {
+        if (!track.ready || track.keys.empty() || !EbTriggerClassify::isStatic(track.kind))
+            continue;
+        auto const found = simulator.m_captureObjects.find(track.uniqueId);
+        if (found == simulator.m_captureObjects.end())
+            continue;
+        auto* object = found->second.data();
         EbShadowSimulator::SavedTransform st;
-        st.uniqueId = uid;
+        st.uniqueId = track.uniqueId;
         st.obj = object;
         st.sectioned = object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0;
         st.x = object->getPositionX();
@@ -126,30 +144,11 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
         st.scaleX = object->getScaleX();
         st.scaleY = object->getScaleY();
         st.nodeVisible = object->isVisible();
-        st.track = tracks.at(uid);
-        int const captureTick =
-            simulator.m_poseRemapDt > 0.f
-                ? store.remapLiveTick(simulator.m_simTickBase, simulator.m_poseRemapDt)
-                : store.remapLiveTick(simulator.m_simTickBase);
-        st.hasTrackReference = EbTriggerWorldStore::sampleTrackAtStoreTick(
-            *st.track, captureTick + simulator.m_triggerWorldTimeOffset, st.trackReference);
-
-        st.dirty = false;
-        st.hasAppliedPose = false;
+        st.track = &track;
+        st.hasTrackReference =
+            EbTriggerWorldStore::sampleTrackAtStoreTick(track, captureTick, st.trackReference);
         simulator.m_savedTransforms.push_back(st);
-    };
-
-    // Primary: objectLayer children.
-    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
-        for (unsigned index = 0; index < children->count(); ++index) {
-            consider(geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index)));
-        }
     }
-    // Secondary: section lists often hold objects children miss (same as TW baker).
-    // Without this, bake at spawn can get tw=false → toggled spikes stay lethal.
-    // Poison-safe: never raw typeinfo_cast on m_sections (AV read @ -1).
-    if (seen.size() < wanted.size())
-        EbSectionObjectWalk::forEachInSections(layer, consider);
 }
 
 void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer) {
@@ -157,16 +156,15 @@ void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simula
     if (!layer)
         return;
 
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
-        return;
+    refreshObjectIndex(simulator, layer);
 
     std::vector<EffectGameObject*> toggleEffects;
     toggleEffects.reserve(32);
     std::unordered_set<int> groups;
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* effect =
-            geode::prelude::typeinfo_cast<EffectGameObject*>(children->objectAtIndex(index));
+    for (auto const& entry : simulator.m_captureEffects) {
+        auto* effect = entry.data();
+        if (effect->getParent() != layer->m_objectLayer)
+            continue;
         if (!effect)
             continue;
         if (effect->m_targetGroupID <= 0)
@@ -218,19 +216,18 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
     if (!layer || !EbStageConfig::triggerBake())
         return;
 
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
-        return;
+    refreshObjectIndex(simulator, layer);
 
     bool const wantJobs = !EbStageConfig::triggerBakeSkipDynamic();
 
     std::vector<EffectGameObject*> followEffects;
     std::unordered_set<int> groups;
-    for (unsigned index = 0; index < children->count(); ++index) {
+    for (auto const& entry : simulator.m_captureEffects) {
         if (followEffects.size() >= EbShadowSimulator::kMaxDynamicFollowJobs)
             break;
-        auto* effect =
-            geode::prelude::typeinfo_cast<EffectGameObject*>(children->objectAtIndex(index));
+        auto* effect = entry.data();
+        if (effect->getParent() != layer->m_objectLayer)
+            continue;
         if (!effect)
             continue;
         if (effect->m_targetGroupID <= 0)
@@ -371,18 +368,17 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
                                                          PlayLayer* layer) {
     if (!layer || !EbStageConfig::triggerBake())
         return;
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
-        return;
+    refreshObjectIndex(simulator, layer);
 
     static constexpr size_t kMaxUnmodeledTargets = 8192;
     std::vector<EffectGameObject*> movers;
     std::unordered_set<int> groups;
-    for (unsigned index = 0; index < children->count(); ++index) {
+    for (auto const& entry : simulator.m_captureEffects) {
         if (simulator.m_dynamicTargetIds.size() >= kMaxUnmodeledTargets)
             return;
-        auto* effect =
-            geode::prelude::typeinfo_cast<EffectGameObject*>(children->objectAtIndex(index));
+        auto* effect = entry.data();
+        if (effect->getParent() != layer->m_objectLayer)
+            continue;
         if (!effect || effect->m_targetGroupID <= 0)
             continue;
 

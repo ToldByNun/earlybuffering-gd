@@ -5,6 +5,7 @@
 
 class EbShadowWorldCapture {
 public:
+    static void refreshObjectIndex(EbShadowSimulator& simulator, PlayLayer* layer);
     static void refreshTimeOrigin(EbShadowSimulator& simulator, PlayLayer* layer);
     static void captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer);
     static void captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer);
