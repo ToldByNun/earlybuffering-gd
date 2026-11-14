@@ -2,6 +2,7 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "../../core/sim/validation/native_isolation_probe.hpp"
 #include "../../dev/capture/dev_trace_store.hpp"
 #include "../../dev/dev_config.hpp"
 #include "../../dev/dev_session.hpp"
@@ -58,12 +59,11 @@ public:
         (void)EbDesktopMenuBind::setBool("dev-eval-on-death", true);
         (void)EbDesktopMenuBind::setBool("dev-overlay", true);
         (void)EbDesktopMenuBind::setBool("dev-disable-random", true);
-        EbDesktopAlert::info(
-            "EarlyBuffer Dev",
-            "Research Preset on:\n"
-            "Record + Candidates + Freeze World + Hazards +\n"
-            "Eval On Death + Overlay + Disable Random.\n\n"
-            "Next: press Record, die a few times, then Export Research Pack.");
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             "Research Preset on:\n"
+                             "Record + Candidates + Freeze World + Hazards +\n"
+                             "Eval On Death + Overlay + Disable Random.\n\n"
+                             "Next: press Record, die a few times, then Export Research Pack.");
     }
 
     static std::string shortPath(std::filesystem::path const& path) {
@@ -108,9 +108,9 @@ public:
 
         if (EbDevReport::hasLast()) {
             auto const& report = EbDevReport::last();
-            std::string const line =
-                report.overlayLine.empty() ? EbDevReport::formatOverlayLine(report)
-                                           : report.overlayLine;
+            std::string const line = report.overlayLine.empty()
+                                         ? EbDevReport::formatOverlayLine(report)
+                                         : report.overlayLine;
             smallGap();
             ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
             ImGui::TextWrapped("%s", line.c_str());
@@ -180,8 +180,9 @@ public:
                 fireAction("dev-stop-record-action");
             }
         } else {
-            mutedText(canStart ? "Start in a level. With Eval On Death you usually skip manual eval."
-                               : "Turn on Record Enable (or Apply Research Preset) first.");
+            mutedText(canStart
+                          ? "Start in a level. With Eval On Death you usually skip manual eval."
+                          : "Turn on Record Enable (or Apply Research Preset) first.");
             gap();
             if (EbButton::draw("##dev-start", "Start Recording", canStart,
                                "Starts a rolling Dev Lab session in the current level.", true)) {
@@ -235,7 +236,8 @@ public:
             return;
         }
 
-        mutedText("One click: eval all → write pack folder → path on clipboard (send that folder).");
+        mutedText(
+            "One click: eval all → write pack folder → path on clipboard (send that folder).");
         gap();
 
         if (EbButton::draw("##dev-research-pack", "Export Research Pack", true,
@@ -258,6 +260,11 @@ public:
         }
         EbButton::endRow();
 
+        gap();
+        if (EbButton::draw("##dev-native-isolation", "Native Isolation", true,
+                           "Main menu only: compare two native fixture worlds serially.")) {
+            EbDesktopAlert::info("Native Isolation", EbNativeIsolationProbe::run().c_str());
+        }
         gap();
         if (EbButton::draw("##dev-dump-diag", "Dump Diag", true,
                            "Bake/TW/clock folder — for bake bugs, not Live Delay research.")) {

@@ -1,9 +1,10 @@
-#include "../app/class_manager.hpp"
 #include "play_layer_hooks.hpp"
+#include "../app/class_manager.hpp"
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_controller.hpp"
 #include "../core/bake/bake_scheduler.hpp"
 #include "../core/sim/shadow_simulator.hpp"
+#include "../core/sim/validation/native_isolation_probe.hpp"
 #include "../debug/assist_log.hpp"
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
@@ -12,17 +13,22 @@
 auto EbPlayLayer::init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer) -> bool {
     if (!PlayLayer::init(level, useReplay, dontCreatePlayer))
         return false;
-    EbClassManager::get().onLevelInit(this);
+    if (!EbNativeIsolationProbe::creatingWorld())
+        EbClassManager::get().onLevelInit(this);
     return true;
 }
 
 auto EbPlayLayer::resetLevel() -> void {
+    if (EbNativeIsolationProbe::creatingWorld()) {
+        PlayLayer::resetLevel();
+        return;
+    }
     // Ghosts land in section vectors via sim checkCollisions. Vanilla
     // resetLevel → sortSectionVector then AVs on those bodies — evacuate first.
     EbPerfTrace::Scope const scope("resetLevelHook");
-    EbLagProbe::get().beginEpisode("resetLevel", fmt::format("attemptTickWas={} practice={}",
-                                                           EbAssistController::get().attemptTick(),
-                                                           this->m_isPracticeMode));
+    EbLagProbe::get().beginEpisode(
+        "resetLevel", fmt::format("attemptTickWas={} practice={}",
+                                  EbAssistController::get().attemptTick(), this->m_isPracticeMode));
     EbShadowSimulator::get().clearDeathHitboxSuppress();
     EbClassManager::get().beforeLevelReset(this);
     {
@@ -145,7 +151,8 @@ auto EbPlayLayer::spawnCircle() -> void {
 auto EbPlayLayer::levelComplete() -> void {
     // Safe Mode OFF → never force test mode (progress like vanilla).
     // Safe Mode ON → enabled or assist-touched runs count as test clears.
-    bool const block = EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun());
+    bool const block =
+        EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun());
     if (block) {
         this->m_isTestMode = true;
         EbAssistLog::debug("Safe Mode ON: levelComplete → testMode (no normal progress)");

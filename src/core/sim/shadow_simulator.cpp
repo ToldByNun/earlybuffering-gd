@@ -1,5 +1,5 @@
-#include "../../app/class_manager.hpp"
 #include "shadow_simulator.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../dev/capture/dev_live_witness.hpp"
 #include "../../dev/evaluation/dev_eval_restore.hpp"
 #include "../replay/replay_import.hpp"
@@ -16,6 +16,7 @@
 #include "runtime/shadow_physics.hpp"
 #include "runtime/shadow_player_state.hpp"
 #include "runtime/shadow_section_safety.hpp"
+#include "validation/native_isolation_probe.hpp"
 #include "validation/shadow_regression_checks.hpp"
 #include "world/shadow_world_capture.hpp"
 #include "world/shadow_world_dynamics.hpp"
@@ -27,6 +28,8 @@
 // budget: at most this many extra runOnes
 
 EbShadowSimulator& EbShadowSimulator::get() {
+    if (auto* active = EbNativeIsolationProbe::activeSimulator())
+        return *active;
     return EbClassManager::get().service<EbShadowSimulator>();
 }
 
@@ -50,7 +53,8 @@ bool EbShadowSimulator::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject*
     return EbShadowSectionSafety::tryRemoveFromSection(layer, object);
 }
 
-void EbShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer, EbShadowSimulator* self) {
+void EbShadowSimulator::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
+                                                     EbShadowSimulator* self) {
     return EbShadowSectionSafety::scrubOwnedGhostsFromSections(layer, self);
 }
 
@@ -209,7 +213,8 @@ void EbShadowSimulator::clearCollisionLogs(PlayerObject* state) {
     return EbShadowPlayerState::clearCollisionLogs(state);
 }
 
-void EbShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick, PlayerObject* ghost) {
+void EbShadowSimulator::applyTriggerWorldAtTick(PlayLayer* layer, int absTick,
+                                                PlayerObject* ghost) {
     return EbShadowWorldDynamics::applyTriggerWorldAtTick(*this, layer, absTick, ghost);
 }
 
@@ -248,7 +253,8 @@ PlayerObject* EbShadowSimulator::snapshotSlot(int slot) const {
     return EbShadowPlayerState::snapshotSlot(*this, slot);
 }
 
-EbShadowSimulator::Model EbShadowSimulator::modelFor(PlayerObject* player, int limit, float capMul) {
+EbShadowSimulator::Model EbShadowSimulator::modelFor(PlayerObject* player, int limit,
+                                                     float capMul) {
     return EbShadowPlanPolicy::modelFor(player, limit, capMul);
 }
 
@@ -256,52 +262,55 @@ bool EbShadowSimulator::isHazardLike(GameObject* object) {
     return EbShadowPlanPolicy::isHazardLike(object);
 }
 
-EbThreatZone EbShadowSimulator::buildThreatZone(PlayLayer* layer, float deathX, GameObject* deathObj) {
+EbThreatZone EbShadowSimulator::buildThreatZone(PlayLayer* layer, float deathX,
+                                                GameObject* deathObj) {
     return EbShadowPlanPolicy::buildThreatZone(layer, deathX, deathObj);
 }
 
 bool EbShadowSimulator::spatialOrbHint(PlayLayer* layer, PlayerObject* real, int limit,
-                                     float deltaTime) {
+                                       float deltaTime) {
     return EbShadowPlanPolicy::spatialOrbHint(layer, real, limit, deltaTime);
 }
 
 bool EbShadowSimulator::spatialHazardProximity(PlayLayer* layer, PlayerObject* real,
-                                             float proximityX) {
+                                               float proximityX) {
     return EbShadowPlanPolicy::spatialHazardProximity(layer, real, proximityX);
 }
 
-bool EbShadowSimulator::shouldWaveHazardProximityPass(bool isWave, bool nearHazard, bool noOrbTarget,
-                                                    bool foresightOrbPad, bool pressDown) {
+bool EbShadowSimulator::shouldWaveHazardProximityPass(bool isWave, bool nearHazard,
+                                                      bool noOrbTarget, bool foresightOrbPad,
+                                                      bool pressDown) {
     return EbShadowPlanPolicy::shouldWaveHazardProximityPass(isWave, nearHazard, noOrbTarget,
-                                                           foresightOrbPad, pressDown);
+                                                             foresightOrbPad, pressDown);
 }
 
 bool EbShadowSimulator::shouldWaveFutileDelayPass(bool isWave, bool orbIntent, int bestSurviveBin,
-                                                float bestEndXGain, bool foresightOrbPad,
-                                                bool pressDown) {
+                                                  float bestEndXGain, bool foresightOrbPad,
+                                                  bool pressDown) {
     return EbShadowPlanPolicy::shouldWaveFutileDelayPass(isWave, orbIntent, bestSurviveBin,
-                                                       bestEndXGain, foresightOrbPad, pressDown);
+                                                         bestEndXGain, foresightOrbPad, pressDown);
 }
 
 bool EbShadowSimulator::deathLooksLikeAscent(float playerY, float deathY, bool upsideDown,
-                                           float marginY) {
+                                             float marginY) {
     return EbShadowPlanPolicy::deathLooksLikeAscent(playerY, deathY, upsideDown, marginY);
 }
 
 bool EbShadowSimulator::classifyIdleSafer(bool continuous, bool pressDown, bool baselineDied,
-                                        int baselineDeathTick, float baselineDeathX, bool d0Died,
-                                        int d0DeathTick, float d0DeathX) {
+                                          int baselineDeathTick, float baselineDeathX, bool d0Died,
+                                          int d0DeathTick, float d0DeathX) {
     return EbShadowPlanPolicy::classifyIdleSafer(continuous, pressDown, baselineDied,
-                                               baselineDeathTick, baselineDeathX, d0Died,
-                                               d0DeathTick, d0DeathX);
+                                                 baselineDeathTick, baselineDeathX, d0Died,
+                                                 d0DeathTick, d0DeathX);
 }
 
 bool EbShadowSimulator::classifyAscentUseful(bool continuous, bool pressDown, bool d0Viable,
-                                           int d0SurviveBin, float d0EndX, bool laterViable,
-                                           int laterSurviveBin, float laterEndX, bool laterAlive) {
+                                             int d0SurviveBin, float d0EndX, bool laterViable,
+                                             int laterSurviveBin, float laterEndX,
+                                             bool laterAlive) {
     return EbShadowPlanPolicy::classifyAscentUseful(continuous, pressDown, d0Viable, d0SurviveBin,
-                                                  d0EndX, laterViable, laterSurviveBin, laterEndX,
-                                                  laterAlive);
+                                                    d0EndX, laterViable, laterSurviveBin, laterEndX,
+                                                    laterAlive);
 }
 
 int EbShadowSimulator::pickPreferredRelease(int earliest, int latest, bool continuous) {
@@ -309,8 +318,9 @@ int EbShadowSimulator::pickPreferredRelease(int earliest, int latest, bool conti
 }
 
 int EbShadowSimulator::autoRobustKHints(bool waveLike, bool isWave, float playerSpeed,
-                                      float dtVariance, bool spamDense) {
-    return EbShadowPlanPolicy::autoRobustKHints(waveLike, isWave, playerSpeed, dtVariance, spamDense);
+                                        float dtVariance, bool spamDense) {
+    return EbShadowPlanPolicy::autoRobustKHints(waveLike, isWave, playerSpeed, dtVariance,
+                                                spamDense);
 }
 
 int EbShadowSimulator::autoRobustK(PlayerObject* real, float dtVariance, bool spamDense) {
@@ -328,26 +338,28 @@ EbShadowSimulator::runOne(PlayLayer* layer, PlayerObject* real, bool down, int d
 
 EbShadowSimulator::RunResult
 EbShadowSimulator::runTrajectoryOne(PlayLayer* layer, PlayerObject* real, bool down, int delay,
-                                  int limit, float deltaTime, float firstDt, Model const& model,
-                                  int releaseAfter, EbThreatZone const* zone, int* tickBudgetLeft) {
+                                    int limit, float deltaTime, float firstDt, Model const& model,
+                                    int releaseAfter, EbThreatZone const* zone,
+                                    int* tickBudgetLeft) {
     return EbShadowCandidateRunner::runTrajectoryOne(*this, layer, real, down, delay, limit,
-                                                   deltaTime, firstDt, model, releaseAfter, zone,
-                                                   tickBudgetLeft);
+                                                     deltaTime, firstDt, model, releaseAfter, zone,
+                                                     tickBudgetLeft);
 }
 
 EbShadowSimulator::RunResult EbShadowSimulator::runBaseline(PlayLayer* layer, PlayerObject* real,
-                                                        bool down, float deltaTime, float firstDt,
-                                                        Model const& model, int* tickBudgetLeft) {
+                                                            bool down, float deltaTime,
+                                                            float firstDt, Model const& model,
+                                                            int* tickBudgetLeft) {
     return EbShadowCandidateRunner::runBaseline(*this, layer, real, down, deltaTime, firstDt, model,
-                                              tickBudgetLeft);
+                                                tickBudgetLeft);
 }
 
 EbShadowSimulator::OrbWindow EbShadowSimulator::scanOrbWindow(PlayLayer* layer, PlayerObject* real,
-                                                          bool down, int scanTicks, float deltaTime,
-                                                          float firstDt, int* tickBudgetLeft,
-                                                          bool holdJump) {
+                                                              bool down, int scanTicks,
+                                                              float deltaTime, float firstDt,
+                                                              int* tickBudgetLeft, bool holdJump) {
     return EbShadowCandidateRunner::scanOrbWindow(*this, layer, real, down, scanTicks, deltaTime,
-                                                firstDt, tickBudgetLeft, holdJump);
+                                                  firstDt, tickBudgetLeft, holdJump);
 }
 
 // Score honesty + ModeSurvival:
@@ -357,45 +369,47 @@ EbShadowSimulator::OrbWindow EbShadowSimulator::scanOrbWindow(PlayLayer* layer, 
 // Landing / Recoverable / LateCrashAfterClear (bake verify).
 // Live arm (requireAliveForDelay=true): Delay-worthy = Alive only; Landing /
 
-EbShadowSimulator::VerifyDelayResult
-EbShadowSimulator::verifyDelay(PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
-                             float deltaTime, float firstDt, EbPlanOptions const& options) {
+EbShadowSimulator::VerifyDelayResult EbShadowSimulator::verifyDelay(PlayLayer* layer,
+                                                                    PlayerObject* real, bool down,
+                                                                    int delay, int limit,
+                                                                    float deltaTime, float firstDt,
+                                                                    EbPlanOptions const& options) {
     return EbShadowDelayVerifier::verifyDelay(*this, layer, real, down, delay, limit, deltaTime,
-                                            firstDt, options);
+                                              firstDt, options);
 }
 
 EbSimPlan EbShadowSimulator::plan(PlayLayer* layer, PlayerObject* real, bool down, int limit,
-                                float deltaTime, float firstDt, EbPlanOptions const& options) {
+                                  float deltaTime, float firstDt, EbPlanOptions const& options) {
     return EbAdaptivePlanSearch::run(*this, layer, real, down, limit, deltaTime, firstDt, options);
 }
 
-EbSimPlan EbShadowSimulator::planSequence(PlayLayer* layer, PlayerObject* real, bool down, int limit,
-                                      float deltaTime, float firstDt, EbPlanOptions const& options) {
-    return EbShadowSequencePlanner::planSequence(*this, layer, real, down, limit, deltaTime, firstDt,
-                                               options);
+EbSimPlan EbShadowSimulator::planSequence(PlayLayer* layer, PlayerObject* real, bool down,
+                                          int limit, float deltaTime, float firstDt,
+                                          EbPlanOptions const& options) {
+    return EbShadowSequencePlanner::planSequence(*this, layer, real, down, limit, deltaTime,
+                                                 firstDt, options);
 }
 
 EbShadowSimulator::ReplayResult EbShadowSimulator::replay(PlayLayer* layer, int slot, int startTick,
-                                                      std::vector<EbInputEvent> const& timeline,
-                                                      float deltaTime, int maxTicks,
-                                                      bool shiftActionBy, int actionShift) {
-    return EbShadowReplayRunner::replay(*this, layer, slot, startTick, timeline, deltaTime, maxTicks,
-                                      shiftActionBy, actionShift);
+                                                          std::vector<EbInputEvent> const& timeline,
+                                                          float deltaTime, int maxTicks,
+                                                          bool shiftActionBy, int actionShift) {
+    return EbShadowReplayRunner::replay(*this, layer, slot, startTick, timeline, deltaTime,
+                                        maxTicks, shiftActionBy, actionShift);
 }
 
-EbShadowSimulator::BakeRunResult
-EbShadowSimulator::runBakeTimeline(PlayLayer* layer, int slot, std::vector<EbReplayEvent> const& events,
-                                 float deltaTime, int untilFrame, int sampleFrame,
-                                 bool applyP2ToShadow, bool traceFrames, bool parkReals,
-                                 int substeps, std::function<bool(int frame)> onFrame) {
+EbShadowSimulator::BakeRunResult EbShadowSimulator::runBakeTimeline(
+    PlayLayer* layer, int slot, std::vector<EbReplayEvent> const& events, float deltaTime,
+    int untilFrame, int sampleFrame, bool applyP2ToShadow, bool traceFrames, bool parkReals,
+    int substeps, std::function<bool(int frame)> onFrame) {
     return EbShadowReplayRunner::runBakeTimeline(*this, layer, slot, events, deltaTime, untilFrame,
-                                               sampleFrame, applyP2ToShadow, traceFrames, parkReals,
-                                               substeps, onFrame);
+                                                 sampleFrame, applyP2ToShadow, traceFrames,
+                                                 parkReals, substeps, onFrame);
 }
 
-EbShadowSimulator::PathSample EbShadowSimulator::samplePath(PlayLayer* layer, int slot,
-                                                        std::vector<EbReplayEvent> const& events,
-                                                        float deltaTime, int untilFrame) {
+EbShadowSimulator::PathSample
+EbShadowSimulator::samplePath(PlayLayer* layer, int slot, std::vector<EbReplayEvent> const& events,
+                              float deltaTime, int untilFrame) {
     return EbShadowReplayRunner::samplePath(*this, layer, slot, events, deltaTime, untilFrame);
 }
 
@@ -408,7 +422,7 @@ void EbShadowSimulator::applyPlayerBlob(PlayerObject* destination, EbDevPlayerBl
 }
 
 void EbShadowSimulator::applyEvalWorldRestore(PlayLayer* layer, EbDevLiveWitness const& witness,
-                                            EbDevEvalRestore& restore) {
+                                              EbDevEvalRestore& restore) {
     return EbShadowFreezeEvaluator::applyEvalWorldRestore(*this, layer, witness, restore);
 }
 
@@ -426,8 +440,8 @@ EbShadowSimulator::evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const&
 
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowSimulator::replayActualFire(PlayLayer* layer, EbDevLiveWitness const& witness,
-                                  int actualFireTickAbs, int horizonTicks, bool down,
-                                  int* tickBudgetLeft) {
+                                    int actualFireTickAbs, int horizonTicks, bool down,
+                                    int* tickBudgetLeft) {
     return EbShadowFreezeEvaluator::replayActualFire(*this, layer, witness, actualFireTickAbs,
-                                                   horizonTicks, down, tickBudgetLeft);
+                                                     horizonTicks, down, tickBudgetLeft);
 }
