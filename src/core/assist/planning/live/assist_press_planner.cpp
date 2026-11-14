@@ -185,7 +185,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
 
     // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
     // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
-    if (!mustDelaySearch &&
+    if (!player->m_isBird && !mustDelaySearch &&
         EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
         EbAssistLog::debug(fmt::format("intent: spam Pass (mode={}, tick={})",
                                      EbStageConfig::kindName(kind), effectTick));
@@ -276,6 +276,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.mustDelaySearch = mustDelaySearch;
     // Live Delay-arm: only Alive ghosts (bake verify keeps soft Landing/LateCrash).
     opts.requireAliveForDelay = true;
+    opts.allowSubtick =
+        clock.midStep && player1 && player->m_isBird && !playLayer->m_gameState.m_isDualMode;
+
     // Density without orb/bake override — softens Wave λ / bumps auto k when
     // we still assist (e.g. orb in spam corridor).
     bool const spamDense = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
@@ -448,6 +451,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.m_buffer = {};
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = true;
+    controller.m_buffer.firePhase = plan.firePhase;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;

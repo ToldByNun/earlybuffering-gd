@@ -60,7 +60,7 @@ public:
 
     void noteRecheck(int64_t pressId, int oldFireTick, int newFireTick, char const* where);
     void noteHus(int64_t pressId, AssistReason reason, char const* where, int fireTick);
-    void noteFire(int64_t pressId, int actualFireTick);
+    void noteFire(int64_t pressId, int actualFireTick, float phase = 0.f);
     void noteHoldExtend(int64_t pressId, int holdExtendMax);
     // AP7: user early-UP while Delay armed / hold swallow / injected release.
     void noteReleaseSeen(int64_t pressId, int attemptTick);
@@ -110,6 +110,7 @@ private:
         bool armVerifyOk = true;
         bool budgetHitAtArm = false;
         int holdExtendMax = -1;
+        float plannedFirePhase = 0.f;
         int actualFireTick = -1;
         int recheckDelta = 0;
         // AP7 hold timeline

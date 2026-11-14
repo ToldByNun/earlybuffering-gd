@@ -138,7 +138,31 @@ auto EbPlayerObjectLate::update(float deltaTime) -> void {
         PlayerObject::update(deltaTime);
         return;
     }
-    if (!EbGameHookSimulationGuard::simulating())
-        EbAssistController::get().onSubStep(this, deltaTime);
+    if (!EbGameHookSimulationGuard::simulating()) {
+        auto& controller = EbAssistController::get();
+        float const prefix = controller.bufferedSubstepPrefix(this, deltaTime);
+        if (prefix >= 0.f) {
+            auto* layer = PlayLayer::get();
+            auto const tickStart = this->getPosition();
+            if (prefix > 0.f) {
+                controller.onSubStep(this, prefix);
+                PlayerObject::update(prefix);
+                if (layer && !this->m_isDead)
+                    layer->checkCollisions(this, this->m_isOnSlope ? deltaTime : 0.f, true);
+                EbShadowSimulator::clearCollisionLogs(this);
+            }
+            if (this->m_isDead || (layer && layer->m_playerDied))
+                return;
+            controller.fireBufferedSubstep(this);
+            float const remainder = deltaTime - prefix;
+            if (remainder > 0.f) {
+                controller.onSubStep(this, remainder);
+                PlayerObject::update(remainder);
+            }
+            this->m_lastPosition = tickStart;
+            return;
+        }
+        controller.onSubStep(this, deltaTime);
+    }
     PlayerObject::update(deltaTime);
 }

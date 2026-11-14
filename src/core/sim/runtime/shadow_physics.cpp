@@ -133,9 +133,10 @@ void EbShadowPhysics::stepPreCollide(EbShadowSimulator& simulator, PlayLayer* la
         state->m_isDead = false;
 }
 
-void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
-                                float stepDt, float deltaTime) {
-    auto const tickStart = std::chrono::steady_clock::now();
+void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer,
+                                  PlayerObject* state, float stepDt, float deltaTime,
+                                  bool splitPrefix, cocos2d::CCPoint const* tickStart) {
+    auto const tickWallStart = std::chrono::steady_clock::now();
     simulator.m_triggerWorldAppliedThisTick = false;
     simulator.m_liveDynamicAppliedIds.clear();
     if (simulator.m_simAbsTick >= 0) {
@@ -148,19 +149,22 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
     float colDt = stepDt;
     if (colDt < deltaTime)
         colDt = deltaTime; // same rule as pre-collide: never a tiny remainder
-    float const gdColDt = EbAssistClock::secondsToGdStep(colDt);
+    float const gdColDt = splitPrefix ? 0.f : EbAssistClock::secondsToGdStep(colDt);
     // Ghost muted once in copyPlayerState / beginSession — not 3× per physics tick.
     state->update(gdStepDt);
+    if (tickStart)
+        state->m_lastPosition = *tickStart;
     if (!simulator.m_dead) {
         simulator.clearCollisionLogs(state);
-        layer->checkCollisions(state, gdColDt, false);
+        float const collisionDelta =
+            splitPrefix && state->m_isOnSlope ? EbAssistClock::secondsToGdStep(deltaTime) : gdColDt;
+        layer->checkCollisions(state, collisionDelta, splitPrefix);
     }
     if (state && simulator.isOwnedGhost(state) && state->m_isDead)
         state->m_isDead = false;
     // AP1 measure-only: feed Adaptive BudgetController (does not change search).
-    int const us = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() -
-                                                              tickStart)
-            .count());
+    int const us = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                        std::chrono::steady_clock::now() - tickWallStart)
+                                        .count());
     EbSimTickCostMeter::get().notePhysicsTick(us);
 }

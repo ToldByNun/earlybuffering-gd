@@ -6,6 +6,7 @@
 #include "../../../dev/evaluation/dev_eval_restore.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../shadow_simulator.hpp"
+#include <cmath>
 
 void EbShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination, EbDevPlayerBlob const& blob) {
     if (!destination || !blob.present)
@@ -206,14 +207,16 @@ void EbShadowFreezeEvaluator::finishEvalWorldRestore(EbShadowSimulator& simulato
     simulator.m_savedActivatedIDs.clear();
 }
 
-EbShadowSimulator::EvalFromFreezeResult
-EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayLayer* layer,
-                                           EbDevLiveWitness const& witness, int delay,
-                                           int horizonTicks, bool down, int* tickBudgetLeft,
-                                           bool captureTraj) {
+EbShadowSimulator::EvalFromFreezeResult EbShadowFreezeEvaluator::evalDelayFromFreeze(
+    EbShadowSimulator& simulator, PlayLayer* layer, EbDevLiveWitness const& witness, int delay,
+    int horizonTicks, bool down, int* tickBudgetLeft, bool captureTraj, float firePhase) {
     EbShadowSimulator::EvalFromFreezeResult out;
     out.evalSimPathId = DevSimPathId::EvalDelayFromFreeze;
     simulator.m_evalAbort = false;
+    if (!std::isfinite(firePhase) || firePhase < 0.f || firePhase >= 1.f) {
+        out.clockMismatch = true;
+        return out;
+    }
 
     if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
         out.clockMismatch = true;
@@ -313,13 +316,31 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
             out.budgetHit = true;
             break;
         }
-        float const stepDt = steps[static_cast<size_t>(tick)];
+        float stepDt = steps[static_cast<size_t>(tick)];
+        cocos2d::CCPoint tickStart;
+        bool splitAction = false;
         out.ticksRan = tick + 1;
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase + tick;
         simulator.m_triggerWorldAppliedThisTick = false;
 
         if (!acted && tick == delay) {
+            if (firePhase > 0.f && delay > 0) {
+                tickStart = ghost->getPosition();
+                float const prefix = stepDt * firePhase;
+                simulator.stepPhysics(layer, ghost, prefix, witness.clock.simDt, true);
+                if (simulator.m_dead || simulator.m_unknown) {
+                    out.died = simulator.m_dead;
+                    out.unknown = simulator.m_unknown;
+                    out.deathTick = simulator.m_dead ? tick : -1;
+                    out.endX = ghost->getPositionX();
+                    pushTraj(tick);
+                    break;
+                }
+                simulator.clearCollisionLogs(ghost);
+                stepDt -= prefix;
+                splitAction = true;
+            }
             acted = true;
             if (down) {
                 ghost->pushButton(PlayerButton::Jump);
@@ -340,7 +361,8 @@ EbShadowFreezeEvaluator::evalDelayFromFreeze(EbShadowSimulator& simulator, PlayL
             }
         }
 
-        simulator.stepPhysics(layer, ghost, stepDt, witness.clock.simDt);
+        simulator.stepPhysics(layer, ghost, stepDt, witness.clock.simDt, false,
+                              splitAction ? &tickStart : nullptr);
         pushTraj(tick);
         if (simulator.m_dead) {
             out.died = true;

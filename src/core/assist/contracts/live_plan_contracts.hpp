@@ -134,6 +134,20 @@ public:
         return isBall && orbAssist && !hasStableLanding && groundSearchComplete;
     }
 
+    // UFO timing windows can reopen after several equal ceiling collisions.
+    static constexpr bool repeatedDeathCutAllowed(bool isUfo, bool repeatedDeath) {
+        return !isUfo && repeatedDeath;
+    }
+    static constexpr int ufoRescueProbe(int limit, int index) {
+        if (limit <= 1 || index < 0 || index > 2)
+            return -1;
+        if (index == 0)
+            return limit < 4 ? 1 : limit / 4;
+        if (index == 1)
+            return limit / 2;
+        return limit;
+    }
+
     // AP07: reach middle/late Cube windows before ascending dead prefixes
     // consume the wall. The caller still verifies every proposed delay.
     static constexpr int cubeRescueProbe(int limit, int index) {

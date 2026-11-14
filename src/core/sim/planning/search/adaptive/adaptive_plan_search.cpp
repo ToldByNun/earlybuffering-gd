@@ -271,7 +271,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         for (int delay = 1; delay <= limit; ++delay) {
             if (plan.budgetHit)
                 break;
-            if (EbPrefixSim::sameCrashShouldStop(sameCrashStreak))
+            if (EbLivePlanContracts::repeatedDeathCutAllowed(
+                    real->m_isBird, EbPrefixSim::sameCrashShouldStop(sameCrashStreak)))
                 break;
             if (envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen) <= 0) {
                 // Screen empty with Living survivors is not a hard miss — AP2 will
@@ -297,7 +298,10 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
-        if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
+        if (options.allowSubtick && real->m_isBird) {
+            fallClassic = true;
+            plan.adaptiveAbortedForFallthrough = true;
+        } else if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
             fallClassic = true;
             plan.budgetHit = true;
         } else if (EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(

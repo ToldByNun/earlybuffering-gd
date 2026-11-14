@@ -3,13 +3,18 @@
 #include "../planning/simulation_plan.hpp"
 #include "../shadow_simulator.hpp"
 #include <algorithm>
+#include <cmath>
 
 EbShadowSimulator::RunResult
 EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
-                              bool down, int delay, int limit, float deltaTime, float firstDt,
-                              EbShadowSimulator::Model const& model, int releaseAfter,
-                              EbThreatZone const* zone, int* tickBudgetLeft) {
+                                bool down, int delay, int limit, float deltaTime, float firstDt,
+                                EbShadowSimulator::Model const& model, int releaseAfter,
+                                EbThreatZone const* zone, int* tickBudgetLeft, float firePhase) {
     EbShadowSimulator::RunResult r;
+    if (!std::isfinite(firePhase) || firePhase < 0.f || firePhase >= 1.f) {
+        r.unknown = r.unknownTrunc = true;
+        return r;
+    }
     (void)limit;
     simulator.copyPlayerState(simulator.m_shadow, real);
     simulator.m_dead = false;
@@ -78,12 +83,32 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
     for (int tick = 0; tick < maxTicks; ++tick) {
         if (spend(tick))
             break;
-        float const stepDt = (tick == 0) ? firstDt : deltaTime;
+        float stepDt = (tick == 0) ? firstDt : deltaTime;
+        cocos2d::CCPoint tickStart;
+        bool splitAction = false;
         r.ticksRan = tick + 1;
         simulator.m_orbOverlapTick = false;
         simulator.m_simAbsTick = simulator.m_simTickBase + tick;
 
         if (!acted && tick == delay) {
+            if (firePhase > 0.f) {
+                tickStart = shadowPlayer->getPosition();
+                float const prefix = stepDt * firePhase;
+                simulator.stepPhysics(layer, shadowPlayer, prefix, deltaTime, true);
+                if (simulator.m_dead || simulator.m_unknown) {
+                    r.died = simulator.m_dead;
+                    r.unknown = simulator.m_unknown;
+                    r.unknownTrunc = simulator.m_unknown;
+                    r.diedBeforeAction = simulator.m_dead;
+                    r.deathTick = simulator.m_dead ? tick : -1;
+                    r.deathX = shadowPlayer->getPositionX();
+                    r.deathObject = simulator.m_deathObject;
+                    return finish(r);
+                }
+                simulator.clearCollisionLogs(shadowPlayer);
+                stepDt -= prefix;
+                splitAction = true;
+            }
             acted = true;
             if (down) {
                 shadowPlayer->pushButton(PlayerButton::Jump);
@@ -115,7 +140,8 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             }
         }
 
-        simulator.stepPhysics(layer, shadowPlayer, stepDt, deltaTime);
+        simulator.stepPhysics(layer, shadowPlayer, stepDt, deltaTime, false,
+                              splitAction ? &tickStart : nullptr);
         if (simulator.m_dead) {
             r.died = true;
             r.deathTick = tick;

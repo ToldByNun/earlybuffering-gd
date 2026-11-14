@@ -192,6 +192,8 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->candNotesTruncated = plan.candNotesTruncated;
     // 1.5.1 AP0: hitch / Adaptive shell cost bits (additive; no plan behavior change).
     width->hasPlanCost = true;
+    width->plannedFirePhase = plan.firePhase;
+    cycle->plannedFirePhase = plan.firePhase;
     width->planUs = plan.planUs;
     width->worldCaptureUs = plan.worldCaptureUs;
     width->prepareUs = plan.prepareUs;
@@ -384,6 +386,7 @@ int64_t EbDevCycleRecorder::noteDelayArm(AssistReason reason, char const* where,
         return 0;
     width->plannedDelay = plannedDelay;
     width->plannedFireTick = plannedFireTick;
+    width->plannedFirePhase = cycle->plannedFirePhase;
     width->source = source;
     width->hasAssistDiag = true;
     width->armVerifyOk = meta.armVerifyOk;
@@ -437,7 +440,7 @@ void EbDevCycleRecorder::noteHus(int64_t pressId, AssistReason reason, char cons
     width->plannedFireTick = fireTick;
 }
 
-void EbDevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
+void EbDevCycleRecorder::noteFire(int64_t pressId, int actualFireTick, float phase) {
     auto* cycle = this->tracked(pressId);
     if (!cycle || !this->isRecording())
         return;
@@ -451,6 +454,7 @@ void EbDevCycleRecorder::noteFire(int64_t pressId, int actualFireTick) {
     if (!width)
         return;
     width->actualFireTick = actualFireTick;
+    width->actualFirePhase = phase;
     width->assistReason = fmt::format("fire@{}", actualFireTick);
     width->hasAssistDiag = true;
     width->armVerifyOk = cycle->armVerifyOk;

@@ -1,4 +1,5 @@
 #include "dev_eval_engine.hpp"
+#include "../../core/assist/contracts/subtick_timing.hpp"
 #include <algorithm>
 #include <cstring>
 #include <fmt/format.h>
@@ -117,9 +118,10 @@ std::vector<int> EbDevEvalEngine::buildGridDelays(EbDevConfig::EvalGrid grid, in
 
 EbDevEvalEngine::GridReport
 EbDevEvalEngine::evalGrid(PlayLayer* layer, EbDevLiveWitness const& witness, bool down, int limit,
-                        int plannedDelay, int robustK, int horizonTicks, int tailTicks,
-                        EbDevConfig::EvalGrid grid, EbDevObjective::Kind objective,
-                        EbDevClassifyOptions const& opts, float latencyWeight, int* tickBudgetLeft) {
+                          int plannedDelay, int robustK, int horizonTicks, int tailTicks,
+                          EbDevConfig::EvalGrid grid, EbDevObjective::Kind objective,
+                          EbDevClassifyOptions const& opts, float latencyWeight,
+                          int* tickBudgetLeft, float firePhase) {
     GridReport gr;
     gr.timeBasis = EbDevClockContract::kTimeBasisPhysicsTick;
     gr.clockSchema = EbDevClockContract::kSchema;
@@ -129,7 +131,7 @@ EbDevEvalEngine::evalGrid(PlayLayer* layer, EbDevLiveWitness const& witness, boo
     gr.horizonTicks = horizonTicks;
     gr.tailTicks = tailTicks;
     gr.limit = limit;
-    gr.objectivePartial = (grid != EbDevConfig::EvalGrid::Full);
+    gr.objectivePartial = (grid != EbDevConfig::EvalGrid::Full) || firePhase > 0.f;
 
     if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
         gr.clockMismatch = true;
@@ -155,10 +157,13 @@ EbDevEvalEngine::evalGrid(PlayLayer* layer, EbDevLiveWitness const& witness, boo
 
     EbShadowSimulator::get().clearEvalAbort();
     for (int delay : delays) {
+        if (firePhase > 0.f && delay > 0 && !EbSubtickTiming::withinWindow(delay, firePhase, limit))
+            continue;
         if (EbShadowSimulator::get().evalAbortRequested())
             break;
         auto rawData = EbShadowSimulator::get().evalDelayFromFreeze(
-            layer, witness, delay, schedHorizon, down, tickBudgetLeft);
+            layer, witness, delay, schedHorizon, down, tickBudgetLeft, false,
+            delay > 0 ? firePhase : 0.f);
         if (rawData.clockMismatch) {
             gr.clockMismatch = true;
             break;
@@ -171,6 +176,7 @@ EbDevEvalEngine::evalGrid(PlayLayer* layer, EbDevLiveWitness const& witness, boo
         }
 
         EbDevObjective::Sample sample;
+        sample.firePhase = delay > 0 ? firePhase : 0.f;
         EbDevObjective::classifyPrimaryAndTail(sample, delay, horizonTicks, tailTicks, rawData.died,
                                              rawData.deathTick, rawData.endX, rawData.unknown,
                                              rawData.budgetHit, rawData.aborted, rawData.ticksRan);

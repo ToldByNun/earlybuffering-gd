@@ -109,3 +109,9 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/fixtures/wave_capture_starvation.json
 !/tools/test_capture_index.cpp
 !/tools/test_capture_index.hpp
+!/tools/test_ufo_rescue.cpp
+!/tools/test_ufo_rescue.hpp
+!/tools/test_subtick_timing.cpp
+!/tools/test_subtick_timing.hpp
+!/tools/fixtures/ufo_cbf_window.json
+!/tools/fixtures/ufo_boundary_starvation.json

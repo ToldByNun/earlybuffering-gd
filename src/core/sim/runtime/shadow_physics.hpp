@@ -13,7 +13,8 @@ public:
     static void stepPreCollide(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
                                float deltaTime);
     static void stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* state,
-                            float stepDt, float deltaTime);
+                            float stepDt, float deltaTime, bool splitPrefix = false,
+                            cocos2d::CCPoint const* tickStart = nullptr);
 
 private:
     EbShadowPhysics() = delete;

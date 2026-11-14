@@ -227,6 +227,14 @@ void EbAssistController::beginRealUpdate() {
     return EbAssistLifecycle::beginRealUpdate(*this);
 }
 
+float EbAssistController::bufferedSubstepPrefix(PlayerObject* player, float deltaTime) {
+    return EbAssistBufferRuntime::substepPrefix(*this, player, deltaTime);
+}
+
+void EbAssistController::fireBufferedSubstep(PlayerObject* player) {
+    EbAssistBufferRuntime::fireSubstep(*this, player);
+}
+
 void EbAssistController::endRealUpdate() {
     return EbAssistLifecycle::endRealUpdate(*this);
 }

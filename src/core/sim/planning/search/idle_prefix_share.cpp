@@ -617,7 +617,8 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
             candidate.diedBeforeAction);
         if (candidate.raw.died && !candidate.diedBeforeAction && candidate.raw.deathTick >= 0)
             sameCrashPrevTick = candidate.raw.deathTick;
-        if (EbPrefixSim::sameCrashShouldStop(sameCrashStreak)) {
+        if (EbLivePlanContracts::repeatedDeathCutAllowed(
+                context.real->m_isBird, EbPrefixSim::sameCrashShouldStop(sameCrashStreak))) {
             sameCrashStopped = true;
             context.ledgerSameCrashExit = true;
             EbAssistLog::debug(fmt::format(

@@ -30,6 +30,8 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     otherIndex["plannedDelay"] = e.plannedDelay;
     otherIndex["plannedFireTick"] = e.plannedFireTick;
     otherIndex["actualFireTick"] = e.actualFireTick;
+    otherIndex["plannedFirePhase"] = e.plannedFirePhase;
+    otherIndex["actualFirePhase"] = e.actualFirePhase;
     if (!e.assistReason.empty())
         otherIndex["assistReason"] = e.assistReason;
     if (!e.endReason.empty())
@@ -253,6 +255,12 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         j.contains("pressTick") ? static_cast<int>(j["pressTick"].asInt().unwrapOr(0)) : 0;
     e.plannedDelay =
         j.contains("plannedDelay") ? static_cast<int>(j["plannedDelay"].asInt().unwrapOr(0)) : 0;
+    e.plannedFirePhase = j.contains("plannedFirePhase")
+                             ? static_cast<float>(j["plannedFirePhase"].asDouble().unwrapOr(0.0))
+                             : 0.f;
+    e.actualFirePhase = j.contains("actualFirePhase")
+                            ? static_cast<float>(j["actualFirePhase"].asDouble().unwrapOr(0.0))
+                            : 0.f;
     e.plannedFireTick = j.contains("plannedFireTick")
                             ? static_cast<int>(j["plannedFireTick"].asInt().unwrapOr(-1))
                             : -1;

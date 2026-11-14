@@ -49,7 +49,9 @@ public:
     int pressTick = 0;
     int plannedDelay = 0;
     int plannedFireTick = -1;
+    float plannedFirePhase = 0.f;
     int actualFireTick = -1;
+    float actualFirePhase = 0.f;
     std::string assistReason;
     std::string endReason; // outcome only: death|complete|quit|manual|empty
 

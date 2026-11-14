@@ -112,7 +112,7 @@ bool EbDevReportImplementation::runEvalOnPlanEvent(PlayLayer* layer, EbDevDecisi
     auto grid = EbDevEvalEngine::evalGrid(
         layer, planEv.witness, planEv.down, limit, planEv.plannedDelay, robustK, horizon, tail,
         EbDevConfig::evalGrid(), EbDevReportImplementation::objectiveKindFromConfig(), opts,
-        latencyWeight, &tickBudget);
+        latencyWeight, &tickBudget, planEv.plannedFirePhase);
 
     std::string rec;
     if (EbDevSession::get().isRecording()) {

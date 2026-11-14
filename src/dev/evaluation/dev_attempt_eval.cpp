@@ -145,8 +145,12 @@ void EbDevAttemptEval::captureOptionalTrajectories(EbDevAttemptEval& eval, PlayL
     for (auto const& want : wants) {
         if (EbShadowSimulator::get().evalAbortRequested())
             break;
+        auto const evaluated =
+            std::find_if(eval.samples.begin(), eval.samples.end(),
+                         [&](auto const& sample) { return sample.delay == want.second; });
+        float const phase = evaluated == eval.samples.end() ? 0.f : evaluated->firePhase;
         auto raw = EbShadowSimulator::get().evalDelayFromFreeze(
-            layer, witness, want.second, schedHorizon, down, nullptr, true);
+            layer, witness, want.second, schedHorizon, down, nullptr, true, phase);
         if (raw.clockMismatch || !raw.ran)
             continue;
 
@@ -219,6 +223,7 @@ matjson::Value EbDevAttemptEval::toJson(EbDevAttemptEval const& eval) {
     for (auto const& s : eval.samples) {
         matjson::Value sj = matjson::Value::object();
         sj["delay"] = s.delay;
+        sj["firePhase"] = s.firePhase;
         sj["survivedPrimary"] = s.survivedPrimary;
         sj["deathTick"] = s.deathTick;
         sj["endX"] = s.endX;
@@ -347,6 +352,9 @@ bool EbDevAttemptEval::fromJson(matjson::Value const& j, EbDevAttemptEval& out, 
         for (auto const& sj : j["samples"].asArray().unwrap()) {
             EbDevObjective::Sample s;
             s.delay = sj.contains("delay") ? static_cast<int>(sj["delay"].asInt().unwrapOr(0)) : 0;
+            s.firePhase = sj.contains("firePhase")
+                              ? static_cast<float>(sj["firePhase"].asDouble().unwrapOr(0.0))
+                              : 0.f;
             s.survivedPrimary =
                 sj.contains("survivedPrimary") ? sj["survivedPrimary"].asBool().unwrapOr(false)
                                                : false;

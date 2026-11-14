@@ -7,11 +7,10 @@
 
 class EbShadowCandidateRunner {
 public:
-    static EbShadowSimulator::RunResult runOne(EbShadowSimulator& simulator, PlayLayer* layer,
-                                             PlayerObject* real, bool down, int delay, int limit,
-                                             float deltaTime, float firstDt,
-                                             EbShadowSimulator::Model const& model, int releaseAfter,
-                                             EbThreatZone const* zone, int* tickBudgetLeft);
+    static EbShadowSimulator::RunResult
+    runOne(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down, int delay,
+           int limit, float deltaTime, float firstDt, EbShadowSimulator::Model const& model,
+           int releaseAfter, EbThreatZone const* zone, int* tickBudgetLeft, float firePhase = 0.f);
     static EbShadowSimulator::RunResult runTrajectoryOne(EbShadowSimulator& simulator, PlayLayer* layer,
                                                        PlayerObject* real, bool down, int delay,
                                                        int limit, float deltaTime, float firstDt,

@@ -218,8 +218,10 @@ void EbShadowSimulator::stepPreCollide(PlayLayer* layer, PlayerObject* state, fl
 }
 
 void EbShadowSimulator::stepPhysics(PlayLayer* layer, PlayerObject* state, float stepDt,
-                                  float deltaTime) {
-    return EbShadowPhysics::stepPhysics(*this, layer, state, stepDt, deltaTime);
+                                    float deltaTime, bool splitPrefix,
+                                    cocos2d::CCPoint const* tickStart) {
+    return EbShadowPhysics::stepPhysics(*this, layer, state, stepDt, deltaTime, splitPrefix,
+                                        tickStart);
 }
 
 void EbShadowSimulator::copyPlayerState(PlayerObject* destination, PlayerObject* source) {
@@ -315,13 +317,13 @@ int EbShadowSimulator::autoRobustK(PlayerObject* real, float dtVariance, bool sp
     return EbShadowPlanPolicy::autoRobustK(real, dtVariance, spamDense);
 }
 
-EbShadowSimulator::RunResult EbShadowSimulator::runOne(PlayLayer* layer, PlayerObject* real, bool down,
-                                                   int delay, int limit, float deltaTime,
-                                                   float firstDt, Model const& model,
-                                                   int releaseAfter, EbThreatZone const* zone,
-                                                   int* tickBudgetLeft) {
-    return EbShadowCandidateRunner::runOne(*this, layer, real, down, delay, limit, deltaTime, firstDt,
-                                         model, releaseAfter, zone, tickBudgetLeft);
+EbShadowSimulator::RunResult
+EbShadowSimulator::runOne(PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
+                          float deltaTime, float firstDt, Model const& model, int releaseAfter,
+                          EbThreatZone const* zone, int* tickBudgetLeft, float firePhase) {
+    return EbShadowCandidateRunner::runOne(*this, layer, real, down, delay, limit, deltaTime,
+                                           firstDt, model, releaseAfter, zone, tickBudgetLeft,
+                                           firePhase);
 }
 
 EbShadowSimulator::RunResult
@@ -416,10 +418,10 @@ void EbShadowSimulator::finishEvalWorldRestore(PlayLayer* layer) {
 
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowSimulator::evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const& witness, int delay,
-                                     int horizonTicks, bool down, int* tickBudgetLeft,
-                                     bool captureTraj) {
-    return EbShadowFreezeEvaluator::evalDelayFromFreeze(*this, layer, witness, delay, horizonTicks,
-                                                      down, tickBudgetLeft, captureTraj);
+                                       int horizonTicks, bool down, int* tickBudgetLeft,
+                                       bool captureTraj, float firePhase) {
+    return EbShadowFreezeEvaluator::evalDelayFromFreeze(
+        *this, layer, witness, delay, horizonTicks, down, tickBudgetLeft, captureTraj, firePhase);
 }
 
 EbShadowSimulator::EvalFromFreezeResult

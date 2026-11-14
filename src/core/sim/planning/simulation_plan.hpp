@@ -77,6 +77,7 @@ public:
     // Adaptive Prediction Planner (AP0 contracts; search path lands in later APs).
     // When false, callers keep classic ShadowPlanSearch. Adaptive must not raise
     // Max Assist or Prediction Horizon from these knobs — only subdivide tickBudget.
+    bool allowSubtick = false;
     bool adaptivePlan = false;
     int adaptiveScreenTicks = 24;   // Phase A/B short quantum per candidate
     int adaptiveVerifyQuantum = 16; // Phase C extend grant size
@@ -106,6 +107,7 @@ public:
     PlanAction action = PlanAction::Pass;
     AssistReason reason = AssistReason::None;
     int delay = 0;
+    float firePhase = 0.f;
     int jumpTick = 0;
     bool nowIsSafe = false;
     bool continuous = false;

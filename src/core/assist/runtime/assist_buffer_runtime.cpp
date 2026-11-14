@@ -7,8 +7,34 @@
 #include "../../learning/level_profile.hpp"
 #include "../../sim/planning/simulation_plan.hpp"
 #include "../../sim/shadow_simulator.hpp"
+#include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
+#include "../contracts/subtick_timing.hpp"
 #include <algorithm>
+
+float EbAssistBufferRuntime::substepPrefix(EbAssistController& controller, PlayerObject* player,
+                                           float deltaTime) {
+    auto* layer = PlayLayer::get();
+    if (!layer || player != layer->m_player1 || !player->m_isBird || !controller.m_inRealUpdate ||
+        controller.m_buffer.state != BufferState::Buffered || !controller.m_buffer.player1 ||
+        controller.m_buffer.firePhase <= 0.f ||
+        controller.m_attemptTick != controller.m_buffer.fireTick)
+        return -1.f;
+    float const prefix = EbSubtickTiming::segmentPrefix(controller.m_buffer.firePhase,
+                                                        controller.m_lastDt, controller.m_subDtSeen,
+                                                        EbAssistClock::gdStepToSeconds(deltaTime));
+    return prefix < 0.f ? -1.f : std::clamp(EbAssistClock::secondsToGdStep(prefix), 0.f, deltaTime);
+}
+
+void EbAssistBufferRuntime::fireSubstep(EbAssistController& controller, PlayerObject* player) {
+    auto* layer = PlayLayer::get();
+    if (!layer || player != layer->m_player1 || player->m_isDead ||
+        controller.m_buffer.state != BufferState::Buffered ||
+        controller.m_buffer.firePhase <= 0.f ||
+        controller.m_attemptTick != controller.m_buffer.fireTick)
+        return;
+    controller.fireBuffered(layer, player, false);
+}
 
 void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLayer* layer, bool down) {
     if (!layer)
@@ -211,7 +237,11 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
     int const queuedHold = controller.resolveQueuedHoldTicks(
         requireHold, continuous, releaseAfter, releaseEarliest, releaseLatest, extendCap);
 
-    EbDevCycleRecorder::get().noteFire(devPressId, controller.m_attemptTick);
+    float const actualPhase =
+        controller.m_inRealUpdate && controller.m_lastDt > 0.f
+            ? std::clamp(controller.m_subDtSeen / controller.m_lastDt, 0.f, 1.f)
+            : 0.f;
+    EbDevCycleRecorder::get().noteFire(devPressId, controller.m_attemptTick, actualPhase);
 
     controller.inject(playLayer, controller.m_buffer.down);
     // Real-harm watch: death after a fired Delay inject (Commit 2 DAF).

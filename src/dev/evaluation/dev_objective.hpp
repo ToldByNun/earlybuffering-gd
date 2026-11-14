@@ -20,6 +20,7 @@ public:
     class Sample {
     public:
         int delay = 0;
+        float firePhase = 0.f;
         bool survivedPrimary = false;
         int deathTick = -1;
         float endX = 0.f;

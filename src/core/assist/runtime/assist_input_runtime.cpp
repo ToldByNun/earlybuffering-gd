@@ -222,7 +222,8 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
                 controller.m_attemptTick, controller.m_buffer.fireTick,
                 controller.m_buffer.pressTick, controller.m_buffer.planDelay,
                 controller.m_buffer.limit);
-            if (due) {
+            if (due && (controller.m_buffer.firePhase <= 0.f ||
+                        controller.m_attemptTick > controller.m_buffer.fireTick)) {
                 EbPerfTrace::Scope const scope("fireBuffered");
                 controller.fireBuffered(playLayer, player);
             }

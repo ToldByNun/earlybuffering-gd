@@ -27,6 +27,7 @@ public:
     bool player1 = true;
     int pressTick = 0;
     int fireTick = 0;
+    float firePhase = 0.f;
     int limit = 0;
     int expectedJumpTick = 0;
     // Plan delay at arm time (before jumpTick alignment). SaveFeedback uses
@@ -80,6 +81,8 @@ public:
     void beginRealUpdate();
     void endRealUpdate();
     void onSubStep(PlayerObject* player, float deltaTime);
+    float bufferedSubstepPrefix(PlayerObject* player, float deltaTime);
+    void fireBufferedSubstep(PlayerObject* player);
 
     bool onHandleButton(GJBaseGameLayer* layer, bool down, int button, bool player1);
     bool allowPushButton(PlayerObject* player, PlayerButton button);

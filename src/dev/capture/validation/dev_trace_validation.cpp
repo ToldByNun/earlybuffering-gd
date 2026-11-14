@@ -283,6 +283,8 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     att.endReason = "death";
     att.sealed = true;
     att.events = good;
+    att.events[1].plannedFirePhase = 0.5f;
+    att.events[3].actualFirePhase = 0.5f;
     att.eval.valid = true;
     att.eval.objectiveId = "survive_then_endx_v1";
     att.eval.gridId = "band";
@@ -295,6 +297,7 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     {
         EbDevObjective::Sample sample;
         sample.delay = 2;
+        sample.firePhase = 0.5f;
         sample.survivedPrimary = true;
         sample.endX = 100.f;
         sample.ticksRan = 48;
@@ -322,6 +325,9 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     expect(back.attempts[0].eval.bestSurvivingDelay == 2, "json-eval-bestSurv");
     expect(back.attempts[0].eval.samples.size() == 1, "json-eval-samples");
     expect(back.attempts[0].eval.samples[0].delay == 2, "json-eval-sample-delay");
+    expect(back.attempts[0].events[1].plannedFirePhase == 0.5f, "json-planned-phase");
+    expect(back.attempts[0].events[3].actualFirePhase == 0.5f, "json-actual-phase");
+    expect(back.attempts[0].eval.samples[0].firePhase == 0.5f, "json-eval-phase");
 
     // Store API: begin/append/seal/flush (disk) when Mod is available.
     // Constrained devices (Android/iOS) skip disk gold — PlatformLimits::allowLoadDiskSelfCheck.

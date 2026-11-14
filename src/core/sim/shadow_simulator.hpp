@@ -259,7 +259,7 @@ public:
     EvalFromFreezeResult evalDelayFromFreeze(PlayLayer* layer, EbDevLiveWitness const& witness,
                                              int delay, int horizonTicks, bool down,
                                              int* tickBudgetLeft = nullptr,
-                                             bool captureTraj = false);
+                                             bool captureTraj = false, float firePhase = 0.f);
 
     // Replay actualFireTick (absolute) on the same stamp — not a delay search.
     EvalFromFreezeResult replayActualFire(PlayLayer* layer, EbDevLiveWitness const& witness,
@@ -435,6 +435,8 @@ public:
     private:
     };
 
+    static void clearCollisionLogs(PlayerObject* state);
+
 private:
     friend class EbServiceStore;
 
@@ -533,7 +535,7 @@ private:
 
     RunResult runOne(PlayLayer* layer, PlayerObject* real, bool down, int delay, int limit,
                      float deltaTime, float firstDt, Model const& model, int releaseAfter,
-                     EbThreatZone const* zone, int* tickBudgetLeft);
+                     EbThreatZone const* zone, int* tickBudgetLeft, float firePhase = 0.f);
     // Live V2 Trajectory engine: hold/coast button path (no orb pre-scan).
     // Same delay / releaseAfter / zone-settle contract as runOne for cand eval.
     RunResult runTrajectoryOne(PlayLayer* layer, PlayerObject* real, bool down, int delay,
@@ -564,9 +566,10 @@ private:
     // Cheap ghost-relative pose write when skip-dynamic is false (dual → no-op).
     void applyLiveDynamicNear(PlayLayer* layer, PlayerObject* ghost);
     void copyWaveTrail(PlayerObject* destination, PlayerObject* source);
-    static void clearCollisionLogs(PlayerObject* state);
+
     void stepPreCollide(PlayLayer* layer, PlayerObject* state, float deltaTime);
-    void stepPhysics(PlayLayer* layer, PlayerObject* state, float stepDt, float deltaTime);
+    void stepPhysics(PlayLayer* layer, PlayerObject* state, float stepDt, float deltaTime,
+                     bool splitPrefix = false, cocos2d::CCPoint const* tickStart = nullptr);
 
     PlayerObject* m_shadow = nullptr;
     PlayerObject* m_snapshots[SNAPSHOT_SLOTS] = {};

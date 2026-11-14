@@ -74,7 +74,8 @@ public:
                                int limit, int plannedDelay, int robustK, int horizonTicks,
                                int tailTicks, EbDevConfig::EvalGrid grid,
                                EbDevObjective::Kind objective, EbDevClassifyOptions const& opts,
-                               float latencyWeight = 0.25f, int* tickBudgetLeft = nullptr);
+                               float latencyWeight = 0.25f, int* tickBudgetLeft = nullptr,
+                               float firePhase = 0.f);
 
     static bool selfCheck(std::string& report);
 
