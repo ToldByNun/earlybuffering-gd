@@ -72,10 +72,8 @@ EbShadowSimulator::RunResult EbAdaptiveResumeRunner::runQuantum(
     bool pastZone = resuming && slot.zoneCleared;
     if (pastZone)
         r.zoneCleared = true;
-    bool const initialGravity = shadowPlayer->m_isUpsideDown;
-    bool ballFlipped = false;
-    bool ballAirborne = false;
-    int ballLandingTicks = 0;
+    if (!resuming)
+        slot.ballLanding.reset(shadowPlayer->m_isUpsideDown);
 
     int const endTick = std::min(absoluteCap, startTick + quantumTicks);
 
@@ -197,12 +195,8 @@ EbShadowSimulator::RunResult EbAdaptiveResumeRunner::runQuantum(
         }
 
         if (model.stopAtBallLanding && acted && shadowPlayer->m_isBall) {
-            ballFlipped = ballFlipped || shadowPlayer->m_isUpsideDown != initialGravity;
             bool const grounded = shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2;
-            if (ballFlipped && !grounded)
-                ballAirborne = true;
-            ballLandingTicks = ballAirborne && grounded ? ballLandingTicks + 1 : 0;
-            if (ballLandingTicks >= 2) {
+            if (slot.ballLanding.observe(shadowPlayer->m_isUpsideDown, grounded)) {
                 segment.landedAfterAction = true;
                 segment = finishSegment(segment);
                 auto const absolute =

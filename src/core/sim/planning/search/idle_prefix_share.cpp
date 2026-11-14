@@ -5,6 +5,7 @@
 #include "../../orbs/toggle_orb_sim.hpp"
 #include "../../prefix_sim.hpp"
 #include "../../shadow_simulator.hpp"
+#include "../ball_landing_tracker.hpp"
 #include "../shadow_survival_rules.hpp"
 #include "../simulation_candidate.hpp"
 #include "shadow_plan_context.hpp"
@@ -262,10 +263,8 @@ public:
         int groundedStreak = 0;
         int settledAfterClear = 0;
         bool pastZone = false;
-        bool const initialGravity = shadowPlayer->m_isUpsideDown;
-        bool ballFlipped = false;
-        bool ballAirborne = false;
-        int ballLandingTicks = 0;
+        EbBallLandingTracker ballLanding;
+        ballLanding.reset(shadowPlayer->m_isUpsideDown);
         int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
 
         auto finish = [&](EbShadowSimulator::RunResult output) {
@@ -340,12 +339,8 @@ public:
             }
 
             if (model.stopAtBallLanding && acted && shadowPlayer->m_isBall) {
-                ballFlipped = ballFlipped || shadowPlayer->m_isUpsideDown != initialGravity;
                 bool const grounded = shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2;
-                if (ballFlipped && !grounded)
-                    ballAirborne = true;
-                ballLandingTicks = ballAirborne && grounded ? ballLandingTicks + 1 : 0;
-                if (ballLandingTicks >= 2) {
+                if (ballLanding.observe(shadowPlayer->m_isUpsideDown, grounded)) {
                     r.landedAfterAction = true;
                     return finish(r);
                 }

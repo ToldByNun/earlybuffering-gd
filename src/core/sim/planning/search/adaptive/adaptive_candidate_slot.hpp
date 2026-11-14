@@ -2,6 +2,7 @@
 #define ADAPTIVE_CANDIDATE_SLOT_HPP
 
 #include "../../../shadow_simulator.hpp"
+#include "../../ball_landing_tracker.hpp"
 #include <string>
 
 // Per-delay Adaptive search state. Checkpoint = rotating snapshot ring slot
@@ -18,6 +19,7 @@
 class EbAdaptiveCandidateSlot {
 public:
     int delay = 0;
+    EbBallLandingTracker ballLanding;
     int snapshotSlot = -1;
     int ticksSimulated = 0;
     int simAbsTickAtCheckpoint = -1;

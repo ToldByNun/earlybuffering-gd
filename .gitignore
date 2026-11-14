@@ -97,3 +97,5 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/fixtures/recorded_misses_ap01.json
 !/tools/report_planner_cost_ap02.py
 !/tools/fixtures/wave_release_recovery.json
+!/tools/test_ball_landing.cpp
+!/tools/test_ball_landing.hpp

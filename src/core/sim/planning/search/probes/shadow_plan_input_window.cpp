@@ -330,15 +330,19 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // AP03/AP05: probe a useful part of the turn window before the ascending
     // prefix scan spends the wall on early flaps that hit the same obstacle.
     // Keep the existing horizon and unknown checks for every candidate.
-    bool const turnRescue = context.real && ((context.real->m_isBird && context.down) || isWave) &&
-                            !dual && !context.orbHint.found && !context.spatialHint &&
-                            !context.plan.foresightOrbPad && context.limit > 1 &&
-                            context.candReady[0] && context.cands[0].raw.died &&
-                            !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
-                            !context.cands[0].raw.toggleUnknown;
+    bool const turnRescue =
+        context.real &&
+        (((context.real->m_isBird || context.real->m_isBall) && context.down) || isWave) && !dual &&
+        !context.orbHint.found && !context.spatialHint && !context.plan.foresightOrbPad &&
+        context.limit > 1 && context.candReady[0] && context.cands[0].raw.died &&
+        !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
+        !context.cands[0].raw.toggleUnknown;
     if (turnRescue) {
         int const middle = std::max(1, context.limit / 2);
-        for (int probe : {middle, context.limit}) {
+        std::vector<int> probes{middle, context.limit};
+        if (context.real->m_isBall)
+            probes.insert(probes.begin(), std::max(1, context.limit / 3));
+        for (int probe : probes) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
@@ -399,13 +403,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     for (int delayValue = 1; !skipLaterBand && delayValue <= context.limit; ++delayValue) {
         if (context.plan.reason == AssistReason::PassHardUnknown)
             break;
-        if (context.wallExceeded() || context.tickBudget <= 0) {
-            context.plan.budgetHit = true;
-            break;
-        }
         // Peak-death-cut leftovers: do not re-evalDelay (honest Skipped notes).
         if (context.ledgerPeakDeathExit && !context.candReady[static_cast<size_t>(delayValue)])
-            break;
+            continue;
         if (context.candReady[static_cast<size_t>(delayValue)]) {
             auto const& ready = context.cands[static_cast<size_t>(delayValue)];
             // Assist Pack AP1: shallow Adaptive/prefix Alive must be re-sim'd to
@@ -460,6 +460,12 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             continue;
         }
 
+        // Completed prefix/Adaptive results above remain usable after the
+        // simulation deadline. Only new physics work needs remaining budget.
+        if (context.wallExceeded() || context.tickBudget <= 0) {
+            context.plan.budgetHit = true;
+            continue;
+        }
         if (!ingest(delayValue, context.evalDelay(delayValue, -1)))
             break;
         if (continuous && bestDelay >= 0 && !EbLivePlanContracts::continuousIwRanksByEndX()) {
