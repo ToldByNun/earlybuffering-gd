@@ -1,11 +1,16 @@
-#include "../../../app/class_manager.hpp"
 #include "toggle_orb_sim.hpp"
+#include "../../../app/class_manager.hpp"
 #include "../../../debug/assist_log.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
+#include "../validation/native_isolation_probe.hpp"
 #include "orb_stack_resolver.hpp"
 #include <fmt/format.h>
 
 EbToggleOrbSim& EbToggleOrbSim::get() {
+    if (EbNativeIsolationProbe::activeSimulator()) {
+        static thread_local EbToggleOrbSim diagnosticState;
+        return diagnosticState;
+    }
     return EbClassManager::get().service<EbToggleOrbSim>();
 }
 

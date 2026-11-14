@@ -1,15 +1,20 @@
-#include "../../../app/class_manager.hpp"
 #include "orb_stack_resolver.hpp"
+#include "../../../app/class_manager.hpp"
 #include "../../../config/stage_config.hpp"
 #include "../../../debug/assist_log.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
 #include "../foresight/travel_foresight.hpp"
 #include "../shadow_simulator.hpp"
+#include "../validation/native_isolation_probe.hpp"
 #include "toggle_orb_sim.hpp"
 #include <cmath>
 #include <fmt/format.h>
 
 EbOrbStackResolver& EbOrbStackResolver::get() {
+    if (EbNativeIsolationProbe::activeSimulator()) {
+        static thread_local EbOrbStackResolver diagnosticState;
+        return diagnosticState;
+    }
     return EbClassManager::get().service<EbOrbStackResolver>();
 }
 
@@ -58,7 +63,7 @@ void EbOrbStackResolver::noteFlipSkipped() {
 }
 
 void EbOrbStackResolver::noteTouch(PlayerObject* shadow, RingObject* ring, bool appliedJump,
-                                 int simTick) {
+                                   int simTick) {
     if (!ring)
         return;
 
@@ -95,15 +100,15 @@ void EbOrbStackResolver::noteTouch(PlayerObject* shadow, RingObject* ring, bool 
 
     if (EbStageConfig::debugLogging()) {
         EbAssistLog::debug(fmt::format("orb-stack: touch oid={} uid={} toggle={} jumpRing={} "
-                                     "jumpHeld={} claimed={} appliedJump={} tick={}",
-                                     ev.oid, ev.uid, toggle ? 1 : 0, jumpRing ? 1 : 0,
-                                     jumpHeld ? 1 : 0, claimed ? 1 : 0, appliedJump ? 1 : 0,
-                                     simTick));
+                                       "jumpHeld={} claimed={} appliedJump={} tick={}",
+                                       ev.oid, ev.uid, toggle ? 1 : 0, jumpRing ? 1 : 0,
+                                       jumpHeld ? 1 : 0, claimed ? 1 : 0, appliedJump ? 1 : 0,
+                                       simTick));
     }
 }
 
 int EbOrbStackResolver::fireNormalOrbsAt(PlayLayer* layer, PlayerObject* shadow,
-                                       GameObject* toggleHit) {
+                                         GameObject* toggleHit) {
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
     if (!children)
         return 0;
@@ -182,14 +187,15 @@ int EbOrbStackResolver::fireTogglesAt(PlayLayer* layer, PlayerObject* shadow, Ga
         }
         if (EbStageConfig::debugLogging()) {
             EbAssistLog::debug(fmt::format("orb-stack: dual-fire toggle oid={} uid={} with-jump={}",
-                                         object->m_objectID, object->m_uniqueID,
-                                         jumpHit->m_uniqueID));
+                                           object->m_objectID, object->m_uniqueID,
+                                           jumpHit->m_uniqueID));
         }
     }
     return applied;
 }
 
-int EbOrbStackResolver::fireStackedPartners(PlayLayer* layer, PlayerObject* shadow, GameObject* hit) {
+int EbOrbStackResolver::fireStackedPartners(PlayLayer* layer, PlayerObject* shadow,
+                                            GameObject* hit) {
     if (!layer || !shadow || !hit)
         return 0;
 
