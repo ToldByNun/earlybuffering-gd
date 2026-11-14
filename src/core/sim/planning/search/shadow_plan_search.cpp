@@ -51,8 +51,15 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
                               plan);
     simulator.m_simTickBase = std::max(0, options.attemptStartTick);
     simulator.m_simAbsTick = -1;
+    auto const captureStart = std::chrono::steady_clock::now();
     EbSimSessionGuard session(simulator, layer);
+    auto const prepareStart = std::chrono::steady_clock::now();
+    plan.worldCaptureUs = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(prepareStart - captureStart).count());
     prepare(context);
+    plan.prepareUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                          std::chrono::steady_clock::now() - prepareStart)
+                                          .count());
     if (EbShadowPlanInputWindow::evaluate(context)) {
         if (plan.plannerPath.empty())
             plan.plannerPath = "inputWindow";

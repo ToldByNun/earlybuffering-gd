@@ -19,20 +19,23 @@ class EbGroupMemberIndex {
 public:
     std::unordered_map<int, std::vector<GameObject*>> byGroup;
 
-    void build(std::vector<GameObject*> const& solids, std::unordered_set<int> const& groups) {
+    void build(PlayLayer* layer, std::unordered_set<int> const& groups) {
         byGroup.clear();
-        if (solids.empty() || groups.empty())
+        if (!layer || groups.empty())
             return;
         byGroup.reserve(groups.size());
-        for (int groupId : groups)
-            byGroup.emplace(groupId, std::vector<GameObject*>{});
-        for (auto* object : solids) {
-            if (!object)
+        for (int groupId : groups) {
+            auto& members = byGroup[groupId];
+            auto* liveGroup = layer->getGroup(groupId);
+            if (!liveGroup)
                 continue;
-            for (int groupId : groups) {
-                if (!object->belongsToGroup(groupId))
+            members.reserve(liveGroup->count());
+            for (unsigned index = 0; index < liveGroup->count(); ++index) {
+                auto* object =
+                    geode::prelude::typeinfo_cast<GameObject*>(liveGroup->objectAtIndex(index));
+                if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
                     continue;
-                byGroup[groupId].push_back(object);
+                members.push_back(object);
             }
         }
     }
@@ -47,20 +50,29 @@ public:
 private:
 };
 
-static void collectObjectLayerSolids(PlayLayer* layer, std::vector<GameObject*>& solids) {
-    solids.clear();
-    if (!layer || !layer->m_objectLayer)
+void EbShadowWorldCapture::refreshTimeOrigin(EbShadowSimulator& simulator, PlayLayer* layer) {
+    if (!layer)
         return;
-    auto* children = layer->m_objectLayer->getChildren();
-    if (!children)
+    auto* origin = layer->m_startPosObject;
+    float const originX = origin ? origin->getPositionX() : 0.f;
+    float const originY = origin ? origin->getPositionY() : 0.f;
+    int const originId = origin ? origin->m_uniqueID : -1;
+    double const tps = EbTriggerWorldStore::get().data().tps;
+    if (simulator.m_triggerOriginLayer == layer && simulator.m_triggerOriginId == originId &&
+        simulator.m_triggerOriginX == originX && simulator.m_triggerOriginY == originY &&
+        simulator.m_triggerOriginTps == tps)
         return;
-    solids.reserve(static_cast<size_t>(children->count()));
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
-            continue;
-        solids.push_back(object);
+    simulator.m_triggerWorldTimeOffset = 0;
+    if (origin) {
+        float const seconds = layer->timeForPos(origin->getPosition(), 0, 0, false, -1);
+        simulator.m_triggerWorldTimeOffset =
+            static_cast<int>(std::lround(std::max(0.f, seconds) * tps));
     }
+    simulator.m_triggerOriginLayer = layer;
+    simulator.m_triggerOriginId = originId;
+    simulator.m_triggerOriginX = originX;
+    simulator.m_triggerOriginY = originY;
+    simulator.m_triggerOriginTps = tps;
 }
 
 void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer) {
@@ -70,13 +82,7 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
         return;
 
     auto& store = EbTriggerWorldStore::get();
-    simulator.m_triggerWorldTimeOffset = 0;
-    if (layer->m_startPosObject) {
-        float const startSeconds =
-            layer->timeForPos(layer->m_startPosObject->getPosition(), 0, 0, false, -1);
-        simulator.m_triggerWorldTimeOffset =
-            static_cast<int>(std::lround(std::max(0.f, startSeconds) * store.data().tps));
-    }
+    refreshTimeOrigin(simulator, layer);
 
     EbLagProbe::Scope const scope("eb.trigger.capture");
 
@@ -142,7 +148,8 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
     // Secondary: section lists often hold objects children miss (same as TW baker).
     // Without this, bake at spawn can get tw=false → toggled spikes stay lethal.
     // Poison-safe: never raw typeinfo_cast on m_sections (AV read @ -1).
-    EbSectionObjectWalk::forEachInSections(layer, consider);
+    if (seen.size() < wanted.size())
+        EbSectionObjectWalk::forEachInSections(layer, consider);
 }
 
 void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer) {
@@ -180,10 +187,8 @@ void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simula
     if (toggleEffects.empty())
         return;
 
-    std::vector<GameObject*> solids;
-    collectObjectLayerSolids(layer, solids);
     EbGroupMemberIndex index;
-    index.build(solids, groups);
+    index.build(layer, groups);
 
     static constexpr size_t kMaxToggleTargets = 8192;
     for (auto* effect : toggleEffects) {
@@ -238,10 +243,8 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
     if (followEffects.empty())
         return;
 
-    std::vector<GameObject*> solids;
-    collectObjectLayerSolids(layer, solids);
     EbGroupMemberIndex index;
-    index.build(solids, groups);
+    index.build(layer, groups);
 
     std::unordered_set<int> savedTransformIds;
     if (wantJobs) {
@@ -406,10 +409,8 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
     if (movers.empty())
         return;
 
-    std::vector<GameObject*> solids;
-    collectObjectLayerSolids(layer, solids);
     EbGroupMemberIndex index;
-    index.build(solids, groups);
+    index.build(layer, groups);
 
     for (auto* effect : movers) {
         auto const* members = index.members(effect->m_targetGroupID);

@@ -104,3 +104,6 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/fixtures/cube_rescue_ap07.json
 !/tools/test_trigger_motion.cpp
 !/tools/test_trigger_motion.hpp
+!/tools/test_selected_tick_guard.cpp
+!/tools/test_selected_tick_guard.hpp
+!/tools/fixtures/wave_capture_starvation.json

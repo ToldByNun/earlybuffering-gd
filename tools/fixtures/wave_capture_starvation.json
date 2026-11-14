@@ -1,0 +1,396 @@
+{
+  "source": "C:\\Users\\mikaj\\AppData\\Local\\GeometryDash\\geode\\mods\\audesign.earlybuffer\\research\\research_20261114_063014\\session.json",
+  "sha256": "62ecaf6be61a6cba1b12ff9fbceba92cd8d3972b51246a11c39f0d5fc5479201",
+  "level": "GRIEF",
+  "startPos": true,
+  "plans": 22,
+  "allStarvedBeforeSimulation": true,
+  "minPlanUs": 12163,
+  "maxPlanUs": 14404,
+  "firstEvent": {
+    "eventId": 7,
+    "attemptId": 2,
+    "pressId": 2,
+    "cycleId": 2,
+    "planId": 1,
+    "parentEventId": 6,
+    "playerIndex": 0,
+    "down": true,
+    "source": "live",
+    "kind": "planFinished",
+    "effectTick": 301,
+    "pressTick": 301,
+    "plannedDelay": 0,
+    "plannedFireTick": -1,
+    "actualFireTick": -1,
+    "assistReason": "pass-budget@plan",
+    "clock": {
+      "clockSchema": 1,
+      "timeBasis": "physicsTick",
+      "attemptTick": 301,
+      "effectTick": 301,
+      "simDt": 0.004166666883975267,
+      "firstDt": 0.0025127800181508064,
+      "midStep": true,
+      "continuous": true,
+      "timeWarp": 1,
+      "simTps": 239.99998748302525,
+      "wallDt": 0.004166666883975267,
+      "speedScaleSuspect": false,
+      "liveSimPathId": "ShadowSimulator.plan"
+    },
+    "witness": {
+      "playerBlobSchema": "d34585cd4847d0fb",
+      "freezeWorld": true,
+      "player": {
+        "present": true,
+        "x": 6596.03173828125,
+        "y": 96,
+        "rotation": 5.779845714569092,
+        "scaleX": 0.597694456577301,
+        "scaleY": 0.597694456577301,
+        "yVelocity": 0,
+        "fallSpeed": 0,
+        "gravity": 0.9401990175247192,
+        "gravityMod": 1,
+        "speedMultiplier": 5.980001926422119,
+        "playerSpeed": 0.699999988079071,
+        "vehicleSize": 0.6000000238418579,
+        "platformerXVelocity": 0,
+        "isUpsideDown": false,
+        "isSideways": false,
+        "isGoingLeft": false,
+        "isShip": false,
+        "isBall": false,
+        "isBird": false,
+        "isSwing": false,
+        "isDart": true,
+        "isRobot": false,
+        "isSpider": false,
+        "isSecondPlayer": false,
+        "isPlatformer": false,
+        "isDashing": false,
+        "isOnGround": true,
+        "isOnGround2": true,
+        "isOnSlope": false,
+        "wasOnSlope": false,
+        "jumpBuffered": false,
+        "wasJumpBuffered": false,
+        "stateRingJump": false,
+        "hasEverJumped": false,
+        "hasEverHitRing": false,
+        "isLocked": false,
+        "controlsDisabled": false,
+        "maybeIsFalling": false,
+        "maybeIsBoosted": false,
+        "jumpHeld": false
+      },
+      "clock": {
+        "clockSchema": 1,
+        "timeBasis": "physicsTick",
+        "attemptTick": 301,
+        "effectTick": 301,
+        "simDt": 0.004166666883975267,
+        "firstDt": 0.0025127800181508064,
+        "midStep": true,
+        "continuous": true,
+        "timeWarp": 1,
+        "simTps": 239.99998748302525,
+        "wallDt": 0.004166666883975267,
+        "speedScaleSuspect": false,
+        "liveSimPathId": "ShadowSimulator.plan"
+      },
+      "categories": [
+        {
+          "category": "player",
+          "status": "restored"
+        },
+        {
+          "category": "collisionFlags",
+          "status": "partial"
+        },
+        {
+          "category": "dual",
+          "status": "absent"
+        },
+        {
+          "category": "clock",
+          "status": "restored"
+        },
+        {
+          "category": "orbs",
+          "status": "absent"
+        },
+        {
+          "category": "triggers",
+          "status": "partial"
+        },
+        {
+          "category": "movers",
+          "status": "restored",
+          "digest": "af63bd4c8601b7df"
+        }
+      ],
+      "worldDeps": [
+        "player",
+        "clock",
+        "collisionFlags",
+        "triggers",
+        "movers"
+      ],
+      "triggerStoreKey": "id_149992717_rev_f860dc52df47b25",
+      "triggerStoreVersion": 2,
+      "triggerApplyTick": 301,
+      "triggerCanSpool": true,
+      "triggerReadyTracks": 110,
+      "triggerTrackCount": 1044,
+      "triggerBakeEffects": 0,
+      "triggerBakeChildren": 0,
+      "triggerCollectedEffects": 0,
+      "triggerSkipFollow": 0,
+      "triggerSkipDynamic": 0,
+      "triggerSkipNonSpawn": 0,
+      "triggerSkipTouch": 0,
+      "hazardDigest": "af63bd4c8601b7df",
+      "hazards": [
+        {
+          "id": 12328,
+          "type": 2,
+          "x": 6641.3798828125,
+          "y": 84.06979370117188,
+          "ox": 6635.01904296875,
+          "oy": 77.27395629882812,
+          "ow": 12.7216796875,
+          "oh": 13.5916748046875
+        },
+        {
+          "id": 12319,
+          "type": 2,
+          "x": 6663.56005859375,
+          "y": 82.38815307617188,
+          "ox": 6657.67822265625,
+          "oy": 75.90843200683594,
+          "ow": 11.763671875,
+          "oh": 12.959442138671875
+        },
+        {
+          "id": 12318,
+          "type": 2,
+          "x": 6668.25,
+          "y": 71.83979797363281,
+          "ox": 6656.6015625,
+          "oy": 59.61064529418945,
+          "ow": 23.296875,
+          "oh": 24.458309173583984
+        },
+        {
+          "id": 12419,
+          "type": 2,
+          "x": 6683.83984375,
+          "y": 78.79239654541016,
+          "ox": 6677.82666015625,
+          "oy": 72.22154235839844,
+          "ow": 12.0263671875,
+          "oh": 13.141708374023438
+        },
+        {
+          "id": 12420,
+          "type": 2,
+          "x": 6699.3798828125,
+          "y": 84.06979370117188,
+          "ox": 6693.01904296875,
+          "oy": 77.27395629882812,
+          "ow": 12.7216796875,
+          "oh": 13.5916748046875
+        },
+        {
+          "id": 12674,
+          "type": 2,
+          "x": 6721.56005859375,
+          "y": 82.38815307617188,
+          "ox": 6715.67822265625,
+          "oy": 75.90843200683594,
+          "ow": 11.763671875,
+          "oh": 12.959442138671875
+        },
+        {
+          "id": 12662,
+          "type": 2,
+          "x": 6726.25,
+          "y": 71.83979797363281,
+          "ox": 6714.6015625,
+          "oy": 59.61064529418945,
+          "ow": 23.296875,
+          "oh": 24.458309173583984
+        },
+        {
+          "id": 12760,
+          "type": 2,
+          "x": 6731.3798828125,
+          "y": 84.06979370117188,
+          "ox": 6725.01904296875,
+          "oy": 77.27395629882812,
+          "ow": 12.7216796875,
+          "oh": 13.5916748046875
+        },
+        {
+          "id": 12840,
+          "type": 2,
+          "x": 6741.83984375,
+          "y": 78.79239654541016,
+          "ox": 6735.82666015625,
+          "oy": 72.22154235839844,
+          "ow": 12.0263671875,
+          "oh": 13.141708374023438
+        },
+        {
+          "id": 12842,
+          "type": 2,
+          "x": 6753.56005859375,
+          "y": 82.38815307617188,
+          "ox": 6747.67822265625,
+          "oy": 75.90843200683594,
+          "ow": 11.763671875,
+          "oh": 12.959442138671875
+        }
+      ],
+      "hitbox": {
+        "lx": 6593.03173828125,
+        "ly": 93,
+        "lw": 6,
+        "lh": 6,
+        "overlapLive": 0,
+        "gx": -15,
+        "gy": 90,
+        "gw": 30,
+        "gh": 30,
+        "overlapGhost": 0
+      },
+      "contact": {
+        "present": true,
+        "maybeIsColliding": false,
+        "collidingWithLeft": false,
+        "collidingWithRight": false,
+        "lastCollisionBottom": true,
+        "lastCollisionTop": true,
+        "lastCollisionLeft": true,
+        "lastCollisionRight": true,
+        "collidedTopMinY": 0,
+        "collidedBottomMaxY": 93,
+        "collidedLeftMaxX": 0,
+        "collidedRightMinX": 0,
+        "snapDistance": 0,
+        "groundYVelocity": 0,
+        "groundObjectMaterial": 0,
+        "collidedObjectId": 0,
+        "lastGroundObjectId": 0,
+        "objectSnappedToId": 0,
+        "isOnIce": false,
+        "isSliding": false
+      }
+    },
+    "candNotes": [
+      {
+        "delay": 0,
+        "status": "chosen",
+        "rejectCode": "chosen",
+        "detail": "d=0"
+      },
+      {
+        "delay": 1,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 2,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 3,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 4,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 5,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 6,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 7,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      },
+      {
+        "delay": 8,
+        "status": "skipped",
+        "rejectCode": "budget-not-reached",
+        "detail": "skip=budget-not-reached"
+      }
+    ],
+    "attribution": [
+      {
+        "code": "best-surviving-absent"
+      }
+    ],
+    "planUs": 12481,
+    "guardOriginalDelay": -1,
+    "guardProbeCount": 0,
+    "guardProbeIncomplete": false,
+    "adaptiveWorkUs": 0,
+    "fallthroughSetupUs": 0,
+    "classicSearchUs": 0,
+    "adaptiveSeedCount": 0,
+    "reusedCandidateCount": 0,
+    "reusedCandidateTicks": 0,
+    "budgetHit": true,
+    "candidatesTried": 0,
+    "adaptiveShell": false,
+    "adaptiveFellThrough": false,
+    "adaptiveAbortedForFallthrough": false,
+    "plannerPath": "inputWindow",
+    "gameModeKind": "wave",
+    "continuous": true,
+    "inputWindow": true,
+    "modeParams": {
+      "ticks": 8,
+      "cap": 0,
+      "slack": 1,
+      "latencyWeight": 1,
+      "adaptivePlan": false,
+      "adaptiveScreenTicks": 12,
+      "adaptiveVerifyQuantum": 10,
+      "adaptiveReservePct": 9
+    },
+    "adaptiveScreenedCount": 0,
+    "adaptiveSurvivors": 0,
+    "adaptiveVerifyGrants": 0,
+    "adaptiveStolenScreenTicks": 0,
+    "requireHold": false,
+    "releaseAfter": -1,
+    "releaseEarliest": -1,
+    "releaseLatest": -1,
+    "idleSafer": false,
+    "ascentUseful": false,
+    "usedOrbWindow": false,
+    "foresightOrbPad": false,
+    "longForesightNeedSearch": false
+  }
+}

@@ -117,6 +117,12 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     }
     if (e.hasPlanCost) {
         otherIndex["planUs"] = e.planUs;
+        otherIndex["worldCaptureUs"] = e.worldCaptureUs;
+        otherIndex["prepareUs"] = e.prepareUs;
+        otherIndex["guardOriginalDelay"] = e.guardOriginalDelay;
+        otherIndex["guardProbeCount"] = e.guardProbeCount;
+        otherIndex["guardProbeIncomplete"] = e.guardProbeIncomplete;
+
         otherIndex["adaptiveWorkUs"] = e.adaptiveWorkUs;
         otherIndex["fallthroughSetupUs"] = e.fallthroughSetupUs;
         otherIndex["classicSearchUs"] = e.classicSearchUs;
@@ -402,6 +408,20 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         (j.contains("budgetHit") && e.kind == DevEventKind::PlanFinished)) {
         e.hasPlanCost = true;
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
+        e.worldCaptureUs = j.contains("worldCaptureUs")
+                               ? static_cast<int>(j["worldCaptureUs"].asInt().unwrapOr(0))
+                               : 0;
+        e.prepareUs =
+            j.contains("prepareUs") ? static_cast<int>(j["prepareUs"].asInt().unwrapOr(0)) : 0;
+        e.guardOriginalDelay = j.contains("guardOriginalDelay")
+                                   ? static_cast<int>(j["guardOriginalDelay"].asInt().unwrapOr(-1))
+                                   : -1;
+        e.guardProbeCount = j.contains("guardProbeCount")
+                                ? static_cast<int>(j["guardProbeCount"].asInt().unwrapOr(0))
+                                : 0;
+        e.guardProbeIncomplete = j.contains("guardProbeIncomplete") &&
+                                 j["guardProbeIncomplete"].asBool().unwrapOr(false);
+
         e.reusedCandidateCount =
             j.contains("reusedCandidateCount")
                 ? static_cast<int>(j["reusedCandidateCount"].asInt().unwrapOr(0))

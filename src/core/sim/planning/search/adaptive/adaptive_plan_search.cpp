@@ -2,6 +2,7 @@
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
+#include "../../../../assist/contracts/selected_tick_guard.hpp"
 #include "../../../../assist/planning/assist_horizon.hpp"
 #include "../../../../trigger_world/trigger_world_store.hpp"
 #include "../../../prefix_sim.hpp"
@@ -182,7 +183,12 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     simulator.m_simAbsTick = -1;
 
     {
+        auto const captureStart = std::chrono::steady_clock::now();
         EbSimSessionGuard session(simulator, layer);
+        plan.worldCaptureUs =
+            static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                 std::chrono::steady_clock::now() - captureStart)
+                                 .count());
 
         // Soft wall runs from plan start (same as classic) — screen + verify.
         auto runScreenDelay = [&](int delay) {
@@ -632,7 +638,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
     // AP05: the classic Wave path verifies the full observation horizon for
     // both input edges and reuses completed Adaptive seeds.
-    if (real->m_isDart && gate.action == PlanAction::Delay)
+    if ((real->m_isDart || options.robustJitter) && gate.action == PlanAction::Delay)
         return runClassicFallthrough();
 
     if (gate.action == PlanAction::Delay && gate.delay > 0) {
@@ -653,8 +659,34 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         }
     }
 
+    if (plan.action == PlanAction::Delay && plan.delay > 0) {
+        plan.guardOriginalDelay = plan.delay;
+        std::vector<int> verified;
+        for (int delay = 1; delay <= limit; ++delay) {
+            auto const& slot = slots[static_cast<size_t>(delay)];
+            if (slot.screened && slot.autonomousAlive && !slot.terminalUnknown &&
+                (slot.terminalAliveCap || slot.lastRaw.landedAfterAction) &&
+                (!plan.requireOrb || slot.activatedRing) &&
+                slot.releaseAfter == slots[static_cast<size_t>(plan.delay)].releaseAfter)
+                verified.push_back(delay);
+        }
+        plan.viableDelays = verified;
+        if (std::ranges::find(verified, plan.delay) != verified.end()) {
+            int const selected =
+                EbSelectedTickGuard::choose(plan.delay, limit, gateIn.robustK, verified);
+            if (selected != plan.delay) {
+                plan.delay = selected;
+                plan.jumpTick = selected;
+                plan.activatedRing = slots[static_cast<size_t>(selected)].activatedRing;
+            }
+            plan.guardProbeIncomplete = !EbSelectedTickGuard::hasMargin(plan.delay, verified);
+        } else {
+            plan.guardProbeIncomplete = true;
+        }
+    }
+
     stats.gated = true;
-    stats.gatedDelay = gate.action == PlanAction::Delay ? gate.delay : 0;
+    stats.gatedDelay = plan.action == PlanAction::Delay ? plan.delay : 0;
     noteStats(stats);
     return plan;
 }

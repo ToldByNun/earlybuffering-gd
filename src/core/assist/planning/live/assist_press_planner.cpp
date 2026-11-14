@@ -7,24 +7,25 @@
 #include "../../../../dev/capture/dev_cycle_recorder.hpp"
 #include "../../../../dev/capture/dev_trace_store.hpp"
 #include "../../../../dev/dev_config.hpp"
+#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../bake/bake_verifier.hpp"
 #include "../../../diagnostics/assist_perf_stats.hpp"
-#include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../diagnostics/assist_real_metrics.hpp"
 #include "../../../diagnostics/divergence_tracker.hpp"
+#include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
 #include "../../../sim/shadow_simulator.hpp"
 #include "../../../sim/sim_trust.hpp"
-#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../trigger_world/trigger_world_baker.hpp"
 #include "../../../trigger_world/trigger_world_store.hpp"
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
 #include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
+#include "../../contracts/selected_tick_guard.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../orb_align.hpp"
 #include "../perfect_assist_policy.hpp"
@@ -402,6 +403,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             EbDevCycleRecorder::get().noteLearningOnPlan(plannedDelay, delay, learningFloored, false);
         }
     }
+
+    // Learning may only move to a tick already verified by this plan.
+    // Otherwise retain the exact timing selected by the planner.
+    delay = EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay, plan.viableDelays);
 
     // If auto-tune shifted delay away from plannedDelay, verify the shifted delay;
     // when plannedDelay is kept as-is, ShadowSimulator::plan already verified it.

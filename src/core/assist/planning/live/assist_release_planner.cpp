@@ -7,6 +7,7 @@
 #include "../../../../dev/capture/dev_cycle_recorder.hpp"
 #include "../../../../dev/capture/dev_trace_store.hpp"
 #include "../../../../dev/dev_config.hpp"
+#include "../../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../bake/bake_verifier.hpp"
 #include "../../../diagnostics/assist_real_metrics.hpp"
 #include "../../../diagnostics/divergence_tracker.hpp"
@@ -22,7 +23,7 @@
 #include "../../contracts/assist_verdict.hpp"
 #include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
-#include "../../../../ui/feedback/lag_warning_toast.hpp"
+#include "../../contracts/selected_tick_guard.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
 #include <algorithm>
@@ -308,6 +309,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         if (delay < 1)
             delay = 1;
     }
+
+    // Learning may only move to a tick already verified by this plan.
+    // Otherwise retain the exact timing selected by the planner.
+    delay = EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay, plan.viableDelays);
 
     controller.m_buffer = {};
     controller.m_buffer.state = BufferState::Buffered;

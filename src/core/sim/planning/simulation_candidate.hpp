@@ -19,6 +19,8 @@ public:
     bool requireHold = false;
     bool robustKFailed = false;
     bool verifyFailed = false;
+    bool jitterVerified = false;
+    int jitterVerifiedReleaseAfter = -1;
     int releaseAfter = -1; // ticks after press; -1 = auto tap / unknown
     int surviveBin = 0;
     int surviveTicks = 0;

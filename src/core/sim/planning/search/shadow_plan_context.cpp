@@ -2,6 +2,7 @@
 #include "../../../../config/stage_config.hpp"
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
+#include "../../../assist/contracts/selected_tick_guard.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
 #include "../../mode_survival.hpp"
 #include "../../shadow_simulator.hpp"
@@ -118,6 +119,11 @@ EbShadowSimulator::RunResult EbShadowPlanContext::runEngine(PlayerObject* who, i
 
 void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
                                       EbDevRejectLedger::EarlyExit early) {
+    guardSelectedTick();
+    if (plan.guardOriginalDelay > 0) {
+        chosenDelay = plan.delay;
+        doPassFlag = plan.action == PlanAction::Pass;
+    }
     EbDevRejectLedger::BuildInput in;
     in.limit = limit;
     in.chosenDelay = chosenDelay;
@@ -249,13 +255,24 @@ void EbShadowPlanContext::finalizeViable(EbSimulationCandidate& candidate, int r
     }
 }
 
-bool EbShadowPlanContext::jitterOk(int delay, int releaseAfter) {
-    if (!options.robustJitter || delay < 0)
+bool EbShadowPlanContext::jitterOk(int delay, int releaseAfter, bool force) {
+    if ((!options.robustJitter && !force) || delay < 0)
         return true;
-    if (tickBudget <= 0 || wallExceeded())
-        return true; // soft accept
-    static float const kScales[] = {0.97f, 1.03f};
+    if (delay <= limit && cands[static_cast<size_t>(delay)].jitterVerified &&
+        cands[static_cast<size_t>(delay)].jitterVerifiedReleaseAfter == releaseAfter)
+        return true;
+    if (tickBudget <= 0 || wallExceeded()) {
+        plan.guardProbeIncomplete = true;
+        return true;
+    }
+    float const variation = std::clamp(options.dtVariance, 0.03f, 0.1f);
+    float const kScales[] = {1.f - variation, 1.f + variation};
     for (float state : kScales) {
+        if (tickBudget <= 0 || wallExceeded()) {
+            plan.guardProbeIncomplete = true;
+            return true;
+        }
+        ++plan.guardProbeCount;
         float jd = firstDt * state;
         if (jd <= 0.f || jd > deltaTime * 1.5f)
             jd = firstDt;
@@ -269,8 +286,101 @@ bool EbShadowPlanContext::jitterOk(int delay, int releaseAfter) {
                                       releaseAfter, zone.valid ? &zone : nullptr, &tickBudget);
         }
         simulator.resetCaptureForNextRun(layer);
-        if (!EbShadowSurvivalRules::clearsThreatOf(result, zone) || result.diedBeforeAction)
+        plan.budgetHit = plan.budgetHit || simulator.planWallHit();
+        auto const probeState = EbSelectedTickGuard::classifyProbe(
+            result.died || result.diedBeforeAction,
+            result.unknown || result.unknownTrunc || result.toggleUnknown, result.landedAfterAction,
+            result.ticksRan, model.cap, EbShadowSurvivalRules::clearsThreatOf(result, zone));
+        if (probeState == EbSelectedTickGuard::ProbeState::Rejected)
             return false;
+        if (probeState == EbSelectedTickGuard::ProbeState::Incomplete) {
+            plan.guardProbeIncomplete = true;
+            return true;
+        }
+    }
+    if (delay <= limit) {
+        cands[static_cast<size_t>(delay)].jitterVerified = true;
+        cands[static_cast<size_t>(delay)].jitterVerifiedReleaseAfter = releaseAfter;
     }
     return true;
+}
+
+void EbShadowPlanContext::guardSelectedTick() {
+    if (!options.requireAliveForDelay || plan.action != PlanAction::Delay || plan.delay <= 0 ||
+        plan.delay > limit || plan.guardOriginalDelay >= 0 || linkedDual())
+        return;
+    plan.guardOriginalDelay = plan.delay;
+    auto const compatible = [&](int delay) {
+        auto const& candidate = cands[static_cast<size_t>(delay)];
+        auto const& original = cands[static_cast<size_t>(plan.guardOriginalDelay)];
+        bool const known = !candidate.raw.unknown && !candidate.raw.unknownTrunc &&
+                           !candidate.raw.toggleUnknown && !candidate.unknownTrunc;
+        bool const complete = candidate.recoveryPressTick >= 0 ||
+                              (!candidate.raw.died && (candidate.raw.landedAfterAction ||
+                                                       candidate.raw.ticksRan >= model.cap));
+        return candReady[static_cast<size_t>(delay)] && candidate.viable && known && complete &&
+               (!plan.requireOrb ||
+                (candidate.activatedRing && (plan.dMin < 0 || delay >= plan.dMin) &&
+                 (plan.dMax < 0 || delay <= plan.dMax))) &&
+               candidate.raw.wasDashing == original.raw.wasDashing &&
+               candidate.requireHold == original.requireHold &&
+               candidate.releaseAfter == original.releaseAfter;
+    };
+    std::vector<int> verified;
+    for (int delay = 1; delay <= limit; ++delay) {
+        if (compatible(delay))
+            verified.push_back(delay);
+    }
+    plan.viableDelays = verified;
+    // An earlier gate may have a different proof contract. Do not reinterpret
+    // that candidate as fully checked here.
+    if (std::ranges::find(verified, plan.delay) == verified.end()) {
+        plan.guardProbeIncomplete = true;
+        return;
+    }
+    int selected = EbSelectedTickGuard::choose(plan.delay, limit, robustK, verified);
+    for (int attempt = 0; attempt < 2 && selected > 0; ++attempt) {
+        bool const interior = EbSelectedTickGuard::hasMargin(selected, verified);
+        if (interior && !options.robustJitter)
+            break;
+        // With jitter disabled, require a measured timing disturbance before
+        // perturbing an already-proven input.
+        if (!options.robustJitter && options.dtVariance < 0.03f) {
+            plan.guardProbeIncomplete = true;
+            break;
+        }
+        auto const& candidate = cands[static_cast<size_t>(selected)];
+        int const followup = candidate.recoveryPressTick >= 0
+                                 ? candidate.recoveryPressTick - selected
+                                 : candidate.releaseAfter;
+        if (jitterOk(selected, followup, true))
+            break;
+        cands[static_cast<size_t>(selected)].verifyFailed = true;
+        cands[static_cast<size_t>(selected)].viable = false;
+        std::erase(verified, selected);
+        selected = attempt == 1 ? -1
+                                : EbSelectedTickGuard::choose(plan.guardOriginalDelay, limit,
+                                                              robustK, verified);
+    }
+    plan.viableDelays = verified;
+    if (selected <= 0) {
+        plan.action = PlanAction::Pass;
+        plan.reason = AssistReason::PassRobustFail;
+        plan.dMin = plan.dMax = -1;
+        plan.requireHold = false;
+        plan.releaseAfter = plan.releaseEarliest = plan.releaseLatest = -1;
+        plan.delay = plan.jumpTick = 0;
+        plan.nowIsSafe = false;
+        plan.threatCleared = false;
+        return;
+    }
+    if (selected == plan.guardOriginalDelay)
+        return;
+    auto const& winner = cands[static_cast<size_t>(selected)];
+    plan.delay = selected;
+    plan.jumpTick = winner.jumpTick;
+    plan.requireHold = plan.requireHold || winner.requireHold;
+    if (winner.releaseAfter >= 0)
+        plan.releaseAfter = winner.releaseAfter;
+    plan.activatedRing = winner.activatedRing;
 }

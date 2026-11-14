@@ -87,6 +87,12 @@ public:
     // 1.5.1 AP0: hitch / Adaptive shell diagnostics on planFinished (additive JSON).
     bool hasPlanCost = false;
     int planUs = 0;
+    int worldCaptureUs = 0;
+    int prepareUs = 0;
+    int guardOriginalDelay = -1;
+    int guardProbeCount = 0;
+    bool guardProbeIncomplete = false;
+
     int adaptiveWorkUs = 0;
     int fallthroughSetupUs = 0;
     int classicSearchUs = 0;

@@ -1,6 +1,7 @@
 #include "shadow_ghost_lifecycle.hpp"
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
+#include "../world/shadow_world_capture.hpp"
 
 void EbShadowGhostLifecycle::clearWaveTrailGeometry(PlayerObject* player) {
     if (!player)
@@ -63,6 +64,7 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
     simulator.m_evalAbort = false;
     simulator.m_nextSnapshot = EbShadowSimulator::SNAPSHOT_RING_BEGIN;
     simulator.m_hostLayer = layer;
+    EbShadowWorldCapture::refreshTimeOrigin(simulator, layer);
 }
 
 void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDying) {
@@ -85,6 +87,9 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
     simulator.m_deathObject = nullptr;
     simulator.m_simAbsTick = -1;
     simulator.m_simTickBase = 0;
+    simulator.m_triggerOriginLayer = nullptr;
+    simulator.m_transformCaptureLayer = nullptr;
+    simulator.m_triggerWorldAppliedIds.clear();
     simulator.m_poseRemapDt = -1.f;
     simulator.m_triggerWorldAppliedThisTick = false;
     simulator.m_dynamicTargetIds.clear();

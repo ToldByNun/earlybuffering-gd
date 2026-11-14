@@ -20,7 +20,7 @@ class PlannerCostReport:
                 groups.setdefault(key, []).append(event)
         for key, events in groups.items():
             print(key, "inputs", len(events))
-            for field in ("planUs", "adaptiveWorkUs", "fallthroughSetupUs", "classicSearchUs", "adaptiveSeedCount"):
+            for field in ("planUs", "worldCaptureUs", "prepareUs", "adaptiveWorkUs", "fallthroughSetupUs", "classicSearchUs", "adaptiveSeedCount"):
                 values = sorted(e[field] for e in events if field in e)
                 if not values:
                     print(field, "unavailable")

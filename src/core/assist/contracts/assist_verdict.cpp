@@ -16,6 +16,8 @@ char const* EbAssistVerdict::name(AssistReason reason) {
         return "pass-d0-safe";
     case AssistReason::PassHopeless:
         return "pass-hopeless";
+    case AssistReason::PassRobustFail:
+        return "pass-robust-fail";
     case AssistReason::PassBudget:
         return "pass-budget";
     case AssistReason::PassSpam:
@@ -90,6 +92,8 @@ char const* EbAssistVerdict::overlayBit(AssistReason reason) {
         return "PASS d0-safe";
     case AssistReason::PassHopeless:
         return "PASS hopeless";
+    case AssistReason::PassRobustFail:
+        return "PASS fragile";
     case AssistReason::PassBudget:
         return "PASS budget";
     case AssistReason::PassSpam:

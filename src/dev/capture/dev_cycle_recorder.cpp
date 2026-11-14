@@ -193,6 +193,12 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     // 1.5.1 AP0: hitch / Adaptive shell cost bits (additive; no plan behavior change).
     width->hasPlanCost = true;
     width->planUs = plan.planUs;
+    width->worldCaptureUs = plan.worldCaptureUs;
+    width->prepareUs = plan.prepareUs;
+    width->guardOriginalDelay = plan.guardOriginalDelay;
+    width->guardProbeCount = plan.guardProbeCount;
+    width->guardProbeIncomplete = plan.guardProbeIncomplete;
+
     width->adaptiveWorkUs = plan.adaptiveWorkUs;
     width->fallthroughSetupUs = plan.fallthroughSetupUs;
     width->classicSearchUs = plan.classicSearchUs;

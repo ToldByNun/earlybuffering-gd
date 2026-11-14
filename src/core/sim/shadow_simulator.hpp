@@ -602,6 +602,12 @@ private:
     std::vector<SavedTransform> m_savedTransforms;
     std::unordered_set<int> m_triggerWorldAppliedIds;
     int m_triggerWorldTimeOffset = 0;
+    PlayLayer* m_triggerOriginLayer = nullptr;
+    int m_triggerOriginId = -1;
+    float m_triggerOriginX = 0.f;
+    float m_triggerOriginY = 0.f;
+    double m_triggerOriginTps = 0.0;
+
     PlayLayer* m_transformCaptureLayer = nullptr;
     gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
     // Absolute attempt tick for the current sim step (−1 = do not apply bake).

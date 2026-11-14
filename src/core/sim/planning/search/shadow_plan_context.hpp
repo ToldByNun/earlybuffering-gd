@@ -35,7 +35,8 @@ private:
     void publishLedger(int chosenDelay, bool doPassFlag, EbDevRejectLedger::EarlyExit early);
     EbSimulationCandidate evalDelay(int delayValue, int releaseAfter);
     void finalizeViable(EbSimulationCandidate& candidate, int releaseAfter);
-    bool jitterOk(int delay, int releaseAfter);
+    bool jitterOk(int delay, int releaseAfter, bool force = false);
+    void guardSelectedTick();
 
     EbShadowSimulator& simulator;
     PlayLayer* layer;
