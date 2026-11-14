@@ -15,6 +15,13 @@ public:
     static void recordRingApplication(RingObject* ring, char const* event, PlayerObject* player);
 
 private:
+    static constexpr int kOrbRuns = 1000;
+    static constexpr int kModeCount = 8;
+    static constexpr int kRunsPerMode = 64;
+    static constexpr int kTotalRuns = kOrbRuns + kModeCount * kRunsPerMode;
+    static void configureMode(PlayerObject* player, int mode, bool inverted, bool mini, int world);
+    static int modeMask(PlayerObject* player);
+
     static void moveFixtureObject(PlayLayer* layer, GameObject* object,
                                   cocos2d::CCPoint const& position);
 
@@ -33,6 +40,12 @@ private:
         bool blockActive = false;
         bool toggleModeled = false;
         bool initialBlockActive = false;
+        int mode = 0;
+        bool modeConfigured = true;
+        float vehicleSize = 1.f;
+        int inputCommands = 0;
+        float width = 0.f;
+        float height = 0.f;
         float movingX = 0.f;
         float movingY = 0.f;
         int objectId = -1;
