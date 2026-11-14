@@ -56,7 +56,8 @@ jobs:
         id: modbuild
         uses: geode-sdk/build-geode-mod@main
         with:
-          combine: true
+          combine: false
+          configure-args: -DGEODE_PACKAGE_ZSTD=OFF
           target: ${{ matrix.config.target }}
           sdk: given
 
@@ -76,8 +77,7 @@ jobs:
           echo "Checking ${PKG}"
           python3 tools/geode_package_check.py "${PKG}" --require ios --check-ios-sign --check-install-name
 
-      # geode-sdk/build-geode-mod also uploads geode-build-* (combine feed), but those
-      # nested uploads are not reliably downloadable later. Keep our own copies.
+      # Our package job consumes these explicit per-platform artifacts only.
       - name: Stage platform package
         id: stage
         shell: bash
@@ -117,24 +117,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: geode-sdk/build-geode-mod/combine@main
-        id: build
+      - uses: actions/setup-python@v5
         with:
-          # Default combine uses ZIP method 93 (zstd). Android Geode unzip can
-          # fail with "Unable to read entry (code -3)" / MZ_DATA_ERROR on those
-          # entries — keep classic deflate for ship packages.
-          zstd: false
+          python-version: '3.14'
+
+      - name: Download our platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: earlybuffer-*-${{ github.sha }}
+          path: platform-input
+
+      - name: Bundle all five platforms
+        run: python tools/bundle_geode.py --input-dir platform-input --output bundle-out/audesign.earlybuffer.geode
 
       - name: Test package validation
-        run: python3 tools/test_geode_package_check.py
+        run: |
+          python tools/test_geode_package_check.py
+          python tools/test_bundle_geode.py
 
       - name: Gate package (binaries + no zstd + iOS filename)
         shell: bash
         run: |
           set -euo pipefail
-          PKG=$(find "${{ steps.build.outputs.build-output }}" -name '*.geode' -type f | head -n 1)
-          if [[ -z "${PKG}" ]]; then
-            echo "ERROR: no .geode in combine output"
+          PKG="bundle-out/audesign.earlybuffer.geode"
+          if [[ ! -f "${PKG}" ]]; then
+            echo "ERROR: no final bundle"
             exit 1
           fi
           echo "Checking ${PKG}"
@@ -145,6 +152,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: earlybuffer-${{ github.sha }}
-          path: ${{ steps.build.outputs.build-output }}
+          path: |
+            bundle-out/audesign.earlybuffer.geode
+            bundle-out/audesign.earlybuffer.sha256.txt
           if-no-files-found: error
           retention-days: 30

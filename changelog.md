@@ -1,6 +1,18 @@
 # Changelog
 
-## v1.6.2 (dev)
+## v1.6.2
+
+Release notes: [`releases/v1.6.2.md`](releases/v1.6.2.md).
+
+### Timing, moving objects and performance
+- UFO CBF planning and injection support fractional ticks; Ball and Cube rescue searches verify useful landing/escape paths, and Wave release searches can verify a future player press.
+- Adaptive fallthrough retains completed work. The shadow world caches its object index and predicts nearby moving objects from their live pose plus correctly timed future motion.
+- Selected-tick checks retain verified timings. Orb windows receive earlier verification; UFO orb chains and Spider candidates can verify one conditional future player click without injecting that click into live play.
+- UFO lower-line-up live/simulation mismatch and Ball orb-to-orb misses remain under investigation. Conditional continuation tests do not establish universal in-game coverage.
+
+### Release packaging
+- CI bundles its own five platform artifacts into a Deflate-only `audesign.earlybuffer.geode`, validates all binaries and the iOS signature marker, and emits SHA256.
+- Canonical download filename avoids the iOS launcher file-import mismatch caused by version suffixes. Confirmation on affected iOS devices remains pending.
 
 ### Assist Pack AP-M1 — Wave false-futile → Delay / PassBudget
 - Classic Wave IW no longer `pass-wave-futile` when a later delay still progresses past a dying d0 (later `deathTick` / `ticksRan` / endX ≥ 8px) — arms `DelayThreat` instead (River-class miss vs Adaptive).

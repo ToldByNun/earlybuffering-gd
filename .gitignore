@@ -131,3 +131,12 @@ tools/fixtures/orb_window_starvation.json
 !/tools/test_spider_continuation.hpp
 !/tools/fixtures/spider_continuation.json
 tools/fixtures/spider_continuation.json
+
+!/tools/bundle_geode.py
+!/tools/test_bundle_geode.py
+!/releases/
+/releases/*
+!/releases/v1.6.2.md
+!/releases/README.md
+!/releases/CHECKLIST.md
+/releases

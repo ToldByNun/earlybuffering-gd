@@ -35,7 +35,7 @@ Stopping at first safe on ball was a real footgun (Eval `bestSurv` ≠ Live pick
 
 Ball `stopAtBallLanding`: do **not** rank landed cands by absolute `surviveBin` — ticksRan grows with delay.
 
-**1.5.1 / 1.6.x contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`; AP-L1–L7 on **1.6.1**):
+**1.5.1 / 1.6.x contracts** (`EbLivePlanContracts`, PlanGold `live-plan-contracts` / `live-hitch-ceiling`; AP-L1–L7 on **1.6.2**):
 
 | Topic | Status |
 |---|---|

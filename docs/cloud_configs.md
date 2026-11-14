@@ -1,6 +1,6 @@
 # Cloud configs
 
-Release **v1.6.1** includes this system (shipped since v1.4.3). Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions — both open the Geode popup in 1.6.x. Restart GD after installing a new package to load its settings definitions.
+Release **v1.6.2** includes this system (shipped since v1.4.3). Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions — both open the Geode popup in 1.6.x. Restart GD after installing a new package to load its settings definitions.
 
 EarlyBuffer browses the public catalog **`ToldByNun/earlybuffer-configs`** and can Share packs into it. There are **no player-facing cloud URL/token settings** — catalog, submit, and stats URLs are built into the mod. The GitHub token lives only in Vercel env vars.
 

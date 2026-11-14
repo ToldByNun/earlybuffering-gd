@@ -4,7 +4,7 @@
 
 Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.x** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.6.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.6.2** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
@@ -154,7 +154,7 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.6.1**). Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.6.2**). Tab IA: **Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
 
 **Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 
@@ -176,7 +176,7 @@ Every `mod.json` key (including `title-*` and `custom:eb-action`) maps to exactl
 
 With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir. Full schema + Research Pack / Compare / CLI: [`docs/dev/traces.md`](dev/traces.md).
 
-**Research workflow (1.6.1):** Apply Research Preset → Record → die a few times → **Export Research Pack** (one folder on clipboard). Optional **Compare Sessions** for Gain/Flat/Regress on the same `levelKey`. Offline: `tools/scan_devlab_assists.py` (session or pack) and `tools/compare_devlab_sessions.py`.
+**Research workflow (1.6.2):** Apply Research Preset → Record → die a few times → **Export Research Pack** (one folder on clipboard). Optional **Compare Sessions** for Gain/Flat/Regress on the same `levelKey`. Offline: `tools/scan_devlab_assists.py` (session or pack) and `tools/compare_devlab_sessions.py`.
 
 | Field | Where | Meaning |
 |-------|--------|---------|

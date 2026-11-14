@@ -33,7 +33,7 @@ You still click. EarlyBuffer only holds a slightly early jump and fires it on th
 <br/>
 
 <strong>Not on the Geode Index.</strong> Install from <a href="https://github.com/ToldByNun/earlybuffering-gd/releases">GitHub Releases</a> only.<br/>
-<strong>Last 2.2081 line</strong> — v1.6.1 does not support newer Geometry Dash builds.
+<strong>Last 2.2081 line</strong> — v1.6.2 does not support newer Geometry Dash builds.
 
 </div>
 
@@ -91,7 +91,7 @@ Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_refer
 
 ---
 
-## Desktop settings (v1.6.1)
+## Desktop settings (v1.6.2)
 
 On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
 
@@ -124,7 +124,7 @@ See [Cloud Configs](docs/cloud_configs.md).
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.6.1** |
+| Version | **1.6.2** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows · macOS · iOS · Android |
 | License | [MIT](LICENSE) |

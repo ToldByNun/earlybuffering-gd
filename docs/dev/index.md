@@ -31,4 +31,4 @@ EarlyBuffer is **banned from the Geode Index**. Shipping = GitHub Releases / dir
 
 ## Branch tip
 
-Active 1.6.x work often lives on `earlybuffer-1.6.x-dev` branches. Docs edit link points at `earlybuffer-1.6.1-dev`.
+Active 1.6.x work often lives on `earlybuffer-1.6.x-dev` branches. Docs edit link points at `main`.
