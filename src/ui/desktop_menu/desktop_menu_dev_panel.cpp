@@ -261,8 +261,9 @@ public:
         EbButton::endRow();
 
         gap();
-        if (EbButton::draw("##dev-native-isolation", "Native Isolation", true,
-                           "Main menu only: compare two native fixture worlds serially.")) {
+        if (EbButton::draw(
+                "##dev-native-isolation", "Native Isolation", true,
+                "Main menu only: two native workers plus main-thread native fixture physics.")) {
             EbDesktopAlert::info("Native Isolation", EbNativeIsolationProbe::run().c_str());
         }
         gap();

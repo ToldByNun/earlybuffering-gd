@@ -1,10 +1,15 @@
 #include "sim_tick_cost_meter.hpp"
 #include "../../app/class_manager.hpp"
+#include "../sim/validation/native_isolation_probe.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
 EbSimTickCostMeter& EbSimTickCostMeter::get() {
+    if (EbNativeIsolationProbe::activeSimulator()) {
+        static thread_local EbSimTickCostMeter diagnosticMeter;
+        return diagnosticMeter;
+    }
     return EbClassManager::get().service<EbSimTickCostMeter>();
 }
 
