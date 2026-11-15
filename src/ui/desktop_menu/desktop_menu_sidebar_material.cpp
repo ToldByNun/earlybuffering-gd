@@ -1,6 +1,7 @@
 #include "desktop_menu_sidebar_material.hpp"
 #if defined(EB_DESKTOP_IMGUI)
 #include "desktop_menu_bind.hpp"
+#include "desktop_menu_motion.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_sidebar_wave_gpu.hpp"
 #include "desktop_menu_theme.hpp"
@@ -97,28 +98,36 @@ void EbDesktopMenuSidebarMaterial::paint(ImDrawList* list, ImVec2 min, ImVec2 ma
     if (!list || max.x <= min.x || max.y <= min.y)
         return;
     auto settings = EbSidebarMaterialSettings::load();
-    if ((settings.glass || (settings.blur && settings.radius > 0 && settings.opacity > 0)) &&
+    float classic = EbDesktopMenuMotion::smoothToward(0xEB5101u, settings.enabled, 0.12f);
+    float blur = EbDesktopMenuMotion::smoothToward(0xEB5102u, settings.blur, 0.12f);
+    float glass = EbDesktopMenuMotion::smoothToward(0xEB5103u, settings.glass, 0.12f);
+    auto settle = [](float value) { return value < 0.001f ? 0.f : value > 0.999f ? 1.f : value; };
+    classic = settle(classic);
+    blur = settle(blur);
+    glass = settle(glass);
+    if ((glass > 0 || blur > 0 || classic > 0 && classic < 1) &&
         EbDesktopMenuSidebarWaveGpu::ensureReady()) {
         EbDesktopMenuSidebarWaveGpu::PaintRequest request;
         request.min = min;
         request.max = max;
         request.rounding = rounding;
         request.timeSeconds = float(ImGui::GetTime()) * settings.speed;
-        request.glass = settings.glass;
-        request.refraction = settings.refraction;
-        request.highlight = settings.highlight;
+        request.glass = glass > 0;
+        request.alpha = std::max({classic, blur, glass});
+        request.refraction = settings.refraction * glass;
+        request.highlight = settings.highlight * glass;
         request.edgeWidth = settings.edgeWidth;
         request.blur = true;
-        request.classic = settings.enabled;
-        request.blurRadius = settings.blur ? settings.radius : settings.diffusion;
-        request.opacity = settings.blur ? settings.opacity : 1.f;
-        request.tint = settings.tint;
+        request.classic = classic;
+        request.blurRadius = settings.diffusion * glass * (1.f - blur) + settings.radius * blur;
+        request.opacity = settings.opacity * blur + (1.f - blur) * glass;
+        request.tint = settings.tint * std::max(blur, glass);
         request.baseColor = EbDesktopMenuTheme::sidebarWaveDark();
         request.lightColor = EbDesktopMenuTheme::sidebarWaveLight();
         EbDesktopMenuSidebarWaveGpu::paint(list, request);
         return;
     }
-    if (!settings.enabled)
+    if (classic <= 0)
         return;
     EbDesktopMenuSidebarSmoke::get().paint(list, min, max, rounding,
                                            float(ImGui::GetTime()) * settings.speed,

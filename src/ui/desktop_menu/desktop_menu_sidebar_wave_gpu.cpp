@@ -3,6 +3,7 @@
 #if defined(EB_DESKTOP_IMGUI)
 
 #include "desktop_menu_theme.hpp"
+#include "desktop_menu_background.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/cocos/platform/CCGL.h>
 #include <cmath>
@@ -130,6 +131,7 @@ void main() {
 precision mediump float;
 #endif
 
+uniform vec4 uBackdropDim;
 uniform sampler2D uBackdrop;
 uniform sampler2D uHorizontal;
 uniform float uPass;
@@ -162,16 +164,17 @@ float glassDistance(vec2 local) {
     return length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-radius;
 }
 vec3 material(vec2 local) {
-    if(uClassic < 0.5) {
+    vec3 backdropColor = vec3(0.0);
+    if(uClassic < 0.9999) {
         vec2 screen = uCapture.xy + vec2(local.x, uResolution.y-local.y)*uCapture.zw;
-        return texture2D(uBackdrop, clamp(screen/uFramebuffer,vec2(0.0),vec2(1.0))).rgb;
+        backdropColor = mix(texture2D(uBackdrop, clamp(screen/uFramebuffer,vec2(0.0),vec2(1.0))).rgb,uBackdropDim.rgb,uBackdropDim.a);
     }
     vec2 uv = (2.0*local-uResolution)/min(uResolution.x,uResolution.y);
     for(float i=1.0;i<6.0;i++) {
         uv.x += 0.6/i*cos(i*2.5*uv.y+uTime/18.0);
         uv.y += 0.6/i*cos(i*2.5*uv.x+uTime/18.0);
     }
-    return mix(uBaseColor,uLightColor,0.5+0.5*sin(uTime-uv.y-uv.x));
+    return mix(backdropColor,mix(uBaseColor,uLightColor,0.5+0.5*sin(uTime-uv.y-uv.x)),uClassic);
 }
 void main() {
     vec2 local = vec2(v_uv.x, 1.0 - v_uv.y) * (uPass < 1.5 && uPass > 0.5 ? uTargetSize : uResolution);
@@ -229,7 +232,7 @@ void main() {
         color = uPass < 1.5 ? blurred : mix(color,blurred,uOpacity);
 
     }
-    if(uPass > 1.5 && uClassic < 0.5) color = mix(color,uBaseColor,uTint);
+    if(uPass > 1.5) color = mix(color,uBaseColor,uTint*(1.0-uClassic));
     if(uGlass > 0.5 && uPass != 1.0) color = clamp(color*(1.0+edgeLight)+vec3(max(edgeLight,0.0)*0.15),0.0,1.0);
     gl_FragColor = vec4(color,1.0);
 }
@@ -442,7 +445,7 @@ void main() {
         if (!backdrop)
             glGenTextures(1, &backdrop);
         glBindTexture(GL_TEXTURE_2D, backdrop);
-        if (request.blur && !request.classic) {
+        if (request.blur && request.classic < 0.9999) {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -469,6 +472,8 @@ void main() {
 
         GLuint const program = EbDesktopMenuSidebarWaveGpuState::program();
         glUseProgram(program);
+        auto const dim = EbDesktopMenuBackground::dim(EbDesktopMenuTheme::styleAlpha());
+        glUniform4f(glGetUniformLocation(program,"uBackdropDim"),dim.x,dim.y,dim.z,dim.w);
         glUniform1i(glGetUniformLocation(program, "uBackdrop"), 0);
         glUniform1f(glGetUniformLocation(program, "uGlass"), request.glass);
         glUniform1f(glGetUniformLocation(program, "uRefraction"), request.refraction);
@@ -638,7 +643,7 @@ void EbDesktopMenuSidebarWaveGpu::paint(ImDrawList* drawList, PaintRequest const
         EbDesktopMenuSidebarWaveGpuGl::toImGuiTexture(EbDesktopMenuSidebarWaveGpuState::colorTex());
     // Discarded corners stay alpha-0 from the FBO clear — AddImage blends them out.
     // Tint alpha follows Style.Alpha so the GPU wave fades with shell open/close.
-    float const fade = EbDesktopMenuTheme::styleAlpha();
+    float const fade = EbDesktopMenuTheme::styleAlpha()*request.alpha;
     int const a = static_cast<int>(fade * 255.0f + 0.5f);
     drawList->AddImage(tex, request.min, request.max, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f),
                        IM_COL32(255, 255, 255, a < 0 ? 0 : (a > 255 ? 255 : a)));

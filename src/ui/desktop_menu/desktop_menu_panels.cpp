@@ -1,4 +1,5 @@
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_background.hpp"
 #include "desktop_menu_sidebar_material.hpp"
 #include "../../config/assist_policy_settings.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
@@ -332,6 +333,10 @@ public:
     static void drawUI() {
         if (EbSectionCard::begin("ui-sidebar", "Sidebar Materials"))
             EbDesktopMenuSidebarMaterial::settings();
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("ui-background", "Game Background"))
+            EbDesktopMenuBackground::settings();
         EbSectionCard::end();
 
         if (EbSectionCard::begin("ui-chrome", "Interface")) {

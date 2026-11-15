@@ -8,6 +8,7 @@
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -69,20 +70,21 @@ public:
         float const totalH = labelH + gap + trackBlockH;
 
         ImVec2 const origin = ImGui::GetCursorScreenPos();
-        if (enabled) {
-            ImGui::InvisibleButton("##eb-slider", ImVec2(avail, totalH));
-        } else {
-            ImGui::Dummy(ImVec2(avail, totalH));
-        }
+        ImGuiID const sliderId = ImGui::GetID("##eb-slider");
+        if (!enabled && ImGui::GetActiveID() == sliderId)
+            ImGui::ClearActiveID();
+        ImGui::BeginDisabled(!enabled);
+        ImGui::InvisibleButton("##eb-slider", ImVec2(avail, totalH));
+        ImGui::EndDisabled();
         EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
         bool const held = enabled && ImGui::IsItemActive();
-        ImGuiID const itemId = ImGui::GetItemID();
+        ImGuiID const itemId = sliderId;
         float const heat =
             enabled ? EbDesktopMenuMotion::smoothToward(itemId, hovered || held, 0.05f) : 0.0f;
         // Visual thumb/fill eases toward the live value (snappier while dragging).
-        float const visualT = EbDesktopMenuMotion::smoothFloat(itemId ^ 0x51ADu, clampf(t, 0.0f, 1.0f),
-                                                               held ? 0.028f : 0.08f);
+        float const visualT = EbDesktopMenuMotion::smoothFloat(
+            itemId ^ 0x51ADu, clampf(t, 0.0f, 1.0f), held ? 0.028f : 0.08f);
 
         ImVec2 const valueSize = ImGui::CalcTextSize(valueText);
         ImDrawList* drawList = ImGui::GetWindowDrawList();

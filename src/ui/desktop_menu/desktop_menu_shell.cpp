@@ -1,4 +1,5 @@
 #include "desktop_menu_shell.hpp"
+#include "desktop_menu_background.hpp"
 #include "desktop_menu_sidebar_material.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
@@ -516,6 +517,7 @@ public:
             return;
         }
 
+        EbDesktopMenuBackground::paint(openE);
         ImGuiIO const& io = ImGui::GetIO();
         ImVec2 const screenCenter(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
         ImVec2 const winSize(EbDesktopMenuShellState::kMenuWidth,

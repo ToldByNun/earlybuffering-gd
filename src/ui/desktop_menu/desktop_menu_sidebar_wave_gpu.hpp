@@ -16,7 +16,8 @@ public:
         bool glass = false;
         float refraction = 12.f, highlight = 0.3f, edgeWidth = 20.f;
         bool blur = false;
-        bool classic = true;
+        float classic = 1.f;
+        float alpha = 1.f;
         float blurRadius = 8.f;
         float opacity = 0.7f;
         float tint = 0.35f;

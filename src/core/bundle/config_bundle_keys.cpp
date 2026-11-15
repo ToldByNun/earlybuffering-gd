@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[184] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[185] = {
     {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
     {"ball-ground-check", EbConfigBundleKeys::Kind::String},
     {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
@@ -25,6 +25,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[184] = {
     {"show-trajectory", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
     {"desktop-classic-settings", EbConfigBundleKeys::Kind::Bool},
+    {"background-material", EbConfigBundleKeys::Kind::String},
     {"sidebar-material", EbConfigBundleKeys::Kind::String},
     {"desktop-accent-color", EbConfigBundleKeys::Kind::Color},
     {"save-feedback-sound", EbConfigBundleKeys::Kind::Bool},
@@ -223,7 +224,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 184, "count-184");
+    expect(EbConfigBundleKeysTable::kEntryCount == 185, "count-185");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -269,7 +270,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(kindBool == 68, "kind-bool-68");
     expect(kindInt == 70, "kind-int-70");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 18, "kind-string-18");
+    expect(kindString == 19, "kind-string-19");
     expect(kindColor == 2, "kind-color-2");
     expect(kindKeybind == 6, "kind-keybind-6");
 
