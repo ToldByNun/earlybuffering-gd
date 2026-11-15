@@ -13,6 +13,11 @@ public:
     public:
         ImVec2 min{};
         ImVec2 max{};
+        bool blur = false;
+        bool classic = true;
+        float blurRadius = 8.f;
+        float opacity = 0.7f;
+        float tint = 0.35f;
         float timeSeconds = 0.0f;
         float rounding = 0.0f;
         ImDrawFlags cornerFlags = ImDrawFlags_RoundCornersLeft;

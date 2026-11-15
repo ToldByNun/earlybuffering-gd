@@ -5,6 +5,7 @@
 #include "desktop_menu_theme.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/cocos/platform/CCGL.h>
+#include <cmath>
 #include <imgui.h>
 
 // macOS Cocos pulls OpenGL/gl.h + glext (VAO via APPLE), not gl3.h — so
@@ -122,12 +123,25 @@ void main() {
     }
 
     static char const* fragmentSource() {
-        // v_uv: bottom-left origin from NDC. Flip Y to match ImGui top-left sampling.
+        // FBO coordinates start at the bottom. Local material coordinates start
+        // at the top; the final ImGui image flips texture UVs exactly once.
         return R"GLSL(
 #ifdef GL_ES
 precision mediump float;
 #endif
 
+uniform sampler2D uBackdrop;
+uniform sampler2D uHorizontal;
+uniform float uPass;
+uniform vec2 uTargetSize;
+uniform float uPadding;
+uniform vec4 uCapture;
+uniform vec2 uFramebuffer;
+uniform float uBlur;
+uniform float uClassic;
+uniform float uRadius;
+uniform float uTint;
+uniform float uOpacity;
 uniform float uTime;
 uniform vec2 uResolution;
 uniform vec3 uBaseColor;
@@ -136,10 +150,23 @@ uniform float uRounding;
 uniform vec4 uCorners;
 varying vec2 v_uv;
 
+vec3 material(vec2 local) {
+    if(uClassic < 0.5) {
+        vec2 screen = uCapture.xy + vec2(local.x, uResolution.y-local.y)*uCapture.zw;
+        return texture2D(uBackdrop, clamp(screen/uFramebuffer,vec2(0.0),vec2(1.0))).rgb;
+    }
+    vec2 uv = (2.0*local-uResolution)/min(uResolution.x,uResolution.y);
+    for(float i=1.0;i<6.0;i++) {
+        uv.x += 0.6/i*cos(i*2.5*uv.y+uTime/18.0);
+        uv.y += 0.6/i*cos(i*2.5*uv.x+uTime/18.0);
+    }
+    return mix(uBaseColor,uLightColor,0.5+0.5*sin(uTime-uv.y-uv.x));
+}
 void main() {
-    vec2 local = vec2(v_uv.x, 1.0 - v_uv.y) * uResolution;
+    vec2 local = vec2(v_uv.x, 1.0 - v_uv.y) * (uPass < 1.5 && uPass > 0.5 ? uTargetSize : uResolution);
+    if(uPass > 0.5 && uPass < 1.5) local -= vec2(uPadding);
     float r = uRounding;
-    if (r > 0.5) {
+    if (r > 0.5 && uPass != 1.0) {
         vec2 tl = local - vec2(r, r);
         vec2 tr = local - vec2(uResolution.x - r, r);
         vec2 br = local - vec2(uResolution.x - r, uResolution.y - r);
@@ -161,15 +188,27 @@ void main() {
         }
     }
 
-    vec2 fragCoord = local;
-    vec2 uv = (2.0 * fragCoord - uResolution.xy) / min(uResolution.x, uResolution.y);
-    for (float i = 1.0; i < 6.0; i++) {
-        uv.x += 0.6 / i * cos(i * 2.5 * uv.y + (uTime / 18.0));
-        uv.y += 0.6 / i * cos(i * 2.5 * uv.x + (uTime / 18.0));
+    vec3 color = material(local);
+    if(uBlur > 0.5) {
+        vec3 sum = vec3(0.0);
+        float total = 0.0;
+        for(int i=-32;i<=32;i++) {
+            float offset = float(i)*uRadius/32.0;
+            float weight = exp(-0.5*float(i*i)/113.777778);
+            vec3 sampleColor;
+            if(uPass < 1.5) sampleColor = material(local+vec2(offset,0.0));
+            else {
+                vec2 uv = (local+vec2(uPadding)+vec2(0.0,offset))/uTargetSize;
+                sampleColor = texture2D(uHorizontal,vec2(uv.x,1.0-uv.y)).rgb;
+            }
+            sum += sampleColor*weight;
+            total += weight;
+        }
+        vec3 blurred = sum/total;
+        color = uPass < 1.5 ? blurred : mix(color,blurred,uOpacity);
+        if(uPass > 1.5 && uClassic < 0.5) color = mix(color,uBaseColor,uTint);
     }
-    float wave = 0.5 + 0.5 * sin(uTime - uv.y - uv.x);
-    vec3 finalColor = mix(uBaseColor, uLightColor, wave);
-    gl_FragColor = vec4(finalColor, 1.0);
+    gl_FragColor = vec4(color,1.0);
 }
 )GLSL";
     }
@@ -298,7 +337,8 @@ void main() {
         }
 
         EbDesktopMenuSidebarWaveGpuState::program() = program;
-        EbDesktopMenuSidebarWaveGpuState::locPosition() = glGetAttribLocation(program, "a_position");
+        EbDesktopMenuSidebarWaveGpuState::locPosition() =
+            glGetAttribLocation(program, "a_position");
         EbDesktopMenuSidebarWaveGpuState::locTime() = glGetUniformLocation(program, "uTime");
         EbDesktopMenuSidebarWaveGpuState::locResolution() =
             glGetUniformLocation(program, "uResolution");
@@ -343,10 +383,6 @@ void main() {
         if (width < 1 || height < 1) {
             return false;
         }
-        if (!ensureTextureSize(width, height)) {
-            return false;
-        }
-
         GLint lastFbo = 0;
         GLint lastVao = 0;
         GLint lastProgram = 0;
@@ -368,6 +404,36 @@ void main() {
         lastEnableDepth = glIsEnabled(GL_DEPTH_TEST);
         lastEnableScissor = glIsEnabled(GL_SCISSOR_TEST);
 
+        bool const targetReady = ensureTextureSize(width, height);
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(lastFbo));
+        glActiveTexture(static_cast<GLenum>(lastActiveTexture));
+        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(lastTexture));
+        if (!targetReady)
+            return false;
+
+        // Capture before ImGui submission: foreground UI cannot enter this source.
+        static GLuint backdrop = 0;
+        glActiveTexture(GL_TEXTURE0);
+        GLint unitZeroTexture = 0;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &unitZeroTexture);
+        if (!backdrop)
+            glGenTextures(1, &backdrop);
+        glBindTexture(GL_TEXTURE_2D, backdrop);
+        if (request.blur && !request.classic) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            static int captureWidth = 0, captureHeight = 0;
+            if (captureWidth != lastViewport[2] || captureHeight != lastViewport[3]) {
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, lastViewport[2], lastViewport[3], 0, GL_RGB,
+                             GL_UNSIGNED_BYTE, nullptr);
+                captureWidth = lastViewport[2];
+                captureHeight = lastViewport[3];
+            }
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, lastViewport[0], lastViewport[1],
+                                lastViewport[2], lastViewport[3]);
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, EbDesktopMenuSidebarWaveGpuState::fbo());
         glViewport(0, 0, EbDesktopMenuSidebarWaveGpuState::texW(),
                    EbDesktopMenuSidebarWaveGpuState::texH());
@@ -380,6 +446,18 @@ void main() {
 
         GLuint const program = EbDesktopMenuSidebarWaveGpuState::program();
         glUseProgram(program);
+        glUniform1i(glGetUniformLocation(program, "uBackdrop"), 0);
+        glUniform1f(glGetUniformLocation(program, "uBlur"), request.blur);
+        glUniform1f(glGetUniformLocation(program, "uClassic"), request.classic);
+        glUniform1f(glGetUniformLocation(program, "uRadius"), request.blurRadius);
+        glUniform1f(glGetUniformLocation(program, "uOpacity"), request.opacity);
+        glUniform1f(glGetUniformLocation(program, "uTint"), request.tint);
+        auto const& io = ImGui::GetIO();
+        float sx = lastViewport[2] / io.DisplaySize.x, sy = lastViewport[3] / io.DisplaySize.y;
+        glUniform4f(glGetUniformLocation(program, "uCapture"), request.min.x * sx,
+                    lastViewport[3] - request.max.y * sy, sx, sy);
+        glUniform2f(glGetUniformLocation(program, "uFramebuffer"), float(lastViewport[2]),
+                    float(lastViewport[3]));
 
         float const resW = static_cast<float>(EbDesktopMenuSidebarWaveGpuState::texW());
         float const resH = static_cast<float>(EbDesktopMenuSidebarWaveGpuState::texH());
@@ -414,13 +492,60 @@ void main() {
                         corners[2], corners[3]);
         }
 
+        GLint unitOneTexture = 0;
+        glActiveTexture(GL_TEXTURE1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &unitOneTexture);
+        static GLuint horizontal = 0, horizontalFbo = 0;
+        static int horizontalWidth = 0, horizontalHeight = 0;
+        int padding = int(std::ceil(request.blurRadius)) + 2;
+        int paddedWidth = width + padding * 2, paddedHeight = height + padding * 2;
         glBindVertexArray(EbDesktopMenuSidebarWaveGpuState::vao());
+        glUniform1f(glGetUniformLocation(program, "uPass"), 0);
+        if (request.blur) {
+            if (!horizontal)
+                glGenTextures(1, &horizontal);
+            if (!horizontalFbo)
+                glGenFramebuffers(1, &horizontalFbo);
+            glBindTexture(GL_TEXTURE_2D, horizontal);
+            if (horizontalWidth != paddedWidth || horizontalHeight != paddedHeight) {
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, paddedWidth, paddedHeight, 0, GL_RGB,
+                             GL_UNSIGNED_BYTE, nullptr);
+                horizontalWidth = paddedWidth;
+                horizontalHeight = paddedHeight;
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, horizontalFbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, horizontal,
+                                   0);
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+                glUniform2f(glGetUniformLocation(program, "uTargetSize"), float(paddedWidth),
+                            float(paddedHeight));
+                glUniform1f(glGetUniformLocation(program, "uPadding"), float(padding));
+                glUniform1f(glGetUniformLocation(program, "uPass"), 1);
+                glViewport(0, 0, paddedWidth, paddedHeight);
+                glActiveTexture(GL_TEXTURE0);
+                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                glUniform1i(glGetUniformLocation(program, "uHorizontal"), 1);
+                glUniform1f(glGetUniformLocation(program, "uPass"), 2);
+            } else {
+                glUniform1f(glGetUniformLocation(program, "uBlur"), 0);
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, EbDesktopMenuSidebarWaveGpuState::fbo());
+            glViewport(0, 0, width, height);
+        }
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(unitOneTexture));
 
         glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(lastFbo));
         glBindVertexArray(static_cast<GLuint>(lastVao));
         glUseProgram(static_cast<GLuint>(lastProgram));
         glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(unitZeroTexture));
         glActiveTexture(static_cast<GLenum>(lastActiveTexture));
         glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(lastTexture));
         if (lastEnableBlend) {
@@ -487,7 +612,7 @@ void EbDesktopMenuSidebarWaveGpu::paint(ImDrawList* drawList, PaintRequest const
     // Tint alpha follows Style.Alpha so the GPU wave fades with shell open/close.
     float const fade = EbDesktopMenuTheme::styleAlpha();
     int const a = static_cast<int>(fade * 255.0f + 0.5f);
-    drawList->AddImage(tex, request.min, request.max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+    drawList->AddImage(tex, request.min, request.max, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f),
                        IM_COL32(255, 255, 255, a < 0 ? 0 : (a > 255 ? 255 : a)));
 }
 
