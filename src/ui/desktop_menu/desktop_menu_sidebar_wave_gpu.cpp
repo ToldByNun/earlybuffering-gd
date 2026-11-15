@@ -1,6 +1,7 @@
 #include "desktop_menu_sidebar_wave_gpu.hpp"
 
-#if defined(EB_DESKTOP_IMGUI)
+#if defined(EB_DESKTOP_IMGUI) && defined(EB_DESKTOP_MATERIALS) && \
+    (defined(EB_UI_WINDOWS) || defined(EB_UI_MACOS))
 
 #include "desktop_menu_background.hpp"
 #include "desktop_menu_bind.hpp"
@@ -742,4 +743,8 @@ void EbDesktopMenuSidebarWaveGpu::paint(ImDrawList* drawList, PaintRequest const
                        IM_COL32(255, 255, 255, a < 0 ? 0 : (a > 255 ? 255 : a)));
 }
 
+#elif defined(EB_DESKTOP_IMGUI)
+bool EbDesktopMenuSidebarWaveGpu::ensureReady() { return false; }
+bool EbDesktopMenuSidebarWaveGpu::isAvailable() { return false; }
+void EbDesktopMenuSidebarWaveGpu::paint(ImDrawList*, PaintRequest const&) {}
 #endif

@@ -1,4 +1,5 @@
 #include "desktop_menu_background.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
 #if defined(EB_DESKTOP_IMGUI)
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_motion.hpp"
@@ -69,7 +70,7 @@ void EbDesktopMenuBackground::paint(float openAlpha) {
     auto value = EbBackgroundSettings::load();
     float blend =
         EbDesktopMenuMotion::smoothFloat(0xEBBA002u, value.blur ? value.opacity : 0.f, 0.12f);
-    if (blend > 0.001f && value.radius > 0 && EbDesktopMenuSidebarWaveGpu::ensureReady()) {
+    if (EbUiCapabilities::expensiveMaterials() && blend > 0.001f && value.radius > 0 && EbDesktopMenuSidebarWaveGpu::ensureReady()) {
         auto* viewport = ImGui::GetMainViewport();
         EbDesktopMenuSidebarWaveGpu::PaintRequest request;
         request.background = true;

@@ -1,4 +1,5 @@
 #include "desktop_menu.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
 #include "desktop_menu_scale.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
@@ -224,7 +225,7 @@ private:
 };
 
 bool EbDesktopMenu::isSupported() {
-    return true;
+    return EbUiCapabilities::desktopLayout();
 }
 
 bool EbDesktopMenu::useImGuiShell() {
@@ -232,7 +233,7 @@ bool EbDesktopMenu::useImGuiShell() {
     if (!mod) {
         return false;
     }
-    return !mod->getSettingValue<bool>("desktop-classic-settings");
+    return EbUiCapabilities::desktopLayout() && !mod->getSettingValue<bool>("desktop-classic-settings");
 }
 
 void EbDesktopMenu::install() {

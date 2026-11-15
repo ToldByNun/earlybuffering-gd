@@ -1,4 +1,5 @@
 #include "desktop_menu_sidebar_material.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
 #if defined(EB_DESKTOP_IMGUI)
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_motion.hpp"
@@ -104,6 +105,10 @@ void EbDesktopMenuSidebarMaterial::paint(ImDrawList* list, ImVec2 min, ImVec2 ma
     if (!list || max.x <= min.x || max.y <= min.y)
         return;
     auto settings = EbSidebarMaterialSettings::load();
+    if(!EbUiCapabilities::expensiveMaterials()) {
+        settings.blur=false;
+        settings.glass=false;
+    }
     float classic = EbDesktopMenuMotion::smoothToward(0xEB5101u, settings.enabled, 0.12f);
     float blur = EbDesktopMenuMotion::smoothToward(0xEB5102u, settings.blur, 0.12f);
     float glass = EbDesktopMenuMotion::smoothToward(0xEB5103u, settings.glass, 0.12f);
