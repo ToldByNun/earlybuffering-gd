@@ -76,109 +76,146 @@ bool EbPlanGoldCorpus::run(std::string& report) {
             report += std::string("FAIL ") + name + "; ";
         }
     };
+    auto expectReport = [&](bool ok, char const* name, std::string const& detail) {
+        expect(ok, name);
+        if (!ok && !detail.empty())
+            report += "[" + detail + "] ";
+    };
     // Commit 2 LOCK: freeze ε before any probe / contract selfCheck.
     EbAssistContracts140::applyLockedEps();
     std::string shadowReport;
-    expect(EbShadowSimulator::regressionSelfCheck(shadowReport), "shadow-self");
+    expectReport(EbShadowSimulator::regressionSelfCheck(shadowReport), "shadow-self", shadowReport);
     expect(EbBufferEventMachine::selfCheck(), "buffer-sm");
     std::string filterReport;
-    expect(EbInLevelSettingsFilter::selfCheck(filterReport), "inlevel-settings-filter");
+    expectReport(EbInLevelSettingsFilter::selfCheck(filterReport), "inlevel-settings-filter",
+                 filterReport);
     std::string attribReport;
-    expect(EbAssistController::effectTickSelfCheck(attribReport), "effect-tick-attrib");
+    expectReport(EbAssistController::effectTickSelfCheck(attribReport), "effect-tick-attrib",
+                 attribReport);
     std::string releaseGateReport;
-    expect(EbAssistController::releaseGateSelfCheck(releaseGateReport), "release-gate");
+    expectReport(EbAssistController::releaseGateSelfCheck(releaseGateReport), "release-gate",
+                 releaseGateReport);
     std::string fireReport;
-    expect(EbAssistController::fireTickSelfCheck(fireReport), "fire-tick-jump");
+    expectReport(EbAssistController::fireTickSelfCheck(fireReport), "fire-tick-jump", fireReport);
     std::string queuedHoldReport;
-    expect(EbAssistController::queuedHoldSelfCheck(queuedHoldReport), "queued-hold");
+    expectReport(EbAssistController::queuedHoldSelfCheck(queuedHoldReport), "queued-hold",
+                 queuedHoldReport);
     std::string recheckReport;
-    expect(EbAssistController::recheckSlideSelfCheck(recheckReport), "recheck-slide");
+    expectReport(EbAssistController::recheckSlideSelfCheck(recheckReport), "recheck-slide",
+                 recheckReport);
     std::string exploreReport;
-    expect(EbAssistLearning::exploreGateSelfCheck(exploreReport), "learn-explore-gate");
+    expectReport(EbAssistLearning::exploreGateSelfCheck(exploreReport), "learn-explore-gate",
+                 exploreReport);
     std::string intentReport;
-    expect(EbClickIntentGuard::selfCheck(intentReport), "click-intent-v2");
+    expectReport(EbClickIntentGuard::selfCheck(intentReport), "click-intent-v2", intentReport);
     std::string saveDropReport;
-    expect(EbSaveDropPaths::selfCheck(saveDropReport), "save-drop-paths");
+    expectReport(EbSaveDropPaths::selfCheck(saveDropReport), "save-drop-paths", saveDropReport);
     std::string stageAdaptiveReport;
-    expect(EbStageConfig::selfCheck(stageAdaptiveReport), "stage-adaptive-resolve");
+    expectReport(EbStageConfig::selfCheck(stageAdaptiveReport), "stage-adaptive-resolve",
+                 stageAdaptiveReport);
     std::string configKeysReport;
-    expect(EbConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys");
+    expectReport(EbConfigBundleKeys::selfCheck(configKeysReport), "config-bundle-keys",
+                 configKeysReport);
     std::string configCodecReport;
-    expect(EbConfigBundleCodec::selfCheck(configCodecReport), "config-bundle-codec");
+    expectReport(EbConfigBundleCodec::selfCheck(configCodecReport), "config-bundle-codec",
+                 configCodecReport);
     std::string configBundleReport;
-    expect(EbConfigBundle::selfCheck(configBundleReport), "config-bundle");
+    expectReport(EbConfigBundle::selfCheck(configBundleReport), "config-bundle",
+                 configBundleReport);
     std::string platformLimitsReport;
-    expect(EbPlatformLimits::selfCheck(platformLimitsReport), "platform-limits");
+    expectReport(EbPlatformLimits::selfCheck(platformLimitsReport), "platform-limits",
+                 platformLimitsReport);
     std::string classifyReport;
-    expect(EbTriggerClassify::selfCheck(classifyReport), "trigger-classify");
+    expectReport(EbTriggerClassify::selfCheck(classifyReport), "trigger-classify", classifyReport);
     std::string toggleOrbReport;
-    expect(EbToggleOrbSim::selfCheck(toggleOrbReport), "toggle-orb-sim");
+    expectReport(EbToggleOrbSim::selfCheck(toggleOrbReport), "toggle-orb-sim", toggleOrbReport);
     std::string twReport;
-    expect(EbTriggerWorldStore::selfCheck(twReport), "trigger-world-store");
+    expectReport(EbTriggerWorldStore::selfCheck(twReport), "trigger-world-store", twReport);
     std::string clockReport;
-    expect(EbAssistClock::selfCheck(clockReport), "assist-clock");
+    expectReport(EbAssistClock::selfCheck(clockReport), "assist-clock", clockReport);
     std::string devClockReport;
-    expect(EbDevClockContract::selfCheck(devClockReport), "dev-clock-contract");
+    expectReport(EbDevClockContract::selfCheck(devClockReport), "dev-clock-contract",
+                 devClockReport);
     std::string devWitnessReport;
-    expect(EbDevLiveWitness::selfCheck(devWitnessReport), "dev-live-witness");
+    expectReport(EbDevLiveWitness::selfCheck(devWitnessReport), "dev-live-witness",
+                 devWitnessReport);
     std::string devRestoreReport;
-    expect(EbDevEvalRestore::selfCheck(devRestoreReport), "dev-eval-restore");
+    expectReport(EbDevEvalRestore::selfCheck(devRestoreReport), "dev-eval-restore",
+                 devRestoreReport);
     std::string devDiffReport;
-    expect(EbDevStateDiff::selfCheck(devDiffReport), "dev-state-diff");
+    expectReport(EbDevStateDiff::selfCheck(devDiffReport), "dev-state-diff", devDiffReport);
     std::string devEvalReport;
-    expect(EbDevEvalEngine::selfCheck(devEvalReport), "dev-eval-engine");
+    expectReport(EbDevEvalEngine::selfCheck(devEvalReport), "dev-eval-engine", devEvalReport);
     std::string devObjectiveReport;
-    expect(EbDevObjective::selfCheck(devObjectiveReport), "dev-objective");
+    expectReport(EbDevObjective::selfCheck(devObjectiveReport), "dev-objective",
+                 devObjectiveReport);
     std::string devLedgerReport;
-    expect(EbDevRejectLedger::selfCheck(devLedgerReport), "dev-reject-ledger");
+    expectReport(EbDevRejectLedger::selfCheck(devLedgerReport), "dev-reject-ledger",
+                 devLedgerReport);
     std::string devSessionReport;
-    expect(EbDevSession::selfCheck(devSessionReport), "dev-session");
+    expectReport(EbDevSession::selfCheck(devSessionReport), "dev-session", devSessionReport);
     std::string devReportReport;
-    expect(EbDevReport::selfCheck(devReportReport), "dev-report");
+    expectReport(EbDevReport::selfCheck(devReportReport), "dev-report", devReportReport);
     std::string verdictReport;
-    expect(EbAssistVerdict::selfCheck(verdictReport), "assist-verdict");
+    expectReport(EbAssistVerdict::selfCheck(verdictReport), "assist-verdict", verdictReport);
     std::string spotTrustReport;
-    expect(EbSpotTrustMap::selfCheck(spotTrustReport), "spot-trust-map");
+    expectReport(EbSpotTrustMap::selfCheck(spotTrustReport), "spot-trust-map", spotTrustReport);
     std::string simTrustReport;
-    expect(EbSimTrust::selfCheck(simTrustReport), "sim-trust");
+    expectReport(EbSimTrust::selfCheck(simTrustReport), "sim-trust", simTrustReport);
     std::string ghostParityReport;
-    expect(EbGhostParityProbe::selfCheck(ghostParityReport), "ghost-parity-probe");
+    expectReport(EbGhostParityProbe::selfCheck(ghostParityReport), "ghost-parity-probe",
+                 ghostParityReport);
     std::string contracts140Report;
-    expect(EbAssistContracts140::selfCheck(contracts140Report), "assist-contracts-140");
+    expectReport(EbAssistContracts140::selfCheck(contracts140Report), "assist-contracts-140",
+                 contracts140Report);
     std::string realMetricsReport;
-    expect(EbAssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics");
+    expectReport(EbAssistRealMetrics::selfCheck(realMetricsReport), "assist-real-metrics",
+                 realMetricsReport);
     std::string simEstimateReport;
-    expect(EbAssistSimEstimate::selfCheck(simEstimateReport), "assist-sim-estimate");
+    expectReport(EbAssistSimEstimate::selfCheck(simEstimateReport), "assist-sim-estimate",
+                 simEstimateReport);
     std::string collisionPolicyReport;
-    expect(EbSimCollisionPolicy::selfCheck(collisionPolicyReport), "sim-collision-policy");
+    expectReport(EbSimCollisionPolicy::selfCheck(collisionPolicyReport), "sim-collision-policy",
+                 collisionPolicyReport);
     std::string tg2FixtureReport;
-    expect(EbTg2BakeFixture::selfCheck(tg2FixtureReport), "tg2-bake-fixture");
+    expectReport(EbTg2BakeFixture::selfCheck(tg2FixtureReport), "tg2-bake-fixture",
+                 tg2FixtureReport);
     std::string orbStackReport;
-    expect(EbOrbStackResolver::selfCheck(orbStackReport), "orb-stack-resolver");
+    expectReport(EbOrbStackResolver::selfCheck(orbStackReport), "orb-stack-resolver",
+                 orbStackReport);
     std::string modeSurvivalReport;
-    expect(EbModeSurvival::selfCheck(modeSurvivalReport), "mode-survival");
+    expectReport(EbModeSurvival::selfCheck(modeSurvivalReport), "mode-survival",
+                 modeSurvivalReport);
     std::string prefixSimReport;
-    expect(EbPrefixSim::selfCheck(prefixSimReport), "prefix-sim");
+    expectReport(EbPrefixSim::selfCheck(prefixSimReport), "prefix-sim", prefixSimReport);
     std::string idlePrefixReport;
-    expect(EbIdlePrefixShare::selfCheck(idlePrefixReport), "idle-prefix-share");
+    expectReport(EbIdlePrefixShare::selfCheck(idlePrefixReport), "idle-prefix-share",
+                 idlePrefixReport);
     std::string perfectAssistReport;
-    expect(EbPerfectAssistPolicy::selfCheck(perfectAssistReport), "perfect-assist-policy");
+    expectReport(EbPerfectAssistPolicy::selfCheck(perfectAssistReport), "perfect-assist-policy",
+                 perfectAssistReport);
     std::string orbAlignReport;
-    expect(EbOrbAlign::selfCheck(orbAlignReport), "orb-align");
+    expectReport(EbOrbAlign::selfCheck(orbAlignReport), "orb-align", orbAlignReport);
     std::string assistHorizonReport;
-    expect(EbAssistHorizon::selfCheck(assistHorizonReport), "assist-horizon");
+    expectReport(EbAssistHorizon::selfCheck(assistHorizonReport), "assist-horizon",
+                 assistHorizonReport);
     std::string realCorpusReport;
-    expect(EbRealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures");
+    expectReport(EbRealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures",
+                 realCorpusReport);
     std::string sectionWalkReport;
-    expect(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk");
+    expectReport(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk",
+                 sectionWalkReport);
     std::string diagDumpReport;
-    expect(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump");
+    expectReport(EbDevDiagDump::selfCheck(diagDumpReport), "dev-diag-dump", diagDumpReport);
     std::string researchPackReport;
-    expect(EbDevResearchPack::selfCheck(researchPackReport), "dev-research-pack");
+    expectReport(EbDevResearchPack::selfCheck(researchPackReport), "dev-research-pack",
+                 researchPackReport);
     std::string sessionCompareReport;
-    expect(EbDevSessionCompare::selfCheck(sessionCompareReport), "dev-session-compare");
+    expectReport(EbDevSessionCompare::selfCheck(sessionCompareReport), "dev-session-compare",
+                 sessionCompareReport);
     std::string livePlanReport;
-    expect(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts");
+    expectReport(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts",
+                 livePlanReport);
     // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
     expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&
@@ -340,47 +377,58 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                std::string::npos,
            "pass-toggle-unknown-iw");
     std::string missReport;
-    expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
+    expectReport(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts", missReport);
     std::string pickV1Report;
-    expect(EbAssistPickV1::selfCheck(pickV1Report), "assist-pick-v1");
+    expectReport(EbAssistPickV1::selfCheck(pickV1Report), "assist-pick-v1", pickV1Report);
     std::string pickV2Report;
-    expect(EbAssistPickV2::selfCheck(pickV2Report), "assist-pick-v2");
+    expectReport(EbAssistPickV2::selfCheck(pickV2Report), "assist-pick-v2", pickV2Report);
     std::string longForesightReport;
-    expect(EbLongForesight::selfCheck(longForesightReport), "long-foresight");
+    expectReport(EbLongForesight::selfCheck(longForesightReport), "long-foresight",
+                 longForesightReport);
     std::string foresightReport;
-    expect(EbTravelForesight::selfCheck(foresightReport), "travel-foresight");
+    expectReport(EbTravelForesight::selfCheck(foresightReport), "travel-foresight",
+                 foresightReport);
     std::string probeReport;
-    expect(EbOpportunityProbe::selfCheck(probeReport), "opportunity-probe");
+    expectReport(EbOpportunityProbe::selfCheck(probeReport), "opportunity-probe", probeReport);
     std::string husReport;
-    expect(EbAssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe");
+    expectReport(EbAssistController::holdUntilSafeSelfCheck(husReport), "hold-until-safe",
+                 husReport);
     std::string divReport;
-    expect(EbDivergenceTracker::selfCheck(divReport), "divergence-clear");
+    expectReport(EbDivergenceTracker::selfCheck(divReport), "divergence-clear", divReport);
     std::string simTickReport;
-    expect(EbSimTickCostMeter::selfCheck(simTickReport), "sim-tick-cost-meter");
+    expectReport(EbSimTickCostMeter::selfCheck(simTickReport), "sim-tick-cost-meter",
+                 simTickReport);
     std::string adaptiveSlotReport;
-    expect(EbAdaptiveCandidateSlot::selfCheck(adaptiveSlotReport), "adaptive-candidate-slot");
+    expectReport(EbAdaptiveCandidateSlot::selfCheck(adaptiveSlotReport), "adaptive-candidate-slot",
+                 adaptiveSlotReport);
     std::string adaptiveResumeReport;
-    expect(EbAdaptiveResumeRunner::selfCheck(adaptiveResumeReport), "adaptive-resume-runner");
+    expectReport(EbAdaptiveResumeRunner::selfCheck(adaptiveResumeReport), "adaptive-resume-runner",
+                 adaptiveResumeReport);
     std::string adaptiveBudgetReport;
     expect(EbAdaptiveBudgetController::selfCheck(adaptiveBudgetReport),
            "adaptive-budget-controller");
     std::string adaptivePlanSearchReport;
-    expect(EbAdaptivePlanSearch::selfCheck(adaptivePlanSearchReport), "adaptive-plan-search");
+    expectReport(EbAdaptivePlanSearch::selfCheck(adaptivePlanSearchReport), "adaptive-plan-search",
+                 adaptivePlanSearchReport);
     std::string adaptiveSchedulerReport;
     expect(EbAdaptivePredictionScheduler::selfCheck(adaptiveSchedulerReport),
            "adaptive-prediction-scheduler");
     std::string adaptiveGateReport;
-    expect(EbAdaptiveDecisionGate::selfCheck(adaptiveGateReport), "adaptive-decision-gate");
+    expectReport(EbAdaptiveDecisionGate::selfCheck(adaptiveGateReport), "adaptive-decision-gate",
+                 adaptiveGateReport);
     std::string adaptiveParityReport;
-    expect(EbAdaptiveParityPolicy::selfCheck(adaptiveParityReport), "adaptive-parity-policy");
+    expectReport(EbAdaptiveParityPolicy::selfCheck(adaptiveParityReport), "adaptive-parity-policy",
+                 adaptiveParityReport);
     std::string devConfigReport;
-    expect(EbDevConfig::selfCheck(devConfigReport), "dev-config");
+    expectReport(EbDevConfig::selfCheck(devConfigReport), "dev-config", devConfigReport);
     std::string devTraceReport;
-    expect(EbDevTraceStore::selfCheck(devTraceReport), "dev-trace-store");
+    expectReport(EbDevTraceStore::selfCheck(devTraceReport), "dev-trace-store", devTraceReport);
     std::string devResourceReport;
-    expect(EbDevResourceStats::selfCheck(devResourceReport), "dev-resource-stats");
+    expectReport(EbDevResourceStats::selfCheck(devResourceReport), "dev-resource-stats",
+                 devResourceReport);
     std::string devCycleReport;
-    expect(EbDevCycleRecorder::selfCheck(devCycleReport), "dev-cycle-recorder");
+    expectReport(EbDevCycleRecorder::selfCheck(devCycleReport), "dev-cycle-recorder",
+                 devCycleReport);
     // Synthetic gold: earliest robust policy — no midpoint
     expect(true, "no-midpoint-policy");
     if (fails == 0)

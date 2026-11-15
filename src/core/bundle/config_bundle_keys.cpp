@@ -273,10 +273,10 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 67, "kind-bool-67");
-    expect(kindInt == 70, "kind-int-70");
+    expect(kindBool == 73, "kind-bool-73");
+    expect(kindInt == 71, "kind-int-71");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 8, "kind-string-8");
+    expect(kindString == 19, "kind-string-19");
     expect(kindColor == 2, "kind-color-2");
     expect(kindKeybind == 6, "kind-keybind-6");
 

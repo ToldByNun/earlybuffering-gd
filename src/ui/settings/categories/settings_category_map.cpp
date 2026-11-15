@@ -13,6 +13,8 @@
 
 EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCategoryMap::kCount] = {
     // Main — on/off, windows, smart/adaptive prediction
+    {"assist-probe-past-horizon", SettingsCategory::Assist},
+    {"assist-micro-window", SettingsCategory::Assist},
     {"orb-chain-verify", SettingsCategory::Modes},
     {"ball-ground-check", SettingsCategory::Modes},
     {"cube-orb-chain-verify", SettingsCategory::Modes},

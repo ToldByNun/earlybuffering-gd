@@ -147,3 +147,10 @@ docs/dev/live-budget-ap02-status.md
 docs/dev/live-orbs-ap03-status.md
 docs/dev/live-search-ap05-status.md
 docs/dev/live-policies-ap06-status.md
+
+!/tools/run_live_regression_ap07.py
+
+!/tools/test_config_keys.cpp
+
+!/tools/test_config_keys.hpp
+docs/dev/live-regression-ap07-status.md
