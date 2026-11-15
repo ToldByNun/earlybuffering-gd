@@ -1,4 +1,5 @@
 #include "level_lifecycle.hpp"
+#include "../config/assist_policy_settings.hpp"
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_clock.hpp"
 #include "../core/assist/assist_controller.hpp"
@@ -141,6 +142,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbBakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
         EbLevelProfile::get().loadForLevel(playLayer->m_level);
+        EbAssistPolicySettings::refresh();
         EbBakeMap::get().loadForLevel(playLayer->m_level);
         EbTriggerWorldBaker::get().loadOrBuild(playLayer);
         // Build structural lookup tables during setup, ahead of user clicks.
@@ -187,6 +189,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
         EbTriggerWorldStore::get().save();
     }
     EbLevelProfile::get().clear();
+    EbAssistPolicySettings::refresh();
     EbTriggerWorldStore::get().clear();
     EbSimTrust::get().onLevelQuit();
     EbGhostParityProbe::get().onLevelQuit();

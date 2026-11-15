@@ -13,6 +13,17 @@
 
 EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCategoryMap::kCount] = {
     // Main — on/off, windows, smart/adaptive prediction
+    {"orb-chain-verify", SettingsCategory::Modes},
+    {"ball-ground-check", SettingsCategory::Modes},
+    {"cube-orb-chain-verify", SettingsCategory::Modes},
+    {"ship-orb-chain-verify", SettingsCategory::Modes},
+    {"ball-orb-chain-verify", SettingsCategory::Modes},
+    {"ufo-orb-chain-verify", SettingsCategory::Modes},
+    {"wave-orb-chain-verify", SettingsCategory::Modes},
+    {"robot-orb-chain-verify", SettingsCategory::Modes},
+    {"spider-orb-chain-verify", SettingsCategory::Modes},
+    {"swing-orb-chain-verify", SettingsCategory::Modes},
+    {"level-assist-policies", SettingsCategory::Modes},
     {"title-general", SettingsCategory::Main},
     {"enabled", SettingsCategory::Main},
     {"safe-mode", SettingsCategory::Main},

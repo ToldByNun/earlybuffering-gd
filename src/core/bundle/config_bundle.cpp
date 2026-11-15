@@ -172,7 +172,7 @@ geode::Result<> EbConfigBundle::importFromString(std::string const& json, ApplyO
                 continue;
             }
             EbConfigBundleApplyHelpers::applyOneSetting(mod, *it, settings[it->key], applied,
-                                                      skipped);
+                                                        skipped);
         }
         // Legacy preset / stage-index keys in old exports are ignored (removed).
 
@@ -489,7 +489,7 @@ auto EbConfigBundleApplyHelpers::isDevKey(char const* key) -> bool {
 }
 
 auto EbConfigBundleApplyHelpers::shouldSkip(EbConfigBundleKeys::Entry const& entry,
-                                          EbConfigBundle::ApplyOptions const& opt) -> bool {
+                                            EbConfigBundle::ApplyOptions const& opt) -> bool {
     if (opt.skipKeybinds && entry.kind == EbConfigBundleKeys::Kind::Keybind) {
         return true;
     }
@@ -500,9 +500,9 @@ auto EbConfigBundleApplyHelpers::shouldSkip(EbConfigBundleKeys::Entry const& ent
 }
 
 auto EbConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
-                                               EbConfigBundleKeys::Entry const& entry,
-                                               matjson::Value const& value, int& applied,
-                                               int& skipped) -> bool {
+                                                 EbConfigBundleKeys::Entry const& entry,
+                                                 matjson::Value const& value, int& applied,
+                                                 int& skipped) -> bool {
     try {
         switch (entry.kind) {
         case EbConfigBundleKeys::Kind::Bool: {
@@ -542,6 +542,13 @@ auto EbConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
                 return false;
             }
             std::string text(parsed.unwrap());
+            if (std::string_view(entry.key) == "level-assist-policies") {
+                auto policies = matjson::parse(text);
+                if (policies.isErr() || !policies.unwrap().isObject()) {
+                    ++skipped;
+                    return false;
+                }
+            }
             if (std::string_view(entry.key) == "assist-mode" && text == "Route")
                 text = "Live";
             mod->setSettingValue<std::string>(entry.key, text);

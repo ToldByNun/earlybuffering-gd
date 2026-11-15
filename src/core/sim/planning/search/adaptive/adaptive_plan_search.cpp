@@ -1,4 +1,5 @@
 #include "adaptive_plan_search.hpp"
+#include "../../../../../config/assist_policy_settings.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
@@ -170,7 +171,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     // Match classic IW: ball stopAtBallLanding so Adaptive quanta share landing
     // semantics with fallthrough ranking (was unset → false). Dual linked
     // exclusion stays in classic prepare; Adaptive solo Live is the ship path.
-    model.stopAtBallLanding = inputWindow && real->m_isBall;
+    model.stopAtBallLanding =
+        inputWindow && real->m_isBall &&
+        EbAssistPolicySettings::ground() != EbAssistPolicySettings::Policy::Off;
     if (inputWindow && EbStageConfig::paramsFor(real).cap == 0 &&
         EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {

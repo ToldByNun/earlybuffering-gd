@@ -1,5 +1,6 @@
 #include "stage_settings_cache.hpp"
 #include "../../core/assist/assist_clock.hpp"
+#include "../assist_policy_settings.hpp"
 #include "../stage_config.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -9,6 +10,7 @@
 #include <string>
 
 void EbStageSettingsCache::refreshCache() {
+    EbAssistPolicySettings::refresh();
     auto* mod = geode::prelude::Mod::get();
     EbStageConfigImplementation::s_cachedStage.enabled = mod->getSettingValue<bool>("enabled");
     // Wider max when storing display frames (8 frames ≈ 32 ticks @240 TPS).
@@ -82,8 +84,9 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "assist-probe-past-horizon", true);
     EbStageConfigImplementation::s_cachedAssistMicroWindow =
         EbStageConfigImplementation::readBool(mod, "assist-micro-window", true);
-    EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = EbStageConfigImplementation::clampInt(
-        EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
+    EbStageConfigImplementation::s_cachedAdaptiveScreenTicks =
+        EbStageConfigImplementation::clampInt(
+            EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
     EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum =
         EbStageConfigImplementation::clampInt(
             EbStageConfigImplementation::readInt(mod, "adaptive-verify-quantum", 16), 8, 64);
@@ -114,7 +117,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "save-feedback-counter", false);
     try {
         auto const candidate = mod->getSettingValue<cocos2d::ccColor3B>("save-icon-color");
-        EbStageConfigImplementation::s_cachedSaveIconColor = {candidate.r, candidate.g, candidate.b};
+        EbStageConfigImplementation::s_cachedSaveIconColor = {candidate.r, candidate.g,
+                                                              candidate.b};
     } catch (...) {
         EbStageConfigImplementation::s_cachedSaveIconColor = {};
     }
@@ -223,8 +227,7 @@ void EbStageSettingsCache::refreshCache() {
         p.adaptiveOverwrite =
             EbStageConfigImplementation::readBool(mod, ids.adaptiveOverwrite, false);
         if (p.adaptiveOverwrite) {
-            p.adaptivePlan =
-                EbStageConfigImplementation::readBool(mod, ids.adaptivePlan, true);
+            p.adaptivePlan = EbStageConfigImplementation::readBool(mod, ids.adaptivePlan, true);
             p.adaptiveScreenTicks = EbStageConfigImplementation::clampInt(
                 EbStageConfigImplementation::readInt(mod, ids.adaptiveScreenTicks, 24), 8, 64);
             p.adaptiveVerifyQuantum = EbStageConfigImplementation::clampInt(

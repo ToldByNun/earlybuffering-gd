@@ -1,4 +1,6 @@
 #include "desktop_menu_panels.hpp"
+#include "../../config/assist_policy_settings.hpp"
+#include "../../core/learning/level_profile.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_dev_panel.hpp"
 #include "desktop_menu_icons.hpp"
@@ -14,8 +16,8 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
-#include <imgui.h>
 #include <cstdio>
+#include <imgui.h>
 
 class EbDesktopMenuPanelsDraw {
 public:
@@ -94,6 +96,11 @@ public:
             EbSlider::drawIntSetting("cps-limit", "CPS Limit", 0, 40);
             EbSlider::drawIntSetting("min-click-interval-ms", "Min Click Interval", 0, 500, "ms");
             EbCheckbox::drawSetting("assist-orbs", "Orb Assist");
+            {
+                char const* policies[] = {"Auto", "On", "Off"};
+                EbDropdown::drawSetting("orb-chain-verify", "Orb Chain Verify Default", policies,
+                                        3);
+            }
             EbSlider::drawIntSetting("sim-budget-us", "Sim Budget", 0, 10000, "µs");
             EbSlider::drawIntSetting("tick-budget", "Plan Tick Budget", 500, 20000);
             EbCheckbox::drawSetting("assist-press", "Assist Presses");
@@ -189,6 +196,29 @@ public:
         EbSlider::drawIntSetting(capKey, "Look-Ahead", 0, 240);
         EbSlider::drawIntSetting(slackKey, "Slack", -1, 16);
         EbSlider::drawFloatSetting(latencyKey, "Latency", 0.0f, 2.0f, 2);
+
+        char chainKey[64];
+        std::snprintf(chainKey, sizeof(chainKey), "%s-orb-chain-verify", prefix);
+        char const* choices[] = {"Inherit", "Auto", "On", "Off"};
+        EbDropdown::drawSetting(chainKey, "Orb Chain Verify", choices, 4);
+        if (std::string(prefix) == "ball")
+            EbDropdown::drawSetting("ball-ground-check", "Ground Check", choices + 1, 3);
+        if (!EbLevelProfile::get().key().empty()) {
+            auto drawLevelPolicy = [&](char const* key, char const* label) {
+                auto value = EbAssistPolicySettings::levelValue(key);
+                int selected = 0;
+                for (int index = 1; index < 4; ++index) {
+                    if (value == choices[index])
+                        selected = index;
+                }
+                if (EbDropdown::draw((std::string("level-") + key).c_str(), label, choices, 4,
+                                     &selected))
+                    EbAssistPolicySettings::setLevelValue(key, choices[selected]);
+            };
+            drawLevelPolicy(chainKey, "This Level: Orb Chain Verify");
+            if (std::string(prefix) == "ball")
+                drawLevelPolicy("ball-ground-check", "This Level: Ground Check");
+        }
 
         gap();
         EbCheckbox::drawSetting(adaptiveOwKey, "Adaptive Overwrite");

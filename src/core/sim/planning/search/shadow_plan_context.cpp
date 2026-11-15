@@ -1,4 +1,5 @@
 #include "shadow_plan_context.hpp"
+#include "../../../../config/assist_policy_settings.hpp"
 #include "../../../../config/stage_config.hpp"
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
@@ -215,7 +216,9 @@ EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int release
     ++plan.candidatesTried;
     // Preserve the ordinary single-input result. A speculative next click may
     // rescue a lethal UFO chain, but cannot replace a successful isolated orb.
-    if (EbOrbContinuation::shouldProbe(result.died, result.activatedRing,
+    if (EbAssistPolicySettings::chain(EbStageConfig::kindOf(real)) !=
+            EbAssistPolicySettings::Policy::Off &&
+        EbOrbContinuation::shouldProbe(result.died, result.activatedRing,
                                        result.unknown || result.unknownTrunc ||
                                            result.toggleUnknown,
                                        tickBudget > 0 && !wallExceeded()) &&

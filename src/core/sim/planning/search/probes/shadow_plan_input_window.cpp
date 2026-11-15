@@ -1,4 +1,5 @@
 #include "shadow_plan_input_window.hpp"
+#include "../../../../../config/assist_policy_settings.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/assist_log.hpp"
 #include "../../../../../dev/evaluation/dev_reject_ledger.hpp"
@@ -335,7 +336,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 continue;
             // Keep the verified activation at its tested observation floor.
             // An optional longer d0 probe must not consume its dispatch budget.
-            skipLaterBand = true;
+            skipLaterBand = !context.real->m_isBall ||
+                            EbAssistPolicySettings::ground() != EbAssistPolicySettings::Policy::On;
             break;
         }
     }
@@ -720,11 +722,22 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                                context.plan.foresightOrbPad || anyActivation;
         context.orbIntent = orbIntent;
         context.ledgerOrbIntent = orbIntent;
+        bool stableLanding = false;
+        if (isBall && EbAssistPolicySettings::ground() == EbAssistPolicySettings::Policy::On) {
+            for (int delay = 0; delay <= context.limit; ++delay) {
+                auto const& candidate = context.cands[static_cast<size_t>(delay)];
+                stableLanding =
+                    stableLanding ||
+                    (context.candReady[static_cast<size_t>(delay)] && candidate.viable &&
+                     candidate.raw.landedAfterAction && !candidate.raw.died);
+            }
+        }
         bool const ballIntent =
-            !isBall || EbLivePlanContracts::ballOrbIntentAllowed(
-                           context.orbAssist, context.orbHint.found, anyActivation, d0Safe,
-                           context.candReady[0] && c0.activatedRing,
-                           context.real->m_isOnGround || context.real->m_isOnGround2);
+            !isBall ||
+            (!stableLanding && EbLivePlanContracts::ballOrbIntentAllowed(
+                                   context.orbAssist, context.orbHint.found, anyActivation, d0Safe,
+                                   context.candReady[0] && c0.activatedRing,
+                                   context.real->m_isOnGround || context.real->m_isOnGround2));
         if (orbIntent && ballIntent && actMin >= 0) {
             std::vector<EbAssistPickV1::CandView> views(
                 static_cast<size_t>(std::max(0, context.limit)) + 1u);

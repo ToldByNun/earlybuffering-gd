@@ -1,4 +1,5 @@
 #include "shadow_plan_search.hpp"
+#include "../../../../config/assist_policy_settings.hpp"
 #include "../../../../config/stage_config.hpp"
 #include "../../../../debug/lag_probe.hpp"
 #include "../../../../debug/perf_trace.hpp"
@@ -7,11 +8,11 @@
 #include "../../../assist/contracts/assist_verdict.hpp"
 #include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
-#include "../shadow_survival_rules.hpp"
 #include "../../../assist/planning/opportunity_probe.hpp"
 #include "../../shadow_simulator.hpp"
 #include "../../sim_session_guard.hpp"
 #include "../../sim_trust.hpp"
+#include "../shadow_survival_rules.hpp"
 #include "../simulation_plan.hpp"
 #include "probes/shadow_plan_input_window.hpp"
 #include "probes/shadow_plan_threat_probe.hpp"
@@ -21,9 +22,9 @@
 #include "shadow_plan_context.hpp"
 #include <algorithm>
 
-EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
-                              bool down, int limit, float deltaTime, float firstDt,
-                              EbPlanOptions const& options) {
+EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer,
+                                  PlayerObject* real, bool down, int limit, float deltaTime,
+                                  float firstDt, EbPlanOptions const& options) {
     EbPerfTrace::Scope const scope("plan");
     static int s_planId = 1;
     EbSimPlan plan;
@@ -48,7 +49,7 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
         firstDt = deltaTime;
 
     EbShadowPlanContext context(simulator, layer, real, down, limit, deltaTime, firstDt, options,
-                              plan);
+                                plan);
     simulator.m_simTickBase = std::max(0, options.attemptStartTick);
     simulator.m_simAbsTick = -1;
     auto const captureStart = std::chrono::steady_clock::now();
@@ -101,8 +102,10 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         context.real->m_isDart || context.real->m_isShip || context.real->m_isSwing;
     context.inputWindow =
         context.options.requireAliveForDelay && (context.down || continuousControl);
-    context.model.stopAtBallLanding = context.inputWindow && context.real->m_isBall &&
-                                      !context.useTrajEngine && !context.linkedDual();
+    context.model.stopAtBallLanding =
+        context.inputWindow && context.real->m_isBall && !context.useTrajEngine &&
+        !context.linkedDual() &&
+        EbAssistPolicySettings::ground() != EbAssistPolicySettings::Policy::Off;
     // Continuous IW: max(local look-ahead, short AssistHorizon planCap) so Wave
     // keeps ≥32 ticks (AP3a) instead of bare limit. Discrete retain 96-tick max.
     // Explicit mode/look-ahead settings take precedence. Prove ticks follow.
@@ -110,8 +113,8 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {
             auto const kind = EbStageConfig::kindOf(context.real);
-            context.model.cap = EbAssistHorizon::continuousInputWindowCap(
-                kind, context.limit, context.options.capMul);
+            context.model.cap = EbAssistHorizon::continuousInputWindowCap(kind, context.limit,
+                                                                          context.options.capMul);
             if (context.options.requireAliveForDelay && context.model.cap > 0)
                 context.model.cap += EbShadowSurvivalRules::kPostCapProveTicks;
         } else {
@@ -164,9 +167,8 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     }
     bool const orbScanBudgetOk =
         context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe && prepareHeavyOk();
-    if (context.orbAssist &&
-        EbLivePlanContracts::intendedOrbWindowScanAllowed(context.orbAssist, context.inputWindow,
-                                                          orbScanBudgetOk)) {
+    if (context.orbAssist && EbLivePlanContracts::intendedOrbWindowScanAllowed(
+                                 context.orbAssist, context.inputWindow, orbScanBudgetOk)) {
         int const scanTicks = EbOpportunityProbe::orbScanTicks(context.limit, context.model.slack);
         context.orbHint = context.simulator.scanOrbWindow(
             context.layer, context.real, context.down, scanTicks, context.deltaTime,

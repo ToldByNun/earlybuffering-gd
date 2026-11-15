@@ -3,7 +3,18 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[180] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
+    {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"ball-ground-check", EbConfigBundleKeys::Kind::String},
+    {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"ship-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"ball-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"ufo-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"wave-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"robot-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"spider-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"swing-orb-chain-verify", EbConfigBundleKeys::Kind::String},
+    {"level-assist-policies", EbConfigBundleKeys::Kind::String},
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
@@ -219,7 +230,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 180, "count-180");
+    expect(EbConfigBundleKeysTable::kEntryCount == 191, "count-191");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,

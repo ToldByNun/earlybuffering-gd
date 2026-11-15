@@ -63,8 +63,9 @@ void EbModuleBindings::registerSettings() {
                 return;
             EbStageConfig::cycleAssistMode();
             auto mode = EbStageConfig::assistMode();
-            EbAssistLog::info(fmt::format("ASSIST MODE: {} — {}", EbStageConfig::assistModeName(mode),
-                                        EbStageConfig::assistModeHint(mode)));
+            EbAssistLog::info(fmt::format("ASSIST MODE: {} — {}",
+                                          EbStageConfig::assistModeName(mode),
+                                          EbStageConfig::assistModeHint(mode)));
             EbAssistController::get().updateOverlay();
         });
 
@@ -101,13 +102,12 @@ void EbModuleBindings::registerSettings() {
             EbPauseActionBridge::openModSettings();
         });
 
-    geode::prelude::listenForSettingChanges<bool>(
-        "desktop-classic-settings", [](bool classic) {
-            if (classic && EbDesktopMenu::isOpen())
-                EbDesktopMenu::setOpen(false);
-            if (!EbStageConfig::isApplying())
-                EbModuleBindings::onAnySetting();
-        });
+    geode::prelude::listenForSettingChanges<bool>("desktop-classic-settings", [](bool classic) {
+        if (classic && EbDesktopMenu::isOpen())
+            EbDesktopMenu::setOpen(false);
+        if (!EbStageConfig::isApplying())
+            EbModuleBindings::onAnySetting();
+    });
 
     geode::prelude::listenForSettingChanges<bool>("show-overlay", [](bool value) {
         if (EbStageConfig::isApplying())
@@ -126,6 +126,28 @@ void EbModuleBindings::registerSettings() {
             id, [](int64_t) { EbModuleBindings::onAnySetting(); });
     };
 
+    geode::prelude::listenForSettingChanges<std::string>(
+        "orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "ball-ground-check", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "cube-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "ship-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "ball-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "ufo-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "wave-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "robot-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "spider-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "swing-orb-chain-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
+    geode::prelude::listenForSettingChanges<std::string>(
+        "level-assist-policies", [](std::string) { EbModuleBindings::onAnySetting(); });
     watchBool("enabled");
     watchInt("ticks-all");
     geode::prelude::listenForSettingChanges<std::string>(
@@ -257,38 +279,14 @@ void EbModuleBindings::registerSettings() {
         "assist-off-ranges", [](std::string) { EbModuleBindings::onAnySetting(); });
 
     char const* boolIds[] = {
-        "cube-enable",
-        "cube-overwrite",
-        "cube-adaptive-overwrite",
-        "cube-adaptive-plan",
-        "ship-enable",
-        "ship-overwrite",
-        "ship-adaptive-overwrite",
-        "ship-adaptive-plan",
-        "ball-enable",
-        "ball-overwrite",
-        "ball-adaptive-overwrite",
-        "ball-adaptive-plan",
-        "ufo-enable",
-        "ufo-overwrite",
-        "ufo-adaptive-overwrite",
-        "ufo-adaptive-plan",
-        "wave-enable",
-        "wave-overwrite",
-        "wave-adaptive-overwrite",
-        "wave-adaptive-plan",
-        "robot-enable",
-        "robot-overwrite",
-        "robot-adaptive-overwrite",
-        "robot-adaptive-plan",
-        "spider-enable",
-        "spider-overwrite",
-        "spider-adaptive-overwrite",
-        "spider-adaptive-plan",
-        "swing-enable",
-        "swing-overwrite",
-        "swing-adaptive-overwrite",
-        "swing-adaptive-plan",
+        "cube-enable",   "cube-overwrite",   "cube-adaptive-overwrite",   "cube-adaptive-plan",
+        "ship-enable",   "ship-overwrite",   "ship-adaptive-overwrite",   "ship-adaptive-plan",
+        "ball-enable",   "ball-overwrite",   "ball-adaptive-overwrite",   "ball-adaptive-plan",
+        "ufo-enable",    "ufo-overwrite",    "ufo-adaptive-overwrite",    "ufo-adaptive-plan",
+        "wave-enable",   "wave-overwrite",   "wave-adaptive-overwrite",   "wave-adaptive-plan",
+        "robot-enable",  "robot-overwrite",  "robot-adaptive-overwrite",  "robot-adaptive-plan",
+        "spider-enable", "spider-overwrite", "spider-adaptive-overwrite", "spider-adaptive-plan",
+        "swing-enable",  "swing-overwrite",  "swing-adaptive-overwrite",  "swing-adaptive-plan",
     };
     for (auto* id : boolIds)
         watchBool(id);
@@ -350,5 +348,4 @@ void EbModuleBindings::registerSettings() {
                                 "wave-latency", "robot-latency", "spider-latency", "swing-latency"};
     for (auto* id : latencyIds)
         watchFloat(id);
-
 }

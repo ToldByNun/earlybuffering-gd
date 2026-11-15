@@ -1703,6 +1703,130 @@
 			"name": "Dump All Diag",
 			"description": "Writes a timestamped folder under mod save dir /diag/ with: all settings, clock/assist, replay, BakeMap, Trigger World, bake sim probe (first clicks: deathFrame/unknown/x), self-checks. Also auto-runs on bake 0-windows. Enter level, reset, import replay, then dump (or bake).",
 			"button-text": "dump"
+		},
+		"orb-chain-verify": {
+			"type": "string",
+			"name": "Orb Chain Verify",
+			"default": "Auto",
+			"one-of": [
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Controls additional simulated orb continuation. Single-orb verification remains active."
+		},
+		"ball-ground-check": {
+			"type": "string",
+			"name": "Ball Ground Check",
+			"default": "Auto",
+			"one-of": [
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Auto compares landing and orb intent. On prioritizes a verified landing. Off skips optional stable-landing proof while retaining collision checks."
+		},
+		"cube-orb-chain-verify": {
+			"type": "string",
+			"name": "Cube Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"ship-orb-chain-verify": {
+			"type": "string",
+			"name": "Ship Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"ball-orb-chain-verify": {
+			"type": "string",
+			"name": "Ball Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"ufo-orb-chain-verify": {
+			"type": "string",
+			"name": "Ufo Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"wave-orb-chain-verify": {
+			"type": "string",
+			"name": "Wave Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"robot-orb-chain-verify": {
+			"type": "string",
+			"name": "Robot Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"spider-orb-chain-verify": {
+			"type": "string",
+			"name": "Spider Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"swing-orb-chain-verify": {
+			"type": "string",
+			"name": "Swing Orb Chain Verify",
+			"default": "Inherit",
+			"one-of": [
+				"Inherit",
+				"Auto",
+				"On",
+				"Off"
+			],
+			"description": "Inherit uses the global Orb Chain Verify policy."
+		},
+		"level-assist-policies": {
+			"type": "string",
+			"name": "Level Assist Policies",
+			"default": "{}",
+			"description": "Per-level revision policy overrides as JSON. Managed by the Modes tab in a loaded level. Missing entries inherit mode/global defaults."
 		}
 	},
 	"resources": {
