@@ -1742,6 +1742,7 @@
 	"resources": {
 		"files": [
 			"resources/cues/*.mp3",
+			"resources/liquid_glass_license.txt",
 			"resources/fonts/Inter-Regular.ttf",
 			"resources/fonts/Inter-SemiBold.ttf"
 		],

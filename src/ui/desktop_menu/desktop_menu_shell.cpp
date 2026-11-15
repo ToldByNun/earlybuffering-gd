@@ -327,14 +327,16 @@ public:
         }
         ImVec2 const min(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
         ImVec2 const max(center.x + size.x * 0.5f, center.y + size.y * 0.5f);
-        ImVec4 bg = EbDesktopMenuTheme::bg();
+        // Give the entire silhouette the same visible trail material. A separate
+        // accent sidebar made the near-black content trail disappear visually.
+        ImVec4 const base = EbDesktopMenuTheme::bg();
+        ImVec4 const accent = EbDesktopMenuTheme::accent();
+        ImVec4 bg = EbDesktopMenuMotion::lerp4(base, accent, 0.28f);
         bg.w = alpha;
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(bg), rounding);
-        ImVec4 side = EbDesktopMenuTheme::sidebarBg();
-        side.w = alpha * 0.85f;
-        drawList->AddRectFilled(min, ImVec2(min.x + EbDesktopMenuShellState::kSidebarWidth, max.y),
-                                EbDesktopMenuTheme::toU32(side), rounding,
-                                ImDrawFlags_RoundCornersLeft);
+        ImVec4 edge = EbDesktopMenuTheme::accentLight();
+        edge.w = alpha * 0.8f;
+        drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(edge), rounding, 0, 1.f);
     }
 
     static void drawSidebarNav(ImVec2 const& origin, float width) {

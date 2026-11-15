@@ -137,6 +137,10 @@ uniform vec2 uTargetSize;
 uniform float uPadding;
 uniform vec4 uCapture;
 uniform vec2 uFramebuffer;
+uniform float uGlass;
+uniform float uRefraction;
+uniform float uHighlight;
+uniform float uEdgeWidth;
 uniform float uBlur;
 uniform float uClassic;
 uniform float uRadius;
@@ -150,6 +154,13 @@ uniform float uRounding;
 uniform vec4 uCorners;
 varying vec2 v_uv;
 
+// Distance-field refraction inspired by OverShifted/LiquidGlass,
+// upstream 3797fa541c1f026c521a75885ee271f03bdf9f0f (MIT).
+float glassDistance(vec2 local) {
+    float radius = local.x < uResolution.x*0.5 ? min(uRounding,uResolution.x*0.5) : 0.0;
+    vec2 q = abs(local-uResolution*0.5)-(uResolution*0.5-vec2(radius));
+    return length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-radius;
+}
 vec3 material(vec2 local) {
     if(uClassic < 0.5) {
         vec2 screen = uCapture.xy + vec2(local.x, uResolution.y-local.y)*uCapture.zw;
@@ -188,8 +199,18 @@ void main() {
         }
     }
 
+    float edgeLight = 0.0;
+    if(uGlass > 0.5 && uPass != 1.0) {
+        float distance = glassDistance(local);
+        vec2 gradient = vec2(glassDistance(local+vec2(0.5,0.0))-glassDistance(local-vec2(0.5,0.0)),
+                             glassDistance(local+vec2(0.0,0.5))-glassDistance(local-vec2(0.0,0.5)));
+        vec2 normal = gradient/max(length(gradient),0.0001);
+        float edge = exp(-max(-distance,0.0)/max(uEdgeWidth,1.0));
+        local -= normal*uRefraction*edge;
+        edgeLight = edge*uHighlight*dot(normal,normalize(vec2(-0.6,-0.8)));
+    }
     vec3 color = material(local);
-    if(uBlur > 0.5) {
+    if(uBlur > 0.5 && uRadius > 0.0) {
         vec3 sum = vec3(0.0);
         float total = 0.0;
         for(int i=-32;i<=32;i++) {
@@ -206,8 +227,10 @@ void main() {
         }
         vec3 blurred = sum/total;
         color = uPass < 1.5 ? blurred : mix(color,blurred,uOpacity);
-        if(uPass > 1.5 && uClassic < 0.5) color = mix(color,uBaseColor,uTint);
+
     }
+    if(uPass > 1.5 && uClassic < 0.5) color = mix(color,uBaseColor,uTint);
+    if(uGlass > 0.5 && uPass != 1.0) color = clamp(color*(1.0+edgeLight)+vec3(max(edgeLight,0.0)*0.15),0.0,1.0);
     gl_FragColor = vec4(color,1.0);
 }
 )GLSL";
@@ -447,6 +470,10 @@ void main() {
         GLuint const program = EbDesktopMenuSidebarWaveGpuState::program();
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program, "uBackdrop"), 0);
+        glUniform1f(glGetUniformLocation(program, "uGlass"), request.glass);
+        glUniform1f(glGetUniformLocation(program, "uRefraction"), request.refraction);
+        glUniform1f(glGetUniformLocation(program, "uHighlight"), request.highlight);
+        glUniform1f(glGetUniformLocation(program, "uEdgeWidth"), request.edgeWidth);
         glUniform1f(glGetUniformLocation(program, "uBlur"), request.blur);
         glUniform1f(glGetUniformLocation(program, "uClassic"), request.classic);
         glUniform1f(glGetUniformLocation(program, "uRadius"), request.blurRadius);
@@ -497,7 +524,8 @@ void main() {
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &unitOneTexture);
         static GLuint horizontal = 0, horizontalFbo = 0;
         static int horizontalWidth = 0, horizontalHeight = 0;
-        int padding = int(std::ceil(request.blurRadius)) + 2;
+        int padding =
+            int(std::ceil(request.blurRadius + (request.glass ? request.refraction : 0.f))) + 2;
         int paddedWidth = width + padding * 2, paddedHeight = height + padding * 2;
         glBindVertexArray(EbDesktopMenuSidebarWaveGpuState::vao());
         glUniform1f(glGetUniformLocation(program, "uPass"), 0);
