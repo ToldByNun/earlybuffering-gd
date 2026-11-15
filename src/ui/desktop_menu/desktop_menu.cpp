@@ -1,4 +1,5 @@
 #include "desktop_menu.hpp"
+#include "desktop_menu_scale.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
@@ -238,6 +239,7 @@ void EbDesktopMenu::install() {
     ImGuiCocos::get()
         .setup([] {
             // Fonts / icons first — setup re-runs after fullscreen toggles.
+            EbDesktopMenuScale::install();
             EbDesktopMenuFonts::load();
             EbDesktopMenuIcons::load();
             EbDesktopMenuTheme::apply();

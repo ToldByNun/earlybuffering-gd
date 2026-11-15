@@ -345,6 +345,8 @@ public:
         EbSectionCard::end();
 
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
+            char const* scales[]={"75%","100%","125%","150%"};
+            EbDropdown::drawSetting("desktop-ui-scale","UI Scale",scales,4);
 
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
