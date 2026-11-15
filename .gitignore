@@ -154,3 +154,10 @@ docs/dev/live-policies-ap06-status.md
 
 !/tools/test_config_keys.hpp
 docs/dev/live-regression-ap07-status.md
+
+!/tools/test_assist_mode_migration.cpp
+
+!/tools/test_assist_mode_migration.hpp
+
+!/tools/test_policy_registration_ap06.py
+docs/dev/live-modes-ap08-status.md

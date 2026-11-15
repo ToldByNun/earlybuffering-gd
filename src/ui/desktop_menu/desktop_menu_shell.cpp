@@ -12,11 +12,11 @@
 #if defined(EB_DESKTOP_IMGUI)
 
 #include <Geode/Geode.hpp>
-#include <imgui.h>
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <imgui.h>
 #include <string>
 
 class EbDesktopMenuShellState {
@@ -77,9 +77,9 @@ public:
     static constexpr float kContentPadX = 28.0f;
     static constexpr float kContentPadY = 24.0f;
 
-    static constexpr float kOpenTau = 0.11f;    // ~settle in ~0.35s
+    static constexpr float kOpenTau = 0.11f;       // ~settle in ~0.35s
     static constexpr float kCloseDuration = 0.20f; // fixed cubic close — hits 0, no end snap hitch
-    static constexpr float kTabTau = 0.10f;     // ~settle in ~0.30s
+    static constexpr float kTabTau = 0.10f;        // ~settle in ~0.30s
     static constexpr float kOpenSlidePx = 14.0f;
     static constexpr float kTabSlidePx = 16.0f;
     static constexpr float kTabDip = 0.62f; // don't hard-reset to 0 on re-click
@@ -362,8 +362,7 @@ public:
             ImVec2 const pos = ImGui::GetCursorScreenPos();
             ImFont* const font = ImGui::GetFont();
             float const fontSize = ImGui::GetFontSize();
-            ImVec2 const textSize =
-                font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, version.c_str());
+            ImVec2 const textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, version.c_str());
             EbDesktopMenuTheme::drawTextShadowed(sideDraw, font, fontSize, pos,
                                                  ImVec4(1.0f, 1.0f, 1.0f, 0.42f), version.c_str());
             ImGui::Dummy(ImVec2(textSize.x, textSize.y));
@@ -373,10 +372,10 @@ public:
         float const tabWidth = width - 32.0f;
 
         navGroupLabel("SETTINGS");
-        SettingsCategory const settingsTabs[] = {
-            SettingsCategory::Main,  SettingsCategory::Assist, SettingsCategory::Learn,
-            SettingsCategory::Bake,  SettingsCategory::Modes,  SettingsCategory::Visual,
-            SettingsCategory::UI,    SettingsCategory::Keys};
+        SettingsCategory const settingsTabs[] = {SettingsCategory::Main,   SettingsCategory::Assist,
+                                                 SettingsCategory::Learn,  SettingsCategory::Modes,
+                                                 SettingsCategory::Visual, SettingsCategory::UI,
+                                                 SettingsCategory::Keys};
         for (SettingsCategory category : settingsTabs) {
             bool const selected = EbDesktopMenuShellState::active() == category;
             if (navTab(EbInLevelSettingsFilter::categoryName(category), selected, tabWidth)) {
@@ -404,9 +403,9 @@ public:
                                 float tabSlideX) {
         ImGui::SetCursorScreenPos(ImVec2(origin.x + tabSlideX, origin.y));
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * tabAlpha);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            ImVec2(EbDesktopMenuShellState::kContentPadX,
-                                   EbDesktopMenuShellState::kContentPadY));
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_WindowPadding,
+            ImVec2(EbDesktopMenuShellState::kContentPadX, EbDesktopMenuShellState::kContentPadY));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 8.0f));
         // Hide bar via size 0 — keep scroll extent (NoScrollbar can clip last rows).
         ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
@@ -542,8 +541,8 @@ public:
             trail[0] = EbDesktopMenuMotion::approach2(
                 trail[0], EbDesktopMenuShellState::visualCenter(), 0.035f, deltaTime);
             for (int index = 1; index < EbDesktopMenuShellState::kTrailCount; ++index) {
-                trail[index] = EbDesktopMenuMotion::approach2(trail[index], trail[index - 1], 0.045f,
-                                                             deltaTime);
+                trail[index] = EbDesktopMenuMotion::approach2(trail[index], trail[index - 1],
+                                                              0.045f, deltaTime);
             }
         } else {
             EbDesktopMenuShellAnim::clearTrailToCenter();
@@ -617,9 +616,9 @@ public:
         drawSidebarFooter(sideMin, sideW, winSize.y);
 
         float const tabE = EbDesktopMenuShellState::tabVisual();
-        float const tabSlide =
-            (1.0f - tabE) * static_cast<float>(EbDesktopMenuShellState::tabDir()) *
-            EbDesktopMenuShellState::kTabSlidePx;
+        float const tabSlide = (1.0f - tabE) *
+                               static_cast<float>(EbDesktopMenuShellState::tabDir()) *
+                               EbDesktopMenuShellState::kTabSlidePx;
         // Soft fade — stays readable on interrupt (dip floors around kTabDip).
         float const tabAlpha = 0.55f + 0.45f * tabE;
         drawContentBody(ImVec2(winPos.x + sideW, winPos.y), winSize.x - sideW, winSize.y, tabAlpha,

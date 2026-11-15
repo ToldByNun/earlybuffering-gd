@@ -10,7 +10,7 @@
 	"name": "EarlyBuffer",
 	"version": "v1.6.2",
 	"developer": "Audesign",
-	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay (Pick v1 vs v2). Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -51,12 +51,10 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Live = plan every click now (best starter default). Replay = use windows from an imported macro bake. Hybrid = use a nearby bake window when it verifies, else Live. BruteForce = use a Brute Bake map (no replay). Same setting as Bake → Cycle Assist Mode and Keys → Cycle Assist Mode (Ctrl+Shift+M).",
+			"description": "Live plans from the current state. Hybrid uses Live planning while the learned Hybrid implementation is being prepared.",
 			"one-of": [
 				"Live",
-				"Replay",
-				"Hybrid",
-				"BruteForce"
+				"Hybrid"
 			],
 			"default": "Live"
 		},
@@ -94,12 +92,12 @@
 		"title-smart": {
 			"type": "title",
 			"name": "Smart Prediction",
-			"description": "Multi-jump foresight for Live / Hybrid. Replay/Brute ignore these."
+			"description": "Multi-jump foresight for Live / Hybrid."
 		},
 		"smart-depth": {
 			"type": "int",
 			"name": "Smart Depth (Jumps Ahead)",
-			"description": "How many jumps ahead Live/Hybrid may look. Depth 1 = single plan() (v1 choose). 2–3 run planSequence follow-up jumps / bake chains — smarter but heavier. Replay/Brute ignore this.",
+			"description": "How many jumps ahead Live/Hybrid may look. Depth 1 = single plan() (v1 choose). 2–3 run planSequence simulated follow-up inputs — smarter but heavier.",
 			"default": 1,
 			"min": 1,
 			"max": 3
@@ -189,7 +187,7 @@
 		"assist-only-practice": {
 			"type": "bool",
 			"name": "Assist Only in Practice",
-			"description": "On = assist is allowed only in Practice Mode (all Assist Modes: Live, Replay, Hybrid, BruteForce). Off = also in normal mode (still respect Safe Mode, start-pos, and percent / off-range rules).",
+			"description": "On = assist is allowed only in Practice Mode (all Assist Modes: Live, Hybrid). Off = also in normal mode (still respect Safe Mode, start-pos, and percent / off-range rules).",
 			"default": false
 		},
 		"assist-startpos-only": {
@@ -384,7 +382,7 @@
 		"title-algorithm": {
 			"type": "title",
 			"name": "Assist",
-			"description": "How the planner decides delays: pick mode, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section. Bake Radius lives under Bake."
+			"description": "How the planner decides delays: pick mode, click-rate limits, CPU budgets, press/release. Smart multi-jump is the next section."
 		},
 		"death-slack": {
 			"type": "int",
@@ -401,26 +399,6 @@
 			"default": 0,
 			"min": 0,
 			"max": 240
-		},
-		"assist-pick": {
-			"type": "string",
-			"name": "Pick Mode",
-			"description": "How Live/Hybrid picks a delay inside your tick window. v1 (default) = if delay 0 is already safe, click now; else latest ±k-robust (orb band still earliest). v2 is reserved for a future pick (currently same as v1 — former New outcome-rank choose removed). Never waits past your Limit. Old Legacy/New values still load as v1/v2.",
-			"one-of": [
-				"v1",
-				"v2"
-			],
-			"default": "v1"
-		},
-		"assist-engine": {
-			"type": "string",
-			"name": "Assist Engine (Live V2)",
-			"description": "Which physics backend Live V2 may use for foresight. ShadowPlayer = full ghost PlayerObject (runOne) — default, matches v1. Trajectory = lighter samplePath foresight (V2 only; optional Shadow verify before arm comes later). Pick v1 always uses ShadowPlayer regardless of this setting.",
-			"one-of": [
-				"ShadowPlayer",
-				"Trajectory"
-			],
-			"default": "ShadowPlayer"
 		},
 		"cps-limit": {
 			"type": "int",
@@ -475,33 +453,13 @@
 		"title-learning": {
 			"type": "title",
 			"name": "Learn",
-			"description": "Optional per-level learning and self-bake (both off by default). Learning never changes your tick window numbers — only soft bias/trust."
+			"description": "Per-level learning and config import/export. Auto Tune adjusts soft bias and trust within the configured input window."
 		},
 		"auto-tune": {
 			"type": "bool",
 			"name": "Auto-Tune Per Level",
 			"description": "Learns gentle bias/trust per level and spot as you play (never changes the tick window). On = adapts over attempts. Off = no learning (starter default). Toggle: Ctrl+Shift+L. Reset level: Ctrl+Shift+R.",
 			"default": false
-		},
-		"self-bake": {
-			"type": "bool",
-			"name": "Self-Bake (Practice)",
-			"description": "In practice, records your normal (non-assist) clicks into the bake map for later Hybrid/Replay help. Assist injects are never recorded. On = builds a personal map; Off = no recording (starter default).",
-			"default": false
-		},
-		"self-bake-normal": {
-			"type": "bool",
-			"name": "Self-Bake in Normal Mode",
-			"description": "Also record vanilla clicks outside practice. Off (recommended) = practice only so normal runs stay cleaner.",
-			"default": false,
-			"enable-if": "self-bake"
-		},
-		"self-bake-refine": {
-			"type": "bool",
-			"name": "Self-Bake Refine Windows",
-			"description": "After a segment, may widen recorded click windows (budgeted; skipped if assist touched the run). On = better windows over time; Off = point windows only (less CPU).",
-			"default": true,
-			"enable-if": "self-bake"
 		},
 		"title-assist-actions": {
 			"type": "title",
@@ -532,48 +490,11 @@
 			"description": "Browse, install and share community settings packs.",
 			"button-text": "cloud"
 		},
-		"title-bake-actions": {
-			"type": "title",
-			"name": "Bake",
-			"description": "Import a replay, build click windows, cancel a bake, and set Bake Radius. Cycle Assist Mode is a shortcut for the same Assist Mode as Main."
-		},
-		"import-bake-replay": {
-			"type": "custom:eb-action",
-			"name": "Import Bake Replay",
-			"description": "Choose a GDR / MHR / SLC replay so Bake Map can build click windows from it. The button shows import or the loaded file name.",
-			"button-text": "import"
-		},
 		"cycle-assist-mode": {
 			"type": "custom:eb-action",
 			"name": "Cycle Assist Mode",
-			"description": "Cycles Live → Replay → Hybrid → BruteForce. Same setting as Main → Assist Mode and Keys → Cycle Assist Mode (Ctrl+Shift+M). The button shows the current mode.",
+			"description": "Cycles Live and Hybrid.",
 			"button-text": "cycle"
-		},
-		"bake-map-action": {
-			"type": "custom:eb-action",
-			"name": "Bake Map",
-			"description": "Builds click-timing windows from the imported replay (import a replay first). Safe to cancel mid-bake.",
-			"button-text": "bake"
-		},
-		"brute-bake-action": {
-			"type": "custom:eb-action",
-			"name": "Brute Bake",
-			"description": "Searches safe click timings through the level without a replay. Heavier than Bake Map; cancel if it takes too long.",
-			"button-text": "brute"
-		},
-		"cancel-bake-action": {
-			"type": "custom:eb-action",
-			"name": "Cancel Bake",
-			"description": "Stops an in-progress bake. Only active while baking.",
-			"button-text": "cancel"
-		},
-		"bake-radius": {
-			"type": "int",
-			"name": "Bake Radius",
-			"description": "When baking, how many frames each click may shift while searching a window. 0 = automatic. Higher = wider searched windows (more bake time). Lower = tighter/faster bake, may miss some timings.",
-			"default": 0,
-			"min": 0,
-			"max": 128
 		},
 		"title-trigger-world": {
 			"type": "title",
@@ -1345,12 +1266,6 @@
 			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
-		"show-bake-path": {
-			"type": "bool",
-			"name": "Bake Visualizer",
-			"description": "Draws BakeMap windows near the player: green = press, purple = release (wave/ship/swing/robot, or dash-hold). Needs a loaded bake. Off by default.",
-			"default": false
-		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",
@@ -1401,14 +1316,8 @@
 		"show-pause-hub": {
 			"type": "bool",
 			"name": "Pause EB Button",
-			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Assist, Learn, Bake, Modes, Visual, UI, Keys, Dev). Off = open settings only from the Geode menu.",
+			"description": "Shows the top-right EB button on pause, which opens EarlyBuffer settings (Main, Assist, Learn, Modes, Visual, UI, Keys, Dev). Off = open settings only from the Geode menu.",
 			"default": true
-		},
-		"show-pause-bake": {
-			"type": "bool",
-			"name": "Pause Status Lines",
-			"description": "On pause, show short mode/bake status lines (top-left). Off = cleaner pause. Bake buttons live under EB → Bake.",
-			"default": false
 		},
 		"desktop-classic-settings": {
 			"type": "bool",
@@ -1470,7 +1379,7 @@
 		"hotkey-assist-mode": {
 			"type": "keybind",
 			"name": "Cycle Assist Mode",
-			"description": "Cycles Live → Replay → Hybrid → BruteForce. Same setting as Main → Assist Mode and Bake → Cycle Assist Mode.",
+			"description": "Cycles Live → Hybrid. Same setting as Main → Assist Mode and Main → Assist Mode.",
 			"default": "Ctrl+Shift+M",
 			"category": "gameplay"
 		},
@@ -1701,7 +1610,7 @@
 		"dev-dump-diag-action": {
 			"type": "custom:eb-action",
 			"name": "Dump All Diag",
-			"description": "Writes a timestamped folder under mod save dir /diag/ with: all settings, clock/assist, replay, BakeMap, Trigger World, bake sim probe (first clicks: deathFrame/unknown/x), self-checks. Also auto-runs on bake 0-windows. Enter level, reset, import replay, then dump (or bake).",
+			"description": "Writes current settings, physics clock, Trigger World diagnostics and self-checks to the mod save folder.",
 			"button-text": "dump"
 		},
 		"orb-chain-verify": {

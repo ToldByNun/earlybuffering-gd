@@ -21,7 +21,7 @@ std::string EbActionButtonSettingImplementation::truncateLabel(std::string text,
 }
 
 std::string EbActionButtonSettingImplementation::dynamicButtonLabel(std::string const& key,
-                                                                  std::string const& fallback) {
+                                                                    std::string const& fallback) {
     if (key == "import-bake-replay") {
         if (auto const* r = EbBakeMap::get().pendingReplay()) {
             return EbActionButtonSettingImplementation::truncateLabel(r->sourceName, 14);
@@ -35,33 +35,11 @@ std::string EbActionButtonSettingImplementation::dynamicButtonLabel(std::string 
 }
 
 bool EbActionButtonSettingImplementation::actionShouldEnable(std::string const& key) {
-    bool const busy = EbBakeMap::get().isBaking() || EbBakeScheduler::get().running();
-    if (key == "bake-map-action" || key == "brute-bake-action" || key == "import-bake-replay") {
-        return !busy;
-    }
-    if (key == "cancel-bake-action") {
-        return busy;
-    }
+    (void)key;
     return true;
 }
 
 void EbActionButtonSettingImplementation::fireSettingAction(std::string const& key) {
-    if (key == "import-bake-replay") {
-        EbPauseActionBridge::importReplay();
-        return;
-    }
-    if (key == "bake-map-action") {
-        EbPauseActionBridge::startBake(false);
-        return;
-    }
-    if (key == "brute-bake-action") {
-        EbPauseActionBridge::startBake(true);
-        return;
-    }
-    if (key == "cancel-bake-action") {
-        EbPauseActionBridge::cancelBake();
-        return;
-    }
     if (key == "cycle-assist-mode") {
         EbPauseActionBridge::cycleAssistMode();
         return;
@@ -194,8 +172,8 @@ void EbActionButtonSettingImplementation::fitActionButtonSprite(ButtonSprite* sp
 // half-width offset so the visual right edge sits flush (default center anchor).
 // Do NOT touch the button's contentSize/anchorPoint — that desyncs the ButtonSprite.
 void EbActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCMenu* menu,
-                                                           CCMenuItemSpriteExtra* button,
-                                                           ButtonSprite* sprite) {
+                                                             CCMenuItemSpriteExtra* button,
+                                                             ButtonSprite* sprite) {
     if (!menu || !button || !sprite)
         return;
     EbActionButtonSettingImplementation::fitActionButtonSprite(sprite);
@@ -217,7 +195,8 @@ void EbActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCM
     menu->updateLayout();
 }
 
-bool EbActionButtonSettingNodeV3::init(std::shared_ptr<EbActionButtonSettingV3> setting, float width) {
+bool EbActionButtonSettingNodeV3::init(std::shared_ptr<EbActionButtonSettingV3> setting,
+                                       float width) {
     if (!geode::prelude::SettingNodeV3::init(setting, width))
         return false;
 
@@ -230,7 +209,7 @@ bool EbActionButtonSettingNodeV3::init(std::shared_ptr<EbActionButtonSettingV3> 
     this->m_button = CCMenuItemSpriteExtra::create(
         this->m_buttonSprite, this, menu_selector(EbActionButtonSettingNodeV3::onButton));
     EbActionButtonSettingImplementation::layoutActionButton(menu, this->m_button,
-                                                          this->m_buttonSprite);
+                                                            this->m_buttonSprite);
 
     this->schedule(schedule_selector(EbActionButtonSettingNodeV3::onTick), 0.2f);
     this->updateState(nullptr);
@@ -244,15 +223,15 @@ void EbActionButtonSettingNodeV3::refreshLabel() {
     if (!this->m_buttonSprite || !this->m_button || !this->getButtonMenu())
         return;
 
-    auto const next = EbActionButtonSettingImplementation::dynamicButtonLabel(setting->getKey(),
-                                                                            setting->buttonText());
+    auto const next = EbActionButtonSettingImplementation::dynamicButtonLabel(
+        setting->getKey(), setting->buttonText());
     if (next == this->m_shownLabel)
         return;
 
     this->m_shownLabel = next;
     this->m_buttonSprite->setString(next.c_str());
     EbActionButtonSettingImplementation::layoutActionButton(this->getButtonMenu(), this->m_button,
-                                                          this->m_buttonSprite);
+                                                            this->m_buttonSprite);
 }
 
 void EbActionButtonSettingNodeV3::updateState(geode::prelude::CCNode* invoker) {

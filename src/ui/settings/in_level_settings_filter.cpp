@@ -23,8 +23,6 @@ char const* EbInLevelSettingsFilter::categoryName(SettingsCategory category) {
         return "Assist";
     case SettingsCategory::Learn:
         return "Learn";
-    case SettingsCategory::Bake:
-        return "Bake";
     case SettingsCategory::Modes:
         return "Modes";
     case SettingsCategory::Visual:
@@ -53,7 +51,7 @@ bool EbInLevelSettingsFilter::keepKey(std::string const& key) {
     auto const candidate = categoryForKey(key);
     return candidate == SettingsCategory::Main || candidate == SettingsCategory::Assist ||
            candidate == SettingsCategory::Learn || candidate == SettingsCategory::Visual ||
-           candidate == SettingsCategory::Bake || candidate == SettingsCategory::UI;
+           candidate == SettingsCategory::UI;
 }
 
 float EbInLevelSettingsFilter::preservedContentY(float posBefore, float heightBefore,
@@ -100,11 +98,10 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
         }
     };
 
-    expect(static_cast<int>(SettingsCategory::Count) == 9, "cat-count-9");
+    expect(static_cast<int>(SettingsCategory::Count) == 8, "cat-count-8");
     expect(std::strcmp(categoryName(SettingsCategory::Main), "Main") == 0, "cat-name-main");
     expect(std::strcmp(categoryName(SettingsCategory::Assist), "Assist") == 0, "cat-name-assist");
     expect(std::strcmp(categoryName(SettingsCategory::Learn), "Learn") == 0, "cat-name-learn");
-    expect(std::strcmp(categoryName(SettingsCategory::Bake), "Bake") == 0, "cat-name-bake");
     expect(std::strcmp(categoryName(SettingsCategory::Modes), "Modes") == 0, "cat-name-modes");
     expect(std::strcmp(categoryName(SettingsCategory::Visual), "Visual") == 0, "cat-name-visual");
     expect(std::strcmp(categoryName(SettingsCategory::UI), "UI") == 0, "cat-name-ui");
@@ -127,17 +124,18 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("lag-warning-toast") == SettingsCategory::UI, "cat-lag-toast-ui");
     expect(categoryForKey("title-ui") == SettingsCategory::UI, "cat-title-ui");
     expect(categoryForKey("title-scope") == SettingsCategory::Assist, "cat-title-scope-assist");
-    expect(categoryForKey("assist-only-practice") == SettingsCategory::Assist, "cat-practice-assist");
+    expect(categoryForKey("assist-only-practice") == SettingsCategory::Assist,
+           "cat-practice-assist");
     expect(categoryForKey("assist-off-1-from") == SettingsCategory::Assist, "cat-off-assist");
-    expect(categoryForKey("import-bake-replay") == SettingsCategory::Bake, "cat-import-bake");
-    expect(categoryForKey("bake-radius") == SettingsCategory::Bake, "cat-bake-radius");
-    expect(categoryForKey("trigger-bake") == SettingsCategory::Bake, "cat-trigger-bake");
+    expect(categoryForKey("import-bake-replay") == SettingsCategory::Count, "cat-import-bake");
+    expect(categoryForKey("bake-radius") == SettingsCategory::Count, "cat-bake-radius");
+    expect(categoryForKey("trigger-bake") == SettingsCategory::Assist, "cat-trigger-bake");
     expect(categoryForKey("reset-learn-action") == SettingsCategory::Learn, "cat-reset-learn");
     expect(categoryForKey("auto-tune") == SettingsCategory::Learn, "cat-auto-tune-learn");
-    expect(categoryForKey("assist-pick") == SettingsCategory::Assist, "cat-assist-pick");
-    expect(categoryForKey("assist-engine") == SettingsCategory::Assist, "cat-assist-engine");
+    expect(categoryForKey("assist-pick") == SettingsCategory::Count, "cat-assist-pick");
+    expect(categoryForKey("assist-engine") == SettingsCategory::Count, "cat-assist-engine");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
-    expect(categoryForKey("show-bake-path") == SettingsCategory::Visual, "cat-bake-path-visual");
+    expect(categoryForKey("show-bake-path") == SettingsCategory::Count, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-debug") == SettingsCategory::Keys, "cat-hotkey-keys");
     expect(categoryForKey("hotkey-desktop-menu") == SettingsCategory::Keys, "cat-hotkey-menu");
@@ -158,11 +156,12 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(keepKey("title-scope"), "legacy-keep-scope");
     expect(keepKey("smart-depth"), "legacy-keep-smart");
     expect(keepKey("title-ui"), "legacy-keep-ui");
-    expect(keepKey("import-bake-replay", SettingsCategory::Bake), "keep-import-on-bake");
+    expect(!keepKey("import-bake-replay", SettingsCategory::Assist), "keep-import-on-bake");
     expect(!keepKey("import-bake-replay", SettingsCategory::Main), "drop-import-on-main");
 
     int mapped = 0;
-    for (auto const* it = EbSettingsCategoryMap::begin(); it != EbSettingsCategoryMap::end(); ++it) {
+    for (auto const* it = EbSettingsCategoryMap::begin(); it != EbSettingsCategoryMap::end();
+         ++it) {
         auto const candidate = categoryForKey(it->key);
         expect(candidate == it->cat, it->key);
         expect(candidate != SettingsCategory::Count, it->key);

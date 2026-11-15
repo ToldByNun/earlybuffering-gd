@@ -30,8 +30,8 @@ public:
             EbCheckbox::drawSetting("enabled", "Enabled");
             EbCheckbox::drawSetting("safe-mode", "Safe Mode");
             {
-                char const* opts[] = {"Live", "Replay", "Hybrid", "BruteForce"};
-                EbComboBox::drawSetting("assist-mode", "Assist Mode", opts, 4);
+                char const* opts[] = {"Live", "Hybrid"};
+                EbComboBox::drawSetting("assist-mode", "Assist Mode", opts, 2);
             }
         }
         EbSectionCard::end();
@@ -84,15 +84,6 @@ public:
         if (EbSectionCard::begin("assist-algorithm", "Algorithm")) {
             EbSlider::drawIntSetting("death-slack", "Death Slack", 0, 16);
             EbSlider::drawIntSetting("look-ahead-cap", "Look-Ahead Cap", 0, 240);
-            {
-                char const* pickOpts[] = {"v1", "v2"};
-                char const* pickLabels[] = {"Pick v1", "Pick v2"};
-                EbDropdown::drawSetting("assist-pick", "Pick Mode", pickOpts, 2, pickLabels);
-            }
-            {
-                char const* engOpts[] = {"ShadowPlayer", "Trajectory"};
-                EbComboBox::drawSetting("assist-engine", "Assist Engine", engOpts, 2);
-            }
             EbSlider::drawIntSetting("cps-limit", "CPS Limit", 0, 40);
             EbSlider::drawIntSetting("min-click-interval-ms", "Min Click Interval", 0, 500, "ms");
             EbCheckbox::drawSetting("assist-orbs", "Orb Assist");
@@ -107,14 +98,16 @@ public:
             EbCheckbox::drawSetting("assist-release", "Assist Releases");
         }
         EbSectionCard::end();
+        if (EbSectionCard::begin("assist-trigger-world", "Trigger World")) {
+            EbCheckbox::drawSetting("trigger-bake", "Prepare Trigger World");
+            EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
+        }
+        EbSectionCard::end();
     }
 
     static void drawLearn() {
         if (EbSectionCard::begin("learn-toggles", "Learning")) {
             EbCheckbox::drawSetting("auto-tune", "Auto-Tune Per Level");
-            EbCheckbox::drawSetting("self-bake", "Self-Bake (Practice)");
-            EbCheckbox::drawSetting("self-bake-normal", "Self-Bake in Normal");
-            EbCheckbox::drawSetting("self-bake-refine", "Self-Bake Refine");
         }
         EbSectionCard::end();
 
@@ -128,34 +121,6 @@ public:
             EbButton::drawAction("reset-learn-action", "Reset Learning");
             EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
             EbButton::endRow();
-        }
-        EbSectionCard::end();
-    }
-
-    static void drawBake() {
-        if (EbSectionCard::begin("bake-actions", "Bake Actions")) {
-            EbButton::beginRow(2);
-            EbButton::drawAction("import-bake-replay", "Import Replay");
-            EbButton::drawAction("cycle-assist-mode", "Cycle Mode");
-            EbButton::endRow();
-            EbButton::beginRow(2);
-            EbButton::drawAction("bake-map-action", "Bake Map");
-            EbButton::drawAction("brute-bake-action", "Brute Bake");
-            EbButton::endRow();
-            EbButton::drawAction("cancel-bake-action", "Cancel Bake");
-            EbSlider::drawIntSetting("bake-radius", "Bake Radius", 0, 128);
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("bake-triggers", "Trigger World")) {
-            EbCheckbox::drawSetting("trigger-bake", "Trigger World Bake");
-            EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
-            {
-                char const* verifyOpts[] = {"off", "ab"};
-                char const* verifyLabels[] = {"Off", "A/B"};
-                EbDropdown::drawSetting("assist-verify", "Assist Verify", verifyOpts, 2,
-                                        verifyLabels);
-            }
         }
         EbSectionCard::end();
     }
@@ -252,7 +217,6 @@ public:
     static void drawVisual() {
         if (EbSectionCard::begin("visual-viz", "Visualizers")) {
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
-            EbCheckbox::drawSetting("show-bake-path", "Bake Path Visualizer");
         }
         EbSectionCard::end();
 
@@ -271,7 +235,6 @@ public:
             gap();
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
-            EbCheckbox::drawSetting("show-pause-bake", "Pause Status Lines");
             EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
         }
         EbSectionCard::end();
@@ -319,9 +282,6 @@ void EbDesktopMenuPanels::draw(SettingsCategory category) {
         break;
     case SettingsCategory::Learn:
         EbDesktopMenuPanelsDraw::drawLearn();
-        break;
-    case SettingsCategory::Bake:
-        EbDesktopMenuPanelsDraw::drawBake();
         break;
     case SettingsCategory::Modes:
         EbDesktopMenuPanelsDraw::drawModes();

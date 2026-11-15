@@ -1,32 +1,16 @@
 # Assist modes
 
-Setting: **Main → Assist Mode** (also cycle key, default Ctrl+Shift+M).
+Choose Live or Hybrid under Main → Assist Mode. Ctrl+Shift+M cycles between them.
 
-| Mode | What it does | When to use |
-|---|---|---|
-| **Live** | Plans every press/release from the current game state | Default. Start here |
-| **Hybrid** | Uses a nearby **bake window** if it verifies safe, else falls back to Live | When you have a bake map for the level |
-| **Replay** | Timing windows from an imported macro bake | Practice with a known click map |
-| **BruteForce** | Windows from a brute bake (no replay file) | Heavy bake workflow |
+| Mode | Current behavior |
+|---|---|
+| Live | Plans each physical press/release from the current game state |
+| Hybrid | Currently uses Live planning. Learned candidate weighting is scheduled for AP09 |
 
-## Important honesty
+Learn contains Auto Tune, learning reset and config import/export. The Bake tab and macro/bake mode selection have been removed.
 
-- Live / Hybrid never softlock a hopeless click — they **Pass** (vanilla).
-- Replay / BruteForce are **timing maps**, not a live multi-click bot queue.
-- Your finger still starts the click.
+Existing Live settings remain Live. Existing Hybrid settings become the new Hybrid selection. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.
 
-## Pick Mode (v1 / v2)
+The player initiates every input. The planner can delay it within the configured window. Press/release cleanup continues when changing modes.
 
-Under Assist settings:
-
-- **v1** (default): if delay 0 is already safe → Pass now; else pick a robust later delay in the window.
-- **v2**: reserved (currently same idea as v1).
-
-## Assist Engine
-
-- **ShadowPlayer** (default): full ghost player sim
-- **Trajectory**: lighter path for some Live V2 paths
-
-v1 always uses ShadowPlayer.
-
-More detail: [How it works](/how-it-works/) and [Assist reference](/assist_reference).
+The planner always uses v1 and ShadowPlayer. Their former dropdowns have been removed.

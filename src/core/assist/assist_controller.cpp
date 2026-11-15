@@ -1,5 +1,5 @@
-#include "../../app/class_manager.hpp"
 #include "assist_controller.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../dev/capture/dev_clock_contract.hpp"
 #include "../bake/bake_map.hpp"
@@ -13,7 +13,6 @@
 #include "input/assist_input_gate.hpp"
 #include "input/click_intent_guard.hpp"
 #include "input/hold_until_safe_policy.hpp"
-#include "planning/live/assist_bake_reuse.hpp"
 #include "planning/live/assist_press_planner.hpp"
 #include "planning/live/assist_release_planner.hpp"
 #include "reporting/assist_outcomes.hpp"
@@ -33,8 +32,9 @@ int EbAssistControllerImplementation::roundBias(float bias) {
     return static_cast<int>(std::lround(bias));
 }
 
-void EbAssistControllerImplementation::fillPlanRobustLatency(EbPlanOptions& opts, PlayerObject* player,
-                                                           float dtVariance, bool spamDense) {
+void EbAssistControllerImplementation::fillPlanRobustLatency(EbPlanOptions& opts,
+                                                             PlayerObject* player, float dtVariance,
+                                                             bool spamDense) {
     opts.robustK = EbStageConfig::robustK();
     opts.robustJitter = EbStageConfig::robustJitter();
     opts.dtVariance = dtVariance;
@@ -49,103 +49,8 @@ void EbAssistControllerImplementation::fillPlanRobustLatency(EbPlanOptions& opts
     }
 }
 
-// Map a nearby BakeMap window onto delay ticks for Live prefer-band ordering.
-// Absolute bake frames → live ticks (unmapTick), then delays relative to effectTick.
-void EbAssistControllerImplementation::fillBakePreferBandFromReuse(EbPlanOptions& opts,
-                                                                 EbHybridPressReuse const& reuse,
-                                                                 int effectTick, int limit,
-                                                                 float simDt) {
-    if (!reuse.hasWindow || limit <= 0 || simDt <= 0.f)
-        return;
-    double const tps = reuse.bakeTps > 0.0 ? reuse.bakeTps : EbAssistClock::kNominalTps;
-    auto& clock = EbAssistClock::get();
-    int eAbs = clock.unmapTick(tps, reuse.earliest, simDt);
-    int lAbs = clock.unmapTick(tps, reuse.latest, simDt);
-    int nAbs = clock.unmapTick(tps, reuse.nominalFrame, simDt);
-    if (lAbs < eAbs)
-        std::swap(lAbs, eAbs);
-    // Prefer band toward nominal when still before it.
-    int entry = std::max(0, eAbs - effectTick);
-    int l = std::max(0, lAbs - effectTick);
-    int count = std::max(0, nAbs - effectTick);
-    if (count >= entry && count <= l) {
-        // Tighten prefer toward nominal..latest when inside the window ahead.
-        entry = count;
-    }
-    entry = std::max(0, std::min(limit, entry));
-    l = std::max(0, std::min(limit, l));
-    if (entry > l)
-        return;
-    opts.preferDelayMin = entry;
-    opts.preferDelayMax = l;
-}
-
-void EbAssistControllerImplementation::fillBakePreferBand(EbPlanOptions& opts, PlayerObject* player,
-                                                        bool player1, bool down, int effectTick,
-                                                        int limit, int attemptTick, float simDt,
-                                                        EbHybridPressReuse const* reuse) {
-    if (reuse && reuse->hasWindow) {
-        EbAssistControllerImplementation::fillBakePreferBandFromReuse(opts, *reuse, effectTick, limit,
-                                                                    simDt);
-        return;
-    }
-    if (!player || limit <= 0 || simDt <= 0.f)
-        return;
-    auto const& bake = EbBakeMap::get();
-    if (!bake.loaded() || bake.data().clicks.empty())
-        return;
-
-    double tps = bake.data().tps > 0.0 ? bake.data().tps : EbAssistClock::kNominalTps;
-    int const approxFrame = EbAssistClock::get().remapTick(tps, attemptTick, simDt);
-    auto const* win = bake.findNear(player->getPositionX(), approxFrame, down, !player1,
-                                    EbStageConfig::kindOf(player));
-    if (!win)
-        return;
-
-    EbHybridPressReuse tmp;
-    tmp.hasWindow = true;
-    tmp.earliest = win->earliest;
-    tmp.latest = win->latest;
-    tmp.nominalFrame = win->nominalFrame;
-    tmp.bakeTps = tps;
-    EbAssistControllerImplementation::fillBakePreferBandFromReuse(opts, tmp, effectTick, limit,
-                                                                simDt);
-}
-
-// Nearby bake click → ClickIntentGuard must not Pass (assist allowed).
-// Hybrid callers clear this after bake verify rejects the window (avoid forcing
-// full Live on every moderate-CPS click near a stale bake).
-bool EbAssistControllerImplementation::nearBakeWindowHint(PlayerObject* player, bool player1,
-                                                        bool down, int attemptTick, float simDt,
-                                                        EbHybridPressReuse const* reuse) {
-    if (reuse)
-        return reuse->hasWindow;
-    if (!player || simDt <= 0.f)
-        return false;
-    auto const& bake = EbBakeMap::get();
-    if (!bake.loaded() || bake.data().clicks.empty())
-        return false;
-    double tps = bake.data().tps > 0.0 ? bake.data().tps : EbAssistClock::kNominalTps;
-    int const approxFrame = EbAssistClock::get().remapTick(tps, attemptTick, simDt);
-    return bake.findNear(player->getPositionX(), approxFrame, down, !player1,
-                         EbStageConfig::kindOf(player)) != nullptr;
-}
-
-// Hybrid Live fallthrough: never HUS-inject before bake nominal (press or release).
-// Returns true when caller should Pass instead of armHoldUntilSafe.
-bool EbAssistControllerImplementation::husBlockedBeforeBakeNominal(EbHybridPressReuse const& reuse,
-                                                                 int effectTick, float simDt,
-                                                                 int& outNomTick) {
-    outNomTick = -1;
-    if (!reuse.hasWindow || simDt <= 0.f)
-        return false;
-    double const bakeTps = reuse.bakeTps > 0.0 ? reuse.bakeTps : EbAssistClock::kNominalTps;
-    outNomTick = EbAssistClock::get().unmapTick(bakeTps, reuse.nominalFrame, simDt);
-    return effectTick < outNomTick;
-}
-
 bool EbAssistControllerImplementation::nearOrbOrPadHint(PlayLayer* playLayer, PlayerObject* player,
-                                                      int limit, float simDt) {
+                                                        int limit, float simDt) {
     if (!EbStageConfig::assistOrbs())
         return false;
     if (!(!playLayer || !player || limit <= 0 || simDt <= 0.f)) {
@@ -260,7 +165,7 @@ bool EbAssistController::releaseAssistModePlayer(PlayerObject* player) {
 }
 
 bool EbAssistController::shouldPlanRelease(PlayLayer* playLayer, PlayerObject* player, bool player1,
-                                         int effectTick) const {
+                                           int effectTick) const {
     return EbAssistInputGate::shouldPlanRelease(*this, playLayer, player, player1, effectTick);
 }
 
@@ -281,9 +186,9 @@ int EbAssistController::resolveFireTick(int effectTick, int delay, int jumpTick,
 }
 
 bool EbAssistController::shouldFireBuffered(int attemptTick, int fireTick, int pressTick,
-                                          int planDelay, int limit) {
+                                            int planDelay, int limit) {
     return EbAssistTimingRules::shouldFireBuffered(attemptTick, fireTick, pressTick, planDelay,
-                                                 limit);
+                                                   limit);
 }
 
 bool EbAssistController::fireTickSelfCheck(std::string& report) {
@@ -291,10 +196,10 @@ bool EbAssistController::fireTickSelfCheck(std::string& report) {
 }
 
 int EbAssistController::resolveQueuedHoldTicks(bool requireHold, bool continuous, int releaseAfter,
-                                             int releaseEarliest, int releaseLatest,
-                                             int extendCap) {
+                                               int releaseEarliest, int releaseLatest,
+                                               int extendCap) {
     return EbAssistTimingRules::resolveQueuedHoldTicks(requireHold, continuous, releaseAfter,
-                                                     releaseEarliest, releaseLatest, extendCap);
+                                                       releaseEarliest, releaseLatest, extendCap);
 }
 
 bool EbAssistController::queuedHoldSelfCheck(std::string& report) {
@@ -314,16 +219,17 @@ bool EbAssistController::holdUntilSafeSelfCheck(std::string& report) {
 }
 
 bool EbAssistController::shouldReplanHoldUntilSafe(int attemptTick, int lastReplanTick, float x,
-                                                 float lastReplanX, bool foresightNow,
-                                                 bool foresightLast, int remainingTicks) {
+                                                   float lastReplanX, bool foresightNow,
+                                                   bool foresightLast, int remainingTicks) {
     return EbHoldUntilSafePolicy::shouldReplanHoldUntilSafe(
         attemptTick, lastReplanTick, x, lastReplanX, foresightNow, foresightLast, remainingTicks);
 }
 
 bool EbAssistController::armHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player, bool player1,
-                                        int effectTick, int limit, EbSimPlan const& plan, bool down) {
-    return EbAssistHoldRuntime::armHoldUntilSafe(*this, playLayer, player, player1, effectTick, limit,
-                                               plan, down);
+                                          int effectTick, int limit, EbSimPlan const& plan,
+                                          bool down) {
+    return EbAssistHoldRuntime::armHoldUntilSafe(*this, playLayer, player, player1, effectTick,
+                                                 limit, plan, down);
 }
 
 void EbAssistController::tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player) {
@@ -345,10 +251,11 @@ int EbAssistController::estimateRobustK(PlayerObject* player, float dtVariance) 
     return EbShadowSimulator::autoRobustK(player, dtVariance, spamDense);
 }
 
-int EbAssistController::acceptRecheckSlide(int oldFire, int attemptTick, int proposedFire, int absMax,
-                                         int robustK, int deadline, bool requireOrb, bool planOk) {
+int EbAssistController::acceptRecheckSlide(int oldFire, int attemptTick, int proposedFire,
+                                           int absMax, int robustK, int deadline, bool requireOrb,
+                                           bool planOk) {
     return EbAssistTimingRules::acceptRecheckSlide(oldFire, attemptTick, proposedFire, absMax,
-                                                 robustK, deadline, requireOrb, planOk);
+                                                   robustK, deadline, requireOrb, planOk);
 }
 
 bool EbAssistController::recheckSlideSelfCheck(std::string& report) {
@@ -392,18 +299,18 @@ void EbAssistController::noteRealJump(PlayerObject* player) {
 }
 
 void EbAssistController::recordDecision(PlayLayer* playLayer, PlayerObject* player, bool down,
-                                      EbSimPlan const& plan, int effectTick, int appliedDelay,
-                                      int limit) {
+                                        EbSimPlan const& plan, int effectTick, int appliedDelay,
+                                        int limit) {
     return EbAssistOutcomes::recordDecision(*this, playLayer, player, down, plan, effectTick,
-                                          appliedDelay, limit);
+                                            appliedDelay, limit);
 }
 
 void EbAssistController::tickLearning(PlayLayer* playLayer, PlayerObject* player) {
     return EbAssistOutcomes::tickLearning(*this, playLayer, player);
 }
 
-void EbAssistController::runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object,
-                                     EbDecisionEntry& dec) {
+void EbAssistController::runPostmortem(PlayLayer* playLayer, PlayerObject* player,
+                                       GameObject* object, EbDecisionEntry& dec) {
     return EbAssistOutcomes::runPostmortem(*this, playLayer, player, object, dec);
 }
 
@@ -423,7 +330,8 @@ void EbAssistController::noteVerdict(AssistReason reason, char const* where) {
     return EbAssistOutcomes::noteVerdict(*this, reason, where);
 }
 
-void EbAssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player, GameObject* object) {
+void EbAssistController::onRealDeath(PlayLayer* playLayer, PlayerObject* player,
+                                     GameObject* object) {
     return EbAssistOutcomes::onRealDeath(*this, playLayer, player, object);
 }
 
@@ -431,7 +339,8 @@ void EbAssistController::flushPendingRelease(PlayLayer* playLayer) {
     return EbAssistBufferRuntime::flushPendingRelease(*this, playLayer);
 }
 
-void EbAssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck) {
+void EbAssistController::fireBuffered(PlayLayer* playLayer, PlayerObject* player,
+                                      bool allowRecheck) {
     return EbAssistBufferRuntime::fireBuffered(*this, playLayer, player, allowRecheck);
 }
 
@@ -439,29 +348,22 @@ void EbAssistController::onPhysicsTick(PlayLayer* playLayer, float deltaTime) {
     return EbAssistInputRuntime::onPhysicsTick(*this, playLayer, deltaTime);
 }
 
-bool EbAssistController::tryBakeAssist(PlayLayer* playLayer, PlayerObject* player, bool player1,
-                                     bool down, int effectTick, float firstDt, bool& handled,
-                                     EbPressSimBudget* sharedBudget, bool* verifyAttempted,
-                                     EbHybridPressReuse* reuse) {
-    return EbAssistBakeReuse::tryBakeAssist(*this, playLayer, player, player1, down, effectTick,
-                                          firstDt, handled, sharedBudget, verifyAttempted, reuse);
-}
-
 bool EbAssistController::planPress(PlayLayer* playLayer, PlayerObject* player, bool player1,
-                                 int effectTick, float firstDt,
-                                 EbDevClockContract::Stamp const& clockIn) {
+                                   int effectTick, float firstDt,
+                                   EbDevClockContract::Stamp const& clockIn) {
     return EbAssistPressPlanner::planPress(*this, playLayer, player, player1, effectTick, firstDt,
-                                         clockIn);
+                                           clockIn);
 }
 
 bool EbAssistController::planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1,
-                                   int effectTick, float firstDt,
-                                   EbDevClockContract::Stamp const& clockIn) {
-    return EbAssistReleasePlanner::planRelease(*this, playLayer, player, player1, effectTick, firstDt,
-                                             clockIn);
+                                     int effectTick, float firstDt,
+                                     EbDevClockContract::Stamp const& clockIn) {
+    return EbAssistReleasePlanner::planRelease(*this, playLayer, player, player1, effectTick,
+                                               firstDt, clockIn);
 }
 
-bool EbAssistController::onHandleButton(GJBaseGameLayer* layer, bool down, int button, bool player1) {
+bool EbAssistController::onHandleButton(GJBaseGameLayer* layer, bool down, int button,
+                                        bool player1) {
     return EbAssistInputRuntime::onHandleButton(*this, layer, down, button, player1);
 }
 

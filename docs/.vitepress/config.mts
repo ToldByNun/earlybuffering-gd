@@ -94,7 +94,7 @@ export default defineConfig({
             { text: 'Adaptive Plan', link: '/features/adaptive' },
             { text: 'Cloud Configs', link: '/features/cloud-configs' },
             { text: 'Safe Mode', link: '/features/safe-mode' },
-            { text: 'Bake & Trigger World', link: '/features/bake' },
+            { text: 'Trigger World', link: '/features/bake' },
           ],
         },
         {

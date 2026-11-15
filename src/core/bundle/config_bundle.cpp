@@ -1,4 +1,5 @@
 #include "config_bundle.hpp"
+#include "../../config/assist_mode_migration.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../dev/dev_config.hpp"
 #include "config_bundle_codec.hpp"
@@ -208,7 +209,7 @@ bool EbConfigBundle::selfCheck(std::string& report) {
     };
 
     expect(EbConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(EbConfigBundleKeys::count() == 191, "portable-keys");
+    expect(EbConfigBundleKeys::count() == 183, "portable-keys");
     expect(EbConfigBundleApplyHelpers::isDevKey("dev-overlay"), "dev-key-yes");
     expect(!EbConfigBundleApplyHelpers::isDevKey("look-ahead-cap"), "dev-key-no");
     expect(!EbConfigBundleApplyHelpers::isDevKey(nullptr), "dev-key-null");
@@ -549,8 +550,8 @@ auto EbConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
                     return false;
                 }
             }
-            if (std::string_view(entry.key) == "assist-mode" && text == "Route")
-                text = "Live";
+            if (std::string_view(entry.key) == "assist-mode")
+                text = EbAssistModeMigration::canonical(text);
             mod->setSettingValue<std::string>(entry.key, text);
             ++applied;
             return true;

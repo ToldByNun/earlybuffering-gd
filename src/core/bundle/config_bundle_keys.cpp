@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[183] = {
     {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
     {"ball-ground-check", EbConfigBundleKeys::Kind::String},
     {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
@@ -23,8 +23,6 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
     {"perf-trace", EbConfigBundleKeys::Kind::Bool},
     {"lag-probe", EbConfigBundleKeys::Kind::Bool},
     {"show-trajectory", EbConfigBundleKeys::Kind::Bool},
-    {"show-bake-path", EbConfigBundleKeys::Kind::Bool},
-    {"show-pause-bake", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
     {"desktop-classic-settings", EbConfigBundleKeys::Kind::Bool},
     {"desktop-accent-color", EbConfigBundleKeys::Kind::Color},
@@ -55,9 +53,6 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
     {"death-slack", EbConfigBundleKeys::Kind::Int},
     {"look-ahead-cap", EbConfigBundleKeys::Kind::Int},
     {"assist-mode", EbConfigBundleKeys::Kind::String},
-    {"assist-pick", EbConfigBundleKeys::Kind::String},
-    {"assist-engine", EbConfigBundleKeys::Kind::String},
-    {"bake-radius", EbConfigBundleKeys::Kind::Int},
     {"cps-limit", EbConfigBundleKeys::Kind::Int},
     {"min-click-interval-ms", EbConfigBundleKeys::Kind::Int},
     {"assist-orbs", EbConfigBundleKeys::Kind::Bool},
@@ -77,9 +72,6 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
     {"assist-probe-past-horizon", EbConfigBundleKeys::Kind::Bool},
     {"assist-micro-window", EbConfigBundleKeys::Kind::Bool},
     {"auto-tune", EbConfigBundleKeys::Kind::Bool},
-    {"self-bake", EbConfigBundleKeys::Kind::Bool},
-    {"self-bake-normal", EbConfigBundleKeys::Kind::Bool},
-    {"self-bake-refine", EbConfigBundleKeys::Kind::Bool},
     {"trigger-bake", EbConfigBundleKeys::Kind::Bool},
     {"trigger-bake-skip-dynamic", EbConfigBundleKeys::Kind::Bool},
     {"assist-verify", EbConfigBundleKeys::Kind::String},
@@ -230,7 +222,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 191, "count-191");
+    expect(EbConfigBundleKeysTable::kEntryCount == 183, "count-183");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -273,18 +265,20 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 73, "kind-bool-73");
-    expect(kindInt == 71, "kind-int-71");
+    expect(kindBool == 68, "kind-bool-68");
+    expect(kindInt == 70, "kind-int-70");
     expect(kindFloat == 20, "kind-float-20");
-    expect(kindString == 19, "kind-string-19");
+    expect(kindString == 17, "kind-string-17");
     expect(kindColor == 2, "kind-color-2");
     expect(kindKeybind == 6, "kind-keybind-6");
 
+    expect(EbConfigBundleKeys::find("assist-pick") == nullptr, "retired-pick-setting");
+    expect(EbConfigBundleKeys::find("assist-engine") == nullptr, "retired-engine-setting");
     auto const* enabled = EbConfigBundleKeys::find("enabled");
     expect(enabled != nullptr, "find-enabled");
     expect(enabled && enabled->kind == Kind::Bool, "find-enabled-bool");
     auto const* bakePath = EbConfigBundleKeys::find("show-bake-path");
-    expect(bakePath && bakePath->kind == Kind::Bool, "find-show-bake-path");
+    expect(bakePath == nullptr, "find-show-bake-path");
     auto const* color = EbConfigBundleKeys::find("save-icon-color");
     expect(color && color->kind == Kind::Color, "find-color");
     auto const* accent = EbConfigBundleKeys::find("desktop-accent-color");

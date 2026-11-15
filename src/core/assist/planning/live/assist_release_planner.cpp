@@ -86,37 +86,12 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         }
     }
 
-    EbPressSimBudget pressBudget;
-    pressBudget.tickLeft = EbStageConfig::tickBudgetPerPress();
-    pressBudget.usUnlimited = false;
-    pressBudget.usLeft = frameScope.remaining(frameLimitUs);
-    bool const shareHybrid = EbStageConfig::assistMode() == AssistMode::Hybrid;
-
-    bool bakeHandled = false;
-    bool hybridVerifyAttempted = false;
-    EbHybridPressReuse hybridReuse{};
-    bool const bakeRet = controller.tryBakeAssist(
-        playLayer, player, player1, false, effectTick, firstDt, bakeHandled, &pressBudget,
-        shareHybrid ? &hybridVerifyAttempted : nullptr, shareHybrid ? &hybridReuse : nullptr);
-    if (bakeHandled)
-        return bakeRet;
-
-    EbLagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
-                             fmt::format("vfy={} remTick={} remUs={}",
-                                         hybridVerifyAttempted ? 1 : 0, pressBudget.tickLeft,
-                                         pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
-
     auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = EbLevelProfile::get();
     int const slot = player1 ? 0 : 1;
     bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(
         playLayer, player, limit, controller.m_simDt);
-    bool nearBake = EbAssistControllerImplementation::nearBakeWindowHint(
-        player, player1, false, effectTick, controller.m_simDt,
-        shareHybrid ? &hybridReuse : nullptr);
-    if (hybridVerifyAttempted)
-        nearBake = false;
 
     if (EbDivergenceTracker::get().simUntrusted()) {
         if (!nearOrb) {
@@ -161,7 +136,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         }
         EbPerfectAssistPolicy::OpportunityInput oppIn;
         oppIn.foresightOrbPad = nearOrb;
-        oppIn.bakePreferBand = nearBake;
+        oppIn.bakePreferBand = false;
         oppIn.orbWindowFound = nearOrb;
         auto const decision = EbPerfectAssistPolicy::classify(trustIn, oppIn);
         mustDelaySearch = (decision == EbPerfectAssistPolicy::Decision::MustDelaySearch);
@@ -174,8 +149,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     // Other continuous modes retain their existing rhythm filter.
     bool const continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
     if (continuous && !player->m_isDart && !mustDelaySearch) {
-        if (EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb,
-                                                        nearBake)) {
+        if (EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, false)) {
             EbAssistLog::debug(fmt::format("intent: spam Pass release (mode={}, tick={})",
                                            EbStageConfig::kindName(kind), effectTick));
             EbDevCycleRecorder::get().noteGatePass(AssistReason::PassSpam, "release-spam");
@@ -203,26 +177,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     }
 
     EbPlanOptions opts;
-    if (shareHybrid) {
-        opts.tickBudget = std::max(0, pressBudget.tickLeft);
-        if (pressBudget.usUnlimited) {
-            opts.budgetUs = 0;
-        } else {
-            opts.budgetUs = std::max(1, pressBudget.usLeft);
-        }
-    } else {
-        opts.budgetUs = EbStageConfig::simBudgetUs();
-        opts.tickBudget = EbStageConfig::tickBudgetPerPress();
-    }
-    if (shareHybrid && hybridVerifyAttempted) {
-        int const halfTick = std::max(400, EbStageConfig::tickBudgetPerPress() / 2);
-        opts.tickBudget = std::min(opts.tickBudget, halfTick);
-        if (!pressBudget.usUnlimited) {
-            int const fullUs = EbStageConfig::simBudgetUs();
-            int const halfUs = std::max(200, fullUs / 2);
-            opts.budgetUs = std::max(1, std::min(opts.budgetUs, halfUs));
-        }
-    }
+    opts.budgetUs = EbStageConfig::simBudgetUs();
+    opts.tickBudget = EbStageConfig::tickBudgetPerPress();
     opts.capMul = EbStageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     if (EbDivergenceTracker::get().shouldWarn()) {
         opts.capMul *= 0.85f;
@@ -246,15 +202,6 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     bool const spamDenseRel = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
     EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                             spamDenseRel);
-    if (!hybridVerifyAttempted) {
-        EbAssistControllerImplementation::fillBakePreferBand(
-            opts, player, player1, false, effectTick, limit, controller.m_attemptTick,
-            controller.m_simDt, shareHybrid ? &hybridReuse : nullptr);
-    }
-    if (hybridVerifyAttempted && hybridReuse.verifyThreat.valid) {
-        opts.seedThreatZone = hybridReuse.verifyThreat;
-    }
-
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();

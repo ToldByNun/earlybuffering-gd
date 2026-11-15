@@ -4,11 +4,11 @@
 #include "cache/stage_settings_cache.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
-#include <matjson.hpp>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <matjson.hpp>
 #include <string>
 #include <vector>
 
@@ -51,9 +51,7 @@ bool EbStageConfigImplementation::s_cachedSelfBakeNormal = false;
 bool EbStageConfigImplementation::s_cachedSelfBakeRefine = true;
 bool EbStageConfigImplementation::s_cachedTriggerBake = true;
 bool EbStageConfigImplementation::s_cachedTriggerBakeSkipDynamic = true;
-AssistMode EbStageConfigImplementation::s_cachedAssistMode = AssistMode::Hybrid;
-bool EbStageConfigImplementation::s_cachedAssistPickLegacy = true; // mod.json default v1 (ex-Legacy)
-AssistEngineKind EbStageConfigImplementation::s_cachedAssistEngine = AssistEngineKind::ShadowPlayer;
+AssistMode EbStageConfigImplementation::s_cachedAssistMode = AssistMode::Live;
 int EbStageConfigImplementation::s_cachedSimBudgetUs = 4000;
 int EbStageConfigImplementation::s_cachedBakeRadius = 0;
 int EbStageConfigImplementation::s_cachedCpsLimit = 0;
@@ -98,7 +96,8 @@ int EbStageConfigImplementation::readInt(geode::prelude::Mod* mod, char const* i
     }
 }
 
-bool EbStageConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id, bool fallback) {
+bool EbStageConfigImplementation::readBool(geode::prelude::Mod* mod, char const* id,
+                                           bool fallback) {
     try {
         return mod->getSettingValue<bool>(id);
     } catch (...) {
@@ -114,7 +113,7 @@ float EbStageConfigImplementation::clampPct(float value) {
 }
 
 float EbStageConfigImplementation::readFloat(geode::prelude::Mod* mod, char const* id,
-                                           float fallback) {
+                                             float fallback) {
     try {
         return static_cast<float>(mod->getSettingValue<double>(id));
     } catch (...) {
@@ -271,8 +270,8 @@ void EbStageConfigImplementation::mirrorAssistOffLegacySlots(
     }
 }
 
-void EbStageConfigImplementation::loadAssistOffSlots(geode::prelude::Mod* mod,
-                                                     std::vector<EbStageConfig::PercentRange>& out) {
+void EbStageConfigImplementation::loadAssistOffSlots(
+    geode::prelude::Mod* mod, std::vector<EbStageConfig::PercentRange>& out) {
     out.clear();
     if (!mod) {
         return;
@@ -313,34 +312,26 @@ void EbStageConfig::toggleDebugLogging() {
 void EbStageConfig::toggleAutoTune() {
     EbStageConfigImplementation::ensureCache();
     EbStageConfigImplementation::s_cachedAutoTune = !EbStageConfigImplementation::s_cachedAutoTune;
-    geode::prelude::Mod::get()->setSettingValue<bool>("auto-tune",
-                                                      EbStageConfigImplementation::s_cachedAutoTune);
+    geode::prelude::Mod::get()->setSettingValue<bool>(
+        "auto-tune", EbStageConfigImplementation::s_cachedAutoTune);
 }
 
 char const* EbStageConfig::assistModeName(AssistMode mode) {
     switch (mode) {
     case AssistMode::Live:
         return "Live";
-    case AssistMode::Replay:
-        return "Replay";
     case AssistMode::Hybrid:
         return "Hybrid";
-    case AssistMode::BruteForce:
-        return "BruteForce";
     }
-    return "Hybrid";
+    return "Live";
 }
 
 char const* EbStageConfig::assistModeHint(AssistMode mode) {
     switch (mode) {
     case AssistMode::Live:
         return "live plan each click";
-    case AssistMode::Replay:
-        return "bake windows only";
     case AssistMode::Hybrid:
-        return "bake if near, else live";
-    case AssistMode::BruteForce:
-        return "pre-baked safe clicks (no replay)";
+        return "Live planning (learning update pending)";
     }
     return "";
 }
@@ -354,7 +345,7 @@ void EbStageConfig::setAssistMode(AssistMode mode) {
 
 void EbStageConfig::cycleAssistMode() {
     EbStageConfigImplementation::ensureCache();
-    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 4;
+    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 2;
     setAssistMode(static_cast<AssistMode>(next));
 }
 
@@ -454,12 +445,10 @@ bool EbStageConfig::showTrajectory() {
     return EbStageConfigImplementation::s_cachedShowTrajectory;
 }
 bool EbStageConfig::showBakePath() {
-    EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedShowBakePath;
+    return false;
 }
 bool EbStageConfig::showPauseBake() {
-    EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedShowPauseBake;
+    return false;
 }
 bool EbStageConfig::showPauseHub() {
     EbStageConfigImplementation::ensureCache();
@@ -479,11 +468,11 @@ bool EbStageConfig::assistOrbs() {
 }
 bool EbStageConfig::autoTune() {
     EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedAutoTune;
+    return EbStageConfigImplementation::s_cachedAutoTune &&
+           EbStageConfigImplementation::s_cachedAssistMode == AssistMode::Live;
 }
 bool EbStageConfig::selfBake() {
-    EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedSelfBake;
+    return false;
 }
 bool EbStageConfig::selfBakeNormal() {
     EbStageConfigImplementation::ensureCache();
@@ -507,8 +496,7 @@ AssistMode EbStageConfig::assistMode() {
 }
 
 bool EbStageConfig::assistPickLegacy() {
-    EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedAssistPickLegacy;
+    return true;
 }
 
 bool EbStageConfig::assistPickV1() {
@@ -516,8 +504,7 @@ bool EbStageConfig::assistPickV1() {
 }
 
 char const* EbStageConfig::assistPickName() {
-    EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedAssistPickLegacy ? "v1" : "v2";
+    return "v1";
 }
 
 char const* EbStageConfig::canonicalizeAssistPick(std::string const& raw) {
@@ -530,16 +517,10 @@ char const* EbStageConfig::canonicalizeAssistPick(std::string const& raw) {
 }
 
 EbStageConfig::AssistEngineKind EbStageConfig::assistEngine() {
-    EbStageConfigImplementation::ensureCache();
-    return EbStageConfigImplementation::s_cachedAssistEngine;
+    return AssistEngineKind::ShadowPlayer;
 }
 
 EbStageConfig::AssistEngineKind EbStageConfig::effectiveAssistEngine() {
-    EbStageConfigImplementation::ensureCache();
-    // V1 choose is frozen on full ghost runOne — never Trajectory.
-    if (!(EbStageConfigImplementation::s_cachedAssistPickLegacy)) {
-        return EbStageConfigImplementation::s_cachedAssistEngine;
-    }
     return AssistEngineKind::ShadowPlayer;
 }
 
@@ -558,7 +539,8 @@ char const* EbStageConfig::assistEngineName() {
 }
 int EbStageConfig::simBudgetUs() {
     EbStageConfigImplementation::ensureCache();
-    return EbPlatformLimits::get().clampSimBudgetUs(EbStageConfigImplementation::s_cachedSimBudgetUs);
+    return EbPlatformLimits::get().clampSimBudgetUs(
+        EbStageConfigImplementation::s_cachedSimBudgetUs);
 }
 int EbStageConfig::bakeRadius() {
     EbStageConfigImplementation::ensureCache();
@@ -649,6 +631,11 @@ bool EbStageConfig::selfCheck(std::string& report) {
             report += std::string("FAIL ") + name + "; ";
         }
     };
+
+    expect(assistPickLegacy() && assistPickV1(), "fixed-v1");
+    expect(std::string(assistPickName()) == "v1", "fixed-pick-name");
+    expect(assistEngine() == AssistEngineKind::ShadowPlayer, "fixed-engine");
+    expect(effectiveAssistEngine() == AssistEngineKind::ShadowPlayer, "fixed-effective-engine");
 
     // Pure resolve: overwrite off → global; overwrite on → mode value.
     auto resolveBool = [](bool overwrite, bool modeValue, bool globalValue) {
@@ -754,8 +741,10 @@ bool EbStageConfig::setAssistDisableRanges(std::vector<PercentRange> const& rang
     if (next.size() == EbStageConfigImplementation::s_cachedAssistDisableRanges.size()) {
         bool same = true;
         for (size_t index = 0; index < next.size(); ++index) {
-            if (next[index].from != EbStageConfigImplementation::s_cachedAssistDisableRanges[index].from ||
-                next[index].to != EbStageConfigImplementation::s_cachedAssistDisableRanges[index].to) {
+            if (next[index].from !=
+                    EbStageConfigImplementation::s_cachedAssistDisableRanges[index].from ||
+                next[index].to !=
+                    EbStageConfigImplementation::s_cachedAssistDisableRanges[index].to) {
                 same = false;
                 break;
             }

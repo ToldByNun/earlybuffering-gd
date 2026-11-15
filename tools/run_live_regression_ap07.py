@@ -14,6 +14,7 @@ class LiveRegressionGate:
         common = ["src/core/assist/contracts/live_plan_contracts.cpp",
                   "src/core/assist/contracts/assist_verdict.cpp"]
         cases = {
+            "assist_mode_migration": ["src/config/assist_mode_migration.cpp"],
             "config_keys": ["src/core/bundle/config_bundle_keys.cpp"],
             "wave_input_window": ["src/core/assist/contracts/miss_assist_contracts.cpp",
                                   "src/core/assist/contracts/assist_verdict.cpp"],

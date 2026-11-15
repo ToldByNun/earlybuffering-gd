@@ -88,42 +88,12 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         }
     }
 
-    // Hybrid: one press wall/tick envelope for bake verify + Live fallthrough.
-    EbPressSimBudget pressBudget;
-    pressBudget.tickLeft = EbStageConfig::tickBudgetPerPress();
-    pressBudget.usUnlimited = false;
-    pressBudget.usLeft = frameScope.remaining(frameLimitUs);
-    bool const shareHybrid = EbStageConfig::assistMode() == AssistMode::Hybrid;
-
-    bool bakeHandled = false;
-    bool hybridVerifyAttempted = false;
-    EbHybridPressReuse hybridReuse{};
-    bool const bakeRet = controller.tryBakeAssist(
-        playLayer, player, player1, true, effectTick, firstDt, bakeHandled, &pressBudget,
-        shareHybrid ? &hybridVerifyAttempted : nullptr, shareHybrid ? &hybridReuse : nullptr);
-    if (bakeHandled)
-        return bakeRet;
-
-    // Times Live fallthrough (verify already paid / skipped). Standalone LagProbe.
-    EbLagProbe::Scope hyLive(shareHybrid ? "eb.hybrid.live" : nullptr,
-                             fmt::format("vfy={} remTick={} remUs={}",
-                                         hybridVerifyAttempted ? 1 : 0, pressBudget.tickLeft,
-                                         pressBudget.usUnlimited ? -1 : pressBudget.usLeft));
-
     auto const kind = EbStageConfig::kindOf(player);
     float const x = player->getPositionX();
     auto& profile = EbLevelProfile::get();
     int const slot = player1 ? 0 : 1;
     bool const nearOrb = EbAssistControllerImplementation::nearOrbOrPadHint(
         playLayer, player, limit, controller.m_simDt);
-    // After Hybrid bake verify rejected the window, do not treat near-bake as
-    // spam override — that forced full Live on every ~5 CPS click (main-thread hitch).
-    // Reuse findNear result from tryBakeAssist when present (no second lookup).
-    bool nearBake = EbAssistControllerImplementation::nearBakeWindowHint(
-        player, player1, true, effectTick, controller.m_simDt,
-        shareHybrid ? &hybridReuse : nullptr);
-    if (hybridVerifyAttempted)
-        nearBake = false;
 
     // Live/Hybrid-live: sim mismatch → hard Pass, unless orb/pad ahead
     // (allow Delay / Soft Hold — solitary early orb miss must still assist).
@@ -182,7 +152,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         }
         EbPerfectAssistPolicy::OpportunityInput oppIn;
         oppIn.foresightOrbPad = nearOrb;
-        oppIn.bakePreferBand = nearBake;
+        oppIn.bakePreferBand = false;
         oppIn.orbWindowFound = nearOrb;
         auto const decision = EbPerfectAssistPolicy::classify(trustIn, oppIn);
         mustDelaySearch = (decision == EbPerfectAssistPolicy::Decision::MustDelaySearch);
@@ -194,7 +164,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
     // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
     if (!player->m_isBird && !mustDelaySearch &&
-        EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, nearBake)) {
+        EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, false)) {
         EbAssistLog::debug(fmt::format("intent: spam Pass (mode={}, tick={})",
                                        EbStageConfig::kindName(kind), effectTick));
         EbSimPlan dummy;
@@ -237,29 +207,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     EbPlanOptions opts;
     // Hybrid fallthrough: remainder after bake verify (not a second full envelope).
     // Exhausted remainder (usLeft==0) must NOT map to PlanOptions unlimited.
-    if (shareHybrid) {
-        opts.tickBudget = std::max(0, pressBudget.tickLeft);
-        if (pressBudget.usUnlimited) {
-            opts.budgetUs = 0;
-        } else {
-            opts.budgetUs = std::max(1, pressBudget.usLeft);
-        }
-    } else {
-        opts.budgetUs = EbStageConfig::simBudgetUs();
-        opts.tickBudget = EbStageConfig::tickBudgetPerPress();
-    }
-    // Verify already paid this press: hard-cap Live so verify-fail + full plan
-    // cannot hitch the game (~0.75 feel / stutter at moderate CPS).
-    if (shareHybrid && hybridVerifyAttempted) {
-        int const halfTick = std::max(400, EbStageConfig::tickBudgetPerPress() / 2);
-        opts.tickBudget = std::min(opts.tickBudget, halfTick);
-        if (!pressBudget.usUnlimited) {
-            int const fullUs = EbStageConfig::simBudgetUs();
-            int const halfUs = std::max(200, fullUs / 2);
-            opts.budgetUs = std::min(opts.budgetUs, halfUs);
-            opts.budgetUs = std::max(1, opts.budgetUs);
-        }
-    }
+    opts.budgetUs = EbStageConfig::simBudgetUs();
+    opts.tickBudget = EbStageConfig::tickBudgetPerPress();
     opts.capMul = EbStageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     // Soft warn: shorten look-ahead slightly (no hard Pass).
     if (EbDivergenceTracker::get().shouldWarn()) {
@@ -293,18 +242,6 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     bool const spamDense = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
     EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                             spamDense);
-    // Rejected bake window must not steer Live prefer-band (wasted sims / hitch).
-    // Otherwise reuse findNear window fields from tryBakeAssist.
-    if (!hybridVerifyAttempted) {
-        EbAssistControllerImplementation::fillBakePreferBand(
-            opts, player, player1, true, effectTick, limit, controller.m_attemptTick,
-            controller.m_simDt, shareHybrid ? &hybridReuse : nullptr);
-    }
-    // Verify-fail: seed threat zone so plan() skips buildThreatZone.
-    if (hybridVerifyAttempted && hybridReuse.verifyThreat.valid) {
-        opts.seedThreatZone = hybridReuse.verifyThreat;
-    }
-
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
@@ -316,11 +253,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
-    // After Hybrid verify, skip when wall remainder is tight.
     bool useSequence = opts.smartDepth > 1;
-    if (hybridVerifyAttempted && !pressBudget.usUnlimited && opts.budgetUs < 600) {
-        useSequence = false;
-    }
+
     auto plan = useSequence ? EbShadowSimulator::get().planSequence(
                                   playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
                             : EbShadowSimulator::get().plan(playLayer, player, true, limit,

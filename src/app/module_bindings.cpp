@@ -173,26 +173,9 @@ void EbModuleBindings::registerSettings() {
         }
         EbAssistController::get().updateOverlay();
     });
-    geode::prelude::listenForSettingChanges<bool>("show-bake-path", [](bool value) {
-        if (EbStageConfig::isApplying())
-            return;
-        EbStageConfig::refreshCache();
-        EbBakePathVisualizer::get().setEnabled(value);
-        if (value) {
-            if (auto* pl = PlayLayer::get())
-                EbBakePathVisualizer::get().attach(pl);
-        } else {
-            EbBakePathVisualizer::get().clear();
-        }
-        EbAssistController::get().updateOverlay();
-    });
-    watchBool("show-pause-bake");
     watchBool("show-pause-hub");
     watchBool("lag-warning-toast");
     watchBool("auto-tune");
-    watchBool("self-bake");
-    watchBool("self-bake-normal");
-    watchBool("self-bake-refine");
     watchBool("trigger-bake");
     watchBool("trigger-bake-skip-dynamic");
     watchBool("assist-only-practice");
@@ -200,7 +183,6 @@ void EbModuleBindings::registerSettings() {
     watchInt("assist-percent-min");
     watchInt("assist-percent-max");
     watchInt("sim-budget-us");
-    watchInt("bake-radius");
     watchInt("cps-limit");
     watchInt("min-click-interval-ms");
     watchBool("assist-orbs");
@@ -221,10 +203,6 @@ void EbModuleBindings::registerSettings() {
 
     geode::prelude::listenForSettingChanges<std::string>(
         "assist-mode", [](std::string) { EbModuleBindings::onAnySetting(); });
-    geode::prelude::listenForSettingChanges<std::string>(
-        "assist-pick", [](std::string) { EbModuleBindings::onAnySetting(); });
-    geode::prelude::listenForSettingChanges<std::string>(
-        "assist-engine", [](std::string) { EbModuleBindings::onAnySetting(); });
     geode::prelude::listenForSettingChanges<std::string>(
         "assist-verify", [](std::string) { EbModuleBindings::onAnySetting(); });
 

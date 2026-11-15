@@ -6,12 +6,7 @@
 
 See [Where it runs](/configure/scope). Platformer is always off.
 
-## Pick Mode / Assist Engine
-
-- Pick **v1** to start
-- Engine **ShadowPlayer** to start
-
-See [Modes](/features/modes).
+The planner uses v1 with ShadowPlayer. Imported pick/engine choices from older configs are ignored.
 
 ## Orbs
 
@@ -32,19 +27,8 @@ Phone: start lower / Adaptive off if the game stutters.
 
 See [Adaptive Plan](/features/adaptive). Extra knobs (screen / verify / reserve) only matter when Adaptive is on.
 
-## Learning / Auto-Tune / Self-Bake
+## Learning / Auto Tune
 
-On the desktop menu these live under **Learn** (and Self-Bake / Trigger World often under Bake). All **off** by default on purpose.
+Learn contains Auto Tune, reset learning and config import/export. The former self-bake workflow and Bake tab have been removed.
 
-- Learning = optional per-level bias (does not widen your tick window by itself)
-- Self-Bake = record vanilla clicks into a bake map (practice-oriented)
-
-Turn on only when you want that workflow.
-
-## Trigger World
-
-See [Bake & Trigger World](/features/bake).
-
-## Assist Actions / Config
-
-On the desktop menu, import / export and **Cloud Configs** live under **Learn → Config**. Classic Geode popup still shows Assist action rows.
+Trigger World preparation controls are under Assist. Hybrid currently uses Live planning while learned Hybrid is developed.

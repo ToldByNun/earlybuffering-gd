@@ -184,8 +184,6 @@ private:
 
     friend class EbAssistPressPlanner;
 
-    friend class EbAssistBakeReuse;
-
     friend class EbAssistOutcomes;
 
     friend class EbAssistOverlay;
@@ -215,16 +213,6 @@ private:
                    float firstDt, EbDevClockContract::Stamp const& clock);
     bool planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick,
                      float firstDt, EbDevClockContract::Stamp const& clock);
-    // Returns true if bake handled the input (caller should return that bool).
-    // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
-    // sharedBudget: Hybrid press envelope (verify spends first; Live uses remainder).
-    // verifyAttempted: set when BakeVerifier::verify ran (Hybrid Live must not
-    // re-force assist via nearBake / prefer-band from the rejected window).
-    // reuse: copy findNear window + verify threatZone for Live (no bake ptrs).
-    bool tryBakeAssist(PlayLayer* playLayer, PlayerObject* player, bool player1, bool down,
-                       int effectTick, float firstDt, bool& handled,
-                       EbPressSimBudget* sharedBudget = nullptr, bool* verifyAttempted = nullptr,
-                       EbHybridPressReuse* reuse = nullptr);
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
@@ -312,15 +300,6 @@ public:
     static int roundBias(float bias);
     static void fillPlanRobustLatency(EbPlanOptions& opts, PlayerObject* player, float dtVariance,
                                       bool spamDense = false);
-    static void fillBakePreferBandFromReuse(EbPlanOptions& opts, EbHybridPressReuse const& reuse,
-                                            int effectTick, int limit, float simDt);
-    static void fillBakePreferBand(EbPlanOptions& opts, PlayerObject* player, bool player1,
-                                   bool down, int effectTick, int limit, int attemptTick,
-                                   float simDt, EbHybridPressReuse const* reuse = nullptr);
-    static bool nearBakeWindowHint(PlayerObject* player, bool player1, bool down, int attemptTick,
-                                   float simDt, EbHybridPressReuse const* reuse = nullptr);
-    static bool husBlockedBeforeBakeNominal(EbHybridPressReuse const& reuse, int effectTick,
-                                            float simDt, int& outNomTick);
     static bool nearOrbOrPadHint(PlayLayer* playLayer, PlayerObject* player, int limit,
                                  float simDt);
 
