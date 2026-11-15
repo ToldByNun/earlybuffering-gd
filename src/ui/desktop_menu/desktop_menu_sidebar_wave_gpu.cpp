@@ -4,6 +4,7 @@
 
 #include "desktop_menu_background.hpp"
 #include "desktop_menu_theme.hpp"
+#include "desktop_menu_bind.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/cocos/platform/CCGL.h>
 #include <cmath>
@@ -157,6 +158,7 @@ uniform float uEdgeWidth;
 uniform float uBlur;
 uniform float uClassic;
 uniform float uRadius;
+uniform float uSamples;
 uniform float uTint;
 uniform float uOpacity;
 uniform float uTime;
@@ -230,8 +232,10 @@ void main() {
         vec3 sum = vec3(0.0);
         float total = 0.0;
         for(int i=-32;i<=32;i++) {
-            float offset = float(i)*uRadius/32.0;
-            float weight = exp(-0.5*float(i*i)/113.777778);
+            if(abs(float(i)) > uSamples) continue;
+            float offset = float(i)*uRadius/uSamples;
+            float sigma=uSamples/3.0;
+            float weight = exp(-0.5*float(i*i)/(sigma*sigma));
             vec3 sampleColor;
             if(uPass < 1.5) sampleColor = material(local+vec2(offset,0.0));
             else {
@@ -416,7 +420,9 @@ void main() {
         return true;
     }
 
-    static bool renderToTexture(EbDesktopMenuSidebarWaveGpu::PaintRequest const& request) {
+    static bool renderToTexture(EbDesktopMenuSidebarWaveGpu::PaintRequest request) {
+        auto quality=EbDesktopMenuBind::getString("ui-render-quality","High");
+        request.renderScale*=quality=="Low" ? 0.5f : quality=="Balanced" ? 0.75f : 1.f;
         int const width = static_cast<int>(request.max.x - request.min.x + 0.5f);
         int const height = static_cast<int>(request.max.y - request.min.y + 0.5f);
         if (width < 1 || height < 1) {
@@ -509,6 +515,7 @@ void main() {
         glUniform1f(glGetUniformLocation(program, "uEdgeWidth"), request.edgeWidth);
         glUniform1f(glGetUniformLocation(program, "uBlur"), request.blur);
         glUniform1f(glGetUniformLocation(program, "uClassic"), request.classic);
+        glUniform1f(glGetUniformLocation(program,"uSamples"),quality=="Low" ? 8.f : quality=="Balanced" ? 16.f : 32.f);
         glUniform1f(glGetUniformLocation(program, "uRadius"), request.blurRadius);
         glUniform1f(glGetUniformLocation(program, "uOpacity"), request.opacity);
         glUniform1f(glGetUniformLocation(program, "uTint"), request.tint);

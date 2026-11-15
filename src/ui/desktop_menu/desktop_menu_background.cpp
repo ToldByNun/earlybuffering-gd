@@ -99,7 +99,9 @@ void EbDesktopMenuBackground::settings() {
     auto value = EbBackgroundSettings::load();
     static int type = 0;
     char const* types[] = {"Dimmed", "Blur"};
-    EbDropdown::draw("background-type", "Type", types, 2, &type);
+    EbDropdown::draw("background-type", "Type", types, 2, &type, nullptr, true,
+                     "Choose which background layer to edit. Dimmed and Blur can be enabled "
+                     "together, below the sidebar and interface.");
     bool changed = false;
     if (type == 0) {
         changed = EbCheckbox::draw("background-dim", "Enable Dimmed", &value.enabled, true,

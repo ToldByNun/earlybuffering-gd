@@ -358,6 +358,12 @@ public:
             EbCheckbox::drawSetting("lag-warning-toast", "Lag Warning");
         }
         EbSectionCard::end();
+        if(EbSectionCard::begin("ui-quality","Rendering Quality")) {
+            char const* quality[]={"Low","Balanced","High"};
+            EbDropdown::drawSetting("ui-render-quality","Shader Quality",quality,3);
+            ImGui::TextWrapped("Quality controls shader resolution and blur samples. Background Render Scale is an additional per-effect multiplier.");
+        }
+        EbSectionCard::end();
 
         if (EbSectionCard::begin("ui-diag", "Diagnostics")) {
             EbCheckbox::drawSetting("debug-logging", "Debug Logging");

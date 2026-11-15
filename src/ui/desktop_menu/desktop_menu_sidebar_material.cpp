@@ -10,6 +10,7 @@
 #include "widgets/eb_dropdown.hpp"
 #include "widgets/eb_slider.hpp"
 #include <algorithm>
+#include <cmath>
 #include <matjson.hpp>
 
 class EbSidebarMaterialSettings {
@@ -25,7 +26,7 @@ public:
     static EbSidebarMaterialSettings load() {
         EbSidebarMaterialSettings result;
         auto parsed = matjson::parse(EbDesktopMenuBind::getString("sidebar-material", "{}"));
-        if (parsed.isOk()) {
+        if (parsed.isOk() && parsed.unwrap().isObject()) {
             auto value = parsed.unwrap();
             result.glass = value["glass"].asBool().unwrapOr(false);
             result.refraction =
@@ -56,6 +57,11 @@ public:
             result.baseBrightness = brightness("baseBrightness", "base", peak * 0.8544f);
             result.lightBrightness =
                 brightness("lightBrightness", "light", peak + (1.f - peak) * 0.12f);
+            for (float* number : {&result.refraction, &result.highlight, &result.edgeWidth,
+                                  &result.diffusion, &result.radius, &result.opacity, &result.tint,
+                                  &result.speed, &result.baseBrightness, &result.lightBrightness})
+                if (!std::isfinite(*number))
+                    *number = 0.f;
             result.enabled = value["enabled"].asBool().unwrapOr(true);
             result.speed = std::clamp(float(value["speed"].asDouble().unwrapOr(1)), 0.f, 3.f);
         }
@@ -137,7 +143,11 @@ void EbDesktopMenuSidebarMaterial::settings() {
     auto value = EbSidebarMaterialSettings::load();
     static int type = 0;
     char const* types[] = {"Classic", "Blur", "Liquid Glass"};
-    EbDropdown::draw("sidebar-type", "Type", types, 3, &type);
+    EbDropdown::draw("sidebar-type", "Type", types, 3, &type, nullptr, true,
+                     "Choose which material to edit. Enable switches are independent. Layer order "
+                     "is Classic, Blur, Liquid Glass.");
+    ImGui::TextDisabled("Active: %s%s%s", value.enabled ? "Classic " : "",
+                        value.blur ? "Blur " : "", value.glass ? "Liquid Glass" : "");
     bool changed = false;
     if (type == 0) {
         changed = EbCheckbox::draw("sidebar-classic", "Enable", &value.enabled, true,

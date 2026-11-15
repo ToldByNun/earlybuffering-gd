@@ -25,7 +25,7 @@ class PolicyRegistrationCheck:
             assert settings[key]["default"] == "Auto"
         assert json.loads(settings["level-assist-policies"]["default"]) == {}
         entries = re.findall(r'\{"[^"]+", EbConfigBundleKeys::Kind::', bundle)
-        assert len(entries) == 189, len(entries)
+        assert len(entries) == 190, len(entries)
         print("AP06 registration: 11 policy keys, all modes and bundle entries verified")
 
 

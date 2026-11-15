@@ -480,6 +480,30 @@ public:
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         EbDesktopMenuPanels::draw(active);
+        // Keep a small, persistent position cue in the unused outer gutter.
+        // Draw-list geometry adds neither layout height nor an input target.
+        float const scrollMax = ImGui::GetScrollMaxY();
+        if (scrollMax > 1.f) {
+            ImVec2 const windowPos = ImGui::GetWindowPos();
+            float const inset = EbDesktopMenuShellState::kContentPadY;
+            float const trackHeight = std::max(1.f, height - inset * 2.f);
+            float const visibleFraction = height / (height + scrollMax);
+            float const thumbHeight =
+                std::min(trackHeight, std::max(24.f, trackHeight * visibleFraction));
+            float const progress = std::clamp(ImGui::GetScrollY() / scrollMax, 0.f, 1.f);
+            float const x = windowPos.x + width - 10.f;
+            float const top = windowPos.y + inset;
+            float const thumbTop = top + (trackHeight - thumbHeight) * progress;
+            ImVec4 track = EbDesktopMenuTheme::outline();
+            track.w = 0.45f;
+            ImVec4 thumb = EbDesktopMenuTheme::accentLight();
+            thumb.w = 0.85f;
+            auto* draw = ImGui::GetWindowDrawList();
+            draw->AddRectFilled(ImVec2(x, top), ImVec2(x + 3.f, top + trackHeight),
+                                EbDesktopMenuTheme::toU32(track), 1.5f);
+            draw->AddRectFilled(ImVec2(x, thumbTop), ImVec2(x + 3.f, thumbTop + thumbHeight),
+                                EbDesktopMenuTheme::toU32(thumb), 1.5f);
+        }
         // No extra end Dummy — AlwaysUseWindowPadding already mirrors top kContentPadY
         // at the bottom. (Old Dummy(pad+24) made the scrolled-end gutter ~2× the top.)
 
