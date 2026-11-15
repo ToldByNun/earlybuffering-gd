@@ -7,6 +7,7 @@
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
+#include <array>
 #include <cocos-ext.h>
 #include <fmt/format.h>
 #include <vector>
@@ -47,6 +48,7 @@ public:
     static EbSettingsFilterKeeperNode* findOpen();
 
 private:
+    std::array<float, static_cast<size_t>(SettingsCategory::Count)> m_scrollOffsets{};
     geode::prelude::ListenerHandle m_changeHandle{};
 };
 

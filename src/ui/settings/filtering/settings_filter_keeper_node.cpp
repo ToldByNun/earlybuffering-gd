@@ -1,4 +1,5 @@
 #include "settings_filter_keeper_node.hpp"
+#include "../../../core/platform/ui_capabilities.hpp"
 #include "../categories/settings_category_bar.hpp"
 #include "../in_level_settings_filter.hpp"
 #include "settings_filter_walk.hpp"
@@ -7,6 +8,7 @@
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
+#include <algorithm>
 #include <cmath>
 #include <cocos-ext.h>
 #include <fmt/format.h>
@@ -19,23 +21,36 @@ auto EbSettingsFilterKeeperNode::setCategory(SettingsCategory category) -> void 
     if (index < 0)
         index += count;
 
+    if (!EbUiCapabilities::keybindUI() &&
+        static_cast<SettingsCategory>(index) == SettingsCategory::Keys) {
+        index = static_cast<int>(SettingsCategory::Dev);
+    }
+    if (this->m_category == static_cast<SettingsCategory>(index))
+        return;
+    if (EbUiCapabilities::mobileLayout() && this->m_list && this->m_list->m_contentLayer) {
+        auto* content = this->m_list->m_contentLayer;
+        float const top = this->m_list->getContentHeight() - content->getContentHeight();
+        this->m_scrollOffsets[static_cast<size_t>(this->m_category)] =
+            std::max(0.f, content->getPositionY() - top);
+    }
     this->m_category = static_cast<SettingsCategory>(index);
     if (this->m_bar)
         this->m_bar->setCategory(this->m_category);
     this->refilter(true);
-    if (this->m_list)
-        this->m_list->moveToTop();
 }
 
 auto EbSettingsFilterKeeperNode::cycle(int delta) -> void {
-    this->setCategory(static_cast<SettingsCategory>(static_cast<int>(this->m_category) + delta));
+    int target = static_cast<int>(this->m_category) + delta;
+    if (!EbUiCapabilities::keybindUI() && target == static_cast<int>(SettingsCategory::Keys))
+        target += delta < 0 ? -1 : 1;
+    this->setCategory(static_cast<SettingsCategory>(target));
 }
 
 auto EbSettingsFilterKeeperNode::layoutBar(geode::prelude::ScrollLayer* list,
-                                         EbSettingsCategoryBar* bar) -> void {
+                                           EbSettingsCategoryBar* bar) -> void {
     if (!list || !bar)
         return;
-    constexpr float kBarH = EbSettingsCategoryBar::kBarH;
+    float const kBarH = EbUiCapabilities::mobileLayout() ? 44.f : EbSettingsCategoryBar::kBarH;
     auto const size = list->getContentSize();
     // Geode can restore list height every frame — keep carving the tab strip out.
     if (size.height > this->m_listFullH)
@@ -53,6 +68,7 @@ auto EbSettingsFilterKeeperNode::layoutBar(geode::prelude::ScrollLayer* list,
     if (std::fabs(size.height - wantH) > 0.5f) {
         list->setContentSize({size.width, wantH});
     }
+    bar->resize(size.width);
     bar->setPosition({list->getPositionX() + size.width * 0.5f, list->getPositionY() + wantH});
     // Beat ScrollLayer + Geode menus so tab hits actually fire.
     bar->setMenuTouchPriority(list->getTouchPriority() - 64);
@@ -80,7 +96,7 @@ auto EbSettingsFilterKeeperNode::ensureBar(geode::prelude::ScrollLayer* list) ->
         return;
     }
 
-    constexpr float kBarH = EbSettingsCategoryBar::kBarH;
+    float const kBarH = EbUiCapabilities::mobileLayout() ? 44.f : EbSettingsCategoryBar::kBarH;
     if (this->m_listFullH <= kBarH + 16.f) {
         if (!this->m_loggedShortList) {
             this->m_loggedShortList = true;
@@ -134,7 +150,7 @@ auto EbSettingsFilterKeeperNode::absorbFromTree(geode::prelude::CCNode* popup) -
 }
 
 auto EbSettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
-                                        SettingsCategory category) -> bool {
+                                          SettingsCategory category) -> bool {
     if (!sett)
         return false;
     if (auto setting = sett->getSetting()) {
@@ -149,7 +165,8 @@ auto EbSettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
 
     std::string const text = label->getString();
     auto match = [&](char const* key) {
-        return text.find(key) != std::string::npos && EbInLevelSettingsFilter::keepKey(key, category);
+        return text.find(key) != std::string::npos &&
+               EbInLevelSettingsFilter::keepKey(key, category);
     };
     return match("import-bake-replay") || match("cycle-assist-mode") || match("bake-map-action") ||
            match("brute-bake-action") || match("cancel-bake-action") ||
@@ -200,6 +217,13 @@ auto EbSettingsFilterKeeperNode::refilter(bool force) -> void {
     float const hAfter = content->getContentHeight();
     if (force && this->m_appliedCat != this->m_category) {
         this->m_list->moveToTop();
+        if (EbUiCapabilities::mobileLayout()) {
+            float const top = this->m_list->getContentHeight() - hAfter;
+            float const range = std::max(0.f, hAfter - this->m_list->getContentHeight());
+            content->setPositionY(
+                top + std::clamp(this->m_scrollOffsets[static_cast<size_t>(this->m_category)], 0.f,
+                                 range));
+        }
     } else {
         content->setPositionY(EbInLevelSettingsFilter::preservedContentY(yBefore, hBefore, hAfter));
     }
