@@ -332,16 +332,16 @@ public:
     }
 
     static void drawUI() {
+        if (EbSectionCard::begin("ui-appearance", "Appearance and Contrast"))
+            EbDesktopMenuTheme::contrastSettings();
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ui-sidebar", "Sidebar Materials"))
             EbDesktopMenuSidebarMaterial::settings();
         EbSectionCard::end();
 
         if (EbSectionCard::begin("ui-background", "Game Background"))
             EbDesktopMenuBackground::settings();
-        EbSectionCard::end();
-
-        if(EbSectionCard::begin("ui-appearance","Appearance and Contrast"))
-            EbDesktopMenuTheme::contrastSettings();
         EbSectionCard::end();
 
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
