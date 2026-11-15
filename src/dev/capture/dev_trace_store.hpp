@@ -89,6 +89,15 @@ public:
     // 1.5.1 AP0: hitch / Adaptive shell diagnostics on planFinished (additive JSON).
     bool hasPlanCost = false;
     int planUs = 0;
+    long long renderFrame = 0;
+    int frameBudgetUs = 0;
+    int frameSpentBeforeUs = 0;
+    int plannerBudgetUs = 0;
+
+    int physicsCalls = 0;
+    int physicsWorldUs = 0;
+    int physicsUpdateUs = 0;
+    int physicsCollisionUs = 0;
     int worldCaptureUs = 0;
     int prepareUs = 0;
     int guardOriginalDelay = -1;

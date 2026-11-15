@@ -140,3 +140,8 @@ tools/fixtures/spider_continuation.json
 !/releases/README.md
 !/releases/CHECKLIST.md
 /releases
+docs/dev/live-assist-1.7.0-plan.md
+docs/dev/live-ball-ap04-status.md
+docs/dev/live-baseline-ap01-status.md
+docs/dev/live-budget-ap02-status.md
+docs/dev/live-orbs-ap03-status.md
