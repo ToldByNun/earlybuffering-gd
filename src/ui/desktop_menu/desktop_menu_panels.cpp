@@ -1,4 +1,5 @@
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_theme.hpp"
 #include "desktop_menu_background.hpp"
 #include "desktop_menu_sidebar_material.hpp"
 #include "../../config/assist_policy_settings.hpp"
@@ -339,9 +340,12 @@ public:
             EbDesktopMenuBackground::settings();
         EbSectionCard::end();
 
+        if(EbSectionCard::begin("ui-appearance","Appearance and Contrast"))
+            EbDesktopMenuTheme::contrastSettings();
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
-            EbColorPicker::drawSetting("desktop-accent-color", "Accent Color");
-            gap();
+
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
             EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");

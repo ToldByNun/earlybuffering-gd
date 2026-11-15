@@ -22,7 +22,7 @@ public:
     private:
     };
 
-    static constexpr int kCount = 227;
+    static constexpr int kCount = 230;
 
     static Entry const* begin();
     static Entry const* end();

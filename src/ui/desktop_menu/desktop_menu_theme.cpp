@@ -3,7 +3,11 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "color_contrast.hpp"
 #include "desktop_menu_bind.hpp"
+#include "widgets/eb_checkbox.hpp"
+#include "widgets/eb_color_picker.hpp"
+#include "widgets/eb_slider.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -43,6 +47,25 @@ private:
     EbDesktopMenuThemeColors() = delete;
 };
 
+bool EbDesktopMenuTheme::contrastEnabled() {
+    return EbDesktopMenuBind::getBool("ui-auto-contrast", true);
+}
+float EbDesktopMenuTheme::contrastTarget() {
+    return std::clamp(float(EbDesktopMenuBind::getFloat("ui-contrast-target", 4.5)), 4.5f, 7.f);
+}
+void EbDesktopMenuTheme::contrastSettings() {
+    EbColorPicker::drawSetting("desktop-accent-color", "Accent Color");
+    EbCheckbox::drawSetting("ui-auto-contrast", "Automatic Contrast");
+    EbCheckbox::drawSetting("ui-preserve-accent", "Preserve Accent Color", contrastEnabled());
+    EbSlider::drawFloatSetting("ui-contrast-target", "Text Contrast Target", 4.5f, 7.f, 1, ":1",
+                               contrastEnabled(), 0.1f);
+    ImGui::TextWrapped("Automatic Contrast adjusts accent shades and panel text. Transparent fades "
+                       "and disabled controls can have lower contrast.");
+    ImGui::Text(
+        "Muted text / panel   %.2f:1",
+        EbColorContrast::ratio(EbColorContrast::luminance(muted().x, muted().y, muted().z),
+                               EbColorContrast::luminance(panel().x, panel().y, panel().z)));
+}
 float EbDesktopMenuTheme::styleAlpha() {
     return std::clamp(ImGui::GetStyle().Alpha, 0.0f, 1.0f);
 }
@@ -56,29 +79,51 @@ ImU32 EbDesktopMenuTheme::toU32(ImVec4 const& color) {
 ImVec4 EbDesktopMenuTheme::bg() {
     // Near-black canvas with a soft accent pull so secondary greys track the picker.
     ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(13, 13, 18);
-    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.90f),
-                                          0.14f);
+    return EbDesktopMenuThemeColors::lerp(neutral,
+                                          EbDesktopMenuThemeColors::darken(accent(), 0.90f), 0.65f);
 }
 
 ImVec4 EbDesktopMenuTheme::panel() {
     ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(28, 28, 40);
-    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.82f),
-                                          0.18f);
+    return EbDesktopMenuThemeColors::lerp(neutral,
+                                          EbDesktopMenuThemeColors::darken(accent(), 0.82f), 0.65f);
 }
 
 ImVec4 EbDesktopMenuTheme::surface() {
     ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(26, 26, 30);
-    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.86f),
-                                          0.16f);
+    return EbDesktopMenuThemeColors::lerp(neutral,
+                                          EbDesktopMenuThemeColors::darken(accent(), 0.86f), 0.65f);
+}
+
+ImVec4 EbDesktopMenuTheme::controlFill(float emphasis) {
+    return EbDesktopMenuThemeColors::lerp(surface(),accent(),std::clamp(emphasis,0.f,1.f));
 }
 
 ImVec4 EbDesktopMenuTheme::accent() {
-    return EbDesktopMenuThemeColors::fromSetting();
+    ImVec4 value = EbDesktopMenuThemeColors::fromSetting();
+    if (contrastEnabled() && !EbDesktopMenuBind::getBool("ui-preserve-accent",false)) {
+        float const limit = EbColorContrast::maximumBackground(contrastTarget());
+        float const peak = std::max({value.x, value.y, value.z, 0.001f});
+        float const scale = std::min(1.f, limit / peak);
+        value.x *= scale;
+        value.y *= scale;
+        value.z *= scale;
+    }
+    return value;
 }
 
 ImVec4 EbDesktopMenuTheme::accentLight() {
     // Slightly lifted accent for fills / active chrome.
-    return EbDesktopMenuThemeColors::lighten(accent(), 0.12f);
+    auto color = EbDesktopMenuThemeColors::lighten(accent(), 0.12f);
+    if (contrastEnabled() && !EbDesktopMenuBind::getBool("ui-preserve-accent",false)) {
+        float const limit = EbColorContrast::maximumBackground(contrastTarget());
+        float const peak = std::max({color.x, color.y, color.z, 0.001f});
+        float const scale = std::min(1.f, limit / peak);
+        color.x *= scale;
+        color.y *= scale;
+        color.z *= scale;
+    }
+    return color;
 }
 
 ImVec4 EbDesktopMenuTheme::sidebarBg() {
@@ -88,11 +133,12 @@ ImVec4 EbDesktopMenuTheme::sidebarBg() {
 
 ImVec4 EbDesktopMenuTheme::sidebarWaveDark() {
     // Matches shaders/sidebar_wave.frag base — between dock and accent.
-    return EbDesktopMenuSidebarMaterial::color(false,EbDesktopMenuThemeColors::lerp(sidebarBg(), accent(), 0.72f));
+    return EbDesktopMenuSidebarMaterial::color(
+        false, EbDesktopMenuThemeColors::lerp(sidebarBg(), accent(), 0.72f));
 }
 
 ImVec4 EbDesktopMenuTheme::sidebarWaveLight() {
-    return EbDesktopMenuSidebarMaterial::color(true,accentLight());
+    return EbDesktopMenuSidebarMaterial::color(true, accentLight());
 }
 
 ImVec4 EbDesktopMenuTheme::text() {
@@ -101,14 +147,24 @@ ImVec4 EbDesktopMenuTheme::text() {
 
 ImVec4 EbDesktopMenuTheme::muted() {
     ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(156, 163, 175);
-    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::lighten(accent(), 0.55f),
-                                          0.22f);
+    auto value = EbDesktopMenuThemeColors::lerp(
+        neutral, EbDesktopMenuThemeColors::lighten(accent(), 0.55f), 0.22f);
+    if (contrastEnabled()) {
+        auto background = panel();
+        double bg = EbColorContrast::luminance(background.x, background.y, background.z);
+        for (int i = 0;
+             i < 24 && EbColorContrast::ratio(EbColorContrast::luminance(value.x, value.y, value.z),
+                                              bg) < contrastTarget();
+             ++i)
+            value = EbDesktopMenuThemeColors::lighten(value, 0.08f);
+    }
+    return value;
 }
 
 ImVec4 EbDesktopMenuTheme::outline() {
     ImVec4 const neutral = EbDesktopMenuThemeColors::rgbByte(55, 55, 68);
-    return EbDesktopMenuThemeColors::lerp(neutral, EbDesktopMenuThemeColors::darken(accent(), 0.55f),
-                                          0.28f);
+    return EbDesktopMenuThemeColors::lerp(neutral,
+                                          EbDesktopMenuThemeColors::darken(accent(), 0.55f), 0.28f);
 }
 
 ImVec4 EbDesktopMenuTheme::danger() {

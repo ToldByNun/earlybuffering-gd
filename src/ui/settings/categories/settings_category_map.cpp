@@ -202,6 +202,9 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
 
         // UI — chrome + accent + light diagnostics
         {"title-ui", SettingsCategory::UI},
+        {"ui-preserve-accent", SettingsCategory::UI},
+        {"ui-auto-contrast", SettingsCategory::UI},
+        {"ui-contrast-target", SettingsCategory::UI},
         {"background-material", SettingsCategory::UI},
         {"sidebar-material", SettingsCategory::UI},
         {"desktop-accent-color", SettingsCategory::UI},

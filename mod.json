@@ -1297,6 +1297,9 @@
 		},
 		"background-material": { "type": "string", "name": "Background Material", "default": "{}", "description": "Desktop game backdrop configuration." },
 		"sidebar-material": { "type": "string", "name": "Sidebar Material", "default": "{}", "description": "Desktop sidebar material configuration." },
+        "ui-preserve-accent": {"type":"bool","default":false,"name":"Preserve Accent Color","description":"Keep the selected accent brightness for the sidebar and accent-derived controls while Automatic Contrast continues adjusting panel text. Colored elements may fall below the target contrast."},
+        "ui-auto-contrast": {"type":"bool","default":true,"name":"Automatic Contrast","description":"Adjust accent shades and panel text for readability."},
+        "ui-contrast-target": {"type":"float","default":4.5,"min":4.5,"max":7.0,"name":"Text Contrast Target","description":"Requested normal-text contrast ratio. Opening fades and disabled states can fall below the target."},
 		"desktop-accent-color": {
 			"type": "color",
 			"name": "Accent Color",

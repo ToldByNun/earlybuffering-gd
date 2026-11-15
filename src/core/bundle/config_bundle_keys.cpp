@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[185] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[188] = {
     {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
     {"ball-ground-check", EbConfigBundleKeys::Kind::String},
     {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
@@ -25,6 +25,9 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[185] = {
     {"show-trajectory", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
     {"desktop-classic-settings", EbConfigBundleKeys::Kind::Bool},
+    {"ui-preserve-accent", EbConfigBundleKeys::Kind::Bool},
+    {"ui-auto-contrast", EbConfigBundleKeys::Kind::Bool},
+    {"ui-contrast-target", EbConfigBundleKeys::Kind::Float},
     {"background-material", EbConfigBundleKeys::Kind::String},
     {"sidebar-material", EbConfigBundleKeys::Kind::String},
     {"desktop-accent-color", EbConfigBundleKeys::Kind::Color},
@@ -224,7 +227,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 185, "count-185");
+    expect(EbConfigBundleKeysTable::kEntryCount == 188, "count-188");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -267,9 +270,9 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 68, "kind-bool-68");
+    expect(kindBool == 70, "kind-bool-70");
     expect(kindInt == 70, "kind-int-70");
-    expect(kindFloat == 20, "kind-float-20");
+    expect(kindFloat == 21, "kind-float-21");
     expect(kindString == 19, "kind-string-19");
     expect(kindColor == 2, "kind-color-2");
     expect(kindKeybind == 6, "kind-keybind-6");
