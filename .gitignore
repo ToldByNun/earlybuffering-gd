@@ -164,3 +164,13 @@ docs/dev/live-regression-ap07-status.md
 !/tools/test_policy_registration_ap06.py
 docs/dev/live-modes-ap08-status.md
 docs/dev/live-hybrid-ap09-status.md
+
+!/releases/v1.7.0.md
+
+!/releases/
+/releases/*
+!/releases/README.md
+!/releases/CHECKLIST.md
+!/releases/v1.6.2.md
+!/releases/v1.7.0.md
+/releases

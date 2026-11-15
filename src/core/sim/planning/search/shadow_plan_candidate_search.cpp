@@ -22,6 +22,18 @@ void EbShadowPlanCandidateSearch::evaluate(EbShadowPlanContext& context) {
         context.hasPrefer = context.preferLo <= context.preferHi;
     }
 
+    // A learned opportunity may exist without an ordinary threat target.
+    // Evaluate its current geometry before the broad prefix walk spends the wall.
+    int const learned = context.options.hybridDelay;
+    if (learned > 0 && learned <= context.limit && context.tickBudget > 0 &&
+        !context.wallExceeded() && !context.candReady[static_cast<size_t>(learned)]) {
+        auto candidate = context.evalDelay(learned, -1);
+        context.finalizeViable(candidate, -1);
+        context.cands[static_cast<size_t>(learned)] = candidate;
+        context.candReady[static_cast<size_t>(learned)] = 1;
+        context.plan.hybridTried = true;
+    }
+
     // Ascending idle-prefix share for runOne engine (not traj): one idle spine,
     // fork at each press. Falls through to legacy when traj / dual abort / fail.
     if (EbIdlePrefixShare::evaluateAscending(context)) {

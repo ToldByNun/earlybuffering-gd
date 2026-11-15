@@ -59,7 +59,7 @@ jobs:
           combine: false
           configure-args: -DGEODE_PACKAGE_ZSTD=OFF
           target: ${{ matrix.config.target }}
-          sdk: given
+          sdk: "5.11.1"
 
       - name: Verify iOS dylib signature in package
         if: matrix.config.name == 'iOS'
@@ -96,6 +96,14 @@ jobs:
             echo "ERROR: no audesign.earlybuffer.geode to stage"
             exit 1
           fi
+          python3 - "${PKG}" <<'PY'
+          import json, sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as package:
+              manifest = json.loads(package.read("mod.json"))
+          assert manifest["geode"] == "5.11.1", manifest
+          assert manifest["version"] == "v1.7.0", manifest
+          print("Verified package metadata: Geode 5.11.1 / EarlyBuffer v1.7.0")
+          PY
           cp "${PKG}" "platform-out/audesign.earlybuffer.geode"
           echo "Staged ${PKG} ($(wc -c < platform-out/audesign.earlybuffer.geode) bytes)"
           ls -la platform-out

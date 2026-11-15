@@ -113,7 +113,11 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
 
     // Commit 11/13: same PerfectAssist as press — trust+opportunity must Delay-search
     // (wave hold-longer saves must not lose to spam / PassNoThreat).
-    bool mustDelaySearch = false;
+    EbPlanOptions learnedContext;
+    int const learnedOpportunity =
+        EbHybridLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, learnedContext);
+    bool mustDelaySearch = learnedOpportunity > 0;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -142,7 +146,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         oppIn.bakePreferBand = false;
         oppIn.orbWindowFound = nearOrb;
         auto const decision = EbPerfectAssistPolicy::classify(trustIn, oppIn);
-        mustDelaySearch = (decision == EbPerfectAssistPolicy::Decision::MustDelaySearch);
+        mustDelaySearch =
+            mustDelaySearch || decision == EbPerfectAssistPolicy::Decision::MustDelaySearch;
         if (mustDelaySearch) {
             EbAssistLog::debug("PERFECT must-delay-search release (trust+opportunity)");
         }
@@ -207,6 +212,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
                                                             spamDenseRel);
     opts.hybridDelay = EbHybridLearning::get().prepare(
         playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
+    if (opts.hybridDelay > 0)
+        opts.mustDelaySearch = true;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
