@@ -7,15 +7,22 @@
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
-#include <imgui.h>
-#include <imgui_internal.h>
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
 
 class EbSliderDraw {
 public:
+    static ImGuiID& editorId() {
+        static ImGuiID value = 0;
+        return value;
+    }
     static constexpr float kTrackH = 10.0f;
     static constexpr float kKnobR = 8.0f;
 
@@ -73,7 +80,7 @@ public:
         ImGuiID const sliderId = ImGui::GetID("##eb-slider");
         if (!enabled && ImGui::GetActiveID() == sliderId)
             ImGui::ClearActiveID();
-        ImGui::BeginDisabled(!enabled);
+        ImGui::BeginDisabled(!enabled || editorId() == ImGui::GetID("##value"));
         ImGui::InvisibleButton("##eb-slider", ImVec2(avail, totalH));
         ImGui::EndDisabled();
         EbDesktopMenuTooltip::show(tooltip);
@@ -105,9 +112,10 @@ public:
 
         drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), origin,
                           EbDesktopMenuTheme::toU32(labelColor), label);
-        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                          ImVec2(origin.x + avail - valueSize.x, origin.y),
-                          EbDesktopMenuTheme::toU32(valueColor), valueText);
+        if (editorId() != ImGui::GetID("##value"))
+            drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                              ImVec2(origin.x + avail - valueSize.x, origin.y),
+                              EbDesktopMenuTheme::toU32(valueColor), valueText);
 
         float const trackY = origin.y + labelH + gap + (trackBlockH - kTrackH) * 0.5f;
         ImVec2 const trackMin(origin.x, trackY);
@@ -179,13 +187,83 @@ public:
         return changed;
     }
 
+    static bool editValue(char const* id, char const* label, double current, double minimum,
+                          double maximum, bool integer, bool enabled, double* result) {
+        (void)label;
+        ImVec2 const itemMin = ImGui::GetItemRectMin();
+        ImVec2 const itemMax = ImGui::GetItemRectMax();
+        bool const request =
+            enabled && (ImGui::IsItemClicked(ImGuiMouseButton_Right) ||
+                        (ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter)));
+        ImGui::PushID(id);
+        ImGuiID const inputId = ImGui::GetID("##value");
+        static char input[96] = {};
+        static bool invalid = false;
+        if (request) {
+            editorId() = inputId;
+            std::snprintf(input, sizeof(input), integer ? "%.0f" : "%.9g", current);
+            invalid = false;
+            ImGui::ClearActiveID();
+        }
+        bool committed = false;
+        if (editorId() == inputId) {
+            if (!enabled) {
+                editorId() = 0;
+            } else {
+                ImVec2 const cursor = ImGui::GetCursorScreenPos();
+                EbDesktopMenuFonts::pushUi();
+                float const width = std::min(itemMax.x - itemMin.x,
+                                             std::max(16.f, ImGui::CalcTextSize(input).x + 8.f));
+                ImGui::SetCursorScreenPos(ImVec2(itemMax.x - width, itemMin.y));
+                ImGui::SetNextItemWidth(width);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.f, 0.f));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.f);
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.f);
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, EbDesktopMenuTheme::panel());
+                if (request)
+                    ImGui::SetKeyboardFocusHere();
+                bool submit = ImGui::InputText("##value", input, sizeof(input),
+                                               ImGuiInputTextFlags_EnterReturnsTrue |
+                                                   ImGuiInputTextFlags_AutoSelectAll);
+                bool const hovered = ImGui::IsItemHovered();
+                ImGui::PopStyleColor();
+                ImGui::PopStyleVar(3);
+                EbDesktopMenuFonts::pop();
+                if (submit) {
+                    errno = 0;
+                    char* end = nullptr;
+                    double parsed = std::strtod(input, &end);
+                    while (end && std::isspace(static_cast<unsigned char>(*end)))
+                        ++end;
+                    invalid = end == input || !end || *end || errno == ERANGE ||
+                              !std::isfinite(parsed) || (integer && std::trunc(parsed) != parsed);
+                    if (!invalid) {
+                        *result = std::clamp(parsed, minimum, maximum);
+                        committed = true;
+                        editorId() = 0;
+                    }
+                }
+                if (invalid && hovered)
+                    ImGui::SetTooltip("Enter a finite %s. Range %.9g to %.9g.",
+                                      integer ? "whole number" : "number", minimum, maximum);
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
+                    (!request && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !hovered))
+                    editorId() = 0;
+                ImGui::SetCursorScreenPos(cursor);
+                ImGui::Dummy(ImVec2(0, 0));
+            }
+        }
+        ImGui::PopID();
+        return committed;
+    }
+
 private:
     EbSliderDraw() = delete;
 };
 
 bool EbSlider::drawFloat(char const* id, char const* label, float* value, float minValue,
                          float maxValue, int decimals, char const* suffix, bool enabled,
-                         char const* tooltip) {
+                         char const* tooltip, float step) {
     if (!value || maxValue <= minValue) {
         return false;
     }
@@ -194,10 +272,20 @@ bool EbSlider::drawFloat(char const* id, char const* label, float* value, float 
     char text[64];
     EbSliderDraw::formatFloat(text, sizeof(text), *value, decimals, suffix);
     float newT = t;
-    if (!EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled, tooltip)) {
+    bool dragged = EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled, tooltip);
+    double entered = *value;
+    bool direct =
+        EbSliderDraw::editValue(id, label, *value, minValue, maxValue, false, enabled, &entered);
+    if (!dragged && !direct)
         return false;
-    }
-    float const next = minValue + newT * span;
+    float increment =
+        step > 0 && std::isfinite(step) ? step : std::pow(10.f, -std::clamp(decimals, 0, 4));
+    float next = direct      ? float(entered)
+                 : newT >= 1 ? maxValue
+                 : newT <= 0
+                     ? minValue
+                     : std::clamp(minValue + std::round((newT * span) / increment) * increment,
+                                  minValue, maxValue);
     if (std::fabs(next - *value) <= 0.00001f) {
         return false;
     }
@@ -206,20 +294,28 @@ bool EbSlider::drawFloat(char const* id, char const* label, float* value, float 
 }
 
 bool EbSlider::drawInt(char const* id, char const* label, int* value, int minValue, int maxValue,
-                       char const* suffix, bool enabled, char const* tooltip) {
+                       char const* suffix, bool enabled, char const* tooltip, int step) {
     if (!value || maxValue <= minValue) {
         return false;
     }
-    float const span = static_cast<float>(maxValue - minValue);
-    float t = static_cast<float>(*value - minValue) / span;
+    double const span = double(maxValue) - minValue;
+    float t = float((double(*value) - minValue) / span);
     char text[64];
     EbSliderDraw::formatInt(text, sizeof(text), *value, suffix);
     float newT = t;
-    if (!EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled, tooltip)) {
+    bool dragged = EbSliderDraw::drawChrome(id, label, text, t, &newT, enabled, tooltip);
+    double entered = *value;
+    bool direct =
+        EbSliderDraw::editValue(id, label, *value, minValue, maxValue, true, enabled, &entered);
+    if (!dragged && !direct)
         return false;
-    }
-    int const next = minValue + static_cast<int>(std::lround(newT * span));
-    int const clamped = next < minValue ? minValue : (next > maxValue ? maxValue : next);
+    double increment = std::max(1, step);
+    double next = direct      ? entered
+                  : newT >= 1 ? maxValue
+                  : newT <= 0
+                      ? minValue
+                      : double(minValue) + std::round((newT * span) / increment) * increment;
+    int clamped = static_cast<int>(std::clamp(next, double(minValue), double(maxValue)));
     if (clamped == *value) {
         return false;
     }
@@ -228,21 +324,21 @@ bool EbSlider::drawInt(char const* id, char const* label, int* value, int minVal
 }
 
 bool EbSlider::drawFloatSetting(char const* key, char const* label, float minValue, float maxValue,
-                                int decimals, char const* suffix, bool enabled) {
+                                int decimals, char const* suffix, bool enabled, float step) {
     if (!key || key[0] == '\0' || !EbDesktopMenuBind::exists(key)) {
         return false;
     }
     float value = static_cast<float>(EbDesktopMenuBind::getFloat(key, minValue));
     std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
-    if (!drawFloat(key, label, &value, minValue, maxValue, decimals, suffix, enabled,
-                   tip.c_str())) {
+    if (!drawFloat(key, label, &value, minValue, maxValue, decimals, suffix, enabled, tip.c_str(),
+                   step)) {
         return false;
     }
     return EbDesktopMenuBind::setFloat(key, static_cast<double>(value));
 }
 
 bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minValue,
-                              int64_t maxValue, char const* suffix, bool enabled) {
+                              int64_t maxValue, char const* suffix, bool enabled, int step) {
     if (!key || key[0] == '\0' || !EbDesktopMenuBind::exists(key)) {
         return false;
     }
@@ -250,7 +346,7 @@ bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minVal
     int const minI = static_cast<int>(minValue);
     int const maxI = static_cast<int>(maxValue);
     std::string const tip = EbDesktopMenuTooltip::descriptionForKey(key);
-    if (!drawInt(key, label, &value, minI, maxI, suffix, enabled, tip.c_str())) {
+    if (!drawInt(key, label, &value, minI, maxI, suffix, enabled, tip.c_str(), step)) {
         return false;
     }
     return EbDesktopMenuBind::setInt(key, static_cast<int64_t>(value));
@@ -260,7 +356,7 @@ bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minVal
 
 bool EbSlider::drawFloat(char const* id, char const* label, float* value, float minValue,
                          float maxValue, int decimals, char const* suffix, bool enabled,
-                         char const* tooltip) {
+                         char const* tooltip, float step) {
     (void)id;
     (void)label;
     (void)value;
@@ -274,7 +370,7 @@ bool EbSlider::drawFloat(char const* id, char const* label, float* value, float 
 }
 
 bool EbSlider::drawInt(char const* id, char const* label, int* value, int minValue, int maxValue,
-                       char const* suffix, bool enabled, char const* tooltip) {
+                       char const* suffix, bool enabled, char const* tooltip, int step) {
     (void)id;
     (void)label;
     (void)value;
@@ -287,7 +383,7 @@ bool EbSlider::drawInt(char const* id, char const* label, int* value, int minVal
 }
 
 bool EbSlider::drawFloatSetting(char const* key, char const* label, float minValue, float maxValue,
-                                int decimals, char const* suffix, bool enabled) {
+                                int decimals, char const* suffix, bool enabled, float step) {
     (void)key;
     (void)label;
     (void)minValue;
@@ -299,7 +395,7 @@ bool EbSlider::drawFloatSetting(char const* key, char const* label, float minVal
 }
 
 bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minValue,
-                              int64_t maxValue, char const* suffix, bool enabled) {
+                              int64_t maxValue, char const* suffix, bool enabled, int step) {
     (void)key;
     (void)label;
     (void)minValue;

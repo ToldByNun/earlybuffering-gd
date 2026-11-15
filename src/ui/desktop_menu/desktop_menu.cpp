@@ -18,8 +18,26 @@
 #include <imgui.h>
 #include <vector>
 
+#if defined(GEODE_IS_WINDOWS)
+#include <Windows.h>
+#endif
+
 class EbDesktopMenuInput {
 public:
+    static void feedRightMouse() {
+#if defined(GEODE_IS_WINDOWS)
+        // imgui-cocos forwards Cocos touches as left clicks only.
+        static bool previous = false;
+        bool down = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+        if (GetForegroundWindow() != GetActiveWindow())
+            down = false;
+        if (down != previous) {
+            ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Right, down);
+            previous = down;
+        }
+#endif
+    }
+
     // Broader than imgui-cocos' cocosToImGuiKey (adds F-keys, Space, …) so Esc /
     // capture UI see the same edges while the menu owns the keyboard.
     static ImGuiKey toImGuiKey(cocos2d::enumKeyCodes key) {
@@ -235,6 +253,7 @@ void EbDesktopMenu::install() {
                 ImGui::GetCurrentContext()) {
                 ImGui::SetNextFrameWantCaptureKeyboard(true);
             }
+            EbDesktopMenuInput::feedRightMouse();
             EbDesktopMenuShell::draw();
             EbDesktopCloudOverlay::draw();
             EbDesktopMenuModal::draw();

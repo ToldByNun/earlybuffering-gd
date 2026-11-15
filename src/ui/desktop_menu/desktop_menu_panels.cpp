@@ -95,8 +95,8 @@ public:
                 EbDropdown::drawSetting("orb-chain-verify", "Orb Chain Verify Default", policies,
                                         3);
             }
-            EbSlider::drawIntSetting("sim-budget-us", "Sim Budget", 0, 10000, "µs");
-            EbSlider::drawIntSetting("tick-budget", "Plan Tick Budget", 500, 20000);
+            EbSlider::drawIntSetting("sim-budget-us", "Sim Budget", 0, 10000, "µs", true, 100);
+            EbSlider::drawIntSetting("tick-budget", "Plan Tick Budget", 500, 20000, "", true, 100);
             EbCheckbox::drawSetting("assist-press", "Assist Presses");
             EbCheckbox::drawSetting("assist-release", "Assist Releases");
         }

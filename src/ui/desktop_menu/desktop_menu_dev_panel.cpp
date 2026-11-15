@@ -213,7 +213,7 @@ public:
             EbDropdown::drawSetting("dev-objective", "Objective", objOpts, 3, objLabels);
         }
         EbCheckbox::drawSetting("dev-eval-require-deps", "Require Deps");
-        EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000);
+        EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000, "", true, 100);
 
         gap();
         EbButton::beginRow(2);
