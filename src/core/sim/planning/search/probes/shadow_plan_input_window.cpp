@@ -262,6 +262,20 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         return context.evalDelay(delayValue, -1);
     };
 
+    // Ball ring discovery competes with landing candidates in the same budget.
+    // Waiting for every landing delay to finish starves airborne orb inputs.
+    if (context.real->m_isBall && context.down && context.orbAssist && !context.orbHint.found &&
+        !dual && !context.useTrajEngine && context.tickBudget > 0 && !context.wallExceeded()) {
+        auto window = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
+                                                      context.limit + 1, context.deltaTime,
+                                                      context.firstDt, &context.tickBudget, false);
+        context.simulator.resetCaptureForNextRun(context.layer);
+        if (window.found) {
+            context.orbHint = window;
+            context.plan.usedOrbWindow = true;
+        }
+    }
+
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
         context.plan.budgetHit = true;
@@ -301,7 +315,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // before unrelated early flaps/flips consume the wall. Every candidate still
     // needs the normal survival proof; Ball ground/fallback selection stays below.
     if (context.orbAssist && context.orbHint.found && !dual &&
-        (context.real->m_isBird || context.real->m_isBall)) {
+        (context.real->m_isBird || context.real->m_isBall ||
+         EbStageConfig::kindOf(context.real) == GameModeKind::Cube)) {
         auto const order =
             EbOrbProbeOrder::window(context.orbHint.first, context.orbHint.last, context.limit);
         for (int delay : order) {
@@ -317,8 +332,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             auto const& candidate = context.cands[static_cast<size_t>(delay)];
             if (!candidate.viable || !candidate.raw.activatedRing)
                 continue;
-            if (context.real->m_isBird)
-                skipLaterBand = true;
+            // Keep the verified activation at its tested observation floor.
+            // An optional longer d0 probe must not consume its dispatch budget.
+            skipLaterBand = true;
             break;
         }
     }
@@ -662,44 +678,6 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.model.cap = savedCapForProbe;
 
     bool const isBall = context.real && context.real->m_isBall;
-    bool groundSearchComplete = true;
-    bool hasStableLanding = false;
-    for (int delay = 0; isBall && delay <= context.limit; ++delay) {
-        auto const index = static_cast<size_t>(delay);
-        if (!context.candReady[index] || isDepthTruncated(context.cands[index].raw, delay)) {
-            groundSearchComplete = false;
-            continue;
-        }
-        auto const& candidate = context.cands[index];
-        hasStableLanding =
-            hasStableLanding ||
-            (candidate.viable && candidate.raw.landedAfterAction && !candidate.raw.died);
-    }
-    bool const ballOrbFallback = EbLivePlanContracts::ballOrbFallbackAllowed(
-        isBall, context.orbAssist, hasStableLanding, groundSearchComplete);
-    // A Ball input in flight can be aligned to an orb only after the normal
-    // landing search found no stable surface. The scan shares the input budget.
-    if (ballOrbFallback && !dual && !context.useTrajEngine && !context.wallExceeded() &&
-        context.tickBudget > 0) {
-        auto window = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
-                                                      context.limit + 1, context.deltaTime,
-                                                      context.firstDt, &context.tickBudget, false);
-        context.simulator.resetCaptureForNextRun(context.layer);
-        if (window.found) {
-            context.orbHint = window;
-            context.plan.usedOrbWindow = true;
-            for (int delay = std::max(0, window.first);
-                 delay <= std::min(context.limit, window.last); ++delay) {
-                if (context.wallExceeded() || context.tickBudget <= 0)
-                    break;
-                // Orb activation and the existing full survival test both apply.
-                ingest(delay, evaluateCandidate(delay));
-            }
-        }
-        if (context.simulator.planWallHit())
-            context.plan.budgetHit = true;
-    }
-
     auto const& c0 = context.cands[0];
     bool const d0Safe = context.candReady[0] && c0.viable && !c0.raw.died;
     bool const d0HasRunTruth = EbLivePlanContracts::waveIwD0HasRunTruth(
@@ -707,8 +685,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     // AP4 — Orb-intent handoff (before Wave help-only / Alive ranking).
     // Classic selection never runs after IW returns — recover G1 earliest±k.
-    if (context.orbAssist && context.down && (!isBall || ballOrbFallback) &&
-        context.plan.reason != AssistReason::PassHardUnknown &&
+    if (context.orbAssist && context.down && context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown) {
         bool anyActivation = false;
         int actMin = -1;
@@ -731,7 +708,12 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                                context.plan.foresightOrbPad || anyActivation;
         context.orbIntent = orbIntent;
         context.ledgerOrbIntent = orbIntent;
-        if (orbIntent && actMin >= 0) {
+        bool const ballIntent =
+            !isBall || EbLivePlanContracts::ballOrbIntentAllowed(
+                           context.orbAssist, context.orbHint.found, anyActivation, d0Safe,
+                           context.candReady[0] && c0.activatedRing,
+                           context.real->m_isOnGround || context.real->m_isOnGround2);
+        if (orbIntent && ballIntent && actMin >= 0) {
             std::vector<EbAssistPickV1::CandView> views(
                 static_cast<size_t>(std::max(0, context.limit)) + 1u);
             for (int delay = 0; delay <= context.limit; ++delay) {

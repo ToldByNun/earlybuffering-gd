@@ -1,4 +1,5 @@
 #include "plan_gold_corpus.hpp"
+#include "../config/stage_config.hpp"
 #include "../core/assist/assist_clock.hpp"
 #include "../core/assist/assist_controller.hpp"
 #include "../core/assist/contracts/assist_contracts140.hpp"
@@ -13,22 +14,14 @@
 #include "../core/assist/planning/opportunity_probe.hpp"
 #include "../core/assist/planning/orb_align.hpp"
 #include "../core/assist/planning/perfect_assist_policy.hpp"
-#include "../config/stage_config.hpp"
 #include "../core/bundle/config_bundle.hpp"
 #include "../core/bundle/config_bundle_codec.hpp"
 #include "../core/bundle/config_bundle_keys.hpp"
 #include "../core/diagnostics/assist_real_metrics.hpp"
 #include "../core/diagnostics/assist_sim_estimate.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
-#include "../core/diagnostics/sim_tick_cost_meter.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_budget_controller.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_candidate_slot.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_decision_gate.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_parity_policy.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_plan_search.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_prediction_scheduler.hpp"
-#include "../core/sim/planning/search/adaptive/adaptive_resume_runner.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
+#include "../core/diagnostics/sim_tick_cost_meter.hpp"
 #include "../core/fixtures/real_corpus_fixtures.hpp"
 #include "../core/fixtures/tg2_bake_fixture.hpp"
 #include "../core/learning/assist_learning.hpp"
@@ -41,8 +34,15 @@
 #include "../core/sim/mode_survival.hpp"
 #include "../core/sim/orbs/orb_stack_resolver.hpp"
 #include "../core/sim/orbs/toggle_orb_sim.hpp"
-#include "../core/sim/prefix_sim.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_budget_controller.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_candidate_slot.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_decision_gate.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_parity_policy.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_plan_search.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_prediction_scheduler.hpp"
+#include "../core/sim/planning/search/adaptive/adaptive_resume_runner.hpp"
 #include "../core/sim/planning/search/idle_prefix_share.hpp"
+#include "../core/sim/prefix_sim.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_collision_policy.hpp"
 #include "../core/sim/sim_trust.hpp"
@@ -52,9 +52,9 @@
 #include "../dev/capture/dev_cycle_recorder.hpp"
 #include "../dev/capture/dev_live_witness.hpp"
 #include "../dev/capture/dev_trace_store.hpp"
-#include "../dev/diagnostics/dev_resource_stats.hpp"
 #include "../dev/dev_config.hpp"
 #include "../dev/dev_session.hpp"
+#include "../dev/diagnostics/dev_resource_stats.hpp"
 #include "../dev/evaluation/dev_eval_engine.hpp"
 #include "../dev/evaluation/dev_eval_restore.hpp"
 #include "../dev/evaluation/dev_objective.hpp"
@@ -189,11 +189,12 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                !EbLivePlanContracts::hopelessBlockedByLivingLater(true, false),
            "assist-pack-ap4-false-hopeless");
     // Assist Pack AP3 (tight): endX/survive lead blocks PassD0Safe; bare under-horizon does not.
-    expect(!EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f) &&
-               EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f) &&
-               EbLivePlanContracts::weakD0SafeNeedsFallthrough(true) &&
-               !EbLivePlanContracts::weakD0SafeNeedsFallthrough(false),
-           "assist-pack-ap3-weak-d0safe");
+    expect(
+        !EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f) &&
+            EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f) &&
+            EbLivePlanContracts::weakD0SafeNeedsFallthrough(true) &&
+            !EbLivePlanContracts::weakD0SafeNeedsFallthrough(false),
+        "assist-pack-ap3-weak-d0safe");
     // Assist Pack AP5: continuous ranks by endX; wave save prefers score peak.
     expect(EbLivePlanContracts::continuousIwRanksByEndX() &&
                EbLivePlanContracts::waveIwChooseDelayByScore(false, 7, 3) == 7 &&
@@ -225,8 +226,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                                                            104.f) &&
                !EbLivePlanContracts::waveIwLaterProgressBeatsD0(true, 24, 25, 100.f, true, true, 24,
                                                                 25, 100.f) &&
-               !EbLivePlanContracts::waveIwFutilePass(true, true, false, false, false, 0, 3.f, false,
-                                                      true) &&
+               !EbLivePlanContracts::waveIwFutilePass(true, true, false, false, false, 0, 3.f,
+                                                      false, true) &&
                EbLivePlanContracts::waveIwPreferPassBudgetOverFutile(true, false, 3, 8),
            "assist-pack-ap-m1-wave-false-futile");
     // Assist Pack AP-M6: Adaptive shell soft-abort gifts remUs to classic.
@@ -236,12 +237,12 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                !EbLivePlanContracts::adaptiveAbortToFallthroughAfterScreen(false, 0, 12),
            "assist-pack-ap-m6-adaptive-remus-gift");
     // Assist Pack AP-M3: probe-extended d0 yields to floor-reached later Alive.
-    expect(EbLivePlanContracts::discreteIwProbeExtendedD0Alive(true, 120, 96, true) &&
-               EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true, true) &&
-               !EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true, false) &&
-               !EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f,
-                                                                100.f),
-           "assist-pack-ap-m3-cube-underselect");
+    expect(
+        EbLivePlanContracts::discreteIwProbeExtendedD0Alive(true, 120, 96, true) &&
+            EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true, true) &&
+            !EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(true, true, false) &&
+            !EbLivePlanContracts::laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f),
+        "assist-pack-ap-m3-cube-underselect");
     // Assist Pack AP-M7: Wave zero-survivor Adaptive gifts classic IW remUs.
     expect(EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(true, true, 0) &&
                EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(true, 0, 2000) == 2000 &&
@@ -296,8 +297,7 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                EbLivePlanContracts::adaptiveShellBudgetUs(
                    8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085 &&
                EbLivePlanContracts::intendedFallthroughClassicBudgetUs(0, 100) == 0 &&
-               EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
-                   EbLivePlanContracts::kLiveSoftWallFloorUs &&
+               EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) == 2500 &&
                !EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(true) &&
                EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(false),
            "assist-pack-ap-l5-adaptive-fallthrough");
@@ -327,7 +327,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
         EbAssistPickV1::CandView orbCands[] = {
             {false, false}, {true, true}, {true, true}, {true, true}};
         auto const orbPick = EbAssistPickV1::choose(orbCands, 3, 0, true, 1, 3);
-        expect(!orbPick.doPass && orbPick.chosen == 1 && orbPick.requireOrb, "orb-under-input-window");
+        expect(!orbPick.doPass && orbPick.chosen == 1 && orbPick.requireOrb,
+               "orb-under-input-window");
     }
     // Dash hold contract: wasDashing salvage uses releaseAfter=40 (IW mirrors classic).
     {
@@ -335,8 +336,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
         expect(dashHoldReleaseAfter == 40 && dashHoldReleaseAfter > 0, "orb-dash-hold-iw");
     }
     // Toggle unknown named Pass (not Hopeless) — reason id locked in AssistVerdict.
-    expect(std::string(EbAssistVerdict::name(AssistReason::PassToggleUnknown))
-                   .find("toggle") != std::string::npos,
+    expect(std::string(EbAssistVerdict::name(AssistReason::PassToggleUnknown)).find("toggle") !=
+               std::string::npos,
            "pass-toggle-unknown-iw");
     std::string missReport;
     expect(EbMissAssistContracts::selfCheck(missReport), "miss-assist-contracts");
@@ -361,7 +362,8 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string adaptiveResumeReport;
     expect(EbAdaptiveResumeRunner::selfCheck(adaptiveResumeReport), "adaptive-resume-runner");
     std::string adaptiveBudgetReport;
-    expect(EbAdaptiveBudgetController::selfCheck(adaptiveBudgetReport), "adaptive-budget-controller");
+    expect(EbAdaptiveBudgetController::selfCheck(adaptiveBudgetReport),
+           "adaptive-budget-controller");
     std::string adaptivePlanSearchReport;
     expect(EbAdaptivePlanSearch::selfCheck(adaptivePlanSearchReport), "adaptive-plan-search");
     std::string adaptiveSchedulerReport;

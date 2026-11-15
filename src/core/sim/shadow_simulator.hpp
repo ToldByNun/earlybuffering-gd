@@ -184,10 +184,10 @@ public:
     PlayerObject* snapshotSlot(int slot) const;
 
     EbSimPlan plan(PlayLayer* layer, PlayerObject* real, bool down, int limit, float deltaTime,
-                 float firstDt, EbPlanOptions const& options = {});
+                   float firstDt, EbPlanOptions const& options = {});
 
     EbSimPlan planSequence(PlayLayer* layer, PlayerObject* real, bool down, int limit,
-                         float deltaTime, float firstDt, EbPlanOptions const& options = {});
+                           float deltaTime, float firstDt, EbPlanOptions const& options = {});
 
     // Single-candidate bake check: runOne(delay) must clear the threat zone
     // and not die before the action. Used by Hybrid bake verify (O(1) sim).
@@ -333,7 +333,7 @@ public:
     };
     ReplayResult replay(PlayLayer* layer, int snapshotSlot, int startTick,
                         std::vector<EbInputEvent> const& timeline, float deltaTime, int maxTicks,
-                        bool shiftActionBy = false, int actionShift = 0);
+                        bool shiftActionBy = false, int actionShift = 0, int budgetUs = 0);
 
     // Optional per-frame bake/diag trace (filled when traceFrames=true).
     class BakeFrameTrace {
@@ -397,7 +397,8 @@ public:
     private:
     };
     PathSample samplePath(PlayLayer* layer, int snapshotSlot,
-                          std::vector<EbReplayEvent> const& events, float deltaTime, int untilFrame);
+                          std::vector<EbReplayEvent> const& events, float deltaTime,
+                          int untilFrame);
 
     class Model {
     public:

@@ -4,7 +4,8 @@
 #include "../shadow_simulator.hpp"
 #include <chrono>
 
-void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* player, GameObject* object) {
+void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* player,
+                               GameObject* object) {
     // Active sim body (live shadow or eval ghost) drives m_dead.
     if (player == simulator.m_shadow ||
         (simulator.m_evalActive && player == simulator.m_evalActive)) {
@@ -55,7 +56,7 @@ void EbShadowPhysics::noteOrbOverlap(EbShadowSimulator& simulator) {
 }
 
 void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* shadow,
-                                  RingObject* ring) {
+                                    RingObject* ring) {
     if (!shadow || !ring || (shadow != simulator.m_shadow && shadow != simulator.m_evalActive))
         return;
 
@@ -117,7 +118,7 @@ void EbShadowPhysics::applyRingJump(EbShadowSimulator& simulator, PlayerObject* 
 }
 
 void EbShadowPhysics::stepPreCollide(EbShadowSimulator& simulator, PlayLayer* layer,
-                                   PlayerObject* state, float deltaTime) {
+                                     PlayerObject* state, float deltaTime) {
     // Always use the full step dt here — tiny CBF remainders launch slopes
     // and also under-detect orb/spike overlaps.
     simulator.m_triggerWorldAppliedThisTick = false;
@@ -156,7 +157,9 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
         colDt = deltaTime; // same rule as pre-collide: never a tiny remainder
     float const gdColDt = splitPrefix ? 0.f : EbAssistClock::secondsToGdStep(colDt);
     // Ghost muted once in copyPlayerState / beginSession — not 3× per physics tick.
+    auto const updateStart = std::chrono::steady_clock::now();
     state->update(gdStepDt);
+    auto const collisionStart = std::chrono::steady_clock::now();
     if (tickStart)
         state->m_lastPosition = *tickStart;
     if (!simulator.m_dead) {
@@ -167,6 +170,17 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
     }
     if (state && simulator.isOwnedGhost(state) && state->m_isDead)
         state->m_isDead = false;
+    auto const phasesEnd = std::chrono::steady_clock::now();
+    EbSimTickCostMeter::get().notePhysicsPhases(
+        static_cast<int>(
+            std::chrono::duration_cast<std::chrono::microseconds>(updateStart - tickWallStart)
+                .count()),
+        static_cast<int>(
+            std::chrono::duration_cast<std::chrono::microseconds>(collisionStart - updateStart)
+                .count()),
+        static_cast<int>(
+            std::chrono::duration_cast<std::chrono::microseconds>(phasesEnd - collisionStart)
+                .count()));
     // AP1 measure-only: feed Adaptive BudgetController (does not change search).
     int const us = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
                                         std::chrono::steady_clock::now() - tickWallStart)

@@ -54,14 +54,15 @@ bool EbLivePlanContracts::liveTwApplySkippedForPlanWall(bool planWallExceeded) {
 }
 
 size_t EbLivePlanContracts::liveTwApplyMaxPerTick(size_t trackCount, bool bakeOffline,
-                                                   size_t fullCap) {
+                                                  size_t fullCap) {
     size_t const cap = fullCap > 0 ? fullCap : 1;
     if (bakeOffline || trackCount < static_cast<size_t>(kLiveTwTightenTrackFloor))
         return cap;
     return std::max<size_t>(1, cap / 2);
 }
 
-int EbLivePlanContracts::liveTwApplyBudgetUs(size_t trackCount, bool bakeOffline, int fullBudgetUs) {
+int EbLivePlanContracts::liveTwApplyBudgetUs(size_t trackCount, bool bakeOffline,
+                                             int fullBudgetUs) {
     int const budget = fullBudgetUs > 0 ? fullBudgetUs : 1;
     if (bakeOffline || trackCount < static_cast<size_t>(kLiveTwTightenTrackFloor))
         return budget;
@@ -83,10 +84,6 @@ int EbLivePlanContracts::intendedFallthroughClassicBudgetUs(int remUs, int ticks
 }
 
 int EbLivePlanContracts::intendedLiveSoftWallFloorUs(int budgetUs) {
-    if (budgetUs <= 0)
-        return budgetUs;
-    if (budgetUs < kLiveSoftWallFloorUs)
-        return kLiveSoftWallFloorUs;
     return budgetUs;
 }
 
@@ -110,8 +107,7 @@ int EbLivePlanContracts::adaptiveShellBudgetUs(int fullBudgetUs, int fallthrough
     return fullBudgetUs - reserve;
 }
 
-int EbLivePlanContracts::adaptiveFallthroughReserveUs(int fullBudgetUs,
-                                                      bool discreteInputWindow) {
+int EbLivePlanContracts::adaptiveFallthroughReserveUs(int fullBudgetUs, bool discreteInputWindow) {
     if (fullBudgetUs <= 0)
         return 0;
     if (!discreteInputWindow)
@@ -181,8 +177,8 @@ bool EbLivePlanContracts::intendedLandedPreferLater(float bestScore, float candS
     return false;
 }
 
-bool EbLivePlanContracts::peakDeathShouldStop(bool inputWindow, bool continuousLike, bool hadSurvivor,
-                                              bool diedAfterAction) {
+bool EbLivePlanContracts::peakDeathShouldStop(bool inputWindow, bool continuousLike,
+                                              bool hadSurvivor, bool diedAfterAction) {
     return inputWindow && !continuousLike && hadSurvivor && diedAfterAction;
 }
 
@@ -218,10 +214,10 @@ bool EbLivePlanContracts::waveIwProximityPass(bool isWave, bool pressDown, bool 
     return !foresightOrbPad;
 }
 
-bool EbLivePlanContracts::waveIwFutilePass(bool isWave, bool pressDown, bool anyAliveSaveFromD0Death,
-                                           bool idleHoldsEscape, bool orbIntent, int bestSurviveBin,
-                                           float bestEndXGain, bool foresightOrbPad,
-                                           bool anyLaterProgress) {
+bool EbLivePlanContracts::waveIwFutilePass(bool isWave, bool pressDown,
+                                           bool anyAliveSaveFromD0Death, bool idleHoldsEscape,
+                                           bool orbIntent, int bestSurviveBin, float bestEndXGain,
+                                           bool foresightOrbPad, bool anyLaterProgress) {
     if (!pressDown || !isWave || anyAliveSaveFromD0Death || idleHoldsEscape || orbIntent ||
         foresightOrbPad || anyLaterProgress)
         return false;
@@ -356,8 +352,8 @@ bool EbLivePlanContracts::discreteIwProbeBeforeBand(bool continuous, bool probeE
     return !continuous && probeEnabled && d0AtWall;
 }
 
-bool EbLivePlanContracts::microWindowPreferLater(bool microEnabled, int limitTicks,
-                                                 float laterEndX, float d0EndX) {
+bool EbLivePlanContracts::microWindowPreferLater(bool microEnabled, int limitTicks, float laterEndX,
+                                                 float d0EndX) {
     if (!microEnabled || limitTicks <= 0 || limitTicks > kMicroWindowMaxAssistTicks)
         return false;
     return laterEndX > d0EndX + 1e-3f;
@@ -371,8 +367,9 @@ bool EbLivePlanContracts::discreteIwProbeExtendedD0Alive(bool d0Alive, int d0Tic
     return d0TicksRan > std::max(1, observationFloorTicks);
 }
 
-bool EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(
-    bool discreteIw, bool probeExtendedD0, bool laterAliveAtObservationFloor) {
+bool EbLivePlanContracts::discreteIwLivingBandDemotesPassD0Safe(bool discreteIw,
+                                                                bool probeExtendedD0,
+                                                                bool laterAliveAtObservationFloor) {
     return discreteIw && probeExtendedD0 && laterAliveAtObservationFloor;
 }
 
@@ -416,7 +413,7 @@ bool EbLivePlanContracts::hopelessBlockedByLivingLater(bool d0Died, bool anyLate
 }
 
 bool EbLivePlanContracts::discreteIwLaterRunAliveForHopeless(bool died, bool unknown,
-                                                            int ticksRan) {
+                                                             int ticksRan) {
     return !died && !unknown && ticksRan > 0;
 }
 
@@ -428,9 +425,10 @@ bool EbLivePlanContracts::ballIwIncompleteBandBlocksHopeless(bool isBall, bool b
     return candidatesTried < (limit + 1);
 }
 
-bool EbLivePlanContracts::discreteIwHopelessMustFallthrough(
-    bool d0Died, bool anyLaterRunAlive, bool anyDepthTruncatedAlive, bool isBall, bool budgetHit,
-    int candidatesTried, int limit) {
+bool EbLivePlanContracts::discreteIwHopelessMustFallthrough(bool d0Died, bool anyLaterRunAlive,
+                                                            bool anyDepthTruncatedAlive,
+                                                            bool isBall, bool budgetHit,
+                                                            int candidatesTried, int limit) {
     if (hopelessBlockedByDepthTruncation(anyDepthTruncatedAlive, false))
         return true;
     if (hopelessBlockedByLivingLater(d0Died, anyLaterRunAlive))
@@ -491,7 +489,8 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
                liveTwApplyMaxPerTick(942, true, 96) == 96 &&
                liveTwApplyMaxPerTick(50, false, 96) == 96,
            "live-tw-max-per-tick");
-    expect(liveTwApplyBudgetUs(942, false, 350) == 175 && liveTwApplyBudgetUs(942, true, 350) == 350,
+    expect(liveTwApplyBudgetUs(942, false, 350) == 175 &&
+               liveTwApplyBudgetUs(942, true, 350) == 350,
            "live-tw-budget-us");
     expect(std::fabs(kLandedScoreEps - 8.f) < 1e-6f, "landed-eps");
 
@@ -508,7 +507,7 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(intendedFallthroughClassicBudgetUs(0, 100) == 0, "ap-l5-ft-rem-no-stack");
     expect(intendedFallthroughClassicBudgetUs(900, 50) == 900, "ft-rem-intended-keep");
     expect(intendedLiveSoftWallFloorUs(0) == 0, "ap-l5-soft-wall-unlimited");
-    expect(intendedLiveSoftWallFloorUs(2500) == kLiveSoftWallFloorUs, "ap-l5-soft-wall-floor");
+    expect(intendedLiveSoftWallFloorUs(2500) == 2500, "ap-p05-respect-small-budget");
     expect(intendedLiveSoftWallFloorUs(8170) == 8170, "ap-l5-soft-wall-keep");
     expect(lagWarningShouldNotify(true, 9000, false), "ap-l7-note-hitch");
     expect(lagWarningShouldNotify(true, 1000, true), "ap-l7-note-budget-hit");
@@ -657,7 +656,8 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     // Assist Pack AP3 — only survive/endX lead blocks (not bare under-horizon).
     expect(!laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 100.f, 100.f),
            "ap3-under-horizon-alone-ok");
-    expect(laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f), "ap3-under-horizon-endx");
+    expect(laterAliveBlocksPassD0Safe(true, true, 18, 96, 8, 109.f, 100.f),
+           "ap3-under-horizon-endx");
     expect(laterAliveBlocksPassD0Safe(true, false, 110, 96, 8, 100.f, 100.f), "ap3-survive-lead");
     expect(laterAliveBlocksPassD0Safe(true, false, 96, 96, 8, 109.f, 100.f), "ap3-endx-lead");
     expect(!laterAliveBlocksPassD0Safe(true, false, 96, 96, 8, 103.f, 100.f), "ap3-no-weak-lead");

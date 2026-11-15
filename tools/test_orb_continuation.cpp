@@ -4,6 +4,12 @@
 
 int OrbContinuationRegression::run() {
     int failures = 0;
+    // Successful isolated-ring evidence must never spend a second simulation.
+    failures += EbOrbContinuation::shouldProbe(false, true, false, true);
+    failures += EbOrbContinuation::shouldProbe(true, false, false, true);
+    failures += EbOrbContinuation::shouldProbe(true, true, true, true);
+    failures += EbOrbContinuation::shouldProbe(true, true, false, false);
+    failures += !EbOrbContinuation::shouldProbe(true, true, false, true);
     EbOrbContinuation chain;
     failures += chain.next(1, 0, true) != EbOrbContinuation::Input::None;
     failures += chain.next(5, 1, false) != EbOrbContinuation::Input::Release;

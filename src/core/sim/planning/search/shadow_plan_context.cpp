@@ -6,6 +6,7 @@
 #include "../../../assist/planning/assist_horizon.hpp"
 #include "../../mode_survival.hpp"
 #include "../../shadow_simulator.hpp"
+#include "../orb_continuation.hpp"
 #include "../shadow_survival_rules.hpp"
 #include "../simulation_candidate.hpp"
 #include "../simulation_plan.hpp"
@@ -14,14 +15,16 @@
 #include <fmt/format.h>
 
 EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer,
-                                     PlayerObject* real, bool down, int limit, float deltaTime,
-                                     float firstDt, EbPlanOptions const& options, EbSimPlan& plan)
+                                         PlayerObject* real, bool down, int limit, float deltaTime,
+                                         float firstDt, EbPlanOptions const& options,
+                                         EbSimPlan& plan)
     : simulator(simulator), layer(layer), real(real), down(down), limit(limit),
       deltaTime(deltaTime), firstDt(firstDt), options(options), plan(plan),
       model(EbShadowSimulator::modelFor(real, limit, options.capMul)),
       robustK(EbShadowSurvivalRules::resolveRobustK(real, options)),
       latencyWeight(std::max(0.f, options.latencyWeight)),
-      tickBudget(options.tickBudget > 0 ? options.tickBudget : EbShadowSimulator::kDefaultTickBudget),
+      tickBudget(options.tickBudget > 0 ? options.tickBudget
+                                        : EbShadowSimulator::kDefaultTickBudget),
       useTrajEngine(!options.legacyPick &&
                     options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
     plan.trajectoryEngine = useTrajEngine;
@@ -36,8 +39,8 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
         if (inputWindow && real && EbStageConfig::paramsFor(real).cap == 0 &&
             EbStageConfig::lookAheadCap() == 0) {
             if (continuousControl) {
-                model.cap = EbAssistHorizon::continuousInputWindowCap(
-                    EbStageConfig::kindOf(real), limit, options.capMul);
+                model.cap = EbAssistHorizon::continuousInputWindowCap(EbStageConfig::kindOf(real),
+                                                                      limit, options.capMul);
             } else {
                 model.cap = std::min(model.cap, std::max(1, 96 - limit));
             }
@@ -108,7 +111,8 @@ bool EbShadowPlanContext::linkedDual() const {
 }
 
 EbShadowSimulator::RunResult EbShadowPlanContext::runEngine(PlayerObject* who, int delay,
-                                                        int releaseAfter, EbThreatZone const* z) {
+                                                            int releaseAfter,
+                                                            EbThreatZone const* z) {
     if (useTrajEngine) {
         return simulator.runTrajectoryOne(layer, who, down, delay, limit, deltaTime, firstDt, model,
                                           releaseAfter, z, &tickBudget);
@@ -118,7 +122,7 @@ EbShadowSimulator::RunResult EbShadowPlanContext::runEngine(PlayerObject* who, i
 }
 
 void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
-                                      EbDevRejectLedger::EarlyExit early) {
+                                        EbDevRejectLedger::EarlyExit early) {
     guardSelectedTick();
     if (plan.guardOriginalDelay > 0) {
         chosenDelay = plan.delay;
@@ -163,8 +167,7 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         bool const aliveShort = !candidate.raw.died && !candidate.raw.unknown &&
                                 !candidate.raw.unknownTrunc && candidate.raw.ticksRan > 0 &&
                                 candidate.raw.ticksRan < model.cap;
-        s.budgetHit =
-            (plan.budgetHit && aliveShort) || (aliveShort && !candidate.viable);
+        s.budgetHit = (plan.budgetHit && aliveShort) || (aliveShort && !candidate.viable);
         auto const cls = EbModeSurvival::classify(
             EbShadowSurvivalRules::survivalInputFrom(candidate.raw, zone, model, real));
         s.survivalClass = EbModeSurvival::classId(cls);
@@ -200,18 +203,26 @@ EbSimulationCandidate EbShadowPlanContext::evalDelay(int delayValue, int release
         plan.budgetHit = true;
         return candidate;
     }
-    EbShadowSimulator::RunResult result;
-    if (probeOrbContinuation && real->m_isBird && down && !useTrajEngine && !linkedDual()) {
-        auto continuationModel = model;
-        continuationModel.probeOrbContinuation = true;
-        result = simulator.runOne(layer, real, down, delayValue, limit, deltaTime, firstDt,
-                                  continuationModel, releaseAfter, zone.valid ? &zone : nullptr,
-                                  &tickBudget);
-    } else {
-        result = runEngine(real, delayValue, releaseAfter, zone.valid ? &zone : nullptr);
-    }
+    auto result = runEngine(real, delayValue, releaseAfter, zone.valid ? &zone : nullptr);
     simulator.resetCaptureForNextRun(layer);
     ++plan.candidatesTried;
+    // Preserve the ordinary single-input result. A speculative next click may
+    // rescue a lethal UFO chain, but cannot replace a successful isolated orb.
+    if (EbOrbContinuation::shouldProbe(result.died, result.activatedRing,
+                                       result.unknown || result.unknownTrunc ||
+                                           result.toggleUnknown,
+                                       tickBudget > 0 && !wallExceeded()) &&
+        probeOrbContinuation && real->m_isBird && down && !useTrajEngine && !linkedDual()) {
+        auto continuationModel = model;
+        continuationModel.probeOrbContinuation = true;
+        auto continuation = simulator.runOne(layer, real, down, delayValue, limit, deltaTime,
+                                             firstDt, continuationModel, releaseAfter,
+                                             zone.valid ? &zone : nullptr, &tickBudget);
+        simulator.resetCaptureForNextRun(layer);
+        ++plan.candidatesTried;
+        if (continuation.orbContinuationTick >= 0)
+            result = continuation;
+    }
     // Assist Pack AP-L1: mid-run soft-wall abort must surface as budgetHit.
     if (simulator.planWallHit())
         plan.budgetHit = true;
@@ -250,7 +261,7 @@ void EbShadowPlanContext::finalizeViable(EbSimulationCandidate& candidate, int r
             bool const longSafe = requireAlive ? EbModeSurvival::countsAsDelayWorthy(cls)
                                                : EbModeSurvival::countsAsSafeForDelay(cls);
             if (!EbAssistHorizon::longPathSuccessOk(candidate.surviveTicks, candidate.raw.died,
-                                                  longSafe, minSurviveLong)) {
+                                                    longSafe, minSurviveLong)) {
                 candidate.viable = false;
             }
         }

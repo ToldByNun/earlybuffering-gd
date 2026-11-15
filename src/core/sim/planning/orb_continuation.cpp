@@ -1,5 +1,10 @@
 #include "orb_continuation.hpp"
 
+bool EbOrbContinuation::shouldProbe(bool died, bool activatedRing, bool unknown,
+                                    bool budgetAvailable) {
+    return died && activatedRing && !unknown && budgetAvailable;
+}
+
 EbOrbContinuation::Input EbOrbContinuation::next(int tick, int ringCount, bool freshOrb) {
     if (tick < 0 || ringCount < 1)
         return Input::None;

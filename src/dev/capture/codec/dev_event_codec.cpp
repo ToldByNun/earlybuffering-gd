@@ -119,6 +119,15 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
     }
     if (e.hasPlanCost) {
         otherIndex["planUs"] = e.planUs;
+        otherIndex["renderFrame"] = e.renderFrame;
+        otherIndex["frameBudgetUs"] = e.frameBudgetUs;
+        otherIndex["frameSpentBeforeUs"] = e.frameSpentBeforeUs;
+        otherIndex["plannerBudgetUs"] = e.plannerBudgetUs;
+
+        otherIndex["physicsCalls"] = e.physicsCalls;
+        otherIndex["physicsWorldUs"] = e.physicsWorldUs;
+        otherIndex["physicsUpdateUs"] = e.physicsUpdateUs;
+        otherIndex["physicsCollisionUs"] = e.physicsCollisionUs;
         otherIndex["worldCaptureUs"] = e.worldCaptureUs;
         otherIndex["prepareUs"] = e.prepareUs;
         otherIndex["guardOriginalDelay"] = e.guardOriginalDelay;
@@ -415,6 +424,28 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         j.contains("adaptiveFellThrough") || j.contains("adaptiveAbortedForFallthrough") ||
         (j.contains("budgetHit") && e.kind == DevEventKind::PlanFinished)) {
         e.hasPlanCost = true;
+        e.physicsCalls = j.contains("physicsCalls")
+                             ? static_cast<int>(j["physicsCalls"].asInt().unwrapOr(0))
+                             : 0;
+        e.physicsWorldUs = j.contains("physicsWorldUs")
+                               ? static_cast<int>(j["physicsWorldUs"].asInt().unwrapOr(0))
+                               : 0;
+        e.physicsUpdateUs = j.contains("physicsUpdateUs")
+                                ? static_cast<int>(j["physicsUpdateUs"].asInt().unwrapOr(0))
+                                : 0;
+        e.physicsCollisionUs = j.contains("physicsCollisionUs")
+                                   ? static_cast<int>(j["physicsCollisionUs"].asInt().unwrapOr(0))
+                                   : 0;
+        e.renderFrame = j.contains("renderFrame") ? j["renderFrame"].asInt().unwrapOr(0) : 0;
+        e.frameBudgetUs = j.contains("frameBudgetUs")
+                              ? static_cast<int>(j["frameBudgetUs"].asInt().unwrapOr(0))
+                              : 0;
+        e.frameSpentBeforeUs = j.contains("frameSpentBeforeUs")
+                                   ? static_cast<int>(j["frameSpentBeforeUs"].asInt().unwrapOr(0))
+                                   : 0;
+        e.plannerBudgetUs = j.contains("plannerBudgetUs")
+                                ? static_cast<int>(j["plannerBudgetUs"].asInt().unwrapOr(0))
+                                : 0;
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
         e.worldCaptureUs = j.contains("worldCaptureUs")
                                ? static_cast<int>(j["worldCaptureUs"].asInt().unwrapOr(0))
