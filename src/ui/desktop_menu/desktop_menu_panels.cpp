@@ -1,4 +1,5 @@
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_sidebar_material.hpp"
 #include "../../config/assist_policy_settings.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
@@ -329,6 +330,10 @@ public:
     }
 
     static void drawUI() {
+        if (EbSectionCard::begin("ui-sidebar", "Sidebar Materials"))
+            EbDesktopMenuSidebarMaterial::settings();
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
             EbColorPicker::drawSetting("desktop-accent-color", "Accent Color");
             gap();

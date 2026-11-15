@@ -26,7 +26,7 @@ public:
     static bool ensureReady();
     static bool isAvailable();
 
-    // Queue a GPU wave draw for this ImDrawList (clip + callback + state reset).
+    // Render the wave to its FBO before ImGui::Render, then append a clipped image.
     static void paint(ImDrawList* drawList, PaintRequest const& request);
 
 private:

@@ -1,4 +1,5 @@
 #include "desktop_menu_theme.hpp"
+#include "desktop_menu_sidebar_material.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -87,11 +88,11 @@ ImVec4 EbDesktopMenuTheme::sidebarBg() {
 
 ImVec4 EbDesktopMenuTheme::sidebarWaveDark() {
     // Matches shaders/sidebar_wave.frag base — between dock and accent.
-    return EbDesktopMenuThemeColors::lerp(sidebarBg(), accent(), 0.72f);
+    return EbDesktopMenuSidebarMaterial::color(false,EbDesktopMenuThemeColors::lerp(sidebarBg(), accent(), 0.72f));
 }
 
 ImVec4 EbDesktopMenuTheme::sidebarWaveLight() {
-    return accentLight();
+    return EbDesktopMenuSidebarMaterial::color(true,accentLight());
 }
 
 ImVec4 EbDesktopMenuTheme::text() {

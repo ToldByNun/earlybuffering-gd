@@ -1,4 +1,5 @@
 #include "desktop_menu_shell.hpp"
+#include "desktop_menu_sidebar_material.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
@@ -623,9 +624,7 @@ public:
 
         ImVec2 const sideMin = winPos;
         ImVec2 const sideMax(winPos.x + sideW, winPos.y + winSize.y);
-        EbDesktopMenuSidebarSmoke::get().paint(drawList, sideMin, sideMax, rounding,
-                                               static_cast<float>(ImGui::GetTime()),
-                                               ImDrawFlags_RoundCornersLeft);
+        EbDesktopMenuSidebarMaterial::paint(drawList, sideMin, sideMax, rounding);
 
         drawSidebarNav(sideMin, sideW);
         drawSidebarFooter(sideMin, sideW, winSize.y);

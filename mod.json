@@ -1295,6 +1295,7 @@
 			"name": "UI",
 			"description": "In-level overlay, pause chrome, classic Geode settings menu, accent color, and light diagnostics."
 		},
+		"sidebar-material": { "type": "string", "name": "Sidebar Material", "default": "{}", "description": "Desktop sidebar material configuration." },
 		"desktop-accent-color": {
 			"type": "color",
 			"name": "Accent Color",
