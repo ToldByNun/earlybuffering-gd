@@ -1,5 +1,7 @@
 #include "stage_settings_cache.hpp"
 #include "../../core/assist/assist_clock.hpp"
+#include "../assist_mode_migration.hpp"
+#include "../assist_policy_settings.hpp"
 #include "../stage_config.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -9,6 +11,7 @@
 #include <string>
 
 void EbStageSettingsCache::refreshCache() {
+    EbAssistPolicySettings::refresh();
     auto* mod = geode::prelude::Mod::get();
     EbStageConfigImplementation::s_cachedStage.enabled = mod->getSettingValue<bool>("enabled");
     // Wider max when storing display frames (8 frames ≈ 32 ticks @240 TPS).
@@ -34,10 +37,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "lag-warning-toast", true);
     EbStageConfigImplementation::s_cachedShowTrajectory =
         EbStageConfigImplementation::readBool(mod, "show-trajectory", false);
-    EbStageConfigImplementation::s_cachedShowBakePath =
-        EbStageConfigImplementation::readBool(mod, "show-bake-path", false);
-    EbStageConfigImplementation::s_cachedShowPauseBake =
-        EbStageConfigImplementation::readBool(mod, "show-pause-bake", false);
+    EbStageConfigImplementation::s_cachedShowBakePath = false;
+    EbStageConfigImplementation::s_cachedShowPauseBake = false;
     EbStageConfigImplementation::s_cachedShowPauseHub =
         EbStageConfigImplementation::readBool(mod, "show-pause-hub", true);
     EbStageConfigImplementation::s_cachedAssistPress =
@@ -48,20 +49,16 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "assist-orbs", true);
     EbStageConfigImplementation::s_cachedAutoTune =
         EbStageConfigImplementation::readBool(mod, "auto-tune", false);
-    EbStageConfigImplementation::s_cachedSelfBake =
-        EbStageConfigImplementation::readBool(mod, "self-bake", false);
-    EbStageConfigImplementation::s_cachedSelfBakeNormal =
-        EbStageConfigImplementation::readBool(mod, "self-bake-normal", false);
-    EbStageConfigImplementation::s_cachedSelfBakeRefine =
-        EbStageConfigImplementation::readBool(mod, "self-bake-refine", true);
+    EbStageConfigImplementation::s_cachedSelfBake = false;
+    EbStageConfigImplementation::s_cachedSelfBakeNormal = false;
+    EbStageConfigImplementation::s_cachedSelfBakeRefine = false;
     EbStageConfigImplementation::s_cachedTriggerBake =
         EbStageConfigImplementation::readBool(mod, "trigger-bake", true);
     EbStageConfigImplementation::s_cachedTriggerBakeSkipDynamic =
         EbStageConfigImplementation::readBool(mod, "trigger-bake-skip-dynamic", true);
     EbStageConfigImplementation::s_cachedSimBudgetUs = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "sim-budget-us", 4000), 0, 10000);
-    EbStageConfigImplementation::s_cachedBakeRadius = EbStageConfigImplementation::clampInt(
-        EbStageConfigImplementation::readInt(mod, "bake-radius", 0), 0, 128);
+    EbStageConfigImplementation::s_cachedBakeRadius = 0;
     EbStageConfigImplementation::s_cachedCpsLimit = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "cps-limit", 0), 0, 40);
     EbStageConfigImplementation::s_cachedMinClickIntervalMs = EbStageConfigImplementation::clampInt(
@@ -82,8 +79,9 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "assist-probe-past-horizon", true);
     EbStageConfigImplementation::s_cachedAssistMicroWindow =
         EbStageConfigImplementation::readBool(mod, "assist-micro-window", true);
-    EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = EbStageConfigImplementation::clampInt(
-        EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
+    EbStageConfigImplementation::s_cachedAdaptiveScreenTicks =
+        EbStageConfigImplementation::clampInt(
+            EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);
     EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum =
         EbStageConfigImplementation::clampInt(
             EbStageConfigImplementation::readInt(mod, "adaptive-verify-quantum", 16), 8, 64);
@@ -114,7 +112,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "save-feedback-counter", false);
     try {
         auto const candidate = mod->getSettingValue<cocos2d::ccColor3B>("save-icon-color");
-        EbStageConfigImplementation::s_cachedSaveIconColor = {candidate.r, candidate.g, candidate.b};
+        EbStageConfigImplementation::s_cachedSaveIconColor = {candidate.r, candidate.g,
+                                                              candidate.b};
     } catch (...) {
         EbStageConfigImplementation::s_cachedSaveIconColor = {};
     }
@@ -131,69 +130,16 @@ void EbStageSettingsCache::refreshCache() {
     EbStageConfigImplementation::s_cachedLookAhead = EbStageConfigImplementation::clampInt(
         EbStageConfigImplementation::readInt(mod, "look-ahead-cap", 0), 0, 240);
     try {
-        auto modeStr = mod->getSettingValue<std::string>("assist-mode");
-        if (modeStr == "Live")
-            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Live;
-        else if (modeStr == "Replay")
-            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Replay;
-        else if (modeStr == "BruteForce")
-            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::BruteForce;
-        else
-            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Hybrid;
+        auto const storedMode = mod->getSettingValue<std::string>("assist-mode");
+        std::string const modeStr = EbAssistModeMigration::canonical(storedMode);
+        EbStageConfigImplementation::s_cachedAssistMode = modeStr == "Hybrid"
+                                                              ? EbStageConfig::AssistMode::Hybrid
+                                                              : EbStageConfig::AssistMode::Live;
+        if (storedMode != modeStr)
+            mod->setSettingValue<std::string>("assist-mode", "Live");
     } catch (...) {
-        EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Hybrid;
+        EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Live;
     }
-    try {
-        auto pickStr = mod->getSettingValue<std::string>("assist-pick");
-        char const* canon = EbStageConfig::canonicalizeAssistPick(pickStr);
-        if (!canon) {
-            // Unknown → v1 default.
-            EbStageConfigImplementation::s_cachedAssistPickLegacy = true;
-            canon = "v1";
-        } else {
-            EbStageConfigImplementation::s_cachedAssistPickLegacy = (std::strcmp(canon, "v1") == 0);
-        }
-        // Migrate store Legacy/New → v1/v2 so Geode one-of stays valid.
-        if (pickStr != canon) {
-            bool const nested = EbStageConfigImplementation::s_applying;
-            if (!nested)
-                EbStageConfigImplementation::s_applying = true;
-            try {
-                mod->setSettingValue<std::string>("assist-pick", std::string(canon));
-            } catch (...) {
-            }
-            if (!nested)
-                EbStageConfigImplementation::s_applying = false;
-        }
-    } catch (...) {
-        // mod.json default is v1.
-        EbStageConfigImplementation::s_cachedAssistPickLegacy = true;
-    }
-    try {
-        auto engStr = mod->getSettingValue<std::string>("assist-engine");
-        if (engStr == "Trajectory") {
-            EbStageConfigImplementation::s_cachedAssistEngine =
-                EbStageConfig::AssistEngineKind::Trajectory;
-        } else {
-            EbStageConfigImplementation::s_cachedAssistEngine =
-                EbStageConfig::AssistEngineKind::ShadowPlayer;
-            if (engStr != "ShadowPlayer") {
-                bool const nested = EbStageConfigImplementation::s_applying;
-                if (!nested)
-                    EbStageConfigImplementation::s_applying = true;
-                try {
-                    mod->setSettingValue<std::string>("assist-engine", std::string("ShadowPlayer"));
-                } catch (...) {
-                }
-                if (!nested)
-                    EbStageConfigImplementation::s_applying = false;
-            }
-        }
-    } catch (...) {
-        EbStageConfigImplementation::s_cachedAssistEngine =
-            EbStageConfig::AssistEngineKind::ShadowPlayer;
-    }
-
     for (int index = 0; index < EbStageConfig::MODE_COUNT; ++index) {
         auto const& ids = EbStageConfigImplementation::MODE_IDS[index];
         EbModeParams p;
@@ -223,8 +169,7 @@ void EbStageSettingsCache::refreshCache() {
         p.adaptiveOverwrite =
             EbStageConfigImplementation::readBool(mod, ids.adaptiveOverwrite, false);
         if (p.adaptiveOverwrite) {
-            p.adaptivePlan =
-                EbStageConfigImplementation::readBool(mod, ids.adaptivePlan, true);
+            p.adaptivePlan = EbStageConfigImplementation::readBool(mod, ids.adaptivePlan, true);
             p.adaptiveScreenTicks = EbStageConfigImplementation::clampInt(
                 EbStageConfigImplementation::readInt(mod, ids.adaptiveScreenTicks, 24), 8, 64);
             p.adaptiveVerifyQuantum = EbStageConfigImplementation::clampInt(

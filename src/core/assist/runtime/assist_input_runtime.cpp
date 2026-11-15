@@ -12,6 +12,7 @@
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
+#include "../../learning/hybrid_learning.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../sim/sim_trust.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -93,6 +94,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
     {
         EbPerfTrace::Scope const scope("pollOutcome");
         controller.pollOutcome(playLayer);
+        EbHybridLearning::get().poll(playLayer, controller.m_attemptTick);
     }
     {
         EbPerfTrace::Scope const scope("flushPendingRelease");
@@ -269,10 +271,19 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
     int const effectTick =
         controller.resolveEffectTick(controller.m_attemptTick, midStep, continuous);
 
+    // A swallowed early release does not change the pending physical action.
+    // Keep the original press observation until its buffered input fires.
+    bool const learningReleaseBuffered =
+        !down && controller.m_buffer.state == BufferState::Buffered &&
+        controller.m_buffer.player1 == player1 && controller.m_buffer.down;
+    if (!learningReleaseBuffered)
+        EbHybridLearning::get().edge(player1, effectTick, down);
     auto finish = [&](bool passThrough) -> bool {
         if (passThrough) {
+            EbHybridLearning::get().vanilla(playLayer, player, down, player1, effectTick,
+                                            controller.m_simDt);
             EbSelfBakeRecorder::get().noteVanillaInput(playLayer, player, player1, down, effectTick,
-                                                     controller.m_simDt);
+                                                       controller.m_simDt);
         }
         return passThrough;
     };

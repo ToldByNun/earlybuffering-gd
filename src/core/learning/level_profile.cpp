@@ -1,8 +1,9 @@
-#include "../../app/class_manager.hpp"
 #include "level_profile.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../level/level_content_key.hpp"
 #include "assist_learning.hpp"
+#include "hybrid_learning.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
@@ -37,6 +38,7 @@ std::string EbLevelProfile::makeKey(GJGameLevel* level) {
 }
 
 void EbLevelProfile::clear() {
+    EbHybridLearning::get().close();
     m_key.clear();
     m_loaded = false;
     m_dirty = false;
@@ -238,6 +240,7 @@ void EbLevelProfile::loadForLevel(GJGameLevel* level) {
     clear();
     m_key = makeKey(level);
     m_loaded = true;
+    EbHybridLearning::get().open(EbLevelProfileImplementation::levelsDir() / (m_key + ".hybrid"));
     auto result = readFile();
     if (result.isErr()) {
         EbAssistLog::debug(fmt::format("LEARN: no profile for {} (fresh)", m_key));
@@ -247,6 +250,7 @@ void EbLevelProfile::loadForLevel(GJGameLevel* level) {
 }
 
 void EbLevelProfile::resetCurrent() {
+    EbHybridLearning::get().reset();
     if (!m_loaded)
         return;
     for (auto& m : m_modes) {
@@ -259,6 +263,7 @@ void EbLevelProfile::resetCurrent() {
 }
 
 void EbLevelProfile::save() {
+    EbHybridLearning::get().save();
     if (!m_loaded || m_key.empty())
         return;
     if (!m_dirty)

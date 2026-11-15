@@ -6,6 +6,7 @@
 #include "../bake/bake_verifier.hpp"
 #include "../diagnostics/decision_log.hpp"
 #include "../sim/shadow_simulator.hpp"
+#include "contracts/frame_plan_budget.hpp"
 #include "planning/orb_align.hpp"
 #include <Geode/Geode.hpp>
 #include <chrono>
@@ -183,8 +184,6 @@ private:
 
     friend class EbAssistPressPlanner;
 
-    friend class EbAssistBakeReuse;
-
     friend class EbAssistOutcomes;
 
     friend class EbAssistOverlay;
@@ -214,16 +213,6 @@ private:
                    float firstDt, EbDevClockContract::Stamp const& clock);
     bool planRelease(PlayLayer* playLayer, PlayerObject* player, bool player1, int effectTick,
                      float firstDt, EbDevClockContract::Stamp const& clock);
-    // Returns true if bake handled the input (caller should return that bool).
-    // Sets handled=false if bake misses / verify fails and Hybrid should fall through to live.
-    // sharedBudget: Hybrid press envelope (verify spends first; Live uses remainder).
-    // verifyAttempted: set when BakeVerifier::verify ran (Hybrid Live must not
-    // re-force assist via nearBake / prefer-band from the rejected window).
-    // reuse: copy findNear window + verify threatZone for Live (no bake ptrs).
-    bool tryBakeAssist(PlayLayer* playLayer, PlayerObject* player, bool player1, bool down,
-                       int effectTick, float firstDt, bool& handled,
-                       EbPressSimBudget* sharedBudget = nullptr, bool* verifyAttempted = nullptr,
-                       EbHybridPressReuse* reuse = nullptr);
     // allowRecheck=false for CPS / mode-change force-fire (inject now).
     void fireBuffered(PlayLayer* playLayer, PlayerObject* player, bool allowRecheck = true);
     void flushPendingRelease(PlayLayer* playLayer);
@@ -242,12 +231,13 @@ private:
     // Cadenced replan while holdUntilSafe buffer is armed (not every tick).
     void tickHoldUntilSafe(PlayLayer* playLayer, PlayerObject* player);
 
-    void recordDecision(PlayLayer* playLayer, PlayerObject* player, bool down, EbSimPlan const& plan,
-                        int effectTick, int appliedDelay, int limit);
+    void recordDecision(PlayLayer* playLayer, PlayerObject* player, bool down,
+                        EbSimPlan const& plan, int effectTick, int appliedDelay, int limit);
     void tickLearning(PlayLayer* playLayer, PlayerObject* player);
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object,
                        EbDecisionEntry& dec);
 
+    EbFramePlanBudget m_framePlanBudget;
     EbBufferedInput m_buffer{};
     EbDecisionLog m_log{};
     bool m_injecting = false;
@@ -271,10 +261,10 @@ private:
     bool m_pendingReleaseP1 = true;
     bool m_pendingReleaseHold = false;
     bool m_pendingReleaseContinuous = false;
-    int m_pendingReleaseArmTick = 0;     // attemptTick when release was armed
-    int m_pendingReleaseUserUpTick = -1; // -1 = user still holding; else let-go tick
-    int m_pendingReleaseMaxExtend = 0;   // max ticks to keep Jump down AFTER user-up
-    int m_pendingReleaseTick = 0;        // absolute deadline (= userUp + maxExtend)
+    int m_pendingReleaseArmTick = 0;        // attemptTick when release was armed
+    int m_pendingReleaseUserUpTick = -1;    // -1 = user still holding; else let-go tick
+    int m_pendingReleaseMaxExtend = 0;      // max ticks to keep Jump down AFTER user-up
+    int m_pendingReleaseTick = 0;           // absolute deadline (= userUp + maxExtend)
     int64_t m_pendingReleaseDevPressId = 0; // Dev Lab hold timeline (AP7)
     float m_lastPlayerX = 0.f;
     GameModeKind m_lastMode = GameModeKind::Cube;
@@ -310,15 +300,6 @@ public:
     static int roundBias(float bias);
     static void fillPlanRobustLatency(EbPlanOptions& opts, PlayerObject* player, float dtVariance,
                                       bool spamDense = false);
-    static void fillBakePreferBandFromReuse(EbPlanOptions& opts, EbHybridPressReuse const& reuse,
-                                            int effectTick, int limit, float simDt);
-    static void fillBakePreferBand(EbPlanOptions& opts, PlayerObject* player, bool player1, bool down,
-                                   int effectTick, int limit, int attemptTick, float simDt,
-                                   EbHybridPressReuse const* reuse = nullptr);
-    static bool nearBakeWindowHint(PlayerObject* player, bool player1, bool down, int attemptTick,
-                                   float simDt, EbHybridPressReuse const* reuse = nullptr);
-    static bool husBlockedBeforeBakeNominal(EbHybridPressReuse const& reuse, int effectTick,
-                                            float simDt, int& outNomTick);
     static bool nearOrbOrPadHint(PlayLayer* playLayer, PlayerObject* player, int limit,
                                  float simDt);
 

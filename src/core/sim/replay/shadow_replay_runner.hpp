@@ -10,18 +10,19 @@
 class EbShadowReplayRunner {
 public:
     static EbShadowSimulator::ReplayResult replay(EbShadowSimulator& simulator, PlayLayer* layer,
-                                                int slot, int startTick,
-                                                std::vector<EbInputEvent> const& timeline,
-                                                float deltaTime, int maxTicks, bool shiftActionBy,
-                                                int actionShift);
+                                                  int slot, int startTick,
+                                                  std::vector<EbInputEvent> const& timeline,
+                                                  float deltaTime, int maxTicks, bool shiftActionBy,
+                                                  int actionShift, int budgetUs);
     static EbShadowSimulator::BakeRunResult
     runBakeTimeline(EbShadowSimulator& simulator, PlayLayer* layer, int slot,
                     std::vector<EbReplayEvent> const& events, float deltaTime, int untilFrame,
                     int sampleFrame, bool applyP2ToShadow, bool traceFrames, bool parkReals,
                     int substeps, std::function<bool(int frame)> onFrame);
     static EbShadowSimulator::PathSample samplePath(EbShadowSimulator& simulator, PlayLayer* layer,
-                                                  int slot, std::vector<EbReplayEvent> const& events,
-                                                  float deltaTime, int untilFrame);
+                                                    int slot,
+                                                    std::vector<EbReplayEvent> const& events,
+                                                    float deltaTime, int untilFrame);
 
 private:
     EbShadowReplayRunner() = delete;

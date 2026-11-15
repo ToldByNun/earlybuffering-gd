@@ -161,7 +161,7 @@ void EbPauseActionBridge::resetLearning() {
 void EbPauseActionBridge::toggleAutoTune() {
     EbStageConfig::toggleAutoTune();
     EbAssistLog::info(
-        fmt::format("LEARN: smart learning {}", EbStageConfig::autoTune() ? "ON" : "OFF"));
+        fmt::format("LEARN: smart learning {}", EbStageConfig::autoTuneEnabled() ? "ON" : "OFF"));
     EbAssistController::get().updateOverlay();
 }
 

@@ -6,12 +6,12 @@
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
 #include "../../bake/bake_map.hpp"
 #include "../../diagnostics/assist_perf_stats.hpp"
-#include "../../diagnostics/sim_tick_cost_meter.hpp"
-#include "../../sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../../diagnostics/assist_real_metrics.hpp"
 #include "../../diagnostics/assist_sim_estimate.hpp"
 #include "../../diagnostics/divergence_tracker.hpp"
+#include "../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../learning/level_profile.hpp"
+#include "../../sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../../sim/sim_trust.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
@@ -47,9 +47,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         auto const* modeName = EbStageConfig::assistModeName(mode);
         std::string learnBit;
         // Learning only applies to Live / Hybrid fallback — not bake windows.
-        if (mode == AssistMode::Replay || mode == AssistMode::BruteForce) {
-            learnBit = "learn n/a";
-        } else if (EbStageConfig::autoTune()) {
+        if (EbStageConfig::autoTune()) {
             auto spot =
                 EbLevelProfile::get().overlaySpot(controller.m_lastMode, controller.m_lastPlayerX);
             learnBit =
@@ -58,27 +56,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         } else {
             learnBit = "learn OFF";
         }
-        // Template ownership: last bake arm/miss hint over map status.
-        // Hybrid/Replay/Brute prefix so Live foresight is never confused with tpl.
-        std::string bakeBit = controller.m_lastBakeHint.empty() ? EbBakeMap::get().statusLine()
-                                                                : controller.m_lastBakeHint;
-        if (!controller.m_lastBakeHint.empty()) {
-            char const* pref = nullptr;
-            if (mode == AssistMode::Hybrid)
-                pref = "hy";
-            else if (mode == AssistMode::Replay)
-                pref = "rp";
-            else if (mode == AssistMode::BruteForce)
-                pref = "br";
-            if (pref)
-                bakeBit = fmt::format("{} {}", pref, controller.m_lastBakeHint);
-        }
-        // While a bake-armed buffer is waiting, mark tpl ownership on left=.
-        if (controller.m_buffer.state == BufferState::Buffered && controller.m_buffer.fromBake) {
-            bakeBit = fmt::format("{} · tpl{}", bakeBit, controller.m_buffer.down ? "↓" : "↑");
-        }
         std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
-        std::string bakeVizBit = EbBakePathVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
@@ -92,16 +70,14 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
                                              : fmt::format("cps {}/{}", cps, cpsLim);
         }
         controller.m_overlayText =
-            fmt::format("EarlyBuffer {} | mode {} | {} left={} | {} | {}",
-                        EbStageConfig::stageLabel(stage), modeName, state, left, learnBit, bakeBit);
+            fmt::format("EarlyBuffer {} | mode {} | {} left={} | {}",
+                        EbStageConfig::stageLabel(stage), modeName, state, left, learnBit);
         if (!smartBit.empty())
             controller.m_overlayText += " | " + smartBit;
         if (!cpsBit.empty())
             controller.m_overlayText += " | " + cpsBit;
         if (!trajBit.empty())
             controller.m_overlayText += " | " + trajBit;
-        if (!bakeVizBit.empty())
-            controller.m_overlayText += " | " + bakeVizBit;
         if (EbStageConfig::triggerBake()) {
             if (EbTriggerWorldBaker::get().running()) {
                 controller.m_overlayText += fmt::format(

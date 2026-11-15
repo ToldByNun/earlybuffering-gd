@@ -4,6 +4,7 @@
 class EbOrbContinuation {
 public:
     enum class Input { None, Release, Press };
+    static bool shouldProbe(bool died, bool activatedRing, bool unknown, bool budgetAvailable);
     Input next(int tick, int ringCount, bool freshOrb);
     bool attempted() const;
     bool verified(int ringCount, int ticksRan) const;

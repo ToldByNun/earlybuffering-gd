@@ -44,6 +44,7 @@ public:
     int attemptStartTick = 0; // absolute attempt tick at plan time (for abs death ticks)
     // Live bake-prior: delay ticks from a nearby BakeMap window (−1 = unset).
     // Enqueued after d0 / orb window; early-exit when a ±k-robust prefer delay is viable.
+    int hybridDelay = -1;
     int preferDelayMin = -1;
     int preferDelayMax = -1;
     // ±k robust margin: 0 = auto (mode/speed/dtVariance/spam); else clamp 1–3.
@@ -103,6 +104,8 @@ private:
 
 class EbSimPlan {
 public:
+    int hybridHint = -1;
+    bool hybridTried = false;
     bool fixedFireTick = false;
     PlanAction action = PlanAction::Pass;
     AssistReason reason = AssistReason::None;
@@ -123,6 +126,15 @@ public:
     bool budgetHit = false;
     // Wall µs spent in plan()/planSequence (filled by Live press/release planners).
     int planUs = 0;
+    long long renderFrame = 0;
+    int frameBudgetUs = 0;
+    int frameSpentBeforeUs = 0;
+    int plannerBudgetUs = 0;
+
+    int physicsCalls = 0;
+    int physicsWorldUs = 0;
+    int physicsUpdateUs = 0;
+    int physicsCollisionUs = 0;
     int worldCaptureUs = 0;
     int prepareUs = 0;
     int guardOriginalDelay = -1;

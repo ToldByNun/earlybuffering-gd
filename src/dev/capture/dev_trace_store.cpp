@@ -1,5 +1,6 @@
-#include "../../app/class_manager.hpp"
 #include "dev_trace_store.hpp"
+#include "../../app/class_manager.hpp"
+#include "../../config/assist_policy_settings.hpp"
 #include "../../config/stage_config.hpp"
 #include "codec/dev_event_codec.hpp"
 #include "codec/dev_session_codec.hpp"
@@ -120,18 +121,19 @@ bool EbDevTraceStore::parseSource(std::string const& s, DevEventSource& out) {
     return false;
 }
 
-bool EbDevTraceStore::validatePressChain(std::vector<EbDevDecisionEvent> const& events, int64_t pressId,
-                                       std::string& err) {
+bool EbDevTraceStore::validatePressChain(std::vector<EbDevDecisionEvent> const& events,
+                                         int64_t pressId, std::string& err) {
     return EbDevTraceValidation::validatePressChain(events, pressId, err);
 }
 
-matjson::Value EbDevTraceStoreImplementation::clockStampToJson(EbDevClockContract::Stamp const& st) {
+matjson::Value
+EbDevTraceStoreImplementation::clockStampToJson(EbDevClockContract::Stamp const& st) {
     return EbDevSnapshotCodec::clockStampToJson(st);
 }
 
 bool EbDevTraceStoreImplementation::clockStampFromJson(matjson::Value const& j,
-                                                     EbDevClockContract::Stamp& st,
-                                                     std::string& err) {
+                                                       EbDevClockContract::Stamp& st,
+                                                       std::string& err) {
     return EbDevSnapshotCodec::clockStampFromJson(j, st, err);
 }
 
@@ -139,7 +141,8 @@ matjson::Value EbDevTraceStoreImplementation::playerBlobToJson(EbDevPlayerBlob c
     return EbDevSnapshotCodec::playerBlobToJson(b);
 }
 
-void EbDevTraceStoreImplementation::playerBlobFromJson(matjson::Value const& j, EbDevPlayerBlob& b) {
+void EbDevTraceStoreImplementation::playerBlobFromJson(matjson::Value const& j,
+                                                       EbDevPlayerBlob& b) {
     return EbDevSnapshotCodec::playerBlobFromJson(j, b);
 }
 
@@ -148,7 +151,7 @@ matjson::Value EbDevTraceStoreImplementation::witnessToJson(EbDevLiveWitness con
 }
 
 bool EbDevTraceStoreImplementation::witnessFromJson(matjson::Value const& j, EbDevLiveWitness& w,
-                                                  std::string& err) {
+                                                    std::string& err) {
     return EbDevSnapshotCodec::witnessFromJson(j, w, err);
 }
 
@@ -157,7 +160,7 @@ matjson::Value EbDevTraceStoreImplementation::eventToJson(EbDevDecisionEvent con
 }
 
 bool EbDevTraceStoreImplementation::eventFromJson(matjson::Value const& j, EbDevDecisionEvent& e,
-                                                std::string& err) {
+                                                  std::string& err) {
     return EbDevEventCodec::eventFromJson(j, e, err);
 }
 
@@ -170,7 +173,7 @@ std::string EbDevTraceStore::sessionToJsonString(EbDevSessionFile const& session
 }
 
 bool EbDevTraceStore::sessionFromJsonString(std::string const& body, EbDevSessionFile& out,
-                                          std::string& err) {
+                                            std::string& err) {
     return EbDevSessionCodec::sessionFromJsonString(body, out, err);
 }
 
@@ -236,7 +239,7 @@ void EbDevTraceStore::sampleResources() {
 }
 
 void EbDevTraceStore::setLevelMeta(std::string levelKey, std::string levelName, bool startPos,
-                                 bool practice, std::string settingsFingerprint) {
+                                   bool practice, std::string settingsFingerprint) {
     if (!this->m_open)
         return;
     this->m_session.levelKey = std::move(levelKey);
@@ -255,15 +258,24 @@ void EbDevTraceStore::setModVersion(std::string modVersion) {
 std::string EbDevTraceStore::makeSettingsFingerprint() {
     return fmt::format(
         "stage={} mode={} pick={} eng={} ticks={}/{} unit={} safe={} orbs={} "
-        "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={}",
+        "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={} ground={} "
+        "chain={}/{}/{}/{}/{}/{}/{}/{}",
         EbStageConfig::stageLabel(EbStageConfig::fromSettings()),
         EbStageConfig::assistModeName(EbStageConfig::assistMode()), EbStageConfig::assistPickName(),
         EbStageConfig::assistEngineName(), EbStageConfig::ticksAll(), EbStageConfig::ticksWave(),
         EbStageConfig::windowUnitFrames() ? "Frames" : "Ticks", EbStageConfig::safeMode() ? 1 : 0,
         EbStageConfig::assistOrbs() ? 1 : 0, EbStageConfig::simBudgetUs(),
         EbStageConfig::tickBudgetPerPress(), EbStageConfig::triggerBake() ? 1 : 0,
-        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTune() ? 1 : 0,
-        EbStageConfig::selfBake() ? 1 : 0);
+        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTuneEnabled() ? 1 : 0,
+        EbStageConfig::selfBake() ? 1 : 0, static_cast<int>(EbAssistPolicySettings::ground()),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Cube)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ship)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ball)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ufo)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Wave)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Robot)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Spider)),
+        static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Swing)));
 }
 
 bool EbDevTraceStore::beginAttempt(int startTick) {
@@ -303,8 +315,8 @@ EbDevDecisionEvent* EbDevTraceStore::appendEvent(EbDevDecisionEvent event) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed)
         return nullptr;
-    bool const attemptScoped = event.kind == DevEventKind::Checkpoint ||
-                               event.kind == DevEventKind::ModeTransition;
+    bool const attemptScoped =
+        event.kind == DevEventKind::Checkpoint || event.kind == DevEventKind::ModeTransition;
     if (event.pressId <= 0 && !attemptScoped)
         return nullptr;
     if (attemptScoped) {
@@ -435,7 +447,8 @@ bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
 
 bool EbDevTraceStore::flush() {
     if (!(!this->m_open)) {
-        return this->writeAtomic(EbDevTraceStoreImplementation::sessionToJsonValue(this->m_session));
+        return this->writeAtomic(
+            EbDevTraceStoreImplementation::sessionToJsonValue(this->m_session));
     }
     return false;
 }
@@ -471,8 +484,8 @@ EbDevAttempt const* EbDevTraceStore::currentAttempt() const {
 }
 
 EbDevDecisionEvent EbDevTraceStoreImplementation::makeEv(DevEventKind kind, int64_t eventId,
-                                                     int64_t attemptId, int64_t pressId,
-                                                     int64_t parent, int64_t planId) {
+                                                         int64_t attemptId, int64_t pressId,
+                                                         int64_t parent, int64_t planId) {
     return EbDevTraceValidation::makeEv(kind, eventId, attemptId, pressId, parent, planId);
 }
 

@@ -48,7 +48,8 @@ int main() {
            "a4-d0-dead-not-trunc");
     expect(EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false),
            "a4-hopeless-blocked");
-    expect(EbLivePlanContracts::hopelessBlockedByLivingLater(true, true), "a4-living-later-blocked");
+    expect(EbLivePlanContracts::hopelessBlockedByLivingLater(true, true),
+           "a4-living-later-blocked");
     expect(!EbLivePlanContracts::hopelessBlockedByLivingLater(true, false), "a7-uniform-allowed");
 
     // Seed honesty still requires covering death to count as proven Alive (AP10).
@@ -60,7 +61,11 @@ int main() {
     // Fair depth ranking: deep d0 bin must not crush quantum later on bin alone.
     expect(!EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 103.f, quantum),
            "a4-fair-no-bin-steal");
-    expect(EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, quantum),
+    // With this fixture's 12-tick quantum, 18 ticks is already deep:
+    // the larger survival bin wins. A genuinely shallow result needs a clear gain.
+    expect(!EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, 18, 0, 109.f, quantum),
+           "a4-deep-lower-bin");
+    expect(EbLivePlanContracts::fairDepthPreferCand(96, 3, 100.f, quantum - 1, 0, 109.f, quantum),
            "a4-fair-score-gain");
 
     // Ledger: truncated Alive with budgetHit → budget-not-reached (not not-viable).

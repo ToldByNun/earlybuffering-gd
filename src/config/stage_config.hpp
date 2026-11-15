@@ -39,7 +39,7 @@ class EbStageConfig {
 public:
     enum class GameModeKind { Cube = 0, Ship, Ball, Ufo, Wave, Robot, Spider, Swing, Count };
 
-    enum class AssistMode { Live = 0, Replay, Hybrid, BruteForce };
+    enum class AssistMode { Live = 0, Hybrid };
 
     // Live V2 sim backend (WU8). V1 effective engine is always ShadowPlayer.
     enum class AssistEngineKind { ShadowPlayer = 0, Trajectory };
@@ -197,6 +197,7 @@ public:
 
     // --- Learning ---
     static bool autoTune();
+    static bool autoTuneEnabled();
     // Self-bake: practice default; optional normal-mode; budgeted window refine.
     static bool selfBake();
     static bool selfBakeNormal();
@@ -269,8 +270,8 @@ public:
                                         std::vector<EbStageConfig::PercentRange>& out);
     static bool parseAssistOffRangesJson(std::string const& raw,
                                          std::vector<EbStageConfig::PercentRange>& out);
-    static std::string serializeAssistOffRangesJson(
-        std::vector<EbStageConfig::PercentRange> const& ranges);
+    static std::string
+    serializeAssistOffRangesJson(std::vector<EbStageConfig::PercentRange> const& ranges);
     static void normalizeAssistOffRanges(std::vector<EbStageConfig::PercentRange>& ranges);
     static void writeAssistOffRangesJson(geode::prelude::Mod* mod,
                                          std::vector<EbStageConfig::PercentRange> const& ranges);
@@ -304,16 +305,16 @@ private:
          "wave-adaptive-verify-quantum", "wave-adaptive-reserve-pct", "wave"},
         {"robot-enable", "robot-overwrite", "robot-ticks", "robot-cap", "robot-slack",
          "robot-latency", "robot-adaptive-overwrite", "robot-adaptive-plan",
-         "robot-adaptive-screen-ticks", "robot-adaptive-verify-quantum", "robot-adaptive-reserve-pct",
-         "robot"},
+         "robot-adaptive-screen-ticks", "robot-adaptive-verify-quantum",
+         "robot-adaptive-reserve-pct", "robot"},
         {"spider-enable", "spider-overwrite", "spider-ticks", "spider-cap", "spider-slack",
          "spider-latency", "spider-adaptive-overwrite", "spider-adaptive-plan",
          "spider-adaptive-screen-ticks", "spider-adaptive-verify-quantum",
          "spider-adaptive-reserve-pct", "spider"},
         {"swing-enable", "swing-overwrite", "swing-ticks", "swing-cap", "swing-slack",
          "swing-latency", "swing-adaptive-overwrite", "swing-adaptive-plan",
-         "swing-adaptive-screen-ticks", "swing-adaptive-verify-quantum", "swing-adaptive-reserve-pct",
-         "swing"},
+         "swing-adaptive-screen-ticks", "swing-adaptive-verify-quantum",
+         "swing-adaptive-reserve-pct", "swing"},
     };
     static EbStageInfo s_cachedStage;
     static std::array<EbModeParams, EbStageConfig::MODE_COUNT> s_cachedModes;
@@ -337,8 +338,6 @@ private:
     static bool s_cachedTriggerBake;
     static bool s_cachedTriggerBakeSkipDynamic;
     static AssistMode s_cachedAssistMode;
-    static bool s_cachedAssistPickLegacy;
-    static AssistEngineKind s_cachedAssistEngine;
     static int s_cachedSimBudgetUs;
     static int s_cachedBakeRadius;
     static int s_cachedCpsLimit;

@@ -1,4 +1,5 @@
 #include "adaptive_plan_search.hpp"
+#include "../../../../../config/assist_policy_settings.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
@@ -110,6 +111,32 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         noteStats(stats);
         return plan;
     }
+    // These input families unconditionally require classic continuation/subtick
+    // search. Screening them first captures the same world twice and discards
+    // every verification opportunity before falling through.
+    bool const needsClassic = EbLivePlanContracts::adaptiveNeedsClassicInputSearch(
+        real->m_isSpider && down, real->m_isBird, options.allowSubtick,
+        down && EbStageConfig::assistOrbs());
+    bool const immediateWave =
+        options.hybridDelay == 0 && real->m_isDart && (!down || !EbStageConfig::assistOrbs());
+    bool const learnedWindow = (options.hybridDelay > 0 || immediateWave) &&
+                               options.hybridDelay <= limit && options.requireAliveForDelay &&
+                               !layer->m_gameState.m_isDualMode &&
+                               (down || real->m_isDart || real->m_isShip || real->m_isSwing);
+    if (needsClassic || learnedWindow) {
+        auto classicOptions = options;
+        classicOptions.adaptivePlan = false;
+        auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
+                                                   firstDt, classicOptions);
+        classicPlan.adaptiveShell = true;
+        classicPlan.adaptiveFellThrough = true;
+        classicPlan.adaptiveAbortedForFallthrough = true;
+        classicPlan.plannerPath = learnedWindow ? "hybridInputWindow" : "classicRequired";
+        stats.gated = false;
+        noteStats(stats);
+        return classicPlan;
+    }
+
     float useFirstDt = firstDt;
     if (useFirstDt <= 0.f || useFirstDt > deltaTime)
         useFirstDt = deltaTime;
@@ -150,7 +177,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     // Match classic IW: ball stopAtBallLanding so Adaptive quanta share landing
     // semantics with fallthrough ranking (was unset → false). Dual linked
     // exclusion stays in classic prepare; Adaptive solo Live is the ship path.
-    model.stopAtBallLanding = inputWindow && real->m_isBall;
+    model.stopAtBallLanding =
+        inputWindow && real->m_isBall &&
+        EbAssistPolicySettings::ground() != EbAssistPolicySettings::Policy::Off;
     if (inputWindow && EbStageConfig::paramsFor(real).cap == 0 &&
         EbStageConfig::lookAheadCap() == 0) {
         if (continuousControl) {
@@ -262,6 +291,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Phase A — baseline d0
         runScreenDelay(0);
+        plan.hybridTried = options.hybridDelay == 0 && slots[0].ticksSimulated > 0;
         if (slots[0].terminalDied && slots[0].deathTick >= 0 && plan.firstDeathTick < 0) {
             plan.firstDeathTick = slots[0].deathTick;
             plan.firstDeathObject = slots[0].lastRaw.deathObject;
@@ -298,8 +328,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
-        if ((real->m_isSpider && down) ||
-            (real->m_isBird && (options.allowSubtick || (down && EbStageConfig::assistOrbs())))) {
+        if (needsClassic) {
             fallClassic = true;
             plan.adaptiveAbortedForFallthrough = true;
         } else if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
@@ -585,6 +614,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(fallthroughRemUs))
             classicPlan.budgetHit = true;
         classicPlan.plannerPath = "hybridFallthrough";
+        classicPlan.hybridTried |= plan.hybridTried;
         return classicPlan;
     };
 
@@ -768,9 +798,8 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
            "ap-l5-fallthrough-no-stack");
     expect(EbLivePlanContracts::intendedFallthroughClassicBudgetUs(1500, 50) == 1500,
            "fallthrough-remus-keep");
-    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) ==
-               EbLivePlanContracts::kLiveSoftWallFloorUs,
-           "ap-l5-classic-soft-wall-floor");
+    expect(EbLivePlanContracts::intendedLiveSoftWallFloorUs(2500) == 2500,
+           "ap-p05-small-budget-preserved");
     expect(EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true) == 4085 &&
                EbLivePlanContracts::adaptiveShellBudgetUs(
                    8170, EbLivePlanContracts::adaptiveFallthroughReserveUs(8170, true)) == 4085,

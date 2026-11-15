@@ -1,4 +1,7 @@
 #include "desktop_menu_panels.hpp"
+#include "../../config/assist_policy_settings.hpp"
+#include "../../core/learning/hybrid_learning.hpp"
+#include "../../core/learning/level_profile.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_dev_panel.hpp"
 #include "desktop_menu_icons.hpp"
@@ -14,8 +17,8 @@
 
 #if defined(EB_DESKTOP_IMGUI)
 
-#include <imgui.h>
 #include <cstdio>
+#include <imgui.h>
 
 class EbDesktopMenuPanelsDraw {
 public:
@@ -28,8 +31,8 @@ public:
             EbCheckbox::drawSetting("enabled", "Enabled");
             EbCheckbox::drawSetting("safe-mode", "Safe Mode");
             {
-                char const* opts[] = {"Live", "Replay", "Hybrid", "BruteForce"};
-                EbComboBox::drawSetting("assist-mode", "Assist Mode", opts, 4);
+                char const* opts[] = {"Live", "Hybrid"};
+                EbComboBox::drawSetting("assist-mode", "Assist Mode", opts, 2);
             }
         }
         EbSectionCard::end();
@@ -82,22 +85,23 @@ public:
         if (EbSectionCard::begin("assist-algorithm", "Algorithm")) {
             EbSlider::drawIntSetting("death-slack", "Death Slack", 0, 16);
             EbSlider::drawIntSetting("look-ahead-cap", "Look-Ahead Cap", 0, 240);
-            {
-                char const* pickOpts[] = {"v1", "v2"};
-                char const* pickLabels[] = {"Pick v1", "Pick v2"};
-                EbDropdown::drawSetting("assist-pick", "Pick Mode", pickOpts, 2, pickLabels);
-            }
-            {
-                char const* engOpts[] = {"ShadowPlayer", "Trajectory"};
-                EbComboBox::drawSetting("assist-engine", "Assist Engine", engOpts, 2);
-            }
             EbSlider::drawIntSetting("cps-limit", "CPS Limit", 0, 40);
             EbSlider::drawIntSetting("min-click-interval-ms", "Min Click Interval", 0, 500, "ms");
             EbCheckbox::drawSetting("assist-orbs", "Orb Assist");
+            {
+                char const* policies[] = {"Auto", "On", "Off"};
+                EbDropdown::drawSetting("orb-chain-verify", "Orb Chain Verify Default", policies,
+                                        3);
+            }
             EbSlider::drawIntSetting("sim-budget-us", "Sim Budget", 0, 10000, "µs");
             EbSlider::drawIntSetting("tick-budget", "Plan Tick Budget", 500, 20000);
             EbCheckbox::drawSetting("assist-press", "Assist Presses");
             EbCheckbox::drawSetting("assist-release", "Assist Releases");
+        }
+        EbSectionCard::end();
+        if (EbSectionCard::begin("assist-trigger-world", "Trigger World")) {
+            EbCheckbox::drawSetting("trigger-bake", "Prepare Trigger World");
+            EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
         }
         EbSectionCard::end();
     }
@@ -105,9 +109,104 @@ public:
     static void drawLearn() {
         if (EbSectionCard::begin("learn-toggles", "Learning")) {
             EbCheckbox::drawSetting("auto-tune", "Auto-Tune Per Level");
-            EbCheckbox::drawSetting("self-bake", "Self-Bake (Practice)");
-            EbCheckbox::drawSetting("self-bake-normal", "Self-Bake in Normal");
-            EbCheckbox::drawSetting("self-bake-refine", "Self-Bake Refine");
+            auto& learning = EbHybridLearning::get();
+            if (!EbLevelProfile::get().loaded())
+                ImGui::TextWrapped("Open a level to see its learning progress.");
+            else if (EbStageConfig::assistMode() != AssistMode::Hybrid)
+                ImGui::TextWrapped("Live uses its own timing adjustments. Choose Hybrid to learn "
+                                   "which timings work on repeated attempts.");
+            else if (!EbStageConfig::autoTuneEnabled())
+                ImGui::TextWrapped("Learning is paused. Turn on Auto-Tune to continue with this "
+                                   "level's saved experience.");
+            else {
+                bool frozen = learning.frozen();
+                if (EbCheckbox::draw("freeze-hybrid", "Keep current timings", &frozen, true,
+                                     "Try your learned timings without updating them. Applies "
+                                     "until you leave this level."))
+                    learning.freeze(frozen);
+                int const familiar = learning.familiar();
+                if (frozen)
+                    ImGui::TextWrapped("Your timing history is fixed for this test. Hybrid still "
+                                       "checks each suggestion as you play.");
+                else
+                    ImGui::TextWrapped(
+                        familiar ? "On familiar clicks, Hybrid checks a timing that worked "
+                                   "before. On unfamiliar clicks it uses the usual search."
+                                 : "Play the same section a few times. Hybrid learns when a "
+                                   "timing keeps working across separate attempts.");
+                ImGui::Separator();
+                if (ImGui::BeginTable("learning-stats", 2, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled("FAMILIAR PATTERNS");
+                    ImGui::Text("%d", familiar);
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled("TIMINGS ACCEPTED");
+                    ImGui::Text("%d / %d", learning.confirmed, learning.tried);
+                    ImGui::EndTable();
+                }
+                float acceptance =
+                    learning.tried ? float(learning.confirmed) / learning.tried : 0.f;
+                ImGui::ProgressBar(acceptance, ImVec2(-1.f, 5.f), "");
+                if (!learning.tried)
+                    ImGui::TextWrapped(
+                        "No learned timing has reached a physics check this visit. Familiar "
+                        "patterns may belong to another part or input type.");
+                ImGui::Separator();
+                ImGui::Text("Inputs seen this visit   %d", learning.edges);
+                ImGui::Text("Local outcomes observed   %d", learning.observations);
+                ImGui::Text("Suggested timings chosen   %d / %d", learning.confirmed,
+                            learning.tried);
+                ImGui::Text("Inputs ending an observation   %d", learning.interrupted);
+                ImGui::Text("Local deaths   %d", learning.deaths);
+                ImGui::Text("Last delay   %d ticks", learning.lastDelay);
+                if (learning.lastDeathAge >= 0)
+                    ImGui::Text("Last local death after   %d ticks", learning.lastDeathAge);
+                if (learning.drift)
+                    ImGui::TextWrapped("Learning paused on %d inputs where the prediction "
+                                       "disagreed with the game.",
+                                       learning.drift);
+            }
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("learn-advanced", "Advanced Learning")) {
+            auto& learning = EbHybridLearning::get();
+            EbSlider::drawInt("learn-observation", "Observation", &learning.observationTicks, 24,
+                              96, " ticks", true,
+                              "Longer observation catches later deaths. Another physical input "
+                              "ends attribution.");
+            EbSlider::drawInt(
+                "learn-attempts", "Independent Attempts", &learning.minimumAttempts, 3, 12, "",
+                true,
+                "More attempts require stronger repeated evidence before proposing a timing.");
+            EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes);
+            EbCheckbox::draw("learn-phase", "Record death timing phase", &learning.trackPhase,
+                             learning.trackOutcomes);
+            EbCheckbox::draw("learn-sequence", "Record recent input sequence",
+                             &learning.trackSequence, learning.trackOutcomes);
+            EbSlider::drawInt("learn-death-penalty", "Local death penalty", &learning.deathPenalty,
+                              0, 4);
+            EbSlider::drawInt("learn-survival-reward", "Survival reward", &learning.survivalReward,
+                              1, 3);
+            EbSlider::drawInt("learn-lineup-depth", "Lineup Look-Ahead", &learning.lineupDepth, 1,
+                              3, " inputs", true,
+                              "On familiar presses, check up to this many inputs ahead within the "
+                              "current planning budget.");
+            EbSlider::drawInt("learn-bin-x", "Position X resolution", &learning.positionBinX, 16,
+                              256);
+            EbSlider::drawInt("learn-bin-y", "Position Y resolution", &learning.positionBinY, 16,
+                              256);
+            EbSlider::drawInt("learn-tps-quantum", "TPS grouping", &learning.tpsQuantum, 1, 120);
+            EbCheckbox::draw("learn-match-substep", "Distinguish sub-step inputs",
+                             &learning.matchSubstep);
+            EbCheckbox::draw("learn-match-intervals", "Distinguish input intervals",
+                             &learning.matchIntervals);
+            EbCheckbox::draw("learn-coarse", "Continuous mode fallback", &learning.coarseFallback);
+            EbSlider::drawInt("learn-coarse-attempts", "Fallback independent attempts",
+                              &learning.coarseAttempts, 3, 12, "", learning.coarseFallback);
+            ImGui::TextWrapped(
+                "Coarser groups share experience between nearby paths. Every suggestion is checked "
+                "against current geometry. These controls apply during this level visit.");
         }
         EbSectionCard::end();
 
@@ -118,37 +217,9 @@ public:
             EbButton::drawAction("import-config-action", "Import Config");
             EbButton::endRow();
             EbButton::beginRow(2);
-            EbButton::drawAction("reset-learn-action", "Reset Learning");
+            EbButton::drawAction("reset-learn-action", "Reset This Level");
             EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
             EbButton::endRow();
-        }
-        EbSectionCard::end();
-    }
-
-    static void drawBake() {
-        if (EbSectionCard::begin("bake-actions", "Bake Actions")) {
-            EbButton::beginRow(2);
-            EbButton::drawAction("import-bake-replay", "Import Replay");
-            EbButton::drawAction("cycle-assist-mode", "Cycle Mode");
-            EbButton::endRow();
-            EbButton::beginRow(2);
-            EbButton::drawAction("bake-map-action", "Bake Map");
-            EbButton::drawAction("brute-bake-action", "Brute Bake");
-            EbButton::endRow();
-            EbButton::drawAction("cancel-bake-action", "Cancel Bake");
-            EbSlider::drawIntSetting("bake-radius", "Bake Radius", 0, 128);
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("bake-triggers", "Trigger World")) {
-            EbCheckbox::drawSetting("trigger-bake", "Trigger World Bake");
-            EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
-            {
-                char const* verifyOpts[] = {"off", "ab"};
-                char const* verifyLabels[] = {"Off", "A/B"};
-                EbDropdown::drawSetting("assist-verify", "Assist Verify", verifyOpts, 2,
-                                        verifyLabels);
-            }
         }
         EbSectionCard::end();
     }
@@ -190,6 +261,29 @@ public:
         EbSlider::drawIntSetting(slackKey, "Slack", -1, 16);
         EbSlider::drawFloatSetting(latencyKey, "Latency", 0.0f, 2.0f, 2);
 
+        char chainKey[64];
+        std::snprintf(chainKey, sizeof(chainKey), "%s-orb-chain-verify", prefix);
+        char const* choices[] = {"Inherit", "Auto", "On", "Off"};
+        EbDropdown::drawSetting(chainKey, "Orb Chain Verify", choices, 4);
+        if (std::string(prefix) == "ball")
+            EbDropdown::drawSetting("ball-ground-check", "Ground Check", choices + 1, 3);
+        if (!EbLevelProfile::get().key().empty()) {
+            auto drawLevelPolicy = [&](char const* key, char const* label) {
+                auto value = EbAssistPolicySettings::levelValue(key);
+                int selected = 0;
+                for (int index = 1; index < 4; ++index) {
+                    if (value == choices[index])
+                        selected = index;
+                }
+                if (EbDropdown::draw((std::string("level-") + key).c_str(), label, choices, 4,
+                                     &selected))
+                    EbAssistPolicySettings::setLevelValue(key, choices[selected]);
+            };
+            drawLevelPolicy(chainKey, "This Level: Orb Chain Verify");
+            if (std::string(prefix) == "ball")
+                drawLevelPolicy("ball-ground-check", "This Level: Ground Check");
+        }
+
         gap();
         EbCheckbox::drawSetting(adaptiveOwKey, "Adaptive Overwrite");
         bool const adaptiveOw = EbDesktopMenuBind::getBool(adaptiveOwKey, false);
@@ -222,7 +316,6 @@ public:
     static void drawVisual() {
         if (EbSectionCard::begin("visual-viz", "Visualizers")) {
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
-            EbCheckbox::drawSetting("show-bake-path", "Bake Path Visualizer");
         }
         EbSectionCard::end();
 
@@ -241,7 +334,6 @@ public:
             gap();
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
-            EbCheckbox::drawSetting("show-pause-bake", "Pause Status Lines");
             EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
         }
         EbSectionCard::end();
@@ -289,9 +381,6 @@ void EbDesktopMenuPanels::draw(SettingsCategory category) {
         break;
     case SettingsCategory::Learn:
         EbDesktopMenuPanelsDraw::drawLearn();
-        break;
-    case SettingsCategory::Bake:
-        EbDesktopMenuPanelsDraw::drawBake();
         break;
     case SettingsCategory::Modes:
         EbDesktopMenuPanelsDraw::drawModes();

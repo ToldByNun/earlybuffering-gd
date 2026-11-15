@@ -1,4 +1,5 @@
 #include "shadow_plan_input_window.hpp"
+#include "../../../../../config/assist_policy_settings.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/assist_log.hpp"
 #include "../../../../../dev/evaluation/dev_reject_ledger.hpp"
@@ -252,7 +253,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         auto const index = static_cast<size_t>(delayValue);
         auto const& cached = context.cands[index].raw;
         bool const finished = cached.died || cached.unknown || cached.unknownTrunc ||
-                              cached.toggleUnknown || cached.ticksRan >= context.model.cap;
+                              cached.toggleUnknown || cached.landedAfterAction ||
+                              cached.ticksRan >= context.model.cap;
         if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue)) {
             ++context.plan.reusedCandidateCount;
             context.plan.reusedCandidateTicks += context.cands[index].raw.ticksRan;
@@ -261,6 +263,20 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.candReady[index] = 0;
         return context.evalDelay(delayValue, -1);
     };
+
+    // Ball ring discovery competes with landing candidates in the same budget.
+    // Waiting for every landing delay to finish starves airborne orb inputs.
+    if (context.real->m_isBall && context.down && context.orbAssist && !context.orbHint.found &&
+        !dual && !context.useTrajEngine && context.tickBudget > 0 && !context.wallExceeded()) {
+        auto window = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
+                                                      context.limit + 1, context.deltaTime,
+                                                      context.firstDt, &context.tickBudget, false);
+        context.simulator.resetCaptureForNextRun(context.layer);
+        if (window.found) {
+            context.orbHint = window;
+            context.plan.usedOrbWindow = true;
+        }
+    }
 
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
@@ -273,6 +289,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.model.cap = std::min(savedCap, 12);
         auto baseline = evaluateCandidate(0);
         context.model.cap = savedCap;
+        // A learned immediate action also receives a real baseline probe outside Wave.
+        if (context.options.hybridDelay == 0 && baseline.raw.ticksRan > 0)
+            context.plan.hybridTried = true;
         if (!ingest(0, baseline)) {
             context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
                                   context.ledgerEarlyExit());
@@ -282,7 +301,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     // Assist Pack AP-L4: dying Wave d0 + remUs below continuous reserve → do not
     // burn the rest of the press on a full later-band endX scan; PassBudget later.
-    bool skipLaterBand = false;
+    // Wave help-only already passes a fully proven safe immediate edge. Releases
+    // cannot claim rings. A press with orb assistance keeps its ring search.
+    bool const learnedImmediate = context.options.hybridDelay == 0 && isWave && !dual &&
+                                  (!context.down || !context.orbAssist);
+    if (learnedImmediate && context.candReady[0])
+        context.plan.hybridTried = true;
+    bool skipLaterBand = learnedImmediate && context.candReady[0] && context.cands[0].viable &&
+                         !context.cands[0].raw.died && complete(context.cands[0].raw, 0);
     if (isWave && continuous && context.down && context.candReady[0]) {
         auto const& d0 = context.cands[0];
         bool const d0DeadTruth =
@@ -301,14 +327,20 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // before unrelated early flaps/flips consume the wall. Every candidate still
     // needs the normal survival proof; Ball ground/fallback selection stays below.
     if (context.orbAssist && context.orbHint.found && !dual &&
-        (context.real->m_isBird || context.real->m_isBall)) {
-        auto const order =
+        (context.real->m_isBird || context.real->m_isBall ||
+         EbStageConfig::kindOf(context.real) == GameModeKind::Cube)) {
+        auto order =
             EbOrbProbeOrder::window(context.orbHint.first, context.orbHint.last, context.limit);
+        auto learned = std::find(order.begin(), order.end(), context.options.hybridDelay);
+        if (context.options.hybridDelay > 0 && learned != order.end())
+            std::rotate(order.begin(), learned, learned + 1);
         for (int delay : order) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
             }
+            if (delay > 0 && delay == context.options.hybridDelay)
+                context.plan.hybridTried = true;
             auto candidateResult = context.real->m_isBird && !context.useTrajEngine
                                        ? context.evalDelay(delay, -1, true)
                                        : evaluateCandidate(delay);
@@ -317,8 +349,10 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             auto const& candidate = context.cands[static_cast<size_t>(delay)];
             if (!candidate.viable || !candidate.raw.activatedRing)
                 continue;
-            if (context.real->m_isBird)
-                skipLaterBand = true;
+            // Keep the verified activation at its tested observation floor.
+            // An optional longer d0 probe must not consume its dispatch budget.
+            skipLaterBand = !context.real->m_isBall ||
+                            EbAssistPolicySettings::ground() != EbAssistPolicySettings::Policy::On;
             break;
         }
     }
@@ -326,11 +360,43 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // Assist Pack AP-L6 — AP3c probe-before-band (discrete only).
     // Horizon probe runs after d0 / before 1..limit so mid-band wall spend cannot
     // starve the +24 prove extend (Cataclysm cube sticky PassD0Safe class).
+    bool verifiedAlternative = false;
+    bool learnedRescue = false;
+    if (!skipLaterBand && context.down && !dual && !continuous && !context.orbHint.found &&
+        context.limit > 1 && context.candReady[0] && !context.cands[0].raw.unknown &&
+        !context.cands[0].raw.unknownTrunc && !context.cands[0].raw.toggleUnknown &&
+        !context.wallExceeded() && context.tickBudget > 0 &&
+        (context.real->m_isBall || EbStageConfig::kindOf(context.real) == GameModeKind::Cube)) {
+        int const learned = context.options.hybridDelay;
+        bool const useLearned = learned > 0 && learned <= context.limit;
+        int const probe = useLearned ? learned : std::max(1, context.limit / 2);
+        context.plan.hybridTried |= useLearned;
+        if (ingest(probe, evaluateCandidate(probe))) {
+            auto const& alternative = context.cands[static_cast<size_t>(probe)];
+            verifiedAlternative = alternative.viable;
+            // Only shorten ordinary Cube search after surviving beyond the current d0 death.
+            // Ball retains its full landing comparison. Orb intent retains its own handoff.
+            learnedRescue = useLearned && !context.real->m_isBall && !context.spatialHint &&
+                            !context.plan.foresightOrbPad && context.cands[0].raw.died &&
+                            verifiedAlternative && !alternative.raw.died &&
+                            !alternative.raw.activatedRing && !context.options.robustJitter &&
+                            context.options.dtVariance < 0.03f &&
+                            alternative.raw.ticksRan > context.cands[0].raw.deathTick;
+            if (learnedRescue)
+                skipLaterBand = true;
+            int const ordinaryProbe = std::max(1, context.limit / 2);
+            if (useLearned && !verifiedAlternative && probe != ordinaryProbe &&
+                context.tickBudget > 0 && !context.wallExceeded() &&
+                ingest(ordinaryProbe, evaluateCandidate(ordinaryProbe)))
+                verifiedAlternative = context.cands[static_cast<size_t>(ordinaryProbe)].viable;
+        }
+    }
+
     int savedCapForProbe = context.model.cap;
     bool keepExtendedCapForBand = false;
     bool ranHorizonProbe = false;
-    if (!skipLaterBand && !continuous && context.candReady[0] && context.down &&
-        context.plan.reason != AssistReason::PassHardUnknown &&
+    if (!skipLaterBand && !verifiedAlternative && !continuous && context.candReady[0] &&
+        context.down && context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown && context.tickBudget > 0 &&
         !context.wallExceeded()) {
         auto const& c0probe = context.cands[0];
@@ -447,7 +513,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                             context.candReady[0] && context.cands[0].raw.died &&
                             !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
                             !context.cands[0].raw.toggleUnknown;
-    if (turnRescue) {
+    if (turnRescue && !learnedRescue) {
         int idleBoundary = -1;
         int const middle = std::max(1, context.limit / 2);
         std::vector<int> probes{middle, context.limit};
@@ -481,11 +547,18 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         // wall on the ascending integer band before refining that boundary.
         if (subtickRescue)
             probes = {middle};
+        int const learned = context.options.hybridDelay;
+        if (!subtickRescue && learned > 0 && learned <= context.limit) {
+            std::erase(probes, learned);
+            probes.insert(probes.begin(), learned);
+        }
         for (int probe : probes) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
             }
+            if (probe == learned)
+                context.plan.hybridTried = true;
             auto candidate = evaluateCandidate(probe);
             if (subtickRescue && candidate.raw.diedBeforeAction && !candidate.raw.unknown &&
                 !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown)
@@ -579,6 +652,16 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             skipLaterBand = true;
     }
 
+    // Ship, Swing and Robot still rank the ordinary band. Give their learned
+    // candidate a turn before the prefix walk can consume the whole wall.
+    int const learned = context.options.hybridDelay;
+    if (!skipLaterBand && !dual && !context.plan.hybridTried && !subtickRescue && learned > 0 &&
+        learned <= context.limit && !context.orbHint.found && context.candReady[0] &&
+        context.cands[0].raw.died && !context.wallExceeded() && context.tickBudget > 0) {
+        context.plan.hybridTried = true;
+        ingest(learned, evaluateCandidate(learned));
+    }
+
     if (!skipLaterBand && !dual && !context.useTrajEngine && context.limit >= 1 &&
         !context.plan.budgetHit && context.plan.reason != AssistReason::PassHardUnknown) {
         EbIdlePrefixShare::evaluateAscending(context);
@@ -662,44 +745,6 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.model.cap = savedCapForProbe;
 
     bool const isBall = context.real && context.real->m_isBall;
-    bool groundSearchComplete = true;
-    bool hasStableLanding = false;
-    for (int delay = 0; isBall && delay <= context.limit; ++delay) {
-        auto const index = static_cast<size_t>(delay);
-        if (!context.candReady[index] || isDepthTruncated(context.cands[index].raw, delay)) {
-            groundSearchComplete = false;
-            continue;
-        }
-        auto const& candidate = context.cands[index];
-        hasStableLanding =
-            hasStableLanding ||
-            (candidate.viable && candidate.raw.landedAfterAction && !candidate.raw.died);
-    }
-    bool const ballOrbFallback = EbLivePlanContracts::ballOrbFallbackAllowed(
-        isBall, context.orbAssist, hasStableLanding, groundSearchComplete);
-    // A Ball input in flight can be aligned to an orb only after the normal
-    // landing search found no stable surface. The scan shares the input budget.
-    if (ballOrbFallback && !dual && !context.useTrajEngine && !context.wallExceeded() &&
-        context.tickBudget > 0) {
-        auto window = context.simulator.scanOrbWindow(context.layer, context.real, context.down,
-                                                      context.limit + 1, context.deltaTime,
-                                                      context.firstDt, &context.tickBudget, false);
-        context.simulator.resetCaptureForNextRun(context.layer);
-        if (window.found) {
-            context.orbHint = window;
-            context.plan.usedOrbWindow = true;
-            for (int delay = std::max(0, window.first);
-                 delay <= std::min(context.limit, window.last); ++delay) {
-                if (context.wallExceeded() || context.tickBudget <= 0)
-                    break;
-                // Orb activation and the existing full survival test both apply.
-                ingest(delay, evaluateCandidate(delay));
-            }
-        }
-        if (context.simulator.planWallHit())
-            context.plan.budgetHit = true;
-    }
-
     auto const& c0 = context.cands[0];
     bool const d0Safe = context.candReady[0] && c0.viable && !c0.raw.died;
     bool const d0HasRunTruth = EbLivePlanContracts::waveIwD0HasRunTruth(
@@ -707,8 +752,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     // AP4 — Orb-intent handoff (before Wave help-only / Alive ranking).
     // Classic selection never runs after IW returns — recover G1 earliest±k.
-    if (context.orbAssist && context.down && (!isBall || ballOrbFallback) &&
-        context.plan.reason != AssistReason::PassHardUnknown &&
+    if (context.orbAssist && context.down && context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown) {
         bool anyActivation = false;
         int actMin = -1;
@@ -731,7 +775,23 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                                context.plan.foresightOrbPad || anyActivation;
         context.orbIntent = orbIntent;
         context.ledgerOrbIntent = orbIntent;
-        if (orbIntent && actMin >= 0) {
+        bool stableLanding = false;
+        if (isBall && EbAssistPolicySettings::ground() == EbAssistPolicySettings::Policy::On) {
+            for (int delay = 0; delay <= context.limit; ++delay) {
+                auto const& candidate = context.cands[static_cast<size_t>(delay)];
+                stableLanding =
+                    stableLanding ||
+                    (context.candReady[static_cast<size_t>(delay)] && candidate.viable &&
+                     candidate.raw.landedAfterAction && !candidate.raw.died);
+            }
+        }
+        bool const ballIntent =
+            !isBall ||
+            (!stableLanding && EbLivePlanContracts::ballOrbIntentAllowed(
+                                   context.orbAssist, context.orbHint.found, anyActivation, d0Safe,
+                                   context.candReady[0] && c0.activatedRing,
+                                   context.real->m_isOnGround || context.real->m_isOnGround2));
+        if (orbIntent && ballIntent && actMin >= 0) {
             std::vector<EbAssistPickV1::CandView> views(
                 static_cast<size_t>(std::max(0, context.limit)) + 1u);
             for (int delay = 0; delay <= context.limit; ++delay) {
@@ -787,10 +847,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                     context.plan.reason =
                         EbAssistVerdict::inferDelayReason(true, true, context.hasPrefer);
                     context.publishLedger(pick.chosen, false, context.ledgerEarlyExit());
-                    EbAssistLog::debug(fmt::format(
-                        "PLAN id={} IW DelayOrb d={} act=[{},{}] hold={} foresight={}",
-                        context.plan.planId, pick.chosen, actMin, actMax,
-                        context.plan.requireHold ? 1 : 0, context.plan.foresightOrbPad ? 1 : 0));
+                    if (EbStageConfig::debugLogging()) {
+                        EbAssistLog::debug(fmt::format(
+                            "PLAN id={} IW DelayOrb d={} act=[{},{}] hold={} foresight={}",
+                            context.plan.planId, pick.chosen, actMin, actMax,
+                            context.plan.requireHold ? 1 : 0,
+                            context.plan.foresightOrbPad ? 1 : 0));
+                    }
                     return true;
                 }
             }
@@ -810,8 +873,11 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.plan.nowIsSafe = false;
             context.plan.threatCleared = false;
             context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} IW PassBudget wave-starved (no d0 run truth)", context.plan.planId));
+            if (EbStageConfig::debugLogging()) {
+                EbAssistLog::debug(
+                    fmt::format("PLAN id={} IW PassBudget wave-starved (no d0 run truth)",
+                                context.plan.planId));
+            }
             return true;
         }
 
@@ -983,18 +1049,22 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.plan.threatCleared = !c0.raw.died;
                 context.plan.waveFutile = true;
                 context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveFutile);
-                EbAssistLog::debug(fmt::format(
-                    "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
-                    context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
+                if (EbStageConfig::debugLogging()) {
+                    EbAssistLog::debug(fmt::format(
+                        "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
+                        context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
+                }
             } else {
                 context.plan.reason = AssistReason::PassBudget;
                 context.plan.budgetHit = true;
                 context.plan.nowIsSafe = false;
                 context.plan.threatCleared = false;
                 context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
-                EbAssistLog::debug(fmt::format(
-                    "PLAN id={} IW PassBudget wave-starved (futile shape without honest band)",
-                    context.plan.planId));
+                if (EbStageConfig::debugLogging()) {
+                    EbAssistLog::debug(fmt::format(
+                        "PLAN id={} IW PassBudget wave-starved (futile shape without honest band)",
+                        context.plan.planId));
+                }
             }
             return true;
         }

@@ -16,6 +16,12 @@ public:
     // else 0 (remaining delays were cut short). Adaptive will pass real coverage later.
     void notePlanOutcome(bool budgetHit, int candidatesTried, int candidatesFullyVerified);
 
+    void notePhysicsPhases(int worldUs, int updateUs, int collisionUs);
+    long long worldTotalUs() const;
+    long long updateTotalUs() const;
+    long long collisionTotalUs() const;
+    long long physicsTotalCount() const;
+
     float emaUsPerTick() const;
     float stddevUsPerTick() const;
     float budgetHitRate() const;
@@ -33,6 +39,10 @@ private:
     static constexpr int kPlanRing = 32;
     static constexpr float kEmaAlpha = 0.15f;
 
+    long long m_worldTotalUs = 0;
+    long long m_updateTotalUs = 0;
+    long long m_collisionTotalUs = 0;
+    long long m_physicsTotalCount = 0;
     float m_emaUs = 0.f;
     bool m_emaInit = false;
 

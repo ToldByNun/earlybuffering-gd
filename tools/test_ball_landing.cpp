@@ -11,6 +11,13 @@ int BallLandingRegression::run() {
     failures += EbLivePlanContracts::ballOrbFallbackAllowed(true, false, false, true);
     failures += EbLivePlanContracts::ballOrbFallbackAllowed(false, true, false, true);
 
+    failures += !EbLivePlanContracts::ballOrbIntentAllowed(true, true, true, false, false, true);
+    failures += !EbLivePlanContracts::ballOrbIntentAllowed(true, true, true, true, false, false);
+    failures += EbLivePlanContracts::ballOrbIntentAllowed(true, true, true, true, false, true);
+    failures += EbLivePlanContracts::ballOrbIntentAllowed(true, true, false, false, false, false);
+    failures += EbLivePlanContracts::ballOrbIntentAllowed(false, true, true, false, false, false);
+    failures += EbLivePlanContracts::ballOrbIntentAllowed(true, false, true, false, false, false);
+
     for (bool initialGravity : {false, true}) {
         EbBallLandingTracker landing;
         landing.reset(initialGravity);

@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.7.0
+
+Release notes: [v1.7.0](releases/v1.7.0.md).
+
+- Introduce learned Hybrid alongside Live, with per-level timing evidence and current-state verification.
+- Restore isolated orb priority, separate Ball landing and orb intent, and improve useful Live search ordering.
+- Share the render-frame planning budget and reuse completed candidate work.
+- Add per-level orb-chain and Ball ground policies, advanced learning controls and a Dev timing inspector.
+- Simplify assist modes and fix the planner to v1 + ShadowPlayer.
+- Pin CI to Geode SDK 5.11.1 and validate packaged version metadata.
+
 ## v1.6.2
 
 Release notes: [`releases/v1.6.2.md`](releases/v1.6.2.md).

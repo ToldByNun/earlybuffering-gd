@@ -101,8 +101,8 @@ void EbTriggerWorldStore::noteSoftcap(char const* where) {
         return;
     this->m_softcapLogged = true;
     EbAssistLog::info(fmt::format("TRIGGER-WORLD: softcap ({}) tracks≤{} keys/track≤{} — refusing "
-                                "further growth; no silent drop under soft",
-                                where ? where : "?", kSoftMaxTracks, kSoftMaxKeysPerTrack));
+                                  "further growth; no silent drop under soft",
+                                  where ? where : "?", kSoftMaxTracks, kSoftMaxKeysPerTrack));
 }
 
 void EbTriggerWorldStore::clear() {
@@ -140,12 +140,12 @@ void EbTriggerWorldStore::loadForLevel(GJGameLevel* level) {
             return;
         }
         EbAssistLog::debug(fmt::format("TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
-                                     this->m_data.levelKey, this->m_data.tracks.size(),
-                                     this->readyTrackCount()));
+                                       this->m_data.levelKey, this->m_data.tracks.size(),
+                                       this->readyTrackCount()));
         return;
     }
     EbAssistLog::debug(fmt::format("TRIGGER-WORLD: no cache for {} ({})", this->m_data.levelKey,
-                                 result.unwrapErr()));
+                                   result.unwrapErr()));
 }
 
 void EbTriggerWorldStore::save() const {
@@ -158,7 +158,7 @@ void EbTriggerWorldStore::save() const {
     if (result.isOk()) {
         this->m_dirty = false;
         EbAssistLog::debug(fmt::format("TRIGGER-WORLD: saved {} ({} tracks)", this->m_data.levelKey,
-                                     this->m_data.tracks.size()));
+                                       this->m_data.tracks.size()));
         return;
     }
     EbAssistLog::debug(fmt::format("TRIGGER-WORLD: save failed: {}", result.unwrapErr()));
@@ -235,7 +235,8 @@ int EbTriggerWorldStore::remapLiveTick(int liveAbsTick, float liveSimDt) const {
     return EbAssistClock::get().remapTick(tps, liveAbsTick, liveSimDt);
 }
 
-bool EbTriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick, EbTriggerPose& out) const {
+bool EbTriggerWorldStore::samplePoseAtStoreTick(int uniqueId, int storeTick,
+                                                EbTriggerPose& out) const {
     auto const* track = this->findTrack(uniqueId);
     if (!track)
         return false;
@@ -254,7 +255,7 @@ bool EbTriggerWorldStore::sampleTrackAtStoreTick(EbTriggerTrack const& track, in
 }
 
 bool EbTriggerWorldStore::samplePose(int uniqueId, int liveAbsTick, float liveSimDt,
-                                   EbTriggerPose& out) const {
+                                     EbTriggerPose& out) const {
     int const storeTick = this->remapLiveTick(liveAbsTick, liveSimDt);
     return this->samplePoseAtStoreTick(uniqueId, storeTick, out);
 }
@@ -320,6 +321,8 @@ void EbTriggerWorldStore::writePose(GameObject* object, EbTriggerPose const& pos
 }
 
 bool EbTriggerWorldStore::writePoseIfChanged(GameObject* object, EbTriggerPose const& pose) {
+    if (!object)
+        return false;
     if (EbTriggerWorldStore::poseMatchesObject(object, pose))
         return false;
     EbTriggerWorldStore::writePose(object, pose);
