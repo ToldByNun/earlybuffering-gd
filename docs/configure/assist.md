@@ -31,4 +31,4 @@ See [Adaptive Plan](/features/adaptive). Extra knobs (screen / verify / reserve)
 
 Learn contains Auto Tune, reset learning and config import/export. The former self-bake workflow and Bake tab have been removed.
 
-Trigger World preparation controls are under Assist. Hybrid currently uses Live planning while learned Hybrid is developed.
+Trigger World preparation controls are under Assist. In Hybrid, enable Auto-Tune to learn from repeated attempts. The Learn tab shows familiar patterns and how often a suggested timing was chosen. Reset This Level clears its saved learning.

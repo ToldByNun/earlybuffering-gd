@@ -1,5 +1,6 @@
 #include "desktop_menu_panels.hpp"
 #include "../../config/assist_policy_settings.hpp"
+#include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_dev_panel.hpp"
@@ -108,6 +109,104 @@ public:
     static void drawLearn() {
         if (EbSectionCard::begin("learn-toggles", "Learning")) {
             EbCheckbox::drawSetting("auto-tune", "Auto-Tune Per Level");
+            auto& learning = EbHybridLearning::get();
+            if (!EbLevelProfile::get().loaded())
+                ImGui::TextWrapped("Open a level to see its learning progress.");
+            else if (EbStageConfig::assistMode() != AssistMode::Hybrid)
+                ImGui::TextWrapped("Live uses its own timing adjustments. Choose Hybrid to learn "
+                                   "which timings work on repeated attempts.");
+            else if (!EbStageConfig::autoTuneEnabled())
+                ImGui::TextWrapped("Learning is paused. Turn on Auto-Tune to continue with this "
+                                   "level's saved experience.");
+            else {
+                bool frozen = learning.frozen();
+                if (EbCheckbox::draw("freeze-hybrid", "Keep current timings", &frozen, true,
+                                     "Try your learned timings without updating them. Applies "
+                                     "until you leave this level."))
+                    learning.freeze(frozen);
+                int const familiar = learning.familiar();
+                if (frozen)
+                    ImGui::TextWrapped("Your timing history is fixed for this test. Hybrid still "
+                                       "checks each suggestion as you play.");
+                else
+                    ImGui::TextWrapped(
+                        familiar ? "On familiar clicks, Hybrid checks a timing that worked "
+                                   "before. On unfamiliar clicks it uses the usual search."
+                                 : "Play the same section a few times. Hybrid learns when a "
+                                   "timing keeps working across separate attempts.");
+                ImGui::Separator();
+                if (ImGui::BeginTable("learning-stats", 2, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled("FAMILIAR PATTERNS");
+                    ImGui::Text("%d", familiar);
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled("TIMINGS ACCEPTED");
+                    ImGui::Text("%d / %d", learning.confirmed, learning.tried);
+                    ImGui::EndTable();
+                }
+                float acceptance =
+                    learning.tried ? float(learning.confirmed) / learning.tried : 0.f;
+                ImGui::ProgressBar(acceptance, ImVec2(-1.f, 5.f), "");
+                if (!learning.tried)
+                    ImGui::TextWrapped(
+                        "No learned timing has reached a physics check this visit. Familiar "
+                        "patterns may belong to another part or input type.");
+                ImGui::Separator();
+                ImGui::Text("Inputs seen this visit   %d", learning.edges);
+                ImGui::Text("Local outcomes observed   %d", learning.observations);
+                ImGui::Text("Suggested timings chosen   %d / %d", learning.confirmed,
+                            learning.tried);
+                ImGui::Text("Inputs ending an observation   %d", learning.interrupted);
+                ImGui::Text("Local deaths   %d", learning.deaths);
+                ImGui::Text("Last delay   %d ticks", learning.lastDelay);
+                if (learning.lastDeathAge >= 0)
+                    ImGui::Text("Last local death after   %d ticks", learning.lastDeathAge);
+                if (learning.drift)
+                    ImGui::TextWrapped("Learning paused on %d inputs where the prediction "
+                                       "disagreed with the game.",
+                                       learning.drift);
+            }
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("learn-advanced", "Advanced Learning")) {
+            auto& learning = EbHybridLearning::get();
+            EbSlider::drawInt("learn-observation", "Observation", &learning.observationTicks, 24,
+                              96, " ticks", true,
+                              "Longer observation catches later deaths. Another physical input "
+                              "ends attribution.");
+            EbSlider::drawInt(
+                "learn-attempts", "Independent Attempts", &learning.minimumAttempts, 3, 12, "",
+                true,
+                "More attempts require stronger repeated evidence before proposing a timing.");
+            EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes);
+            EbCheckbox::draw("learn-phase", "Record death timing phase", &learning.trackPhase,
+                             learning.trackOutcomes);
+            EbCheckbox::draw("learn-sequence", "Record recent input sequence",
+                             &learning.trackSequence, learning.trackOutcomes);
+            EbSlider::drawInt("learn-death-penalty", "Local death penalty", &learning.deathPenalty,
+                              0, 4);
+            EbSlider::drawInt("learn-survival-reward", "Survival reward", &learning.survivalReward,
+                              1, 3);
+            EbSlider::drawInt("learn-lineup-depth", "Lineup Look-Ahead", &learning.lineupDepth, 1,
+                              3, " inputs", true,
+                              "On familiar presses, check up to this many inputs ahead within the "
+                              "current planning budget.");
+            EbSlider::drawInt("learn-bin-x", "Position X resolution", &learning.positionBinX, 16,
+                              256);
+            EbSlider::drawInt("learn-bin-y", "Position Y resolution", &learning.positionBinY, 16,
+                              256);
+            EbSlider::drawInt("learn-tps-quantum", "TPS grouping", &learning.tpsQuantum, 1, 120);
+            EbCheckbox::draw("learn-match-substep", "Distinguish sub-step inputs",
+                             &learning.matchSubstep);
+            EbCheckbox::draw("learn-match-intervals", "Distinguish input intervals",
+                             &learning.matchIntervals);
+            EbCheckbox::draw("learn-coarse", "Continuous mode fallback", &learning.coarseFallback);
+            EbSlider::drawInt("learn-coarse-attempts", "Fallback independent attempts",
+                              &learning.coarseAttempts, 3, 12, "", learning.coarseFallback);
+            ImGui::TextWrapped(
+                "Coarser groups share experience between nearby paths. Every suggestion is checked "
+                "against current geometry. These controls apply during this level visit.");
         }
         EbSectionCard::end();
 
@@ -118,7 +217,7 @@ public:
             EbButton::drawAction("import-config-action", "Import Config");
             EbButton::endRow();
             EbButton::beginRow(2);
-            EbButton::drawAction("reset-learn-action", "Reset Learning");
+            EbButton::drawAction("reset-learn-action", "Reset This Level");
             EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
             EbButton::endRow();
         }

@@ -158,6 +158,9 @@ docs/dev/live-regression-ap07-status.md
 !/tools/test_assist_mode_migration.cpp
 
 !/tools/test_assist_mode_migration.hpp
+!/tools/test_hybrid_model.cpp
+!/tools/test_hybrid_model.hpp
 
 !/tools/test_policy_registration_ap06.py
 docs/dev/live-modes-ap08-status.md
+docs/dev/live-hybrid-ap09-status.md

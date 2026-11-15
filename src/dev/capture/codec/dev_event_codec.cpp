@@ -138,6 +138,8 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["fallthroughSetupUs"] = e.fallthroughSetupUs;
         otherIndex["classicSearchUs"] = e.classicSearchUs;
         otherIndex["adaptiveSeedCount"] = e.adaptiveSeedCount;
+        otherIndex["hybridHint"] = e.hybridHint;
+        otherIndex["hybridTried"] = e.hybridTried;
         otherIndex["reusedCandidateCount"] = e.reusedCandidateCount;
         otherIndex["reusedCandidateTicks"] = e.reusedCandidateTicks;
         otherIndex["budgetHit"] = e.budgetHit;
@@ -461,6 +463,10 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.guardProbeIncomplete = j.contains("guardProbeIncomplete") &&
                                  j["guardProbeIncomplete"].asBool().unwrapOr(false);
 
+        if (j.contains("hybridHint"))
+            e.hybridHint = static_cast<int>(j["hybridHint"].asInt().unwrapOr(-1));
+        if (j.contains("hybridTried"))
+            e.hybridTried = j["hybridTried"].asBool().unwrapOr(false);
         e.reusedCandidateCount =
             j.contains("reusedCandidateCount")
                 ? static_cast<int>(j["reusedCandidateCount"].asInt().unwrapOr(0))

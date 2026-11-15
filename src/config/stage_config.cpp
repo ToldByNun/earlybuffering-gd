@@ -1,4 +1,5 @@
 #include "stage_config.hpp"
+#include "../core/learning/hybrid_learning.hpp"
 #include "../core/assist/assist_clock.hpp"
 #include "../core/platform/platform_limits.hpp"
 #include "cache/stage_settings_cache.hpp"
@@ -294,7 +295,8 @@ void EbStageConfigImplementation::loadAssistOffSlots(
 }
 
 void EbStageConfig::refreshCache() {
-    return EbStageSettingsCache::refreshCache();
+    EbStageSettingsCache::refreshCache();
+    EbHybridLearning::get().settingsChanged();
 }
 
 void EbStageConfigImplementation::ensureCache() {
@@ -331,7 +333,7 @@ char const* EbStageConfig::assistModeHint(AssistMode mode) {
     case AssistMode::Live:
         return "live plan each click";
     case AssistMode::Hybrid:
-        return "Live planning (learning update pending)";
+        return "Checks learned timings on familiar clicks";
     }
     return "";
 }
@@ -465,6 +467,10 @@ bool EbStageConfig::assistRelease() {
 bool EbStageConfig::assistOrbs() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAssistOrbs;
+}
+bool EbStageConfig::autoTuneEnabled() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedAutoTune;
 }
 bool EbStageConfig::autoTune() {
     EbStageConfigImplementation::ensureCache();

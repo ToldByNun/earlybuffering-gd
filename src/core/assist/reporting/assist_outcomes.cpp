@@ -11,6 +11,7 @@
 #include "../../diagnostics/assist_real_metrics.hpp"
 #include "../../diagnostics/decision_log.hpp"
 #include "../../diagnostics/divergence_tracker.hpp"
+#include "../../learning/hybrid_learning.hpp"
 #include "../../learning/level_profile.hpp"
 #include "../../sim/planning/simulation_plan.hpp"
 #include "../../sim/shadow_simulator.hpp"
@@ -36,7 +37,7 @@ void EbAssistOutcomes::noteRealJump(EbAssistController& controller, PlayerObject
 void EbAssistOutcomes::recordDecision(EbAssistController& controller, PlayLayer* playLayer,
                                     PlayerObject* player, bool down, EbSimPlan const& plan,
                                     int effectTick, int appliedDelay, int limit) {
-    if (!playLayer || !player)
+    if (!playLayer || !player || EbStageConfig::assistMode() == AssistMode::Hybrid)
         return;
 
     EbDecisionEntry e;
@@ -190,6 +191,7 @@ void EbAssistOutcomes::onRealDeath(EbAssistController& controller, PlayLayer* pl
         return;
     if (EbShadowSimulator::get().isOwnedGhost(player))
         return;
+    EbHybridLearning::get().death(player == playLayer->m_player1, controller.m_attemptTick);
     (void)object;
 
     EbLagProbe::Scope const deathScope("eb.onRealDeath");

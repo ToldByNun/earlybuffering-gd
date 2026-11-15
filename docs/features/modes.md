@@ -5,7 +5,7 @@ Choose Live or Hybrid under Main → Assist Mode. Ctrl+Shift+M cycles between th
 | Mode | Current behavior |
 |---|---|
 | Live | Plans each physical press/release from the current game state |
-| Hybrid | Currently uses Live planning. Learned candidate weighting is scheduled for AP09 |
+| Hybrid | With Auto-Tune enabled, learns timings across attempts and tests familiar timings in the Live input window. See Learn for this level’s progress. |
 
 Learn contains Auto Tune, learning reset and config import/export. The Bake tab and macro/bake mode selection have been removed.
 

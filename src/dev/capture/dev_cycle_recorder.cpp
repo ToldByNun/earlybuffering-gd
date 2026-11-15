@@ -214,6 +214,8 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->fallthroughSetupUs = plan.fallthroughSetupUs;
     width->classicSearchUs = plan.classicSearchUs;
     width->adaptiveSeedCount = plan.adaptiveSeedCount;
+    width->hybridHint = plan.hybridHint;
+    width->hybridTried = plan.hybridTried;
     width->reusedCandidateCount = plan.reusedCandidateCount;
     width->reusedCandidateTicks = plan.reusedCandidateTicks;
     width->budgetHit = plan.budgetHit;

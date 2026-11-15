@@ -14,6 +14,7 @@
 #include "../../../diagnostics/divergence_tracker.hpp"
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
+#include "../../../learning/hybrid_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
@@ -69,6 +70,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         float const xGate = player->getPositionX();
         AssistReason parityReason = AssistReason::None;
         if (EbSimTrust::get().forcePassReason(xGate, parityReason)) {
+            if (EbHybridLearning::enabled())
+                ++EbHybridLearning::get().drift;
             EbAssistLog::debug(
                 fmt::format("SIMTRUST pass press ({})", EbAssistVerdict::name(parityReason)));
             controller.m_untrustPassHint = true;
@@ -242,6 +245,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     bool const spamDense = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
     EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                             spamDense);
+    opts.hybridDelay = EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick,
+                                                       limit, controller.m_simDt, firstDt, opts);
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
@@ -253,6 +258,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
+    if (opts.hybridDelay >= 0)
+        opts.smartDepth = std::max(opts.smartDepth, EbHybridLearning::get().lineupDepth);
     bool useSequence = opts.smartDepth > 1;
 
     auto plan = useSequence ? EbShadowSimulator::get().planSequence(
@@ -263,6 +270,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     plan.planUs = planUs;
+    plan.hybridHint = opts.hybridDelay;
     plan.renderFrame = static_cast<long long>(frameScope.frame());
     plan.frameBudgetUs = frameLimitUs;
     plan.frameSpentBeforeUs = frameScope.spentBeforeUs();
@@ -298,6 +306,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Commit 11: do not invent Delay without a viable cand (plan already gated).
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
+    EbHybridLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {

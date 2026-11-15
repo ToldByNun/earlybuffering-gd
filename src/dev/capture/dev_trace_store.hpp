@@ -108,6 +108,8 @@ public:
     int fallthroughSetupUs = 0;
     int classicSearchUs = 0;
     int adaptiveSeedCount = 0;
+    int hybridHint = -1;
+    bool hybridTried = false;
     int reusedCandidateCount = 0;
     int reusedCandidateTicks = 0;
     bool budgetHit = false;

@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <string>
 
 class EbDesktopMenuShellState {
@@ -431,7 +432,21 @@ public:
         float const maxY = ImGui::GetScrollMaxY();
         float const scrollBefore = EbDesktopMenuShellState::scrollVisual();
         bool scrolled = false;
-        if (wheel != 0.0f && overTab && EbDesktopMenuShellState::tabVisual() >= 0.97f) {
+        auto* hovered = ImGui::GetCurrentContext()->HoveredWindow;
+        bool const nestedScroll =
+            hovered && hovered != ImGui::GetCurrentWindow() &&
+            ImGui::IsWindowChildOf(hovered, ImGui::GetCurrentWindow(), false) &&
+            hovered->ScrollMax.y > 0.f;
+        if (wheel != 0.0f && overTab && nestedScroll &&
+            EbDesktopMenuShellState::tabVisual() >= 0.97f) {
+            float const step = ImGui::GetTextLineHeightWithSpacing();
+            float const target =
+                hovered->ScrollTarget.y < FLT_MAX ? hovered->ScrollTarget.y : hovered->Scroll.y;
+            ImGui::SetScrollY(hovered,
+                              std::clamp(target + wheel * step, 0.f, hovered->ScrollMax.y));
+        }
+        if (wheel != 0.0f && overTab && !nestedScroll &&
+            EbDesktopMenuShellState::tabVisual() >= 0.97f) {
             float const step = ImGui::GetTextLineHeightWithSpacing();
             float next = EbDesktopMenuShellState::scrollTarget() + wheel * step;
             if (next < 0.0f) {

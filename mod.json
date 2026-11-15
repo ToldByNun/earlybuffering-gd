@@ -51,7 +51,7 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Live plans from the current state. Hybrid uses Live planning while the learned Hybrid implementation is being prepared.",
+			"description": "Hybrid with Auto-Tune learns timings across attempts and checks them with Live physics. See Learn for progress.",
 			"one-of": [
 				"Live",
 				"Hybrid"
@@ -458,7 +458,7 @@
 		"auto-tune": {
 			"type": "bool",
 			"name": "Auto-Tune Per Level",
-			"description": "Learns gentle bias/trust per level and spot as you play (never changes the tick window). On = adapts over attempts. Off = no learning (starter default). Toggle: Ctrl+Shift+L. Reset level: Ctrl+Shift+R.",
+			"description": "Live adapts local timing. Hybrid remembers timings that work across attempts and checks them against the current level. See Learn for progress. Toggle with Ctrl+Shift+L.",
 			"default": false
 		},
 		"title-assist-actions": {
@@ -469,7 +469,7 @@
 		"reset-learn-action": {
 			"type": "custom:eb-action",
 			"name": "Reset Level Learning",
-			"description": "Clears learned bias/trust for the current level so auto-tune starts fresh. Does not change your tick window settings.",
+			"description": "Clears Live and Hybrid learning for the current level revision.",
 			"button-text": "reset"
 		},
 		"export-config-action": {

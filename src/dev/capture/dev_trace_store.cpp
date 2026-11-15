@@ -266,7 +266,7 @@ std::string EbDevTraceStore::makeSettingsFingerprint() {
         EbStageConfig::windowUnitFrames() ? "Frames" : "Ticks", EbStageConfig::safeMode() ? 1 : 0,
         EbStageConfig::assistOrbs() ? 1 : 0, EbStageConfig::simBudgetUs(),
         EbStageConfig::tickBudgetPerPress(), EbStageConfig::triggerBake() ? 1 : 0,
-        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTune() ? 1 : 0,
+        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTuneEnabled() ? 1 : 0,
         EbStageConfig::selfBake() ? 1 : 0, static_cast<int>(EbAssistPolicySettings::ground()),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Cube)),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ship)),

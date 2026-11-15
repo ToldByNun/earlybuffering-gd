@@ -52,7 +52,7 @@ void EbModuleBindings::registerSettings() {
             if (!down || repeat || EbKeybind::isCapturing())
                 return;
             EbStageConfig::toggleAutoTune();
-            bool const now = EbStageConfig::autoTune();
+            bool const now = EbStageConfig::autoTuneEnabled();
             EbAssistLog::info(fmt::format("LEARN: smart learning {}", now ? "ON" : "OFF"));
             EbAssistController::get().updateOverlay();
         });

@@ -197,6 +197,7 @@ public:
 
     // --- Learning ---
     static bool autoTune();
+    static bool autoTuneEnabled();
     // Self-bake: practice default; optional normal-mode; budgeted window refine.
     static bool selfBake();
     static bool selfBakeNormal();

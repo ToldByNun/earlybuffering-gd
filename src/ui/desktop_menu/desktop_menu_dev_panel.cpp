@@ -1,3 +1,4 @@
+#include "../../core/learning/hybrid_learning.hpp"
 #include "desktop_menu_dev_panel.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
@@ -304,6 +305,57 @@ public:
     }
 
     static void draw() {
+        if (EbSectionCard::begin("dev-learning", "Learned Timings")) {
+            auto const rows = EbHybridLearning::get().inspect();
+            ImGui::TextWrapped("Each bar shows an action's recent weight. Repeated survival "
+                               "supports immediate input. Death lowers its weight. Suggestions "
+                               "still require current physics verification.");
+            // The shell routes the captured Cocos wheel directly to the hovered child.
+            ImGui::BeginChild("learning-weight-list", ImVec2(0, 250), ImGuiChildFlags_None,
+                              ImGuiWindowFlags_NoScrollWithMouse);
+            ImGuiListClipper clipper;
+            clipper.Begin(static_cast<int>(rows.size()), 58.f);
+            while (clipper.Step())
+                for (int index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index) {
+                    auto const& row = rows[index];
+                    ImVec2 pos = ImGui::GetCursorScreenPos();
+                    float width = ImGui::GetContentRegionAvail().x;
+                    auto* draw = ImGui::GetWindowDrawList();
+                    draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + 52),
+                                        IM_COL32(35, 38, 52, 255), 7.f);
+                    draw->AddRectFilled(
+                        ImVec2(pos.x + 10, pos.y + 39),
+                        ImVec2(pos.x + 10 +
+                                   (width - 20) * std::clamp((row.weight + 64.f) / 256.f, 0.f, 1.f),
+                               pos.y + 44),
+                        row.weight < 0 ? IM_COL32(210, 100, 110, 255)
+                                       : IM_COL32(105, 140, 215, 255),
+                        2.f);
+                    ImGui::SetCursorScreenPos(ImVec2(pos.x + 10, pos.y + 5));
+                    ImGui::Text("Delay %d   Weight %d   Samples %d", row.delay, row.weight,
+                                row.samples);
+                    ImGui::SetCursorScreenPos(ImVec2(pos.x + 10, pos.y + 22));
+                    ImGui::TextDisabled("%llx  %s", static_cast<unsigned long long>(row.key),
+                                        row.selected ? "Ready to propose"
+                                        : row.samples < EbHybridLearning::get().minimumAttempts
+                                            ? "Needs more attempts"
+                                            : "Insufficient weight or competing action");
+                    ImGui::SetCursorScreenPos(pos);
+                    ImGui::Dummy(ImVec2(width, 58.f - ImGui::GetStyle().ItemSpacing.y));
+                    if (ImGui::IsItemHovered()) {
+                        auto const& e = row.evidence;
+                        ImGui::SetTooltip(
+                            "Survived %d   Local deaths %d   Unclear %d\nRescue evidence %d   "
+                            "Verified harm %d\nLast death: +%d ticks, %d intervening inputs\nInput "
+                            "phase bin %d   Sequence %d (-1 = unavailable)",
+                            e.successCount, e.failureCount, e.unknownCount, e.verifiedRescueCount,
+                            e.verifiedHarmCount, e.deathDeltaTicks, e.interveningInputs,
+                            e.timingPhase, e.inputSequenceSignature);
+                    }
+                }
+            ImGui::EndChild();
+        }
+        EbSectionCard::end();
         drawStatus();
         gap();
         drawSetup();

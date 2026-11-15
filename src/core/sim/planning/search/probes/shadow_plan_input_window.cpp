@@ -289,6 +289,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.model.cap = std::min(savedCap, 12);
         auto baseline = evaluateCandidate(0);
         context.model.cap = savedCap;
+        // A learned immediate action also receives a real baseline probe outside Wave.
+        if (context.options.hybridDelay == 0 && baseline.raw.ticksRan > 0)
+            context.plan.hybridTried = true;
         if (!ingest(0, baseline)) {
             context.publishLedger(context.plan.delay, context.plan.action == PlanAction::Pass,
                                   context.ledgerEarlyExit());
@@ -298,7 +301,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     // Assist Pack AP-L4: dying Wave d0 + remUs below continuous reserve → do not
     // burn the rest of the press on a full later-band endX scan; PassBudget later.
-    bool skipLaterBand = false;
+    // Wave help-only already passes a fully proven safe immediate edge. Releases
+    // cannot claim rings. A press with orb assistance keeps its ring search.
+    bool const learnedImmediate = context.options.hybridDelay == 0 && isWave && !dual &&
+                                  (!context.down || !context.orbAssist);
+    if (learnedImmediate && context.candReady[0])
+        context.plan.hybridTried = true;
+    bool skipLaterBand = learnedImmediate && context.candReady[0] && context.cands[0].viable &&
+                         !context.cands[0].raw.died && complete(context.cands[0].raw, 0);
     if (isWave && continuous && context.down && context.candReady[0]) {
         auto const& d0 = context.cands[0];
         bool const d0DeadTruth =
@@ -319,13 +329,18 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     if (context.orbAssist && context.orbHint.found && !dual &&
         (context.real->m_isBird || context.real->m_isBall ||
          EbStageConfig::kindOf(context.real) == GameModeKind::Cube)) {
-        auto const order =
+        auto order =
             EbOrbProbeOrder::window(context.orbHint.first, context.orbHint.last, context.limit);
+        auto learned = std::find(order.begin(), order.end(), context.options.hybridDelay);
+        if (context.options.hybridDelay > 0 && learned != order.end())
+            std::rotate(order.begin(), learned, learned + 1);
         for (int delay : order) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
             }
+            if (delay > 0 && delay == context.options.hybridDelay)
+                context.plan.hybridTried = true;
             auto candidateResult = context.real->m_isBird && !context.useTrajEngine
                                        ? context.evalDelay(delay, -1, true)
                                        : evaluateCandidate(delay);
@@ -346,14 +361,35 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // Horizon probe runs after d0 / before 1..limit so mid-band wall spend cannot
     // starve the +24 prove extend (Cataclysm cube sticky PassD0Safe class).
     bool verifiedAlternative = false;
+    bool learnedRescue = false;
     if (!skipLaterBand && context.down && !dual && !continuous && !context.orbHint.found &&
         context.limit > 1 && context.candReady[0] && !context.cands[0].raw.unknown &&
         !context.cands[0].raw.unknownTrunc && !context.cands[0].raw.toggleUnknown &&
         !context.wallExceeded() && context.tickBudget > 0 &&
         (context.real->m_isBall || EbStageConfig::kindOf(context.real) == GameModeKind::Cube)) {
-        int const probe = std::max(1, context.limit / 2);
-        if (ingest(probe, evaluateCandidate(probe)))
-            verifiedAlternative = context.cands[static_cast<size_t>(probe)].viable;
+        int const learned = context.options.hybridDelay;
+        bool const useLearned = learned > 0 && learned <= context.limit;
+        int const probe = useLearned ? learned : std::max(1, context.limit / 2);
+        context.plan.hybridTried |= useLearned;
+        if (ingest(probe, evaluateCandidate(probe))) {
+            auto const& alternative = context.cands[static_cast<size_t>(probe)];
+            verifiedAlternative = alternative.viable;
+            // Only shorten ordinary Cube search after surviving beyond the current d0 death.
+            // Ball retains its full landing comparison. Orb intent retains its own handoff.
+            learnedRescue = useLearned && !context.real->m_isBall && !context.spatialHint &&
+                            !context.plan.foresightOrbPad && context.cands[0].raw.died &&
+                            verifiedAlternative && !alternative.raw.died &&
+                            !alternative.raw.activatedRing && !context.options.robustJitter &&
+                            context.options.dtVariance < 0.03f &&
+                            alternative.raw.ticksRan > context.cands[0].raw.deathTick;
+            if (learnedRescue)
+                skipLaterBand = true;
+            int const ordinaryProbe = std::max(1, context.limit / 2);
+            if (useLearned && !verifiedAlternative && probe != ordinaryProbe &&
+                context.tickBudget > 0 && !context.wallExceeded() &&
+                ingest(ordinaryProbe, evaluateCandidate(ordinaryProbe)))
+                verifiedAlternative = context.cands[static_cast<size_t>(ordinaryProbe)].viable;
+        }
     }
 
     int savedCapForProbe = context.model.cap;
@@ -477,7 +513,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                             context.candReady[0] && context.cands[0].raw.died &&
                             !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
                             !context.cands[0].raw.toggleUnknown;
-    if (turnRescue) {
+    if (turnRescue && !learnedRescue) {
         int idleBoundary = -1;
         int const middle = std::max(1, context.limit / 2);
         std::vector<int> probes{middle, context.limit};
@@ -511,11 +547,18 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         // wall on the ascending integer band before refining that boundary.
         if (subtickRescue)
             probes = {middle};
+        int const learned = context.options.hybridDelay;
+        if (!subtickRescue && learned > 0 && learned <= context.limit) {
+            std::erase(probes, learned);
+            probes.insert(probes.begin(), learned);
+        }
         for (int probe : probes) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
             }
+            if (probe == learned)
+                context.plan.hybridTried = true;
             auto candidate = evaluateCandidate(probe);
             if (subtickRescue && candidate.raw.diedBeforeAction && !candidate.raw.unknown &&
                 !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown)
@@ -607,6 +650,16 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         if (!isWave && bestDelay > 0)
             skipLaterBand = true;
+    }
+
+    // Ship, Swing and Robot still rank the ordinary band. Give their learned
+    // candidate a turn before the prefix walk can consume the whole wall.
+    int const learned = context.options.hybridDelay;
+    if (!skipLaterBand && !dual && !context.plan.hybridTried && !subtickRescue && learned > 0 &&
+        learned <= context.limit && !context.orbHint.found && context.candReady[0] &&
+        context.cands[0].raw.died && !context.wallExceeded() && context.tickBudget > 0) {
+        context.plan.hybridTried = true;
+        ingest(learned, evaluateCandidate(learned));
     }
 
     if (!skipLaterBand && !dual && !context.useTrajEngine && context.limit >= 1 &&

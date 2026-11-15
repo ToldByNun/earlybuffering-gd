@@ -12,6 +12,7 @@
 #include "../core/diagnostics/assist_real_metrics.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
+#include "../core/learning/hybrid_learning.hpp"
 #include "../core/learning/level_profile.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
@@ -32,6 +33,7 @@
 void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLayer* playLayer) {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
     // Trigger world: keep store + in-flight baker; only reset abs attempt tick.
+    EbHybridLearning::get().boundary(false);
     EbSelfBakeRecorder::get().flushSegment(playLayer, "checkpoint", false);
     controller.clearBuffer();
     controller.m_pendingRelease = false;
@@ -70,6 +72,7 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
         EbSelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
     }
     // If death already sealed the attempt, open the next; else seal as reset.
+    EbHybridLearning::get().boundary(true);
     EbDevCycleRecorder::get().onAttemptReset(0);
     controller.clearBuffer();
     controller.m_pendingRelease = false;

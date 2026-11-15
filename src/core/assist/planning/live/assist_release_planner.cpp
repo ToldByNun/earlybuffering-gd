@@ -13,6 +13,7 @@
 #include "../../../diagnostics/divergence_tracker.hpp"
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
+#include "../../../learning/hybrid_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
@@ -73,6 +74,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         float const xGate = player->getPositionX();
         AssistReason parityReason = AssistReason::None;
         if (EbSimTrust::get().forcePassReason(xGate, parityReason)) {
+            if (EbHybridLearning::enabled())
+                ++EbHybridLearning::get().drift;
             EbAssistLog::debug(
                 fmt::format("SIMTRUST pass release ({})", EbAssistVerdict::name(parityReason)));
             controller.m_untrustPassHint = true;
@@ -202,6 +205,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     bool const spamDenseRel = EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind);
     EbAssistControllerImplementation::fillPlanRobustLatency(opts, player, controller.m_dtVarEma,
                                                             spamDenseRel);
+    opts.hybridDelay = EbHybridLearning::get().prepare(
+        playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
@@ -217,6 +222,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    plan.hybridHint = opts.hybridDelay;
     plan.renderFrame = static_cast<long long>(frameScope.frame());
     plan.frameBudgetUs = frameLimitUs;
     plan.frameSpentBeforeUs = frameScope.spentBeforeUs();
@@ -241,6 +247,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         plan.toggleUnknown = true;
     }
 
+    EbHybridLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {

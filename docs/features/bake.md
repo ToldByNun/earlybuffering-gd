@@ -4,4 +4,4 @@ Trigger World preparation supplies moving-object and trigger state to the Live s
 
 The former Bake tab, Replay and BruteForce assist modes, macro import actions, bake path visualizer and self-bake controls have been removed. Existing files remain on disk.
 
-Hybrid currently uses Live planning. Learned Hybrid is scheduled for AP09.
+Hybrid uses the level’s learned click timings with Auto-Tune enabled.

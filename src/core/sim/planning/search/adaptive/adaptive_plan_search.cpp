@@ -117,7 +117,13 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
     bool const needsClassic = EbLivePlanContracts::adaptiveNeedsClassicInputSearch(
         real->m_isSpider && down, real->m_isBird, options.allowSubtick,
         down && EbStageConfig::assistOrbs());
-    if (needsClassic) {
+    bool const immediateWave =
+        options.hybridDelay == 0 && real->m_isDart && (!down || !EbStageConfig::assistOrbs());
+    bool const learnedWindow = (options.hybridDelay > 0 || immediateWave) &&
+                               options.hybridDelay <= limit && options.requireAliveForDelay &&
+                               !layer->m_gameState.m_isDualMode &&
+                               (down || real->m_isDart || real->m_isShip || real->m_isSwing);
+    if (needsClassic || learnedWindow) {
         auto classicOptions = options;
         classicOptions.adaptivePlan = false;
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
@@ -125,7 +131,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         classicPlan.adaptiveShell = true;
         classicPlan.adaptiveFellThrough = true;
         classicPlan.adaptiveAbortedForFallthrough = true;
-        classicPlan.plannerPath = "classicRequired";
+        classicPlan.plannerPath = learnedWindow ? "hybridInputWindow" : "classicRequired";
         stats.gated = false;
         noteStats(stats);
         return classicPlan;
@@ -285,6 +291,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Phase A — baseline d0
         runScreenDelay(0);
+        plan.hybridTried = options.hybridDelay == 0 && slots[0].ticksSimulated > 0;
         if (slots[0].terminalDied && slots[0].deathTick >= 0 && plan.firstDeathTick < 0) {
             plan.firstDeathTick = slots[0].deathTick;
             plan.firstDeathObject = slots[0].lastRaw.deathObject;
@@ -607,6 +614,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
             EbLivePlanContracts::adaptiveShellHitPoisonsFallthrough(fallthroughRemUs))
             classicPlan.budgetHit = true;
         classicPlan.plannerPath = "hybridFallthrough";
+        classicPlan.hybridTried |= plan.hybridTried;
         return classicPlan;
     };
 
