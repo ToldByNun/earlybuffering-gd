@@ -141,6 +141,11 @@ public:
         return !immediateSafe || immediateActivated || !initiallyGrounded;
     }
 
+    static constexpr bool adaptiveNeedsClassicInputSearch(bool spiderPress, bool isUfo,
+                                                          bool allowSubtick, bool orbPress) {
+        return spiderPress || (isUfo && (allowSubtick || orbPress));
+    }
+
     // UFO timing windows can reopen after several equal ceiling collisions.
     static constexpr bool repeatedDeathCutAllowed(bool isUfo, bool repeatedDeath) {
         return !isUfo && repeatedDeath;

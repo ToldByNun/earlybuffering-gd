@@ -252,7 +252,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         auto const index = static_cast<size_t>(delayValue);
         auto const& cached = context.cands[index].raw;
         bool const finished = cached.died || cached.unknown || cached.unknownTrunc ||
-                              cached.toggleUnknown || cached.ticksRan >= context.model.cap;
+                              cached.toggleUnknown || cached.landedAfterAction ||
+                              cached.ticksRan >= context.model.cap;
         if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue)) {
             ++context.plan.reusedCandidateCount;
             context.plan.reusedCandidateTicks += context.cands[index].raw.ticksRan;
@@ -342,11 +343,22 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // Assist Pack AP-L6 — AP3c probe-before-band (discrete only).
     // Horizon probe runs after d0 / before 1..limit so mid-band wall spend cannot
     // starve the +24 prove extend (Cataclysm cube sticky PassD0Safe class).
+    bool verifiedAlternative = false;
+    if (!skipLaterBand && context.down && !dual && !continuous && !context.orbHint.found &&
+        context.limit > 1 && context.candReady[0] && !context.cands[0].raw.unknown &&
+        !context.cands[0].raw.unknownTrunc && !context.cands[0].raw.toggleUnknown &&
+        !context.wallExceeded() && context.tickBudget > 0 &&
+        (context.real->m_isBall || EbStageConfig::kindOf(context.real) == GameModeKind::Cube)) {
+        int const probe = std::max(1, context.limit / 2);
+        if (ingest(probe, evaluateCandidate(probe)))
+            verifiedAlternative = context.cands[static_cast<size_t>(probe)].viable;
+    }
+
     int savedCapForProbe = context.model.cap;
     bool keepExtendedCapForBand = false;
     bool ranHorizonProbe = false;
-    if (!skipLaterBand && !continuous && context.candReady[0] && context.down &&
-        context.plan.reason != AssistReason::PassHardUnknown &&
+    if (!skipLaterBand && !verifiedAlternative && !continuous && context.candReady[0] &&
+        context.down && context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown && context.tickBudget > 0 &&
         !context.wallExceeded()) {
         auto const& c0probe = context.cands[0];
@@ -769,10 +781,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                     context.plan.reason =
                         EbAssistVerdict::inferDelayReason(true, true, context.hasPrefer);
                     context.publishLedger(pick.chosen, false, context.ledgerEarlyExit());
-                    EbAssistLog::debug(fmt::format(
-                        "PLAN id={} IW DelayOrb d={} act=[{},{}] hold={} foresight={}",
-                        context.plan.planId, pick.chosen, actMin, actMax,
-                        context.plan.requireHold ? 1 : 0, context.plan.foresightOrbPad ? 1 : 0));
+                    if (EbStageConfig::debugLogging()) {
+                        EbAssistLog::debug(fmt::format(
+                            "PLAN id={} IW DelayOrb d={} act=[{},{}] hold={} foresight={}",
+                            context.plan.planId, pick.chosen, actMin, actMax,
+                            context.plan.requireHold ? 1 : 0,
+                            context.plan.foresightOrbPad ? 1 : 0));
+                    }
                     return true;
                 }
             }
@@ -792,8 +807,11 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             context.plan.nowIsSafe = false;
             context.plan.threatCleared = false;
             context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} IW PassBudget wave-starved (no d0 run truth)", context.plan.planId));
+            if (EbStageConfig::debugLogging()) {
+                EbAssistLog::debug(
+                    fmt::format("PLAN id={} IW PassBudget wave-starved (no d0 run truth)",
+                                context.plan.planId));
+            }
             return true;
         }
 
@@ -965,18 +983,22 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 context.plan.threatCleared = !c0.raw.died;
                 context.plan.waveFutile = true;
                 context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::WaveFutile);
-                EbAssistLog::debug(fmt::format(
-                    "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
-                    context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
+                if (EbStageConfig::debugLogging()) {
+                    EbAssistLog::debug(fmt::format(
+                        "PLAN id={} IW Pass wave-futile bin={} gain={:.1f} idleSafer={}",
+                        context.plan.planId, bestBin, bestGain, context.plan.idleSafer ? 1 : 0));
+                }
             } else {
                 context.plan.reason = AssistReason::PassBudget;
                 context.plan.budgetHit = true;
                 context.plan.nowIsSafe = false;
                 context.plan.threatCleared = false;
                 context.publishLedger(0, true, EbDevRejectLedger::EarlyExit::Budget);
-                EbAssistLog::debug(fmt::format(
-                    "PLAN id={} IW PassBudget wave-starved (futile shape without honest band)",
-                    context.plan.planId));
+                if (EbStageConfig::debugLogging()) {
+                    EbAssistLog::debug(fmt::format(
+                        "PLAN id={} IW PassBudget wave-starved (futile shape without honest band)",
+                        context.plan.planId));
+                }
             }
             return true;
         }

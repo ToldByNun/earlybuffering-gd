@@ -128,6 +128,13 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
         chosenDelay = plan.delay;
         doPassFlag = plan.action == PlanAction::Pass;
     }
+    // Candidate notes are diagnostic output. Keep timing guards above active
+    // even when no recorder or debug consumer needs the allocated ledger.
+    if (!EbDevConfig::recordEnable() && !EbStageConfig::debugLogging()) {
+        plan.candNotes.clear();
+        plan.candNotesTruncated = false;
+        return;
+    }
     EbDevRejectLedger::BuildInput in;
     in.limit = limit;
     in.chosenDelay = chosenDelay;

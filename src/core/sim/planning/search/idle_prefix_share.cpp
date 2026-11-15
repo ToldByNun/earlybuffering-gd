@@ -1,4 +1,5 @@
 #include "idle_prefix_share.hpp"
+#include "../../../../config/stage_config.hpp"
 #include "../../../../debug/assist_log.hpp"
 #include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/contracts/miss_assist_contracts.hpp"
@@ -256,10 +257,11 @@ public:
         return true;
     }
 
-    static EbShadowSimulator::RunResult runPressContinuation(
-        EbShadowSimulator& simulator, PlayLayer* layer, bool down, int delay, int limit,
-        float deltaTime, float firstDt, EbShadowSimulator::Model const& model, int releaseAfter,
-        EbThreatZone const* zone, int* tickBudgetLeft) {
+    static EbShadowSimulator::RunResult
+    runPressContinuation(EbShadowSimulator& simulator, PlayLayer* layer, bool down, int delay,
+                         int limit, float deltaTime, float firstDt,
+                         EbShadowSimulator::Model const& model, int releaseAfter,
+                         EbThreatZone const* zone, int* tickBudgetLeft) {
         EbShadowSimulator::RunResult r;
         (void)limit;
         auto* shadowPlayer = simulator.m_shadow;
@@ -318,9 +320,8 @@ public:
                 } else if (releaseAfter < 0 && model.tapRelease && !tapReleased &&
                            simulator.m_jumped) {
                     bool const touchingOrb =
-                        simulator.m_orbOverlapTick ||
-                        (shadowPlayer->m_touchingRings &&
-                         shadowPlayer->m_touchingRings->count() > 0);
+                        simulator.m_orbOverlapTick || (shadowPlayer->m_touchingRings &&
+                                                       shadowPlayer->m_touchingRings->count() > 0);
                     bool const dashing = shadowPlayer->m_isDashing;
                     bool const justHitOrb = simulator.m_activatedRing && tick <= delay + 4;
                     if (!touchingOrb && !dashing && !justHitOrb) {
@@ -528,8 +529,7 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
             simulator.stepPhysics(layer, shadowPlayer, stepDt, deltaTime);
             ++idleTicksDone;
             if (simulator.m_dead) {
-                prefixDeathTick =
-                    EbPrefixSim::mergePrefixDeathTick(prefixDeathTick, tick, true);
+                prefixDeathTick = EbPrefixSim::mergePrefixDeathTick(prefixDeathTick, tick, true);
                 EbIdlePrefixForkState::fillPrefixDeath(context, delay, prefixDeathTick);
                 simulator.resetCaptureForNextRun(layer);
                 return true;
@@ -590,7 +590,8 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
             continue;
         }
 
-        context.finalizeViable(candidate, candidate.releaseAfter >= 0 ? candidate.releaseAfter : -1);
+        context.finalizeViable(candidate,
+                               candidate.releaseAfter >= 0 ? candidate.releaseAfter : -1);
         if (candidate.viable && context.linkedDual()) {
             PlayerObject* other =
                 (context.real == layer->m_player1) ? layer->m_player2 : layer->m_player1;
@@ -598,7 +599,7 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
                 auto r2 = context.runEngine(other, delay, -1, zonePtr);
                 simulator.resetCaptureForNextRun(layer);
                 if (!EbShadowSurvivalRules::runResultDelaySafe(r2, context.zone, model, other,
-                                                              context.requireAlive)) {
+                                                               context.requireAlive)) {
                     candidate.viable = false;
                     candidate.clearsThreat = false;
                     candidate.dualFailed = true;
@@ -606,9 +607,11 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
                 context.cands[static_cast<size_t>(delay)] = candidate;
                 context.candReady[static_cast<size_t>(delay)] = 1;
                 // Spine destroyed by dual reset — let legacy fill remaining delays.
-                EbAssistLog::debug(fmt::format(
-                    "PLAN id={} idle-prefix dual reset spine after delay={}", context.plan.planId,
-                    delay));
+                if (EbStageConfig::debugLogging()) {
+                    EbAssistLog::debug(
+                        fmt::format("PLAN id={} idle-prefix dual reset spine after delay={}",
+                                    context.plan.planId, delay));
+                }
                 return false;
             }
         }
@@ -625,9 +628,11 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
                 context.real->m_isBird, EbPrefixSim::sameCrashShouldStop(sameCrashStreak))) {
             sameCrashStopped = true;
             context.ledgerSameCrashExit = true;
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} idle-prefix same-crash stop deathTick={} after delay={}",
-                context.plan.planId, candidate.raw.deathTick, delay));
+            if (EbStageConfig::debugLogging()) {
+                EbAssistLog::debug(fmt::format(
+                    "PLAN id={} idle-prefix same-crash stop deathTick={} after delay={}",
+                    context.plan.planId, candidate.raw.deathTick, delay));
+            }
             break;
         }
         // Input-window discrete: survivor then acted death → stop (Grief cliff).
@@ -638,13 +643,15 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
                 !context.cands[static_cast<size_t>(prior)].raw.died)
                 hadSurvivor = true;
         }
-        if (EbLivePlanContracts::peakDeathShouldStop(context.inputWindow, isWaveMode || isShipLike,
-                                                     hadSurvivor, candidate.raw.died &&
-                                                                     !candidate.diedBeforeAction)) {
+        if (EbLivePlanContracts::peakDeathShouldStop(
+                context.inputWindow, isWaveMode || isShipLike, hadSurvivor,
+                candidate.raw.died && !candidate.diedBeforeAction)) {
             context.ledgerPeakDeathExit = true;
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} idle-prefix input-window peak-death-cut after delay={}",
-                context.plan.planId, delay));
+            if (EbStageConfig::debugLogging()) {
+                EbAssistLog::debug(
+                    fmt::format("PLAN id={} idle-prefix input-window peak-death-cut after delay={}",
+                                context.plan.planId, delay));
+            }
             break;
         }
 
@@ -654,9 +661,11 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
         if (context.hasPrefer && preferExitOk && !context.plan.budgetHit &&
             delay == preferLastInOrder && preferBandRobust()) {
             context.ledgerPreferEarlyExit = true;
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} idle-prefix prefer-band early-exit [{},{}] after delay={}",
-                context.plan.planId, context.preferLo, context.preferHi, delay));
+            if (EbStageConfig::debugLogging()) {
+                EbAssistLog::debug(fmt::format(
+                    "PLAN id={} idle-prefix prefer-band early-exit [{},{}] after delay={}",
+                    context.plan.planId, context.preferLo, context.preferHi, delay));
+            }
             break;
         }
     }
@@ -681,8 +690,8 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
         }
         auto const fullDelays = EbPrefixSim::delaysForFullScore(
             quick.data(), static_cast<int>(quick.size()), EbPrefixSim::kFullScoreTopK);
-        bool const holdTheoryOk = EbPrefixSim::allowHoldBranchTheory(context.model.continuous,
-                                                                   isRobot, isWaveMode, isShipLike);
+        bool const holdTheoryOk = EbPrefixSim::allowHoldBranchTheory(
+            context.model.continuous, isRobot, isWaveMode, isShipLike);
 
         for (int delayValue : fullDelays) {
             if (delayValue < 0 || delayValue > context.limit)
@@ -751,9 +760,11 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
         }
 
         if (sameCrashStopped) {
-            EbAssistLog::debug(fmt::format(
-                "PLAN id={} idle-prefix sameCrash=1 prefixDeathTick={}", context.plan.planId,
-                prefixDeathTick));
+            if (EbStageConfig::debugLogging()) {
+                EbAssistLog::debug(
+                    fmt::format("PLAN id={} idle-prefix sameCrash=1 prefixDeathTick={}",
+                                context.plan.planId, prefixDeathTick));
+            }
         }
     }
 

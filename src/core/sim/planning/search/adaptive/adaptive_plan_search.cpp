@@ -110,6 +110,26 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         noteStats(stats);
         return plan;
     }
+    // These input families unconditionally require classic continuation/subtick
+    // search. Screening them first captures the same world twice and discards
+    // every verification opportunity before falling through.
+    bool const needsClassic = EbLivePlanContracts::adaptiveNeedsClassicInputSearch(
+        real->m_isSpider && down, real->m_isBird, options.allowSubtick,
+        down && EbStageConfig::assistOrbs());
+    if (needsClassic) {
+        auto classicOptions = options;
+        classicOptions.adaptivePlan = false;
+        auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
+                                                   firstDt, classicOptions);
+        classicPlan.adaptiveShell = true;
+        classicPlan.adaptiveFellThrough = true;
+        classicPlan.adaptiveAbortedForFallthrough = true;
+        classicPlan.plannerPath = "classicRequired";
+        stats.gated = false;
+        noteStats(stats);
+        return classicPlan;
+    }
+
     float useFirstDt = firstDt;
     if (useFirstDt <= 0.f || useFirstDt > deltaTime)
         useFirstDt = deltaTime;
@@ -298,8 +318,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
-        if ((real->m_isSpider && down) ||
-            (real->m_isBird && (options.allowSubtick || (down && EbStageConfig::assistOrbs())))) {
+        if (needsClassic) {
             fallClassic = true;
             plan.adaptiveAbortedForFallthrough = true;
         } else if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {

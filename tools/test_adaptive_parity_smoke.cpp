@@ -23,6 +23,11 @@ int AdaptiveParitySmokeTests::run() {
     std::cout << report << '\n';
 
     int fails = 0;
+    fails += !EbLivePlanContracts::adaptiveNeedsClassicInputSearch(true, false, false, false);
+    fails += !EbLivePlanContracts::adaptiveNeedsClassicInputSearch(false, true, true, false);
+    fails += !EbLivePlanContracts::adaptiveNeedsClassicInputSearch(false, true, false, true);
+    fails += EbLivePlanContracts::adaptiveNeedsClassicInputSearch(false, false, true, true);
+    fails += EbLivePlanContracts::adaptiveNeedsClassicInputSearch(false, true, false, false);
     auto expect = [&](bool cond, char const* name) {
         if (cond)
             return;
