@@ -6,6 +6,7 @@
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_sidebar_wave_gpu.hpp"
 #include "desktop_menu_theme.hpp"
+#include "mobile_classic_material.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_dropdown.hpp"
@@ -105,9 +106,9 @@ void EbDesktopMenuSidebarMaterial::paint(ImDrawList* list, ImVec2 min, ImVec2 ma
     if (!list || max.x <= min.x || max.y <= min.y)
         return;
     auto settings = EbSidebarMaterialSettings::load();
-    if(!EbUiCapabilities::expensiveMaterials()) {
-        settings.blur=false;
-        settings.glass=false;
+    if (!EbUiCapabilities::expensiveMaterials()) {
+        settings.blur = false;
+        settings.glass = false;
     }
     float classic = EbDesktopMenuMotion::smoothToward(0xEB5101u, settings.enabled, 0.12f);
     float blur = EbDesktopMenuMotion::smoothToward(0xEB5102u, settings.blur, 0.12f);
@@ -116,6 +117,12 @@ void EbDesktopMenuSidebarMaterial::paint(ImDrawList* list, ImVec2 min, ImVec2 ma
     classic = settle(classic);
     blur = settle(blur);
     glass = settle(glass);
+#if defined(EB_UI_ANDROID)
+    if (classic > 0 && EbMobileClassicMaterial::get().paint(
+                           list, min, max, rounding, float(ImGui::GetTime()) * settings.speed,
+                           ImDrawFlags_RoundCornersLeft, classic))
+        return;
+#endif
     if ((glass > 0 || blur > 0 || classic > 0 && classic < 1) &&
         EbDesktopMenuSidebarWaveGpu::ensureReady()) {
         EbDesktopMenuSidebarWaveGpu::PaintRequest request;

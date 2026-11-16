@@ -587,7 +587,8 @@ public:
             EbDesktopMenuShellState::targetCenter().y - EbDesktopMenuShellState::visualCenter().y);
         float const driftLen = std::sqrt(drift.x * drift.x + drift.y * drift.y);
         // Never draw trail ghosts while closing — they felt like an end hitch.
-        bool const showTrail = EbDesktopMenuShellState::wantOpen() &&
+        bool const showTrail = !EbUiCapabilities::mobileLayout() &&
+                               EbDesktopMenuShellState::wantOpen() &&
                                (EbDesktopMenuShellState::dragging() || driftLen > 2.5f);
 
         ImVec2* trail = EbDesktopMenuShellState::trail();
