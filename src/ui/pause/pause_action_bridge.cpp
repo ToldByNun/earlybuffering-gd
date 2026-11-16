@@ -244,11 +244,11 @@ void EbPauseActionBridge::devCompareSessions() {
 void EbPauseActionBridge::openModSettings() {
 #if defined(EB_UI_ANDROID)
     geode::log::info(
-        "[EarlyBuffer] Android test 05: EB pressed supported={} imgui={} open={} classicPopup={}",
+        "[EarlyBuffer] Android test 08: EB pressed supported={} imgui={} open={} classicPopup={}",
         EbDesktopMenu::isSupported(), EbDesktopMenu::useImGuiShell(), EbDesktopMenu::isOpen(),
         EbInLevelSettingsFilterKeeper::isOpen());
     geode::Notification::create(
-        fmt::format("EB test 05: {} / {}", EbDesktopMenu::useImGuiShell() ? "ImGui" : "Classic",
+        fmt::format("EB test 08: {} / {}", EbDesktopMenu::useImGuiShell() ? "ImGui" : "Classic",
                     EbInLevelSettingsFilterKeeper::isOpen() ? "popup guard" : "opening"),
         geode::NotificationIcon::Info, 5.f)
         ->show();
@@ -257,8 +257,15 @@ void EbPauseActionBridge::openModSettings() {
         // ImGui XOR classic: do not stack over an open Geode popup.
         if (EbInLevelSettingsFilterKeeper::isOpen())
             return;
-        if (!EbDesktopMenu::isOpen())
+        if (!EbDesktopMenu::isOpen()) {
+#if defined(EB_UI_ANDROID)
+            // Opening registers a touch layer. Finish the button's touch dispatch
+            // before changing the scene and its delegate collection.
+            geode::Loader::get()->queueInMainThread([] { EbDesktopMenu::setOpen(true); });
+#else
             EbDesktopMenu::setOpen(true);
+#endif
+        }
         return;
     }
     if (EbDesktopMenu::isOpen())

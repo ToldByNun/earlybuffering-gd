@@ -78,15 +78,23 @@ if (EB_DESKTOP_IMGUI)
     set(IMGUI_VERSION "v1.92.4" CACHE STRING "" FORCE)
     CPMAddPackage("gh:matcool/gd-imgui-cocos#934958c68b1f050a8976d893584fa71368c1df1f")
     if (ANDROID)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_ILL_HANDLE_TOUCHES=1)
         # Render Android through our scene overlay. Keep upstream input hooks,
         # but disable its director render calls to guarantee one draw per visit.
         file(READ "${gd-imgui-cocos_SOURCE_DIR}/src/hooks.cpp" EB_ANDROID_IMGUI_HOOKS)
         string(REPLACE "inst.drawFrame();" "(void)inst;" EB_ANDROID_IMGUI_HOOKS "${EB_ANDROID_IMGUI_HOOKS}")
         file(WRITE "${EB_GENERATED_DIR}/android_imgui_hooks.cpp" "${EB_ANDROID_IMGUI_HOOKS}")
+        file(READ "${gd-imgui-cocos_SOURCE_DIR}/src/backend.cpp" EB_ANDROID_IMGUI_BACKEND)
+        string(REPLACE "if (auto pos = geode::cocos::getMousePos(); !pos.isZero())"
+            "if (auto pos = geode::cocos::getMousePos(); false)"
+            EB_ANDROID_IMGUI_BACKEND "${EB_ANDROID_IMGUI_BACKEND}")
+        file(WRITE "${EB_GENERATED_DIR}/android_imgui_backend.cpp" "${EB_ANDROID_IMGUI_BACKEND}")
         get_target_property(EB_IMGUI_SOURCES imgui-cocos INTERFACE_SOURCES)
         list(FILTER EB_IMGUI_SOURCES EXCLUDE REGEX "/src/hooks\.cpp$")
+        list(FILTER EB_IMGUI_SOURCES EXCLUDE REGEX "/src/backend\.cpp$")
         set_property(TARGET imgui-cocos PROPERTY INTERFACE_SOURCES "${EB_IMGUI_SOURCES}")
-        target_sources(${PROJECT_NAME} PRIVATE "${EB_GENERATED_DIR}/android_imgui_hooks.cpp")
+        target_sources(${PROJECT_NAME} PRIVATE "${EB_GENERATED_DIR}/android_imgui_hooks.cpp"
+            "${EB_GENERATED_DIR}/android_imgui_backend.cpp")
     endif()
     target_link_libraries(${PROJECT_NAME} imgui-cocos)
     target_compile_definitions(${PROJECT_NAME} PRIVATE EB_DESKTOP_IMGUI=1)

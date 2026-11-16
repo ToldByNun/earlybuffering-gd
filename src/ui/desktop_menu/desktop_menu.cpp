@@ -15,7 +15,11 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/CCMouseDispatcher.hpp>
+#if defined(EB_UI_ANDROID)
+#include <Geode/modify/CCTouchDispatcher.hpp>
+#endif
 #include <Geode/utils/Keyboard.hpp>
+#include <cfloat>
 #include <imgui-cocos.hpp>
 #include <imgui.h>
 #include <vector>
@@ -48,6 +52,67 @@ public:
 private:
     EbAndroidImGuiOverlay() = default;
 };
+
+class EbAndroidImGuiTouch {
+public:
+    static bool route(cocos2d::CCSet* touches, unsigned type) {
+        if (!ImGui::GetCurrentContext() || !ImGuiCocos::get().isVisible())
+            return false;
+        if (!touches)
+            return true;
+        auto& io = ImGui::GetIO();
+        for (auto iterator = touches->begin(); iterator != touches->end(); ++iterator) {
+            auto* touch = static_cast<cocos2d::CCTouch*>(*iterator);
+            if (!touch)
+                continue;
+            if (type == 0 && primary() < 0)
+                primary() = touch->getID();
+            if (touch->getID() != primary())
+                continue;
+            auto point = ImGuiCocos::cocosToFrame(touch->getLocation());
+            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+            if (type == 3)
+                point = ImVec2(-FLT_MAX, -FLT_MAX);
+            io.AddMousePosEvent(point.x, point.y);
+            if (type == 0)
+                io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+            if (type == 2 || type == 3) {
+                io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+                primary() = -1;
+            }
+        }
+        return true;
+    }
+
+private:
+    static int& primary() {
+        static int value = -1;
+        return value;
+    }
+};
+
+// Hook the virtual entry points used by Android's view. No custom delegate is
+// registered, avoiding the failing cross-library dynamic_cast in CCTouchHandler.
+class $modify(EbAndroidImGuiTouchDispatcher, cocos2d::CCTouchDispatcher) {
+public:
+    void touchesBegan(cocos2d::CCSet* touches, cocos2d::CCEvent* event) {
+        if (!EbAndroidImGuiTouch::route(touches, 0))
+            cocos2d::CCTouchDispatcher::touchesBegan(touches, event);
+    }
+    void touchesMoved(cocos2d::CCSet* touches, cocos2d::CCEvent* event) {
+        if (!EbAndroidImGuiTouch::route(touches, 1))
+            cocos2d::CCTouchDispatcher::touchesMoved(touches, event);
+    }
+    void touchesEnded(cocos2d::CCSet* touches, cocos2d::CCEvent* event) {
+        if (!EbAndroidImGuiTouch::route(touches, 2))
+            cocos2d::CCTouchDispatcher::touchesEnded(touches, event);
+    }
+    void touchesCancelled(cocos2d::CCSet* touches, cocos2d::CCEvent* event) {
+        if (!EbAndroidImGuiTouch::route(touches, 3))
+            cocos2d::CCTouchDispatcher::touchesCancelled(touches, event);
+    }
+};
+
 #endif
 
 #if defined(GEODE_IS_WINDOWS)
@@ -288,9 +353,9 @@ void EbDesktopMenu::install() {
             if (!reportedFirstFrame && EbDesktopMenuShell::wantsOpen()) {
                 reportedFirstFrame = true;
                 geode::log::info(
-                    "[EarlyBuffer] Android test 05: ImGui draw callback reached, viewport={}x{}",
+                    "[EarlyBuffer] Android test 08: ImGui draw callback reached, viewport={}x{}",
                     ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-                geode::Notification::create("EB test 05: ImGui frame reached",
+                geode::Notification::create("EB test 08: ImGui frame reached",
                                             geode::NotificationIcon::Info, 5.f)
                     ->show();
             }
@@ -345,7 +410,7 @@ void EbDesktopMenu::setOpen(bool open) {
         "[EarlyBuffer] Android ImGui open={} initialized={} visible={} compatibility={}", open,
         ImGuiCocos::get().isInitialized(), ImGuiCocos::get().isVisible(),
         ImGuiCocos::get().getForceLegacy());
-    geode::Notification::create(fmt::format("EB test 05: init={} visible={} requested={}",
+    geode::Notification::create(fmt::format("EB test 08: init={} visible={} requested={}",
                                             ImGuiCocos::get().isInitialized(),
                                             ImGuiCocos::get().isVisible(),
                                             EbDesktopMenuShell::wantsOpen()),
