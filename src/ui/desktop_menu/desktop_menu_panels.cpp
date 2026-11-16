@@ -1,13 +1,15 @@
 #include "desktop_menu_panels.hpp"
-#include "desktop_menu_theme.hpp"
-#include "desktop_menu_background.hpp"
-#include "desktop_menu_sidebar_material.hpp"
 #include "../../config/assist_policy_settings.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
+#include "../pause/pause_action_bridge.hpp"
+#include "desktop_menu_background.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_dev_panel.hpp"
 #include "desktop_menu_icons.hpp"
+#include "desktop_menu_sidebar_material.hpp"
+#include "desktop_menu_theme.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_color_picker.hpp"
@@ -345,12 +347,18 @@ public:
         EbSectionCard::end();
 
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
-            char const* scales[]={"75%","100%","125%","150%"};
-            EbDropdown::drawSetting("desktop-ui-scale","UI Scale",scales,4);
+            char const* scales[] = {"75%", "100%", "125%", "150%"};
+            EbDropdown::drawSetting("desktop-ui-scale", "UI Scale", scales, 4);
 
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
-            EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
+            if (EbUiCapabilities::desktopLayout()) {
+                EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
+            } else if (EbButton::draw("mobile-classic-settings", "Open Geode Settings", true,
+                                      "Open the classic settings interface without changing your "
+                                      "menu preference.")) {
+                EbPauseActionBridge::openClassicSettings();
+            }
         }
         EbSectionCard::end();
 
@@ -358,13 +366,16 @@ public:
             EbCheckbox::drawSetting("lag-warning-toast", "Lag Warning");
         }
         EbSectionCard::end();
-        if(EbSectionCard::begin("ui-quality","Rendering Quality")) {
-            char const* quality[]={"Low","Balanced","High"};
-            EbDropdown::drawSetting("ui-render-quality","Shader Quality",quality,3);
-            ImGui::TextWrapped("Quality controls shader resolution and blur samples. Background Render Scale is an additional per-effect multiplier.");
+        if (EbUiCapabilities::expensiveMaterials()) {
+            if (EbSectionCard::begin("ui-quality", "Rendering Quality")) {
+                char const* quality[] = {"Low", "Balanced", "High"};
+                EbDropdown::drawSetting("ui-render-quality", "Shader Quality", quality, 3);
+                ImGui::TextWrapped(
+                    "Quality controls shader resolution and blur samples. Background Render Scale "
+                    "is an additional per-effect multiplier.");
+            }
+            EbSectionCard::end();
         }
-        EbSectionCard::end();
-
         if (EbSectionCard::begin("ui-diag", "Diagnostics")) {
             EbCheckbox::drawSetting("debug-logging", "Debug Logging");
             EbCheckbox::drawSetting("perf-trace", "Perf Trace");
@@ -374,6 +385,8 @@ public:
     }
 
     static void drawKeys() {
+        if (!EbUiCapabilities::keybindUI())
+            return;
         if (EbSectionCard::begin("keys-hotkeys", "Hotkeys")) {
             EbKeybind::drawSetting("hotkey-desktop-menu", "Desktop Menu");
             EbKeybind::drawSetting("hotkey-debug", "Debug Logging");

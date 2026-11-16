@@ -154,12 +154,21 @@ void EbDesktopMenuSidebarMaterial::paint(ImDrawList* list, ImVec2 min, ImVec2 ma
 void EbDesktopMenuSidebarMaterial::settings() {
     auto value = EbSidebarMaterialSettings::load();
     static int type = 0;
+    bool const desktopEffects = EbUiCapabilities::expensiveMaterials();
+    if (!desktopEffects)
+        type = 0;
     char const* types[] = {"Classic", "Blur", "Liquid Glass"};
-    EbDropdown::draw("sidebar-type", "Type", types, 3, &type, nullptr, true,
-                     "Choose which material to edit. Enable switches are independent. Layer order "
-                     "is Classic, Blur, Liquid Glass.");
+    EbDropdown::draw(
+        "sidebar-type", "Type", types, desktopEffects ? 3 : 1, &type, nullptr, true,
+        desktopEffects
+            ? "Choose which material to edit. Layer order is Classic, Blur, Liquid Glass."
+            : "Android/iOS support Classic. Blur and Liquid Glass require Windows/macOS.");
     ImGui::TextDisabled("Active: %s%s%s", value.enabled ? "Classic " : "",
-                        value.blur ? "Blur " : "", value.glass ? "Liquid Glass" : "");
+                        desktopEffects && value.blur ? "Blur " : "",
+                        desktopEffects && value.glass ? "Liquid Glass" : "");
+    if (!desktopEffects)
+        ImGui::TextWrapped("Blur and Liquid Glass are available on Windows/macOS. Desktop "
+                           "preferences are retained.");
     bool changed = false;
     if (type == 0) {
         changed = EbCheckbox::draw("sidebar-classic", "Enable", &value.enabled, true,
@@ -221,8 +230,16 @@ void EbDesktopMenuSidebarMaterial::settings() {
                                 value.glass && !value.enabled,
                                 "Shared with Blur. Classic already provides the colored base.");
     }
-    if (EbButton::draw("sidebar-reset", "Reset Sidebar"))
-        value = {}, changed = true;
+    if (EbButton::draw("sidebar-reset", "Reset Sidebar")) {
+        if (desktopEffects) {
+            value = {};
+        } else {
+            value.enabled = true;
+            value.custom = false;
+            value.speed = value.baseBrightness = value.lightBrightness = 1.f;
+        }
+        changed = true;
+    }
     if (changed)
         value.save();
 }

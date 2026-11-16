@@ -707,6 +707,8 @@ SettingsCategory EbDesktopMenuShell::activeCategory() {
 }
 
 void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
+    if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
+        category = SettingsCategory::Main;
     EbDesktopMenuShellAnim::beginTabSwitch(category);
 }
 

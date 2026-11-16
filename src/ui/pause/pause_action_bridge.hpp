@@ -48,6 +48,7 @@ public:
 
     // Desktop ImGui shell / Geode popup: Main/Assist/Learn/Bake/Modes/Visual/UI/Keys/Dev.
     static void openModSettings();
+    static void openClassicSettings();
     // Same as openModSettings (EB pause button). No-op if already open.
     static void openHub();
     // Bake poll: refresh Bake-page status on an open settings popup.
@@ -165,9 +166,9 @@ public:
         auto& drops = EbSaveDropPaths::get();
         std::string err;
         if (!drops.ensureDirs(err)) {
-            EbDesktopAlert::info(
-                "EarlyBuffer",
-                err.empty() ? "Could not create the replay drop folder." : err.c_str());
+            EbDesktopAlert::info("EarlyBuffer", err.empty()
+                                                    ? "Could not create the replay drop folder."
+                                                    : err.c_str());
             return std::nullopt;
         }
 
@@ -191,7 +192,7 @@ public:
         auto const& chosen = candidates.front(); // newest mtime
         if (candidates.size() > 1) {
             EbAssistLog::info(fmt::format("Import: {} file(s) in drop folder — using newest '{}'",
-                                        candidates.size(), chosen.filename().string()));
+                                          candidates.size(), chosen.filename().string()));
         }
         return chosen;
     }

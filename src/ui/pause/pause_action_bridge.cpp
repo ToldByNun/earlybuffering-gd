@@ -255,8 +255,7 @@ void EbPauseActionBridge::openModSettings() {
             return;
         if (!EbDesktopMenu::isOpen()) {
 #if defined(EB_UI_ANDROID)
-            // Opening registers a touch layer. Finish the button's touch dispatch
-            // before changing the scene and its delegate collection.
+            // Finish the button's touch dispatch before attaching the overlay.
             geode::Loader::get()->queueInMainThread([] { EbDesktopMenu::setOpen(true); });
 #else
             EbDesktopMenu::setOpen(true);
@@ -277,6 +276,19 @@ void EbPauseActionBridge::openModSettings() {
         return;
     }
     EbInLevelSettingsFilterKeeper::attach(popup);
+}
+
+void EbPauseActionBridge::openClassicSettings() {
+    EbDesktopMenu::setOpen(false);
+    geode::Loader::get()->queueInMainThread([] {
+        if (EbInLevelSettingsFilterKeeper::isOpen())
+            return;
+        auto* mod = geode::Mod::get();
+        if (!mod)
+            return;
+        if (auto* popup = geode::openSettingsPopup(mod, false))
+            EbInLevelSettingsFilterKeeper::attach(popup);
+    });
 }
 
 void EbPauseActionBridge::openHub() {

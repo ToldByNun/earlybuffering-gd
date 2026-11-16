@@ -70,7 +70,8 @@ void EbDesktopMenuBackground::paint(float openAlpha) {
     auto value = EbBackgroundSettings::load();
     float blend =
         EbDesktopMenuMotion::smoothFloat(0xEBBA002u, value.blur ? value.opacity : 0.f, 0.12f);
-    if (EbUiCapabilities::expensiveMaterials() && blend > 0.001f && value.radius > 0 && EbDesktopMenuSidebarWaveGpu::ensureReady()) {
+    if (EbUiCapabilities::expensiveMaterials() && blend > 0.001f && value.radius > 0 &&
+        EbDesktopMenuSidebarWaveGpu::ensureReady()) {
         auto* viewport = ImGui::GetMainViewport();
         EbDesktopMenuSidebarWaveGpu::PaintRequest request;
         request.background = true;
@@ -99,10 +100,14 @@ void EbDesktopMenuBackground::paint(float openAlpha) {
 void EbDesktopMenuBackground::settings() {
     auto value = EbBackgroundSettings::load();
     static int type = 0;
+    bool const desktopEffects = EbUiCapabilities::expensiveMaterials();
+    if (!desktopEffects)
+        type = 0;
     char const* types[] = {"Dimmed", "Blur"};
-    EbDropdown::draw("background-type", "Type", types, 2, &type, nullptr, true,
-                     "Choose which background layer to edit. Dimmed and Blur can be enabled "
-                     "together, below the sidebar and interface.");
+    EbDropdown::draw("background-type", "Type", types, desktopEffects ? 2 : 1, &type, nullptr, true,
+                     desktopEffects
+                         ? "Dimmed and Blur combine below the sidebar and interface."
+                         : "Android/iOS support Dimmed. Background Blur requires Windows/macOS.");
     bool changed = false;
     if (type == 0) {
         changed = EbCheckbox::draw("background-dim", "Enable Dimmed", &value.enabled, true,
@@ -125,7 +130,14 @@ void EbDesktopMenuBackground::settings() {
             "Lower resolution reduces GPU work. Half resolution is the default.");
     }
     if (EbButton::draw("background-reset", "Reset Background")) {
-        value = {};
+        if (desktopEffects) {
+            value = {};
+        } else {
+            value.enabled = false;
+            value.amount = 0.35f;
+            for (float& channel : value.rgb)
+                channel = 0.f;
+        }
         changed = true;
     }
     if (changed)
