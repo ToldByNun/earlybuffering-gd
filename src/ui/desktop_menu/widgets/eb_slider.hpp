@@ -8,6 +8,8 @@
 // int can append a unit suffix ("px", …).
 class EbSlider {
 public:
+    static void cancelEditing();
+
     // Returns true when *value changed.
     static bool drawFloat(char const* id, char const* label, float* value, float minValue,
                           float maxValue, int decimals = 1, char const* suffix = "F",

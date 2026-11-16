@@ -1,4 +1,5 @@
 #include "eb_slider.hpp"
+#include "../../../core/platform/ui_capabilities.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -85,7 +86,11 @@ public:
         ImGui::EndDisabled();
         EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
-        bool const held = enabled && ImGui::IsItemActive();
+        ImVec2 const mouse = ImGui::GetIO().MousePos;
+        bool const valueTouch = EbUiCapabilities::mobileLayout() &&
+                                mouse.x >= origin.x + avail - 96.f && mouse.y >= origin.y &&
+                                mouse.y < origin.y + labelH + gap;
+        bool const held = enabled && ImGui::IsItemActive() && !valueTouch;
         ImGuiID const itemId = sliderId;
         float const heat =
             enabled ? EbDesktopMenuMotion::smoothToward(itemId, hovered || held, 0.05f) : 0.0f;
@@ -187,9 +192,78 @@ public:
         return changed;
     }
 
+    static bool editMobile(char const* id, char const* label, double current, double minimum,
+                           double maximum, bool integer, bool enabled, double* result) {
+        ImVec2 const rowMin = ImGui::GetItemRectMin();
+        ImVec2 const rowMax = ImGui::GetItemRectMax();
+        bool const request = enabled && ImGui::IsItemActivated() &&
+                             ImGui::GetIO().MousePos.x >= rowMax.x - 96.f &&
+                             ImGui::GetIO().MousePos.y < rowMin.y + ImGui::GetFontSize() + 6.f;
+        ImGui::PushID(id);
+        ImGuiID const inputId = ImGui::GetID("##value");
+        static char input[96] = {};
+        static bool invalid = false;
+        if (request) {
+            editorId() = inputId;
+            std::snprintf(input, sizeof(input), integer ? "%.0f" : "%.9g", current);
+            invalid = false;
+            ImGui::ClearActiveID();
+            ImGui::OpenPopup("Edit value");
+        }
+        bool committed = false;
+        auto const display = ImGui::GetIO().DisplaySize;
+        ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, 24.f), ImGuiCond_Always, ImVec2(0.5f, 0));
+        ImGui::SetNextWindowSize(ImVec2(std::max(180.f, std::min(420.f, display.x - 24.f)), 0));
+        if (ImGui::BeginPopupModal("Edit value", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize |
+                                       ImGuiWindowFlags_NoSavedSettings |
+                                       ImGuiWindowFlags_NoMove)) {
+            EbDesktopMenuFonts::pushUi();
+            ImGui::TextWrapped("%s", label);
+            ImGui::TextDisabled("Range: %.9g to %.9g", minimum, maximum);
+            if (request)
+                ImGui::SetKeyboardFocusHere();
+            ImGui::SetNextItemWidth(-1);
+            bool const enter = ImGui::InputText("##number", input, sizeof(input),
+                                                ImGuiInputTextFlags_EnterReturnsTrue |
+                                                    ImGuiInputTextFlags_AutoSelectAll |
+                                                    ImGuiInputTextFlags_CharsDecimal);
+            if (invalid)
+                ImGui::TextWrapped("Enter a finite %s.", integer ? "whole number" : "number");
+            float const width = (ImGui::GetContentRegionAvail().x - 12.f) * 0.5f;
+            bool const apply = ImGui::Button("Apply", ImVec2(width, 44.f));
+            ImGui::SameLine(0, 12.f);
+            bool const cancel = ImGui::Button("Cancel", ImVec2(width, 44.f));
+            if ((enter || apply) && enabled) {
+                errno = 0;
+                char* end = nullptr;
+                double const parsed = std::strtod(input, &end);
+                while (end && std::isspace(static_cast<unsigned char>(*end)))
+                    ++end;
+                invalid = end == input || !end || *end || errno == ERANGE ||
+                          !std::isfinite(parsed) || (integer && std::trunc(parsed) != parsed);
+                if (!invalid) {
+                    *result = std::clamp(parsed, minimum, maximum);
+                    committed = true;
+                }
+            }
+            if (committed || cancel || !enabled || editorId() != inputId ||
+                ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                editorId() = 0;
+                ImGui::ClearActiveID();
+                ImGui::CloseCurrentPopup();
+            }
+            EbDesktopMenuFonts::pop();
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+        return committed;
+    }
+
     static bool editValue(char const* id, char const* label, double current, double minimum,
                           double maximum, bool integer, bool enabled, double* result) {
-        (void)label;
+        if (EbUiCapabilities::mobileLayout())
+            return editMobile(id, label, current, minimum, maximum, integer, enabled, result);
         ImVec2 const itemMin = ImGui::GetItemRectMin();
         ImVec2 const itemMax = ImGui::GetItemRectMax();
         bool const request =
@@ -260,6 +334,17 @@ public:
 private:
     EbSliderDraw() = delete;
 };
+
+void EbSlider::cancelEditing() {
+    if (!EbSliderDraw::editorId())
+        return;
+    EbSliderDraw::editorId() = 0;
+    if (!ImGui::GetCurrentContext())
+        return;
+    ImGui::ClearActiveID();
+    if (EbUiCapabilities::mobileLayout() && ImGui::GetCurrentContext()->OpenPopupStack.Size > 0)
+        ImGui::ClosePopupToLevel(0, true);
+}
 
 bool EbSlider::drawFloat(char const* id, char const* label, float* value, float minValue,
                          float maxValue, int decimals, char const* suffix, bool enabled,
@@ -353,6 +438,8 @@ bool EbSlider::drawIntSetting(char const* key, char const* label, int64_t minVal
 }
 
 #else
+
+void EbSlider::cancelEditing() {}
 
 bool EbSlider::drawFloat(char const* id, char const* label, float* value, float minValue,
                          float maxValue, int decimals, char const* suffix, bool enabled,

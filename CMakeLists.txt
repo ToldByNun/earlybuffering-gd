@@ -88,6 +88,10 @@ if (EB_DESKTOP_IMGUI)
         string(REPLACE "if (auto pos = geode::cocos::getMousePos(); !pos.isZero())"
             "if (auto pos = geode::cocos::getMousePos(); false)"
             EB_ANDROID_IMGUI_BACKEND "${EB_ANDROID_IMGUI_BACKEND}")
+        string(REPLACE
+            "auto& buffer = ImGui::GetInputTextState(ImGui::GetFocusID())->TextA;"
+            "auto* state = ImGui::GetInputTextState(ImGui::GetFocusID()); if (!state) { m_text.clear(); return m_text.c_str(); } auto& buffer = state->TextA;"
+            EB_ANDROID_IMGUI_BACKEND "${EB_ANDROID_IMGUI_BACKEND}")
         file(WRITE "${EB_GENERATED_DIR}/android_imgui_backend.cpp" "${EB_ANDROID_IMGUI_BACKEND}")
         get_target_property(EB_IMGUI_SOURCES imgui-cocos INTERFACE_SOURCES)
         list(FILTER EB_IMGUI_SOURCES EXCLUDE REGEX "/src/hooks\.cpp$")

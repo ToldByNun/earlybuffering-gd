@@ -12,6 +12,7 @@
 #include "desktop_menu_theme.hpp"
 #include "desktop_menu_tooltip.hpp"
 #include "widgets/eb_keybind.hpp"
+#include "widgets/eb_slider.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -178,7 +179,6 @@ public:
         for (int index = 0; index < EbDesktopMenuShellState::kTrailCount; ++index) {
             trail[index] = center;
         }
-        EbDesktopMenuShellState::dragging() = false;
     }
 
     static void updateOpen(float deltaTime) {
@@ -209,6 +209,7 @@ public:
             EbDesktopMenuShellState::closing() = true;
             EbDesktopMenuShellState::closeElapsed() = 0.0f;
             EbDesktopMenuShellState::closeStartVisual() = visual;
+            EbDesktopMenuShellState::dragging() = false;
             clearTrailToCenter();
         }
 
@@ -236,6 +237,7 @@ public:
         if (next == prev || next == SettingsCategory::Count) {
             return;
         }
+        EbSlider::cancelEditing();
         int const from = static_cast<int>(prev);
         int const to = static_cast<int>(next);
         EbDesktopMenuShellState::tabDir() = to >= from ? 1 : -1;

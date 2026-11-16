@@ -247,11 +247,7 @@ void EbPauseActionBridge::openModSettings() {
         "[EarlyBuffer] Android test 08: EB pressed supported={} imgui={} open={} classicPopup={}",
         EbDesktopMenu::isSupported(), EbDesktopMenu::useImGuiShell(), EbDesktopMenu::isOpen(),
         EbInLevelSettingsFilterKeeper::isOpen());
-    geode::Notification::create(
-        fmt::format("EB test 08: {} / {}", EbDesktopMenu::useImGuiShell() ? "ImGui" : "Classic",
-                    EbInLevelSettingsFilterKeeper::isOpen() ? "popup guard" : "opening"),
-        geode::NotificationIcon::Info, 5.f)
-        ->show();
+
 #endif
     if (EbDesktopMenu::useImGuiShell()) {
         // ImGui XOR classic: do not stack over an open Geode popup.

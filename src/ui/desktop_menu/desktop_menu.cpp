@@ -10,6 +10,7 @@
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_keybind.hpp"
+#include "widgets/eb_slider.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -355,9 +356,6 @@ void EbDesktopMenu::install() {
                 geode::log::info(
                     "[EarlyBuffer] Android test 08: ImGui draw callback reached, viewport={}x{}",
                     ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-                geode::Notification::create("EB test 08: ImGui frame reached",
-                                            geode::NotificationIcon::Info, 5.f)
-                    ->show();
             }
 #endif
             bool const lagNote = EbLagWarningToast::wantsDraw();
@@ -400,6 +398,7 @@ void EbDesktopMenu::setOpen(bool open) {
     if (open) {
         ImGuiCocos::get().setVisible(true);
     } else {
+        EbSlider::cancelEditing();
         EbKeybind::cancelCapture();
         EbDesktopCloudOverlay::dismiss();
         EbDesktopMenuModal::dismiss();
@@ -410,12 +409,7 @@ void EbDesktopMenu::setOpen(bool open) {
         "[EarlyBuffer] Android ImGui open={} initialized={} visible={} compatibility={}", open,
         ImGuiCocos::get().isInitialized(), ImGuiCocos::get().isVisible(),
         ImGuiCocos::get().getForceLegacy());
-    geode::Notification::create(fmt::format("EB test 08: init={} visible={} requested={}",
-                                            ImGuiCocos::get().isInitialized(),
-                                            ImGuiCocos::get().isVisible(),
-                                            EbDesktopMenuShell::wantsOpen()),
-                                geode::NotificationIcon::Info, 6.f)
-        ->show();
+
 #endif
     if (!open && !EbDesktopMenuShell::shouldKeepVisible() &&
         !EbDesktopMenuModal::shouldKeepVisible() && !EbDesktopCloudOverlay::shouldKeepVisible()) {
