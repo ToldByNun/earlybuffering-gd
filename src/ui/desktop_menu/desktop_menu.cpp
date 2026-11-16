@@ -1,15 +1,15 @@
 #include "desktop_menu.hpp"
 #include "../../core/platform/ui_capabilities.hpp"
-#include "desktop_menu_scale.hpp"
+#include "../feedback/lag_warning_toast.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
 #include "desktop_menu_modal.hpp"
+#include "desktop_menu_scale.hpp"
 #include "desktop_menu_shell.hpp"
 #include "desktop_menu_theme.hpp"
 #include "widgets/eb_keybind.hpp"
-#include "../feedback/lag_warning_toast.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -19,6 +19,36 @@
 #include <imgui-cocos.hpp>
 #include <imgui.h>
 #include <vector>
+
+#if defined(EB_UI_ANDROID)
+class EbAndroidImGuiOverlay : public cocos2d::CCNode {
+public:
+    static void attach() {
+        auto* scene = cocos2d::CCDirector::sharedDirector()->getRunningScene();
+        if (!scene || scene->getChildByID("earlybuffer-imgui-overlay"))
+            return;
+        auto* overlay = new EbAndroidImGuiOverlay();
+        if (!overlay->init()) {
+            delete overlay;
+            return;
+        }
+        overlay->autorelease();
+        overlay->setID("earlybuffer-imgui-overlay");
+        scene->addChild(overlay, 2147483647);
+    }
+
+    void draw() override {
+        auto& backend = ImGuiCocos::get();
+        if (!backend.isInitialized() || !backend.isVisible())
+            return;
+        backend.runPreDrawCall();
+        backend.drawFrame();
+    }
+
+private:
+    EbAndroidImGuiOverlay() = default;
+};
+#endif
 
 #if defined(GEODE_IS_WINDOWS)
 #include <Windows.h>
@@ -117,7 +147,8 @@ public:
                        static_cast<bool>(data.modifiers & geode::KeyboardModifier::Control));
         io.AddKeyEvent(ImGuiMod_Shift,
                        static_cast<bool>(data.modifiers & geode::KeyboardModifier::Shift));
-        io.AddKeyEvent(ImGuiMod_Alt, static_cast<bool>(data.modifiers & geode::KeyboardModifier::Alt));
+        io.AddKeyEvent(ImGuiMod_Alt,
+                       static_cast<bool>(data.modifiers & geode::KeyboardModifier::Alt));
         io.AddKeyEvent(ImGuiMod_Super,
                        static_cast<bool>(data.modifiers & geode::KeyboardModifier::Super));
         ImGuiKey const imKey = toImGuiKey(data.key);
@@ -134,8 +165,7 @@ public:
             return false;
         }
         // Canonicalize both sides — Geode stores RightShift with Shift bit set.
-        geode::Keybind const pressed =
-            EbKeybind::canonicalKeybind(data.key, data.modifiers);
+        geode::Keybind const pressed = EbKeybind::canonicalKeybind(data.key, data.modifiers);
         std::vector<geode::Keybind> const binds =
             EbDesktopMenuBind::getKeybind("hotkey-desktop-menu");
         for (geode::Keybind const& bind : binds) {
@@ -148,7 +178,7 @@ public:
 
     static void repairStoredKeybinds() {
         char const* keys[] = {
-            "hotkey-desktop-menu", "hotkey-debug",     "hotkey-reset-level",
+            "hotkey-desktop-menu", "hotkey-debug",       "hotkey-reset-level",
             "hotkey-auto-tune",    "hotkey-assist-mode", "hotkey-trajectory",
         };
         for (char const* key : keys) {
@@ -225,7 +255,7 @@ private:
 };
 
 bool EbDesktopMenu::isSupported() {
-    return EbUiCapabilities::desktopLayout();
+    return EbUiCapabilities::desktopLayout() || EbUiCapabilities::mobileLayout();
 }
 
 bool EbDesktopMenu::useImGuiShell() {
@@ -233,10 +263,17 @@ bool EbDesktopMenu::useImGuiShell() {
     if (!mod) {
         return false;
     }
-    return EbUiCapabilities::desktopLayout() && !mod->getSettingValue<bool>("desktop-classic-settings");
+    return isSupported() && !mod->getSettingValue<bool>("desktop-classic-settings");
 }
 
 void EbDesktopMenu::install() {
+#if defined(EB_UI_ANDROID)
+    // The pinned backend's VAO path tests RendererHasVtxOffset with bitwise OR.
+    // That branch has no GLES draw call, so devices reporting ARB VAO render
+    // nothing. Its compatibility renderer uses GLES2-compatible Cocos shaders.
+    ImGuiCocos::get().setForceLegacy(true);
+    ImGuiCocos::get().setInputMode(ImGuiCocos::InputMode::Blocking);
+#endif
     ImGuiCocos::get()
         .setup([] {
             // Fonts / icons first — setup re-runs after fullscreen toggles.
@@ -246,6 +283,18 @@ void EbDesktopMenu::install() {
             EbDesktopMenuTheme::apply();
         })
         .draw([] {
+#if defined(EB_UI_ANDROID)
+            static bool reportedFirstFrame = false;
+            if (!reportedFirstFrame && EbDesktopMenuShell::wantsOpen()) {
+                reportedFirstFrame = true;
+                geode::log::info(
+                    "[EarlyBuffer] Android test 05: ImGui draw callback reached, viewport={}x{}",
+                    ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
+                geode::Notification::create("EB test 05: ImGui frame reached",
+                                            geode::NotificationIcon::Info, 5.f)
+                    ->show();
+            }
+#endif
             bool const lagNote = EbLagWarningToast::wantsDraw();
             if (!ImGuiCocos::get().isVisible()) {
                 return;
@@ -270,7 +319,8 @@ void EbDesktopMenu::install() {
     // Closed until keybind / pause hub opens it.
     ImGuiCocos::get().setVisible(false);
     EbDesktopMenuShell::requestOpen(false);
-    EbDesktopMenuInput::installKeyboard();
+    if (EbUiCapabilities::keybindUI())
+        EbDesktopMenuInput::installKeyboard();
 }
 
 bool EbDesktopMenu::isOpen() {
@@ -278,6 +328,10 @@ bool EbDesktopMenu::isOpen() {
 }
 
 void EbDesktopMenu::setOpen(bool open) {
+#if defined(EB_UI_ANDROID)
+    if (open)
+        EbAndroidImGuiOverlay::attach();
+#endif
     if (open) {
         ImGuiCocos::get().setVisible(true);
     } else {
@@ -286,9 +340,20 @@ void EbDesktopMenu::setOpen(bool open) {
         EbDesktopMenuModal::dismiss();
     }
     EbDesktopMenuShell::requestOpen(open);
+#if defined(EB_UI_ANDROID)
+    geode::log::info(
+        "[EarlyBuffer] Android ImGui open={} initialized={} visible={} compatibility={}", open,
+        ImGuiCocos::get().isInitialized(), ImGuiCocos::get().isVisible(),
+        ImGuiCocos::get().getForceLegacy());
+    geode::Notification::create(fmt::format("EB test 05: init={} visible={} requested={}",
+                                            ImGuiCocos::get().isInitialized(),
+                                            ImGuiCocos::get().isVisible(),
+                                            EbDesktopMenuShell::wantsOpen()),
+                                geode::NotificationIcon::Info, 6.f)
+        ->show();
+#endif
     if (!open && !EbDesktopMenuShell::shouldKeepVisible() &&
-        !EbDesktopMenuModal::shouldKeepVisible() &&
-        !EbDesktopCloudOverlay::shouldKeepVisible()) {
+        !EbDesktopMenuModal::shouldKeepVisible() && !EbDesktopCloudOverlay::shouldKeepVisible()) {
         ImGuiCocos::get().setVisible(false);
     }
 }

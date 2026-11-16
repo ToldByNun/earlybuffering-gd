@@ -24,10 +24,6 @@ public:
 
     void setCategory(SettingsCategory category);
 
-    float barHeight() const;
-    void resize(float width);
-    void onNavigate(geode::prelude::CCObject* sender);
-
     void setMenuTouchPriority(int priority);
 
     void onChip(geode::prelude::CCObject* sender);

@@ -1,11 +1,13 @@
 #include "desktop_menu_shell.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
+#include "desktop_menu.hpp"
 #include "desktop_menu_background.hpp"
-#include "desktop_menu_sidebar_material.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
 #include "desktop_menu_motion.hpp"
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_sidebar_material.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
 #include "desktop_menu_tooltip.hpp"
@@ -382,6 +384,8 @@ public:
                                                  SettingsCategory::Visual, SettingsCategory::UI,
                                                  SettingsCategory::Keys};
         for (SettingsCategory category : settingsTabs) {
+            if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
+                continue;
             bool const selected = EbDesktopMenuShellState::active() == category;
             if (navTab(EbInLevelSettingsFilter::categoryName(category), selected, tabWidth)) {
                 EbDesktopMenuShellAnim::beginTabSwitch(category);
@@ -413,7 +417,8 @@ public:
             ImVec2(EbDesktopMenuShellState::kContentPadX, EbDesktopMenuShellState::kContentPadY));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 8.0f));
         // Hide bar via size 0 — keep scroll extent (NoScrollbar can clip last rows).
-        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize,
+                            EbUiCapabilities::mobileLayout() ? 20.f : 0.f);
         // AlwaysUseWindowPadding: borderless children ignore WindowPadding otherwise,
         // so the section card would fill the tab 1:1 with no bg gutter.
         ImGui::BeginChild("##eb-shell-tab", ImVec2(width, height),
@@ -476,14 +481,19 @@ public:
         if (scrolled) {
             EbDesktopMenuShell::requestDismissFloatingPopups();
         }
-        ImGui::SetScrollY(EbDesktopMenuShellState::scrollVisual());
+        if (EbUiCapabilities::mobileLayout()) {
+            EbDesktopMenuShellState::scrollTarget() = ImGui::GetScrollY();
+            EbDesktopMenuShellState::scrollVisual() = ImGui::GetScrollY();
+        } else {
+            ImGui::SetScrollY(EbDesktopMenuShellState::scrollVisual());
+        }
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         EbDesktopMenuPanels::draw(active);
         // Keep a small, persistent position cue in the unused outer gutter.
         // Draw-list geometry adds neither layout height nor an input target.
         float const scrollMax = ImGui::GetScrollMaxY();
-        if (scrollMax > 1.f) {
+        if (scrollMax > 1.f && !EbUiCapabilities::mobileLayout()) {
             ImVec2 const windowPos = ImGui::GetWindowPos();
             float const inset = EbDesktopMenuShellState::kContentPadY;
             float const trackHeight = std::max(1.f, height - inset * 2.f);
@@ -656,6 +666,11 @@ public:
 
         drawSidebarNav(sideMin, sideW);
         drawSidebarFooter(sideMin, sideW, winSize.y);
+        if (EbUiCapabilities::mobileLayout()) {
+            ImGui::SetCursorScreenPos(ImVec2(sideMin.x + 16.f, sideMin.y + winSize.y - 100.f));
+            if (ImGui::Button("Close", ImVec2(sideW - 32.f, 40.f)))
+                EbDesktopMenu::setOpen(false);
+        }
 
         float const tabE = EbDesktopMenuShellState::tabVisual();
         float const tabSlide = (1.0f - tabE) *

@@ -1,4 +1,5 @@
 #include "desktop_menu_sidebar_smoke.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -121,6 +122,9 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     ImU32 const base = EbDesktopMenuTheme::toU32(EbDesktopMenuTheme::sidebarBg());
     drawList->AddRectFilled(min, max, base, clampedRounding, cornerFlags);
 
+    if (EbUiCapabilities::mobileLayout())
+        return; // Static accent material: no dense CPU wave mesh on phones.
+
     // GPU path (sidebar): fragment shader into current FB via ImDrawCallback.
     // No custom FBO — that previously crashed on the ImGui swap path.
     if (transparentOutside && EbDesktopMenuSidebarWaveGpu::ensureReady()) {
@@ -212,8 +216,8 @@ void EbDesktopMenuSidebarSmoke::paint(ImDrawList* drawList, ImVec2 const& min, I
     drawList->PopClipRect();
 
     if (!transparentOutside) {
-        EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(
-            drawList, min, max, clampedRounding, outsideColor, timeSeconds, cornerFlags);
+        EbDesktopMenuSidebarSmokeMath::remaskRoundedCorners(drawList, min, max, clampedRounding,
+                                                            outsideColor, timeSeconds, cornerFlags);
     }
 }
 

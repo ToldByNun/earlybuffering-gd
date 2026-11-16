@@ -1,5 +1,4 @@
 #include "settings_category_bar.hpp"
-#include "../../../core/platform/ui_capabilities.hpp"
 #include "../filtering/settings_filter_keeper_node.hpp"
 #include "../in_level_settings_filter.hpp"
 #include <Geode/Geode.hpp>
@@ -7,32 +6,8 @@
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
-#include <cmath>
 #include <cocos-ext.h>
 #include <fmt/format.h>
-
-float EbSettingsCategoryBar::barHeight() const {
-    return EbUiCapabilities::mobileLayout() ? 44.f : kBarH;
-}
-
-void EbSettingsCategoryBar::resize(float width) {
-    if (width < 132.f || std::fabs(width - this->getContentSize().width) < 0.5f)
-        return;
-    this->setContentSize({width, this->barHeight()});
-    this->rebuild(this->m_active);
-}
-
-void EbSettingsCategoryBar::onNavigate(geode::prelude::CCObject* sender) {
-    auto* item = geode::prelude::typeinfo_cast<geode::prelude::CCMenuItem*>(sender);
-    if (!item || !this->m_owner)
-        return;
-    int const delta = item->getTag();
-    geode::prelude::Loader::get()->queueInMainThread(
-        [owner = geode::prelude::Ref(this->m_owner), delta] {
-            if (owner)
-                owner->cycle(delta);
-        });
-}
 
 void EbSettingsCategoryBar::onChip(geode::prelude::CCObject* sender) {
     auto* item = geode::prelude::typeinfo_cast<geode::prelude::CCMenuItem*>(sender);
@@ -61,14 +36,14 @@ auto EbSettingsCategoryBar::initBar(EbSettingsFilterKeeperNode* owner, float wid
     this->m_owner = owner;
     this->m_active = SettingsCategory::Main;
     this->setID("earlybuffer-settings-category-bar"_spr);
-    this->setContentSize({width, this->barHeight()});
+    this->setContentSize({width, kBarH});
     this->ignoreAnchorPointForPosition(false);
     this->setAnchorPoint({0.5f, 0.f});
 
     this->m_labels = geode::prelude::CCNode::create();
     if (!this->m_labels)
         return false;
-    this->m_labels->setContentSize({width, this->barHeight()});
+    this->m_labels->setContentSize({width, kBarH});
     this->m_labels->setPosition({0.f, 0.f});
     this->addChild(this->m_labels, 1);
 
@@ -76,7 +51,7 @@ auto EbSettingsCategoryBar::initBar(EbSettingsFilterKeeperNode* owner, float wid
     if (!this->m_menu)
         return false;
     this->m_menu->setID("earlybuffer-settings-category-menu"_spr);
-    this->m_menu->setContentSize({width, this->barHeight()});
+    this->m_menu->setContentSize({width, kBarH});
     this->m_menu->setPosition({0.f, 0.f});
     this->m_menu->ignoreAnchorPointForPosition(false);
     this->m_menu->setAnchorPoint({0.f, 0.f});
@@ -90,10 +65,6 @@ auto EbSettingsCategoryBar::setCategory(SettingsCategory category) -> void {
     if (category == this->m_active)
         return;
     this->m_active = category;
-    if (EbUiCapabilities::mobileLayout()) {
-        this->rebuild(category);
-        return;
-    }
     // Never destroy menu items mid-click — only recolor labels.
     this->paintLabels(category);
 }
@@ -143,36 +114,6 @@ auto EbSettingsCategoryBar::rebuild(SettingsCategory active) -> void {
     this->m_labels->removeAllChildren();
 
     float const barW = this->getContentSize().width;
-    if (EbUiCapabilities::mobileLayout()) {
-        this->m_menu->setContentSize({barW, this->barHeight()});
-        for (int direction : {-1, 1}) {
-            auto* plate = geode::prelude::CCScale9Sprite::create("square02b_001.png");
-            if (!plate)
-                continue;
-            plate->setContentSize({44.f, 44.f});
-            plate->setOpacity(70);
-            auto* item = CCMenuItemSpriteExtra::create(
-                plate, this, menu_selector(EbSettingsCategoryBar::onNavigate));
-            if (!item)
-                continue;
-            item->setTag(direction);
-            item->setPosition({direction < 0 ? 22.f : barW - 22.f, 22.f});
-            this->m_menu->addChild(item);
-            auto* arrow =
-                geode::prelude::CCLabelBMFont::create(direction < 0 ? "<" : ">", "bigFont.fnt");
-            arrow->setScale(0.5f);
-            arrow->setPosition(item->getPosition());
-            this->m_labels->addChild(arrow);
-        }
-        auto* title = geode::prelude::CCLabelBMFont::create(
-            EbInLevelSettingsFilter::categoryName(active), "bigFont.fnt");
-        title->setScale(
-            std::min(0.5f, (barW - 100.f) / std::max(1.f, title->getContentSize().width)));
-        title->setPosition({barW * 0.5f, 22.f});
-        this->m_labels->addChild(title);
-        return;
-    }
-
     int const count = static_cast<int>(SettingsCategory::Count);
     if (count <= 0)
         return;
@@ -181,7 +122,7 @@ auto EbSettingsCategoryBar::rebuild(SettingsCategory active) -> void {
     if (segW < 8.f)
         return;
 
-    this->m_menu->setContentSize({barW, this->barHeight()});
+    this->m_menu->setContentSize({barW, kBarH});
     float x = kSidePad;
     for (int index = 0; index < count; ++index) {
         auto const category = static_cast<SettingsCategory>(index);
@@ -201,7 +142,7 @@ auto EbSettingsCategoryBar::rebuild(SettingsCategory active) -> void {
                 scale = kMinFitScale;
             label->setScale(scale);
             label->setAnchorPoint({0.5f, 0.5f});
-            label->setPosition({x + segW * 0.5f, this->barHeight() * 0.5f});
+            label->setPosition({x + segW * 0.5f, kBarH * 0.5f});
             if (isActive) {
                 label->setColor({255, 255, 255});
                 label->setOpacity(255);
@@ -219,7 +160,7 @@ auto EbSettingsCategoryBar::rebuild(SettingsCategory active) -> void {
             continue;
         }
         hit->setOpacity(1);
-        hit->setContentSize({segW, this->barHeight()});
+        hit->setContentSize({segW, kBarH});
 
         auto* item =
             CCMenuItemSpriteExtra::create(hit, this, menu_selector(EbSettingsCategoryBar::onChip));
@@ -228,12 +169,12 @@ auto EbSettingsCategoryBar::rebuild(SettingsCategory active) -> void {
             continue;
         }
         item->setTag(static_cast<int>(category));
-        item->setContentSize({segW, this->barHeight()});
+        item->setContentSize({segW, kBarH});
         if (auto* img = item->getNormalImage()) {
             img->setAnchorPoint({0.5f, 0.5f});
-            img->setPosition({segW * 0.5f, this->barHeight() * 0.5f});
+            img->setPosition({segW * 0.5f, kBarH * 0.5f});
         }
-        item->setPosition({x + segW * 0.5f, this->barHeight() * 0.5f});
+        item->setPosition({x + segW * 0.5f, kBarH * 0.5f});
         this->m_menu->addChild(item);
         x += segW;
     }

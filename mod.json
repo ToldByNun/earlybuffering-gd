@@ -1329,7 +1329,7 @@
 		"desktop-classic-settings": {
 			"type": "bool",
 			"name": "Classic Settings Menu",
-			"description": "Desktop only. On = open the classic Geode settings popup (Pause EB / menu hotkey). Off = use the ImGui desktop menu. Android/iOS always use classic.",
+			"description": "On = open the classic Geode settings popup from Pause EB. Off = use ImGui on Windows, macOS and Android. iOS currently uses classic.",
 			"default": false
 		},
 		"debug-logging": {
