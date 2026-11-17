@@ -59,8 +59,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs =
-        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
     auto passFrameBudget = [&]() {
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
         controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
@@ -194,7 +193,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     opts.maxBranches = 4;
     // Preserve the same explicit budget policy as press planning.
     opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
-    opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
+
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();

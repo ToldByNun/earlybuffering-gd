@@ -54,8 +54,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs =
-        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
     auto passFrameBudget = [&]() {
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
         controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
@@ -233,9 +232,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
     // Preserve explicitly configured small budgets for classic and Adaptive.
     opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
-    // 1.5.1 AP1: sim-budget-us=0 → hitch ceiling for classic AND Adaptive Live
-    // (EbLivePlanContracts). Stops Adaptive unlimited freezes on small levels.
-    opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
+
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();

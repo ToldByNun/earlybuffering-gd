@@ -85,7 +85,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         // Adaptive→classic seed: Alive only if screen quantum AND any known
         // longer death clock are covered (AP10 — no short seed over d0 death).
-        if (delayValue >= 0 && wasSeeded(delayValue) && !context.real->m_isBird &&
+        if (delayValue >= 0 && wasSeeded(delayValue) &&
+            EbStageConfig::kindOf(context.real) != GameModeKind::Cube && !context.real->m_isBird &&
             !context.real->m_isSpider && !result.died && !unknown && result.ticksRan > 0) {
             int const quantum = std::max(1, context.options.adaptiveScreenTicks);
             return EbLivePlanContracts::adaptiveSeedCountsAlive(
@@ -232,6 +233,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 return true;
             }
             if (!dead && !safe) {
+                if (!candidate.raw.unknown && !candidate.raw.unknownTrunc &&
+                    !candidate.raw.toggleUnknown && !context.sawToggleUnknown &&
+                    (context.wallExceeded() || context.tickBudget <= 0)) {
+                    context.plan.reason = AssistReason::PassBudget;
+                    context.plan.budgetHit = true;
+                    return false;
+                }
                 // AP4: toggle overlap → named Pass (not opaque HardUnknown).
                 context.plan.reason = (candidate.toggleUnknown || context.sawToggleUnknown)
                                           ? AssistReason::PassToggleUnknown
@@ -278,6 +286,19 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
+    // Ordinary Cube jumps can clear the first obstacle but land on the next.
+    // Probe the configured extra horizon in the first run, so the input budget
+    // does not pay for the entire baseline twice before testing a rescue.
+    int const originalCap = context.model.cap;
+    bool const cubeTail = context.down && !dual && !context.orbHint.found && !context.spatialHint &&
+                          !context.plan.foresightOrbPad &&
+                          EbStageConfig::kindOf(context.real) == GameModeKind::Cube &&
+                          EbStageConfig::assistProbePastHorizon() && originalCap > 0;
+    context.model.stopAtCubeLanding = cubeTail && EbStageConfig::lookAheadCap() == 0 &&
+                                      EbStageConfig::paramsFor(context.real).cap == 0;
+    if (cubeTail)
+        context.model.cap += EbLivePlanContracts::kPostHorizonProbeTicks;
+
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
         context.plan.budgetHit = true;
@@ -299,29 +320,11 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    // Assist Pack AP-L4: dying Wave d0 + remUs below continuous reserve → do not
-    // burn the rest of the press on a full later-band endX scan; PassBudget later.
-    // Wave help-only already passes a fully proven safe immediate edge. Releases
-    // cannot claim rings. A press with orb assistance keeps its ring search.
-    bool const learnedImmediate = context.options.hybridDelay == 0 && isWave && !dual &&
-                                  (!context.down || !context.orbAssist);
-    if (learnedImmediate && context.candReady[0])
-        context.plan.hybridTried = true;
-    bool skipLaterBand = learnedImmediate && context.candReady[0] && context.cands[0].viable &&
+    // A proven immediate turn already wins Wave help-only selection. Keep
+    // press scanning when orb assistance can discover an activation window.
+    bool const waveHelpOnly = isWave && !dual && (!context.down || !context.orbAssist);
+    bool skipLaterBand = waveHelpOnly && context.candReady[0] && context.cands[0].viable &&
                          !context.cands[0].raw.died && complete(context.cands[0].raw, 0);
-    if (isWave && continuous && context.down && context.candReady[0]) {
-        auto const& d0 = context.cands[0];
-        bool const d0DeadTruth =
-            d0.raw.died && d0.raw.ticksRan > 0 && !d0.raw.unknown && !d0.raw.unknownTrunc;
-        int const laterReserve =
-            EbLivePlanContracts::prepareReserveUs(context.options.budgetUs, true);
-        bool const laterOk = EbLivePlanContracts::prepareHeavyWorkAllowed(
-            context.wallRemUs(), laterReserve, context.options.budgetUs <= 0);
-        if (EbLivePlanContracts::waveIwSkipLaterBandForStarve(d0DeadTruth, laterOk)) {
-            context.plan.budgetHit = true;
-            skipLaterBand = true;
-        }
-    }
 
     // Orb scans already measured a reachable activation band. Verify that band
     // before unrelated early flaps/flips consume the wall. Every candidate still
@@ -392,11 +395,12 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    int savedCapForProbe = context.model.cap;
-    bool keepExtendedCapForBand = false;
-    bool ranHorizonProbe = false;
-    if (!skipLaterBand && !verifiedAlternative && !continuous && context.candReady[0] &&
-        context.down && context.plan.reason != AssistReason::PassHardUnknown &&
+    int const savedCapForProbe = originalCap;
+    bool keepExtendedCapForBand = cubeTail;
+    bool ranHorizonProbe = cubeTail;
+    if (!cubeTail && !skipLaterBand && !verifiedAlternative && !continuous &&
+        context.candReady[0] && context.down &&
+        context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown && context.tickBudget > 0 &&
         !context.wallExceeded()) {
         auto const& c0probe = context.cands[0];
@@ -513,6 +517,15 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                             context.candReady[0] && context.cands[0].raw.died &&
                             !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
                             !context.cands[0].raw.toggleUnknown;
+    // For an imminent, observed Wave collision, verify enough time for the
+    // next steering input. Apply only to the automatic horizon and ordinary
+    // solo turns. An explicit horizon still verifies its full requested depth.
+    bool const localWaveTurn =
+        turnRescue && isWave && context.limit <= 8 && context.cands[0].raw.deathTick >= 0 &&
+        context.cands[0].raw.deathTick <= context.limit &&
+        EbStageConfig::paramsFor(context.real).cap == 0 && EbStageConfig::lookAheadCap() == 0;
+    if (localWaveTurn)
+        context.model.cap = std::min(context.model.cap, std::max(24, context.limit + 16));
     if (turnRescue && !learnedRescue) {
         int idleBoundary = -1;
         int const middle = std::max(1, context.limit / 2);
@@ -597,10 +610,10 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                     }
                 }
             }
-            // A delayed release may clear this corner and still need the player's
-            // next press. Verify that continuation rather than assuming it works.
+            // Either Wave edge can clear a corner and still need the opposite
+            // player input. Verify that continuation rather than assuming it works.
             auto const& baseline = context.cands[0].raw;
-            if (isWave && !context.down && !context.useTrajEngine && candidate.raw.died &&
+            if (isWave && !context.useTrajEngine && candidate.raw.died &&
                 !candidate.raw.diedBeforeAction && !candidate.raw.unknown &&
                 !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown && baseline.died) {
                 for (int lead : {8, 12, 16}) {
@@ -610,19 +623,31 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                         continue;
                     if (context.wallExceeded() || context.tickBudget <= 0)
                         break;
-                    auto recovery = context.runEngine(context.real, probe, nextPress - probe,
-                                                      context.zone.valid ? &context.zone : nullptr);
+                    auto recoveryModel = context.model;
+                    bool const automatic = EbStageConfig::paramsFor(context.real).cap == 0 &&
+                                           EbStageConfig::lookAheadCap() == 0;
+                    int const escapeFloor = std::max(candidate.raw.deathTick + 2, nextPress + 17);
+                    if (automatic)
+                        recoveryModel.cap = escapeFloor;
+                    auto recovery = context.simulator.runOne(
+                        context.layer, context.real, context.down, probe, context.limit,
+                        context.deltaTime, context.firstDt, recoveryModel, nextPress - probe,
+                        context.zone.valid ? &context.zone : nullptr, &context.tickBudget);
                     context.simulator.resetCaptureForNextRun(context.layer);
                     ++context.plan.candidatesTried;
                     if (context.simulator.planWallHit())
                         context.plan.budgetHit = true;
-                    if (complete(recovery, probe)) {
+                    if (EbLivePlanContracts::waveTurnVerified(
+                            recovery.died,
+                            recovery.unknown || recovery.unknownTrunc || recovery.toggleUnknown,
+                            recovery.ticksRan, std::max(escapeFloor, recoveryModel.cap))) {
                         candidate.recoveryPressTick = nextPress;
                         break;
                     }
                 }
             }
-            if (!ingest(probe, candidate) || (!isWave && bestDelay > 0))
+            if (!ingest(probe, candidate) ||
+                (bestDelay > 0 && (!isWave || waveHelpOnly || localWaveTurn)))
                 break;
         }
         if (subtickRescue && bestDelay < 0 && idleBoundary > 0 && !context.wallExceeded() &&
@@ -648,7 +673,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 break;
             }
         }
-        if (!isWave && bestDelay > 0)
+        if ((!isWave || waveHelpOnly || localWaveTurn) && bestDelay > 0)
             skipLaterBand = true;
     }
 

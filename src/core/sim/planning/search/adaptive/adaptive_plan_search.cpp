@@ -123,7 +123,15 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                                options.hybridDelay <= limit && options.requireAliveForDelay &&
                                !layer->m_gameState.m_isDualMode &&
                                (down || real->m_isDart || real->m_isShip || real->m_isSwing);
-    if (needsClassic || learnedWindow) {
+    // The Cube tail check needs the complete landing trajectory. A short
+    // adaptive screen has to be replayed by the input-window planner.
+    bool const cubeLanding = down && options.requireAliveForDelay &&
+                             !layer->m_gameState.m_isDualMode &&
+                             EbStageConfig::kindOf(real) == GameModeKind::Cube &&
+                             EbStageConfig::assistProbePastHorizon();
+    bool const waveWindow =
+        real->m_isDart && options.requireAliveForDelay && !layer->m_gameState.m_isDualMode;
+    if (needsClassic || learnedWindow || cubeLanding || waveWindow) {
         auto classicOptions = options;
         classicOptions.adaptivePlan = false;
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
@@ -312,6 +320,22 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 break;
             }
             runScreenDelay(delay);
+            // On expensive continuous corridors, many short living screens say
+            // little about the first collision. Price the remaining band after
+            // two real probes and leave at least half the shell for verification.
+            // Classic receives only the unused shared budget and still proves
+            // both the original edge and any proposed correction.
+            if (delay == 1 && inputWindow && continuousControl &&
+                !layer->m_gameState.m_isDualMode && limit > 2 && adaptiveWallUs > 0 &&
+                survivors == 2 && !slots[0].terminalAliveCap && !slots[1].terminalAliveCap) {
+                auto const elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                           std::chrono::steady_clock::now() - wall0)
+                                           .count();
+                if (elapsedUs * (limit + 1LL) >= adaptiveWallUs) {
+                    fallClassic = true;
+                    break;
+                }
+            }
             // Assist Pack AP2: d0 already dead + later Alive → stop screening more
             // doomed delays; steal leftover Screen into Verify for the save.
             if (slots[0].terminalDied && survivors > 0) {
@@ -328,7 +352,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
 
         // Soft-wall incomplete screen: prefer classic before declaring hopeless
         // from only a couple same-crash samples.
-        if (needsClassic) {
+        if (needsClassic || fallClassic) {
             fallClassic = true;
             plan.adaptiveAbortedForFallthrough = true;
         } else if (screened <= 0 || (plan.budgetHit && survivors == 0 && slots[0].terminalDied)) {
@@ -396,7 +420,15 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                     break;
                 }
 
-                int const delay = decision.delay;
+                // A switch discards the live world and requires replaying the cold
+                // candidate from tick zero. Finish proving the baseline or a rescue
+                // for a known lethal baseline while its checkpoint is still live.
+                bool const continueActive =
+                    activeDelay >= 0 && (activeDelay == 0 || slots[0].terminalDied) &&
+                    slots[activeDelay].hasCheckpoint() && slots[activeDelay].autonomousAlive &&
+                    !slots[activeDelay].terminalAliveCap &&
+                    slots[activeDelay].ticksSimulated < model.cap;
+                int const delay = continueActive ? activeDelay : decision.delay;
                 auto& slot = slots[static_cast<size_t>(delay)];
 
                 // Switching candidates requires a clean world; checkpoint cannot
@@ -489,17 +521,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                                      std::chrono::steady_clock::now() - wall0)
                                      .count();
             int const remUs = options.budgetUs - static_cast<int>(elapsed);
-            bool const waveNeedsClassic =
-                EbLivePlanContracts::adaptiveWaveZeroSurvivorsNeedsClassicIw(
-                    real->m_isDart, continuousControl, plan.adaptiveSurvivors);
-            // Assist Pack AP-M7: Wave zero-survivor gift — classic continuous IW
-            // still gets the reserved slice after TW-heavy Adaptive overspend.
-            // Non-Wave keeps AP-L5 (no remUs invent past shared wall).
-            fallthroughRemUs = waveNeedsClassic
-                                   ? EbLivePlanContracts::adaptiveWaveFallthroughGiftUs(
-                                         true, remUs, fallthroughReserveUs)
-                                   : EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
-                                         remUs, classicOpts.tickBudget);
+            fallthroughRemUs = EbLivePlanContracts::intendedFallthroughClassicBudgetUs(
+                remUs, classicOpts.tickBudget);
             if (fallthroughRemUs <= 0) {
                 // Shared press wall spent — no remUs floor stack past sim-budget-us.
                 EbSimPlan out = plan;
@@ -511,19 +534,9 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 out.adaptiveAbortedForFallthrough = plan.adaptiveAbortedForFallthrough;
                 return out;
             }
-            if (EbLivePlanContracts::adaptiveWaveFallthroughUsesFreshWall(waveNeedsClassic,
-                                                                          remUs)) {
-                // Gifted slice starts a fresh classic wall — reusePlanWall is already
-                // past options.budgetUs on Grief-class overspend.
-                classicOpts.budgetUs = fallthroughRemUs;
-                classicOpts.reusePlanWall = false;
-            } else {
-                // Reuse Adaptive wall0 + full press budget so classic IW honors the
-                // same deadline (Adaptive soft-aborted earlier via shell reserve).
-                classicOpts.budgetUs = options.budgetUs;
-                classicOpts.reusePlanWall = true;
-                classicOpts.planWall0 = wall0;
-            }
+            classicOpts.budgetUs = options.budgetUs;
+            classicOpts.reusePlanWall = true;
+            classicOpts.planWall0 = wall0;
         }
 
         // Seed classic with Adaptive terminal / horizon-proven / observation-

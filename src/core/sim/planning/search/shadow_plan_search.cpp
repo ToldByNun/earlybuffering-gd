@@ -167,8 +167,14 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     }
     bool const orbScanBudgetOk =
         context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe && prepareHeavyOk();
-    if (context.orbAssist && EbLivePlanContracts::intendedOrbWindowScanAllowed(
-                                 context.orbAssist, context.inputWindow, orbScanBudgetOk)) {
+    bool const prioritizeNearbyOrb =
+        context.inputWindow && !wallUnlimited && context.options.budgetUs <= 2000;
+    if (context.orbAssist && (!prioritizeNearbyOrb || context.spatialHint) &&
+        EbLivePlanContracts::intendedOrbWindowScanAllowed(
+            context.orbAssist, context.inputWindow,
+            orbScanBudgetOk ||
+                (prioritizeNearbyOrb && context.spatialHint && !context.wallExceeded() &&
+                 context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe))) {
         int const scanTicks = EbOpportunityProbe::orbScanTicks(context.limit, context.model.slack);
         context.orbHint = context.simulator.scanOrbWindow(
             context.layer, context.real, context.down, scanTicks, context.deltaTime,

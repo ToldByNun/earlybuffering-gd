@@ -126,6 +126,10 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
         EbAssistLog::debug("resetAttempt: shadow missing — re-attach");
         EbShadowSimulator::get().attach(playLayer);
     }
+    // Respawn can replace the object array or reattach the ghost. Refresh the
+    // structural index before the first input, once level objects are available.
+    if (playLayer && playLayer->m_objects && playLayer->m_objects->count())
+        EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator::get(), playLayer);
     // Death may have cancelled an in-flight trigger bake — resume if still empty.
     EbTriggerWorldBaker::get().resumeIfEmpty(playLayer);
 }

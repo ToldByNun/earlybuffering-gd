@@ -507,7 +507,10 @@ bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
         return context.simulator.spendPlanTick(&context.tickBudget, tickIndex);
     };
 
-    for (int delay = 1; delay <= context.limit; ++delay) {
+    int lastMissingDelay = context.limit;
+    while (lastMissingDelay > 0 && context.candReady[static_cast<size_t>(lastMissingDelay)])
+        --lastMissingDelay;
+    for (int delay = 1; delay <= lastMissingDelay; ++delay) {
         if (context.tickBudget <= 0 || context.wallExceeded()) {
             context.plan.budgetHit = true;
             break;

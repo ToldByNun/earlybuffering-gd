@@ -8,6 +8,7 @@
 #include "game_hook_simulation_guard.hpp"
 #include <Geode/Geode.hpp>
 #include <fmt/format.h>
+#include <typeinfo>
 
 // ---------------------------------------------------------------------------
 // Input + physics tick
@@ -86,7 +87,7 @@ auto EbGJBaseGameLayer::playerTouchedRing(PlayerObject* player, RingObject* ring
         sim.applyRingJump(player, ring);
         bool const afterClaim = ring && (ring->m_claimTouch || ring->m_activated);
         EbOrbStackResolver::get().noteTouch(player, ring, !beforeClaim && afterClaim,
-                                          sim.simAbsTick());
+                                            sim.simAbsTick());
         // Stacked toggle must also fire (whichever partner collision hit first).
         auto* playLayer = geode::prelude::typeinfo_cast<PlayLayer*>(this);
         EbOrbStackResolver::get().fireStackedPartners(playLayer, player, ring);
@@ -106,7 +107,8 @@ auto EbGJBaseGameLayer::playerTouchedTrigger(PlayerObject* player, EffectGameObj
         if (!sim.isShadow(player) || !object)
             return;
         // Touch-toggle 1049: model group flip; other triggers stay blocked.
-        if (EbTriggerClassify::isToggleTriggerId(object->m_objectID) && object->m_isTouchTriggered) {
+        if (EbTriggerClassify::isToggleTriggerId(object->m_objectID) &&
+            object->m_isTouchTriggered) {
             auto* playLayer = geode::prelude::typeinfo_cast<PlayLayer*>(this);
             EbToggleOrbSim::get().onToggleHit(playLayer, player, object);
             // Stacked normal orb must also fire (same rule as 1594).
@@ -201,13 +203,22 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, gd::vector<G
         if (extra.capacity() < static_cast<size_t>(objectsCount)) {
             extra.reserve(static_cast<size_t>(objectsCount));
         }
+        // Consecutive blocks often share a dynamic type. Their player-cast
+        // result is identical even when their collision policy differs.
+        std::type_info const* lastType = nullptr;
+        bool playerType = false;
         for (int index = 0; index < objectsCount; index++) {
             GameObject* object = vec->at(index);
             if (!object)
                 continue;
             // Never collide the shadow with real P1/P2 or other ghosts —
             // same spawn pose → instant frame-0 "death" during bake/plan.
-            if (geode::prelude::typeinfo_cast<PlayerObject*>(object)) {
+            auto const* type = &typeid(*object);
+            if (type != lastType) {
+                lastType = type;
+                playerType = geode::prelude::typeinfo_cast<PlayerObject*>(object) != nullptr;
+            }
+            if (playerType) {
                 continue;
             }
             switch (EbSimCollisionPolicy::classify(object)) {

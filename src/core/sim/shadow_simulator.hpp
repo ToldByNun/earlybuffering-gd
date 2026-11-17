@@ -404,6 +404,7 @@ public:
     public:
         bool continuous = false;
         bool tapRelease = false;
+        bool stopAtCubeLanding = false;
         bool stopAtBallLanding = false;
         bool probeOrbContinuation = false;
         bool probeSpiderContinuation = false;

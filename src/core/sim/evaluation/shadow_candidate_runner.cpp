@@ -1,4 +1,5 @@
 #include "shadow_candidate_runner.hpp"
+#include "../../../config/stage_config.hpp"
 #include "../planning/ball_landing_tracker.hpp"
 #include "../planning/orb_continuation.hpp"
 #include "../planning/simulation_plan.hpp"
@@ -32,6 +33,8 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
 
     bool acted = false;
     bool tapReleased = false;
+    int cubeAirTicks = 0;
+    int cubeGroundTicks = 0;
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
@@ -228,6 +231,23 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             tick >= delay + releaseAfter && simulator.m_jumped)
             r.followupJumped = true;
 
+        if (model.stopAtCubeLanding && acted && simulator.m_jumped && !simulator.m_activatedRing &&
+            !simulator.m_toggleUnknownHit && !shadowPlayer->m_isDashing &&
+            shadowPlayer->m_isUpsideDown == real->m_isUpsideDown &&
+            EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube) {
+            if (shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2) {
+                if (cubeAirTicks >= 6 && ++cubeGroundTicks >= 4) {
+                    r.landedAfterAction = true;
+                    return finish(r);
+                }
+            } else {
+                ++cubeAirTicks;
+                cubeGroundTicks = 0;
+            }
+        } else {
+            cubeAirTicks = cubeGroundTicks = 0;
+        }
+
         if (model.stopAtBallLanding && acted && shadowPlayer->m_isBall) {
             bool const grounded = shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2;
             if (ballLanding.observe(shadowPlayer->m_isUpsideDown, grounded)) {
@@ -400,9 +420,9 @@ EbShadowSimulator::RunResult EbShadowCandidateRunner::runTrajectoryOne(
 }
 
 EbShadowSimulator::RunResult
-EbShadowCandidateRunner::runBaseline(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
-                                   bool down, float deltaTime, float firstDt,
-                                   EbShadowSimulator::Model const& model, int* tickBudgetLeft) {
+EbShadowCandidateRunner::runBaseline(EbShadowSimulator& simulator, PlayLayer* layer,
+                                     PlayerObject* real, bool down, float deltaTime, float firstDt,
+                                     EbShadowSimulator::Model const& model, int* tickBudgetLeft) {
     EbShadowSimulator::RunResult r;
     simulator.copyPlayerState(simulator.m_shadow, real);
     simulator.m_dead = false;
@@ -441,10 +461,9 @@ EbShadowCandidateRunner::runBaseline(EbShadowSimulator& simulator, PlayLayer* la
     return r;
 }
 
-EbShadowSimulator::OrbWindow
-EbShadowCandidateRunner::scanOrbWindow(EbShadowSimulator& simulator, PlayLayer* layer,
-                                     PlayerObject* real, bool down, int scanTicks, float deltaTime,
-                                     float firstDt, int* tickBudgetLeft, bool holdJump) {
+EbShadowSimulator::OrbWindow EbShadowCandidateRunner::scanOrbWindow(
+    EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down, int scanTicks,
+    float deltaTime, float firstDt, int* tickBudgetLeft, bool holdJump) {
     EbShadowSimulator::OrbWindow win;
     if (!layer || !real || !simulator.m_shadow || scanTicks <= 0)
         return win;

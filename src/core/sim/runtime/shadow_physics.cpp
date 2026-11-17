@@ -182,8 +182,7 @@ void EbShadowPhysics::stepPhysics(EbShadowSimulator& simulator, PlayLayer* layer
             std::chrono::duration_cast<std::chrono::microseconds>(phasesEnd - collisionStart)
                 .count()));
     // AP1 measure-only: feed Adaptive BudgetController (does not change search).
-    int const us = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                        std::chrono::steady_clock::now() - tickWallStart)
-                                        .count());
+    int const us = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(phasesEnd - tickWallStart).count());
     EbSimTickCostMeter::get().notePhysicsTick(us);
 }
