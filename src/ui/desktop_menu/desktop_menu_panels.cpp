@@ -184,31 +184,64 @@ public:
                 "learn-attempts", "Independent Attempts", &learning.minimumAttempts, 3, 12, "",
                 true,
                 "More attempts require stronger repeated evidence before proposing a timing.");
-            EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes);
+            EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes,
+                             true,
+                             "Keep separate success, failure and uncertain-outcome counts for "
+                             "learned timings. Turning this off stops collecting these extra "
+                             "details; saved evidence is retained.");
             EbCheckbox::draw("learn-phase", "Record death timing phase", &learning.trackPhase,
-                             learning.trackOutcomes);
+                             learning.trackOutcomes,
+                             "Record where within a physics tick an input happened, to help "
+                             "inspect timing-sensitive deaths. Requires Track outcome counts.");
             EbCheckbox::draw("learn-sequence", "Record recent input sequence",
-                             &learning.trackSequence, learning.trackOutcomes);
+                             &learning.trackSequence, learning.trackOutcomes,
+                             "Record a compact signature of recent presses and releases to help "
+                             "compare input patterns. Requires Track outcome counts.");
             EbSlider::drawInt("learn-death-penalty", "Local death penalty", &learning.deathPenalty,
-                              0, 4);
+                              0, 4, "", true,
+                              "How strongly an attributed local death lowers a timing score. Zero "
+                              "disables the score penalty. Higher values react faster but can "
+                              "discard useful timings when deaths have other causes.");
             EbSlider::drawInt("learn-survival-reward", "Survival reward", &learning.survivalReward,
-                              1, 3);
+                              1, 3, "", true,
+                              "How strongly an ordinary observed survival raises a timing score. "
+                              "Higher values favor successful timings sooner; survival alone does "
+                              "not prove that a delay rescued the input.");
             EbSlider::drawInt("learn-lineup-depth", "Lineup Look-Ahead", &learning.lineupDepth, 1,
                               3, " inputs", true,
                               "On familiar presses, check up to this many inputs ahead within the "
                               "current planning budget.");
-            EbSlider::drawInt("learn-bin-x", "Position X resolution", &learning.positionBinX, 16,
-                              256);
-            EbSlider::drawInt("learn-bin-y", "Position Y resolution", &learning.positionBinY, 16,
-                              256);
-            EbSlider::drawInt("learn-tps-quantum", "TPS grouping", &learning.tpsQuantum, 1, 120);
-            EbCheckbox::draw("learn-match-substep", "Distinguish sub-step inputs",
-                             &learning.matchSubstep);
+            EbSlider::drawInt(
+                "learn-bin-x", "Position X resolution", &learning.positionBinX, 16, 256, "", true,
+                "Width of each horizontal position group in level units. Smaller values "
+                "distinguish nearby timings; larger values share evidence across a wider area.");
+            EbSlider::drawInt(
+                "learn-bin-y", "Position Y resolution", &learning.positionBinY, 16, 256, "", true,
+                "Height of each vertical position group in level units. Smaller values separate "
+                "paths more precisely; larger values make moving paths easier to recognize again.");
+            EbSlider::drawInt("learn-tps-quantum", "TPS grouping", &learning.tpsQuantum, 1, 120, "",
+                              true,
+                              "Group physics rates in steps of this many ticks per second. Larger "
+                              "groups tolerate small rate differences; smaller groups keep "
+                              "different physics rates separate.");
+            EbCheckbox::draw(
+                "learn-match-substep", "Distinguish sub-step inputs", &learning.matchSubstep, true,
+                "Keep inputs from shortened physics steps separate from full-step inputs. More "
+                "precise matching can reduce how often a learned pattern is recognized.");
             EbCheckbox::draw("learn-match-intervals", "Distinguish input intervals",
-                             &learning.matchIntervals);
-            EbCheckbox::draw("learn-coarse", "Continuous mode fallback", &learning.coarseFallback);
-            EbSlider::drawInt("learn-coarse-attempts", "Fallback independent attempts",
-                              &learning.coarseAttempts, 3, 12, "", learning.coarseFallback);
+                             &learning.matchIntervals, true,
+                             "Use coarse recent input-interval groups when recognizing a pattern, "
+                             "helping distinguish short taps and longer holds. Turning this off "
+                             "shares evidence more broadly.");
+            EbCheckbox::draw(
+                "learn-coarse", "Continuous mode fallback", &learning.coarseFallback, true,
+                "In Ship, Wave and Swing, also learn broader position groups so nearby paths can "
+                "share experience. Suggested timings still need current physics verification.");
+            EbSlider::drawInt(
+                "learn-coarse-attempts", "Fallback independent attempts", &learning.coarseAttempts,
+                3, 12, "", learning.coarseFallback,
+                "Minimum independent attempts required before using the broader continuous-mode "
+                "evidence. Higher values are more cautious. Requires Continuous mode fallback.");
             ImGui::TextWrapped(
                 "Coarser groups share experience between nearby paths. Every suggestion is checked "
                 "against current geometry. These controls apply during this level visit.");
