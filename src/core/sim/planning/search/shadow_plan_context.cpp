@@ -29,6 +29,7 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
                                         : EbShadowSimulator::kDefaultTickBudget),
       useTrajEngine(!options.legacyPick &&
                     options.assistEngine == EbStageConfig::AssistEngineKind::Trajectory) {
+    model.shipLine = options.shipLine;
     plan.trajectoryEngine = useTrajEngine;
     model.continuePastClear = options.requireAliveForDelay;
     // Align classic IW with Adaptive discrete clamp (Assist Pack AP7): without a

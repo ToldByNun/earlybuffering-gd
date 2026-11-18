@@ -21,6 +21,7 @@
 #include "../ui/settings/action_button_setting.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
+#include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -170,6 +171,19 @@ void EbModuleBindings::registerSettings() {
                 EbTrajectoryVisualizer::get().attach(pl);
         } else {
             EbTrajectoryVisualizer::get().clear();
+        }
+        EbAssistController::get().updateOverlay();
+    });
+    geode::prelude::listenForSettingChanges<bool>("show-straightfly", [](bool value) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbStraightflyVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get())
+                EbStraightflyVisualizer::get().attach(pl);
+        } else {
+            EbStraightflyVisualizer::get().clear();
         }
         EbAssistController::get().updateOverlay();
     });

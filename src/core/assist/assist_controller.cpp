@@ -5,8 +5,10 @@
 #include "../bake/bake_map.hpp"
 #include "../bake/bake_verifier.hpp"
 #include "../diagnostics/decision_log.hpp"
+#include "../diagnostics/divergence_tracker.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "../sim/shadow_simulator.hpp"
+#include "../sim/sim_trust.hpp"
 #include "assist_clock.hpp"
 #include "contracts/assist_timing_rules.hpp"
 #include "contracts/assist_verdict.hpp"
@@ -402,15 +404,28 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
     sample.sideways = player->m_isSideways;
     sample.reversed = player->m_isGoingLeft;
     sample.valid = !player->m_isDead && !player->m_isPlatformer;
+    m_flightContext[slot] = sample;
     m_flightMeasurement[slot].observe(sample);
     bool const buffered = m_buffer.state != BufferState::Idle && m_buffer.player1 == (slot == 0);
     bool const pendingRelease = m_pendingRelease && m_pendingReleaseP1 == (slot == 0);
     bool const assisted = m_flightCorrectionObserved[slot] || buffered || pendingRelease;
     bool const supported = (player->m_isShip || player->m_isDart || player->m_isSwing) &&
-                           !player->m_controlsDisabled && !player->m_isDashing;
+                           !player->m_controlsDisabled && !player->m_isDashing &&
+                           !EbSimTrust::get().parityDrift() &&
+                           !EbDivergenceTracker::get().simUntrusted();
     m_flightIntent[slot].observe(m_flightMeasurement[slot].result(), sample.dt, supported,
                                  assisted);
     m_flightCorrectionObserved[slot] = false;
+    auto const& intent = m_flightIntent[slot].result();
+    if (intent.targetValid && intent.state == EbFlightIntent::State::Tracking) {
+        if (!m_shipLineHasAnchor[slot]) {
+            m_shipLineX[slot] = sample.x;
+            m_shipLineY[slot] = sample.y;
+            m_shipLineHasAnchor[slot] = true;
+        }
+    } else {
+        m_shipLineHasAnchor[slot] = false;
+    }
 }
 EbFlightMeasurement::Result EbAssistController::flightMeasurement(int player) const {
     if (player < 0 || player >= 2)
@@ -423,10 +438,110 @@ EbFlightIntent::Result EbAssistController::flightIntent(int player) const {
         return {};
     return m_flightIntent[player].result();
 }
+EbAssistController::StraightflyView EbAssistController::straightflyView(int player) const {
+    StraightflyView view;
+    if (player < 0 || player >= 2 || !m_shipLineHasAnchor[player])
+        return view;
+    auto const& intent = m_flightIntent[player].result();
+    if (!intent.targetValid || intent.state != EbFlightIntent::State::Tracking)
+        return view;
+    auto const& context = m_flightContext[player];
+    if (!context.valid)
+        return view;
+    view.valid = true;
+    view.sideways = context.sideways;
+    view.reversed = context.reversed;
+    view.x = m_shipLineX[player];
+    view.y = m_shipLineY[player];
+    view.degrees = intent.targetDegrees;
+    view.bodySize = 30. * (context.size > 0.f ? context.size : 1.f);
+    view.confidence = intent.confidence;
+    return view;
+}
 void EbAssistController::configureFlightIntent(bool manualTarget, double degrees) {
+    bool const restoreEnabled = m_shipLineEnabled;
+    if (restoreEnabled)
+        setShipLineEnabled(false);
     EbFlightIntent::Settings settings;
     settings.manualTarget = manualTarget;
     settings.targetDegrees = degrees;
     for (auto& intent : m_flightIntent)
         intent.configure(settings);
+    m_shipLineEnabled = restoreEnabled;
+}
+
+void EbAssistController::setShipLineEnabled(bool enabled) {
+    if (!enabled && m_buffer.shipLineOwned && m_buffer.state == BufferState::Buffered) {
+        int const slot = m_buffer.player1 ? 0 : 1;
+        clearBuffer();
+        auto* layer = PlayLayer::get();
+        if (layer && m_inputReconciler.state(slot).dispatched != m_userHolding[slot]) {
+            m_injecting = true;
+            layer->handleButton(m_userHolding[slot], EbAssistControllerImplementation::JUMP_BUTTON,
+                                slot == 0);
+            m_injecting = false;
+        }
+    }
+    m_shipLineEnabled = enabled;
+    if (!enabled) {
+        for (auto& intent : m_flightIntent)
+            intent.reset();
+        m_shipLineHasAnchor[0] = m_shipLineHasAnchor[1] = false;
+    }
+}
+bool EbAssistController::shipLineEnabled() const {
+    return m_shipLineEnabled;
+}
+void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer,
+                                             PlayerObject* player) {
+    if (!m_shipLineEnabled || !EbStageConfig::assistPress() || !EbStageConfig::assistRelease() ||
+        !layer || !player || !player->m_isShip || player->m_isDashing ||
+        layer->m_gameState.m_isDualMode || player->m_controlsDisabled)
+        return;
+    int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
+    if (slot < 0)
+        return;
+    auto const& context = m_flightContext[slot];
+    if (!context.valid || context.mode != static_cast<int>(EbStageConfig::kindOf(player)) ||
+        context.inverted != player->m_isUpsideDown || context.sideways != player->m_isSideways ||
+        context.reversed != player->m_isGoingLeft || context.speed != player->m_playerSpeed ||
+        context.size != player->m_vehicleSize || context.gravity != player->m_gravity ||
+        context.timeWarp != layer->m_gameState.m_timeWarp)
+        return;
+    auto const intent = m_flightIntent[slot].result();
+    if (!m_shipLineHasAnchor[slot] || !intent.targetValid ||
+        intent.state != EbFlightIntent::State::Tracking || intent.confidence < .5)
+        return;
+    if (EbAssistControllerImplementation::nearOrbOrPadHint(layer, player, activeLimit(player),
+                                                           m_simDt))
+        return;
+    options.shipLine.enabled = true;
+    options.shipLine.x = m_shipLineX[slot];
+    options.shipLine.y = m_shipLineY[slot];
+    options.shipLine.degrees = intent.targetDegrees;
+    options.shipLine.bodySize = 30. * player->m_vehicleSize;
+    options.shipLine.reversed = player->m_isGoingLeft;
+    options.shipLine.sideways = player->m_isSideways;
+    options.smartDepth = 1;
+}
+bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down) {
+    if (!m_shipLineEnabled || !layer || !player || !player->m_isShip)
+        return false;
+    int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
+    if (slot < 0)
+        return false;
+    bool const ours = m_buffer.state == BufferState::Buffered && m_buffer.shipLineOwned &&
+                      m_buffer.player1 == (slot == 0);
+    if (ours) {
+        bool const delayedDown = m_buffer.down;
+        clearBuffer();
+        if (!delayedDown && down) {
+            m_injecting = true;
+            layer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
+            m_injecting = false;
+        } else if (delayedDown && !down) {
+            return true;
+        }
+    }
+    return ours || m_flightIntent[slot].result().yieldRequested;
 }

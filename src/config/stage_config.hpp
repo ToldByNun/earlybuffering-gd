@@ -77,6 +77,7 @@ public:
     static bool blocksProgressSaves(bool assistTouchedRun);
     static bool showOverlay();
     static bool showTrajectory();
+    static bool showStraightfly(); // acquired Straight Flight target line
     static bool showBakePath();  // green press + purple release BakeMap windows
     static bool showPauseBake(); // pause-screen status lines
     // Pause top-right button → Geode openSettingsPopup (later: hub).
@@ -325,6 +326,7 @@ private:
     static bool s_cachedShowOverlay;
     static bool s_cachedLagWarningToast;
     static bool s_cachedShowTrajectory;
+    static bool s_cachedShowStraightfly;
     static bool s_cachedShowBakePath;
     static bool s_cachedShowPauseBake;
     static bool s_cachedShowPauseHub;

@@ -14,6 +14,7 @@ class LiveRegressionGate:
         common = ["src/core/assist/contracts/live_plan_contracts.cpp",
                   "src/core/assist/contracts/assist_verdict.cpp"]
         cases = {
+            "ship_line_policy": ["src/core/assist/flight/ship_line_policy.cpp"],
             "flight_intent": ["src/core/assist/flight/flight_intent.cpp"],
             "flight_measurement": ["src/core/assist/flight/flight_measurement.cpp"],
             "input_reconciler": ["src/core/assist/input/input_reconciler.cpp"],

@@ -210,8 +210,22 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             }
         }
 
+        auto const flightBefore = shadowPlayer->m_position;
         simulator.stepPhysics(layer, shadowPlayer, stepDt, deltaTime, false,
                               splitAction ? &tickStart : nullptr);
+        if (model.shipLine.enabled) {
+            if (!shadowPlayer->m_isShip || shadowPlayer->m_isDashing ||
+                shadowPlayer->m_isUpsideDown != real->m_isUpsideDown ||
+                shadowPlayer->m_isSideways != real->m_isSideways ||
+                shadowPlayer->m_isGoingLeft != real->m_isGoingLeft ||
+                shadowPlayer->m_playerSpeed != real->m_playerSpeed ||
+                shadowPlayer->m_vehicleSize != real->m_vehicleSize) {
+                r.shipLine.invalid = true;
+            }
+            auto const position = shadowPlayer->m_position;
+            EbShipLinePolicy::observe(model.shipLine, r.shipLine, position.x, position.y,
+                                      position.x - flightBefore.x, position.y - flightBefore.y);
+        }
         if (simulator.m_dead) {
             r.died = true;
             r.deathTick = tick;

@@ -402,6 +402,7 @@ public:
 
     class Model {
     public:
+        EbShipLinePolicy::Target shipLine;
         bool continuous = false;
         bool tapRelease = false;
         bool stopAtCubeLanding = false;

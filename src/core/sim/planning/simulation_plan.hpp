@@ -34,6 +34,7 @@ private:
 //      CPU as permission to grow Max Assist or Prediction Horizon.
 class EbPlanOptions {
 public:
+    EbShipLinePolicy::Target shipLine;
     float capMul = 1.f;
     int maxBranches = 4;
     int budgetUs = 4000;   // soft cap; tick budget is primary
@@ -104,6 +105,7 @@ private:
 
 class EbSimPlan {
 public:
+    bool shipLineCorrection = false;
     int hybridHint = -1;
     bool hybridTried = false;
     bool fixedFireTick = false;

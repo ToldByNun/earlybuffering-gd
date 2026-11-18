@@ -10,6 +10,7 @@
 #include "../../overlays/status_overlay.hpp"
 #include "../../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../../visualizers/bake_path_visualizer.hpp"
+#include "../../visualizers/straightfly_visualizer.hpp"
 #include "../../visualizers/trajectory_visualizer.hpp"
 #include "../pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
@@ -134,6 +135,15 @@ void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
             }
         } else {
             EbTrajectoryVisualizer::get().clear();
+        }
+        bool const straightfly = EbStageConfig::showStraightfly();
+        EbStraightflyVisualizer::get().setEnabled(straightfly);
+        if (straightfly) {
+            if (auto* pl = PlayLayer::get()) {
+                EbStraightflyVisualizer::get().attach(pl);
+            }
+        } else {
+            EbStraightflyVisualizer::get().clear();
         }
         bool const bakePath = EbStageConfig::showBakePath();
         EbBakePathVisualizer::get().setEnabled(bakePath);

@@ -354,6 +354,7 @@ public:
     static void drawVisual() {
         if (EbSectionCard::begin("visual-viz", "Visualizers")) {
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
+            EbCheckbox::drawSetting("show-straightfly", "Visualize Straightfly");
         }
         EbSectionCard::end();
 

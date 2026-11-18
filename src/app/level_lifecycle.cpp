@@ -28,6 +28,7 @@
 #include "../ui/feedback/save_frame_counter.hpp"
 #include "../ui/overlays/status_overlay.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
+#include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
 
 void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLayer* playLayer) {
@@ -102,6 +103,7 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_flightIntent[0].reset();
     controller.m_flightIntent[1].reset();
     controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
+    controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -144,6 +146,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     controller.m_flightIntent[0].reset();
     controller.m_flightIntent[1].reset();
     controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
+    controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -157,6 +160,8 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbLagWarningToast::get().attach(playLayer);
     EbTrajectoryVisualizer::get().setEnabled(EbStageConfig::showTrajectory());
     EbTrajectoryVisualizer::get().attach(playLayer);
+    EbStraightflyVisualizer::get().setEnabled(EbStageConfig::showStraightfly());
+    EbStraightflyVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
     EbBakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
@@ -190,6 +195,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbSaveFrameCounter::get().detach(!layerAlive);
     EbLagWarningToast::get().detach(!layerAlive);
     EbTrajectoryVisualizer::get().detach(!layerAlive);
+    EbStraightflyVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);
 
@@ -235,6 +241,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_flightIntent[0].reset();
     controller.m_flightIntent[1].reset();
     controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
+    controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();

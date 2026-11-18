@@ -195,6 +195,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
 
         // Visual
         {"show-trajectory", SettingsCategory::Visual},
+        {"show-straightfly", SettingsCategory::Visual},
         {"save-feedback-sound", SettingsCategory::Visual},
         {"save-feedback-color", SettingsCategory::Visual},
         {"save-feedback-counter", SettingsCategory::Visual},

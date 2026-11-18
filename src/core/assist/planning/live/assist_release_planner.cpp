@@ -116,7 +116,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
-    bool mustDelaySearch = learnedOpportunity > 0;
+    controller.fillShipLineOptions(learnedContext, playLayer, player);
+    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -213,6 +214,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
     if (opts.hybridDelay > 0)
         opts.mustDelaySearch = true;
+    opts.shipLine = learnedContext.shipLine;
+    if (opts.shipLine.enabled)
+        opts.smartDepth = 1;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
@@ -305,6 +309,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     controller.m_buffer = {};
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = false;
+    controller.m_buffer.shipLineOwned = opts.shipLine.enabled;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;

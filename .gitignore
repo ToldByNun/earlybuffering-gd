@@ -194,3 +194,6 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/test_flight_intent.cpp
 !/tools/test_flight_intent.hpp
+
+!/tools/test_ship_line_policy.cpp
+!/tools/test_ship_line_policy.hpp

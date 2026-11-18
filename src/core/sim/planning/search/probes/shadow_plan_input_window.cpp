@@ -266,7 +266,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         bool const finished = cached.died || cached.unknown || cached.unknownTrunc ||
                               cached.toggleUnknown || cached.landedAfterAction ||
                               cached.ticksRan >= context.model.cap;
-        if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue)) {
+        if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue) &&
+            (!context.options.shipLine.enabled || cached.shipLine.samples > 0)) {
             ++context.plan.reusedCandidateCount;
             context.plan.reusedCandidateTicks += context.cands[index].raw.ticksRan;
             return context.cands[index];
@@ -334,6 +335,47 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     if (context.model.stopAtCubeLanding && context.candReady[0] && context.cands[0].viable &&
         context.cands[0].raw.landedAfterAction && !context.cands[0].raw.died)
         skipLaterBand = true;
+
+    // Flight assistance compares full, equal-depth native-physics paths. A
+    // safe original remains authoritative unless a verified delay improves it.
+    if (context.options.shipLine.enabled && context.candReady[0] && context.cands[0].viable &&
+        !context.cands[0].raw.died && !dual) {
+        int selected = 0;
+        auto const baselineMetrics = context.cands[0].raw.shipLine;
+        double selectedCost = EbShipLinePolicy::cost(baselineMetrics, 0, context.limit);
+        for (int probe : {std::max(1, context.limit / 2), 1, context.limit}) {
+            if (probe < 1 || probe > context.limit || context.wallExceeded() ||
+                context.tickBudget <= 0)
+                break;
+            if (!ingest(probe, evaluateCandidate(probe)))
+                break;
+            auto const& candidate = context.cands[static_cast<size_t>(probe)];
+            if (!candidate.viable || candidate.raw.died || candidate.activatedRing ||
+                !EbShipLinePolicy::improves(baselineMetrics, candidate.raw.shipLine, probe,
+                                            context.limit))
+                continue;
+            double const cost =
+                EbShipLinePolicy::cost(candidate.raw.shipLine, probe, context.limit);
+            if (cost < selectedCost) {
+                selected = probe;
+                selectedCost = cost;
+                break;
+            }
+        }
+        if (selected > 0 && context.options.robustJitter && !context.jitterOk(selected, -1, true))
+            selected = 0;
+        context.plan.action = selected > 0 ? PlanAction::Delay : PlanAction::Pass;
+        context.plan.reason = selected > 0 ? AssistReason::DelayThreat : AssistReason::PassD0Safe;
+        context.plan.shipLineCorrection = selected > 0;
+        context.plan.delay = context.plan.jumpTick = selected;
+        context.plan.nowIsSafe = selected == 0;
+        context.plan.threatCleared = true;
+        context.plan.guardOriginalDelay = selected;
+        context.plan.viableDelays = selected > 0 ? std::vector<int>{selected} : std::vector<int>{};
+        context.plan.dMin = context.plan.dMax = selected;
+        context.publishLedger(selected, selected == 0, context.ledgerEarlyExit());
+        return true;
+    }
 
     // Orb scans already measured a reachable activation band. Verify that band
     // before unrelated early flaps/flips consume the wall. Every candidate still

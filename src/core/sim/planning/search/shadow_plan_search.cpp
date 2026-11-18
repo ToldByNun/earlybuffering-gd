@@ -124,6 +124,16 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
             context.model.cap = std::min(context.model.cap, std::max(1, 96 - context.limit));
         }
     }
+    if (context.options.shipLine.enabled) {
+        // Reuse the ordinary configured horizon when explicit. Automatic line
+        // control uses a local steering window rather than a long held-input path.
+        if (EbStageConfig::paramsFor(context.real).cap == 0 && EbStageConfig::lookAheadCap() == 0)
+            context.model.cap = std::min(context.model.cap, 32);
+        context.orbAssist = false;
+        context.orbHint = {};
+        context.spatialHint = false;
+        return;
+    }
     // Assist Pack AP-L2: keep soft-wall headroom for IW — baseline/orb scans must
     // not burn the whole press (Grief TW baseline alone was ~15ms / candidatesTried=0).
     int const prepareReserve = EbLivePlanContracts::prepareReserveUs(

@@ -360,6 +360,13 @@ public:
         }
         EbSectionCard::end();
         if (EbSectionCard::begin("dev-flight-measurement", "Flight Measurement")) {
+            bool shipLineEnabled = EbAssistController::get().shipLineEnabled();
+            if (EbCheckbox::draw(
+                    "ship-line-enable", "Ship line assistance (session)", &shipLineEnabled, true,
+                    "Stabilizes an acquired Ship line by delaying real inputs inside the assist "
+                    "window. Requires both press and release assist. Solo only. Yields to "
+                    "sustained input. This development switch is not saved."))
+                EbAssistController::get().setShipLineEnabled(shipLineEnabled);
             static bool manualTarget = false;
             static float targetAngle = 0.f;
             bool changed = EbCheckbox::draw(

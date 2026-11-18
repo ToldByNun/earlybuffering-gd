@@ -132,7 +132,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                              EbStageConfig::assistProbePastHorizon();
     bool const waveWindow =
         real->m_isDart && options.requireAliveForDelay && !layer->m_gameState.m_isDualMode;
-    if (needsClassic || learnedWindow || cubeLanding || waveWindow ||
+    if (options.shipLine.enabled || needsClassic || learnedWindow || cubeLanding || waveWindow ||
         (options.requireAliveForDelay && !down && (real->m_isRobot || real->m_isDashing))) {
         auto classicOptions = options;
         classicOptions.adaptivePlan = false;

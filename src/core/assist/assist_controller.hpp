@@ -25,6 +25,7 @@ enum class BufferState {
 
 class EbBufferedInput {
 public:
+    bool shipLineOwned = false;
     bool fixedFireTick = false;
     BufferState state = BufferState::Idle;
     bool down = true;
@@ -75,10 +76,29 @@ private:
 
 class EbAssistController {
 public:
+    class StraightflyView {
+    public:
+        bool valid = false;
+        bool sideways = false;
+        bool reversed = false;
+        double x = 0.;
+        double y = 0.;
+        double degrees = 0.;
+        double bodySize = 30.;
+        double confidence = 0.;
+
+    private:
+    };
     void measureFlight(PlayerObject* player, float deltaTime);
     EbFlightMeasurement::Result flightMeasurement(int player) const;
     EbFlightIntent::Result flightIntent(int player) const;
+    StraightflyView straightflyView(int player) const;
     void configureFlightIntent(bool manualTarget, double degrees);
+    void setShipLineEnabled(bool enabled);
+    bool shipLineEnabled() const;
+    void fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer, PlayerObject* player);
+    bool yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down);
+
     void acknowledgeInput(bool player1, bool down, int button);
     static EbAssistController& get();
 
@@ -245,6 +265,11 @@ private:
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object,
                        EbDecisionEntry& dec);
 
+    bool m_shipLineEnabled = false;
+    bool m_shipLineHasAnchor[2]{};
+    double m_shipLineX[2]{};
+    double m_shipLineY[2]{};
+    EbFlightMeasurement::Sample m_flightContext[2];
     EbFlightMeasurement m_flightMeasurement[2];
     EbFlightIntent m_flightIntent[2];
     bool m_flightCorrectionObserved[2]{};

@@ -3,6 +3,7 @@
 #include "../../../ui/overlays/dev_overlay.hpp"
 #include "../../../ui/overlays/status_overlay.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
+#include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
 #include "../../bake/bake_map.hpp"
 #include "../../diagnostics/assist_perf_stats.hpp"
@@ -57,6 +58,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             learnBit = "learn OFF";
         }
         std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
+        std::string straightflyBit = EbStraightflyVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
@@ -78,6 +80,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + cpsBit;
         if (!trajBit.empty())
             controller.m_overlayText += " | " + trajBit;
+        if (!straightflyBit.empty())
+            controller.m_overlayText += " | " + straightflyBit;
         if (EbStageConfig::triggerBake()) {
             if (EbTriggerWorldBaker::get().running()) {
                 controller.m_overlayText += fmt::format(

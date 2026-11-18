@@ -9,6 +9,7 @@
 #include "../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../ui/feedback/save_feedback.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
+#include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
@@ -184,6 +185,10 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         EbTrajectoryVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
     {
+        EbPerfTrace::Scope const scope("straightfly");
+        EbStraightflyVisualizer::get().onPhysicsTick(playLayer, deltaTime);
+    }
+    {
         EbPerfTrace::Scope const scope("bakePath");
         EbBakePathVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
@@ -303,6 +308,17 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
         EbDevCycleRecorder::get().beginPress(playerIndex, down, effectTick,
                                              controller.m_attemptTick, DevEventSource::Live);
     };
+
+    if (controller.yieldShipLine(playLayer, player, down)) {
+        bool const dispatched = controller.m_inputReconciler.state(player1 ? 0 : 1).dispatched;
+        bool const deliver = down != dispatched;
+        beginDevPress();
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassNoThreat, "ship-line-yield");
+        controller.noteVerdict(AssistReason::PassNoThreat, "ship-line-yield");
+        if (deliver)
+            controller.m_log.noteInput(effectTick, down);
+        return finish(deliver);
+    }
 
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {

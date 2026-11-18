@@ -126,7 +126,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
-    bool mustDelaySearch = learnedOpportunity > 0;
+    controller.fillShipLineOptions(learnedContext, playLayer, player);
+    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -251,6 +252,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                                                        limit, controller.m_simDt, firstDt, opts);
     if (opts.hybridDelay > 0)
         opts.mustDelaySearch = true;
+    opts.shipLine = learnedContext.shipLine;
+    if (opts.shipLine.enabled)
+        opts.smartDepth = 1;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
@@ -262,7 +266,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
-    if (opts.hybridDelay >= 0)
+    if (!opts.shipLine.enabled && opts.hybridDelay >= 0)
         opts.smartDepth = std::max(opts.smartDepth, EbHybridLearning::get().lineupDepth);
     bool useSequence = opts.smartDepth > 1;
 
@@ -434,6 +438,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = true;
     controller.m_buffer.firePhase = plan.firePhase;
+    controller.m_buffer.shipLineOwned = opts.shipLine.enabled;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;

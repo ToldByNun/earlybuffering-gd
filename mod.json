@@ -1266,6 +1266,12 @@
 			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
+		"show-straightfly": {
+			"type": "bool",
+			"name": "Visualize Straightfly",
+			"description": "Draws the acquired Straight Flight target line and body-width corridor once intent is Tracking. Cyan = predicted line; opacity follows confidence. Off = no draw cost.",
+			"default": false
+		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",

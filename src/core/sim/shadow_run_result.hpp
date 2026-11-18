@@ -1,12 +1,14 @@
 #ifndef SHADOW_RUN_RESULT_HPP
 #define SHADOW_RUN_RESULT_HPP
 
+#include "../assist/flight/ship_line_policy.hpp"
 #include <Geode/Geode.hpp>
 
 // Standalone so planning headers can embed a run result without pulling
 // shadow_simulator.hpp (which includes simulation_plan → candidate → cycle).
 class EbShadowRunResult {
 public:
+    EbShipLinePolicy::Metrics shipLine;
     bool landedAfterAction = false;
     bool followupJumped = false;
     bool died = false;
