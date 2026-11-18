@@ -18,6 +18,7 @@
 #include "../shadow_plan_context.hpp"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <fmt/format.h>
 #include <vector>
 
@@ -336,46 +337,101 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.cands[0].raw.landedAfterAction && !context.cands[0].raw.died)
         skipLaterBand = true;
 
-    // Flight assistance compares full, equal-depth native-physics paths. A
-    // safe original remains authoritative unless a verified delay improves it.
-    // Rank the whole delay band; keep the lowest-cost improver (latency is in cost).
+    // Straightfly priority: (1) steer back onto the line by delaying the edge
+    // that moves toward it, (2) otherwise fall through to ordinary safe/threat.
+    // Research pack 20261118_231744: 246× PassD0Safe with sf 100% — cost ranking
+    // never won because ship endX is delay-invariant; steer from live cross-track.
     if (context.options.shipLine.enabled && context.candReady[0] && context.cands[0].viable &&
-        !context.cands[0].raw.died && !dual) {
-        int selected = 0;
+        !context.cands[0].raw.died && !dual && context.real) {
+        double const liveSigned = EbShipLinePolicy::signedCrossTrack(
+            context.options.shipLine, context.real->m_position.x, context.real->m_position.y);
+        bool const edgeHelps =
+            EbShipLinePolicy::delayHelpsTowardLine(context.down, liveSigned);
         auto const baselineMetrics = context.cands[0].raw.shipLine;
-        double selectedCost = EbShipLinePolicy::cost(baselineMetrics, 0, context.limit);
+        int selected = 0;
+        double selectedAbs = std::abs(baselineMetrics.lastSignedError);
+        if (!std::isfinite(selectedAbs) || baselineMetrics.samples <= 0)
+            selectedAbs = std::abs(liveSigned);
         for (int probe = 1; probe <= context.limit; ++probe) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
             }
-            if (!ingest(probe, evaluateCandidate(probe)))
+            auto candidate = evaluateCandidate(probe);
+            if (candidate.raw.ticksRan == 0) {
+                context.plan.budgetHit = true;
                 break;
-            auto const& candidate = context.cands[static_cast<size_t>(probe)];
-            if (!candidate.viable || candidate.raw.died || candidate.activatedRing ||
-                !EbShipLinePolicy::improves(baselineMetrics, candidate.raw.shipLine, probe,
-                                            context.limit))
+            }
+            if (!ingest(probe, candidate))
                 continue;
-            double const cost =
-                EbShipLinePolicy::cost(candidate.raw.shipLine, probe, context.limit);
-            if (cost + 1e-9 < selectedCost) {
+            if (!edgeHelps)
+                continue;
+            auto const& stored = context.cands[static_cast<size_t>(probe)];
+            if (!stored.viable || stored.raw.died || stored.activatedRing)
+                continue;
+            double candAbs = stored.raw.shipLine.samples > 0 && !stored.raw.shipLine.invalid
+                                 ? std::abs(stored.raw.shipLine.lastSignedError)
+                                 : std::numeric_limits<double>::infinity();
+            if (!std::isfinite(candAbs))
+                continue;
+            // Prefer any delay that finishes closer to the line than d0 / current best.
+            if (candAbs + .01 < selectedAbs) {
                 selected = probe;
-                selectedCost = cost;
+                selectedAbs = candAbs;
+            }
+        }
+        // Sim metrics can be flat even when live cross-track is clearly off — force
+        // a survival-checked delay proportional to the live error on the helping edge.
+        if (selected <= 0 && edgeHelps && std::isfinite(liveSigned) &&
+            std::abs(liveSigned) >= .08) {
+            int guess = static_cast<int>(std::lround(std::abs(liveSigned) * 14.));
+            guess = std::clamp(guess, 1, context.limit);
+            auto tryDelay = [&](int delay) -> bool {
+                if (delay <= 0 || delay > context.limit)
+                    return false;
+                if (!context.candReady[static_cast<size_t>(delay)]) {
+                    auto candidate = evaluateCandidate(delay);
+                    if (candidate.raw.ticksRan == 0)
+                        return false;
+                    if (!ingest(delay, candidate))
+                        return false;
+                }
+                auto const& stored = context.cands[static_cast<size_t>(delay)];
+                if (!stored.viable || stored.raw.died || stored.activatedRing)
+                    return false;
+                selected = delay;
+                return true;
+            };
+            if (!tryDelay(guess)) {
+                for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {
+                    if (tryDelay(guess - delta) || tryDelay(guess + delta))
+                        break;
+                }
             }
         }
         if (selected > 0 && context.options.robustJitter && !context.jitterOk(selected, -1, true))
             selected = 0;
-        context.plan.action = selected > 0 ? PlanAction::Delay : PlanAction::Pass;
-        context.plan.reason = selected > 0 ? AssistReason::DelayThreat : AssistReason::PassD0Safe;
-        context.plan.shipLineCorrection = selected > 0;
-        context.plan.delay = context.plan.jumpTick = selected;
-        context.plan.nowIsSafe = selected == 0;
-        context.plan.threatCleared = true;
-        context.plan.guardOriginalDelay = selected;
-        context.plan.viableDelays = selected > 0 ? std::vector<int>{selected} : std::vector<int>{};
-        context.plan.dMin = context.plan.dMax = selected;
-        context.publishLedger(selected, selected == 0, context.ledgerEarlyExit());
-        return true;
+        if (selected > 0) {
+            context.plan.action = PlanAction::Delay;
+            context.plan.reason = AssistReason::DelayThreat;
+            context.plan.shipLineCorrection = true;
+            context.plan.delay = context.plan.jumpTick = selected;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = true;
+            context.plan.guardOriginalDelay = selected;
+            context.plan.viableDelays = std::vector<int>{selected};
+            context.plan.dMin = context.plan.dMax = selected;
+            EbAssistLog::info(fmt::format(
+                "SHIP-LINE steer +{} liveXt={:.3f} down={} samples={} lastXt={:.3f}", selected,
+                liveSigned, context.down ? 1 : 0, baselineMetrics.samples,
+                baselineMetrics.lastSignedError));
+            context.publishLedger(selected, false, context.ledgerEarlyExit());
+            return true;
+        }
+        EbAssistLog::debug(fmt::format(
+            "SHIP-LINE fallback-safe liveXt={:.3f} helps={} samples={} lastXt={:.3f}", liveSigned,
+            edgeHelps ? 1 : 0, baselineMetrics.samples, baselineMetrics.lastSignedError));
+        // No line winner → ordinary IW safe/threat (priority 2).
     }
 
     // Orb scans already measured a reachable activation band. Verify that band

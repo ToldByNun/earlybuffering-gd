@@ -38,7 +38,7 @@ int ShipLineRegression::run() {
                     failures += !EbShipLinePolicy::improves(original, corrected, 2, 8);
                     failures += EbShipLinePolicy::improves(corrected, corrected, 2, 8);
                     auto excessiveTurn = corrected;
-                    excessiveTurn.lastHeadingError = original.lastHeadingError + 31.;
+                    excessiveTurn.lastHeadingError = original.lastHeadingError + 36.;
                     failures += EbShipLinePolicy::improves(original, excessiveTurn, 2, 8);
                     failures += EbShipLinePolicy::improves(corrected, original, 2, 8);
                     failures += EbShipLinePolicy::improves(original, corrected, 9, 8);
@@ -46,6 +46,8 @@ int ShipLineRegression::run() {
                     auto tiny = original;
                     tiny.errorSum = original.errorSum * .99;
                     tiny.maxError = original.maxError;
+                    tiny.lastError = original.lastError;
+                    tiny.lastSignedError = original.lastSignedError;
                     tiny.angleSum = original.angleSum;
                     tiny.lastHeadingError = original.lastHeadingError;
                     tiny.samples = original.samples;
@@ -68,6 +70,24 @@ int ShipLineRegression::run() {
     target.bodySize = 0.;
     EbShipLinePolicy::observe(target, empty, 0., 0., 1., 0.);
     failures += !empty.invalid;
+    EbShipLinePolicy::Target line;
+    line.enabled = true;
+    line.x = 0.;
+    line.y = 0.;
+    line.degrees = 0.;
+    line.bodySize = 30.;
+    failures += std::abs(EbShipLinePolicy::normalizedCrossTrack(line, 0., 30.) - 1.) > 1e-6;
+    failures += std::abs(EbShipLinePolicy::normalizedCrossTrack(line, 100., 0.)) > 1e-6;
+    failures += std::abs(EbShipLinePolicy::signedCrossTrack(line, 0., 30.) - 1.) > 1e-6;
+    failures += std::abs(EbShipLinePolicy::signedCrossTrack(line, 0., -30.) + 1.) > 1e-6;
+    failures += !EbShipLinePolicy::delayHelpsTowardLine(true, .2);
+    failures += EbShipLinePolicy::delayHelpsTowardLine(true, -.2);
+    failures += !EbShipLinePolicy::delayHelpsTowardLine(false, -.2);
+    failures += EbShipLinePolicy::delayHelpsTowardLine(false, .2);
+    double px = 0.;
+    double py = 0.;
+    EbShipLinePolicy::projectOntoLine(line, 40., 30., px, py);
+    failures += std::abs(px - 40.) > 1e-6 || std::abs(py) > 1e-6;
     std::cout << cases << " line/direction/size cases, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

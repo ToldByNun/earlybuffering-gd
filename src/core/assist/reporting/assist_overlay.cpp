@@ -19,6 +19,7 @@
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
+#include "../flight/ship_line_policy.hpp"
 #include <cstring>
 #include <string>
 
@@ -82,7 +83,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + trajBit;
         if (!straightflyBit.empty())
             controller.m_overlayText += " | " + straightflyBit;
-        if (controller.shipLineEnabled()) {
+        if (controller.shipLineAssistActive()) {
             std::string shipLineBit;
             if (controller.m_buffer.state == BufferState::Buffered &&
                 controller.m_buffer.shipLineOwned) {
@@ -92,10 +93,26 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
                 shipLineBit = fmt::format("sf-corr +{}", controller.m_lastShipLineDelay);
             } else {
                 auto const intent = controller.flightIntent(0);
-                if (intent.targetValid && intent.state == EbFlightIntent::State::Tracking)
-                    shipLineBit = fmt::format("sf {:.0f}%", intent.confidence * 100.);
-                else
-                    shipLineBit = "sf on";
+                if (intent.targetValid && intent.state == EbFlightIntent::State::Tracking) {
+                    auto const view = controller.straightflyView(0);
+                    double xt = 0.;
+                    if (view.valid) {
+                        EbShipLinePolicy::Target line;
+                        line.enabled = true;
+                        line.x = view.x;
+                        line.y = view.y;
+                        line.degrees = view.degrees;
+                        line.bodySize = view.bodySize;
+                        line.reversed = view.reversed;
+                        line.sideways = view.sideways;
+                        if (auto* pl = PlayLayer::get(); pl && pl->m_player1) {
+                            xt = EbShipLinePolicy::signedCrossTrack(line, pl->m_player1->m_position.x,
+                                                                    pl->m_player1->m_position.y);
+                        }
+                    }
+                    shipLineBit = fmt::format("sf {:.0f}% xt={:+.2f}", intent.confidence * 100., xt);
+                } else
+                    shipLineBit = "sf arming";
             }
             controller.m_overlayText += " | " + shipLineBit;
         }

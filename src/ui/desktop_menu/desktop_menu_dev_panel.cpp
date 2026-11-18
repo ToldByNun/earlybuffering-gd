@@ -363,9 +363,10 @@ public:
             bool shipLineEnabled = EbAssistController::get().shipLineEnabled();
             if (EbCheckbox::draw(
                     "ship-line-enable", "Ship line assistance (session)", &shipLineEnabled, true,
-                    "Stabilizes an acquired Ship line by delaying real inputs inside the assist "
-                    "window. Requires both press and release assist. Solo only. Yields to "
-                    "sustained input. This development switch is not saved."))
+                    "Stabilizes an acquired Ship line by delaying real inputs (line first, ordinary "
+                    "safe as fallback). Requires press + release assist. Solo Ship only. Visualize "
+                    "Straightfly also arms this while Tracking. Modes → Ship may stay off. Delay "
+                    "window ≥20 ticks. Session-only — not saved."))
                 EbAssistController::get().setShipLineEnabled(shipLineEnabled);
             static bool manualTarget = false;
             static float targetAngle = 0.f;

@@ -23,6 +23,8 @@ public:
 private:
     friend class EbStatusOverlay;
 
+    static std::string wrapLines(std::string const& text, float maxWidth, float scale);
+
     static std::string s_lastText;
     static bool s_lastVisible;
 

@@ -9,6 +9,7 @@
 #include "contracts/frame_plan_budget.hpp"
 #include "flight/flight_intent.hpp"
 #include "flight/flight_measurement.hpp"
+#include "flight/flight_mode_policy.hpp"
 #include "input/input_reconciler.hpp"
 #include "planning/orb_align.hpp"
 #include <Geode/Geode.hpp>
@@ -96,8 +97,12 @@ public:
     void configureFlightIntent(bool manualTarget, double degrees);
     void setShipLineEnabled(bool enabled);
     bool shipLineEnabled() const;
+    // Session Dev toggle, or Visualize Straightfly while a Ship target is live.
+    bool shipLineAssistActive() const;
     void fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer, PlayerObject* player);
     bool yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down);
+    // AP06: portal / gamemode boundary — drop ship-line ownership, keep ordinary assist.
+    void invalidateFlightForModeChange(PlayLayer* layer, PlayerObject* player);
 
     void acknowledgeInput(bool player1, bool down, int button);
     static EbAssistController& get();
@@ -269,6 +274,7 @@ private:
     bool m_shipLineHasAnchor[2]{};
     double m_shipLineX[2]{};
     double m_shipLineY[2]{};
+    double m_shipLineOffSeconds[2]{};
     int m_lastShipLineDelay = 0;
     int m_lastShipLineTick = -1;
     EbFlightMeasurement::Sample m_flightContext[2];

@@ -132,6 +132,11 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         context.orbAssist = false;
         context.orbHint = {};
         context.spatialHint = false;
+        context.zone = {};
+        // Must size candidates before IW evaluate — early return used to skip
+        // resize and crash on cands[0] (research pack crash 2026-11-18).
+        context.cands.resize(static_cast<size_t>(context.limit) + 1);
+        context.candReady.assign(static_cast<size_t>(context.limit) + 1, 0);
         return;
     }
     // Assist Pack AP-L2: keep soft-wall headroom for IW — baseline/orb scans must

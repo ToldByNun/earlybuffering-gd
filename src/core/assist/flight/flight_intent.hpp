@@ -4,14 +4,21 @@
 class EbFlightIntent {
 public:
     enum class State { Inactive, Acquiring, Tracking, Yielding, Reacquiring };
-    enum class Reason { None, ContextChanged, SustainedInput, RhythmChanged, StaleEvidence };
+    enum class Reason {
+        None,
+        ContextChanged,
+        SustainedInput,
+        RhythmChanged,
+        StaleEvidence,
+        OffCorridor
+    };
     class Settings {
     public:
-        double acquisitionSeconds = .3;
-        double residualSeconds = .15;
-        double durationTolerance = .5;
-        double minimumDeviationSeconds = .025;
-        double maximumTargetAge = 3.;
+        double acquisitionSeconds = .25;
+        double residualSeconds = .12;
+        double durationTolerance = .75;
+        double minimumDeviationSeconds = .04;
+        double maximumTargetAge = 8.;
         bool manualTarget = false;
         double targetDegrees = 0.;
 
@@ -36,6 +43,8 @@ public:
     void rawEdge(bool down);
     void observe(EbFlightMeasurement::Result const& measurement, double dt, bool supported,
                  bool assisted);
+    // Drop the lock immediately (off the corridor / explicit cancel).
+    void abandon(Reason reason);
     void reset();
     Result const& result() const;
     static char const* stateName(State state);
@@ -56,6 +65,7 @@ private:
     double m_windowSeconds = 0.;
     double m_sumX = 0.;
     double m_sumY = 0.;
+    double m_offHeadingSeconds = 0.;
     int m_holdCount = 0;
     int m_releaseCount = 0;
     int m_deviations = 0;

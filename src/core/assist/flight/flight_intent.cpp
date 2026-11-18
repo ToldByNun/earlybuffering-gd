@@ -1,4 +1,5 @@
 #include "flight_intent.hpp"
+#include "flight_measurement.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -7,11 +8,11 @@ void EbFlightIntent::configure(Settings const& settings) {
     auto clamp = [](double value, double low, double high, double fallback) {
         return std::isfinite(value) ? std::clamp(value, low, high) : fallback;
     };
-    m_settings.acquisitionSeconds = clamp(settings.acquisitionSeconds, .1, 3., .3);
-    m_settings.residualSeconds = clamp(settings.residualSeconds, .05, 1., .15);
-    m_settings.durationTolerance = clamp(settings.durationTolerance, .1, 2., .5);
-    m_settings.minimumDeviationSeconds = clamp(settings.minimumDeviationSeconds, .01, .25, .025);
-    m_settings.maximumTargetAge = clamp(settings.maximumTargetAge, .5, 10., 3.);
+    m_settings.acquisitionSeconds = clamp(settings.acquisitionSeconds, .1, 3., .25);
+    m_settings.residualSeconds = clamp(settings.residualSeconds, .05, 1., .12);
+    m_settings.durationTolerance = clamp(settings.durationTolerance, .1, 2., .75);
+    m_settings.minimumDeviationSeconds = clamp(settings.minimumDeviationSeconds, .01, .25, .04);
+    m_settings.maximumTargetAge = clamp(settings.maximumTargetAge, .5, 10., 8.);
     m_settings.targetDegrees = clamp(settings.targetDegrees, -89., 89., 0.);
     reset();
 }
@@ -21,7 +22,7 @@ void EbFlightIntent::clearAcquisition() {
 void EbFlightIntent::reset() {
     m_result = {};
     m_time = m_edgeTime = m_lastEvidence = m_targetTime = m_yieldTime = 0.;
-    m_hold = m_release = m_cleanAge = 0.;
+    m_hold = m_release = m_cleanAge = m_offHeadingSeconds = 0.;
     m_holdCount = m_releaseCount = m_deviations = 0;
     m_hasEdge = m_down = false;
     clearAcquisition();
@@ -52,8 +53,12 @@ void EbFlightIntent::yield(Reason reason) {
     m_result.confidence = 0.;
     m_yieldTime = m_time;
     m_cleanAge = 0.;
+    m_offHeadingSeconds = 0.;
     m_result.cleanSeconds = 0.;
     clearAcquisition();
+}
+void EbFlightIntent::abandon(Reason reason) {
+    yield(reason);
 }
 void EbFlightIntent::rawEdge(bool down) {
     if (m_hasEdge && down == m_down)
@@ -68,7 +73,7 @@ void EbFlightIntent::rawEdge(bool down) {
             bool const deviation = count >= 2 && std::abs(duration - mean) > tolerance;
             if (m_result.state == State::Tracking && deviation) {
                 ++m_deviations;
-                if (m_deviations >= 2)
+                if (m_deviations >= 3)
                     yield(Reason::RhythmChanged);
             } else {
                 m_deviations = 0;
@@ -76,7 +81,7 @@ void EbFlightIntent::rawEdge(bool down) {
                 count = std::min(100, count + 1);
                 m_lastEvidence = m_time;
                 if (m_result.state == State::Tracking)
-                    m_result.confidence = std::min(1., m_result.confidence + .04);
+                    m_result.confidence = std::min(1., m_result.confidence + .06);
             }
         }
     }
@@ -108,13 +113,16 @@ void EbFlightIntent::observe(EbFlightMeasurement::Result const& measurement, dou
         m_holdCount = m_releaseCount = m_deviations = 0;
         m_edgeTime = m_time;
         m_lastEvidence = m_time;
+        m_offHeadingSeconds = 0.;
     }
     double const expected = m_down ? m_hold : m_release;
     int const count = m_down ? m_holdCount : m_releaseCount;
     double const tolerance =
         std::max(m_settings.minimumDeviationSeconds, expected * m_settings.durationTolerance);
+    double const sustainedLimit =
+        expected + std::max(tolerance * 2., m_settings.minimumDeviationSeconds * 3.);
     if (m_result.state == State::Tracking && m_hasEdge && count >= 2 &&
-        m_time - m_edgeTime > expected + tolerance) {
+        m_time - m_edgeTime > sustainedLimit) {
         yield(Reason::SustainedInput);
         return;
     }
@@ -126,8 +134,23 @@ void EbFlightIntent::observe(EbFlightMeasurement::Result const& measurement, dou
     }
     m_result.cleanSeconds = m_cleanAge;
     if (m_result.state == State::Tracking) {
-        m_result.confidence = std::max(0., m_result.confidence - dt * .08);
-        if (m_result.rawEvidenceAge > .75 || m_time - m_targetTime > m_settings.maximumTargetAge)
+        // Instant travelAngle swings ±30° while clicking — never abandon on that.
+        // Corridor exit is handled by cross-track in the controller. Here only
+        // gently refine the locked angle from clean, near-target motion.
+        if (measurement.headingValid && !assisted && !m_settings.manualTarget) {
+            double const headingError = EbFlightMeasurement::angleDifference(
+                measurement.travelAngle, m_result.targetDegrees);
+            if (std::abs(headingError) <= 12.) {
+                double const alpha = -std::expm1(-dt / .55);
+                m_result.targetDegrees =
+                    std::clamp(m_result.targetDegrees + alpha * headingError, -80., 80.);
+                m_lastEvidence = m_time;
+                m_result.confidence = std::min(1., m_result.confidence + dt * .15);
+            }
+        }
+        m_result.confidence = std::max(0., m_result.confidence - dt * .02);
+        m_result.rawEvidenceAge = m_time - m_lastEvidence;
+        if (m_result.rawEvidenceAge > 2. || m_time - m_targetTime > m_settings.maximumTargetAge)
             yield(Reason::StaleEvidence);
         return;
     }
@@ -136,13 +159,13 @@ void EbFlightIntent::observe(EbFlightMeasurement::Result const& measurement, dou
         clearAcquisition();
         return;
     }
-    // Only uncontaminated observed movement can acquire an automatic line.
-    // Raw completed cycles independently establish that the player is feathering.
     m_windowSeconds += dt;
     double const radians = measurement.travelAngle * std::numbers::pi / 180.;
     double const speed = std::hypot(measurement.vx, measurement.vy);
-    m_sumX += std::cos(radians) * speed * dt;
-    m_sumY += std::sin(radians) * speed * dt;
+    // Mild recent bias so multi-click acquisition settles on the flown line.
+    double const decay = std::exp(-dt / .35);
+    m_sumX = m_sumX * decay + std::cos(radians) * speed * dt;
+    m_sumY = m_sumY * decay + std::sin(radians) * speed * dt;
     bool const cadence = m_holdCount >= 2 && m_releaseCount >= 2;
     bool const fresh =
         m_hasEdge && m_time - m_edgeTime <= expected + tolerance && m_result.rawEvidenceAge <= .75;
@@ -162,5 +185,7 @@ void EbFlightIntent::observe(EbFlightMeasurement::Result const& measurement, dou
     m_result.state = State::Tracking;
     m_result.reason = Reason::None;
     m_result.yieldRequested = false;
+    m_offHeadingSeconds = 0.;
     m_targetTime = m_lastEvidence = m_time;
+    clearAcquisition();
 }

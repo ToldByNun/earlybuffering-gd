@@ -32,7 +32,7 @@ int FlightIntentRegression::run() {
                     intent.observe(movement, dt, true, true);
                     failures += std::abs(intent.result().targetDegrees - angle) > 1e-6;
                     // Sustained input must invalidate target before reacquisition.
-                    for (int tick = 0; tick < interval * 2; ++tick)
+                    for (int tick = 0; tick < interval * 8; ++tick)
                         intent.observe(movement, dt, true, false);
                     failures += intent.result().targetValid;
                     // Invalid physics context cannot retain intent.

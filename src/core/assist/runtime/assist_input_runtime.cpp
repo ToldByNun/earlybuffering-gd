@@ -167,10 +167,16 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
             EbDevCycleRecorder::get().pollModeTimeline(playLayer, controller.m_attemptTick);
         }
 
-        if (modeChanged && controller.m_buffer.state != BufferState::Idle) {
-            EbAssistLog::debug("mode change → delivering buffered input");
-            EbPerfTrace::Scope const scope("fireBuffered.modeChange");
-            controller.fireBuffered(playLayer, playerOne, false);
+        if (modeChanged) {
+            // AP06: never inherit Ship-line targeting / pending line timing across portals.
+            controller.invalidateFlightForModeChange(playLayer, playerOne);
+            if (playLayer->m_player2)
+                controller.invalidateFlightForModeChange(playLayer, playLayer->m_player2);
+            if (controller.m_buffer.state != BufferState::Idle) {
+                EbAssistLog::debug("mode change → delivering buffered input");
+                EbPerfTrace::Scope const scope("fireBuffered.modeChange");
+                controller.fireBuffered(playLayer, playerOne, false);
+            }
             controller.updateOverlay();
         }
 

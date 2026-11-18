@@ -12,6 +12,10 @@
 #include "assist_clock.hpp"
 #include "contracts/assist_timing_rules.hpp"
 #include "contracts/assist_verdict.hpp"
+#include "flight/flight_mode_policy.hpp"
+#include "flight/ship_line_policy.hpp"
+#include "../../debug/assist_log.hpp"
+#include "../../ui/visualizers/straightfly_visualizer.hpp"
 #include "input/assist_input_gate.hpp"
 #include "input/click_intent_guard.hpp"
 #include "input/hold_until_safe_policy.hpp"
@@ -391,11 +395,12 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
     int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
     if (slot < 0)
         return;
+    auto const kind = EbStageConfig::kindOf(player);
     EbFlightMeasurement::Sample sample;
     sample.x = player->m_position.x;
     sample.y = player->m_position.y;
     sample.dt = EbAssistClock::gdStepToSeconds(deltaTime);
-    sample.mode = static_cast<int>(EbStageConfig::kindOf(player));
+    sample.mode = static_cast<int>(kind);
     sample.speed = player->m_playerSpeed;
     sample.size = player->m_vehicleSize;
     sample.timeWarp = layer->m_gameState.m_timeWarp;
@@ -405,26 +410,58 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
     sample.reversed = player->m_isGoingLeft;
     sample.valid = !player->m_isDead && !player->m_isPlatformer;
     m_flightContext[slot] = sample;
+    // Always observe so portal/mode discontinuities invalidate heading + intent.
     m_flightMeasurement[slot].observe(sample);
     bool const buffered = m_buffer.state != BufferState::Idle && m_buffer.player1 == (slot == 0);
     bool const pendingRelease = m_pendingRelease && m_pendingReleaseP1 == (slot == 0);
     bool const assisted = m_flightCorrectionObserved[slot] || buffered || pendingRelease;
-    bool const supported = (player->m_isShip || player->m_isDart || player->m_isSwing) &&
-                           !player->m_controlsDisabled && !player->m_isDashing &&
-                           !EbSimTrust::get().parityDrift() &&
-                           !EbDivergenceTracker::get().simUntrusted();
-    m_flightIntent[slot].observe(m_flightMeasurement[slot].result(), sample.dt, supported,
+    bool const liveOk = !player->m_controlsDisabled && !player->m_isDashing &&
+                        !EbSimTrust::get().parityDrift() &&
+                        !EbDivergenceTracker::get().simUntrusted();
+    // AP06: Ship may acquire a straight-flight target. Wave/Swing measure heading
+    // only until their own control models arm (AP07+). Ordinary modes never target.
+    bool const lineTargeting = EbFlightModePolicy::allowsLineTargeting(kind) && liveOk;
+    m_flightIntent[slot].observe(m_flightMeasurement[slot].result(), sample.dt, lineTargeting,
                                  assisted);
     m_flightCorrectionObserved[slot] = false;
     auto const& intent = m_flightIntent[slot].result();
-    if (intent.targetValid && intent.state == EbFlightIntent::State::Tracking) {
+    if (lineTargeting && intent.targetValid && intent.state == EbFlightIntent::State::Tracking) {
         if (!m_shipLineHasAnchor[slot]) {
             m_shipLineX[slot] = sample.x;
             m_shipLineY[slot] = sample.y;
             m_shipLineHasAnchor[slot] = true;
+            m_shipLineOffSeconds[slot] = 0.;
         }
-    } else {
+        EbShipLinePolicy::Target line;
+        line.enabled = true;
+        line.x = m_shipLineX[slot];
+        line.y = m_shipLineY[slot];
+        line.degrees = intent.targetDegrees;
+        line.bodySize = 30. * (sample.size > 0. ? sample.size : 1.);
+        line.reversed = sample.reversed;
+        line.sideways = sample.sideways;
+        // Keep the drawn line under the ship without changing geometry (slide along axis).
+        EbShipLinePolicy::projectOntoLine(line, sample.x, sample.y, m_shipLineX[slot],
+                                          m_shipLineY[slot]);
+        line.x = m_shipLineX[slot];
+        line.y = m_shipLineY[slot];
+        double const crossTrack = EbShipLinePolicy::normalizedCrossTrack(line, sample.x, sample.y);
+        // Sustained lateral leave only — click heading noise must not kill Tracking.
+        if (crossTrack > 1.1) {
+            m_shipLineOffSeconds[slot] += sample.dt;
+            if (m_shipLineOffSeconds[slot] > .2) {
+                m_flightIntent[slot].abandon(EbFlightIntent::Reason::OffCorridor);
+                m_shipLineHasAnchor[slot] = false;
+                m_shipLineOffSeconds[slot] = 0.;
+                EbStraightflyVisualizer::get().clear();
+            }
+        } else {
+            m_shipLineOffSeconds[slot] = std::max(0., m_shipLineOffSeconds[slot] - sample.dt);
+        }
+    } else if (m_shipLineHasAnchor[slot]) {
         m_shipLineHasAnchor[slot] = false;
+        m_shipLineOffSeconds[slot] = 0.;
+        EbStraightflyVisualizer::get().clear();
     }
 }
 EbFlightMeasurement::Result EbAssistController::flightMeasurement(int player) const {
@@ -446,7 +483,8 @@ EbAssistController::StraightflyView EbAssistController::straightflyView(int play
     if (!intent.targetValid || intent.state != EbFlightIntent::State::Tracking)
         return view;
     auto const& context = m_flightContext[player];
-    if (!context.valid)
+    if (!context.valid ||
+        !EbFlightModePolicy::allowsLineTargeting(static_cast<GameModeKind>(context.mode)))
         return view;
     view.valid = true;
     view.sideways = context.sideways;
@@ -487,34 +525,43 @@ void EbAssistController::setShipLineEnabled(bool enabled) {
         for (auto& intent : m_flightIntent)
             intent.reset();
         m_shipLineHasAnchor[0] = m_shipLineHasAnchor[1] = false;
+        m_shipLineOffSeconds[0] = m_shipLineOffSeconds[1] = 0.;
     }
 }
 bool EbAssistController::shipLineEnabled() const {
     return m_shipLineEnabled;
 }
+bool EbAssistController::shipLineAssistActive() const {
+    // Visualize Straightfly alone used to draw the line with zero corrections.
+    // Arm planning whenever the player is looking at the line or opted into Dev.
+    return m_shipLineEnabled || EbStageConfig::showStraightfly();
+}
 void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer,
                                              PlayerObject* player) {
-    if (!m_shipLineEnabled || !EbStageConfig::assistPress() || !EbStageConfig::assistRelease() ||
-        !layer || !player || !player->m_isShip || player->m_isDashing ||
+    if (!shipLineAssistActive() || !EbStageConfig::assistPress() ||
+        !EbStageConfig::assistRelease() || !layer || !player || player->m_isDashing ||
         layer->m_gameState.m_isDualMode || player->m_controlsDisabled)
+        return;
+    auto const kind = EbStageConfig::kindOf(player);
+    // Dual is rejected above; shared dual corrections stay denied by contract.
+    if (!EbFlightModePolicy::allowsShipLineAssist(kind))
         return;
     int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
     if (slot < 0)
         return;
     auto const& context = m_flightContext[slot];
-    if (!context.valid || context.mode != static_cast<int>(EbStageConfig::kindOf(player)) ||
+    // Only discrete portal/orientation bits must match — float identity on
+    // speed/gravity/timewarp was silently disabling ship-line every press.
+    if (!context.valid || context.mode != static_cast<int>(kind) ||
         context.inverted != player->m_isUpsideDown || context.sideways != player->m_isSideways ||
-        context.reversed != player->m_isGoingLeft || context.speed != player->m_playerSpeed ||
-        context.size != player->m_vehicleSize || context.gravity != player->m_gravity ||
-        context.timeWarp != layer->m_gameState.m_timeWarp)
+        context.reversed != player->m_isGoingLeft)
         return;
     auto const intent = m_flightIntent[slot].result();
     if (!m_shipLineHasAnchor[slot] || !intent.targetValid ||
-        intent.state != EbFlightIntent::State::Tracking || intent.confidence < .35)
+        intent.state != EbFlightIntent::State::Tracking || intent.confidence < .15)
         return;
-    if (EbAssistControllerImplementation::nearOrbOrPadHint(layer, player, activeLimit(player),
-                                                           m_simDt))
-        return;
+    // Orb look-ahead used to blank ship-line entirely on normal levels. IW already
+    // disables orb scans while shipLine.enabled — keep arming here.
     options.shipLine.enabled = true;
     options.shipLine.x = m_shipLineX[slot];
     options.shipLine.y = m_shipLineY[slot];
@@ -523,9 +570,31 @@ void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* 
     options.shipLine.reversed = player->m_isGoingLeft;
     options.shipLine.sideways = player->m_isSideways;
     options.smartDepth = 1;
+    EbAssistLog::debug(fmt::format("SHIP-LINE arm deg={:.1f} conf={:.0f}%", intent.targetDegrees,
+                                   intent.confidence * 100.));
+}
+void EbAssistController::invalidateFlightForModeChange(PlayLayer* layer, PlayerObject* player) {
+    if (!layer || !player)
+        return;
+    int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
+    if (slot < 0)
+        return;
+    m_flightIntent[slot].reset();
+    m_flightMeasurement[slot].reset();
+    m_shipLineHasAnchor[slot] = false;
+    m_shipLineOffSeconds[slot] = 0.;
+    m_flightCorrectionObserved[slot] = false;
+    // Do not carry a Ship-line timing into the next mode's controls.
+    if (m_buffer.state == BufferState::Buffered && m_buffer.shipLineOwned &&
+        m_buffer.player1 == (slot == 0)) {
+        clearBuffer();
+        syncButtonState(layer);
+        noteVerdict(AssistReason::PassNoThreat, "ship-line-mode-boundary");
+    }
 }
 bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down) {
-    if (!m_shipLineEnabled || !layer || !player || !player->m_isShip)
+    if (!shipLineAssistActive() || !layer || !player ||
+        !EbFlightModePolicy::allowsShipLineAssist(EbStageConfig::kindOf(player)))
         return false;
     int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
     if (slot < 0)
@@ -542,6 +611,9 @@ bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, b
         } else if (delayedDown && !down) {
             return true;
         }
+        // Intentional leave cancels our armed correction, then pass the new edge.
+        return m_flightIntent[slot].result().yieldRequested || ours;
     }
-    return ours || m_flightIntent[slot].result().yieldRequested;
+    // yieldRequested without an owned buffer must not blanket-block ordinary assist.
+    return false;
 }

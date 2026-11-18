@@ -6,6 +6,7 @@
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
+#include <algorithm>
 #include <chrono>
 #include <string>
 
@@ -120,7 +121,13 @@ bool EbAssistInputGate::releaseGateSelfCheck(std::string& report) {
 }
 
 int EbAssistInputGate::activeLimit(EbAssistController const& controller, PlayerObject* player) {
-    return EbStageConfig::paramsFor(player).ticks;
+    int const ticks = EbStageConfig::paramsFor(player).ticks;
+    // Ship-line ranking needs a usable delay band; Main ticks=4 is ~16ms @240 and
+    // cannot express line corrections. Floor while the session toggle is on.
+    if (controller.shipLineAssistActive() && player &&
+        EbStageConfig::kindOf(player) == GameModeKind::Ship)
+        return std::max(ticks, 20);
+    return ticks;
 }
 
 bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller, PlayerObject* player) {
@@ -130,7 +137,11 @@ bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller,
         return false;
     if (controller.cpsLimited())
         return false;
-    if (!EbStageConfig::paramsFor(player).enabled)
+    auto const kind = EbStageConfig::kindOf(player);
+    bool const modeEnabled = EbStageConfig::paramsFor(player).enabled;
+    // Straightfly viz / Dev ship-line imply Solo Ship assist even if Modes → Ship is off.
+    bool const shipLineBypass = controller.shipLineAssistActive() && kind == GameModeKind::Ship;
+    if (!modeEnabled && !shipLineBypass)
         return false;
     if (!(!EbAssistScopeGate::allowAssist(PlayLayer::get(), player))) {
         return true;
