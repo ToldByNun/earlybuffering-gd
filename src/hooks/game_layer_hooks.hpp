@@ -33,6 +33,7 @@ public:
     }
 
     void handleButton(bool down, int button, bool isPlayer1);
+    void teleportPlayer(TeleportPortalObject* object, PlayerObject* player);
 
     // --- simulation guards ---
     void flipGravity(PlayerObject* player, bool flip, bool noEffects);

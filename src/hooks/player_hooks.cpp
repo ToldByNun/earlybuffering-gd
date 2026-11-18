@@ -27,10 +27,13 @@ auto EbPlayerObject::update(float deltaTime) -> void {
             ac.beginRealUpdate();
             PlayerObject::update(deltaTime);
             ac.endRealUpdate();
+            ac.measureFlight(this, deltaTime);
             return;
         }
     }
     PlayerObject::update(deltaTime);
+    if (!EbGameHookSimulationGuard::simulating())
+        EbAssistController::get().measureFlight(this, deltaTime);
 }
 
 auto EbPlayerObject::incrementJumps() -> void {
@@ -61,7 +64,7 @@ auto EbPlayerObject::ringJump(RingObject* ring, bool skipCheck) -> void {
 }
 
 auto EbPlayerObject::collidedWithObjectInternal(float deltaTime, GameObject* object,
-                                                  cocos2d::CCRect rect, bool skipCheck) -> bool {
+                                                cocos2d::CCRect rect, bool skipCheck) -> bool {
     auto& sim = EbShadowSimulator::get();
     if (!sim.isOwnedGhost(this))
         return PlayerObject::collidedWithObjectInternal(deltaTime, object, rect, skipCheck);

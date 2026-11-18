@@ -379,3 +379,31 @@ void EbAssistController::acknowledgeInput(bool player1, bool down, int button) {
                                       std::chrono::steady_clock::now().time_since_epoch())
                                       .count());
 }
+
+void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
+    auto* layer = PlayLayer::get();
+    if (!layer || !player)
+        return;
+    int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
+    if (slot < 0)
+        return;
+    EbFlightMeasurement::Sample sample;
+    sample.x = player->m_position.x;
+    sample.y = player->m_position.y;
+    sample.dt = EbAssistClock::gdStepToSeconds(deltaTime);
+    sample.mode = static_cast<int>(EbStageConfig::kindOf(player));
+    sample.speed = player->m_playerSpeed;
+    sample.size = player->m_vehicleSize;
+    sample.timeWarp = layer->m_gameState.m_timeWarp;
+    sample.gravity = player->m_gravity;
+    sample.inverted = player->m_isUpsideDown;
+    sample.sideways = player->m_isSideways;
+    sample.reversed = player->m_isGoingLeft;
+    sample.valid = !player->m_isDead && !player->m_isPlatformer;
+    m_flightMeasurement[slot].observe(sample);
+}
+EbFlightMeasurement::Result EbAssistController::flightMeasurement(int player) const {
+    if (player < 0 || player >= 2)
+        return {};
+    return m_flightMeasurement[player].result();
+}

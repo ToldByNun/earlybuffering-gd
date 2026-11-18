@@ -7,6 +7,7 @@
 #include "../diagnostics/decision_log.hpp"
 #include "../sim/shadow_simulator.hpp"
 #include "contracts/frame_plan_budget.hpp"
+#include "flight/flight_measurement.hpp"
 #include "input/input_reconciler.hpp"
 #include "planning/orb_align.hpp"
 #include <Geode/Geode.hpp>
@@ -73,6 +74,8 @@ private:
 
 class EbAssistController {
 public:
+    void measureFlight(PlayerObject* player, float deltaTime);
+    EbFlightMeasurement::Result flightMeasurement(int player) const;
     void acknowledgeInput(bool player1, bool down, int button);
     static EbAssistController& get();
 
@@ -239,6 +242,7 @@ private:
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object,
                        EbDecisionEntry& dec);
 
+    EbFlightMeasurement m_flightMeasurement[2];
     EbInputReconciler m_inputReconciler;
     EbFramePlanBudget m_framePlanBudget;
     EbBufferedInput m_buffer{};

@@ -99,6 +99,8 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_startSnapshotSlot = -1;
     controller.m_lastBakeHint.clear();
     controller.m_log.clear();
+    controller.m_flightMeasurement[0].reset();
+    controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;
@@ -136,6 +138,8 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
 }
 
 void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* playLayer) {
+    controller.m_flightMeasurement[0].reset();
+    controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;
     EbSelfBakeRecorder::get().onLevelInit(playLayer);
@@ -222,6 +226,8 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_startSnapshotSlot = -1;
     controller.m_lastBakeHint.clear();
     controller.m_log.clear();
+    controller.m_flightMeasurement[0].reset();
+    controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;

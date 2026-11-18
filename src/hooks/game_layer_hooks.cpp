@@ -279,3 +279,9 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, gd::vector<G
     }
     GJBaseGameLayer::collisionCheckObjects(player, vec, objectsCount, deltaTime);
 }
+
+void EbGJBaseGameLayer::teleportPlayer(TeleportPortalObject* object, PlayerObject* player) {
+    GJBaseGameLayer::teleportPlayer(object, player);
+    if (!EbGameHookSimulationGuard::simulating())
+        EbAssistController::get().measureFlight(player, 0.f);
+}

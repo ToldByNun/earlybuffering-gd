@@ -188,3 +188,6 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/test_input_reconciler.cpp
 !/tools/test_input_reconciler.hpp
+
+!/tools/test_flight_measurement.cpp
+!/tools/test_flight_measurement.hpp

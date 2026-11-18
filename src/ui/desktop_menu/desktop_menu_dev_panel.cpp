@@ -1,5 +1,6 @@
-#include "../../core/learning/hybrid_learning.hpp"
 #include "desktop_menu_dev_panel.hpp"
+#include "../../core/assist/assist_controller.hpp"
+#include "../../core/learning/hybrid_learning.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -59,12 +60,11 @@ public:
         (void)EbDesktopMenuBind::setBool("dev-eval-on-death", true);
         (void)EbDesktopMenuBind::setBool("dev-overlay", true);
         (void)EbDesktopMenuBind::setBool("dev-disable-random", true);
-        EbDesktopAlert::info(
-            "EarlyBuffer Dev",
-            "Research Preset on:\n"
-            "Record + Candidates + Freeze World + Hazards +\n"
-            "Eval On Death + Overlay + Disable Random.\n\n"
-            "Next: press Record, die a few times, then Export Research Pack.");
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             "Research Preset on:\n"
+                             "Record + Candidates + Freeze World + Hazards +\n"
+                             "Eval On Death + Overlay + Disable Random.\n\n"
+                             "Next: press Record, die a few times, then Export Research Pack.");
     }
 
     static std::string shortPath(std::filesystem::path const& path) {
@@ -109,9 +109,9 @@ public:
 
         if (EbDevReport::hasLast()) {
             auto const& report = EbDevReport::last();
-            std::string const line =
-                report.overlayLine.empty() ? EbDevReport::formatOverlayLine(report)
-                                           : report.overlayLine;
+            std::string const line = report.overlayLine.empty()
+                                         ? EbDevReport::formatOverlayLine(report)
+                                         : report.overlayLine;
             smallGap();
             ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
             ImGui::TextWrapped("%s", line.c_str());
@@ -181,8 +181,9 @@ public:
                 fireAction("dev-stop-record-action");
             }
         } else {
-            mutedText(canStart ? "Start in a level. With Eval On Death you usually skip manual eval."
-                               : "Turn on Record Enable (or Apply Research Preset) first.");
+            mutedText(canStart
+                          ? "Start in a level. With Eval On Death you usually skip manual eval."
+                          : "Turn on Record Enable (or Apply Research Preset) first.");
             gap();
             if (EbButton::draw("##dev-start", "Start Recording", canStart,
                                "Starts a rolling Dev Lab session in the current level.", true)) {
@@ -213,7 +214,8 @@ public:
             EbDropdown::drawSetting("dev-objective", "Objective", objOpts, 3, objLabels);
         }
         EbCheckbox::drawSetting("dev-eval-require-deps", "Require Deps");
-        EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000, "", true, 100);
+        EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000, "", true,
+                                 100);
 
         gap();
         EbButton::beginRow(2);
@@ -236,7 +238,8 @@ public:
             return;
         }
 
-        mutedText("One click: eval all → write pack folder → path on clipboard (send that folder).");
+        mutedText(
+            "One click: eval all → write pack folder → path on clipboard (send that folder).");
         gap();
 
         if (EbButton::draw("##dev-research-pack", "Export Research Pack", true,
@@ -354,6 +357,22 @@ public:
                     }
                 }
             ImGui::EndChild();
+        }
+        EbSectionCard::end();
+        if (EbSectionCard::begin("dev-flight-measurement", "Flight Measurement")) {
+            for (int player = 0; player < 2; ++player) {
+                auto const result = EbAssistController::get().flightMeasurement(player);
+                ImGui::Text("Player %d: %s", player + 1,
+                            result.headingValid ? "Measured" : "Acquiring / unavailable");
+                if (result.headingValid) {
+                    ImGui::Text("World %.1f deg   Travel %.1f deg   Filtered %.1f deg",
+                                result.worldAngle, result.travelAngle, result.smoothedAngle);
+                    ImGui::Text("Velocity %.1f / %.1f units/s   Variance %.1f", result.vx,
+                                result.vy, result.velocityVariance);
+                }
+            }
+            ImGui::TextWrapped("Target angle and intent confidence become available with intent "
+                               "recognition. These measurements describe actual movement.");
         }
         EbSectionCard::end();
         drawStatus();
