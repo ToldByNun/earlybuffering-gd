@@ -191,3 +191,6 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/test_flight_measurement.cpp
 !/tools/test_flight_measurement.hpp
+
+!/tools/test_flight_intent.cpp
+!/tools/test_flight_intent.hpp

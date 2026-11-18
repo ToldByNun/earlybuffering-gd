@@ -99,6 +99,9 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_startSnapshotSlot = -1;
     controller.m_lastBakeHint.clear();
     controller.m_log.clear();
+    controller.m_flightIntent[0].reset();
+    controller.m_flightIntent[1].reset();
+    controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -138,6 +141,9 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
 }
 
 void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* playLayer) {
+    controller.m_flightIntent[0].reset();
+    controller.m_flightIntent[1].reset();
+    controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -226,6 +232,9 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_startSnapshotSlot = -1;
     controller.m_lastBakeHint.clear();
     controller.m_log.clear();
+    controller.m_flightIntent[0].reset();
+    controller.m_flightIntent[1].reset();
+    controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();

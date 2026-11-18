@@ -374,6 +374,8 @@ bool EbAssistController::allowPushButton(PlayerObject* player, PlayerButton butt
 void EbAssistController::acknowledgeInput(bool player1, bool down, int button) {
     if (button != EbAssistControllerImplementation::JUMP_BUTTON)
         return;
+    if (m_injecting)
+        m_flightCorrectionObserved[player1 ? 0 : 1] = true;
     m_inputReconciler.acknowledge(player1 ? 0 : 1, down,
                                   std::chrono::duration_cast<std::chrono::microseconds>(
                                       std::chrono::steady_clock::now().time_since_epoch())
@@ -401,9 +403,30 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
     sample.reversed = player->m_isGoingLeft;
     sample.valid = !player->m_isDead && !player->m_isPlatformer;
     m_flightMeasurement[slot].observe(sample);
+    bool const buffered = m_buffer.state != BufferState::Idle && m_buffer.player1 == (slot == 0);
+    bool const pendingRelease = m_pendingRelease && m_pendingReleaseP1 == (slot == 0);
+    bool const assisted = m_flightCorrectionObserved[slot] || buffered || pendingRelease;
+    bool const supported = (player->m_isShip || player->m_isDart || player->m_isSwing) &&
+                           !player->m_controlsDisabled && !player->m_isDashing;
+    m_flightIntent[slot].observe(m_flightMeasurement[slot].result(), sample.dt, supported,
+                                 assisted);
+    m_flightCorrectionObserved[slot] = false;
 }
 EbFlightMeasurement::Result EbAssistController::flightMeasurement(int player) const {
     if (player < 0 || player >= 2)
         return {};
     return m_flightMeasurement[player].result();
+}
+
+EbFlightIntent::Result EbAssistController::flightIntent(int player) const {
+    if (player < 0 || player >= 2)
+        return {};
+    return m_flightIntent[player].result();
+}
+void EbAssistController::configureFlightIntent(bool manualTarget, double degrees) {
+    EbFlightIntent::Settings settings;
+    settings.manualTarget = manualTarget;
+    settings.targetDegrees = degrees;
+    for (auto& intent : m_flightIntent)
+        intent.configure(settings);
 }

@@ -259,6 +259,8 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
                                          std::chrono::duration_cast<std::chrono::microseconds>(
                                              std::chrono::steady_clock::now().time_since_epoch())
                                              .count());
+    if (controller.m_userHolding[player1 ? 0 : 1] != down)
+        controller.m_flightIntent[player1 ? 0 : 1].rawEdge(down);
     controller.m_userHolding[player1 ? 0 : 1] = down;
 
     // Second click while a hold-assist release is armed: cancel it and re-plan.

@@ -360,7 +360,26 @@ public:
         }
         EbSectionCard::end();
         if (EbSectionCard::begin("dev-flight-measurement", "Flight Measurement")) {
+            static bool manualTarget = false;
+            static float targetAngle = 0.f;
+            bool changed = EbCheckbox::draw(
+                "flight-manual-target", "Manual target (preview)", &manualTarget, true,
+                "Uses this travel-relative angle for intent diagnostics. Steering arrives in the "
+                "next implementation stage. Resets acquisition when changed.");
+            changed |= EbSlider::drawFloat("flight-target-angle", "Target angle", &targetAngle,
+                                           -80.f, 80.f, 1, " deg", manualTarget,
+                                           "Positive means upward transverse motion relative to "
+                                           "travel. This preview is session-only.");
+            if (changed)
+                EbAssistController::get().configureFlightIntent(manualTarget, targetAngle);
             for (int player = 0; player < 2; ++player) {
+                auto const intent = EbAssistController::get().flightIntent(player);
+                ImGui::Text("P%d intent: %s   confidence %.0f%%", player + 1,
+                            EbFlightIntent::stateName(intent.state), intent.confidence * 100.);
+                if (intent.targetValid)
+                    ImGui::Text("Target %.1f deg   Hold %.0f ms / Release %.0f ms",
+                                intent.targetDegrees, intent.holdSeconds * 1000.,
+                                intent.releaseSeconds * 1000.);
                 auto const result = EbAssistController::get().flightMeasurement(player);
                 ImGui::Text("Player %d: %s", player + 1,
                             result.headingValid ? "Measured" : "Acquiring / unavailable");

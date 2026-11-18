@@ -7,6 +7,7 @@
 #include "../diagnostics/decision_log.hpp"
 #include "../sim/shadow_simulator.hpp"
 #include "contracts/frame_plan_budget.hpp"
+#include "flight/flight_intent.hpp"
 #include "flight/flight_measurement.hpp"
 #include "input/input_reconciler.hpp"
 #include "planning/orb_align.hpp"
@@ -76,6 +77,8 @@ class EbAssistController {
 public:
     void measureFlight(PlayerObject* player, float deltaTime);
     EbFlightMeasurement::Result flightMeasurement(int player) const;
+    EbFlightIntent::Result flightIntent(int player) const;
+    void configureFlightIntent(bool manualTarget, double degrees);
     void acknowledgeInput(bool player1, bool down, int button);
     static EbAssistController& get();
 
@@ -243,6 +246,8 @@ private:
                        EbDecisionEntry& dec);
 
     EbFlightMeasurement m_flightMeasurement[2];
+    EbFlightIntent m_flightIntent[2];
+    bool m_flightCorrectionObserved[2]{};
     EbInputReconciler m_inputReconciler;
     EbFramePlanBudget m_framePlanBudget;
     EbBufferedInput m_buffer{};
