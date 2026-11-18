@@ -4,6 +4,7 @@
 #include "../../../../../debug/assist_log.hpp"
 #include "../../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../../assist/contracts/assist_verdict.hpp"
+#include "../../../../assist/contracts/input_search_policy.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../../../assist/contracts/orb_probe_order.hpp"
@@ -199,7 +200,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return false;
         }
         bool dead = candidate.raw.died;
-        bool safe = complete(candidate.raw, delayValue) || candidate.recoveryPressTick >= 0;
+        bool safe = complete(candidate.raw, delayValue) ||
+                    (candidate.recoveryPressTick >= 0 && !candidate.raw.unknown &&
+                     !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown);
         if (!safe && isDepthTruncated(candidate.raw, delayValue))
             anyDepthTruncated = true;
         if (dual && !dead) {
@@ -325,6 +328,12 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     bool const waveHelpOnly = isWave && !dual && (!context.down || !context.orbAssist);
     bool skipLaterBand = waveHelpOnly && context.candReady[0] && context.cands[0].viable &&
                          !context.cands[0].raw.died && complete(context.cands[0].raw, 0);
+
+    // A completed ordinary jump needs no additional delay search. The same
+    // landing proof is used for the immediate input and delayed alternatives.
+    if (context.model.stopAtCubeLanding && context.candReady[0] && context.cands[0].viable &&
+        context.cands[0].raw.landedAfterAction && !context.cands[0].raw.died)
+        skipLaterBand = true;
 
     // Orb scans already measured a reachable activation band. Verify that band
     // before unrelated early flaps/flips consume the wall. Every candidate still
@@ -507,16 +516,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // prefix scan spends the wall on early flaps that hit the same obstacle.
     // Keep the existing horizon and unknown checks for every candidate.
     bool const isCube = context.real && EbStageConfig::kindOf(context.real) == GameModeKind::Cube;
-    bool const turnRescue = context.real &&
-                            (((context.real->m_isBird || context.real->m_isBall ||
-                               context.real->m_isSpider || isCube) &&
-                              context.down) ||
-                             isWave) &&
-                            !dual && !context.orbHint.found && !context.spatialHint &&
-                            !context.plan.foresightOrbPad && context.limit > 1 &&
-                            context.candReady[0] && context.cands[0].raw.died &&
-                            !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
-                            !context.cands[0].raw.toggleUnknown;
+    bool const turnRescue =
+        context.real && !dual && !context.orbHint.found && !context.spatialHint &&
+        !context.plan.foresightOrbPad && context.candReady[0] &&
+        EbInputSearchPolicy::needsRescue(context.cands[0].raw.died,
+                                         context.cands[0].raw.unknown ||
+                                             context.cands[0].raw.unknownTrunc ||
+                                             context.cands[0].raw.toggleUnknown,
+                                         context.cands[0].raw.diedBeforeAction, context.limit);
     // For an imminent, observed Wave collision, verify enough time for the
     // next steering input. Apply only to the automatic horizon and ordinary
     // solo turns. An explicit horizon still verifies its full requested depth.
@@ -661,7 +668,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         // Refine toward the earliest fully verified flap. Keep the verified
         // rescue if the remaining wall expires during refinement.
         int const rescueDelay = bestDelay;
-        for (int earlier = 1; !isWave && rescueDelay > 0 && earlier < rescueDelay; ++earlier) {
+        for (int earlier = 1; !isWave && !isCube && rescueDelay > 0 && earlier < rescueDelay;
+             ++earlier) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;

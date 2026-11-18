@@ -2,6 +2,7 @@
 #include "../../../../../config/assist_policy_settings.hpp"
 #include "../../../../../config/stage_config.hpp"
 #include "../../../../../debug/perf_trace.hpp"
+#include "../../../../assist/contracts/input_search_policy.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/contracts/selected_tick_guard.hpp"
 #include "../../../../assist/planning/assist_horizon.hpp"
@@ -131,7 +132,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                              EbStageConfig::assistProbePastHorizon();
     bool const waveWindow =
         real->m_isDart && options.requireAliveForDelay && !layer->m_gameState.m_isDualMode;
-    if (needsClassic || learnedWindow || cubeLanding || waveWindow) {
+    if (needsClassic || learnedWindow || cubeLanding || waveWindow ||
+        (options.requireAliveForDelay && !down && (real->m_isRobot || real->m_isDashing))) {
         auto classicOptions = options;
         classicOptions.adaptivePlan = false;
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
@@ -162,7 +164,10 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         return plan;
     }
     bool const continuousControl = real->m_isDart || real->m_isShip || real->m_isSwing;
-    bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
+    bool const inputWindow =
+        options.requireAliveForDelay && real &&
+        EbInputSearchPolicy::usesInputWindow(static_cast<int>(EbStageConfig::kindOf(real)), down,
+                                             real->m_isDashing);
     // Assist Pack AP-M7: TW-heavy Wave — smaller screen quantum so Adaptive
     // shell leaves remUs for classic continuous IW fallthrough.
     if (real->m_isDart && continuousControl) {

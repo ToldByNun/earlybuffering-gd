@@ -6,6 +6,7 @@
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../assist/contracts/assist_verdict.hpp"
+#include "../../../assist/contracts/input_search_policy.hpp"
 #include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
 #include "../../../assist/planning/opportunity_probe.hpp"
@@ -101,7 +102,9 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     bool const continuousControl =
         context.real->m_isDart || context.real->m_isShip || context.real->m_isSwing;
     context.inputWindow =
-        context.options.requireAliveForDelay && (context.down || continuousControl);
+        context.options.requireAliveForDelay &&
+        EbInputSearchPolicy::usesInputWindow(static_cast<int>(EbStageConfig::kindOf(context.real)),
+                                             context.down, context.real->m_isDashing);
     context.model.stopAtBallLanding =
         context.inputWindow && context.real->m_isBall && !context.useTrajEngine &&
         !context.linkedDual() &&

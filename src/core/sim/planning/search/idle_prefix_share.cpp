@@ -7,6 +7,7 @@
 #include "../../prefix_sim.hpp"
 #include "../../shadow_simulator.hpp"
 #include "../ball_landing_tracker.hpp"
+#include "../cube_landing_tracker.hpp"
 #include "../shadow_survival_rules.hpp"
 #include "../simulation_candidate.hpp"
 #include "shadow_plan_context.hpp"
@@ -273,6 +274,8 @@ public:
         int groundedStreak = 0;
         int settledAfterClear = 0;
         bool pastZone = false;
+        EbCubeLandingTracker cubeLanding;
+        bool const initialGravity = shadowPlayer->m_isUpsideDown;
         EbBallLandingTracker ballLanding;
         ballLanding.reset(shadowPlayer->m_isUpsideDown);
         int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
@@ -344,6 +347,17 @@ public:
                 r.unknown = true;
                 r.unknownTrunc = true;
                 r.unknownTick = tick;
+                return finish(r);
+            }
+
+            bool const cubeJump = model.stopAtCubeLanding && acted && simulator.m_jumped &&
+                                  !simulator.m_activatedRing && !simulator.m_toggleUnknownHit &&
+                                  !shadowPlayer->m_isDashing &&
+                                  shadowPlayer->m_isUpsideDown == initialGravity &&
+                                  EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
+            if (cubeLanding.observe(cubeJump,
+                                    shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2)) {
+                r.landedAfterAction = true;
                 return finish(r);
             }
 

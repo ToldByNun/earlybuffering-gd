@@ -176,3 +176,9 @@ docs/dev/live-hybrid-ap09-status.md
 /releases
 docs/dev/ui-1.7.1-plan.md
 docs/dev/mobile-ui-plan.md
+
+!/tools/test_cube_landing.cpp
+!/tools/test_cube_landing.hpp
+
+!/tools/test_input_search_policy.cpp
+!/tools/test_input_search_policy.hpp

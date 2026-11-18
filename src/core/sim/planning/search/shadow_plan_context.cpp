@@ -3,6 +3,7 @@
 #include "../../../../config/stage_config.hpp"
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
+#include "../../../assist/contracts/input_search_policy.hpp"
 #include "../../../assist/contracts/selected_tick_guard.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
 #include "../../mode_survival.hpp"
@@ -36,7 +37,10 @@ EbShadowPlanContext::EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer
     {
         bool const continuousControl =
             real && (real->m_isDart || real->m_isShip || real->m_isSwing);
-        bool const inputWindow = options.requireAliveForDelay && (down || continuousControl);
+        bool const inputWindow =
+            options.requireAliveForDelay && real &&
+            EbInputSearchPolicy::usesInputWindow(static_cast<int>(EbStageConfig::kindOf(real)),
+                                                 down, real->m_isDashing);
         if (inputWindow && real && EbStageConfig::paramsFor(real).cap == 0 &&
             EbStageConfig::lookAheadCap() == 0) {
             if (continuousControl) {

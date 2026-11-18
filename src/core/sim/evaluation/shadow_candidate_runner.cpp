@@ -1,6 +1,7 @@
 #include "shadow_candidate_runner.hpp"
 #include "../../../config/stage_config.hpp"
 #include "../planning/ball_landing_tracker.hpp"
+#include "../planning/cube_landing_tracker.hpp"
 #include "../planning/orb_continuation.hpp"
 #include "../planning/simulation_plan.hpp"
 #include "../shadow_simulator.hpp"
@@ -33,8 +34,7 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
 
     bool acted = false;
     bool tapReleased = false;
-    int cubeAirTicks = 0;
-    int cubeGroundTicks = 0;
+    EbCubeLandingTracker cubeLanding;
     int groundedStreak = 0;
     int settledAfterClear = 0;
     bool pastZone = false;
@@ -231,21 +231,15 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             tick >= delay + releaseAfter && simulator.m_jumped)
             r.followupJumped = true;
 
-        if (model.stopAtCubeLanding && acted && simulator.m_jumped && !simulator.m_activatedRing &&
-            !simulator.m_toggleUnknownHit && !shadowPlayer->m_isDashing &&
-            shadowPlayer->m_isUpsideDown == real->m_isUpsideDown &&
-            EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube) {
-            if (shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2) {
-                if (cubeAirTicks >= 6 && ++cubeGroundTicks >= 4) {
-                    r.landedAfterAction = true;
-                    return finish(r);
-                }
-            } else {
-                ++cubeAirTicks;
-                cubeGroundTicks = 0;
-            }
-        } else {
-            cubeAirTicks = cubeGroundTicks = 0;
+        bool const cubeJump = model.stopAtCubeLanding && acted && simulator.m_jumped &&
+                              !simulator.m_activatedRing && !simulator.m_toggleUnknownHit &&
+                              !shadowPlayer->m_isDashing &&
+                              shadowPlayer->m_isUpsideDown == real->m_isUpsideDown &&
+                              EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
+        if (cubeLanding.observe(cubeJump,
+                                shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2)) {
+            r.landedAfterAction = true;
+            return finish(r);
         }
 
         if (model.stopAtBallLanding && acted && shadowPlayer->m_isBall) {
