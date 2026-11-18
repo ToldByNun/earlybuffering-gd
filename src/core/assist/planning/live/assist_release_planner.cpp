@@ -309,7 +309,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     controller.m_buffer = {};
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = false;
-    controller.m_buffer.shipLineOwned = opts.shipLine.enabled;
+    controller.m_buffer.shipLineOwned = opts.shipLine.enabled && plan.shipLineCorrection;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;
@@ -323,6 +323,11 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     controller.m_buffer.decisionX = x;
     controller.m_buffer.mode = kind;
     controller.m_buffer.fireTick = std::min(controller.m_buffer.fireTick, effectTick + limit);
+    if (controller.m_buffer.shipLineOwned) {
+        controller.m_lastShipLineDelay = delay;
+        controller.m_lastShipLineTick = effectTick;
+        EbAssistLog::info(fmt::format("SHIP-LINE release corr +{}", delay));
+    }
 
     EbAssistLog::debug(
         fmt::format("ASSIST release +{} ticks (now dies @+{}, limit {}, tick={} fire={})", delay,

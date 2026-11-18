@@ -438,12 +438,17 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = true;
     controller.m_buffer.firePhase = plan.firePhase;
-    controller.m_buffer.shipLineOwned = opts.shipLine.enabled;
+    controller.m_buffer.shipLineOwned = opts.shipLine.enabled && plan.shipLineCorrection;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;
     controller.m_buffer.pressTick = effectTick;
     controller.m_buffer.planDelay = delay;
+    if (controller.m_buffer.shipLineOwned) {
+        controller.m_lastShipLineDelay = delay;
+        controller.m_lastShipLineTick = effectTick;
+        EbAssistLog::info(fmt::format("SHIP-LINE press corr +{}", delay));
+    }
     controller.m_buffer.limit = limit;
     int const jumpRel = plan.jumpTick > 0 ? plan.jumpTick : delay;
     controller.m_buffer.expectedJumpTick = effectTick + jumpRel;

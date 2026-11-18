@@ -42,10 +42,12 @@ bool EbShipLinePolicy::improves(Metrics const& baseline, Metrics const& candidat
         return false;
     double const original = cost(baseline, 0, limit);
     double const corrected = cost(candidate, delay, limit);
+    // Playtest calibration: still reject tiny / unstable turns, but allow more
+    // frequent local line corrections than the first AP05 defaults.
     return std::isfinite(original) && std::isfinite(corrected) &&
-           candidate.maxError <= baseline.maxError + .05 &&
+           candidate.maxError <= baseline.maxError + .08 &&
            std::abs(std::remainder(candidate.lastHeadingError - baseline.lastHeadingError, 360.)) <=
-               20. &&
-           candidate.angleSum / candidate.samples <= baseline.angleSum / baseline.samples + .1 &&
-           original - corrected >= std::max(.08, original * .1);
+               30. &&
+           candidate.angleSum / candidate.samples <= baseline.angleSum / baseline.samples + .15 &&
+           original - corrected >= std::max(.04, original * .05);
 }

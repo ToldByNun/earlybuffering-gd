@@ -269,6 +269,8 @@ private:
     bool m_shipLineHasAnchor[2]{};
     double m_shipLineX[2]{};
     double m_shipLineY[2]{};
+    int m_lastShipLineDelay = 0;
+    int m_lastShipLineTick = -1;
     EbFlightMeasurement::Sample m_flightContext[2];
     EbFlightMeasurement m_flightMeasurement[2];
     EbFlightIntent m_flightIntent[2];

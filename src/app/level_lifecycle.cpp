@@ -104,6 +104,8 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_flightIntent[1].reset();
     controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
     controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
+    controller.m_lastShipLineDelay = 0;
+    controller.m_lastShipLineTick = -1;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -147,6 +149,8 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     controller.m_flightIntent[1].reset();
     controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
     controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
+    controller.m_lastShipLineDelay = 0;
+    controller.m_lastShipLineTick = -1;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -242,6 +246,8 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_flightIntent[1].reset();
     controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
     controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
+    controller.m_lastShipLineDelay = 0;
+    controller.m_lastShipLineTick = -1;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();

@@ -510,7 +510,7 @@ void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* 
         return;
     auto const intent = m_flightIntent[slot].result();
     if (!m_shipLineHasAnchor[slot] || !intent.targetValid ||
-        intent.state != EbFlightIntent::State::Tracking || intent.confidence < .5)
+        intent.state != EbFlightIntent::State::Tracking || intent.confidence < .35)
         return;
     if (EbAssistControllerImplementation::nearOrbOrPadHint(layer, player, activeLimit(player),
                                                            m_simDt))

@@ -338,15 +338,17 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
 
     // Flight assistance compares full, equal-depth native-physics paths. A
     // safe original remains authoritative unless a verified delay improves it.
+    // Rank the whole delay band; keep the lowest-cost improver (latency is in cost).
     if (context.options.shipLine.enabled && context.candReady[0] && context.cands[0].viable &&
         !context.cands[0].raw.died && !dual) {
         int selected = 0;
         auto const baselineMetrics = context.cands[0].raw.shipLine;
         double selectedCost = EbShipLinePolicy::cost(baselineMetrics, 0, context.limit);
-        for (int probe : {std::max(1, context.limit / 2), 1, context.limit}) {
-            if (probe < 1 || probe > context.limit || context.wallExceeded() ||
-                context.tickBudget <= 0)
+        for (int probe = 1; probe <= context.limit; ++probe) {
+            if (context.wallExceeded() || context.tickBudget <= 0) {
+                context.plan.budgetHit = true;
                 break;
+            }
             if (!ingest(probe, evaluateCandidate(probe)))
                 break;
             auto const& candidate = context.cands[static_cast<size_t>(probe)];
@@ -356,10 +358,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 continue;
             double const cost =
                 EbShipLinePolicy::cost(candidate.raw.shipLine, probe, context.limit);
-            if (cost < selectedCost) {
+            if (cost + 1e-9 < selectedCost) {
                 selected = probe;
                 selectedCost = cost;
-                break;
             }
         }
         if (selected > 0 && context.options.robustJitter && !context.jitterOk(selected, -1, true))

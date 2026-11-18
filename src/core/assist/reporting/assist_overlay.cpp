@@ -82,6 +82,23 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + trajBit;
         if (!straightflyBit.empty())
             controller.m_overlayText += " | " + straightflyBit;
+        if (controller.shipLineEnabled()) {
+            std::string shipLineBit;
+            if (controller.m_buffer.state == BufferState::Buffered &&
+                controller.m_buffer.shipLineOwned) {
+                shipLineBit = fmt::format("sf-corr +{}", controller.m_buffer.planDelay);
+            } else if (controller.m_lastShipLineTick >= 0 &&
+                       controller.m_attemptTick - controller.m_lastShipLineTick <= 90) {
+                shipLineBit = fmt::format("sf-corr +{}", controller.m_lastShipLineDelay);
+            } else {
+                auto const intent = controller.flightIntent(0);
+                if (intent.targetValid && intent.state == EbFlightIntent::State::Tracking)
+                    shipLineBit = fmt::format("sf {:.0f}%", intent.confidence * 100.);
+                else
+                    shipLineBit = "sf on";
+            }
+            controller.m_overlayText += " | " + shipLineBit;
+        }
         if (EbStageConfig::triggerBake()) {
             if (EbTriggerWorldBaker::get().running()) {
                 controller.m_overlayText += fmt::format(
