@@ -35,8 +35,10 @@
 auto EbGJBaseGameLayer::handleButton(bool down, int button, bool isPlayer1) -> void {
     if (EbGameHookSimulationGuard::simulating())
         return; // never let anything poke the real input path mid-sim
-    if (EbAssistController::get().onHandleButton(this, down, button, isPlayer1)) {
+    auto& controller = EbAssistController::get();
+    if (controller.onHandleButton(this, down, button, isPlayer1)) {
         GJBaseGameLayer::handleButton(down, button, isPlayer1);
+        controller.acknowledgeInput(isPlayer1, down, button);
     }
 }
 

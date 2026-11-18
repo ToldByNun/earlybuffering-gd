@@ -185,3 +185,6 @@ docs/dev/mobile-ui-plan.md
 docs/dev/flight-alternate-ap01-baseline.json
 docs/dev/flight-alternate-ap01-contracts.md
 docs/dev/flight-and-alternate-assist-plan.md
+
+!/tools/test_input_reconciler.cpp
+!/tools/test_input_reconciler.hpp

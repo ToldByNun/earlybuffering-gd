@@ -7,6 +7,7 @@
 #include "../diagnostics/decision_log.hpp"
 #include "../sim/shadow_simulator.hpp"
 #include "contracts/frame_plan_budget.hpp"
+#include "input/input_reconciler.hpp"
 #include "planning/orb_align.hpp"
 #include <Geode/Geode.hpp>
 #include <chrono>
@@ -72,6 +73,7 @@ private:
 
 class EbAssistController {
 public:
+    void acknowledgeInput(bool player1, bool down, int button);
     static EbAssistController& get();
 
     void resetAttempt(PlayLayer* playLayer = nullptr);
@@ -237,6 +239,7 @@ private:
     void runPostmortem(PlayLayer* playLayer, PlayerObject* player, GameObject* object,
                        EbDecisionEntry& dec);
 
+    EbInputReconciler m_inputReconciler;
     EbFramePlanBudget m_framePlanBudget;
     EbBufferedInput m_buffer{};
     EbDecisionLog m_log{};

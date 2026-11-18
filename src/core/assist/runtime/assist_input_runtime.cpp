@@ -21,13 +21,14 @@
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
 #include "../input/click_intent_guard.hpp"
+#include "../input/input_source_scope.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 
 void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLayer* playLayer,
-                                       float deltaTime) {
+                                         float deltaTime) {
     EbPerfTrace::get().beginTick(controller.m_attemptTick, deltaTime);
     // endTick runs on every exit path (including early returns).
     class EbTickEndGuard {
@@ -80,12 +81,12 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         double const simTps = EbAssistClock::get().simTpsFromDt(controller.m_simDt);
         if (EbAssistClock::get().noteSpeedScale(timeWarp, simTps, controller.m_attemptTick)) {
             EbAssistLog::debug(fmt::format("speed-scale: suspect simTps={:.1f} wallTps={:.1f} "
-                                         "tw={:.3f} simDt={:.6f} lastDt={:.6f}",
-                                         simTps,
-                                         EbAssistClock::get().wallTpsFromDt(controller.m_lastDt),
-                                         timeWarp, controller.m_simDt, controller.m_lastDt));
+                                           "tw={:.3f} simDt={:.6f} lastDt={:.6f}",
+                                           simTps,
+                                           EbAssistClock::get().wallTpsFromDt(controller.m_lastDt),
+                                           timeWarp, controller.m_simDt, controller.m_lastDt));
             EbLagProbe::get().mark("eb.speed.scale",
-                                 fmt::format("tps={:.1f} tw={:.3f}", simTps, timeWarp));
+                                   fmt::format("tps={:.1f} tw={:.3f}", simTps, timeWarp));
         }
     }
     if (!playLayer)
@@ -125,7 +126,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         {
             EbPerfTrace::Scope const scope("ghostParity");
             EbGhostParityProbe::get().onPhysicsTick(playLayer, playerOne, controller.m_simDt,
-                                                  controller.m_attemptTick);
+                                                    controller.m_attemptTick);
         }
         // Drift mid-buffer → drop Delay; never fire a plan made under bad trust.
         if (EbSimTrust::get().parityDrift() && controller.m_buffer.state == BufferState::Buffered) {
@@ -138,7 +139,8 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         controller.m_lastMode = EbStageConfig::kindOf(playerOne);
         if (!controller.m_startSnapshotTaken && controller.m_attemptTick <= 2) {
             EbPerfTrace::Scope const scope("captureStartSnapshot");
-            controller.m_startSnapshotSlot = EbShadowSimulator::get().captureStartSnapshot(playerOne);
+            controller.m_startSnapshotSlot =
+                EbShadowSimulator::get().captureStartSnapshot(playerOne);
             controller.m_startSnapshotTaken = controller.m_startSnapshotSlot >= 0;
         }
 
@@ -237,7 +239,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
 }
 
 bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBaseGameLayer* layer,
-                                        bool down, int button, bool player1) {
+                                          bool down, int button, bool player1) {
     if (controller.m_injecting)
         return true;
     if (button != EbAssistControllerImplementation::JUMP_BUTTON)
@@ -251,6 +253,12 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
     if (!player)
         return true;
 
+    // Unknown marks callbacks without a synchronous native source adapter.
+    // Record requested ownership independently of delayed game dispatch.
+    controller.m_inputReconciler.request(EbInputSourceScope::current(), player1 ? 0 : 1, down,
+                                         std::chrono::duration_cast<std::chrono::microseconds>(
+                                             std::chrono::steady_clock::now().time_since_epoch())
+                                             .count());
     controller.m_userHolding[player1 ? 0 : 1] = down;
 
     // Second click while a hold-assist release is armed: cancel it and re-plan.
@@ -290,8 +298,8 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
 
     int const playerIndex = player1 ? 0 : 1;
     auto beginDevPress = [&]() {
-        EbDevCycleRecorder::get().beginPress(playerIndex, down, effectTick, controller.m_attemptTick,
-                                           DevEventSource::Live);
+        EbDevCycleRecorder::get().beginPress(playerIndex, down, effectTick,
+                                             controller.m_attemptTick, DevEventSource::Live);
     };
 
     // Min click interval: skip assist only — never block the vanilla click.
@@ -337,10 +345,10 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
     // Attribution log only under debug-logging (not every press into perf file).
     if (down && EbStageConfig::debugLogging()) {
         EbAssistLog::debug(fmt::format("attrib: effectTick={} attemptTick={} midStep={} "
-                                     "continuous={} firstDt={:.6f} simDt={:.6f} p{}",
-                                     effectTick, controller.m_attemptTick, midStep ? 1 : 0,
-                                     continuous ? 1 : 0, firstDt, controller.m_simDt,
-                                     player1 ? 1 : 2));
+                                       "continuous={} firstDt={:.6f} simDt={:.6f} p{}",
+                                       effectTick, controller.m_attemptTick, midStep ? 1 : 0,
+                                       continuous ? 1 : 0, firstDt, controller.m_simDt,
+                                       player1 ? 1 : 2));
     }
 
     // Track real (non-swallowed) inputs for learning timelines.
@@ -454,7 +462,7 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
 }
 
 bool EbAssistInputRuntime::allowPushButton(EbAssistController& controller, PlayerObject* player,
-                                         PlayerButton button) {
+                                           PlayerButton button) {
     if (controller.m_injecting)
         return true;
     if (button != PlayerButton::Jump)

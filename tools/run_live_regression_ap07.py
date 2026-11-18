@@ -14,6 +14,7 @@ class LiveRegressionGate:
         common = ["src/core/assist/contracts/live_plan_contracts.cpp",
                   "src/core/assist/contracts/assist_verdict.cpp"]
         cases = {
+            "input_reconciler": ["src/core/assist/input/input_reconciler.cpp"],
             "input_search_policy": ["src/core/assist/contracts/input_search_policy.cpp"],
             "hybrid_model": ["src/core/learning/hybrid_model.cpp", "src/core/learning/hybrid_observation.cpp"],
             "assist_mode_migration": ["src/config/assist_mode_migration.cpp"],

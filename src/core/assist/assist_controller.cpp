@@ -370,3 +370,12 @@ bool EbAssistController::onHandleButton(GJBaseGameLayer* layer, bool down, int b
 bool EbAssistController::allowPushButton(PlayerObject* player, PlayerButton button) {
     return EbAssistInputRuntime::allowPushButton(*this, player, button);
 }
+
+void EbAssistController::acknowledgeInput(bool player1, bool down, int button) {
+    if (button != EbAssistControllerImplementation::JUMP_BUTTON)
+        return;
+    m_inputReconciler.acknowledge(player1 ? 0 : 1, down,
+                                  std::chrono::duration_cast<std::chrono::microseconds>(
+                                      std::chrono::steady_clock::now().time_since_epoch())
+                                      .count());
+}
