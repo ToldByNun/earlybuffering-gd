@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "corpusId": "cataclysm",
+  "status": "pending",
+  "clearSha256": "d0d88c74a1231fcd47dac341affbbd81ae648f8e9ca0fc802aec3b15b695be67",
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  },
+  "import": {
+    "tps": 240.0,
+    "eventCount": 404,
+    "lastFrame": 18644,
+    "dual": true
+  },
+  "attempt": null,
+  "notes": "Untrusted for oracle until status=pass from an unmodified PlayLayer gold clear (assist off, practice/startpos off unless tagged).",
+  "updatedAt": "2026-11-19T22:01:01Z"
+}

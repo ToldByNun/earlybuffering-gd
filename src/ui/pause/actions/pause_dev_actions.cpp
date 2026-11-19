@@ -1,6 +1,7 @@
 #include "pause_dev_actions.hpp"
 #include "../../../core/assist/assist_controller.hpp"
 #include "../../../core/platform/save_drop_paths.hpp"
+#include "../../../core/real_assist/gold_reproduce_gate.hpp"
 #include "../../../debug/assist_log.hpp"
 #include "../../../dev/capture/dev_trace_store.hpp"
 #include "../../../dev/dev_config.hpp"
@@ -309,4 +310,19 @@ void EbPauseDevActions::devCompareSessions() {
                     EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
     EbAssistLog::info(fmt::format("Dev Lab: {}", result.summaryLine));
     EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
+}
+
+void EbPauseDevActions::devReproduceGold() {
+    std::string report;
+    bool const ok = EbGoldReproduceGate::runDevAction(report);
+    auto const message =
+        ok ? fmt::format("Import gate OK.\n\n{}\n\n"
+                         "PlayLayer clear still required for reproduce=pass.\n"
+                         "Summary: saveDir/real_assist/last_run.txt",
+                         report)
+           : fmt::format("Import gate failed.\n\n{}\n\n"
+                         "Sync with:\n"
+                         "python tools/sync_real_corpus.py --install-save",
+                         report);
+    EbDesktopAlert::info("EarlyBuffer Real Assist", message.c_str());
 }

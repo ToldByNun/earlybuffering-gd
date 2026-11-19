@@ -100,6 +100,10 @@ void EbActionButtonSettingImplementation::fireSettingAction(std::string const& k
         EbPauseActionBridge::devCompareSessions();
         return;
     }
+    if (key == "dev-reproduce-gold-action") {
+        EbPauseActionBridge::devReproduceGold();
+        return;
+    }
 }
 
 geode::Result<std::shared_ptr<geode::prelude::SettingV3>>

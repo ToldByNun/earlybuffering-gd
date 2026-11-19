@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "syncedAt": "2026-11-19T22:01:01Z",
+  "source": "C:\\Users\\mikaj\\Music\\earlybuffer",
+  "ids": [
+    "cataclysm",
+    "quantum",
+    "slaughterhouse",
+    "hoveropolis"
+  ],
+  "entries": [
+    {
+      "id": "cataclysm",
+      "tags": [
+        "dual",
+        "varied-gamemodes",
+        "fast"
+      ],
+      "levelSha256": "6399909caf59e26e727c679896c474cf0e13ff0c4025cfcd72b8ddbf365090cb",
+      "clearSha256": "d0d88c74a1231fcd47dac341affbbd81ae648f8e9ca0fc802aec3b15b695be67",
+      "tps": 240.0,
+      "eventCount": 404,
+      "dual": true,
+      "levelName": "Cataclysm 2",
+      "levelId": 0,
+      "reproduce": "pending"
+    },
+    {
+      "id": "quantum",
+      "tags": [
+        "dual",
+        "varied-gamemodes"
+      ],
+      "levelSha256": "a3ae9aa14f6bdcef2432c6b0f61e231581be86443619a3c9f0c8564b54cfadee",
+      "clearSha256": "25f74cc2bc9a9dcd0d24ef77c5d70f1686f8be1adef9c638ed15dc89653c8010",
+      "tps": 240.0,
+      "eventCount": 568,
+      "dual": true,
+      "levelName": "Quantum Processing 2",
+      "levelId": 0,
+      "reproduce": "pending"
+    },
+    {
+      "id": "slaughterhouse",
+      "tags": [
+        "wave",
+        "cube",
+        "fast"
+      ],
+      "levelSha256": "3abd8a55229bbc830a4dc2d6a2933f33fabeec2a6aaef9128e7366ba8fa37bea",
+      "clearSha256": "02767513994633c7296f124070acd4caafc9bb0a4aa4207e2912fd7cf64b44fa",
+      "tps": 240.0,
+      "eventCount": 334,
+      "dual": false,
+      "levelName": "Slaughterhouse  2",
+      "levelId": 0,
+      "reproduce": "pending"
+    },
+    {
+      "id": "hoveropolis",
+      "tags": [
+        "ship",
+        "ball",
+        "cube",
+        "tight"
+      ],
+      "levelSha256": "0beebb2c4bff19032fb5876e946fb16d059534c3589a1a923d22d86e3f3470ab",
+      "clearSha256": "845d2b4e7567d0b1be8192dac22c2fe8f2fef0b6eceb23761ad800f616484af1",
+      "tps": 240.0,
+      "eventCount": 516,
+      "dual": true,
+      "levelName": "Silent Hoveropolis",
+      "levelId": 151696481,
+      "reproduce": "pending"
+    }
+  ],
+  "gate": {
+    "oracleRequires": "reproduce=pass",
+    "assistOnReproduce": false
+  }
+}

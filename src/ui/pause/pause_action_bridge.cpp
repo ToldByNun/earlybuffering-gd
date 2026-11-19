@@ -241,6 +241,10 @@ void EbPauseActionBridge::devCompareSessions() {
     return EbPauseDevActions::devCompareSessions();
 }
 
+void EbPauseActionBridge::devReproduceGold() {
+    return EbPauseDevActions::devReproduceGold();
+}
+
 void EbPauseActionBridge::openModSettings() {
 #if defined(EB_UI_ANDROID)
     geode::log::info(

@@ -292,6 +292,26 @@ public:
         EbSectionCard::end();
     }
 
+    static void drawRealAssist() {
+        if (!EbSectionCard::begin("dev-real-assist", "Real Assist")) {
+            EbSectionCard::end();
+            return;
+        }
+
+        mutedText(
+            "APR0 gold gate: import-stamp synced clears. Oracle work needs reproduce=pass "
+            "from an unmodified PlayLayer clear (assist off).");
+        gap();
+        if (EbButton::draw("##dev-reproduce-gold", "Reproduce Gold Clears", true,
+                           "Import-stamps saveDir/real_corpus (or EB_REAL_CORPUS_DIR). Writes "
+                           "reproduce.json + real_assist/last_run.txt.",
+                           true)) {
+            fireAction("dev-reproduce-gold-action");
+        }
+
+        EbSectionCard::end();
+    }
+
     static void drawDanger() {
         if (!EbSectionCard::begin("dev-danger", "Danger")) {
             EbSectionCard::end();
@@ -453,6 +473,8 @@ public:
         drawSave();
         gap();
         drawCompare();
+        gap();
+        drawRealAssist();
         gap();
         drawDanger();
     }

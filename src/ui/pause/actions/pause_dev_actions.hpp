@@ -14,6 +14,8 @@ public:
     static void devCopyReport();
     static void devExportResearchPack();
     static void devCompareSessions();
+    // APR0: import-stamp gold clears; PlayLayer pass still required for reproduce=pass.
+    static void devReproduceGold();
 
 private:
     EbPauseDevActions() = delete;

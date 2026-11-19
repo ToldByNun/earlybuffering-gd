@@ -12,6 +12,7 @@
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/trigger_world/trigger_classify.hpp"
 #include "../core/trigger_world/trigger_world_store.hpp"
+#include "../core/real_assist/gold_reproduce_gate.hpp"
 #include "../debug/assist_log.hpp"
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
@@ -69,6 +70,7 @@ void EbClassManager::initialize() {
                                   EbClassRegistry::all().size(), EbClassRegistry::serviceCount()));
     runStartupChecks();
     EbModuleBindings::registerSettings();
+    EbGoldReproduceGate::maybeQueueAutoFromEnv();
     m_initialized = true;
 }
 

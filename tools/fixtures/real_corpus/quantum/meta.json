@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "id": "quantum",
+  "levelFile": "level.gmd",
+  "clearFile": "clear.gdr2",
+  "tags": [
+    "dual",
+    "varied-gamemodes"
+  ],
+  "source": {
+    "level": "Quantum Processing 2.gmd",
+    "clear": "quantum processing.gdr2",
+    "syncedAt": "2026-11-19T22:01:01Z"
+  },
+  "level": {
+    "name": "Quantum Processing 2",
+    "id": 0,
+    "sha256": "a3ae9aa14f6bdcef2432c6b0f61e231581be86443619a3c9f0c8564b54cfadee",
+    "bytes": 148791
+  },
+  "clear": {
+    "sha256": "25f74cc2bc9a9dcd0d24ef77c5d70f1686f8be1adef9c638ed15dc89653c8010",
+    "bytes": 763,
+    "author": "Audesign",
+    "bot": "MEGA",
+    "botVersion": 300,
+    "gameVersion": 22081,
+    "tps": 240.0,
+    "eventCount": 568,
+    "p1Events": 482,
+    "p2Events": 86,
+    "dual": true,
+    "platformer": false,
+    "lastFrame": 23835,
+    "deathCount": 0,
+    "durationHeader": 0.0
+  },
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  }
+}

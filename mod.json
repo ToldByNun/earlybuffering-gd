@@ -1637,6 +1637,12 @@
 			"description": "Compares the last N sealed session-*.json under devtraces/ (newest vs median of older). Writes compare_<stamp>.json and shows gained/flat/regressed with driving metrics. Copies the compare file path.",
 			"button-text": "compare"
 		},
+		"dev-reproduce-gold-action": {
+			"type": "custom:eb-action",
+			"name": "Reproduce Gold Clears",
+			"description": "APR0 Real Assist: import-stamp all synced gold clears under saveDir/real_corpus (or EB_REAL_CORPUS_DIR). Writes reproduce.json import block + real_assist/last_run.txt. PlayLayer unmodified clear still required for status=pass.",
+			"button-text": "reproduce"
+		},
 		"title-dev-diag": {
 			"type": "title",
 			"name": "Diagnostics",

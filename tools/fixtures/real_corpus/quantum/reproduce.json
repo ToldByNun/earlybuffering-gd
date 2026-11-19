@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "corpusId": "quantum",
+  "status": "pending",
+  "clearSha256": "25f74cc2bc9a9dcd0d24ef77c5d70f1686f8be1adef9c638ed15dc89653c8010",
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  },
+  "import": {
+    "tps": 240.0,
+    "eventCount": 568,
+    "lastFrame": 23835,
+    "dual": true
+  },
+  "attempt": null,
+  "notes": "Untrusted for oracle until status=pass from an unmodified PlayLayer gold clear (assist off, practice/startpos off unless tagged).",
+  "updatedAt": "2026-11-19T22:01:01Z"
+}

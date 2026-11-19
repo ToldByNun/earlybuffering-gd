@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "id": "cataclysm",
+  "levelFile": "level.gmd",
+  "clearFile": "clear.gdr2",
+  "tags": [
+    "dual",
+    "varied-gamemodes",
+    "fast"
+  ],
+  "source": {
+    "level": "Cataclysm 2.gmd",
+    "clear": "cataclysm.gdr2",
+    "syncedAt": "2026-11-19T22:01:01Z"
+  },
+  "level": {
+    "name": "Cataclysm 2",
+    "id": 0,
+    "sha256": "6399909caf59e26e727c679896c474cf0e13ff0c4025cfcd72b8ddbf365090cb",
+    "bytes": 97916
+  },
+  "clear": {
+    "sha256": "d0d88c74a1231fcd47dac341affbbd81ae648f8e9ca0fc802aec3b15b695be67",
+    "bytes": 543,
+    "author": "Audesign",
+    "bot": "MEGA",
+    "botVersion": 300,
+    "gameVersion": 22081,
+    "tps": 240.0,
+    "eventCount": 404,
+    "p1Events": 378,
+    "p2Events": 26,
+    "dual": true,
+    "platformer": false,
+    "lastFrame": 18644,
+    "deathCount": 0,
+    "durationHeader": 0.0
+  },
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  }
+}

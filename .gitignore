@@ -91,7 +91,7 @@ docs/dev/assist_verbesserungsplan.md
 
 !/tools/
 /tools/*
-/tools/fixtures
+!/tools/fixtures/
 !/tools/test_recorded_misses_ap01.py
 /tools/fixtures/*
 !/tools/fixtures/recorded_misses_ap01.json
@@ -206,3 +206,27 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/test_wave_pattern_policy.cpp
 !/tools/test_wave_pattern_policy.hpp
+
+!/tools/sync_real_corpus.py
+!/tools/test_real_corpus_import.py
+!/tools/real_assist/
+!/tools/real_assist/__init__.py
+!/tools/real_assist/gdr2.py
+!/tools/fixtures/real_corpus/
+!/tools/fixtures/real_corpus/README.md
+!/tools/fixtures/real_corpus/manifest.json
+!/tools/fixtures/real_corpus/cataclysm/
+!/tools/fixtures/real_corpus/cataclysm/meta.json
+!/tools/fixtures/real_corpus/cataclysm/reproduce.json
+!/tools/fixtures/real_corpus/quantum/
+!/tools/fixtures/real_corpus/quantum/meta.json
+!/tools/fixtures/real_corpus/quantum/reproduce.json
+!/tools/fixtures/real_corpus/slaughterhouse/
+!/tools/fixtures/real_corpus/slaughterhouse/meta.json
+!/tools/fixtures/real_corpus/slaughterhouse/reproduce.json
+!/tools/fixtures/real_corpus/hoveropolis/
+!/tools/fixtures/real_corpus/hoveropolis/meta.json
+!/tools/fixtures/real_corpus/hoveropolis/reproduce.json
+tools/fixtures/real_corpus/**/level.gmd
+tools/fixtures/real_corpus/**/clear.gdr2
+tools/fixtures/real_corpus/derived/
