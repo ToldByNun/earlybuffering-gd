@@ -159,6 +159,8 @@ public:
                 ImGui::Separator();
                 ImGui::Text("Inputs seen this visit   %d", learning.edges);
                 ImGui::Text("Local outcomes observed   %d", learning.observations);
+                ImGui::Text("Verify probe updates   %d", learning.verifyUpdates);
+                ImGui::Text("Action pulls   %u", learning.totalPulls());
                 ImGui::Text("Suggested timings chosen   %d / %d", learning.confirmed,
                             learning.tried);
                 ImGui::Text("Inputs ending an observation   %d", learning.interrupted);
@@ -184,6 +186,43 @@ public:
                 "learn-attempts", "Independent Attempts", &learning.minimumAttempts, 3, 12, "",
                 true,
                 "More attempts require stronger repeated evidence before proposing a timing.");
+            if (EbSlider::drawInt("learn-max-keys", "Max Unique Keys", &learning.maxUniqueKeys, 32,
+                                  2048, "", true,
+                                  "Hard cap on distinct learned situations for this level. When "
+                                  "full, weakest old keys are dropped before new ones are kept.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            if (EbSlider::drawInt("learn-max-actions", "Max Delays Per Spot",
+                                  &learning.maxActionsPerSpot, 1, 4, "", true,
+                                  "How many different delay timings to remember for one "
+                                  "situation. Lower values keep memory tighter.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            EbCheckbox::draw(
+                "learn-bridge", "Interpolate Between Survivals", &learning.bridgeInterpolate, true,
+                "If 1t and 4t both survived, raise 2t/3t so Hybrid can try the in-between delays.");
+            EbCheckbox::draw(
+                "learn-hybrid-first", "Verify Learned First", &learning.preferHybridFirst, true,
+                "Check known Hybrid delays (best first) with Live physics before the ordinary "
+                "search. The first verified-safe learned delay wins.");
+            if (EbSlider::drawFloat("learn-ucb", "UCB Exploration", &learning.ucbCoefficient, 0.f,
+                                    4.f, 2, "", true,
+                                    "How strongly under-tried delays rise in the verify order. "
+                                    "Zero ranks by score only; higher values explore more.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            if (EbSlider::drawFloat("learn-neighbor", "Neighbor Bleed", &learning.neighborBleed, 0.f,
+                                    1.f, 2, "", true,
+                                    "Share a fraction of each reward update with delay±1 so nearby "
+                                    "timings generalize without waiting for separate attempts.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            EbSlider::drawInt(
+                "learn-eligibility", "Eligibility Trace", &learning.eligibilitySteps, 0, 4, "", true,
+                "On a local death, also soft-penalize this many recently successful delivered "
+                "timings in the same attempt (temporal credit assignment).");
+            ImGui::TextDisabled("Keys stored   %d / %d", learning.uniqueKeys(),
+                                learning.maxUniqueKeys);
             EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes,
                              true,
                              "Keep separate success, failure and uncertain-outcome counts for "

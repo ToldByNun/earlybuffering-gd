@@ -274,10 +274,68 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         opts.smartDepth = std::max(opts.smartDepth, EbHybridLearning::get().lineupDepth);
     bool useSequence = opts.smartDepth > 1;
 
-    auto plan = useSequence ? EbShadowSimulator::get().planSequence(
-                                  playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
-                            : EbShadowSimulator::get().plan(playLayer, player, true, limit,
-                                                            controller.m_simDt, firstDt, opts);
+    EbSimPlan plan{};
+    bool hybridWon = false;
+    // Hybrid-first: verify known/learned delays (best first) before Live search.
+    // Take the first that clears current physics; otherwise fall through to Live.
+    auto& hybrid = EbHybridLearning::get();
+    if (hybrid.preferHybridFirst && !opts.shipLine.enabled && !opts.wavePattern.enabled &&
+        !playLayer->m_gameState.m_isDualMode) {
+        auto const order = hybrid.rankedVerifyDelays(limit);
+        for (int delayValue : order) {
+            if (delayValue < 0 || delayValue > limit)
+                continue;
+            int const remUs = frameScope.remaining(frameLimitUs);
+            if (remUs <= 0) {
+                opts.budgetUs = 0;
+                break;
+            }
+            EbPlanOptions vopts = opts;
+            vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
+            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.maxBranches = 0;
+            vopts.smartDepth = 1;
+            auto const vr = EbShadowSimulator::get().verifyDelay(
+                playLayer, player, true, delayValue, limit, controller.m_simDt, firstDt, vopts);
+            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            if (vr.budgetHit || vr.unknown)
+                continue;
+            if (!vr.ok) {
+                hybrid.noteVerifyOutcome(delayValue, false);
+                continue;
+            }
+            hybrid.noteVerifyOutcome(delayValue, true);
+            plan.hybridTried = true;
+            plan.hybridHint = opts.hybridDelay;
+            plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            plan.fixedFireTick = true;
+            if (delayValue <= 0) {
+                plan.action = PlanAction::Pass;
+                plan.reason = AssistReason::PassNoThreat;
+                plan.nowIsSafe = true;
+                plan.delay = 0;
+            } else {
+                plan.action = PlanAction::Delay;
+                plan.reason = AssistReason::DelayThreat;
+                plan.delay = plan.jumpTick = delayValue;
+                plan.viableDelays = std::vector<int>{delayValue};
+                plan.dMin = plan.dMax = delayValue;
+                plan.guardOriginalDelay = delayValue;
+                plan.threatCleared = true;
+                plan.nowIsSafe = false;
+            }
+            hybridWon = true;
+            EbAssistLog::info(fmt::format("HYBRID-FIRST {} d={}",
+                                          delayValue <= 0 ? "pass" : "delay", delayValue));
+            break;
+        }
+    }
+    if (!hybridWon) {
+        plan = useSequence ? EbShadowSimulator::get().planSequence(
+                                 playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
+                           : EbShadowSimulator::get().plan(playLayer, player, true, limit,
+                                                           controller.m_simDt, firstDt, opts);
+    }
     int const planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
