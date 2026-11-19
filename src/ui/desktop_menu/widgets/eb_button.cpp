@@ -49,35 +49,15 @@ public:
     static constexpr float kMinHeight = 34.0f;
 
     static ImVec4 idleFill(bool accent) {
-        // Lifted above panel() so chips read as controls, not hollow outlines.
-        ImVec4 fill = EbDesktopMenuTheme::surface();
-        ImVec4 lift(0.20f, 0.20f, 0.27f, 1.0f);
-        fill = EbDesktopMenuMotion::lerp4(fill, lift, 0.72f);
-        if (accent) {
-            ImVec4 wash = EbDesktopMenuTheme::accent();
-            wash.w = 0.28f;
-            fill = EbDesktopMenuMotion::lerp4(fill, wash, 0.85f);
-            fill.w = 1.0f;
-        }
-        return fill;
+        return EbDesktopMenuTheme::controlFill(accent ? 0.65f : 0.2f);
     }
 
     static ImVec4 hoverFill(bool accent) {
-        if (accent) {
-            ImVec4 wash = EbDesktopMenuTheme::accent();
-            wash.w = 0.40f;
-            return EbDesktopMenuMotion::lerp4(ImVec4(0.24f, 0.24f, 0.32f, 1.0f), wash, 0.75f);
-        }
-        return ImVec4(0.26f, 0.26f, 0.34f, 1.0f);
+        return EbDesktopMenuTheme::controlFill(accent ? 0.8f : 0.35f);
     }
 
     static ImVec4 heldFill(bool accent) {
-        if (accent) {
-            ImVec4 wash = EbDesktopMenuTheme::accent();
-            wash.w = 0.50f;
-            return EbDesktopMenuMotion::lerp4(ImVec4(0.30f, 0.30f, 0.38f, 1.0f), wash, 0.80f);
-        }
-        return ImVec4(0.32f, 0.32f, 0.40f, 1.0f);
+        return EbDesktopMenuTheme::controlFill(accent ? 0.95f : 0.5f);
     }
 
     static float resolveWidth() {

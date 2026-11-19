@@ -1,5 +1,7 @@
-#include "../../core/learning/hybrid_learning.hpp"
 #include "desktop_menu_dev_panel.hpp"
+#include "../../core/assist/assist_controller.hpp"
+#include "../../core/assist/flight/wave_pattern_recognizer.hpp"
+#include "../../core/learning/hybrid_learning.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -59,12 +61,11 @@ public:
         (void)EbDesktopMenuBind::setBool("dev-eval-on-death", true);
         (void)EbDesktopMenuBind::setBool("dev-overlay", true);
         (void)EbDesktopMenuBind::setBool("dev-disable-random", true);
-        EbDesktopAlert::info(
-            "EarlyBuffer Dev",
-            "Research Preset on:\n"
-            "Record + Candidates + Freeze World + Hazards +\n"
-            "Eval On Death + Overlay + Disable Random.\n\n"
-            "Next: press Record, die a few times, then Export Research Pack.");
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             "Research Preset on:\n"
+                             "Record + Candidates + Freeze World + Hazards +\n"
+                             "Eval On Death + Overlay + Disable Random.\n\n"
+                             "Next: press Record, die a few times, then Export Research Pack.");
     }
 
     static std::string shortPath(std::filesystem::path const& path) {
@@ -109,9 +110,9 @@ public:
 
         if (EbDevReport::hasLast()) {
             auto const& report = EbDevReport::last();
-            std::string const line =
-                report.overlayLine.empty() ? EbDevReport::formatOverlayLine(report)
-                                           : report.overlayLine;
+            std::string const line = report.overlayLine.empty()
+                                         ? EbDevReport::formatOverlayLine(report)
+                                         : report.overlayLine;
             smallGap();
             ImGui::PushStyleColor(ImGuiCol_Text, EbDesktopMenuTheme::text());
             ImGui::TextWrapped("%s", line.c_str());
@@ -181,8 +182,9 @@ public:
                 fireAction("dev-stop-record-action");
             }
         } else {
-            mutedText(canStart ? "Start in a level. With Eval On Death you usually skip manual eval."
-                               : "Turn on Record Enable (or Apply Research Preset) first.");
+            mutedText(canStart
+                          ? "Start in a level. With Eval On Death you usually skip manual eval."
+                          : "Turn on Record Enable (or Apply Research Preset) first.");
             gap();
             if (EbButton::draw("##dev-start", "Start Recording", canStart,
                                "Starts a rolling Dev Lab session in the current level.", true)) {
@@ -213,7 +215,8 @@ public:
             EbDropdown::drawSetting("dev-objective", "Objective", objOpts, 3, objLabels);
         }
         EbCheckbox::drawSetting("dev-eval-require-deps", "Require Deps");
-        EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000);
+        EbSlider::drawIntSetting("dev-eval-tick-budget", "Eval Tick Budget", 500, 50000, "", true,
+                                 100);
 
         gap();
         EbButton::beginRow(2);
@@ -236,7 +239,8 @@ public:
             return;
         }
 
-        mutedText("One click: eval all → write pack folder → path on clipboard (send that folder).");
+        mutedText(
+            "One click: eval all → write pack folder → path on clipboard (send that folder).");
         gap();
 
         if (EbButton::draw("##dev-research-pack", "Export Research Pack", true,
@@ -354,6 +358,86 @@ public:
                     }
                 }
             ImGui::EndChild();
+        }
+        EbSectionCard::end();
+        if (EbSectionCard::begin("dev-flight-measurement", "Flight Measurement")) {
+            bool shipLineEnabled = EbAssistController::get().shipLineEnabled();
+            if (EbCheckbox::draw(
+                    "ship-line-enable", "Ship line assistance (session)", &shipLineEnabled, true,
+                    "Stabilizes an acquired Ship line by delaying real inputs (line first, ordinary "
+                    "safe as fallback). Requires press + release assist. Solo Ship only. Visualize "
+                    "Straightfly also arms this while Tracking. Modes → Ship may stay off. Delay "
+                    "window ≥20 ticks. Session-only — not saved."))
+                EbAssistController::get().setShipLineEnabled(shipLineEnabled);
+            bool wavePatternEnabled = EbAssistController::get().wavePatternEnabled();
+            if (EbCheckbox::draw(
+                    "wave-pattern-enable", "Wave pattern assistance (session)", &wavePatternEnabled,
+                    true,
+                    "Stabilizes a locked Wave hold/release motif by delaying early edges to the "
+                    "expected phase (late edges pass to ordinary Wave rescue). Never invents "
+                    "missing clicks. Requires press + release assist. Solo Wave only. Visualize "
+                    "Wave Pattern also arms this while Tracking. Delay window ≥20 ticks. "
+                    "Session-only — not saved."))
+                EbAssistController::get().setWavePatternEnabled(wavePatternEnabled);
+            static bool waveManual = false;
+            static float waveHoldMs = 100.f;
+            static float waveReleaseMs = 50.f;
+            bool waveManualChanged = EbCheckbox::draw(
+                "wave-pattern-manual", "Manual Wave pattern (session)", &waveManual, true,
+                "Overrides recognized hold/release targets with the values below when pattern "
+                "assist is armed. Still needs a recent real edge for phase error. Session-only.");
+            waveManualChanged |=
+                EbSlider::drawFloat("wave-hold-ms", "Hold", &waveHoldMs, 20.f, 400.f, 1, " ms",
+                                    waveManual, "Target hold duration for manual Wave pattern.");
+            waveManualChanged |= EbSlider::drawFloat(
+                "wave-release-ms", "Release", &waveReleaseMs, 20.f, 400.f, 1, " ms", waveManual,
+                "Target release duration for manual Wave pattern.");
+            if (waveManualChanged)
+                EbAssistController::get().configureWavePatternManual(
+                    waveManual, waveHoldMs / 1000.f, waveReleaseMs / 1000.f);
+            static bool manualTarget = false;
+            static float targetAngle = 0.f;
+            bool changed = EbCheckbox::draw(
+                "flight-manual-target", "Manual target (preview)", &manualTarget, true,
+                "Uses this travel-relative angle for intent diagnostics. Steering arrives in the "
+                "next implementation stage. Resets acquisition when changed.");
+            changed |= EbSlider::drawFloat("flight-target-angle", "Target angle", &targetAngle,
+                                           -80.f, 80.f, 1, " deg", manualTarget,
+                                           "Positive means upward transverse motion relative to "
+                                           "travel. This preview is session-only.");
+            if (changed)
+                EbAssistController::get().configureFlightIntent(manualTarget, targetAngle);
+            for (int player = 0; player < 2; ++player) {
+                auto const intent = EbAssistController::get().flightIntent(player);
+                ImGui::Text("P%d intent: %s   confidence %.0f%%", player + 1,
+                            EbFlightIntent::stateName(intent.state), intent.confidence * 100.);
+                if (intent.targetValid)
+                    ImGui::Text("Target %.1f deg   Hold %.0f ms / Release %.0f ms",
+                                intent.targetDegrees, intent.holdSeconds * 1000.,
+                                intent.releaseSeconds * 1000.);
+                auto const wave = EbAssistController::get().wavePattern(player);
+                ImGui::Text("P%d wave: %s   confidence %.0f%%", player + 1,
+                            EbWavePatternRecognizer::stateName(wave.state), wave.confidence * 100.);
+                if (wave.targetValid)
+                    ImGui::Text("Hold %.0f ms / Release %.0f ms   duty %.0f%%   motif %dp  "
+                                "target %.1f deg (avg %.1f)   jitter %.0f ms",
+                                wave.holdSeconds * 1000., wave.releaseSeconds * 1000.,
+                                wave.dutyCycle * 100., wave.motifPairs, wave.targetTravelDegrees,
+                                wave.averageTravelDegrees, wave.jitterSeconds * 1000.);
+                auto const result = EbAssistController::get().flightMeasurement(player);
+                ImGui::Text("Player %d: %s", player + 1,
+                            result.headingValid ? "Measured" : "Acquiring / unavailable");
+                if (result.headingValid) {
+                    ImGui::Text("World %.1f deg   Travel %.1f deg   Filtered %.1f deg",
+                                result.worldAngle, result.travelAngle, result.smoothedAngle);
+                    ImGui::Text("Velocity %.1f / %.1f units/s   Variance %.1f", result.vx,
+                                result.vy, result.velocityVariance);
+                }
+            }
+            ImGui::TextWrapped(
+                "Ship intent locks a straight-flight line. Wave pattern (AP07/08) locks "
+                "hold/release spam. AP09 combines both with ordinary assist: direction change "
+                "wins, then collision rescue, then Ship/Wave preference, else ordinary.");
         }
         EbSectionCard::end();
         drawStatus();

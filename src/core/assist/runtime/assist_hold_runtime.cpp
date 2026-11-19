@@ -149,8 +149,7 @@ void EbAssistHoldRuntime::tickHoldUntilSafe(EbAssistController& controller, Play
     }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs =
-        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
     if (frameScope.remaining(frameLimitUs) <= 0) {
         controller.m_buffer.fireTick = deadline;
         EbDevCycleRecorder::get().noteHus(controller.m_buffer.devPressId, AssistReason::HoldPending,

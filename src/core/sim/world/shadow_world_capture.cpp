@@ -78,7 +78,6 @@ void EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator& simulator, Play
     }
     for (unsigned index = 0; index < source->count(); ++index)
         consider(geode::prelude::typeinfo_cast<GameObject*>(source->objectAtIndex(index)));
-    EbSectionObjectWalk::forEachInSections(layer, consider);
     simulator.m_captureIndexKey.bind(layer, source, source->count());
 }
 
@@ -107,7 +106,8 @@ void EbShadowWorldCapture::refreshTimeOrigin(EbShadowSimulator& simulator, PlayL
     simulator.m_triggerOriginTps = tps;
 }
 
-void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator,
+                                                    PlayLayer* layer) {
     simulator.m_savedTransforms.clear();
     simulator.m_transformCaptureLayer = layer;
     if (!layer || !EbStageConfig::triggerBake())
@@ -151,7 +151,8 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
     }
 }
 
-void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator,
+                                                       PlayLayer* layer) {
     simulator.m_toggleTargetIds.clear();
     if (!layer)
         return;
@@ -338,7 +339,7 @@ void EbShadowWorldCapture::resetTriggerTransforms(EbShadowSimulator& simulator) 
 }
 
 void EbShadowWorldCapture::restoreTriggerTransforms(EbShadowSimulator& simulator,
-                                                  GJBaseGameLayer* layer) {
+                                                    GJBaseGameLayer* layer) {
     (void)layer;
     simulator.resetTriggerTransforms();
     simulator.m_savedTransforms.clear();
@@ -394,8 +395,8 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
             effect->m_isTouchTriggered &&
             (kind == TriggerKind::DynamicOther || kind == TriggerKind::StaticMove ||
              kind == TriggerKind::StaticRotate || kind == TriggerKind::StaticScale);
-        bool const followLikeStatic =
-            kind == TriggerKind::StaticMove && EbTriggerWorldBaker::isFollowLikeStatic(effect, kind);
+        bool const followLikeStatic = kind == TriggerKind::StaticMove &&
+                                      EbTriggerWorldBaker::isFollowLikeStatic(effect, kind);
         if (!touchMover && !followLikeStatic)
             continue;
 

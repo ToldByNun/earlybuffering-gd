@@ -10,7 +10,9 @@
 #include "../../overlays/status_overlay.hpp"
 #include "../../settings/filtering/in_level_settings_filter_keeper.hpp"
 #include "../../visualizers/bake_path_visualizer.hpp"
+#include "../../visualizers/straightfly_visualizer.hpp"
 #include "../../visualizers/trajectory_visualizer.hpp"
+#include "../../visualizers/wave_pattern_visualizer.hpp"
 #include "../pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
@@ -134,6 +136,24 @@ void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
             }
         } else {
             EbTrajectoryVisualizer::get().clear();
+        }
+        bool const straightfly = EbStageConfig::showStraightfly();
+        EbStraightflyVisualizer::get().setEnabled(straightfly);
+        if (straightfly) {
+            if (auto* pl = PlayLayer::get()) {
+                EbStraightflyVisualizer::get().attach(pl);
+            }
+        } else {
+            EbStraightflyVisualizer::get().clear();
+        }
+        bool const wavePattern = EbStageConfig::showWavePattern();
+        EbWavePatternVisualizer::get().setEnabled(wavePattern);
+        if (wavePattern) {
+            if (auto* pl = PlayLayer::get()) {
+                EbWavePatternVisualizer::get().attach(pl);
+            }
+        } else {
+            EbWavePatternVisualizer::get().clear();
         }
         bool const bakePath = EbStageConfig::showBakePath();
         EbBakePathVisualizer::get().setEnabled(bakePath);

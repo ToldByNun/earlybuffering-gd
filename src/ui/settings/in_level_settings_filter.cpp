@@ -135,6 +135,10 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("assist-pick") == SettingsCategory::Count, "cat-assist-pick");
     expect(categoryForKey("assist-engine") == SettingsCategory::Count, "cat-assist-engine");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");
+    expect(categoryForKey("show-straightfly") == SettingsCategory::Visual, "cat-straightfly-visual");
+    expect(categoryForKey("show-wave-pattern") == SettingsCategory::Visual, "cat-wave-pattern-visual");
+    expect(categoryForKey("wave-angle-snap") == SettingsCategory::Visual, "cat-flight-angle-snap");
+    expect(categoryForKey("ship-room-of-error") == SettingsCategory::Visual, "cat-ship-room");
     expect(categoryForKey("show-bake-path") == SettingsCategory::Count, "cat-bake-path-visual");
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-debug") == SettingsCategory::Keys, "cat-hotkey-keys");

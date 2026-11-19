@@ -1,6 +1,7 @@
 #include "test_hybrid_model.hpp"
 #include "../src/core/learning/hybrid_model.hpp"
 #include "../src/core/learning/hybrid_observation.hpp"
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -92,6 +93,23 @@ int HybridModelTests::run() {
         mature.observe(key, 5, -4);
     }
     check(mature.proposal(key) < 0, "repeated deaths suppress established timing");
+    EbHybridModel explore;
+    uint64_t const exploreKey = EbHybridModel::mix(99, 7);
+    explore.setUcbCoefficient(2.f);
+    explore.setNeighborBleed(.5f);
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        explore.nextAttempt();
+        explore.observe(exploreKey, 4, 3);
+    }
+    explore.noteProbeOutcome(exploreKey, 2, false);
+    explore.noteProbeOutcome(exploreKey, 6, true);
+    auto ranked = explore.rankedDelays(exploreKey, 3, 96, true);
+    check(!ranked.empty() && ranked.front() == 4, "mature delay still leads verify order");
+    check(std::find(ranked.begin(), ranked.end(), 6) != ranked.end(),
+          "verified-safe probe enters explore ranking");
+    check(std::find(ranked.begin(), ranked.end(), 3) != ranked.end() ||
+              std::find(ranked.begin(), ranked.end(), 5) != ranked.end(),
+          "neighbor bleed seeds adjacent delays");
     auto path = std::filesystem::temp_directory_path() /
                 ("eb-hybrid-test-" +
                  std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));

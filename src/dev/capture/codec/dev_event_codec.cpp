@@ -118,6 +118,8 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["attribution"] = attrs;
     }
     if (e.hasPlanCost) {
+        otherIndex["shipLineCorrection"] = e.shipLineCorrection;
+        otherIndex["wavePatternCorrection"] = e.wavePatternCorrection;
         otherIndex["planUs"] = e.planUs;
         otherIndex["renderFrame"] = e.renderFrame;
         otherIndex["frameBudgetUs"] = e.frameBudgetUs;
@@ -448,6 +450,10 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.plannerBudgetUs = j.contains("plannerBudgetUs")
                                 ? static_cast<int>(j["plannerBudgetUs"].asInt().unwrapOr(0))
                                 : 0;
+        e.shipLineCorrection =
+            j.contains("shipLineCorrection") && j["shipLineCorrection"].asBool().unwrapOr(false);
+        e.wavePatternCorrection = j.contains("wavePatternCorrection") &&
+                                  j["wavePatternCorrection"].asBool().unwrapOr(false);
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
         e.worldCaptureUs = j.contains("worldCaptureUs")
                                ? static_cast<int>(j["worldCaptureUs"].asInt().unwrapOr(0))

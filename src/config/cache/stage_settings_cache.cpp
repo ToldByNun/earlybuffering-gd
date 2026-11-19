@@ -37,6 +37,14 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "lag-warning-toast", true);
     EbStageConfigImplementation::s_cachedShowTrajectory =
         EbStageConfigImplementation::readBool(mod, "show-trajectory", false);
+    EbStageConfigImplementation::s_cachedShowStraightfly =
+        EbStageConfigImplementation::readBool(mod, "show-straightfly", false);
+    EbStageConfigImplementation::s_cachedShowWavePattern =
+        EbStageConfigImplementation::readBool(mod, "show-wave-pattern", false);
+    EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees =
+        std::clamp(EbStageConfigImplementation::readInt(mod, "wave-angle-snap", 0), 0, 45);
+    EbStageConfigImplementation::s_cachedShipRoomOfError = std::clamp(
+        EbStageConfigImplementation::readFloat(mod, "ship-room-of-error", 1.1f), .4f, 3.f);
     EbStageConfigImplementation::s_cachedShowBakePath = false;
     EbStageConfigImplementation::s_cachedShowPauseBake = false;
     EbStageConfigImplementation::s_cachedShowPauseHub =

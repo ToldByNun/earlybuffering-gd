@@ -3,7 +3,9 @@
 #include "../../../ui/overlays/dev_overlay.hpp"
 #include "../../../ui/overlays/status_overlay.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
+#include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
+#include "../../../ui/visualizers/wave_pattern_visualizer.hpp"
 #include "../../bake/bake_map.hpp"
 #include "../../diagnostics/assist_perf_stats.hpp"
 #include "../../diagnostics/assist_real_metrics.hpp"
@@ -18,6 +20,8 @@
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
+#include "../flight/ship_line_policy.hpp"
+#include "../flight/wave_pattern_recognizer.hpp"
 #include <cstring>
 #include <string>
 
@@ -57,6 +61,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             learnBit = "learn OFF";
         }
         std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
+        std::string straightflyBit = EbStraightflyVisualizer::get().statusHint();
+        std::string wavePatternBit = EbWavePatternVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
@@ -78,6 +84,75 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + cpsBit;
         if (!trajBit.empty())
             controller.m_overlayText += " | " + trajBit;
+        if (!straightflyBit.empty())
+            controller.m_overlayText += " | " + straightflyBit;
+        if (!wavePatternBit.empty())
+            controller.m_overlayText += " | " + wavePatternBit;
+        if (controller.shipLineAssistActive()) {
+            std::string shipLineBit;
+            if (controller.m_buffer.state == BufferState::Buffered &&
+                controller.m_buffer.shipLineOwned) {
+                shipLineBit = fmt::format("sf-corr +{}", controller.m_buffer.planDelay);
+            } else if (controller.m_lastShipLineTick >= 0 &&
+                       controller.m_attemptTick - controller.m_lastShipLineTick <= 90) {
+                shipLineBit = fmt::format("sf-corr +{}", controller.m_lastShipLineDelay);
+            } else {
+                auto const intent = controller.flightIntent(0);
+                if (intent.targetValid && intent.state == EbFlightIntent::State::Tracking) {
+                    auto const view = controller.straightflyView(0);
+                    double xt = 0.;
+                    if (view.valid) {
+                        EbShipLinePolicy::Target line;
+                        line.enabled = true;
+                        line.x = view.x;
+                        line.y = view.y;
+                        line.degrees = view.degrees;
+                        line.bodySize = view.bodySize;
+                        line.reversed = view.reversed;
+                        line.sideways = view.sideways;
+                        if (auto* pl = PlayLayer::get(); pl && pl->m_player1) {
+                            xt = EbShipLinePolicy::signedCrossTrack(line, pl->m_player1->m_position.x,
+                                                                    pl->m_player1->m_position.y);
+                        }
+                    }
+                    shipLineBit = fmt::format("sf {:.0f}% xt={:+.2f}", intent.confidence * 100., xt);
+                } else
+                    shipLineBit = "sf arming";
+            }
+            controller.m_overlayText += " | " + shipLineBit;
+        }
+        if (controller.wavePatternAssistActive()) {
+            std::string waveBit;
+            if (controller.m_buffer.state == BufferState::Buffered &&
+                controller.m_buffer.wavePatternOwned) {
+                waveBit = fmt::format("wp-corr +{}", controller.m_buffer.planDelay);
+            } else if (controller.m_lastWavePatternTick >= 0 &&
+                       controller.m_attemptTick - controller.m_lastWavePatternTick <= 90) {
+                waveBit = fmt::format("wp-corr +{}", controller.m_lastWavePatternDelay);
+            } else {
+                auto const wave = controller.wavePattern(0);
+                if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
+                    waveBit = fmt::format("wp {:.0f}% {:.0f}/{:.0f}ms @{:.0f}°",
+                                          wave.confidence * 100., wave.holdSeconds * 1000.,
+                                          wave.releaseSeconds * 1000., wave.targetTravelDegrees);
+                } else if (wave.state == EbWavePatternRecognizer::State::Acquiring ||
+                           wave.state == EbWavePatternRecognizer::State::Reacquiring) {
+                    waveBit = "wp arming";
+                }
+            }
+            if (!waveBit.empty())
+                controller.m_overlayText += " | " + waveBit;
+        } else {
+            auto const wave = controller.wavePattern(0);
+            if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
+                controller.m_overlayText += fmt::format(
+                    " | wp {:.0f}% {:.0f}/{:.0f}ms @{:.0f}°", wave.confidence * 100.,
+                    wave.holdSeconds * 1000., wave.releaseSeconds * 1000., wave.targetTravelDegrees);
+            } else if (wave.state == EbWavePatternRecognizer::State::Acquiring ||
+                       wave.state == EbWavePatternRecognizer::State::Reacquiring) {
+                controller.m_overlayText += " | wp arming";
+            }
+        }
         if (EbStageConfig::triggerBake()) {
             if (EbTriggerWorldBaker::get().running()) {
                 controller.m_overlayText += fmt::format(

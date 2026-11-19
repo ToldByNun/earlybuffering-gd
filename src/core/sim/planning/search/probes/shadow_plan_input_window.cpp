@@ -4,10 +4,14 @@
 #include "../../../../../debug/assist_log.hpp"
 #include "../../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../../assist/contracts/assist_verdict.hpp"
+#include "../../../../assist/contracts/input_search_policy.hpp"
 #include "../../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../../../assist/contracts/orb_probe_order.hpp"
 #include "../../../../assist/contracts/subtick_timing.hpp"
+#include "../../../../assist/flight/flight_assist_combine.hpp"
+#include "../../../../assist/flight/ship_line_policy.hpp"
+#include "../../../../assist/flight/wave_pattern_policy.hpp"
 #include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../shadow_simulator.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -17,6 +21,7 @@
 #include "../shadow_plan_context.hpp"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <fmt/format.h>
 #include <vector>
 
@@ -85,7 +90,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
         // Adaptive→classic seed: Alive only if screen quantum AND any known
         // longer death clock are covered (AP10 — no short seed over d0 death).
-        if (delayValue >= 0 && wasSeeded(delayValue) && !context.real->m_isBird &&
+        if (delayValue >= 0 && wasSeeded(delayValue) &&
+            EbStageConfig::kindOf(context.real) != GameModeKind::Cube && !context.real->m_isBird &&
             !context.real->m_isSpider && !result.died && !unknown && result.ticksRan > 0) {
             int const quantum = std::max(1, context.options.adaptiveScreenTicks);
             return EbLivePlanContracts::adaptiveSeedCountsAlive(
@@ -198,7 +204,9 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             return false;
         }
         bool dead = candidate.raw.died;
-        bool safe = complete(candidate.raw, delayValue) || candidate.recoveryPressTick >= 0;
+        bool safe = complete(candidate.raw, delayValue) ||
+                    (candidate.recoveryPressTick >= 0 && !candidate.raw.unknown &&
+                     !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown);
         if (!safe && isDepthTruncated(candidate.raw, delayValue))
             anyDepthTruncated = true;
         if (dual && !dead) {
@@ -232,6 +240,13 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 return true;
             }
             if (!dead && !safe) {
+                if (!candidate.raw.unknown && !candidate.raw.unknownTrunc &&
+                    !candidate.raw.toggleUnknown && !context.sawToggleUnknown &&
+                    (context.wallExceeded() || context.tickBudget <= 0)) {
+                    context.plan.reason = AssistReason::PassBudget;
+                    context.plan.budgetHit = true;
+                    return false;
+                }
                 // AP4: toggle overlap → named Pass (not opaque HardUnknown).
                 context.plan.reason = (candidate.toggleUnknown || context.sawToggleUnknown)
                                           ? AssistReason::PassToggleUnknown
@@ -255,7 +270,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         bool const finished = cached.died || cached.unknown || cached.unknownTrunc ||
                               cached.toggleUnknown || cached.landedAfterAction ||
                               cached.ticksRan >= context.model.cap;
-        if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue)) {
+        if (context.candReady[index] && finished && !isDepthTruncated(cached, delayValue) &&
+            (!context.options.shipLine.enabled || cached.shipLine.samples > 0)) {
             ++context.plan.reusedCandidateCount;
             context.plan.reusedCandidateTicks += context.cands[index].raw.ticksRan;
             return context.cands[index];
@@ -278,6 +294,19 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
+    // Ordinary Cube jumps can clear the first obstacle but land on the next.
+    // Probe the configured extra horizon in the first run, so the input budget
+    // does not pay for the entire baseline twice before testing a rescue.
+    int const originalCap = context.model.cap;
+    bool const cubeTail = context.down && !dual && !context.orbHint.found && !context.spatialHint &&
+                          !context.plan.foresightOrbPad &&
+                          EbStageConfig::kindOf(context.real) == GameModeKind::Cube &&
+                          EbStageConfig::assistProbePastHorizon() && originalCap > 0;
+    context.model.stopAtCubeLanding = cubeTail && EbStageConfig::lookAheadCap() == 0 &&
+                                      EbStageConfig::paramsFor(context.real).cap == 0;
+    if (cubeTail)
+        context.model.cap += EbLivePlanContracts::kPostHorizonProbeTicks;
+
     // d0 first (unknown / hopeless gates), then shared idle spine for 1..limit.
     if (context.wallExceeded() || context.tickBudget <= 0) {
         context.plan.budgetHit = true;
@@ -299,28 +328,268 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    // Assist Pack AP-L4: dying Wave d0 + remUs below continuous reserve → do not
-    // burn the rest of the press on a full later-band endX scan; PassBudget later.
-    // Wave help-only already passes a fully proven safe immediate edge. Releases
-    // cannot claim rings. A press with orb assistance keeps its ring search.
-    bool const learnedImmediate = context.options.hybridDelay == 0 && isWave && !dual &&
-                                  (!context.down || !context.orbAssist);
-    if (learnedImmediate && context.candReady[0])
-        context.plan.hybridTried = true;
-    bool skipLaterBand = learnedImmediate && context.candReady[0] && context.cands[0].viable &&
+    // A proven immediate turn already wins Wave help-only selection. Keep
+    // press scanning when orb assistance can discover an activation window.
+    bool const waveHelpOnly = isWave && !dual && (!context.down || !context.orbAssist);
+    bool skipLaterBand = waveHelpOnly && context.candReady[0] && context.cands[0].viable &&
                          !context.cands[0].raw.died && complete(context.cands[0].raw, 0);
-    if (isWave && continuous && context.down && context.candReady[0]) {
-        auto const& d0 = context.cands[0];
-        bool const d0DeadTruth =
-            d0.raw.died && d0.raw.ticksRan > 0 && !d0.raw.unknown && !d0.raw.unknownTrunc;
-        int const laterReserve =
-            EbLivePlanContracts::prepareReserveUs(context.options.budgetUs, true);
-        bool const laterOk = EbLivePlanContracts::prepareHeavyWorkAllowed(
-            context.wallRemUs(), laterReserve, context.options.budgetUs <= 0);
-        if (EbLivePlanContracts::waveIwSkipLaterBandForStarve(d0DeadTruth, laterOk)) {
-            context.plan.budgetHit = true;
-            skipLaterBand = true;
+
+    // A completed ordinary jump needs no additional delay search. The same
+    // landing proof is used for the immediate input and delayed alternatives.
+    if (context.model.stopAtCubeLanding && context.candReady[0] && context.cands[0].viable &&
+        context.cands[0].raw.landedAfterAction && !context.cands[0].raw.died)
+        skipLaterBand = true;
+
+    // AP09: binding lane — collision on d0 outranks Ship/Wave preference; dash
+    // holds stay ordinary. Direction-change yields happen before plan().
+    EbFlightAssistCombine::EdgeContext combineCtx;
+    combineCtx.lifecycleOk = context.real != nullptr;
+    combineCtx.baselineDied =
+        context.candReady[0] && context.cands[0].viable && context.cands[0].raw.died;
+    // Wave corridor reuses options.shipLine for metrics — do not classify as Ship lane.
+    bool const waveOwns = context.options.wavePattern.enabled;
+    combineCtx.shipLineArmed = context.options.shipLine.enabled && !waveOwns;
+    combineCtx.wavePatternArmed = waveOwns;
+    combineCtx.shipTracking = combineCtx.shipLineArmed;
+    combineCtx.waveTracking = waveOwns;
+    combineCtx.shipConfidence = combineCtx.shipLineArmed ? 1. : 0.;
+    combineCtx.waveConfidence = waveOwns ? 1. : 0.;
+    combineCtx.dashHold = context.real && context.real->m_isDashing;
+    combineCtx.orbTiming = context.orbAssist && context.orbHint.found;
+    auto const combineLane = EbFlightAssistCombine::selectLaneDeterministic(
+        combineCtx, context.wallExceeded() || context.tickBudget <= 0 ? 0 : 1);
+
+    // Straightfly priority: (1) steer back onto the line by delaying the edge
+    // that moves toward it, (2) otherwise fall through to ordinary safe/threat.
+    // Research pack 20261118_231744: 246× PassD0Safe with sf 100% — cost ranking
+    // never won because ship endX is delay-invariant; steer from live cross-track.
+    if (combineLane == EbFlightAssistCombine::Lane::FlightLine &&
+        context.options.shipLine.enabled && context.candReady[0] && context.cands[0].viable &&
+        !context.cands[0].raw.died && !dual && context.real) {
+        double const liveSigned = EbShipLinePolicy::signedCrossTrack(
+            context.options.shipLine, context.real->m_position.x, context.real->m_position.y);
+        bool const edgeHelps =
+            EbShipLinePolicy::delayHelpsTowardLine(context.down, liveSigned);
+        auto const baselineMetrics = context.cands[0].raw.shipLine;
+        int selected = 0;
+        double selectedAbs = std::abs(baselineMetrics.lastSignedError);
+        if (!std::isfinite(selectedAbs) || baselineMetrics.samples <= 0)
+            selectedAbs = std::abs(liveSigned);
+        for (int probe = 1; probe <= context.limit; ++probe) {
+            if (context.wallExceeded() || context.tickBudget <= 0) {
+                context.plan.budgetHit = true;
+                break;
+            }
+            auto candidate = evaluateCandidate(probe);
+            if (candidate.raw.ticksRan == 0) {
+                context.plan.budgetHit = true;
+                break;
+            }
+            if (!ingest(probe, candidate))
+                continue;
+            if (!edgeHelps)
+                continue;
+            auto const& stored = context.cands[static_cast<size_t>(probe)];
+            if (!stored.viable || stored.raw.died || stored.activatedRing)
+                continue;
+            double candAbs = stored.raw.shipLine.samples > 0 && !stored.raw.shipLine.invalid
+                                 ? std::abs(stored.raw.shipLine.lastSignedError)
+                                 : std::numeric_limits<double>::infinity();
+            if (!std::isfinite(candAbs))
+                continue;
+            // Prefer any delay that finishes closer to the line than d0 / current best.
+            if (candAbs + .01 < selectedAbs) {
+                selected = probe;
+                selectedAbs = candAbs;
+            }
         }
+        // Sim metrics can be flat even when live cross-track is clearly off — force
+        // a survival-checked delay proportional to the live error on the helping edge.
+        if (selected <= 0 && edgeHelps && std::isfinite(liveSigned) &&
+            std::abs(liveSigned) >= .08) {
+            int guess = static_cast<int>(std::lround(std::abs(liveSigned) * 14.));
+            guess = std::clamp(guess, 1, context.limit);
+            auto tryDelay = [&](int delay) -> bool {
+                if (delay <= 0 || delay > context.limit)
+                    return false;
+                if (!context.candReady[static_cast<size_t>(delay)]) {
+                    auto candidate = evaluateCandidate(delay);
+                    if (candidate.raw.ticksRan == 0)
+                        return false;
+                    if (!ingest(delay, candidate))
+                        return false;
+                }
+                auto const& stored = context.cands[static_cast<size_t>(delay)];
+                if (!stored.viable || stored.raw.died || stored.activatedRing)
+                    return false;
+                selected = delay;
+                return true;
+            };
+            if (!tryDelay(guess)) {
+                for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {
+                    if (tryDelay(guess - delta) || tryDelay(guess + delta))
+                        break;
+                }
+            }
+        }
+        if (selected > 0 && context.options.robustJitter && !context.jitterOk(selected, -1, true))
+            selected = 0;
+        if (selected > 0) {
+            context.plan.action = PlanAction::Delay;
+            context.plan.reason = AssistReason::DelayThreat;
+            context.plan.shipLineCorrection = true;
+            context.plan.delay = context.plan.jumpTick = selected;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = true;
+            context.plan.guardOriginalDelay = selected;
+            context.plan.viableDelays = std::vector<int>{selected};
+            context.plan.dMin = context.plan.dMax = selected;
+            EbAssistLog::info(fmt::format(
+                "SHIP-LINE steer +{} liveXt={:.3f} down={} samples={} lastXt={:.3f}", selected,
+                liveSigned, context.down ? 1 : 0, baselineMetrics.samples,
+                baselineMetrics.lastSignedError));
+            context.publishLedger(selected, false, context.ledgerEarlyExit());
+            return true;
+        }
+        EbAssistLog::debug(fmt::format(
+            "SHIP-LINE fallback-safe liveXt={:.3f} helps={} samples={} lastXt={:.3f}", liveSigned,
+            edgeHelps ? 1 : 0, baselineMetrics.samples, baselineMetrics.lastSignedError));
+        // No line winner → ordinary IW safe/threat (priority 2).
+    }
+
+    // Wave pattern (AP08/AP09): (1) stay inside the average-travel corridor
+    // (Ship-like out-of-bounds strips), (2) else early-edge phase timing.
+    // Late edges Pass into ordinary IW — never invent a missing past click.
+    if (combineLane == EbFlightAssistCombine::Lane::AlternateRhythm &&
+        context.options.wavePattern.enabled && context.candReady[0] && context.cands[0].viable &&
+        !context.cands[0].raw.died && !dual && context.real) {
+        int selected = 0;
+        auto tryDelay = [&](int delay) -> bool {
+            if (delay <= 0 || delay > context.limit)
+                return false;
+            if (!context.candReady[static_cast<size_t>(delay)]) {
+                if (context.wallExceeded() || context.tickBudget <= 0) {
+                    context.plan.budgetHit = true;
+                    return false;
+                }
+                auto candidate = evaluateCandidate(delay);
+                if (candidate.raw.ticksRan == 0)
+                    return false;
+                if (!ingest(delay, candidate))
+                    return false;
+            }
+            auto const& stored = context.cands[static_cast<size_t>(delay)];
+            if (!stored.viable || stored.raw.died || stored.activatedRing)
+                return false;
+            selected = delay;
+            return true;
+        };
+
+        // Corridor steer first — keep the Wave average path inside the strips.
+        if (context.options.shipLine.enabled) {
+            double const liveSigned = EbShipLinePolicy::signedCrossTrack(
+                context.options.shipLine, context.real->m_position.x, context.real->m_position.y);
+            bool const inverted = context.real->m_isUpsideDown;
+            bool const edgeHelps =
+                EbShipLinePolicy::delayHelpsTowardLine(context.down, liveSigned, inverted);
+            auto const baselineMetrics = context.cands[0].raw.shipLine;
+            double selectedAbs = std::abs(baselineMetrics.lastSignedError);
+            if (!std::isfinite(selectedAbs) || baselineMetrics.samples <= 0)
+                selectedAbs = std::abs(liveSigned);
+            for (int probe = 1; probe <= context.limit; ++probe) {
+                if (context.wallExceeded() || context.tickBudget <= 0) {
+                    context.plan.budgetHit = true;
+                    break;
+                }
+                auto candidate = evaluateCandidate(probe);
+                if (candidate.raw.ticksRan == 0) {
+                    context.plan.budgetHit = true;
+                    break;
+                }
+                if (!ingest(probe, candidate))
+                    continue;
+                if (!edgeHelps)
+                    continue;
+                auto const& stored = context.cands[static_cast<size_t>(probe)];
+                if (!stored.viable || stored.raw.died || stored.activatedRing)
+                    continue;
+                double candAbs = stored.raw.shipLine.samples > 0 && !stored.raw.shipLine.invalid
+                                     ? std::abs(stored.raw.shipLine.lastSignedError)
+                                     : std::numeric_limits<double>::infinity();
+                if (!std::isfinite(candAbs))
+                    continue;
+                if (candAbs + .01 < selectedAbs) {
+                    selected = probe;
+                    selectedAbs = candAbs;
+                }
+            }
+            if (selected <= 0 && edgeHelps && std::isfinite(liveSigned) &&
+                std::abs(liveSigned) >= .08) {
+                int guess = static_cast<int>(std::lround(std::abs(liveSigned) * 14.));
+                guess = std::clamp(guess, 1, context.limit);
+                if (!tryDelay(guess)) {
+                    for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {
+                        if (tryDelay(guess - delta) || tryDelay(guess + delta))
+                            break;
+                    }
+                }
+            }
+            if (selected > 0 && context.options.robustJitter &&
+                !context.jitterOk(selected, -1, true))
+                selected = 0;
+            if (selected > 0) {
+                context.plan.action = PlanAction::Delay;
+                context.plan.reason = AssistReason::DelayThreat;
+                context.plan.wavePatternCorrection = true;
+                context.plan.delay = context.plan.jumpTick = selected;
+                context.plan.nowIsSafe = false;
+                context.plan.threatCleared = true;
+                context.plan.guardOriginalDelay = selected;
+                context.plan.viableDelays = std::vector<int>{selected};
+                context.plan.dMin = context.plan.dMax = selected;
+                EbAssistLog::info(fmt::format(
+                    "WAVE-CORRIDOR steer +{} liveXt={:.3f} down={} inv={}", selected, liveSigned,
+                    context.down ? 1 : 0, inverted ? 1 : 0));
+                context.publishLedger(selected, false, context.ledgerEarlyExit());
+                return true;
+            }
+        }
+
+        // Phase timing (early edges only).
+        selected = 0;
+        int const target = EbWavePatternPolicy::suggestedDelayTicks(
+            context.options.wavePattern, context.deltaTime, context.limit);
+        if (target > 0) {
+            if (!tryDelay(target)) {
+                for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {
+                    if (tryDelay(target - delta) || tryDelay(target + delta))
+                        break;
+                }
+            }
+        }
+        if (selected > 0 && context.options.robustJitter && !context.jitterOk(selected, -1, true))
+            selected = 0;
+        if (selected > 0) {
+            context.plan.action = PlanAction::Delay;
+            context.plan.reason = AssistReason::DelayThreat;
+            context.plan.wavePatternCorrection = true;
+            context.plan.delay = context.plan.jumpTick = selected;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = true;
+            context.plan.guardOriginalDelay = selected;
+            context.plan.viableDelays = std::vector<int>{selected};
+            context.plan.dMin = context.plan.dMax = selected;
+            EbAssistLog::info(fmt::format(
+                "WAVE-PATTERN steer +{} err={:+.0f}ms {} down={}", selected,
+                context.options.wavePattern.phaseErrorSeconds * 1000.,
+                context.options.wavePattern.closingHold ? "hold" : "release",
+                context.down ? 1 : 0));
+            context.publishLedger(selected, false, context.ledgerEarlyExit());
+            return true;
+        }
+        EbAssistLog::debug(fmt::format(
+            "WAVE-PATTERN fallback-safe target={} err={:+.0f}ms", target,
+            context.options.wavePattern.phaseErrorSeconds * 1000.));
     }
 
     // Orb scans already measured a reachable activation band. Verify that band
@@ -392,11 +661,12 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         }
     }
 
-    int savedCapForProbe = context.model.cap;
-    bool keepExtendedCapForBand = false;
-    bool ranHorizonProbe = false;
-    if (!skipLaterBand && !verifiedAlternative && !continuous && context.candReady[0] &&
-        context.down && context.plan.reason != AssistReason::PassHardUnknown &&
+    int const savedCapForProbe = originalCap;
+    bool keepExtendedCapForBand = cubeTail;
+    bool ranHorizonProbe = cubeTail;
+    if (!cubeTail && !skipLaterBand && !verifiedAlternative && !continuous &&
+        context.candReady[0] && context.down &&
+        context.plan.reason != AssistReason::PassHardUnknown &&
         context.plan.reason != AssistReason::PassToggleUnknown && context.tickBudget > 0 &&
         !context.wallExceeded()) {
         auto const& c0probe = context.cands[0];
@@ -503,16 +773,23 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     // prefix scan spends the wall on early flaps that hit the same obstacle.
     // Keep the existing horizon and unknown checks for every candidate.
     bool const isCube = context.real && EbStageConfig::kindOf(context.real) == GameModeKind::Cube;
-    bool const turnRescue = context.real &&
-                            (((context.real->m_isBird || context.real->m_isBall ||
-                               context.real->m_isSpider || isCube) &&
-                              context.down) ||
-                             isWave) &&
-                            !dual && !context.orbHint.found && !context.spatialHint &&
-                            !context.plan.foresightOrbPad && context.limit > 1 &&
-                            context.candReady[0] && context.cands[0].raw.died &&
-                            !context.cands[0].raw.unknown && !context.cands[0].raw.unknownTrunc &&
-                            !context.cands[0].raw.toggleUnknown;
+    bool const turnRescue =
+        context.real && !dual && !context.orbHint.found && !context.spatialHint &&
+        !context.plan.foresightOrbPad && context.candReady[0] &&
+        EbInputSearchPolicy::needsRescue(context.cands[0].raw.died,
+                                         context.cands[0].raw.unknown ||
+                                             context.cands[0].raw.unknownTrunc ||
+                                             context.cands[0].raw.toggleUnknown,
+                                         context.cands[0].raw.diedBeforeAction, context.limit);
+    // For an imminent, observed Wave collision, verify enough time for the
+    // next steering input. Apply only to the automatic horizon and ordinary
+    // solo turns. An explicit horizon still verifies its full requested depth.
+    bool const localWaveTurn =
+        turnRescue && isWave && context.limit <= 8 && context.cands[0].raw.deathTick >= 0 &&
+        context.cands[0].raw.deathTick <= context.limit &&
+        EbStageConfig::paramsFor(context.real).cap == 0 && EbStageConfig::lookAheadCap() == 0;
+    if (localWaveTurn)
+        context.model.cap = std::min(context.model.cap, std::max(24, context.limit + 16));
     if (turnRescue && !learnedRescue) {
         int idleBoundary = -1;
         int const middle = std::max(1, context.limit / 2);
@@ -597,10 +874,10 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                     }
                 }
             }
-            // A delayed release may clear this corner and still need the player's
-            // next press. Verify that continuation rather than assuming it works.
+            // Either Wave edge can clear a corner and still need the opposite
+            // player input. Verify that continuation rather than assuming it works.
             auto const& baseline = context.cands[0].raw;
-            if (isWave && !context.down && !context.useTrajEngine && candidate.raw.died &&
+            if (isWave && !context.useTrajEngine && candidate.raw.died &&
                 !candidate.raw.diedBeforeAction && !candidate.raw.unknown &&
                 !candidate.raw.unknownTrunc && !candidate.raw.toggleUnknown && baseline.died) {
                 for (int lead : {8, 12, 16}) {
@@ -610,19 +887,31 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                         continue;
                     if (context.wallExceeded() || context.tickBudget <= 0)
                         break;
-                    auto recovery = context.runEngine(context.real, probe, nextPress - probe,
-                                                      context.zone.valid ? &context.zone : nullptr);
+                    auto recoveryModel = context.model;
+                    bool const automatic = EbStageConfig::paramsFor(context.real).cap == 0 &&
+                                           EbStageConfig::lookAheadCap() == 0;
+                    int const escapeFloor = std::max(candidate.raw.deathTick + 2, nextPress + 17);
+                    if (automatic)
+                        recoveryModel.cap = escapeFloor;
+                    auto recovery = context.simulator.runOne(
+                        context.layer, context.real, context.down, probe, context.limit,
+                        context.deltaTime, context.firstDt, recoveryModel, nextPress - probe,
+                        context.zone.valid ? &context.zone : nullptr, &context.tickBudget);
                     context.simulator.resetCaptureForNextRun(context.layer);
                     ++context.plan.candidatesTried;
                     if (context.simulator.planWallHit())
                         context.plan.budgetHit = true;
-                    if (complete(recovery, probe)) {
+                    if (EbLivePlanContracts::waveTurnVerified(
+                            recovery.died,
+                            recovery.unknown || recovery.unknownTrunc || recovery.toggleUnknown,
+                            recovery.ticksRan, std::max(escapeFloor, recoveryModel.cap))) {
                         candidate.recoveryPressTick = nextPress;
                         break;
                     }
                 }
             }
-            if (!ingest(probe, candidate) || (!isWave && bestDelay > 0))
+            if (!ingest(probe, candidate) ||
+                (bestDelay > 0 && (!isWave || waveHelpOnly || localWaveTurn)))
                 break;
         }
         if (subtickRescue && bestDelay < 0 && idleBoundary > 0 && !context.wallExceeded() &&
@@ -636,7 +925,8 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         // Refine toward the earliest fully verified flap. Keep the verified
         // rescue if the remaining wall expires during refinement.
         int const rescueDelay = bestDelay;
-        for (int earlier = 1; !isWave && rescueDelay > 0 && earlier < rescueDelay; ++earlier) {
+        for (int earlier = 1; !isWave && !isCube && rescueDelay > 0 && earlier < rescueDelay;
+             ++earlier) {
             if (context.wallExceeded() || context.tickBudget <= 0) {
                 context.plan.budgetHit = true;
                 break;
@@ -648,7 +938,7 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
                 break;
             }
         }
-        if (!isWave && bestDelay > 0)
+        if ((!isWave || waveHelpOnly || localWaveTurn) && bestDelay > 0)
             skipLaterBand = true;
     }
 

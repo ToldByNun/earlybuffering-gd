@@ -8,21 +8,25 @@
 // int can append a unit suffix ("px", …).
 class EbSlider {
 public:
+    static void cancelEditing();
+
     // Returns true when *value changed.
     static bool drawFloat(char const* id, char const* label, float* value, float minValue,
                           float maxValue, int decimals = 1, char const* suffix = "F",
-                          bool enabled = true, char const* tooltip = nullptr);
+                          bool enabled = true, char const* tooltip = nullptr, float step = 0.f);
 
     static bool drawInt(char const* id, char const* label, int* value, int minValue, int maxValue,
-                        char const* suffix = "", bool enabled = true,
-                        char const* tooltip = nullptr);
+                        char const* suffix = "", bool enabled = true, char const* tooltip = nullptr,
+                        int step = 1);
 
     // Tooltip defaults to the setting's mod.json description.
     static bool drawFloatSetting(char const* key, char const* label, float minValue, float maxValue,
-                                 int decimals = 1, char const* suffix = "F", bool enabled = true);
+                                 int decimals = 1, char const* suffix = "F", bool enabled = true,
+                                 float step = 0.f);
 
     static bool drawIntSetting(char const* key, char const* label, int64_t minValue,
-                               int64_t maxValue, char const* suffix = "", bool enabled = true);
+                               int64_t maxValue, char const* suffix = "", bool enabled = true,
+                               int step = 1);
 
 private:
     EbSlider() = delete;

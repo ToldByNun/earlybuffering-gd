@@ -3,6 +3,7 @@
 #include "../../debug/assist_log.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "../sim/sim_trust.hpp"
+#include <algorithm>
 #include <cmath>
 
 EbHybridLearning& EbHybridLearning::get() {
@@ -18,8 +19,15 @@ void EbHybridLearning::open(std::filesystem::path path) {
     m_path = std::move(path);
     settingsChanged();
 }
+void EbHybridLearning::applyCapacityLimits() {
+    m_model.setMaxUniqueKeys(maxUniqueKeys);
+    m_model.setMaxActionsPerSpot(maxActionsPerSpot);
+    m_model.setUcbCoefficient(ucbCoefficient);
+    m_model.setNeighborBleed(neighborBleed);
+}
 void EbHybridLearning::settingsChanged() {
     boundary(false);
+    applyCapacityLimits();
     if (m_path.empty() || m_loaded || !enabled())
         return;
     m_model.load(m_path);
@@ -30,7 +38,7 @@ void EbHybridLearning::close() {
     m_path.clear();
     m_loaded = false;
     m_model.reset();
-    edges = observations = tried = confirmed = drift = 0;
+    edges = observations = tried = confirmed = drift = verifyUpdates = 0;
     boundary(false);
 }
 void EbHybridLearning::reset() {
@@ -38,7 +46,7 @@ void EbHybridLearning::reset() {
         return;
     m_loaded = true;
     m_model.reset();
-    edges = observations = tried = confirmed = drift = 0;
+    edges = observations = tried = confirmed = drift = verifyUpdates = 0;
     boundary(false);
     save();
 }
@@ -54,9 +62,58 @@ void EbHybridLearning::boundary(bool newAttempt) {
     m_lastTick.fill(-1);
     m_interval.fill(-1);
     m_previousInterval.fill(-1);
+    m_trace = {};
+    m_traceWrite = 0;
+    m_traceCount = 0;
     m_pending = false;
     if (newAttempt)
         m_model.nextAttempt();
+}
+void EbHybridLearning::pushTrace(EbHybridObservation const& edge) {
+    if (!edge.key || edge.delay < 0)
+        return;
+    m_trace[static_cast<size_t>(m_traceWrite)] = edge;
+    m_traceWrite = (m_traceWrite + 1) % static_cast<int>(m_trace.size());
+    m_traceCount = std::min(static_cast<int>(m_trace.size()), m_traceCount + 1);
+}
+void EbHybridLearning::creditEligibility(int tick) {
+    int const depth = std::clamp(eligibilitySteps, 0, static_cast<int>(m_trace.size()));
+    if (depth <= 0)
+        return;
+    for (int step = 1; step <= depth && step <= m_traceCount; ++step) {
+        int const index =
+            (m_traceWrite - step + static_cast<int>(m_trace.size())) % static_cast<int>(m_trace.size());
+        auto const& prior = m_trace[static_cast<size_t>(index)];
+        if (!prior.key || !prior.delivered || prior.delay < 0)
+            continue;
+        int const priorAge = tick - prior.tick;
+        if (tick < prior.tick || priorAge > prior.horizon)
+            continue;
+        // Decaying credit: most recent prior edge gets a softer death penalty.
+        int const soft = std::max(-2, -deathPenalty + step - 1);
+        if (!soft)
+            continue;
+        feedback(prior, soft, priorAge, 0, false);
+        ++observations;
+    }
+}
+int EbHybridLearning::shapeReward(EbHybridObservation const& edge, int reward, int deathAge,
+                                  bool survivedBaseline) const {
+    if (!reward)
+        return 0;
+    int shaped = reward == 1 ? survivalReward : reward;
+    if (shaped > 0) {
+        // Prefer tighter delays among ordinary survivals; rescues keep full credit.
+        if (shaped == survivalReward && edge.delay > 8)
+            shaped = std::max(1, shaped - (edge.delay > 16 ? 1 : 0));
+        if (survivedBaseline && edge.delay > 0)
+            shaped = std::max(shaped, 3);
+        return std::clamp(shaped, 1, 3);
+    }
+    // Early death right after the assisted fire is stronger negative evidence.
+    if (deathAge >= 0 && edge.delivered && deathAge <= edge.delay + 4)
+        shaped = std::max(-4, shaped - 1);
+    return std::clamp(shaped, -4, -1);
 }
 void EbHybridLearning::edge(bool player1, int tick, bool down) {
     if (!enabled() || !m_loaded)
@@ -102,6 +159,7 @@ int EbHybridLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
                               EbPlanOptions const& options) {
     if (!enabled() || !m_loaded || dt <= 0.f)
         return -1;
+    applyCapacityLimits();
     int slot = player1 ? 0 : 1;
     auto& edge = m_edges[slot];
     auto kind = EbStageConfig::kindOf(player);
@@ -186,6 +244,39 @@ int EbHybridLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
         edge.hint =
             m_model.proposal(edge.coarseKey, std::max(minimumAttempts, coarseAttempts), limit);
     return edge.hint;
+}
+std::vector<int> EbHybridLearning::rankedVerifyDelays(int limit) const {
+    if (!enabled() || !m_loaded)
+        return {};
+    // Prefer the path key from the last prepare(); fall back to coarse if needed.
+    for (auto const& edge : m_edges) {
+        if (!edge.key)
+            continue;
+        auto ranked = m_model.rankedDelays(edge.key, minimumAttempts, limit, true);
+        if (!ranked.empty())
+            return ranked;
+        if (edge.coarseKey) {
+            ranked = m_model.rankedDelays(edge.coarseKey, std::max(minimumAttempts, coarseAttempts),
+                                         limit, true);
+            if (!ranked.empty())
+                return ranked;
+        }
+    }
+    return {};
+}
+void EbHybridLearning::noteVerifyOutcome(int delay, bool verifiedSafe) {
+    if (!enabled() || !m_loaded || delay < 0)
+        return;
+    applyCapacityLimits();
+    for (auto const& edge : m_edges) {
+        if (!edge.key)
+            continue;
+        m_model.noteProbeOutcome(edge.key, delay, verifiedSafe);
+        if (edge.coarseKey)
+            m_model.noteProbeOutcome(edge.coarseKey, delay, verifiedSafe);
+        ++verifyUpdates;
+        return;
+    }
 }
 void EbHybridLearning::vanilla(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
                                int tick, float dt) {
@@ -284,6 +375,7 @@ void EbHybridLearning::death(bool player1, int tick) {
         ++observations;
         ++deaths;
         lastDeathAge = tick - edge.tick;
+        creditEligibility(tick);
     }
     boundary(false);
 }
@@ -298,11 +390,19 @@ void EbHybridLearning::feedback(EbHybridObservation const& edge, int reward, int
     e.timingPhase = edge.phaseBin;
     e.inputSequenceSignature = edge.sequence;
     e.verifiedRescueCount = reward == 3 && survivedBaseline && edge.delay > 0 && edge.delivered;
-    m_model.observe(edge.key, edge.delay, reward == 1 ? survivalReward : reward,
-                    trackOutcomes ? &e : nullptr);
+    int const applied = shapeReward(edge, reward, deathAge, survivedBaseline);
+    m_model.observe(edge.key, edge.delay, applied, trackOutcomes ? &e : nullptr);
     if (edge.coarseKey)
-        m_model.observe(edge.coarseKey, edge.delay, reward == 1 ? survivalReward : reward,
-                        trackOutcomes ? &e : nullptr);
+        m_model.observe(edge.coarseKey, edge.delay, applied, trackOutcomes ? &e : nullptr);
+    if (applied > 0 && edge.delivered)
+        pushTrace(edge);
+    // Survivals at 1t and 4t should lift 2t/3t so Hybrid can verify the band.
+    if (bridgeInterpolate && applied > 0) {
+        m_model.bridgeBetweenSurvivors(edge.key, 96, minimumAttempts);
+        if (edge.coarseKey)
+            m_model.bridgeBetweenSurvivors(edge.coarseKey, 96,
+                                           std::max(minimumAttempts, coarseAttempts));
+    }
 }
 void EbHybridLearning::freeze(bool value) {
     boundary(false);
@@ -316,4 +416,10 @@ std::vector<EbHybridModel::Inspection> EbHybridLearning::inspect() const {
 }
 int EbHybridLearning::familiar() const {
     return m_model.familiar();
+}
+int EbHybridLearning::uniqueKeys() const {
+    return m_model.uniqueKeyCount();
+}
+unsigned EbHybridLearning::totalPulls() const {
+    return m_model.totalPulls();
 }

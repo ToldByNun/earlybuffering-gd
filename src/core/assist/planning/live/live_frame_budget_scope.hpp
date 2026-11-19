@@ -11,6 +11,7 @@ public:
     EbLiveFrameBudgetScope(EbLiveFrameBudgetScope const&) = delete;
     EbLiveFrameBudgetScope& operator=(EbLiveFrameBudgetScope const&) = delete;
 
+    static int frameLimit(int configuredUs);
     int remaining(int limitUs) const;
     int spentBeforeUs() const;
     std::uint64_t frame() const;

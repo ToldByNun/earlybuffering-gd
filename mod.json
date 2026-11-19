@@ -1266,6 +1266,34 @@
 			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
+		"show-straightfly": {
+			"type": "bool",
+			"name": "Visualize Straightfly",
+			"description": "Draws the acquired Straight Flight target line and body-width corridor once intent is Tracking. Cyan = predicted line; opacity follows confidence. Off = no draw cost.",
+			"default": false
+		},
+		"show-wave-pattern": {
+			"type": "bool",
+			"name": "Visualize Wave Pattern",
+			"description": "When a Wave hold/release pattern is locked, draws the predicted zigzag path and upcoming click edges (amber path, bright next-click markers). Not a straight corridor — shows the next clicks / wave lane. Off = no draw cost.",
+			"default": false
+		},
+		"wave-angle-snap": {
+			"type": "int",
+			"name": "Flight Angle Snap (deg)",
+			"description": "Ship straightfly and Wave pattern locks snap travel heading onto this degree grid (0 / 10 / 20…). 0 = continuous (locked line still stays stable — small mistakes do not rewrite it). Example: 10 means straight, +10°, +20°, never in-between. For Wave, also retargets hold/release duty to match the snapped heading.",
+			"default": 0,
+			"min": 0,
+			"max": 45
+		},
+		"ship-room-of-error": {
+			"type": "float",
+			"name": "Flight Room of Error",
+			"description": "How wide the Ship/Wave flight corridor is (the two outer strips). 1.0 ≈ one body width from the center line. Higher = more room before the assist yields the lock; lower = tighter line. Also scales the visualized corridor band. Wave uses the locked average-travel heading.",
+			"default": 1.1,
+			"min": 0.4,
+			"max": 3.0
+		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",
@@ -1295,6 +1323,13 @@
 			"name": "UI",
 			"description": "In-level overlay, pause chrome, classic Geode settings menu, accent color, and light diagnostics."
 		},
+		"background-material": { "type": "string", "name": "Background Material", "default": "{}", "description": "Desktop game backdrop configuration." },
+		"sidebar-material": { "type": "string", "name": "Sidebar Material", "default": "{}", "description": "Desktop sidebar material configuration." },
+        "ui-render-quality": {"type":"string","default":"High","one-of":["Low","Balanced","High"],"name":"Shader Quality","description":"Desktop shader quality. Low uses half resolution and 17 blur samples per pass. Balanced uses 75% resolution and 33 samples. High uses full resolution and 65 samples. Background Render Scale multiplies this resolution. Desktop shader controls are unavailable in the classic mobile interface."},
+        "desktop-ui-scale": {"type":"string","default":"100%","one-of":["75%","100%","125%","150%"],"name":"UI Scale","description":"Scale the entire desktop interface, including text and controls. Automatically fits smaller viewports."},
+        "ui-preserve-accent": {"type":"bool","default":false,"name":"Preserve Accent Color","description":"Keep the selected accent brightness for the sidebar and accent-derived controls while Automatic Contrast continues adjusting panel text. Colored elements may fall below the target contrast."},
+        "ui-auto-contrast": {"type":"bool","default":true,"name":"Automatic Contrast","description":"Adjust accent shades and panel text for readability."},
+        "ui-contrast-target": {"type":"float","default":4.5,"min":4.5,"max":7.0,"name":"Text Contrast Target","description":"Requested normal-text contrast ratio. Opening fades and disabled states can fall below the target."},
 		"desktop-accent-color": {
 			"type": "color",
 			"name": "Accent Color",
@@ -1322,7 +1357,7 @@
 		"desktop-classic-settings": {
 			"type": "bool",
 			"name": "Classic Settings Menu",
-			"description": "Desktop only. On = open the classic Geode settings popup (Pause EB / menu hotkey). Off = use the ImGui desktop menu. Android/iOS always use classic.",
+			"description": "On = open the classic Geode settings popup from Pause EB. Off = use ImGui on Windows, macOS and Android. iOS currently uses classic.",
 			"default": false
 		},
 		"debug-logging": {
@@ -1741,6 +1776,7 @@
 	"resources": {
 		"files": [
 			"resources/cues/*.mp3",
+			"resources/liquid_glass_license.txt",
 			"resources/fonts/Inter-Regular.ttf",
 			"resources/fonts/Inter-SemiBold.ttf"
 		],

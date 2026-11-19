@@ -1,15 +1,16 @@
 #include "eb_keybind.hpp"
+#include "../../../core/platform/ui_capabilities.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
+#include "../../../core/bundle/config_bundle_codec.hpp"
 #include "../desktop_menu_bind.hpp"
 #include "../desktop_menu_fonts.hpp"
 #include "../desktop_menu_motion.hpp"
 #include "../desktop_menu_theme.hpp"
 #include "../desktop_menu_tooltip.hpp"
-#include "../../../core/bundle/config_bundle_codec.hpp"
-#include <imgui.h>
 #include <algorithm>
+#include <imgui.h>
 #include <string>
 
 class EbKeybindState {
@@ -99,7 +100,7 @@ public:
     // Live KeyboardInputEvent does the same. Storage + match must use that form or
     // listenForKeybindSettingPresses will miss the bind (close-only / open-broken).
     static geode::KeyboardModifier geodeNormalizeMods(cocos2d::enumKeyCodes key,
-                                                     geode::KeyboardModifier mods) {
+                                                      geode::KeyboardModifier mods) {
         geode::KeyboardModifier out = mods;
         if (key == cocos2d::KEY_LeftShift || key == cocos2d::KEY_RightShift ||
             key == cocos2d::KEY_Shift) {
@@ -117,8 +118,7 @@ public:
     }
 
     static bool isBindableKey(cocos2d::enumKeyCodes key) {
-        if (key == cocos2d::KEY_None || key == cocos2d::KEY_Unknown ||
-            key == cocos2d::KEY_Escape) {
+        if (key == cocos2d::KEY_None || key == cocos2d::KEY_Unknown || key == cocos2d::KEY_Escape) {
             return false;
         }
         if (isMouseKey(key)) {
@@ -445,8 +445,8 @@ public:
         ImVec4 stroke = EbDesktopMenuTheme::outline();
         stroke.w = enabled ? 0.7f : 0.4f;
         if (enabled) {
-            ImVec4 hot = capturing ? EbDesktopMenuTheme::accentLight()
-                                   : ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
+            ImVec4 hot =
+                capturing ? EbDesktopMenuTheme::accentLight() : ImVec4(0.55f, 0.57f, 0.66f, 0.95f);
             if (capturing) {
                 hot.w = 0.9f;
             }
@@ -462,8 +462,8 @@ public:
             if (EbKeybindState::unsupportedUntil() > 0.0f) {
                 valueColor = EbDesktopMenuTheme::danger();
             } else {
-                valueColor = EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::accentLight(),
-                                                       heat);
+                valueColor =
+                    EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::accentLight(), heat);
             }
         } else {
             valueColor = EbDesktopMenuMotion::lerp4(valueColor, EbDesktopMenuTheme::text(), heat);
@@ -471,15 +471,15 @@ public:
         ImVec2 const valueSize = ImGui::CalcTextSize(display.c_str());
         float const valueMaxX = fieldMax.x - (binds->empty() || capturing ? kFieldPadX : kClearW);
         drawList->PushClipRect(fieldMin, ImVec2(valueMaxX, fieldMax.y), true);
-        drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                          ImVec2(fieldMin.x + kFieldPadX,
-                                 fieldMin.y + (fieldH - valueSize.y) * 0.5f),
-                          EbDesktopMenuTheme::toU32(valueColor), display.c_str());
+        drawList->AddText(
+            ImGui::GetFont(), ImGui::GetFontSize(),
+            ImVec2(fieldMin.x + kFieldPadX, fieldMin.y + (fieldH - valueSize.y) * 0.5f),
+            EbDesktopMenuTheme::toU32(valueColor), display.c_str());
         drawList->PopClipRect();
 
         if (enabled && !binds->empty() && !capturing) {
-            ImVec4 clearColor = EbDesktopMenuMotion::lerp4(
-                EbDesktopMenuTheme::muted(), EbDesktopMenuTheme::text(), heat);
+            ImVec4 clearColor = EbDesktopMenuMotion::lerp4(EbDesktopMenuTheme::muted(),
+                                                           EbDesktopMenuTheme::text(), heat);
             ImVec2 const clearSize = ImGui::CalcTextSize("×");
             drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                               ImVec2(fieldMax.x - kClearW * 0.5f - clearSize.x * 0.5f,
@@ -532,6 +532,8 @@ bool EbKeybind::draw(char const* id, char const* label, std::vector<geode::Keybi
 }
 
 bool EbKeybind::drawSetting(char const* key, char const* label, bool enabled) {
+    if (!EbUiCapabilities::keybindUI())
+        return false;
     if (!key || key[0] == '\0') {
         return false;
     }
@@ -592,6 +594,8 @@ bool EbKeybind::draw(char const* id, char const* label, std::vector<geode::Keybi
 }
 
 bool EbKeybind::drawSetting(char const* key, char const* label, bool enabled) {
+    if (!EbUiCapabilities::keybindUI())
+        return false;
     (void)key;
     (void)label;
     (void)enabled;

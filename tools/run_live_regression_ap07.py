@@ -14,6 +14,11 @@ class LiveRegressionGate:
         common = ["src/core/assist/contracts/live_plan_contracts.cpp",
                   "src/core/assist/contracts/assist_verdict.cpp"]
         cases = {
+            "ship_line_policy": ["src/core/assist/flight/ship_line_policy.cpp"],
+            "flight_intent": ["src/core/assist/flight/flight_intent.cpp"],
+            "flight_measurement": ["src/core/assist/flight/flight_measurement.cpp"],
+            "input_reconciler": ["src/core/assist/input/input_reconciler.cpp"],
+            "input_search_policy": ["src/core/assist/contracts/input_search_policy.cpp"],
             "hybrid_model": ["src/core/learning/hybrid_model.cpp", "src/core/learning/hybrid_observation.cpp"],
             "assist_mode_migration": ["src/config/assist_mode_migration.cpp"],
             "config_keys": ["src/core/bundle/config_bundle_keys.cpp"],
@@ -32,6 +37,7 @@ class LiveRegressionGate:
             "spider_continuation": ["src/core/sim/planning/spider_continuation.cpp"],
             "capture_index": ["src/core/sim/world/capture_index_key.cpp"],
             "trigger_motion": ["src/core/trigger_world/trigger_motion_anchor.cpp"],
+            "cube_landing": ["src/core/sim/planning/cube_landing_tracker.cpp"],
             "cube_rescue": [],
             "ufo_rescue": [],
         }

@@ -13,6 +13,16 @@ public:
     public:
         ImVec2 min{};
         ImVec2 max{};
+        bool background = false;
+        float renderScale = 1.f;
+        bool glass = false;
+        float refraction = 12.f, highlight = 0.3f, edgeWidth = 20.f;
+        bool blur = false;
+        float classic = 1.f;
+        float alpha = 1.f;
+        float blurRadius = 8.f;
+        float opacity = 0.7f;
+        float tint = 0.35f;
         float timeSeconds = 0.0f;
         float rounding = 0.0f;
         ImDrawFlags cornerFlags = ImDrawFlags_RoundCornersLeft;
@@ -26,7 +36,7 @@ public:
     static bool ensureReady();
     static bool isAvailable();
 
-    // Queue a GPU wave draw for this ImDrawList (clip + callback + state reset).
+    // Render the wave to its FBO before ImGui::Render, then append a clipped image.
     static void paint(ImDrawList* drawList, PaintRequest const& request);
 
 private:

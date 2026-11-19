@@ -40,6 +40,10 @@ bool EbStageConfigImplementation::s_cachedSafeMode = false;
 bool EbStageConfigImplementation::s_cachedShowOverlay = true;
 bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
 bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
+bool EbStageConfigImplementation::s_cachedShowStraightfly = false;
+bool EbStageConfigImplementation::s_cachedShowWavePattern = false;
+int EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees = 0;
+float EbStageConfigImplementation::s_cachedShipRoomOfError = 1.1f;
 bool EbStageConfigImplementation::s_cachedShowBakePath = false;
 bool EbStageConfigImplementation::s_cachedShowPauseBake = true;
 bool EbStageConfigImplementation::s_cachedShowPauseHub = true;
@@ -445,6 +449,22 @@ bool EbStageConfig::lagWarningToast() {
 bool EbStageConfig::showTrajectory() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowTrajectory;
+}
+bool EbStageConfig::showStraightfly() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowStraightfly;
+}
+bool EbStageConfig::showWavePattern() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowWavePattern;
+}
+int EbStageConfig::flightAngleSnapDegrees() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees;
+}
+float EbStageConfig::shipRoomOfError() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShipRoomOfError;
 }
 bool EbStageConfig::showBakePath() {
     return false;

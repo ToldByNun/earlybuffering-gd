@@ -47,6 +47,26 @@ int SelectedTickRegression::run() {
             failures += EbSelectedTickGuard::choose(selected, limit, 3, nominal) != selected;
         }
     }
+    // A margin must fit inside the current configured window even if a
+    // caller supplies proof ticks collected under a larger prior window.
+    for (int limit = 3; limit <= 96; ++limit) {
+        std::array const staleBand{limit - 1, limit, limit + 1};
+        failures += EbSelectedTickGuard::choose(limit - 2, limit, 3, staleBand) != -1;
+    }
+    // Exhaust the truth flags at both sides of the observation boundary.
+    for (int flags = 0; flags < 16; ++flags) {
+        for (int ticks : {0, 1, 23, 24, 25}) {
+            bool const died = flags & 1;
+            bool const unknown = flags & 2;
+            bool const landed = flags & 4;
+            bool const clear = flags & 8;
+            auto const result =
+                EbSelectedTickGuard::classifyProbe(died, unknown, landed, ticks, 24, clear);
+            bool const verified = result == EbSelectedTickGuard::ProbeState::Verified;
+            failures +=
+                verified != (!died && !unknown && ticks > 0 && (landed || ticks >= 24) && clear);
+        }
+    }
     std::cout << "Selected tick regression: " << failures << " failures" << '\n';
     return failures ? 1 : 0;
 }
