@@ -1,9 +1,9 @@
-"""Minimal GDR2 reader matching libGDR / EbReplayImport (classic Jump-only packing)."""
+"""Minimal GDR2 reader/writer matching libGDR / EbReplayImport (classic Jump packing)."""
 
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 
@@ -34,6 +34,7 @@ class Gdr2Replay:
     level_name: str
     deaths: list[int]
     inputs: list[Gdr2Input]
+    extension: bytes = field(default_factory=bytes)
 
 
 class _Reader:
@@ -81,6 +82,46 @@ class _Reader:
         return bool(self.varint())
 
 
+class _Writer:
+    def __init__(self) -> None:
+        self._buf = bytearray()
+
+    def raw(self, data: bytes) -> None:
+        self._buf.extend(data)
+
+    def varint(self, value: int) -> None:
+        if value < 0:
+            raise ValueError("negative varint")
+        if value == 0:
+            self._buf.append(0)
+            return
+        while value > 0:
+            byte = value & 0x7F
+            value >>= 7
+            if value > 0:
+                byte |= 0x80
+            self._buf.append(byte)
+
+    def string(self, text: str) -> None:
+        data = text.encode("utf-8")
+        if len(data) > 0xFFFF:
+            raise ValueError("string too long")
+        self.varint(len(data))
+        self.raw(data)
+
+    def f32(self, value: float) -> None:
+        self.raw(struct.pack(">f", float(value)))
+
+    def f64(self, value: float) -> None:
+        self.raw(struct.pack(">d", float(value)))
+
+    def boolean(self, value: bool) -> None:
+        self.varint(1 if value else 0)
+
+    def finish(self) -> bytes:
+        return bytes(self._buf)
+
+
 def parse_gdr2(path: Path) -> Gdr2Replay:
     data = path.read_bytes()
     reader = _Reader(data)
@@ -105,7 +146,7 @@ def parse_gdr2(path: Path) -> Gdr2Replay:
     level_name = reader.string()
 
     extension_size = reader.varint()
-    reader.take(extension_size)
+    extension = reader.take(extension_size)
 
     death_count = reader.varint()
     deaths: list[int] = []
@@ -132,8 +173,8 @@ def parse_gdr2(path: Path) -> Gdr2Replay:
         frame = delta + previous
         player2 = remaining_p1 == 0
         if input_tag:
-            extension = reader.varint()
-            reader.take(extension)
+            ext_size = reader.varint()
+            reader.take(ext_size)
         inputs.append(Gdr2Input(frame=frame, button=button, player2=player2, down=down))
         previous = frame
         if remaining_p1 > 0:
@@ -146,7 +187,7 @@ def parse_gdr2(path: Path) -> Gdr2Replay:
     if reader.remaining() != 0:
         raise ValueError(f"trailing {reader.remaining()} bytes after inputs")
 
-    inputs.sort(key=lambda item: item.frame)
+    inputs.sort(key=lambda item: (item.frame, item.player2, item.button, 0 if item.down else 1))
     return Gdr2Replay(
         version=version,
         input_tag=input_tag,
@@ -165,4 +206,73 @@ def parse_gdr2(path: Path) -> Gdr2Replay:
         level_name=level_name,
         deaths=deaths,
         inputs=inputs,
+        extension=extension,
+    )
+
+
+def export_gdr2(replay: Gdr2Replay, path: Path) -> None:
+    writer = _Writer()
+    writer.raw(b"GDR")
+    writer.varint(replay.version)
+    writer.string(replay.input_tag)
+    writer.string(replay.author)
+    writer.string(replay.description)
+    writer.f32(replay.duration)
+    writer.varint(replay.game_version)
+    writer.f64(replay.framerate if replay.framerate > 0 else 240.0)
+    writer.varint(replay.seed)
+    writer.varint(replay.coins)
+    writer.boolean(replay.ldm)
+    writer.boolean(replay.platformer)
+    writer.string(replay.bot_name)
+    writer.varint(replay.bot_version)
+    writer.varint(replay.level_id)
+    writer.string(replay.level_name)
+
+    extension = replay.extension or b""
+    writer.varint(len(extension))
+    writer.raw(extension)
+
+    writer.varint(len(replay.deaths))
+    previous = 0
+    for death in replay.deaths:
+        writer.varint(death - previous)
+        previous = death
+
+    inputs = sorted(
+        replay.inputs, key=lambda item: (item.frame, item.player2, item.button, 0 if item.down else 1)
+    )
+    p1 = [item for item in inputs if not item.player2]
+    p2 = [item for item in inputs if item.player2]
+    writer.varint(len(inputs))
+    writer.varint(len(p1))
+
+    def write_stream(stream: list[Gdr2Input]) -> None:
+        previous_frame = 0
+        for item in stream:
+            delta = item.frame - previous_frame
+            if delta < 0:
+                raise ValueError("input stream not sorted")
+            if replay.platformer:
+                packed = (delta << 3) | ((item.button & 3) << 1) | (1 if item.down else 0)
+            else:
+                packed = (delta << 1) | (1 if item.down else 0)
+            writer.varint(packed)
+            if replay.input_tag:
+                writer.varint(0)
+            previous_frame = item.frame
+
+    write_stream(p1)
+    write_stream(p2)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(writer.finish())
+
+
+def clone_replay(replay: Gdr2Replay, inputs: list[Gdr2Input] | None = None) -> Gdr2Replay:
+    return replace(
+        replay,
+        inputs=list(inputs if inputs is not None else replay.inputs),
+        deaths=list(replay.deaths),
+        extension=bytes(replay.extension),
     )

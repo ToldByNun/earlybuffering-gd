@@ -209,9 +209,15 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/sync_real_corpus.py
 !/tools/test_real_corpus_import.py
+!/tools/shift_replay.py
+!/tools/test_shift_replay.py
+!/tools/build_verifier_safe.py
+!/tools/build_physics_safe.py
 !/tools/real_assist/
 !/tools/real_assist/__init__.py
 !/tools/real_assist/gdr2.py
+!/tools/real_assist/shift.py
+!/tools/real_assist/oracle.py
 !/tools/fixtures/real_corpus/
 !/tools/fixtures/real_corpus/README.md
 !/tools/fixtures/real_corpus/manifest.json

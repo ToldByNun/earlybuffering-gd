@@ -46,3 +46,18 @@ python tools/test_real_corpus_import.py
 ```
 
 In-game: Dev → **Reproduce Gold Clears**, or `geode run` with `EB_REAL_ASSIST_AUTO=1` (optional `EB_REAL_ASSIST_CASE=<id>`).
+
+## APR1 — Shifts + dual oracles
+
+```bat
+python tools/shift_replay.py
+python tools/test_shift_replay.py
+python tools/build_verifier_safe.py --id cataclysm --family pulse-shift-early-2
+python tools/build_physics_safe.py  --id cataclysm --family pulse-shift-early-2
+```
+
+- Derived variants land under `derived/<id>/` (gitignored) with `.gdr2` + `.sidecar.json`
+- Families: `on-time`, `pulse-shift-*-k`, `edge-only-*-k` (k=1..8), `drop-click`
+- Sidecar records shifted indices, hold lengths, and **pre_shifted_press** capture contract
+- Oracle builders **refuse** unless `reproduce=pass`; offline they only emit `pending-probe` docs
+- **PhysicsSafeSet** = acceptance ground truth; **VerifierSafeSet** = diagnostic only
