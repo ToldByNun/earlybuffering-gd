@@ -28,7 +28,7 @@ int EbSelectedTickGuard::choose(int selected, int limit, int radius,
         return selected;
     for (int distance = 1; distance <= std::clamp(radius, 1, 3); ++distance) {
         int const later = selected + distance;
-        if (later <= limit && hasMargin(later, verified))
+        if (later < limit && hasMargin(later, verified))
             return later;
         int const earlier = selected - distance;
         if (earlier > 0 && hasMargin(earlier, verified))

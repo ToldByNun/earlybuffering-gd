@@ -195,6 +195,10 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
 
         // Visual
         {"show-trajectory", SettingsCategory::Visual},
+        {"show-straightfly", SettingsCategory::Visual},
+        {"show-wave-pattern", SettingsCategory::Visual},
+        {"wave-angle-snap", SettingsCategory::Visual},
+        {"ship-room-of-error", SettingsCategory::Visual},
         {"save-feedback-sound", SettingsCategory::Visual},
         {"save-feedback-color", SettingsCategory::Visual},
         {"save-feedback-counter", SettingsCategory::Visual},
@@ -202,6 +206,13 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
 
         // UI — chrome + accent + light diagnostics
         {"title-ui", SettingsCategory::UI},
+        {"ui-render-quality", SettingsCategory::UI},
+        {"desktop-ui-scale", SettingsCategory::UI},
+        {"ui-preserve-accent", SettingsCategory::UI},
+        {"ui-auto-contrast", SettingsCategory::UI},
+        {"ui-contrast-target", SettingsCategory::UI},
+        {"background-material", SettingsCategory::UI},
+        {"sidebar-material", SettingsCategory::UI},
         {"desktop-accent-color", SettingsCategory::UI},
         {"show-overlay", SettingsCategory::UI},
         {"lag-warning-toast", SettingsCategory::UI},

@@ -56,9 +56,18 @@ set(LIBGDR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 CPMAddPackage("gh:maxnut/GDReplayFormat#d8d2f0b1193a46cdf47b413dc832616dd052b6a9")
 target_link_libraries(${PROJECT_NAME} libGDR)
 
-# Desktop ImGui (Windows + macOS only). Android/iOS never fetch or link imgui-cocos.
+# Shared ImGui shell: desktop and Android. iOS input integration remains pending.
 set(EB_DESKTOP_IMGUI OFF)
-if (WIN32)
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE EB_UI_IOS=1)
+elseif (ANDROID)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE EB_UI_ANDROID=1)
+elseif (WIN32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE EB_UI_WINDOWS=1)
+elseif (APPLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE EB_UI_MACOS=1)
+endif()
+if (WIN32 OR ANDROID)
     set(EB_DESKTOP_IMGUI ON)
 elseif (APPLE AND NOT ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS))
     set(EB_DESKTOP_IMGUI ON)
@@ -68,8 +77,34 @@ if (EB_DESKTOP_IMGUI)
     set(IMGUI_HOOK_EARLY OFF CACHE BOOL "" FORCE)
     set(IMGUI_VERSION "v1.92.4" CACHE STRING "" FORCE)
     CPMAddPackage("gh:matcool/gd-imgui-cocos#934958c68b1f050a8976d893584fa71368c1df1f")
+    if (ANDROID)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_ILL_HANDLE_TOUCHES=1)
+        # Render Android through our scene overlay. Keep upstream input hooks,
+        # but disable its director render calls to guarantee one draw per visit.
+        file(READ "${gd-imgui-cocos_SOURCE_DIR}/src/hooks.cpp" EB_ANDROID_IMGUI_HOOKS)
+        string(REPLACE "inst.drawFrame();" "(void)inst;" EB_ANDROID_IMGUI_HOOKS "${EB_ANDROID_IMGUI_HOOKS}")
+        file(WRITE "${EB_GENERATED_DIR}/android_imgui_hooks.cpp" "${EB_ANDROID_IMGUI_HOOKS}")
+        file(READ "${gd-imgui-cocos_SOURCE_DIR}/src/backend.cpp" EB_ANDROID_IMGUI_BACKEND)
+        string(REPLACE "if (auto pos = geode::cocos::getMousePos(); !pos.isZero())"
+            "if (auto pos = geode::cocos::getMousePos(); false)"
+            EB_ANDROID_IMGUI_BACKEND "${EB_ANDROID_IMGUI_BACKEND}")
+        string(REPLACE
+            "auto& buffer = ImGui::GetInputTextState(ImGui::GetFocusID())->TextA;"
+            "auto* state = ImGui::GetInputTextState(ImGui::GetFocusID()); if (!state) { m_text.clear(); return m_text.c_str(); } auto& buffer = state->TextA;"
+            EB_ANDROID_IMGUI_BACKEND "${EB_ANDROID_IMGUI_BACKEND}")
+        file(WRITE "${EB_GENERATED_DIR}/android_imgui_backend.cpp" "${EB_ANDROID_IMGUI_BACKEND}")
+        get_target_property(EB_IMGUI_SOURCES imgui-cocos INTERFACE_SOURCES)
+        list(FILTER EB_IMGUI_SOURCES EXCLUDE REGEX "/src/hooks\.cpp$")
+        list(FILTER EB_IMGUI_SOURCES EXCLUDE REGEX "/src/backend\.cpp$")
+        set_property(TARGET imgui-cocos PROPERTY INTERFACE_SOURCES "${EB_IMGUI_SOURCES}")
+        target_sources(${PROJECT_NAME} PRIVATE "${EB_GENERATED_DIR}/android_imgui_hooks.cpp"
+            "${EB_GENERATED_DIR}/android_imgui_backend.cpp")
+    endif()
     target_link_libraries(${PROJECT_NAME} imgui-cocos)
     target_compile_definitions(${PROJECT_NAME} PRIVATE EB_DESKTOP_IMGUI=1)
+    if (WIN32 OR (APPLE AND NOT IOS AND NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "iOS"))
+        target_compile_definitions(${PROJECT_NAME} PRIVATE EB_DESKTOP_MATERIALS=1)
+    endif()
     message(STATUS "EarlyBuffer: desktop ImGui enabled (gd-imgui-cocos)")
 else()
     message(STATUS "EarlyBuffer: desktop ImGui disabled (non-desktop target)")

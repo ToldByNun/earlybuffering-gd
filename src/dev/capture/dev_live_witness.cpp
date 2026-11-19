@@ -181,7 +181,7 @@ uint64_t EbDevLiveWitness::computePlayerBlobSchema() {
 }
 
 void EbDevLiveWitness::setCategory(EbDevLiveWitness& w, DevWitnessCategory candidate,
-                                 DevWitnessStatus status, uint64_t digest) {
+                                   DevWitnessStatus status, uint64_t digest) {
     for (auto& e : w.categories) {
         if (e.category == candidate) {
             e.status = status;
@@ -197,7 +197,7 @@ void EbDevLiveWitness::setCategory(EbDevLiveWitness& w, DevWitnessCategory candi
 }
 
 DevWitnessStatus EbDevLiveWitness::categoryStatus(EbDevLiveWitness const& w,
-                                                DevWitnessCategory candidate) {
+                                                  DevWitnessCategory candidate) {
     for (auto const& e : w.categories) {
         if (e.category == candidate)
             return e.status;
@@ -324,7 +324,7 @@ bool EbDevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {
 }
 
 uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player,
-                                                float radiusX) {
+                                                  float radiusX) {
     if (!layer || !player || !layer->m_objectLayer || radiusX <= 0.f)
         return 0;
     auto* children = layer->m_objectLayer->getChildren();
@@ -351,8 +351,8 @@ uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject
         float half = object->getContentSize().width * std::fabs(object->getScaleX()) * 0.5f;
         if (half < 8.f)
             half = 8.f;
-        height = EbDevLiveWitnessImplementation::fnv1aMix(height,
-                                                        static_cast<uint64_t>(object->m_uniqueID));
+        height = EbDevLiveWitnessImplementation::fnv1aMix(
+            height, static_cast<uint64_t>(object->m_uniqueID));
         height = EbDevLiveWitnessImplementation::fnv1aMix(
             height, static_cast<uint64_t>(static_cast<int>(object->m_objectType)));
         long long const xUs = static_cast<long long>(std::llround(objectX * 100.0));
@@ -368,7 +368,7 @@ uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject
 }
 
 void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
-                                        PlayerObject* player, float radiusX) {
+                                          PlayerObject* player, float radiusX) {
     w.hazards.clear();
     w.hasHazards = false;
     if (!layer || !player || radiusX <= 0.f)
@@ -409,7 +409,7 @@ void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
             consider(EbSectionObjectWalk::asGameObject(children->objectAtIndex(index)));
         }
     }
-    EbSectionObjectWalk::forEachInSections(layer, consider);
+    EbSectionObjectWalk::forEachOwnedObject(layer, consider);
 
     std::sort(found.begin(), found.end(), [](EbDevHazardSnap const& a, EbDevHazardSnap const& b) {
         if (a.dist2 != b.dist2)
@@ -437,7 +437,7 @@ void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
 }
 
 void EbDevLiveWitness::captureHitboxSnap(EbDevLiveWitness& w, PlayLayer* layer,
-                                       PlayerObject* player) {
+                                         PlayerObject* player) {
     w.hitbox = {};
     w.hasHitbox = false;
     if (!player)
@@ -476,9 +476,9 @@ void EbDevLiveWitness::captureHitboxSnap(EbDevLiveWitness& w, PlayLayer* layer,
 }
 
 EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* player,
-                                       PlayerObject* player2, EbSimPlan const& plan,
-                                       EbDevClockContract::Stamp const& clock, int effectTick,
-                                       bool freezeWorld) {
+                                           PlayerObject* player2, EbSimPlan const& plan,
+                                           EbDevClockContract::Stamp const& clock, int effectTick,
+                                           bool freezeWorld) {
     EbDevLiveWitness w;
     w.freezeWorld = freezeWorld;
     w.playerBlobSchema = EbDevLiveWitness::computePlayerBlobSchema();

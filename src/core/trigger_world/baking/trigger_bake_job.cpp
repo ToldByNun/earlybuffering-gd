@@ -38,19 +38,14 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
 
         if (owner.m_phase == EbTriggerWorldBaker::Phase::WaitObjects) {
             auto* layer = owner.m_layer;
-            size_t children = 0;
-            if (layer && layer->m_objectLayer) {
-                if (auto* ch = layer->m_objectLayer->getChildren()) {
-                    children = static_cast<size_t>(ch->count());
-                }
-            }
-            bool const hasSections = layer && !layer->m_sections.empty();
+            auto* objects = EbSectionObjectWalk::objectArray(layer);
+            size_t const children = objects ? objects->count() : 0;
             ++owner.m_waitSlices;
             owner.m_progress =
                 0.02f *
                 std::min(1.f, static_cast<float>(owner.m_waitSlices) /
                                   static_cast<float>(EbTriggerWorldBaker::kMaxWaitObjectSlices));
-            if (children > 0 || hasSections) {
+            if (children > 0) {
                 owner.m_childCount = children;
                 owner.m_childIndex = 0;
                 owner.m_objects.clear();
@@ -78,25 +73,19 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
 
         if (owner.m_phase == EbTriggerWorldBaker::Phase::Collect) {
             auto* layer = owner.m_layer;
-            if (!layer || !layer->m_objectLayer) {
-                owner.m_phase = EbTriggerWorldBaker::Phase::CollectSections;
-                owner.m_secOuter = 0;
-                owner.m_secInner = 0;
-                owner.m_secSlot = 0;
-                continue;
-            }
-            auto* children = layer->m_objectLayer->getChildren();
+            auto* children = EbSectionObjectWalk::objectArray(layer);
             if (!children) {
+                owner.m_collectIncomplete = true;
                 owner.m_phase = EbTriggerWorldBaker::Phase::CollectSections;
-                owner.m_secOuter = 0;
-                owner.m_secInner = 0;
-                owner.m_secSlot = 0;
                 continue;
             }
+            if (!layer->m_objects || children->count() < owner.m_childCount)
+                owner.m_collectIncomplete = true;
+            size_t const available = std::min(owner.m_childCount, size_t(children->count()));
 
             // Collect must finish every child across slices (no skip on budget).
             size_t count = 0;
-            while (owner.m_childIndex < owner.m_childCount &&
+            while (owner.m_childIndex < available &&
                    count < EbTriggerWorldBaker::kCollectPerSlice && !budgetHit()) {
                 auto* object = geode::prelude::typeinfo_cast<GameObject*>(
                     children->objectAtIndex(static_cast<unsigned>(owner.m_childIndex)));
@@ -111,7 +100,7 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
                                           : 1.f;
             owner.m_progress = 0.12f * collectFrac;
 
-            if (owner.m_childIndex >= owner.m_childCount) {
+            if (owner.m_childIndex >= available) {
                 owner.m_phase = EbTriggerWorldBaker::Phase::CollectSections;
                 owner.m_secOuter = 0;
                 owner.m_secInner = 0;
@@ -121,58 +110,10 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
         }
 
         if (owner.m_phase == EbTriggerWorldBaker::Phase::CollectSections) {
-            auto* layer = owner.m_layer;
-            if (!layer) {
-                owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
-                owner.m_effectIndex = 0;
-                continue;
-            }
-
-            auto& sections = layer->m_sections;
-            size_t count = 0;
-            while (count < EbTriggerWorldBaker::kCollectPerSlice && !budgetHit()) {
-                if (owner.m_secOuter >= sections.size()) {
-                    owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
-                    owner.m_effectIndex = 0;
-                    if (owner.m_sectionExtras > 0) {
-                        EbAssistLog::debug(fmt::format(
-                            "TRIGGER-WORLD: section collect +{} objects (total objs={} effects={})",
-                            owner.m_sectionExtras, owner.m_objects.size(), owner.m_effects.size()));
-                    }
-                    break;
-                }
-                auto* mid = sections[owner.m_secOuter];
-                // Never raw typeinfo_cast on section slots — poison / tagged
-                // garbage AVs (read @ -1). Same filter as EbSectionObjectWalk.
-                if (!EbSectionObjectWalk::pointerLooksLive(mid) ||
-                    owner.m_secInner >= mid->size()) {
-                    ++owner.m_secOuter;
-                    owner.m_secInner = 0;
-                    owner.m_secSlot = 0;
-                    continue;
-                }
-                auto* inner = (*mid)[owner.m_secInner];
-                if (!EbSectionObjectWalk::pointerLooksLive(inner) ||
-                    owner.m_secSlot >= inner->size()) {
-                    ++owner.m_secInner;
-                    owner.m_secSlot = 0;
-                    continue;
-                }
-                auto* rawData = (*inner)[owner.m_secSlot];
-                ++owner.m_secSlot;
-                ++count;
-                size_t const before = owner.m_seenIds.size();
-                owner.considerCollectedObject(EbSectionObjectWalk::asGameObject(rawData));
-                if (owner.m_seenIds.size() > before) {
-                    ++owner.m_sectionExtras;
-                }
-            }
-
-            owner.m_progress =
-                0.12f + 0.03f * (sections.empty()
-                                     ? 1.f
-                                     : std::min(1.f, static_cast<float>(owner.m_secOuter) /
-                                                         static_cast<float>(sections.size())));
+            // m_objects already owns the level objects, including objects absent
+            // from the visible object layer. Never cast non-owning section slots.
+            owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
+            owner.m_effectIndex = 0;
             continue;
         }
 

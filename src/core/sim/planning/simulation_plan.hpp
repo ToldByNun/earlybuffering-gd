@@ -4,6 +4,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../assist/contracts/assist_verdict.hpp"
+#include "../../assist/flight/wave_pattern_policy.hpp"
 #include "simulation_candidate.hpp"
 #include <Geode/Geode.hpp>
 #include <chrono>
@@ -34,6 +35,8 @@ private:
 //      CPU as permission to grow Max Assist or Prediction Horizon.
 class EbPlanOptions {
 public:
+    EbShipLinePolicy::Target shipLine;
+    EbWavePatternPolicy::Target wavePattern;
     float capMul = 1.f;
     int maxBranches = 4;
     int budgetUs = 4000;   // soft cap; tick budget is primary
@@ -104,6 +107,8 @@ private:
 
 class EbSimPlan {
 public:
+    bool shipLineCorrection = false;
+    bool wavePatternCorrection = false;
     int hybridHint = -1;
     bool hybridTried = false;
     bool fixedFireTick = false;

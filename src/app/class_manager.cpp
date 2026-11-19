@@ -1,8 +1,8 @@
 #include "class_manager.hpp"
+#include "../core/bake/bake_scheduler.hpp"
 #include "class_registry.hpp"
 #include "level_lifecycle.hpp"
 #include "module_bindings.hpp"
-#include "../core/bake/bake_scheduler.hpp"
 
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_controller.hpp"
@@ -55,8 +55,9 @@ void EbClassManager::initialize() {
     // Commit 2 LOCK: freeze GhostParityProbe ε before any runtime / PlanGold probe.
     EbAssistContracts140::applyLockedEps();
     EbAssistLog::info(fmt::format("AssistContracts140 LOCK schema={} corpus={} eps=({:.0f},{:.0f})",
-                                EbAssistContracts140::kSchema, EbAssistContracts140::kCorpusLabel,
-                                EbAssistContracts140::kLockedEpsX, EbAssistContracts140::kLockedEpsY));
+                                  EbAssistContracts140::kSchema, EbAssistContracts140::kCorpusLabel,
+                                  EbAssistContracts140::kLockedEpsX,
+                                  EbAssistContracts140::kLockedEpsY));
     if (EbStageConfig::perfTrace()) {
         EbAssistLog::info(fmt::format("PerfTrace logging to {}", EbPerfTrace::logPath()));
     }
@@ -64,9 +65,8 @@ void EbClassManager::initialize() {
         EbAssistLog::info(fmt::format("LagProbe logging to {}", EbLagProbe::logPath()));
     }
 
-
     EbAssistLog::info(fmt::format("Class registry: {} classes / {} managed services",
-        EbClassRegistry::all().size(), EbClassRegistry::serviceCount()));
+                                  EbClassRegistry::all().size(), EbClassRegistry::serviceCount()));
     runStartupChecks();
     EbModuleBindings::registerSettings();
     m_initialized = true;
@@ -85,7 +85,6 @@ void EbClassManager::refreshSettings() {
     EbDevConfig::refreshCache();
     this->syncDiagnostics();
     EbAssistController::get().updateOverlay();
-
 }
 
 void EbClassManager::runStartupChecks() {
@@ -121,8 +120,6 @@ void EbClassManager::runStartupChecks() {
         else
             EbAssistLog::info(fmt::format("WARN {}", report));
     }
-
-
 }
 
 void EbClassManager::onLevelInit(PlayLayer* layer) {
@@ -140,7 +137,10 @@ void EbClassManager::resetAttempt(PlayLayer* layer) {
 }
 
 void EbClassManager::beforeLevelReset(PlayLayer* layer) {
-    if (!layer || m_quitting)
+    // setupHasCompleted calls resetLevel before this PlayLayer is registered.
+    // Addresses may match a previously destroyed layer, so host pointer equality
+    // alone cannot authorize touching its old ghost nodes.
+    if (!layer || m_quitting || m_level != layer)
         return;
     {
         EbLagProbe::Scope const scope("eb.bakeCancel");

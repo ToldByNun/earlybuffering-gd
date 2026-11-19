@@ -1,13 +1,18 @@
 #include "desktop_menu_shell.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
+#include "desktop_menu.hpp"
+#include "desktop_menu_background.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
 #include "desktop_menu_icons.hpp"
 #include "desktop_menu_motion.hpp"
 #include "desktop_menu_panels.hpp"
+#include "desktop_menu_sidebar_material.hpp"
 #include "desktop_menu_sidebar_smoke.hpp"
 #include "desktop_menu_theme.hpp"
 #include "desktop_menu_tooltip.hpp"
 #include "widgets/eb_keybind.hpp"
+#include "widgets/eb_slider.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -174,7 +179,6 @@ public:
         for (int index = 0; index < EbDesktopMenuShellState::kTrailCount; ++index) {
             trail[index] = center;
         }
-        EbDesktopMenuShellState::dragging() = false;
     }
 
     static void updateOpen(float deltaTime) {
@@ -205,6 +209,7 @@ public:
             EbDesktopMenuShellState::closing() = true;
             EbDesktopMenuShellState::closeElapsed() = 0.0f;
             EbDesktopMenuShellState::closeStartVisual() = visual;
+            EbDesktopMenuShellState::dragging() = false;
             clearTrailToCenter();
         }
 
@@ -232,6 +237,7 @@ public:
         if (next == prev || next == SettingsCategory::Count) {
             return;
         }
+        EbSlider::cancelEditing();
         int const from = static_cast<int>(prev);
         int const to = static_cast<int>(next);
         EbDesktopMenuShellState::tabDir() = to >= from ? 1 : -1;
@@ -326,14 +332,16 @@ public:
         }
         ImVec2 const min(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
         ImVec2 const max(center.x + size.x * 0.5f, center.y + size.y * 0.5f);
-        ImVec4 bg = EbDesktopMenuTheme::bg();
+        // Give the entire silhouette the same visible trail material. A separate
+        // accent sidebar made the near-black content trail disappear visually.
+        ImVec4 const base = EbDesktopMenuTheme::bg();
+        ImVec4 const accent = EbDesktopMenuTheme::accent();
+        ImVec4 bg = EbDesktopMenuMotion::lerp4(base, accent, 0.28f);
         bg.w = alpha;
         drawList->AddRectFilled(min, max, EbDesktopMenuTheme::toU32(bg), rounding);
-        ImVec4 side = EbDesktopMenuTheme::sidebarBg();
-        side.w = alpha * 0.85f;
-        drawList->AddRectFilled(min, ImVec2(min.x + EbDesktopMenuShellState::kSidebarWidth, max.y),
-                                EbDesktopMenuTheme::toU32(side), rounding,
-                                ImDrawFlags_RoundCornersLeft);
+        ImVec4 edge = EbDesktopMenuTheme::accentLight();
+        edge.w = alpha * 0.8f;
+        drawList->AddRect(min, max, EbDesktopMenuTheme::toU32(edge), rounding, 0, 1.f);
     }
 
     static void drawSidebarNav(ImVec2 const& origin, float width) {
@@ -378,6 +386,8 @@ public:
                                                  SettingsCategory::Visual, SettingsCategory::UI,
                                                  SettingsCategory::Keys};
         for (SettingsCategory category : settingsTabs) {
+            if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
+                continue;
             bool const selected = EbDesktopMenuShellState::active() == category;
             if (navTab(EbInLevelSettingsFilter::categoryName(category), selected, tabWidth)) {
                 EbDesktopMenuShellAnim::beginTabSwitch(category);
@@ -409,7 +419,8 @@ public:
             ImVec2(EbDesktopMenuShellState::kContentPadX, EbDesktopMenuShellState::kContentPadY));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 8.0f));
         // Hide bar via size 0 — keep scroll extent (NoScrollbar can clip last rows).
-        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize,
+                            EbUiCapabilities::mobileLayout() ? 20.f : 0.f);
         // AlwaysUseWindowPadding: borderless children ignore WindowPadding otherwise,
         // so the section card would fill the tab 1:1 with no bg gutter.
         ImGui::BeginChild("##eb-shell-tab", ImVec2(width, height),
@@ -472,10 +483,39 @@ public:
         if (scrolled) {
             EbDesktopMenuShell::requestDismissFloatingPopups();
         }
-        ImGui::SetScrollY(EbDesktopMenuShellState::scrollVisual());
+        if (EbUiCapabilities::mobileLayout()) {
+            EbDesktopMenuShellState::scrollTarget() = ImGui::GetScrollY();
+            EbDesktopMenuShellState::scrollVisual() = ImGui::GetScrollY();
+        } else {
+            ImGui::SetScrollY(EbDesktopMenuShellState::scrollVisual());
+        }
 
         SettingsCategory const active = EbDesktopMenuShellState::active();
         EbDesktopMenuPanels::draw(active);
+        // Keep a small, persistent position cue in the unused outer gutter.
+        // Draw-list geometry adds neither layout height nor an input target.
+        float const scrollMax = ImGui::GetScrollMaxY();
+        if (scrollMax > 1.f && !EbUiCapabilities::mobileLayout()) {
+            ImVec2 const windowPos = ImGui::GetWindowPos();
+            float const inset = EbDesktopMenuShellState::kContentPadY;
+            float const trackHeight = std::max(1.f, height - inset * 2.f);
+            float const visibleFraction = height / (height + scrollMax);
+            float const thumbHeight =
+                std::min(trackHeight, std::max(24.f, trackHeight * visibleFraction));
+            float const progress = std::clamp(ImGui::GetScrollY() / scrollMax, 0.f, 1.f);
+            float const x = windowPos.x + width - 10.f;
+            float const top = windowPos.y + inset;
+            float const thumbTop = top + (trackHeight - thumbHeight) * progress;
+            ImVec4 track = EbDesktopMenuTheme::outline();
+            track.w = 0.45f;
+            ImVec4 thumb = EbDesktopMenuTheme::accentLight();
+            thumb.w = 0.85f;
+            auto* draw = ImGui::GetWindowDrawList();
+            draw->AddRectFilled(ImVec2(x, top), ImVec2(x + 3.f, top + trackHeight),
+                                EbDesktopMenuTheme::toU32(track), 1.5f);
+            draw->AddRectFilled(ImVec2(x, thumbTop), ImVec2(x + 3.f, thumbTop + thumbHeight),
+                                EbDesktopMenuTheme::toU32(thumb), 1.5f);
+        }
         // No extra end Dummy — AlwaysUseWindowPadding already mirrors top kContentPadY
         // at the bottom. (Old Dummy(pad+24) made the scrolled-end gutter ~2× the top.)
 
@@ -513,6 +553,7 @@ public:
             return;
         }
 
+        EbDesktopMenuBackground::paint(openE);
         ImGuiIO const& io = ImGui::GetIO();
         ImVec2 const screenCenter(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
         ImVec2 const winSize(EbDesktopMenuShellState::kMenuWidth,
@@ -548,7 +589,8 @@ public:
             EbDesktopMenuShellState::targetCenter().y - EbDesktopMenuShellState::visualCenter().y);
         float const driftLen = std::sqrt(drift.x * drift.x + drift.y * drift.y);
         // Never draw trail ghosts while closing — they felt like an end hitch.
-        bool const showTrail = EbDesktopMenuShellState::wantOpen() &&
+        bool const showTrail = !EbUiCapabilities::mobileLayout() &&
+                               EbDesktopMenuShellState::wantOpen() &&
                                (EbDesktopMenuShellState::dragging() || driftLen > 2.5f);
 
         ImVec2* trail = EbDesktopMenuShellState::trail();
@@ -623,12 +665,15 @@ public:
 
         ImVec2 const sideMin = winPos;
         ImVec2 const sideMax(winPos.x + sideW, winPos.y + winSize.y);
-        EbDesktopMenuSidebarSmoke::get().paint(drawList, sideMin, sideMax, rounding,
-                                               static_cast<float>(ImGui::GetTime()),
-                                               ImDrawFlags_RoundCornersLeft);
+        EbDesktopMenuSidebarMaterial::paint(drawList, sideMin, sideMax, rounding);
 
         drawSidebarNav(sideMin, sideW);
         drawSidebarFooter(sideMin, sideW, winSize.y);
+        if (EbUiCapabilities::mobileLayout()) {
+            ImGui::SetCursorScreenPos(ImVec2(sideMin.x + 16.f, sideMin.y + winSize.y - 100.f));
+            if (ImGui::Button("Close", ImVec2(sideW - 32.f, 40.f)))
+                EbDesktopMenu::setOpen(false);
+        }
 
         float const tabE = EbDesktopMenuShellState::tabVisual();
         float const tabSlide = (1.0f - tabE) *
@@ -662,6 +707,8 @@ SettingsCategory EbDesktopMenuShell::activeCategory() {
 }
 
 void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
+    if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
+        category = SettingsCategory::Main;
     EbDesktopMenuShellAnim::beginTabSwitch(category);
 }
 

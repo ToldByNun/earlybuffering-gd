@@ -21,45 +21,34 @@ bool EbSectionObjectWalk::pointerLooksLive(void const* valuePointer) {
     return true;
 }
 
-GameObject* EbSectionObjectWalk::asGameObject(void* rawData) {
-    if (!pointerLooksLive(rawData))
+GameObject* EbSectionObjectWalk::asGameObject(cocos2d::CCObject* object) {
+    if (!pointerLooksLive(object))
         return nullptr;
-    // void* is not polymorphic — cast through CCObject* then typeinfo_cast.
-    // Poison / null-page already rejected above so vtable read is safe enough.
-    auto* asCc = reinterpret_cast<cocos2d::CCObject*>(rawData);
-    return geode::prelude::typeinfo_cast<GameObject*>(asCc);
+    return geode::prelude::typeinfo_cast<GameObject*>(object);
 }
 
-int EbSectionObjectWalk::forEachInSections(GJBaseGameLayer* layer,
-                                         std::function<void(GameObject*)> const& visit) {
-    if (!layer || !visit)
+cocos2d::CCArray* EbSectionObjectWalk::objectArray(GJBaseGameLayer* layer) {
+    if (!layer)
+        return nullptr;
+    if (layer->m_objects)
+        return layer->m_objects;
+    return layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+}
+
+int EbSectionObjectWalk::forEachOwnedObject(GJBaseGameLayer* layer,
+                                            std::function<void(GameObject*)> const& visit) {
+    if (!visit)
+        return 0;
+    auto* objects = objectArray(layer);
+    if (!objects)
         return 0;
     int count = 0;
-    auto& sections = layer->m_sections;
-    size_t const outerN = sections.size();
-    for (size_t objectX = 0; objectX < outerN; ++objectX) {
-        auto* mid = sections[objectX];
-        if (!pointerLooksLive(mid))
+    for (unsigned index = 0; index < objects->count(); ++index) {
+        auto* object = asGameObject(objects->objectAtIndex(index));
+        if (!object)
             continue;
-        size_t const midN = mid->size();
-        for (size_t ix = 0; ix < midN; ++ix) {
-            if (ix >= mid->size())
-                break;
-            auto* inner = (*mid)[ix];
-            if (!pointerLooksLive(inner))
-                continue;
-            size_t const slotN = inner->size();
-            for (size_t state = 0; state < slotN; ++state) {
-                if (state >= inner->size())
-                    break;
-                auto* rawData = (*inner)[state];
-                auto* object = asGameObject(rawData);
-                if (!object)
-                    continue;
-                visit(object);
-                ++count;
-            }
-        }
+        visit(object);
+        ++count;
     }
     return count;
 }
@@ -88,10 +77,11 @@ bool EbSectionObjectWalk::selfCheck(std::string& report) {
     expect(pointerLooksLive(&stackProbe), "stack-live");
 
     expect(asGameObject(nullptr) == nullptr, "as-null");
-    expect(asGameObject(reinterpret_cast<void*>(~uintptr_t{0})) == nullptr, "as-poison");
+    expect(asGameObject(reinterpret_cast<cocos2d::CCObject*>(~uintptr_t{0})) == nullptr,
+           "as-poison");
 
     // No layer → zero visits, no crash.
-    expect(forEachInSections(nullptr, [](GameObject*) {}) == 0, "no-layer");
+    expect(forEachOwnedObject(nullptr, [](GameObject*) {}) == 0, "no-layer");
 
     if (fails == 0) {
         report = "SectionObjectWalk selfCheck OK";

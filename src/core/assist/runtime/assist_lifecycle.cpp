@@ -85,6 +85,8 @@ geode::Result<int> EbAssistLifecycle::runBakeMap(EbAssistController& controller,
 
 void EbAssistLifecycle::resetLevelProfile(EbAssistController& controller) {
     EbLevelProfile::get().resetCurrent();
+    // AP09: resetting learned data cannot leave a flight-owned pending correction.
+    controller.clearFlightOwnedPending("flight-learn-reset");
     controller.updateOverlay();
 }
 

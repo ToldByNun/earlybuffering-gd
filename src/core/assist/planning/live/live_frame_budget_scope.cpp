@@ -2,6 +2,7 @@
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <limits>
 
 long long EbLiveFrameBudgetScope::nowUs() {
@@ -22,7 +23,19 @@ EbLiveFrameBudgetScope::~EbLiveFrameBudgetScope() {
     m_budget.end(nowUs());
 }
 
+int EbLiveFrameBudgetScope::frameLimit(int configuredUs) {
+    if (configuredUs == 0)
+        return 0;
+    double interval = cocos2d::CCDirector::sharedDirector()->getAnimationInterval();
+    if (!std::isfinite(interval) || interval <= 0.)
+        interval = 1. / 240.;
+    // Reserve at least sixty percent of the target frame for the game.
+    return std::min(configuredUs, static_cast<int>(std::clamp(interval * 400000., 1., 4000.)));
+}
+
 int EbLiveFrameBudgetScope::remaining(int limitUs) const {
+    if (limitUs == 0)
+        return std::numeric_limits<int>::max();
     return m_budget.remaining(limitUs, nowUs(), kExitReserveUs);
 }
 

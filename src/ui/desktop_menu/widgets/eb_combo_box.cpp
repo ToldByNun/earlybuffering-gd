@@ -56,11 +56,11 @@ public:
     }
 
     static ImVec4 hoverFill() {
-        return ImVec4(0.18f, 0.18f, 0.24f, 1.0f);
+        return EbDesktopMenuTheme::controlFill(0.3f);
     }
 
     static ImVec4 selectedFill() {
-        return ImVec4(0.24f, 0.24f, 0.32f, 1.0f);
+        return EbDesktopMenuTheme::controlFill(0.55f);
     }
 
     static bool drawRow(char const* id, char const* label, char const* const* options,
@@ -137,7 +137,7 @@ public:
         ImVec4 stroke = EbDesktopMenuTheme::outline();
         stroke.w = enabled ? 0.7f : 0.4f;
         if (enabled) {
-            stroke = EbDesktopMenuMotion::lerp4(stroke, ImVec4(0.55f, 0.57f, 0.66f, 0.95f), heat);
+            stroke = EbDesktopMenuMotion::lerp4(stroke, EbDesktopMenuTheme::accentLight(), heat);
         }
         drawList->AddRect(fieldMin, fieldMax, EbDesktopMenuTheme::toU32(stroke), rounding, 0,
                           EbDesktopMenuTheme::outlineThickness());

@@ -26,6 +26,7 @@
 #include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../contracts/selected_tick_guard.hpp"
+#include "../../flight/flight_assist_combine.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
 #include "live_frame_budget_scope.hpp"
@@ -59,8 +60,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs =
-        EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
     auto passFrameBudget = [&]() {
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
         controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
@@ -117,7 +117,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
-    bool mustDelaySearch = learnedOpportunity > 0;
+    controller.fillShipLineOptions(learnedContext, playLayer, player);
+    controller.fillWavePatternOptions(learnedContext, playLayer, player);
+    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
+                           learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -194,7 +197,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     opts.maxBranches = 4;
     // Preserve the same explicit budget policy as press planning.
     opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
-    opts.budgetUs = EbLivePlanContracts::intendedLiveBudgetUs(opts.budgetUs);
+
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
     opts.assistEngine = EbStageConfig::effectiveAssistEngine();
@@ -214,6 +217,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
     if (opts.hybridDelay > 0)
         opts.mustDelaySearch = true;
+    opts.shipLine = learnedContext.shipLine;
+    opts.wavePattern = learnedContext.wavePattern;
+    if (opts.shipLine.enabled || opts.wavePattern.enabled)
+        opts.smartDepth = 1;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
         return passFrameBudget();
@@ -224,8 +231,64 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     auto const collisionBefore = phaseMeter.collisionTotalUs();
     auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
-    auto plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
-                                              firstDt, opts);
+    EbSimPlan plan{};
+    bool hybridWon = false;
+    auto& hybrid = EbHybridLearning::get();
+    if (hybrid.preferHybridFirst && !opts.shipLine.enabled && !opts.wavePattern.enabled &&
+        !playLayer->m_gameState.m_isDualMode) {
+        auto const order = hybrid.rankedVerifyDelays(limit);
+        for (int delayValue : order) {
+            if (delayValue < 0 || delayValue > limit)
+                continue;
+            int const remUs = frameScope.remaining(frameLimitUs);
+            if (remUs <= 0) {
+                opts.budgetUs = 0;
+                break;
+            }
+            EbPlanOptions vopts = opts;
+            vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
+            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.maxBranches = 0;
+            vopts.smartDepth = 1;
+            auto const vr = EbShadowSimulator::get().verifyDelay(
+                playLayer, player, false, delayValue, limit, controller.m_simDt, firstDt, vopts);
+            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            if (vr.budgetHit || vr.unknown)
+                continue;
+            if (!vr.ok) {
+                hybrid.noteVerifyOutcome(delayValue, false);
+                continue;
+            }
+            hybrid.noteVerifyOutcome(delayValue, true);
+            plan.hybridTried = true;
+            plan.hybridHint = opts.hybridDelay;
+            plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+            plan.fixedFireTick = true;
+            if (delayValue <= 0) {
+                plan.action = PlanAction::Pass;
+                plan.reason = AssistReason::PassNoThreat;
+                plan.nowIsSafe = true;
+                plan.delay = 0;
+            } else {
+                plan.action = PlanAction::Delay;
+                plan.reason = AssistReason::DelayThreat;
+                plan.delay = plan.jumpTick = delayValue;
+                plan.viableDelays = std::vector<int>{delayValue};
+                plan.dMin = plan.dMax = delayValue;
+                plan.guardOriginalDelay = delayValue;
+                plan.threatCleared = true;
+                plan.nowIsSafe = false;
+            }
+            hybridWon = true;
+            EbAssistLog::info(fmt::format("HYBRID-FIRST release {} d={}",
+                                          delayValue <= 0 ? "pass" : "delay", delayValue));
+            break;
+        }
+    }
+    if (!hybridWon) {
+        plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
+                                             firstDt, opts);
+    }
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
@@ -300,12 +363,19 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     }
 
     // Learning may only move to a tick already verified by this plan.
-    // Otherwise retain the exact timing selected by the planner.
-    delay = EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay, plan.viableDelays);
+    // AP09: flight/rhythm corrections keep planned on unverified / incomplete.
+    bool const flightCorr = plan.shipLineCorrection || plan.wavePatternCorrection;
+    delay = flightCorr ? EbFlightAssistCombine::guardFlightDelay(delay, plannedDelay,
+                                                                plan.viableDelays, plan.budgetHit)
+                       : EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay,
+                                                                        plan.viableDelays);
 
     controller.m_buffer = {};
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = false;
+    controller.m_buffer.shipLineOwned = opts.shipLine.enabled && plan.shipLineCorrection;
+    controller.m_buffer.wavePatternOwned =
+        opts.wavePattern.enabled && plan.wavePatternCorrection;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;
@@ -319,6 +389,16 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     controller.m_buffer.decisionX = x;
     controller.m_buffer.mode = kind;
     controller.m_buffer.fireTick = std::min(controller.m_buffer.fireTick, effectTick + limit);
+    if (controller.m_buffer.shipLineOwned) {
+        controller.m_lastShipLineDelay = delay;
+        controller.m_lastShipLineTick = effectTick;
+        EbAssistLog::info(fmt::format("SHIP-LINE release corr +{}", delay));
+    }
+    if (controller.m_buffer.wavePatternOwned) {
+        controller.m_lastWavePatternDelay = delay;
+        controller.m_lastWavePatternTick = effectTick;
+        EbAssistLog::info(fmt::format("WAVE-PATTERN release corr +{}", delay));
+    }
 
     EbAssistLog::debug(
         fmt::format("ASSIST release +{} ticks (now dies @+{}, limit {}, tick={} fire={})", delay,

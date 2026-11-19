@@ -1,6 +1,7 @@
 #ifndef SECTION_OBJECT_WALK_HPP
 #define SECTION_OBJECT_WALK_HPP
 
+#include <Geode/cocos/cocoa/CCArray.h>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -8,20 +9,22 @@
 class GameObject;
 class GJBaseGameLayer;
 
-// Poison-safe walk of GJBaseGameLayer::m_sections.
-// Section slots can hold freed / 0xFFF… entries — never typeinfo_cast those.
+// Walk the level-owned object array. Collision sections are non-owning and may
+// contain stale slots; address plausibility cannot establish object lifetime.
 class EbSectionObjectWalk {
 public:
     // Reject null, null-page, and classic poison (~0) without dereferencing.
     static bool pointerLooksLive(void const* valuePointer);
 
-    // Live check then typeinfo_cast; nullptr if unsafe or wrong type.
-    static GameObject* asGameObject(void* rawData);
+    // Caller must supply an object held by a live owning Cocos collection.
+    static GameObject* asGameObject(cocos2d::CCObject* object);
 
-    // Visit every safely cast GameObject* in m_sections (outer→mid→inner).
-    // Returns how many objects were handed to visit. Never throws on poison.
-    static int forEachInSections(GJBaseGameLayer* layer,
-                                 std::function<void(GameObject*)> const& visit);
+    static cocos2d::CCArray* objectArray(GJBaseGameLayer* layer);
+
+    // Visit the owning list, falling back to object-layer children if unavailable.
+    // Callbacks must not remove objects from the owning collection.
+    static int forEachOwnedObject(GJBaseGameLayer* layer,
+                                  std::function<void(GameObject*)> const& visit);
 
     static bool selfCheck(std::string& report);
 

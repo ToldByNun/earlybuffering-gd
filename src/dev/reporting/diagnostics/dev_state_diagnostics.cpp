@@ -28,6 +28,10 @@ std::string EbDevStateDiagnostics::buildSettings() {
     o << "assistMode=" << EbStageConfig::assistModeName(EbStageConfig::assistMode()) << "\n";
     o << "showTrajectory=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showTrajectory())
       << "\n";
+    o << "showStraightfly="
+      << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showStraightfly()) << "\n";
+    o << "showWavePattern="
+      << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showWavePattern()) << "\n";
     o << "showBakePath=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showBakePath()) << "\n";
     o << "triggerBake=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::triggerBake()) << "\n";
     o << "triggerBakeSkipDynamic="

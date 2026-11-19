@@ -21,7 +21,9 @@
 #include "../ui/settings/action_button_setting.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
+#include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
+#include "../ui/visualizers/wave_pattern_visualizer.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
 
@@ -173,6 +175,33 @@ void EbModuleBindings::registerSettings() {
         }
         EbAssistController::get().updateOverlay();
     });
+    geode::prelude::listenForSettingChanges<bool>("show-straightfly", [](bool value) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbStraightflyVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get())
+                EbStraightflyVisualizer::get().attach(pl);
+        } else {
+            EbStraightflyVisualizer::get().clear();
+        }
+        EbAssistController::get().updateOverlay();
+    });
+    geode::prelude::listenForSettingChanges<bool>("show-wave-pattern", [](bool value) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbWavePatternVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get())
+                EbWavePatternVisualizer::get().attach(pl);
+        } else {
+            EbWavePatternVisualizer::get().clear();
+        }
+        EbAssistController::get().updateOverlay();
+    });
+    watchInt("wave-angle-snap");
     watchBool("show-pause-hub");
     watchBool("lag-warning-toast");
     watchBool("auto-tune");
@@ -326,4 +355,5 @@ void EbModuleBindings::registerSettings() {
                                 "wave-latency", "robot-latency", "spider-latency", "swing-latency"};
     for (auto* id : latencyIds)
         watchFloat(id);
+    watchFloat("ship-room-of-error");
 }

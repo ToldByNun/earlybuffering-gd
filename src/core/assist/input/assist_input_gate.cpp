@@ -6,6 +6,7 @@
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
+#include <algorithm>
 #include <chrono>
 #include <string>
 
@@ -119,7 +120,9 @@ bool EbAssistInputGate::releaseGateSelfCheck(std::string& report) {
     return false;
 }
 
-int EbAssistInputGate::activeLimit(EbAssistController const& controller, PlayerObject* player) {
+int EbAssistInputGate::activeLimit(EbAssistController const&, PlayerObject* player) {
+    // Always the configured mode ticks (Main / Wave / Ship …). Ship-line and
+    // Wave-pattern must never raise Max Assist above what the user set.
     return EbStageConfig::paramsFor(player).ticks;
 }
 
@@ -130,7 +133,14 @@ bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller,
         return false;
     if (controller.cpsLimited())
         return false;
-    if (!EbStageConfig::paramsFor(player).enabled)
+    auto const kind = EbStageConfig::kindOf(player);
+    bool const modeEnabled = EbStageConfig::paramsFor(player).enabled;
+    // Straightfly viz / Dev ship-line imply Solo Ship assist even if Modes → Ship is off.
+    bool const shipLineBypass = controller.shipLineAssistActive() && kind == GameModeKind::Ship;
+    // Wave pattern viz / Dev toggle imply Solo Wave assist even if Modes → Wave is off.
+    bool const wavePatternBypass =
+        controller.wavePatternAssistActive() && kind == GameModeKind::Wave;
+    if (!modeEnabled && !shipLineBypass && !wavePatternBypass)
         return false;
     if (!(!EbAssistScopeGate::allowAssist(PlayLayer::get(), player))) {
         return true;

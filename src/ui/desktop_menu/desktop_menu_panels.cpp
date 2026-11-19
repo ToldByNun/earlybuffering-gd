@@ -2,9 +2,14 @@
 #include "../../config/assist_policy_settings.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
+#include "../pause/pause_action_bridge.hpp"
+#include "desktop_menu_background.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_dev_panel.hpp"
 #include "desktop_menu_icons.hpp"
+#include "desktop_menu_sidebar_material.hpp"
+#include "desktop_menu_theme.hpp"
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_color_picker.hpp"
@@ -93,8 +98,8 @@ public:
                 EbDropdown::drawSetting("orb-chain-verify", "Orb Chain Verify Default", policies,
                                         3);
             }
-            EbSlider::drawIntSetting("sim-budget-us", "Sim Budget", 0, 10000, "µs");
-            EbSlider::drawIntSetting("tick-budget", "Plan Tick Budget", 500, 20000);
+            EbSlider::drawIntSetting("sim-budget-us", "Sim Budget", 0, 10000, "µs", true, 100);
+            EbSlider::drawIntSetting("tick-budget", "Plan Tick Budget", 500, 20000, "", true, 100);
             EbCheckbox::drawSetting("assist-press", "Assist Presses");
             EbCheckbox::drawSetting("assist-release", "Assist Releases");
         }
@@ -154,6 +159,8 @@ public:
                 ImGui::Separator();
                 ImGui::Text("Inputs seen this visit   %d", learning.edges);
                 ImGui::Text("Local outcomes observed   %d", learning.observations);
+                ImGui::Text("Verify probe updates   %d", learning.verifyUpdates);
+                ImGui::Text("Action pulls   %u", learning.totalPulls());
                 ImGui::Text("Suggested timings chosen   %d / %d", learning.confirmed,
                             learning.tried);
                 ImGui::Text("Inputs ending an observation   %d", learning.interrupted);
@@ -179,31 +186,101 @@ public:
                 "learn-attempts", "Independent Attempts", &learning.minimumAttempts, 3, 12, "",
                 true,
                 "More attempts require stronger repeated evidence before proposing a timing.");
-            EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes);
+            if (EbSlider::drawInt("learn-max-keys", "Max Unique Keys", &learning.maxUniqueKeys, 32,
+                                  2048, "", true,
+                                  "Hard cap on distinct learned situations for this level. When "
+                                  "full, weakest old keys are dropped before new ones are kept.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            if (EbSlider::drawInt("learn-max-actions", "Max Delays Per Spot",
+                                  &learning.maxActionsPerSpot, 1, 4, "", true,
+                                  "How many different delay timings to remember for one "
+                                  "situation. Lower values keep memory tighter.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            EbCheckbox::draw(
+                "learn-bridge", "Interpolate Between Survivals", &learning.bridgeInterpolate, true,
+                "If 1t and 4t both survived, raise 2t/3t so Hybrid can try the in-between delays.");
+            EbCheckbox::draw(
+                "learn-hybrid-first", "Verify Learned First", &learning.preferHybridFirst, true,
+                "Check known Hybrid delays (best first) with Live physics before the ordinary "
+                "search. The first verified-safe learned delay wins.");
+            if (EbSlider::drawFloat("learn-ucb", "UCB Exploration", &learning.ucbCoefficient, 0.f,
+                                    4.f, 2, "", true,
+                                    "How strongly under-tried delays rise in the verify order. "
+                                    "Zero ranks by score only; higher values explore more.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            if (EbSlider::drawFloat("learn-neighbor", "Neighbor Bleed", &learning.neighborBleed, 0.f,
+                                    1.f, 2, "", true,
+                                    "Share a fraction of each reward update with delay±1 so nearby "
+                                    "timings generalize without waiting for separate attempts.") &&
+                EbHybridLearning::enabled())
+                learning.applyCapacityLimits();
+            EbSlider::drawInt(
+                "learn-eligibility", "Eligibility Trace", &learning.eligibilitySteps, 0, 4, "", true,
+                "On a local death, also soft-penalize this many recently successful delivered "
+                "timings in the same attempt (temporal credit assignment).");
+            ImGui::TextDisabled("Keys stored   %d / %d", learning.uniqueKeys(),
+                                learning.maxUniqueKeys);
+            EbCheckbox::draw("learn-outcomes", "Track outcome counts", &learning.trackOutcomes,
+                             true,
+                             "Keep separate success, failure and uncertain-outcome counts for "
+                             "learned timings. Turning this off stops collecting these extra "
+                             "details; saved evidence is retained.");
             EbCheckbox::draw("learn-phase", "Record death timing phase", &learning.trackPhase,
-                             learning.trackOutcomes);
+                             learning.trackOutcomes,
+                             "Record where within a physics tick an input happened, to help "
+                             "inspect timing-sensitive deaths. Requires Track outcome counts.");
             EbCheckbox::draw("learn-sequence", "Record recent input sequence",
-                             &learning.trackSequence, learning.trackOutcomes);
+                             &learning.trackSequence, learning.trackOutcomes,
+                             "Record a compact signature of recent presses and releases to help "
+                             "compare input patterns. Requires Track outcome counts.");
             EbSlider::drawInt("learn-death-penalty", "Local death penalty", &learning.deathPenalty,
-                              0, 4);
+                              0, 4, "", true,
+                              "How strongly an attributed local death lowers a timing score. Zero "
+                              "disables the score penalty. Higher values react faster but can "
+                              "discard useful timings when deaths have other causes.");
             EbSlider::drawInt("learn-survival-reward", "Survival reward", &learning.survivalReward,
-                              1, 3);
+                              1, 3, "", true,
+                              "How strongly an ordinary observed survival raises a timing score. "
+                              "Higher values favor successful timings sooner; survival alone does "
+                              "not prove that a delay rescued the input.");
             EbSlider::drawInt("learn-lineup-depth", "Lineup Look-Ahead", &learning.lineupDepth, 1,
                               3, " inputs", true,
                               "On familiar presses, check up to this many inputs ahead within the "
                               "current planning budget.");
-            EbSlider::drawInt("learn-bin-x", "Position X resolution", &learning.positionBinX, 16,
-                              256);
-            EbSlider::drawInt("learn-bin-y", "Position Y resolution", &learning.positionBinY, 16,
-                              256);
-            EbSlider::drawInt("learn-tps-quantum", "TPS grouping", &learning.tpsQuantum, 1, 120);
-            EbCheckbox::draw("learn-match-substep", "Distinguish sub-step inputs",
-                             &learning.matchSubstep);
+            EbSlider::drawInt(
+                "learn-bin-x", "Position X resolution", &learning.positionBinX, 16, 256, "", true,
+                "Width of each horizontal position group in level units. Smaller values "
+                "distinguish nearby timings; larger values share evidence across a wider area.");
+            EbSlider::drawInt(
+                "learn-bin-y", "Position Y resolution", &learning.positionBinY, 16, 256, "", true,
+                "Height of each vertical position group in level units. Smaller values separate "
+                "paths more precisely; larger values make moving paths easier to recognize again.");
+            EbSlider::drawInt("learn-tps-quantum", "TPS grouping", &learning.tpsQuantum, 1, 120, "",
+                              true,
+                              "Group physics rates in steps of this many ticks per second. Larger "
+                              "groups tolerate small rate differences; smaller groups keep "
+                              "different physics rates separate.");
+            EbCheckbox::draw(
+                "learn-match-substep", "Distinguish sub-step inputs", &learning.matchSubstep, true,
+                "Keep inputs from shortened physics steps separate from full-step inputs. More "
+                "precise matching can reduce how often a learned pattern is recognized.");
             EbCheckbox::draw("learn-match-intervals", "Distinguish input intervals",
-                             &learning.matchIntervals);
-            EbCheckbox::draw("learn-coarse", "Continuous mode fallback", &learning.coarseFallback);
-            EbSlider::drawInt("learn-coarse-attempts", "Fallback independent attempts",
-                              &learning.coarseAttempts, 3, 12, "", learning.coarseFallback);
+                             &learning.matchIntervals, true,
+                             "Use coarse recent input-interval groups when recognizing a pattern, "
+                             "helping distinguish short taps and longer holds. Turning this off "
+                             "shares evidence more broadly.");
+            EbCheckbox::draw(
+                "learn-coarse", "Continuous mode fallback", &learning.coarseFallback, true,
+                "In Ship, Wave and Swing, also learn broader position groups so nearby paths can "
+                "share experience. Suggested timings still need current physics verification.");
+            EbSlider::drawInt(
+                "learn-coarse-attempts", "Fallback independent attempts", &learning.coarseAttempts,
+                3, 12, "", learning.coarseFallback,
+                "Minimum independent attempts required before using the broader continuous-mode "
+                "evidence. Higher values are more cautious. Requires Continuous mode fallback.");
             ImGui::TextWrapped(
                 "Coarser groups share experience between nearby paths. Every suggestion is checked "
                 "against current geometry. These controls apply during this level visit.");
@@ -316,6 +393,10 @@ public:
     static void drawVisual() {
         if (EbSectionCard::begin("visual-viz", "Visualizers")) {
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
+            EbCheckbox::drawSetting("show-straightfly", "Visualize Straightfly");
+            EbCheckbox::drawSetting("show-wave-pattern", "Visualize Wave Pattern");
+            EbSlider::drawIntSetting("wave-angle-snap", "Flight Angle Snap", 0, 45, " deg");
+            EbSlider::drawFloatSetting("ship-room-of-error", "Flight Room of Error", .4f, 3.f, 1, "x");
         }
         EbSectionCard::end();
 
@@ -329,12 +410,31 @@ public:
     }
 
     static void drawUI() {
+        if (EbSectionCard::begin("ui-appearance", "Appearance and Contrast"))
+            EbDesktopMenuTheme::contrastSettings();
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("ui-sidebar", "Sidebar Materials"))
+            EbDesktopMenuSidebarMaterial::settings();
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("ui-background", "Game Background"))
+            EbDesktopMenuBackground::settings();
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ui-chrome", "Interface")) {
-            EbColorPicker::drawSetting("desktop-accent-color", "Accent Color");
-            gap();
+            char const* scales[] = {"75%", "100%", "125%", "150%"};
+            EbDropdown::drawSetting("desktop-ui-scale", "UI Scale", scales, 4);
+
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
-            EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
+            if (EbUiCapabilities::desktopLayout()) {
+                EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");
+            } else if (EbButton::draw("mobile-classic-settings", "Open Geode Settings", true,
+                                      "Open the classic settings interface without changing your "
+                                      "menu preference.")) {
+                EbPauseActionBridge::openClassicSettings();
+            }
         }
         EbSectionCard::end();
 
@@ -342,7 +442,16 @@ public:
             EbCheckbox::drawSetting("lag-warning-toast", "Lag Warning");
         }
         EbSectionCard::end();
-
+        if (EbUiCapabilities::expensiveMaterials()) {
+            if (EbSectionCard::begin("ui-quality", "Rendering Quality")) {
+                char const* quality[] = {"Low", "Balanced", "High"};
+                EbDropdown::drawSetting("ui-render-quality", "Shader Quality", quality, 3);
+                ImGui::TextWrapped(
+                    "Quality controls shader resolution and blur samples. Background Render Scale "
+                    "is an additional per-effect multiplier.");
+            }
+            EbSectionCard::end();
+        }
         if (EbSectionCard::begin("ui-diag", "Diagnostics")) {
             EbCheckbox::drawSetting("debug-logging", "Debug Logging");
             EbCheckbox::drawSetting("perf-trace", "Perf Trace");
@@ -352,6 +461,8 @@ public:
     }
 
     static void drawKeys() {
+        if (!EbUiCapabilities::keybindUI())
+            return;
         if (EbSectionCard::begin("keys-hotkeys", "Hotkeys")) {
             EbKeybind::drawSetting("hotkey-desktop-menu", "Desktop Menu");
             EbKeybind::drawSetting("hotkey-debug", "Debug Logging");

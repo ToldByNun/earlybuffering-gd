@@ -10,6 +10,9 @@
 class EbDesktopMenuTheme {
 public:
     static void apply();
+    static bool contrastEnabled();
+    static float contrastTarget();
+    static void contrastSettings();
 
 #if defined(EB_DESKTOP_IMGUI)
     // Multiplies color.a by ImGuiStyle.Alpha so custom draw-list paint fades with
@@ -19,6 +22,7 @@ public:
     static ImVec4 bg();
     static ImVec4 panel();
     static ImVec4 surface();
+    static ImVec4 controlFill(float emphasis);
     static ImVec4 sidebarBg();
     static ImVec4 accent();
     static ImVec4 accentLight();

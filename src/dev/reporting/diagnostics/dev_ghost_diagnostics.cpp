@@ -14,7 +14,7 @@
 #include <string>
 
 void EbDevGhostDiagnostics::dumpVehicleFlags(std::ostringstream& o, char const* prefix,
-                                           PlayerObject* player) {
+                                             PlayerObject* player) {
     if (!player) {
         o << prefix << "=<null>\n";
         return;
@@ -32,7 +32,8 @@ void EbDevGhostDiagnostics::dumpVehicleFlags(std::ostringstream& o, char const* 
     o << prefix << ".isRobot=" << EbDevDiagDumpImplementation::boolStr(player->m_isRobot) << "\n";
     o << prefix << ".isSpider=" << EbDevDiagDumpImplementation::boolStr(player->m_isSpider) << "\n";
     o << prefix << ".isSwing=" << EbDevDiagDumpImplementation::boolStr(player->m_isSwing) << "\n";
-    o << prefix << ".onGround=" << EbDevDiagDumpImplementation::boolStr(player->m_isOnGround) << "\n";
+    o << prefix << ".onGround=" << EbDevDiagDumpImplementation::boolStr(player->m_isOnGround)
+      << "\n";
     o << prefix << ".jumpHeld="
       << EbDevDiagDumpImplementation::boolStr(
              player->m_holdingButtons[static_cast<int>(PlayerButton::Jump)])
@@ -47,7 +48,7 @@ bool EbDevGhostDiagnostics::isHazardType(GameObject* object) {
 }
 
 void EbDevGhostDiagnostics::dumpRectLine(std::ostringstream& o, char const* name,
-                                       PlayerObject* player) {
+                                         PlayerObject* player) {
     if (!player) {
         o << name << "=<null>\n";
         return;
@@ -67,7 +68,7 @@ void EbDevGhostDiagnostics::dumpRectLine(std::ostringstream& o, char const* name
 }
 
 int EbDevGhostDiagnostics::countHazardOverlaps(PlayLayer* layer, PlayerObject* player,
-                                             std::ostringstream& detail, int maxDetail) {
+                                               std::ostringstream& detail, int maxDetail) {
     if (!layer || !player)
         return 0;
     auto const pref = player->getObjectRect();
@@ -93,7 +94,7 @@ int EbDevGhostDiagnostics::countHazardOverlaps(PlayLayer* layer, PlayerObject* p
         }
     }
     // Never raw typeinfo_cast on m_sections — poison slots AV (bakefail diag).
-    EbSectionObjectWalk::forEachInSections(layer, consider);
+    EbSectionObjectWalk::forEachOwnedObject(layer, consider);
     return countValue;
 }
 
@@ -157,6 +158,7 @@ std::string EbDevGhostDiagnostics::buildGhostHitbox() {
     if (report && report->tps > EbAssistClock::kPlanSnapTpsHi) {
         deltaTime = static_cast<float>(1.0 / std::min(report->tps, 4000.0));
     }
-    o << fmt::format("probeDt={} gdStep={}\n", deltaTime, EbAssistClock::secondsToGdStep(deltaTime));
+    o << fmt::format("probeDt={} gdStep={}\n", deltaTime,
+                     EbAssistClock::secondsToGdStep(deltaTime));
     return o.str();
 }

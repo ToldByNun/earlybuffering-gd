@@ -28,7 +28,9 @@
 #include "../ui/feedback/save_frame_counter.hpp"
 #include "../ui/overlays/status_overlay.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
+#include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
+#include "../ui/visualizers/wave_pattern_visualizer.hpp"
 
 void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLayer* playLayer) {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
@@ -99,6 +101,24 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_startSnapshotSlot = -1;
     controller.m_lastBakeHint.clear();
     controller.m_log.clear();
+    controller.m_flightIntent[0].reset();
+    controller.m_flightIntent[1].reset();
+    controller.m_wavePattern[0].reset();
+    controller.m_wavePattern[1].reset();
+    controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
+    controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
+    controller.m_shipLineOffSeconds[0] = controller.m_shipLineOffSeconds[1] = 0.;
+    controller.m_waveLineHasAnchor[0] = controller.m_waveLineHasAnchor[1] = false;
+    controller.m_waveLineOffSeconds[0] = controller.m_waveLineOffSeconds[1] = 0.;
+    controller.m_lastShipLineDelay = 0;
+    controller.m_lastShipLineTick = -1;
+    controller.m_lastWavePatternDelay = 0;
+    controller.m_lastWavePatternTick = -1;
+    controller.m_flightMeasurement[0].reset();
+    controller.m_flightMeasurement[1].reset();
+    controller.m_inputReconciler.reset();
+    // Death often skips the matching UP — stuck true blocks rawEdge / Wave+Ship lock.
+    controller.m_userHolding[0] = controller.m_userHolding[1] = false;
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;
     controller.m_outcomePending = false;
@@ -117,6 +137,15 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
         EbLagProbe::Scope const state("eb.syncButtons");
         controller.syncButtonState(playLayer);
     }
+    // Retry can rebuild objectLayer and orphan draw nodes; re-arm viz from settings.
+    if (playLayer) {
+        EbStraightflyVisualizer::get().setEnabled(EbStageConfig::showStraightfly());
+        if (EbStageConfig::showStraightfly())
+            EbStraightflyVisualizer::get().attach(playLayer);
+        EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
+        if (EbStageConfig::showWavePattern())
+            EbWavePatternVisualizer::get().attach(playLayer);
+    }
     {
         EbLagProbe::Scope const state("eb.updateOverlay");
         controller.updateOverlay();
@@ -126,11 +155,31 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
         EbAssistLog::debug("resetAttempt: shadow missing — re-attach");
         EbShadowSimulator::get().attach(playLayer);
     }
+    // Respawn can replace the object array or reattach the ghost. Refresh the
+    // structural index before the first input, once level objects are available.
+    if (playLayer && playLayer->m_objects && playLayer->m_objects->count())
+        EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator::get(), playLayer);
     // Death may have cancelled an in-flight trigger bake — resume if still empty.
     EbTriggerWorldBaker::get().resumeIfEmpty(playLayer);
 }
 
 void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* playLayer) {
+    controller.m_flightIntent[0].reset();
+    controller.m_flightIntent[1].reset();
+    controller.m_wavePattern[0].reset();
+    controller.m_wavePattern[1].reset();
+    controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
+    controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
+    controller.m_shipLineOffSeconds[0] = controller.m_shipLineOffSeconds[1] = 0.;
+    controller.m_waveLineHasAnchor[0] = controller.m_waveLineHasAnchor[1] = false;
+    controller.m_waveLineOffSeconds[0] = controller.m_waveLineOffSeconds[1] = 0.;
+    controller.m_lastShipLineDelay = 0;
+    controller.m_lastShipLineTick = -1;
+    controller.m_lastWavePatternDelay = 0;
+    controller.m_lastWavePatternTick = -1;
+    controller.m_flightMeasurement[0].reset();
+    controller.m_flightMeasurement[1].reset();
+    controller.m_inputReconciler.reset();
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;
     EbSelfBakeRecorder::get().onLevelInit(playLayer);
     // Attach once before resetAttempt. resetAttempt re-attaches only if missing;
@@ -141,6 +190,10 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbLagWarningToast::get().attach(playLayer);
     EbTrajectoryVisualizer::get().setEnabled(EbStageConfig::showTrajectory());
     EbTrajectoryVisualizer::get().attach(playLayer);
+    EbStraightflyVisualizer::get().setEnabled(EbStageConfig::showStraightfly());
+    EbStraightflyVisualizer::get().attach(playLayer);
+    EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
+    EbWavePatternVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
     EbBakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
@@ -174,6 +227,8 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbSaveFrameCounter::get().detach(!layerAlive);
     EbLagWarningToast::get().detach(!layerAlive);
     EbTrajectoryVisualizer::get().detach(!layerAlive);
+    EbStraightflyVisualizer::get().detach(!layerAlive);
+    EbWavePatternVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);
 
@@ -216,6 +271,22 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_startSnapshotSlot = -1;
     controller.m_lastBakeHint.clear();
     controller.m_log.clear();
+    controller.m_flightIntent[0].reset();
+    controller.m_flightIntent[1].reset();
+    controller.m_wavePattern[0].reset();
+    controller.m_wavePattern[1].reset();
+    controller.m_flightCorrectionObserved[0] = controller.m_flightCorrectionObserved[1] = false;
+    controller.m_shipLineHasAnchor[0] = controller.m_shipLineHasAnchor[1] = false;
+    controller.m_shipLineOffSeconds[0] = controller.m_shipLineOffSeconds[1] = 0.;
+    controller.m_waveLineHasAnchor[0] = controller.m_waveLineHasAnchor[1] = false;
+    controller.m_waveLineOffSeconds[0] = controller.m_waveLineOffSeconds[1] = 0.;
+    controller.m_lastShipLineDelay = 0;
+    controller.m_lastShipLineTick = -1;
+    controller.m_lastWavePatternDelay = 0;
+    controller.m_lastWavePatternTick = -1;
+    controller.m_flightMeasurement[0].reset();
+    controller.m_flightMeasurement[1].reset();
+    controller.m_inputReconciler.reset();
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;

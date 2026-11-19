@@ -6,6 +6,7 @@
 #include "../../../../dev/dev_config.hpp"
 #include "../../../../dev/evaluation/dev_reject_ledger.hpp"
 #include "../../../assist/contracts/assist_verdict.hpp"
+#include "../../../assist/contracts/input_search_policy.hpp"
 #include "../../../assist/contracts/live_plan_contracts.hpp"
 #include "../../../assist/planning/assist_horizon.hpp"
 #include "../../../assist/planning/opportunity_probe.hpp"
@@ -101,7 +102,9 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     bool const continuousControl =
         context.real->m_isDart || context.real->m_isShip || context.real->m_isSwing;
     context.inputWindow =
-        context.options.requireAliveForDelay && (context.down || continuousControl);
+        context.options.requireAliveForDelay &&
+        EbInputSearchPolicy::usesInputWindow(static_cast<int>(EbStageConfig::kindOf(context.real)),
+                                             context.down, context.real->m_isDashing);
     context.model.stopAtBallLanding =
         context.inputWindow && context.real->m_isBall && !context.useTrajEngine &&
         !context.linkedDual() &&
@@ -120,6 +123,22 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
         } else {
             context.model.cap = std::min(context.model.cap, std::max(1, 96 - context.limit));
         }
+    }
+    if (context.options.shipLine.enabled || context.options.wavePattern.enabled) {
+        // Reuse the ordinary configured horizon when explicit. Automatic line /
+        // Wave-pattern control uses a local steering window rather than a long
+        // held-input path.
+        if (EbStageConfig::paramsFor(context.real).cap == 0 && EbStageConfig::lookAheadCap() == 0)
+            context.model.cap = std::min(context.model.cap, 32);
+        context.orbAssist = false;
+        context.orbHint = {};
+        context.spatialHint = false;
+        context.zone = {};
+        // Must size candidates before IW evaluate — early return used to skip
+        // resize and crash on cands[0] (research pack crash 2026-11-18).
+        context.cands.resize(static_cast<size_t>(context.limit) + 1);
+        context.candReady.assign(static_cast<size_t>(context.limit) + 1, 0);
+        return;
     }
     // Assist Pack AP-L2: keep soft-wall headroom for IW — baseline/orb scans must
     // not burn the whole press (Grief TW baseline alone was ~15ms / candidatesTried=0).
@@ -167,8 +186,14 @@ void EbShadowPlanSearch::prepare(EbShadowPlanContext& context) {
     }
     bool const orbScanBudgetOk =
         context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe && prepareHeavyOk();
-    if (context.orbAssist && EbLivePlanContracts::intendedOrbWindowScanAllowed(
-                                 context.orbAssist, context.inputWindow, orbScanBudgetOk)) {
+    bool const prioritizeNearbyOrb =
+        context.inputWindow && !wallUnlimited && context.options.budgetUs <= 2000;
+    if (context.orbAssist && (!prioritizeNearbyOrb || context.spatialHint) &&
+        EbLivePlanContracts::intendedOrbWindowScanAllowed(
+            context.orbAssist, context.inputWindow,
+            orbScanBudgetOk ||
+                (prioritizeNearbyOrb && context.spatialHint && !context.wallExceeded() &&
+                 context.tickBudget >= EbOpportunityProbe::kMinBudgetForProbe))) {
         int const scanTicks = EbOpportunityProbe::orbScanTicks(context.limit, context.model.slack);
         context.orbHint = context.simulator.scanOrbWindow(
             context.layer, context.real, context.down, scanTicks, context.deltaTime,
