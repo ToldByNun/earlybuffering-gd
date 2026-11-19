@@ -38,8 +38,10 @@ public:
     // Slide a point onto the infinite line (viz anchor under the ship).
     static void projectOntoLine(Target const& target, double x, double y, double& outX,
                                 double& outY);
-    // True when delaying this edge moves the ship toward the line.
-    static bool delayHelpsTowardLine(bool pressEdge, double signedCrossTrack);
+    // True when delaying this edge moves toward the line.
+    // invertedControl: Wave upside-down (hold dives) flips press/release sense.
+    static bool delayHelpsTowardLine(bool pressEdge, double signedCrossTrack,
+                                     bool invertedControl = false);
 
 private:
 };

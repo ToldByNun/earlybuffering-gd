@@ -5,6 +5,7 @@
 #include "../../debug/perf_trace.hpp"
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 geode::prelude::ccColor4F EbWavePatternVisualizerImplementation::pathColor(float alpha) {
     return {1.f, 0.55f, 0.18f, alpha};
@@ -22,6 +23,14 @@ geode::prelude::ccColor4F EbWavePatternVisualizerImplementation::ghostColor(floa
     return {1.f, 0.40f, 0.12f, alpha};
 }
 
+geode::prelude::ccColor4F EbWavePatternVisualizerImplementation::corridorLineColor(float alpha) {
+    return {1.f, 0.62f, 0.22f, alpha};
+}
+
+geode::prelude::ccColor4F EbWavePatternVisualizerImplementation::corridorBandColor(float alpha) {
+    return {1.f, 0.45f, 0.12f, alpha};
+}
+
 void EbWavePatternVisualizerImplementation::stepDirection(bool holding, bool sideways,
                                                           bool reversed, bool inverted,
                                                           double& dirX, double& dirY) {
@@ -36,6 +45,14 @@ void EbWavePatternVisualizerImplementation::stepDirection(bool holding, bool sid
         dirX = forward;
         dirY = slope;
     }
+}
+
+void EbWavePatternVisualizerImplementation::travelAxis(bool sideways, bool reversed, double degrees,
+                                                       double& axisX, double& axisY) {
+    double const radians = degrees * std::numbers::pi / 180.;
+    double const forward = reversed ? -1. : 1.;
+    axisX = sideways ? std::sin(radians) : forward * std::cos(radians);
+    axisY = sideways ? forward * std::cos(radians) : std::sin(radians);
 }
 
 EbWavePatternVisualizer& EbWavePatternVisualizer::get() {
@@ -159,6 +176,47 @@ void EbWavePatternVisualizer::rebuild(PlayLayer* layer) {
         if (player->m_position.x != 0.f || player->m_position.y != 0.f) {
             x = player->m_position.x;
             y = player->m_position.y;
+        }
+
+        // Average-travel corridor (out-of-bounds strips) — same geometry as Ship.
+        if (view.corridorValid) {
+            double axisX = 0.;
+            double axisY = 0.;
+            EbWavePatternVisualizerImplementation::travelAxis(
+                view.sideways, view.reversed, view.targetTravelDegrees, axisX, axisY);
+            double const half =
+                std::max(4., view.bodySize * 0.5 * std::max(.25, view.corridorWidth));
+            double const nx = -axisY;
+            double const ny = axisX;
+            double const lx = view.lineX;
+            double const ly = view.lineY;
+            geode::prelude::CCPoint early[2] = {
+                {static_cast<float>(lx + nx * half - axisX * kCorridorBack),
+                 static_cast<float>(ly + ny * half - axisY * kCorridorBack)},
+                {static_cast<float>(lx + nx * half + axisX * kCorridorForward),
+                 static_cast<float>(ly + ny * half + axisY * kCorridorForward)}};
+            geode::prelude::CCPoint late[2] = {
+                {static_cast<float>(lx - nx * half - axisX * kCorridorBack),
+                 static_cast<float>(ly - ny * half - axisY * kCorridorBack)},
+                {static_cast<float>(lx - nx * half + axisX * kCorridorForward),
+                 static_cast<float>(ly - ny * half + axisY * kCorridorForward)}};
+            geode::prelude::ccColor4F band =
+                EbWavePatternVisualizerImplementation::corridorBandColor(0.10f * alpha);
+            geode::prelude::CCPoint triA[3] = {early[0], late[0], late[1]};
+            geode::prelude::CCPoint triB[3] = {early[0], late[1], early[1]};
+            m_node->drawPolygon(triA, 3, band, 0.f, band);
+            m_node->drawPolygon(triB, 3, band, 0.f, band);
+            geode::prelude::CCPoint const behind{
+                static_cast<float>(lx - axisX * kCorridorBack),
+                static_cast<float>(ly - axisY * kCorridorBack)};
+            geode::prelude::CCPoint const ahead{
+                static_cast<float>(lx + axisX * kCorridorForward),
+                static_cast<float>(ly + axisY * kCorridorForward)};
+            m_node->drawSegment(
+                behind, ahead, 1.25f,
+                EbWavePatternVisualizerImplementation::corridorLineColor(0.80f * alpha));
+            m_node->drawDot({static_cast<float>(lx), static_cast<float>(ly)}, 2.8f,
+                            EbWavePatternVisualizerImplementation::corridorLineColor(0.9f * alpha));
         }
 
         double pathLength = 0.;

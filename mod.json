@@ -1288,8 +1288,8 @@
 		},
 		"ship-room-of-error": {
 			"type": "float",
-			"name": "Ship Room of Error",
-			"description": "How wide the Ship straightfly corridor is (the two outer strips). 1.0 ≈ one body width from the center line. Higher = more room before the assist yields the lock; lower = tighter line. Also scales the visualized corridor band.",
+			"name": "Flight Room of Error",
+			"description": "How wide the Ship/Wave flight corridor is (the two outer strips). 1.0 ≈ one body width from the center line. Higher = more room before the assist yields the lock; lower = tighter line. Also scales the visualized corridor band. Wave uses the locked average-travel heading.",
 			"default": 1.1,
 			"min": 0.4,
 			"max": 3.0

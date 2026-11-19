@@ -18,6 +18,7 @@
 #include "flight/wave_pattern_policy.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../ui/visualizers/straightfly_visualizer.hpp"
+#include "../../ui/visualizers/wave_pattern_visualizer.hpp"
 #include "input/assist_input_gate.hpp"
 #include "input/click_intent_guard.hpp"
 #include "input/hold_until_safe_policy.hpp"
@@ -473,6 +474,46 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
         m_shipLineOffSeconds[slot] = 0.;
         EbStraightflyVisualizer::get().clear();
     }
+    auto const& pattern = m_wavePattern[slot].result();
+    if (wavePattern && pattern.targetValid &&
+        pattern.state == EbWavePatternRecognizer::State::Tracking) {
+        if (!m_waveLineHasAnchor[slot]) {
+            m_waveLineX[slot] = sample.x;
+            m_waveLineY[slot] = sample.y;
+            m_waveLineHasAnchor[slot] = true;
+            m_waveLineOffSeconds[slot] = 0.;
+        }
+        EbShipLinePolicy::Target line;
+        line.enabled = true;
+        line.x = m_waveLineX[slot];
+        line.y = m_waveLineY[slot];
+        line.degrees = pattern.targetTravelDegrees;
+        line.bodySize = 30. * (sample.size > 0. ? sample.size : 1.);
+        line.reversed = sample.reversed;
+        line.sideways = sample.sideways;
+        EbShipLinePolicy::projectOntoLine(line, sample.x, sample.y, m_waveLineX[slot],
+                                          m_waveLineY[slot]);
+        line.x = m_waveLineX[slot];
+        line.y = m_waveLineY[slot];
+        double const crossTrack = EbShipLinePolicy::normalizedCrossTrack(line, sample.x, sample.y);
+        double const room = .5 * static_cast<double>(EbStageConfig::shipRoomOfError());
+        double const leave = room * 1.15;
+        if (crossTrack > leave) {
+            m_waveLineOffSeconds[slot] += sample.dt;
+            if (m_waveLineOffSeconds[slot] > .2) {
+                m_wavePattern[slot].abandon(EbWavePatternRecognizer::Reason::OffCorridor);
+                m_waveLineHasAnchor[slot] = false;
+                m_waveLineOffSeconds[slot] = 0.;
+                EbWavePatternVisualizer::get().clear();
+            }
+        } else {
+            m_waveLineOffSeconds[slot] = std::max(0., m_waveLineOffSeconds[slot] - sample.dt);
+        }
+    } else if (m_waveLineHasAnchor[slot]) {
+        m_waveLineHasAnchor[slot] = false;
+        m_waveLineOffSeconds[slot] = 0.;
+        EbWavePatternVisualizer::get().clear();
+    }
 }
 EbFlightMeasurement::Result EbAssistController::flightMeasurement(int player) const {
     if (player < 0 || player >= 2)
@@ -543,7 +584,13 @@ EbAssistController::WavePatternView EbAssistController::wavePatternView(int play
     view.phaseSeconds = pattern.phaseSeconds;
     view.targetTravelDegrees = pattern.targetTravelDegrees;
     view.bodySize = 30. * (context.size > 0.f ? context.size : 1.f);
+    view.corridorWidth = EbStageConfig::shipRoomOfError();
     view.confidence = pattern.confidence;
+    if (m_waveLineHasAnchor[player]) {
+        view.corridorValid = true;
+        view.lineX = m_waveLineX[player];
+        view.lineY = m_waveLineY[player];
+    }
     return view;
 }
 void EbAssistController::configureFlightIntent(bool manualTarget, double degrees) {
@@ -608,6 +655,10 @@ void EbAssistController::setWavePatternEnabled(bool enabled) {
         }
     }
     m_wavePatternEnabled = enabled;
+    if (!enabled) {
+        m_waveLineHasAnchor[0] = m_waveLineHasAnchor[1] = false;
+        m_waveLineOffSeconds[0] = m_waveLineOffSeconds[1] = 0.;
+    }
 }
 bool EbAssistController::wavePatternEnabled() const {
     return m_wavePatternEnabled;
@@ -661,11 +712,21 @@ void EbAssistController::fillWavePatternOptions(EbPlanOptions& options, PlayLaye
     options.wavePattern.releaseSeconds = release;
     options.wavePattern.travelDegrees = pattern.targetTravelDegrees;
     options.wavePattern.confidence = pattern.confidence;
+    // Average-travel corridor (Ship-like): IW steers cross-track with shipLine metrics.
+    if (m_waveLineHasAnchor[slot] && tracking) {
+        options.shipLine.enabled = true;
+        options.shipLine.x = m_waveLineX[slot];
+        options.shipLine.y = m_waveLineY[slot];
+        options.shipLine.degrees = pattern.targetTravelDegrees;
+        options.shipLine.bodySize = 30. * player->m_vehicleSize;
+        options.shipLine.reversed = player->m_isGoingLeft;
+        options.shipLine.sideways = player->m_isSideways;
+    }
     options.smartDepth = 1;
     EbAssistLog::debug(fmt::format(
-        "WAVE-PATTERN arm {} err={:+.0f}ms hold={:.0f}/{:.0f}ms conf={:.0f}%",
+        "WAVE-PATTERN arm {} err={:+.0f}ms hold={:.0f}/{:.0f}ms conf={:.0f}% corridor={}",
         pattern.lastCompletedHold ? "hold→up" : "rel→down", error * 1000., hold * 1000.,
-        release * 1000., pattern.confidence * 100.));
+        release * 1000., pattern.confidence * 100., options.shipLine.enabled ? 1 : 0));
 }
 void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer,
                                              PlayerObject* player) {
@@ -717,6 +778,8 @@ void EbAssistController::invalidateFlightForModeChange(PlayLayer* layer, PlayerO
     m_flightMeasurement[slot].reset();
     m_shipLineHasAnchor[slot] = false;
     m_shipLineOffSeconds[slot] = 0.;
+    m_waveLineHasAnchor[slot] = false;
+    m_waveLineOffSeconds[slot] = 0.;
     m_flightCorrectionObserved[slot] = false;
     // Do not carry a Ship-line / Wave-pattern timing into the next mode's controls.
     if (m_buffer.state == BufferState::Buffered &&

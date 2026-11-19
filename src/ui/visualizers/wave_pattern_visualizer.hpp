@@ -4,8 +4,8 @@
 #include <Geode/Geode.hpp>
 #include <string>
 
-// Draws the locked Wave hold/release zigzag and upcoming click edges (AP07 viz).
-// Distinct from Straightfly: path + next clicks, not a single corridor line.
+// Draws the locked Wave average-travel corridor (Ship-like outer strips) plus
+// hold/release zigzag and upcoming click edges.
 class EbWavePatternVisualizer {
 public:
     static EbWavePatternVisualizer& get();
@@ -34,6 +34,8 @@ private:
     static constexpr int kRebuildEveryTicks = 2;
     static constexpr int kMaxEdges = 10;
     static constexpr float kMaxPathLength = 900.f;
+    static constexpr float kCorridorForward = 420.f;
+    static constexpr float kCorridorBack = 80.f;
 
     cocos2d::CCDrawNode* m_node = nullptr;
     bool m_enabled = false;
@@ -48,8 +50,12 @@ public:
     static geode::prelude::ccColor4F nextClickColor(float alpha);
     static geode::prelude::ccColor4F laterClickColor(float alpha);
     static geode::prelude::ccColor4F ghostColor(float alpha);
+    static geode::prelude::ccColor4F corridorLineColor(float alpha);
+    static geode::prelude::ccColor4F corridorBandColor(float alpha);
     static void stepDirection(bool holding, bool sideways, bool reversed, bool inverted,
                               double& dirX, double& dirY);
+    static void travelAxis(bool sideways, bool reversed, double degrees, double& axisX,
+                           double& axisY);
 
 private:
     EbWavePatternVisualizerImplementation() = delete;

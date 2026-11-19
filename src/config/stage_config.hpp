@@ -82,7 +82,8 @@ public:
     // 0 = continuous; else snap Ship/Wave locked travel onto this degree step.
     // Setting key remains wave-angle-snap (serialized).
     static int flightAngleSnapDegrees();
-    // Ship straightfly corridor half-width in bodySize units (outer strips).
+    // Ship/Wave flight corridor half-width in bodySize units (outer strips).
+    // Setting key remains ship-room-of-error (serialized).
     static float shipRoomOfError();
     static bool showBakePath();  // green press + purple release BakeMap windows
     static bool showPauseBake(); // pause-screen status lines

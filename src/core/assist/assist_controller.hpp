@@ -101,14 +101,19 @@ public:
         bool sideways = false;
         bool reversed = false;
         bool inverted = false;
+        bool corridorValid = false;
         double x = 0.;
         double y = 0.;
+        double lineX = 0.;
+        double lineY = 0.;
         double speed = 0.;
         double holdSeconds = 0.;
         double releaseSeconds = 0.;
         double phaseSeconds = 0.;
         double targetTravelDegrees = 0.;
         double bodySize = 30.;
+        // Same room-of-error setting as Ship outer strips.
+        double corridorWidth = 1.1;
         double confidence = 0.;
 
     private:
@@ -315,6 +320,11 @@ private:
     double m_shipLineX[2]{};
     double m_shipLineY[2]{};
     double m_shipLineOffSeconds[2]{};
+    // Wave average-travel corridor (Ship-like outer strips / out-of-bounds).
+    bool m_waveLineHasAnchor[2]{};
+    double m_waveLineX[2]{};
+    double m_waveLineY[2]{};
+    double m_waveLineOffSeconds[2]{};
     int m_lastShipLineDelay = 0;
     int m_lastShipLineTick = -1;
     int m_lastWavePatternDelay = 0;

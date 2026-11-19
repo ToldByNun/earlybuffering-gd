@@ -14,7 +14,8 @@ public:
         SustainedInput,
         RhythmChanged,
         MotifChanged,
-        StaleEvidence
+        StaleEvidence,
+        OffCorridor
     };
 
     class Settings {

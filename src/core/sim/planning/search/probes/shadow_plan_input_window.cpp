@@ -10,6 +10,7 @@
 #include "../../../../assist/contracts/orb_probe_order.hpp"
 #include "../../../../assist/contracts/subtick_timing.hpp"
 #include "../../../../assist/flight/flight_assist_combine.hpp"
+#include "../../../../assist/flight/ship_line_policy.hpp"
 #include "../../../../assist/flight/wave_pattern_policy.hpp"
 #include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../shadow_simulator.hpp"
@@ -345,12 +346,14 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
     combineCtx.lifecycleOk = context.real != nullptr;
     combineCtx.baselineDied =
         context.candReady[0] && context.cands[0].viable && context.cands[0].raw.died;
-    combineCtx.shipLineArmed = context.options.shipLine.enabled;
-    combineCtx.wavePatternArmed = context.options.wavePattern.enabled;
-    combineCtx.shipTracking = context.options.shipLine.enabled;
-    combineCtx.waveTracking = context.options.wavePattern.enabled;
-    combineCtx.shipConfidence = context.options.shipLine.enabled ? 1. : 0.;
-    combineCtx.waveConfidence = context.options.wavePattern.enabled ? 1. : 0.;
+    // Wave corridor reuses options.shipLine for metrics — do not classify as Ship lane.
+    bool const waveOwns = context.options.wavePattern.enabled;
+    combineCtx.shipLineArmed = context.options.shipLine.enabled && !waveOwns;
+    combineCtx.wavePatternArmed = waveOwns;
+    combineCtx.shipTracking = combineCtx.shipLineArmed;
+    combineCtx.waveTracking = waveOwns;
+    combineCtx.shipConfidence = combineCtx.shipLineArmed ? 1. : 0.;
+    combineCtx.waveConfidence = waveOwns ? 1. : 0.;
     combineCtx.dashHold = context.real && context.real->m_isDashing;
     combineCtx.orbTiming = context.orbAssist && context.orbHint.found;
     auto const combineLane = EbFlightAssistCombine::selectLaneDeterministic(
@@ -454,14 +457,12 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         // No line winner → ordinary IW safe/threat (priority 2).
     }
 
-    // Wave pattern (AP08/AP09): early edges may wait for the locked hold/release
-    // phase. Late edges Pass into ordinary IW — never invent a missing past click.
-    // CollisionRescue / dash lanes skip rhythm preference (combineLane gate).
+    // Wave pattern (AP08/AP09): (1) stay inside the average-travel corridor
+    // (Ship-like out-of-bounds strips), (2) else early-edge phase timing.
+    // Late edges Pass into ordinary IW — never invent a missing past click.
     if (combineLane == EbFlightAssistCombine::Lane::AlternateRhythm &&
         context.options.wavePattern.enabled && context.candReady[0] && context.cands[0].viable &&
-        !dual) {
-        int const target = EbWavePatternPolicy::suggestedDelayTicks(
-            context.options.wavePattern, context.deltaTime, context.limit);
+        !context.cands[0].raw.died && !dual && context.real) {
         int selected = 0;
         auto tryDelay = [&](int delay) -> bool {
             if (delay <= 0 || delay > context.limit)
@@ -483,6 +484,81 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             selected = delay;
             return true;
         };
+
+        // Corridor steer first — keep the Wave average path inside the strips.
+        if (context.options.shipLine.enabled) {
+            double const liveSigned = EbShipLinePolicy::signedCrossTrack(
+                context.options.shipLine, context.real->m_position.x, context.real->m_position.y);
+            bool const inverted = context.real->m_isUpsideDown;
+            bool const edgeHelps =
+                EbShipLinePolicy::delayHelpsTowardLine(context.down, liveSigned, inverted);
+            auto const baselineMetrics = context.cands[0].raw.shipLine;
+            double selectedAbs = std::abs(baselineMetrics.lastSignedError);
+            if (!std::isfinite(selectedAbs) || baselineMetrics.samples <= 0)
+                selectedAbs = std::abs(liveSigned);
+            for (int probe = 1; probe <= context.limit; ++probe) {
+                if (context.wallExceeded() || context.tickBudget <= 0) {
+                    context.plan.budgetHit = true;
+                    break;
+                }
+                auto candidate = evaluateCandidate(probe);
+                if (candidate.raw.ticksRan == 0) {
+                    context.plan.budgetHit = true;
+                    break;
+                }
+                if (!ingest(probe, candidate))
+                    continue;
+                if (!edgeHelps)
+                    continue;
+                auto const& stored = context.cands[static_cast<size_t>(probe)];
+                if (!stored.viable || stored.raw.died || stored.activatedRing)
+                    continue;
+                double candAbs = stored.raw.shipLine.samples > 0 && !stored.raw.shipLine.invalid
+                                     ? std::abs(stored.raw.shipLine.lastSignedError)
+                                     : std::numeric_limits<double>::infinity();
+                if (!std::isfinite(candAbs))
+                    continue;
+                if (candAbs + .01 < selectedAbs) {
+                    selected = probe;
+                    selectedAbs = candAbs;
+                }
+            }
+            if (selected <= 0 && edgeHelps && std::isfinite(liveSigned) &&
+                std::abs(liveSigned) >= .08) {
+                int guess = static_cast<int>(std::lround(std::abs(liveSigned) * 14.));
+                guess = std::clamp(guess, 1, context.limit);
+                if (!tryDelay(guess)) {
+                    for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {
+                        if (tryDelay(guess - delta) || tryDelay(guess + delta))
+                            break;
+                    }
+                }
+            }
+            if (selected > 0 && context.options.robustJitter &&
+                !context.jitterOk(selected, -1, true))
+                selected = 0;
+            if (selected > 0) {
+                context.plan.action = PlanAction::Delay;
+                context.plan.reason = AssistReason::DelayThreat;
+                context.plan.wavePatternCorrection = true;
+                context.plan.delay = context.plan.jumpTick = selected;
+                context.plan.nowIsSafe = false;
+                context.plan.threatCleared = true;
+                context.plan.guardOriginalDelay = selected;
+                context.plan.viableDelays = std::vector<int>{selected};
+                context.plan.dMin = context.plan.dMax = selected;
+                EbAssistLog::info(fmt::format(
+                    "WAVE-CORRIDOR steer +{} liveXt={:.3f} down={} inv={}", selected, liveSigned,
+                    context.down ? 1 : 0, inverted ? 1 : 0));
+                context.publishLedger(selected, false, context.ledgerEarlyExit());
+                return true;
+            }
+        }
+
+        // Phase timing (early edges only).
+        selected = 0;
+        int const target = EbWavePatternPolicy::suggestedDelayTicks(
+            context.options.wavePattern, context.deltaTime, context.limit);
         if (target > 0) {
             if (!tryDelay(target)) {
                 for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {

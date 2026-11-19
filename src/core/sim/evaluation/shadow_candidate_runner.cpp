@@ -217,7 +217,9 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             // Skip mismatched ticks — do NOT latch invalid while still sampling.
             // Research pack 20261118_225031: invalid+samples made every cost ∞
             // so ship-line ranking never beat PassD0Safe.
-            if (shadowPlayer->m_isShip && !shadowPlayer->m_isDashing &&
+            // Wave (m_isDart) reuses the same corridor metrics for average-travel lock.
+            bool const flightVehicle = shadowPlayer->m_isShip || shadowPlayer->m_isDart;
+            if (flightVehicle && !shadowPlayer->m_isDashing &&
                 shadowPlayer->m_isUpsideDown == real->m_isUpsideDown &&
                 shadowPlayer->m_isSideways == real->m_isSideways &&
                 shadowPlayer->m_isGoingLeft == real->m_isGoingLeft) {

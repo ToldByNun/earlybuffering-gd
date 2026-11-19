@@ -63,9 +63,12 @@ void EbShipLinePolicy::projectOntoLine(Target const& target, double x, double y,
     outX = target.x + axisX * along;
     outY = target.y + axisY * along;
 }
-bool EbShipLinePolicy::delayHelpsTowardLine(bool pressEdge, double signedCross) {
+bool EbShipLinePolicy::delayHelpsTowardLine(bool pressEdge, double signedCross,
+                                            bool invertedControl) {
     if (!std::isfinite(signedCross))
         return false;
+    if (invertedControl)
+        pressEdge = !pressEdge;
     // Press delayed → fall more first. Helps only when currently above the line.
     // Release delayed → climb more first. Helps only when currently below the line.
     if (pressEdge)
