@@ -2,6 +2,7 @@
 #include "../../../core/assist/assist_controller.hpp"
 #include "../../../core/platform/save_drop_paths.hpp"
 #include "../../../core/real_assist/gold_reproduce_gate.hpp"
+#include "../../../core/real_assist/real_assist_runner.hpp"
 #include "../../../debug/assist_log.hpp"
 #include "../../../dev/capture/dev_trace_store.hpp"
 #include "../../../dev/dev_config.hpp"
@@ -323,6 +324,22 @@ void EbPauseDevActions::devReproduceGold() {
            : fmt::format("Import gate failed.\n\n{}\n\n"
                          "Sync with:\n"
                          "python tools/sync_real_corpus.py --install-save",
+                         report);
+    EbDesktopAlert::info("EarlyBuffer Real Assist", message.c_str());
+}
+
+void EbPauseDevActions::devRunRealAssist() {
+    std::string report;
+    bool const ok = EbRealAssistRunner::get().runDevAction(report);
+    auto const message =
+        ok ? fmt::format("Real Assist armed (prep/open).\n\n{}\n\n"
+                         "PASS needs reproduce=pass + real attempts.\n"
+                         "Details: saveDir/real_assist/last_run.txt",
+                         report)
+           : fmt::format("Real Assist runner failed.\n\n{}\n\n"
+                         "Sync + shift:\n"
+                         "python tools/sync_real_corpus.py --install-save\n"
+                         "python tools/shift_replay.py --install-save",
                          report);
     EbDesktopAlert::info("EarlyBuffer Real Assist", message.c_str());
 }

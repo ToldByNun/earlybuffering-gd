@@ -265,6 +265,11 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"dev-copy-report-action", SettingsCategory::Dev},
         {"dev-export-research-pack-action", SettingsCategory::Dev},
         {"dev-compare-sessions-action", SettingsCategory::Dev},
+        {"dev-reproduce-gold-action", SettingsCategory::Dev},
+        {"real-assist-case", SettingsCategory::Dev},
+        {"real-assist-mode", SettingsCategory::Dev},
+        {"real-assist-protocol", SettingsCategory::Dev},
+        {"dev-run-real-assist-action", SettingsCategory::Dev},
         {"title-dev-diag", SettingsCategory::Dev},
         {"dev-dump-diag-action", SettingsCategory::Dev},
 };

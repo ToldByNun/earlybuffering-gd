@@ -1643,6 +1643,38 @@
 			"description": "APR0 Real Assist: import-stamp all synced gold clears under saveDir/real_corpus (or EB_REAL_CORPUS_DIR). Writes reproduce.json import block + real_assist/last_run.txt. PlayLayer unmodified clear still required for status=pass.",
 			"button-text": "reproduce"
 		},
+		"real-assist-case": {
+			"type": "string",
+			"name": "Real Assist Case",
+			"description": "APR2 case id or id/variant (e.g. cataclysm/pulse-shift-early-2). Use matrix for prep-only smoke. Overridden by EB_REAL_ASSIST_CASE.",
+			"default": "slaughterhouse/pulse-shift-early-2"
+		},
+		"real-assist-mode": {
+			"type": "string",
+			"name": "Real Assist Mode",
+			"description": "Assist mode for the Real Assist Runner. Overridden by EB_REAL_ASSIST_MODE.",
+			"one-of": [
+				"Live",
+				"Hybrid"
+			],
+			"default": "Live"
+		},
+		"real-assist-protocol": {
+			"type": "string",
+			"name": "Real Assist Protocol",
+			"description": "Frozen: no learner writes / Auto-Tune off. Online: reset + learn (ColdStart). Overridden by EB_REAL_ASSIST_PROTOCOL.",
+			"one-of": [
+				"Frozen",
+				"Online"
+			],
+			"default": "Frozen"
+		},
+		"dev-run-real-assist-action": {
+			"type": "custom:eb-action",
+			"name": "Run Real Assist Case",
+			"description": "APR2: prepare case (mode/protocol/import shifted gdr2), open level.gmd, record attempts to real_assist/session_*.json + last_run.txt. geode run with EB_REAL_ASSIST_AUTO=1 waits for MenuLayer then runs.",
+			"button-text": "run"
+		},
 		"title-dev-diag": {
 			"type": "title",
 			"name": "Diagnostics",

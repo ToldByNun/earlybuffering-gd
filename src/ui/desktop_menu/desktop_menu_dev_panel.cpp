@@ -308,6 +308,16 @@ public:
                            true)) {
             fireAction("dev-reproduce-gold-action");
         }
+        gap();
+        mutedText("Case / mode / protocol: settings real-assist-* or env "
+                  "EB_REAL_ASSIST_CASE/MODE/PROTOCOL. AUTO=matrix = prep smoke.");
+        gap();
+        if (EbButton::draw("##dev-run-real-assist", "Run Real Assist Case", true,
+                           "Prepare (+ open level) for real-assist-case. Frozen freezes Hybrid "
+                           "writes / Auto-Tune off. Writes real_assist/last_run.txt + session JSON.",
+                           true)) {
+            fireAction("dev-run-real-assist-action");
+        }
 
         EbSectionCard::end();
     }

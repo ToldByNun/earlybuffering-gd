@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,12 +43,20 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def default_save_corpus() -> Path:
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        raise SystemExit("LOCALAPPDATA unset; pass --install-save PATH")
+    return Path(local) / "GeometryDash" / "geode" / "mods" / "audesign.earlybuffer" / "real_corpus"
+
+
 def synthesize_id(
     corpus_id: str,
     click_index: int | None,
     ks: list[int],
     families: list[Family],
     include_drop: bool,
+    install_root: Path | None = None,
 ) -> int:
     folder = FIXTURE_ROOT / corpus_id
     clear = folder / "clear.gdr2"
@@ -94,6 +104,11 @@ def synthesize_id(
             },
         }
         write_json(side_path, sidecar)
+        if install_root is not None:
+            install_dir = install_root / "derived" / corpus_id
+            install_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(gdr_path, install_dir / gdr_path.name)
+            shutil.copy2(side_path, install_dir / side_path.name)
         index_rows.append(
             {
                 "family": result.family,
@@ -112,18 +127,18 @@ def synthesize_id(
             f"{sidecar.get('newHoldLength')}"
         )
 
-    write_json(
-        out_dir / "index.json",
-        {
-            "schema": 1,
-            "corpusId": corpus_id,
-            "parentSha256": parent_sha,
-            "clickIndex": chosen,
-            "pairCount": len(pairs),
-            "variants": index_rows,
-            "updatedAt": utc_now(),
-        },
-    )
+    index_payload = {
+        "schema": 1,
+        "corpusId": corpus_id,
+        "parentSha256": parent_sha,
+        "clickIndex": chosen,
+        "pairCount": len(pairs),
+        "variants": index_rows,
+        "updatedAt": utc_now(),
+    }
+    write_json(out_dir / "index.json", index_payload)
+    if install_root is not None:
+        write_json(install_root / "derived" / corpus_id / "index.json", index_payload)
     return written
 
 
@@ -153,6 +168,13 @@ def main() -> int:
         action="store_true",
         help="Skip drop-click variant",
     )
+    parser.add_argument(
+        "--install-save",
+        nargs="?",
+        const="",
+        default=None,
+        help="Also copy derived/ into mod save real_corpus/ (for in-game runner)",
+    )
     args = parser.parse_args()
     manifest_path = FIXTURE_ROOT / "manifest.json"
     if not manifest_path.is_file():
@@ -161,6 +183,10 @@ def main() -> int:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     ids = args.ids or list(manifest.get("ids") or [])
     ks = args.k if args.k is not None else DEFAULT_KS
+    install_root = None
+    if args.install_save is not None:
+        install_root = Path(args.install_save) if args.install_save else default_save_corpus()
+        install_root.mkdir(parents=True, exist_ok=True)
     total = 0
     for corpus_id in ids:
         total += synthesize_id(
@@ -169,8 +195,11 @@ def main() -> int:
             ks=ks,
             families=SHIFT_FAMILIES,
             include_drop=not args.no_drop,
+            install_root=install_root,
         )
     print(f"wrote {total} derived variants under {FIXTURE_ROOT / 'derived'}")
+    if install_root is not None:
+        print(f"installed derived -> {install_root / 'derived'}")
     return 0
 
 

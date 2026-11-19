@@ -10,6 +10,7 @@
 #include "../core/bake/hybrid_verify_cache.hpp"
 #include "../core/bake/self_bake_recorder.hpp"
 #include "../core/diagnostics/assist_real_metrics.hpp"
+#include "../core/real_assist/real_assist_runner.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/learning/hybrid_learning.hpp"
@@ -64,11 +65,19 @@ void EbLevelLifecycle::onLevelComplete(EbAssistController& controller, PlayLayer
         EbLagProbe::Scope const state("eb.triggerBake.save");
         EbTriggerWorldStore::get().save();
     }
+    float percent = 100.f;
+    if (playLayer && playLayer->m_level)
+        percent = static_cast<float>(playLayer->m_level->m_normalPercent);
+    EbRealAssistRunner::get().onAttemptEnd(playLayer, true, percent);
 }
 
 void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* playLayer) {
     // Self-bake stays buffered — idle drain merges after we're alive again.
     EbLagProbe::Scope const episodeScope("eb.resetAttempt");
+    if (EbRealAssistRunner::get().active() && controller.attemptTick() > 0 && playLayer) {
+        float const pct = playLayer->getCurrentPercent();
+        EbRealAssistRunner::get().onAttemptEnd(playLayer, false, pct);
+    }
     {
         EbLagProbe::Scope const state("eb.flushSegment");
         EbSelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
@@ -207,6 +216,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
         bool const dynamicLabelled = EbTriggerWorldStore::get().hasTracks();
         EbAssistRealMetrics::get().setLevelKey(EbLevelProfile::get().key(), dynamicLabelled);
     }
+    EbRealAssistRunner::get().onLevelInit(playLayer);
     controller.updateOverlay();
 }
 

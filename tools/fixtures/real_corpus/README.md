@@ -61,3 +61,16 @@ python tools/build_physics_safe.py  --id cataclysm --family pulse-shift-early-2
 - Sidecar records shifted indices, hold lengths, and **pre_shifted_press** capture contract
 - Oracle builders **refuse** unless `reproduce=pass`; offline they only emit `pending-probe` docs
 - **PhysicsSafeSet** = acceptance ground truth; **VerifierSafeSet** = diagnostic only
+
+## APR2 — In-game runner + auto
+
+```bat
+python tools/shift_replay.py --install-save
+set EB_REAL_ASSIST_AUTO=matrix
+geode run
+```
+
+- Dev → **Run Real Assist Case** (settings `real-assist-case` / `mode` / `protocol`)
+- Env: `EB_REAL_ASSIST_AUTO`, `EB_REAL_ASSIST_CASE`, `EB_REAL_ASSIST_MODE`, `EB_REAL_ASSIST_PROTOCOL`
+- Matrix + agent loop: `tools/real_assist/run_matrix.md`
+- Outputs: `saveDir/real_assist/last_run.txt` + `session_*.json`

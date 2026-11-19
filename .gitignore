@@ -218,6 +218,7 @@ docs/dev/flight-and-alternate-assist-plan.md
 !/tools/real_assist/gdr2.py
 !/tools/real_assist/shift.py
 !/tools/real_assist/oracle.py
+!/tools/real_assist/run_matrix.md
 !/tools/fixtures/real_corpus/
 !/tools/fixtures/real_corpus/README.md
 !/tools/fixtures/real_corpus/manifest.json

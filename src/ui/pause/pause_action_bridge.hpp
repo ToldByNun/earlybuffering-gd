@@ -46,6 +46,7 @@ public:
     static void devExportResearchPack();
     static void devCompareSessions();
     static void devReproduceGold();
+    static void devRunRealAssist();
 
     // Desktop ImGui shell / Geode popup: Main/Assist/Learn/Bake/Modes/Visual/UI/Keys/Dev.
     static void openModSettings();
