@@ -88,6 +88,8 @@ public:
         double y = 0.;
         double degrees = 0.;
         double bodySize = 30.;
+        // Normalized corridor half-width in bodySize units (outer strips / room of error).
+        double corridorWidth = 1.1;
         double confidence = 0.;
 
     private:
@@ -105,6 +107,7 @@ public:
         double holdSeconds = 0.;
         double releaseSeconds = 0.;
         double phaseSeconds = 0.;
+        double targetTravelDegrees = 0.;
         double bodySize = 30.;
         double confidence = 0.;
 

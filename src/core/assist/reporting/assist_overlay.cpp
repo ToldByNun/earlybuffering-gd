@@ -132,8 +132,9 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             } else {
                 auto const wave = controller.wavePattern(0);
                 if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
-                    waveBit = fmt::format("wp {:.0f}% {:.0f}/{:.0f}ms", wave.confidence * 100.,
-                                          wave.holdSeconds * 1000., wave.releaseSeconds * 1000.);
+                    waveBit = fmt::format("wp {:.0f}% {:.0f}/{:.0f}ms @{:.0f}°",
+                                          wave.confidence * 100., wave.holdSeconds * 1000.,
+                                          wave.releaseSeconds * 1000., wave.targetTravelDegrees);
                 } else if (wave.state == EbWavePatternRecognizer::State::Acquiring ||
                            wave.state == EbWavePatternRecognizer::State::Reacquiring) {
                     waveBit = "wp arming";
@@ -145,8 +146,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             auto const wave = controller.wavePattern(0);
             if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
                 controller.m_overlayText += fmt::format(
-                    " | wp {:.0f}% {:.0f}/{:.0f}ms", wave.confidence * 100.,
-                    wave.holdSeconds * 1000., wave.releaseSeconds * 1000.);
+                    " | wp {:.0f}% {:.0f}/{:.0f}ms @{:.0f}°", wave.confidence * 100.,
+                    wave.holdSeconds * 1000., wave.releaseSeconds * 1000., wave.targetTravelDegrees);
             } else if (wave.state == EbWavePatternRecognizer::State::Acquiring ||
                        wave.state == EbWavePatternRecognizer::State::Reacquiring) {
                 controller.m_overlayText += " | wp arming";

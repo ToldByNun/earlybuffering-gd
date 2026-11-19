@@ -356,6 +356,8 @@ public:
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
             EbCheckbox::drawSetting("show-straightfly", "Visualize Straightfly");
             EbCheckbox::drawSetting("show-wave-pattern", "Visualize Wave Pattern");
+            EbSlider::drawIntSetting("wave-angle-snap", "Flight Angle Snap", 0, 45, " deg");
+            EbSlider::drawFloatSetting("ship-room-of-error", "Ship Room of Error", .4f, 3.f, 1, "x");
         }
         EbSectionCard::end();
 

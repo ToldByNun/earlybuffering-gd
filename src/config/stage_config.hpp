@@ -79,6 +79,11 @@ public:
     static bool showTrajectory();
     static bool showStraightfly(); // acquired Straight Flight target line
     static bool showWavePattern(); // locked Wave zigzag + upcoming click edges
+    // 0 = continuous; else snap Ship/Wave locked travel onto this degree step.
+    // Setting key remains wave-angle-snap (serialized).
+    static int flightAngleSnapDegrees();
+    // Ship straightfly corridor half-width in bodySize units (outer strips).
+    static float shipRoomOfError();
     static bool showBakePath();  // green press + purple release BakeMap windows
     static bool showPauseBake(); // pause-screen status lines
     // Pause top-right button → Geode openSettingsPopup (later: hub).
@@ -329,6 +334,8 @@ private:
     static bool s_cachedShowTrajectory;
     static bool s_cachedShowStraightfly;
     static bool s_cachedShowWavePattern;
+    static int s_cachedWaveAngleSnapDegrees;
+    static float s_cachedShipRoomOfError;
     static bool s_cachedShowBakePath;
     static bool s_cachedShowPauseBake;
     static bool s_cachedShowPauseHub;

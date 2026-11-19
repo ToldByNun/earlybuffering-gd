@@ -197,6 +197,8 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"show-trajectory", SettingsCategory::Visual},
         {"show-straightfly", SettingsCategory::Visual},
         {"show-wave-pattern", SettingsCategory::Visual},
+        {"wave-angle-snap", SettingsCategory::Visual},
+        {"ship-room-of-error", SettingsCategory::Visual},
         {"save-feedback-sound", SettingsCategory::Visual},
         {"save-feedback-color", SettingsCategory::Visual},
         {"save-feedback-counter", SettingsCategory::Visual},

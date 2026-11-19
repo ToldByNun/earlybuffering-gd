@@ -21,6 +21,8 @@ public:
         double maximumTargetAge = 8.;
         bool manualTarget = false;
         double targetDegrees = 0.;
+        // 0 = continuous. Else lock Ship heading onto this degree grid.
+        int angleSnapDegrees = 0;
 
     private:
     };
@@ -40,6 +42,8 @@ public:
     private:
     };
     void configure(Settings const& settings);
+    // Hot-path: update snap without wiping a live lock.
+    void setAngleSnapDegrees(int stepDegrees);
     void rawEdge(bool down);
     void observe(EbFlightMeasurement::Result const& measurement, double dt, bool supported,
                  bool assisted);
@@ -52,6 +56,7 @@ public:
 private:
     void yield(Reason reason);
     void clearAcquisition();
+    void lockTargetDegrees(double measuredDegrees);
     Settings m_settings;
     Result m_result;
     double m_time = 0.;
@@ -66,6 +71,10 @@ private:
     double m_sumX = 0.;
     double m_sumY = 0.;
     double m_offHeadingSeconds = 0.;
+    double m_headingShiftSeconds = 0.;
+    double m_probeSumX = 0.;
+    double m_probeSumY = 0.;
+    double m_probeSeconds = 0.;
     int m_holdCount = 0;
     int m_releaseCount = 0;
     int m_deviations = 0;

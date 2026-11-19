@@ -25,6 +25,15 @@ public:
     static int suggestedDelayTicks(Target const& target, float deltaTime, int limit);
     static double expectedSeconds(Target const& target);
     static double phaseError(double completedSeconds, double expectedSeconds);
+    // 0 = continuous. Else round travel heading onto a discrete degree grid.
+    static double snapDegrees(double degrees, int stepDegrees);
+    // Prefer staying on the locked step until measured clearly belongs to a neighbor.
+    static double snapDegreesSticky(double degrees, int stepDegrees, double lockedDegrees);
+    // Equal-slope Wave model: θ ≈ atan((Th-Tr)/(Th+Tr)) ↔ duty = (1+tanθ)/2.
+    static double dutyFromTravelDegrees(double degrees);
+    static double travelDegreesFromDuty(double duty);
+    static void holdReleaseForTravel(double travelDegrees, double periodSeconds, double& holdSeconds,
+                                     double& releaseSeconds);
     static bool selfCheck(std::string& report);
 
 private:

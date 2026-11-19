@@ -416,13 +416,14 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
     bool const buffered = m_buffer.state != BufferState::Idle && m_buffer.player1 == (slot == 0);
     bool const pendingRelease = m_pendingRelease && m_pendingReleaseP1 == (slot == 0);
     bool const assisted = m_flightCorrectionObserved[slot] || buffered || pendingRelease;
-    bool const liveOk = !player->m_controlsDisabled && !player->m_isDashing &&
-                        !EbSimTrust::get().parityDrift() &&
-                        !EbDivergenceTracker::get().simUntrusted();
-    // AP06/AP07: Ship acquires a straight-flight target. Wave recognizes hold/release
-    // patterns (AP07). Swing measures heading only until its control model arms.
-    bool const lineTargeting = EbFlightModePolicy::allowsLineTargeting(kind) && liveOk;
-    bool const wavePattern = EbFlightModePolicy::allowsWavePatternRecognition(kind) && liveOk;
+    // Recognition must keep running even when trust is soft — otherwise untrust
+    // resets the lock every tick and Ship/Wave never stay acquired.
+    bool const canMeasure = !player->m_controlsDisabled && !player->m_isDashing;
+    bool const lineTargeting = EbFlightModePolicy::allowsLineTargeting(kind) && canMeasure;
+    bool const wavePattern = EbFlightModePolicy::allowsWavePatternRecognition(kind) && canMeasure;
+    int const angleSnap = EbStageConfig::flightAngleSnapDegrees();
+    m_flightIntent[slot].setAngleSnapDegrees(angleSnap);
+    m_wavePattern[slot].setAngleSnapDegrees(angleSnap);
     m_flightIntent[slot].observe(m_flightMeasurement[slot].result(), sample.dt, lineTargeting,
                                  assisted);
     m_wavePattern[slot].observe(m_flightMeasurement[slot].result(), sample.dt, wavePattern,
@@ -450,8 +451,12 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
         line.x = m_shipLineX[slot];
         line.y = m_shipLineY[slot];
         double const crossTrack = EbShipLinePolicy::normalizedCrossTrack(line, sample.x, sample.y);
+        // Match straightfly outer strips: half-width = 0.5 * bodySize * room →
+        // normalized threshold is 0.5 * room (plus a little leave hysteresis).
+        double const room = .5 * static_cast<double>(EbStageConfig::shipRoomOfError());
+        double const leave = room * 1.15;
         // Sustained lateral leave only — click heading noise must not kill Tracking.
-        if (crossTrack > 1.1) {
+        if (crossTrack > leave) {
             m_shipLineOffSeconds[slot] += sample.dt;
             if (m_shipLineOffSeconds[slot] > .2) {
                 m_flightIntent[slot].abandon(EbFlightIntent::Reason::OffCorridor);
@@ -502,6 +507,7 @@ EbAssistController::StraightflyView EbAssistController::straightflyView(int play
     view.y = m_shipLineY[player];
     view.degrees = intent.targetDegrees;
     view.bodySize = 30. * (context.size > 0.f ? context.size : 1.f);
+    view.corridorWidth = EbStageConfig::shipRoomOfError();
     view.confidence = intent.confidence;
     return view;
 }
@@ -534,6 +540,7 @@ EbAssistController::WavePatternView EbAssistController::wavePatternView(int play
     view.holdSeconds = pattern.holdSeconds;
     view.releaseSeconds = pattern.releaseSeconds;
     view.phaseSeconds = pattern.phaseSeconds;
+    view.targetTravelDegrees = pattern.targetTravelDegrees;
     view.bodySize = 30. * (context.size > 0.f ? context.size : 1.f);
     view.confidence = pattern.confidence;
     return view;
@@ -545,6 +552,7 @@ void EbAssistController::configureFlightIntent(bool manualTarget, double degrees
     EbFlightIntent::Settings settings;
     settings.manualTarget = manualTarget;
     settings.targetDegrees = degrees;
+    settings.angleSnapDegrees = EbStageConfig::flightAngleSnapDegrees();
     for (auto& intent : m_flightIntent)
         intent.configure(settings);
     m_shipLineEnabled = restoreEnabled;
@@ -612,6 +620,8 @@ void EbAssistController::fillWavePatternOptions(EbPlanOptions& options, PlayLaye
         !EbStageConfig::assistRelease() || !layer || !player || player->m_isDashing ||
         layer->m_gameState.m_isDualMode || player->m_controlsDisabled)
         return;
+    if (EbSimTrust::get().parityDrift() || EbDivergenceTracker::get().simUntrusted())
+        return;
     auto const kind = EbStageConfig::kindOf(player);
     if (!EbFlightModePolicy::allowsWavePatternAssist(kind))
         return;
@@ -659,6 +669,8 @@ void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* 
     if (!shipLineAssistActive() || !EbStageConfig::assistPress() ||
         !EbStageConfig::assistRelease() || !layer || !player || player->m_isDashing ||
         layer->m_gameState.m_isDualMode || player->m_controlsDisabled)
+        return;
+    if (EbSimTrust::get().parityDrift() || EbDivergenceTracker::get().simUntrusted())
         return;
     auto const kind = EbStageConfig::kindOf(player);
     // Dual is rejected above; shared dual corrections stay denied by contract.

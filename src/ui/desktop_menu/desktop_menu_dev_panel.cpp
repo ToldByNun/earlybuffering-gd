@@ -420,10 +420,10 @@ public:
                             EbWavePatternRecognizer::stateName(wave.state), wave.confidence * 100.);
                 if (wave.targetValid)
                     ImGui::Text("Hold %.0f ms / Release %.0f ms   duty %.0f%%   motif %dp  "
-                                "travel %.1f deg   jitter %.0f ms",
+                                "target %.1f deg (avg %.1f)   jitter %.0f ms",
                                 wave.holdSeconds * 1000., wave.releaseSeconds * 1000.,
-                                wave.dutyCycle * 100., wave.motifPairs, wave.averageTravelDegrees,
-                                wave.jitterSeconds * 1000.);
+                                wave.dutyCycle * 100., wave.motifPairs, wave.targetTravelDegrees,
+                                wave.averageTravelDegrees, wave.jitterSeconds * 1000.);
                 auto const result = EbAssistController::get().flightMeasurement(player);
                 ImGui::Text("Player %d: %s", player + 1,
                             result.headingValid ? "Measured" : "Acquiring / unavailable");

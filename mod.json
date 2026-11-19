@@ -1278,6 +1278,22 @@
 			"description": "When a Wave hold/release pattern is locked, draws the predicted zigzag path and upcoming click edges (amber path, bright next-click markers). Not a straight corridor — shows the next clicks / wave lane. Off = no draw cost.",
 			"default": false
 		},
+		"wave-angle-snap": {
+			"type": "int",
+			"name": "Flight Angle Snap (deg)",
+			"description": "Ship straightfly and Wave pattern locks snap travel heading onto this degree grid (0 / 10 / 20…). 0 = continuous (locked line still stays stable — small mistakes do not rewrite it). Example: 10 means straight, +10°, +20°, never in-between. For Wave, also retargets hold/release duty to match the snapped heading.",
+			"default": 0,
+			"min": 0,
+			"max": 45
+		},
+		"ship-room-of-error": {
+			"type": "float",
+			"name": "Ship Room of Error",
+			"description": "How wide the Ship straightfly corridor is (the two outer strips). 1.0 ≈ one body width from the center line. Higher = more room before the assist yields the lock; lower = tighter line. Also scales the visualized corridor band.",
+			"default": 1.1,
+			"min": 0.4,
+			"max": 3.0
+		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",

@@ -201,6 +201,7 @@ void EbModuleBindings::registerSettings() {
         }
         EbAssistController::get().updateOverlay();
     });
+    watchInt("wave-angle-snap");
     watchBool("show-pause-hub");
     watchBool("lag-warning-toast");
     watchBool("auto-tune");
@@ -354,4 +355,5 @@ void EbModuleBindings::registerSettings() {
                                 "wave-latency", "robot-latency", "spider-latency", "swing-latency"};
     for (auto* id : latencyIds)
         watchFloat(id);
+    watchFloat("ship-room-of-error");
 }

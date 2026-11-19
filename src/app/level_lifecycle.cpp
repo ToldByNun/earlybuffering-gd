@@ -115,6 +115,8 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
+    // Death often skips the matching UP — stuck true blocks rawEdge / Wave+Ship lock.
+    controller.m_userHolding[0] = controller.m_userHolding[1] = false;
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;
     controller.m_outcomePending = false;
@@ -132,6 +134,15 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     {
         EbLagProbe::Scope const state("eb.syncButtons");
         controller.syncButtonState(playLayer);
+    }
+    // Retry can rebuild objectLayer and orphan draw nodes; re-arm viz from settings.
+    if (playLayer) {
+        EbStraightflyVisualizer::get().setEnabled(EbStageConfig::showStraightfly());
+        if (EbStageConfig::showStraightfly())
+            EbStraightflyVisualizer::get().attach(playLayer);
+        EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
+        if (EbStageConfig::showWavePattern())
+            EbWavePatternVisualizer::get().attach(playLayer);
     }
     {
         EbLagProbe::Scope const state("eb.updateOverlay");

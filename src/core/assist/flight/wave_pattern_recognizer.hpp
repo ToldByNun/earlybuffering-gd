@@ -4,8 +4,7 @@
 #include "flight_measurement.hpp"
 #include <string>
 
-// AP07: recognize controlled Wave hold/release spam and short motifs.
-// Recognition only — timing corrections arrive in AP08.
+// AP07/AP08: recognize Wave hold/release spam and keep a locked motif/heading stable.
 class EbWavePatternRecognizer {
 public:
     enum class State { Inactive, Acquiring, Tracking, Yielding, Reacquiring };
@@ -27,6 +26,8 @@ public:
         double residualSeconds = .08;
         int lockCycles = 3;
         int motifMaxPairs = 2;
+        // 0 = continuous travel heading. Else lock onto this degree grid.
+        int angleSnapDegrees = 0;
 
     private:
     };
@@ -42,7 +43,8 @@ public:
         double dutyCycle = 0.;
         double phaseSeconds = 0.;
         double jitterSeconds = 0.;
-        double averageTravelDegrees = 0.;
+        double averageTravelDegrees = 0.; // recent measured average (diagnostic)
+        double targetTravelDegrees = 0.;  // locked assist heading (snapped when configured)
         int motifPairs = 1;
         int matchedCycles = 0;
         double rawEvidenceAge = 0.;
@@ -57,6 +59,8 @@ public:
     };
 
     void configure(Settings const& settings);
+    // Hot-path: update snap without wiping a live lock.
+    void setAngleSnapDegrees(int stepDegrees);
     void rawEdge(bool down);
     void observe(EbFlightMeasurement::Result const& measurement, double dt, bool supported,
                  bool assisted);
@@ -79,7 +83,10 @@ private:
     void yield(Reason reason);
     void pushSegment(bool hold, double seconds, bool assisted);
     void scoreMotifs();
+    void refineLockedMotif();
+    void lockTravelTarget(double measuredDegrees);
     void updateTravel(EbFlightMeasurement::Result const& measurement, double dt, bool assisted);
+    void publishDurations(double holdSeconds, double releaseSeconds);
     Settings m_settings;
     Result m_result;
     static constexpr int kSegmentCapacity = 16;
@@ -95,6 +102,10 @@ private:
     double m_sumX = 0.;
     double m_sumY = 0.;
     double m_travelSeconds = 0.;
+    double m_probeSumX = 0.;
+    double m_probeSumY = 0.;
+    double m_probeSeconds = 0.;
+    double m_headingShiftSeconds = 0.;
     // Motif templates: up to 2 hold/release pairs → 4 segment means.
     double m_template[4]{};
     int m_templateLen = 0;
@@ -103,6 +114,7 @@ private:
     bool m_hasEdge = false;
     bool m_down = false;
     bool m_edgeAssisted = false;
+    bool m_travelLocked = false;
 };
 
 #endif

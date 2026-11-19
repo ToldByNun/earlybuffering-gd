@@ -105,8 +105,10 @@ void EbStraightflyVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     if (!layer->m_objectLayer)
         return;
     if (!m_node->getParent()) {
-        detach(true);
-        return;
+        // Retry/respawn can rebuild objectLayer — reattach instead of disabling forever.
+        ensureNode(layer);
+        if (!m_node || !m_node->getParent())
+            return;
     }
     ++m_ticksSinceRebuild;
     if (m_ticksSinceRebuild < kRebuildEveryTicks)
@@ -142,7 +144,9 @@ void EbStraightflyVisualizer::rebuild(PlayLayer* layer) {
         geode::prelude::CCPoint const behind{
             static_cast<float>(view.x - axisX * kBackLength),
             static_cast<float>(view.y - axisY * kBackLength)};
-        double const half = std::max(4., view.bodySize * 0.5);
+        // Outer strips = body half-width × room-of-error (corridorWidth).
+        double const half =
+            std::max(4., view.bodySize * 0.5 * std::max(.25, view.corridorWidth));
         double const nx = -axisY;
         double const ny = axisX;
         geode::prelude::CCPoint early[2] = {

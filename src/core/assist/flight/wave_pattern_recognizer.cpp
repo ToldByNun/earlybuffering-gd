@@ -1,4 +1,5 @@
 #include "wave_pattern_recognizer.hpp"
+#include "wave_pattern_policy.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -16,7 +17,17 @@ void EbWavePatternRecognizer::configure(Settings const& settings) {
     m_settings.residualSeconds = clamp(settings.residualSeconds, .02, .5, .08);
     m_settings.lockCycles = std::clamp(settings.lockCycles, 2, 8);
     m_settings.motifMaxPairs = std::clamp(settings.motifMaxPairs, 1, 2);
+    m_settings.angleSnapDegrees = std::clamp(settings.angleSnapDegrees, 0, 45);
     reset();
+}
+
+void EbWavePatternRecognizer::setAngleSnapDegrees(int stepDegrees) {
+    int const snap = std::clamp(stepDegrees, 0, 45);
+    if (snap == m_settings.angleSnapDegrees)
+        return;
+    m_settings.angleSnapDegrees = snap;
+    if (m_result.state == State::Tracking && m_travelLocked && m_result.periodSeconds > 0.)
+        lockTravelTarget(m_result.targetTravelDegrees);
 }
 
 void EbWavePatternRecognizer::reset() {
@@ -24,10 +35,38 @@ void EbWavePatternRecognizer::reset() {
     m_segmentCount = m_segmentWrite = 0;
     m_time = m_edgeTime = m_lastEvidence = m_targetTime = m_yieldTime = 0.;
     m_cleanAge = m_sumX = m_sumY = m_travelSeconds = 0.;
+    m_probeSumX = m_probeSumY = m_probeSeconds = m_headingShiftSeconds = 0.;
     m_templateLen = m_matchedCycles = m_deviations = 0;
-    m_hasEdge = m_down = m_edgeAssisted = false;
+    m_hasEdge = m_down = m_edgeAssisted = m_travelLocked = false;
     for (double& value : m_template)
         value = 0.;
+}
+
+void EbWavePatternRecognizer::publishDurations(double holdSeconds, double releaseSeconds) {
+    m_result.holdSeconds = holdSeconds;
+    m_result.releaseSeconds = releaseSeconds;
+    m_result.periodSeconds = holdSeconds + releaseSeconds;
+    m_result.dutyCycle =
+        m_result.periodSeconds > 1e-6 ? holdSeconds / m_result.periodSeconds : 0.;
+}
+
+void EbWavePatternRecognizer::lockTravelTarget(double measuredDegrees) {
+    double measured = measuredDegrees;
+    if (!std::isfinite(measured)) {
+        measured = EbWavePatternPolicy::travelDegreesFromDuty(
+            m_result.periodSeconds > 1e-6 ? m_result.holdSeconds / m_result.periodSeconds : .5);
+    }
+    double const snapped = EbWavePatternPolicy::snapDegrees(measured, m_settings.angleSnapDegrees);
+    m_result.targetTravelDegrees = snapped;
+    m_travelLocked = true;
+    if (m_settings.angleSnapDegrees > 0 && m_result.periodSeconds > 1e-4) {
+        double hold = m_result.holdSeconds;
+        double release = m_result.releaseSeconds;
+        EbWavePatternPolicy::holdReleaseForTravel(snapped, m_result.periodSeconds, hold, release);
+        publishDurations(hold, release);
+    }
+    m_headingShiftSeconds = 0.;
+    m_probeSumX = m_probeSumY = m_probeSeconds = 0.;
 }
 
 EbWavePatternRecognizer::Result const& EbWavePatternRecognizer::result() const {
@@ -62,6 +101,8 @@ void EbWavePatternRecognizer::yield(Reason reason) {
     m_matchedCycles = 0;
     m_deviations = 0;
     m_sumX = m_sumY = m_travelSeconds = 0.;
+    m_probeSumX = m_probeSumY = m_probeSeconds = m_headingShiftSeconds = 0.;
+    m_travelLocked = false;
 }
 
 void EbWavePatternRecognizer::abandon(Reason reason) {
@@ -109,12 +150,59 @@ void EbWavePatternRecognizer::updateTravel(EbFlightMeasurement::Result const& me
     double const speed = std::hypot(measurement.vx, measurement.vy);
     if (!(speed > 1.))
         return;
-    m_sumX += std::cos(radians) * speed * dt;
-    m_sumY += std::sin(radians) * speed * dt;
-    m_travelSeconds += dt;
-    if (m_travelSeconds >= .05)
-        m_result.averageTravelDegrees =
-            std::atan2(m_sumY, m_sumX) * 180. / std::numbers::pi;
+    double const weight = speed * dt;
+    if (!m_travelLocked) {
+        m_sumX += std::cos(radians) * weight;
+        m_sumY += std::sin(radians) * weight;
+        m_travelSeconds += dt;
+        if (m_travelSeconds >= .05)
+            m_result.averageTravelDegrees =
+                std::atan2(m_sumY, m_sumX) * 180. / std::numbers::pi;
+        return;
+    }
+
+    // Locked: keep a short probe of recent travel. Do not rewrite the assist
+    // heading on ordinary click jitter — only accept a neighboring snap step
+    // after sustained evidence (Ship-like stability).
+    double const decay = std::exp(-dt / .28);
+    m_probeSumX = m_probeSumX * decay + std::cos(radians) * weight;
+    m_probeSumY = m_probeSumY * decay + std::sin(radians) * weight;
+    m_probeSeconds = std::min(1., m_probeSeconds + dt);
+    if (m_probeSeconds < .12)
+        return;
+    double const measured = std::atan2(m_probeSumY, m_probeSumX) * 180. / std::numbers::pi;
+    m_result.averageTravelDegrees = measured;
+    int const snap = m_settings.angleSnapDegrees;
+    if (snap <= 0) {
+        double const err = EbFlightMeasurement::angleDifference(measured, m_result.targetTravelDegrees);
+        if (std::abs(err) <= 10.) {
+            // Confirm lock; do not rewrite the assist heading on click jitter.
+            m_headingShiftSeconds = 0.;
+            m_lastEvidence = m_time;
+            m_result.confidence = std::min(1., m_result.confidence + dt * .1);
+        } else if (std::abs(err) >= 18.) {
+            m_headingShiftSeconds += dt;
+            if (m_headingShiftSeconds >= .45)
+                lockTravelTarget(measured);
+        } else {
+            m_headingShiftSeconds = std::max(0., m_headingShiftSeconds - dt);
+        }
+        return;
+    }
+
+    double const candidate = EbWavePatternPolicy::snapDegreesSticky(
+        measured, snap, m_result.targetTravelDegrees);
+    double const delta =
+        std::abs(EbFlightMeasurement::angleDifference(candidate, m_result.targetTravelDegrees));
+    if (delta < .5) {
+        m_headingShiftSeconds = 0.;
+        m_lastEvidence = m_time;
+        m_result.confidence = std::min(1., m_result.confidence + dt * .08);
+        return;
+    }
+    m_headingShiftSeconds += dt;
+    if (m_headingShiftSeconds >= .45)
+        lockTravelTarget(candidate);
 }
 
 void EbWavePatternRecognizer::scoreMotifs() {
@@ -254,17 +342,20 @@ void EbWavePatternRecognizer::scoreMotifs() {
     if (best.cycles < m_settings.lockCycles || !(best.error < 1e8))
         return;
 
+    // Already Tracking: never wholesale-replace the locked motif from a noisy
+    // recent window. Gentle confirmation only (Ship-like consistency).
+    if (m_result.state == State::Tracking && m_result.targetValid) {
+        refineLockedMotif();
+        return;
+    }
+
     m_templateLen = best.templateLen;
     for (int slot = 0; slot < best.templateLen; ++slot)
         m_template[slot] = best.templateMeans[slot];
     m_matchedCycles = best.cycles;
     m_result.motifPairs = best.pairs;
     m_result.matchedCycles = best.cycles;
-    m_result.holdSeconds = best.holdMean;
-    m_result.releaseSeconds = best.releaseMean;
-    m_result.periodSeconds = best.holdMean + best.releaseMean;
-    m_result.dutyCycle =
-        m_result.periodSeconds > 1e-6 ? best.holdMean / m_result.periodSeconds : 0.;
+    publishDurations(best.holdMean, best.releaseMean);
     m_result.jitterSeconds = best.jitter;
     m_result.targetValid = true;
     m_result.reason = Reason::None;
@@ -273,6 +364,38 @@ void EbWavePatternRecognizer::scoreMotifs() {
     m_result.state = State::Tracking;
     m_targetTime = m_lastEvidence = m_time;
     m_deviations = 0;
+    double measuredTravel = m_result.averageTravelDegrees;
+    if (!(m_travelSeconds >= .05))
+        measuredTravel = EbWavePatternPolicy::travelDegreesFromDuty(m_result.dutyCycle);
+    lockTravelTarget(measuredTravel);
+}
+
+void EbWavePatternRecognizer::refineLockedMotif() {
+    if (m_segmentCount < 2 || m_templateLen < 2)
+        return;
+    auto const& newest =
+        m_segments[(m_segmentWrite + kSegmentCapacity - 1) % kSegmentCapacity];
+    if (newest.assisted)
+        return;
+    double const mean = newest.hold ? m_result.holdSeconds : m_result.releaseSeconds;
+    if (!(mean > 0.))
+        return;
+    double const tol =
+        std::max(m_settings.minimumDeviationSeconds, mean * m_settings.durationTolerance);
+    double const delta = newest.seconds - mean;
+    if (std::abs(delta) > tol * 1.25)
+        return;
+    // With degree snap the duty cycle is owned by the locked heading — only
+    // confirm confidence. Without snap, gently blend durations (Ship-like).
+    if (m_settings.angleSnapDegrees <= 0) {
+        double const blended = mean + .06 * delta;
+        if (newest.hold)
+            publishDurations(blended, m_result.releaseSeconds);
+        else
+            publishDurations(m_result.holdSeconds, blended);
+    }
+    m_result.confidence = std::min(1., m_result.confidence + .03);
+    m_targetTime = m_time;
 }
 
 void EbWavePatternRecognizer::observe(EbFlightMeasurement::Result const& measurement, double dt,
@@ -302,6 +425,8 @@ void EbWavePatternRecognizer::observe(EbFlightMeasurement::Result const& measure
         m_edgeTime = m_time;
         m_lastEvidence = m_time;
         m_sumX = m_sumY = m_travelSeconds = 0.;
+        m_probeSumX = m_probeSumY = m_probeSeconds = m_headingShiftSeconds = 0.;
+        m_travelLocked = false;
     }
 
     if (assisted) {
@@ -329,9 +454,10 @@ void EbWavePatternRecognizer::observe(EbFlightMeasurement::Result const& measure
                 double const mean = newest.hold ? m_result.holdSeconds : m_result.releaseSeconds;
                 double const tol =
                     std::max(m_settings.minimumDeviationSeconds, mean * m_settings.durationTolerance);
-                if (std::abs(newest.seconds - mean) > tol * 1.9) {
+                if (std::abs(newest.seconds - mean) > tol * 2.2) {
                     ++m_deviations;
-                    if (m_deviations >= 3) {
+                    // Require a clear run of bad edges before abandoning the locked line.
+                    if (m_deviations >= 5) {
                         yield(Reason::RhythmChanged);
                         return;
                     }
@@ -342,9 +468,10 @@ void EbWavePatternRecognizer::observe(EbFlightMeasurement::Result const& measure
             }
         }
         updateTravel(measurement, dt, assisted);
-        m_result.confidence = std::max(0., m_result.confidence - dt * .025);
+        // Soft decay only — locked motif must survive ordinary click jitter.
+        m_result.confidence = std::max(.15, m_result.confidence - dt * .012);
         m_result.rawEvidenceAge = m_time - m_lastEvidence;
-        if (m_result.rawEvidenceAge > 1.25 || m_time - m_targetTime > m_settings.maximumTargetAge) {
+        if (m_result.rawEvidenceAge > 2.5 || m_time - m_targetTime > m_settings.maximumTargetAge) {
             yield(Reason::StaleEvidence);
             return;
         }
@@ -467,6 +594,66 @@ bool EbWavePatternRecognizer::selfCheck(std::string& report) {
         auto const& result = recognizer.result();
         expect(result.state == State::Tracking, "inv-tracking");
         expect(result.dutyCycle < .45, "inv-duty");
+    }
+
+    // Locked motif must stay put through a few messy edges (Ship-like).
+    {
+        EbWavePatternRecognizer recognizer;
+        EbFlightMeasurement::Result movement;
+        movement.status = EbFlightMeasurement::Status::Valid;
+        movement.headingValid = true;
+        movement.travelAngle = 0.;
+        movement.vx = 800.;
+        movement.vy = 0.;
+        bool down = true;
+        for (int tick = 0; tick < 240; ++tick) {
+            if (tick % 5 == 0) {
+                down = !down;
+                recognizer.rawEdge(down);
+            }
+            recognizer.observe(movement, .01, true, false);
+        }
+        expect(recognizer.result().state == State::Tracking, "stable-pre");
+        double const hold0 = recognizer.result().holdSeconds;
+        double const release0 = recognizer.result().releaseSeconds;
+        // Three early hold closes (~30ms instead of ~50ms) — must not rewrite lock.
+        for (int mess = 0; mess < 3; ++mess) {
+            for (int tick = 0; tick < 3; ++tick)
+                recognizer.observe(movement, .01, true, false);
+            down = !down;
+            recognizer.rawEdge(down);
+            for (int tick = 0; tick < 5; ++tick)
+                recognizer.observe(movement, .01, true, false);
+            down = !down;
+            recognizer.rawEdge(down);
+        }
+        expect(recognizer.result().state == State::Tracking, "stable-still");
+        expect(std::abs(recognizer.result().holdSeconds - hold0) < .015, "stable-hold");
+        expect(std::abs(recognizer.result().releaseSeconds - release0) < .015, "stable-release");
+    }
+
+    // Angle snap retargets duty onto a discrete heading.
+    {
+        EbWavePatternRecognizer recognizer;
+        EbWavePatternRecognizer::Settings settings;
+        settings.angleSnapDegrees = 10;
+        recognizer.configure(settings);
+        EbFlightMeasurement::Result movement;
+        movement.status = EbFlightMeasurement::Status::Valid;
+        movement.headingValid = true;
+        movement.travelAngle = 14.;
+        movement.vx = 800.;
+        movement.vy = 200.;
+        bool down = true;
+        for (int tick = 0; tick < 240; ++tick) {
+            if (tick % 5 == 0) {
+                down = !down;
+                recognizer.rawEdge(down);
+            }
+            recognizer.observe(movement, .01, true, false);
+        }
+        expect(recognizer.result().state == State::Tracking, "snap-tracking");
+        expect(std::abs(recognizer.result().targetTravelDegrees - 10.) < 1e-6, "snap-target-10");
     }
 
     expect(stateName(State::Tracking)[0] != '\0', "state-name");

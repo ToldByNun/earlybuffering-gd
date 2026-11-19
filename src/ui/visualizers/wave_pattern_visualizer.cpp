@@ -118,8 +118,10 @@ void EbWavePatternVisualizer::onPhysicsTick(PlayLayer* layer, float) {
     if (!layer->m_objectLayer)
         return;
     if (!m_node->getParent()) {
-        detach(true);
-        return;
+        // Retry/respawn can rebuild objectLayer — reattach instead of disabling forever.
+        ensureNode(layer);
+        if (!m_node || !m_node->getParent())
+            return;
     }
     ++m_ticksSinceRebuild;
     if (m_ticksSinceRebuild < kRebuildEveryTicks)
