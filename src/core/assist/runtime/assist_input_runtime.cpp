@@ -22,6 +22,7 @@
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
+#include "../flight/flight_mode_policy.hpp"
 #include "../input/click_intent_guard.hpp"
 #include "../input/input_source_scope.hpp"
 #include <algorithm>
@@ -323,22 +324,19 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
                                              controller.m_attemptTick, DevEventSource::Live);
     };
 
-    if (controller.yieldShipLine(playLayer, player, down)) {
+    // AP09: one yield path — direction change cancels Ship/Wave pending before plan.
+    if (controller.yieldFlightAssist(playLayer, player, down)) {
         bool const dispatched = controller.m_inputReconciler.state(player1 ? 0 : 1).dispatched;
         bool const deliver = down != dispatched;
         beginDevPress();
-        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassNoThreat, "ship-line-yield");
-        controller.noteVerdict(AssistReason::PassNoThreat, "ship-line-yield");
-        if (deliver)
-            controller.m_log.noteInput(effectTick, down);
-        return finish(deliver);
-    }
-    if (controller.yieldWavePattern(playLayer, player, down)) {
-        bool const dispatched = controller.m_inputReconciler.state(player1 ? 0 : 1).dispatched;
-        bool const deliver = down != dispatched;
-        beginDevPress();
-        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassNoThreat, "wave-pattern-yield");
-        controller.noteVerdict(AssistReason::PassNoThreat, "wave-pattern-yield");
+        auto const kind = EbStageConfig::kindOf(player);
+        char const* where = "flight-combine-yield";
+        if (EbFlightModePolicy::allowsShipLineAssist(kind))
+            where = "ship-line-yield";
+        else if (EbFlightModePolicy::allowsWavePatternAssist(kind))
+            where = "wave-pattern-yield";
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassNoThreat, where);
+        controller.noteVerdict(AssistReason::PassNoThreat, where);
         if (deliver)
             controller.m_log.noteInput(effectTick, down);
         return finish(deliver);

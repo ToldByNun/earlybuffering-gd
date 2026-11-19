@@ -435,8 +435,9 @@ public:
                 }
             }
             ImGui::TextWrapped(
-                "Ship intent locks a straight-flight line. Wave pattern recognition (AP07) locks "
-                "hold/release spam and short motifs — corrections arrive in AP08.");
+                "Ship intent locks a straight-flight line. Wave pattern (AP07/08) locks "
+                "hold/release spam. AP09 combines both with ordinary assist: direction change "
+                "wins, then collision rescue, then Ship/Wave preference, else ordinary.");
         }
         EbSectionCard::end();
         drawStatus();

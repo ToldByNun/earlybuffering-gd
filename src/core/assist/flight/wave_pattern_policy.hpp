@@ -13,6 +13,9 @@ public:
         double phaseErrorSeconds = 0.; // completed - expected; early < 0, late > 0
         double holdSeconds = 0.;
         double releaseSeconds = 0.;
+        // AP09: locked motif informs heading preference / candidate order.
+        double travelDegrees = 0.;
+        double confidence = 0.;
         double gain = .85;
         double minimumEarlySeconds = .008;
         double maximumDelaySeconds = .085;

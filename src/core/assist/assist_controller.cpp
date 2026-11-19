@@ -12,6 +12,7 @@
 #include "assist_clock.hpp"
 #include "contracts/assist_timing_rules.hpp"
 #include "contracts/assist_verdict.hpp"
+#include "flight/flight_assist_combine.hpp"
 #include "flight/flight_mode_policy.hpp"
 #include "flight/ship_line_policy.hpp"
 #include "flight/wave_pattern_policy.hpp"
@@ -658,6 +659,8 @@ void EbAssistController::fillWavePatternOptions(EbPlanOptions& options, PlayLaye
     options.wavePattern.phaseErrorSeconds = error;
     options.wavePattern.holdSeconds = hold;
     options.wavePattern.releaseSeconds = release;
+    options.wavePattern.travelDegrees = pattern.targetTravelDegrees;
+    options.wavePattern.confidence = pattern.confidence;
     options.smartDepth = 1;
     EbAssistLog::debug(fmt::format(
         "WAVE-PATTERN arm {} err={:+.0f}ms hold={:.0f}/{:.0f}ms conf={:.0f}%",
@@ -732,6 +735,9 @@ bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, b
         return false;
     bool const ours = m_buffer.state == BufferState::Buffered && m_buffer.shipLineOwned &&
                       m_buffer.player1 == (slot == 0);
+    bool const yieldRequested = m_flightIntent[slot].result().yieldRequested;
+    if (!EbFlightAssistCombine::shouldCancelPending(yieldRequested, ours) && !ours)
+        return false;
     if (ours) {
         bool const delayedDown = m_buffer.down;
         clearBuffer();
@@ -743,7 +749,7 @@ bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, b
             return true;
         }
         // Intentional leave cancels our armed correction, then pass the new edge.
-        return m_flightIntent[slot].result().yieldRequested || ours;
+        return yieldRequested || ours;
     }
     // yieldRequested without an owned buffer must not blanket-block ordinary assist.
     return false;
@@ -758,6 +764,8 @@ bool EbAssistController::yieldWavePattern(PlayLayer* layer, PlayerObject* player
     auto const& pattern = m_wavePattern[slot].result();
     bool const ours = m_buffer.state == BufferState::Buffered && m_buffer.wavePatternOwned &&
                       m_buffer.player1 == (slot == 0);
+    if (!EbFlightAssistCombine::shouldCancelPending(pattern.yieldRequested, ours) && !ours)
+        return false;
     if (ours) {
         bool const delayedDown = m_buffer.down;
         clearBuffer();
@@ -772,4 +780,23 @@ bool EbAssistController::yieldWavePattern(PlayLayer* layer, PlayerObject* player
     }
     // Sustained climb/dive / motif change: cancel only owned buffers above.
     return false;
+}
+bool EbAssistController::yieldFlightAssist(PlayLayer* layer, PlayerObject* player, bool down) {
+    // AP09 single entry: direction-change yield before ordinary plan.
+    if (yieldShipLine(layer, player, down))
+        return true;
+    if (yieldWavePattern(layer, player, down))
+        return true;
+    return false;
+}
+void EbAssistController::clearFlightOwnedPending(char const* reason) {
+    bool const flightOwned = m_buffer.state == BufferState::Buffered &&
+                             (m_buffer.shipLineOwned || m_buffer.wavePatternOwned);
+    if (!EbFlightAssistCombine::resetClearsPending(true, flightOwned))
+        return;
+    clearBuffer();
+    auto* layer = PlayLayer::get();
+    if (layer)
+        syncButtonState(layer);
+    noteVerdict(AssistReason::PassNoThreat, reason ? reason : "flight-learn-reset");
 }

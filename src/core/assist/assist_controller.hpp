@@ -133,6 +133,10 @@ public:
     void fillWavePatternOptions(EbPlanOptions& options, PlayLayer* layer, PlayerObject* player);
     bool yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down);
     bool yieldWavePattern(PlayLayer* layer, PlayerObject* player, bool down);
+    // AP09: single yield path — direction change cancels Ship/Wave pending timing.
+    bool yieldFlightAssist(PlayLayer* layer, PlayerObject* player, bool down);
+    // AP09: learning/profile reset must not leave flight-owned pending on old evidence.
+    void clearFlightOwnedPending(char const* reason);
     // AP06: portal / gamemode boundary — drop ship-line ownership, keep ordinary assist.
     void invalidateFlightForModeChange(PlayLayer* layer, PlayerObject* player);
 

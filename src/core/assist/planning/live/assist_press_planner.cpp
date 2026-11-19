@@ -27,6 +27,7 @@
 #include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../contracts/selected_tick_guard.hpp"
+#include "../../flight/flight_assist_combine.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../orb_align.hpp"
 #include "../perfect_assist_policy.hpp"
@@ -390,8 +391,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     }
 
     // Learning may only move to a tick already verified by this plan.
-    // Otherwise retain the exact timing selected by the planner.
-    delay = EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay, plan.viableDelays);
+    // AP09: flight/rhythm corrections never move onto an unverified learned tick,
+    // and budget-incomplete probes keep the planned delay.
+    bool const flightCorr = plan.shipLineCorrection || plan.wavePatternCorrection;
+    delay = flightCorr ? EbFlightAssistCombine::guardFlightDelay(delay, plannedDelay,
+                                                                plan.viableDelays, plan.budgetHit)
+                       : EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay,
+                                                                        plan.viableDelays);
 
     // If auto-tune shifted delay away from plannedDelay, verify the shifted delay;
     // when plannedDelay is kept as-is, ShadowSimulator::plan already verified it.

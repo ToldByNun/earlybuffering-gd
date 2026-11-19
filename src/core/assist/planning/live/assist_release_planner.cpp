@@ -26,6 +26,7 @@
 #include "../../contracts/live_plan_contracts.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../contracts/selected_tick_guard.hpp"
+#include "../../flight/flight_assist_combine.hpp"
 #include "../../input/click_intent_guard.hpp"
 #include "../perfect_assist_policy.hpp"
 #include "live_frame_budget_scope.hpp"
@@ -306,8 +307,12 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     }
 
     // Learning may only move to a tick already verified by this plan.
-    // Otherwise retain the exact timing selected by the planner.
-    delay = EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay, plan.viableDelays);
+    // AP09: flight/rhythm corrections keep planned on unverified / incomplete.
+    bool const flightCorr = plan.shipLineCorrection || plan.wavePatternCorrection;
+    delay = flightCorr ? EbFlightAssistCombine::guardFlightDelay(delay, plannedDelay,
+                                                                plan.viableDelays, plan.budgetHit)
+                       : EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay,
+                                                                        plan.viableDelays);
 
     controller.m_buffer = {};
     controller.m_buffer.state = BufferState::Buffered;

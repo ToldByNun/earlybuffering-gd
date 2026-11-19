@@ -3,6 +3,7 @@
 #include "../core/assist/assist_clock.hpp"
 #include "../core/assist/assist_controller.hpp"
 #include "../core/assist/contracts/assist_contracts140.hpp"
+#include "../core/assist/flight/flight_assist_combine.hpp"
 #include "../core/assist/flight/flight_mode_policy.hpp"
 #include "../core/assist/flight/wave_pattern_policy.hpp"
 #include "../core/assist/flight/wave_pattern_recognizer.hpp"
@@ -170,6 +171,9 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string wavePatternPolicyReport;
     expectReport(EbWavePatternPolicy::selfCheck(wavePatternPolicyReport), "wave-pattern-policy",
                  wavePatternPolicyReport);
+    std::string flightCombineReport;
+    expectReport(EbFlightAssistCombine::selfCheck(flightCombineReport), "flight-assist-combine",
+                 flightCombineReport);
     std::string spotTrustReport;
     expectReport(EbSpotTrustMap::selfCheck(spotTrustReport), "spot-trust-map", spotTrustReport);
     std::string simTrustReport;

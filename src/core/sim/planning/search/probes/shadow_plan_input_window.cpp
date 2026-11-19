@@ -9,6 +9,7 @@
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../../../assist/contracts/orb_probe_order.hpp"
 #include "../../../../assist/contracts/subtick_timing.hpp"
+#include "../../../../assist/flight/flight_assist_combine.hpp"
 #include "../../../../assist/flight/wave_pattern_policy.hpp"
 #include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../shadow_simulator.hpp"
@@ -338,11 +339,29 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         context.cands[0].raw.landedAfterAction && !context.cands[0].raw.died)
         skipLaterBand = true;
 
+    // AP09: binding lane — collision on d0 outranks Ship/Wave preference; dash
+    // holds stay ordinary. Direction-change yields happen before plan().
+    EbFlightAssistCombine::EdgeContext combineCtx;
+    combineCtx.lifecycleOk = context.real != nullptr;
+    combineCtx.baselineDied =
+        context.candReady[0] && context.cands[0].viable && context.cands[0].raw.died;
+    combineCtx.shipLineArmed = context.options.shipLine.enabled;
+    combineCtx.wavePatternArmed = context.options.wavePattern.enabled;
+    combineCtx.shipTracking = context.options.shipLine.enabled;
+    combineCtx.waveTracking = context.options.wavePattern.enabled;
+    combineCtx.shipConfidence = context.options.shipLine.enabled ? 1. : 0.;
+    combineCtx.waveConfidence = context.options.wavePattern.enabled ? 1. : 0.;
+    combineCtx.dashHold = context.real && context.real->m_isDashing;
+    combineCtx.orbTiming = context.orbAssist && context.orbHint.found;
+    auto const combineLane = EbFlightAssistCombine::selectLaneDeterministic(
+        combineCtx, context.wallExceeded() || context.tickBudget <= 0 ? 0 : 1);
+
     // Straightfly priority: (1) steer back onto the line by delaying the edge
     // that moves toward it, (2) otherwise fall through to ordinary safe/threat.
     // Research pack 20261118_231744: 246× PassD0Safe with sf 100% — cost ranking
     // never won because ship endX is delay-invariant; steer from live cross-track.
-    if (context.options.shipLine.enabled && context.candReady[0] && context.cands[0].viable &&
+    if (combineLane == EbFlightAssistCombine::Lane::FlightLine &&
+        context.options.shipLine.enabled && context.candReady[0] && context.cands[0].viable &&
         !context.cands[0].raw.died && !dual && context.real) {
         double const liveSigned = EbShipLinePolicy::signedCrossTrack(
             context.options.shipLine, context.real->m_position.x, context.real->m_position.y);
@@ -435,9 +454,11 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
         // No line winner → ordinary IW safe/threat (priority 2).
     }
 
-    // Wave pattern (AP08): early edges may wait for the locked hold/release phase.
-    // Late edges Pass into ordinary IW — never invent a missing past click.
-    if (context.options.wavePattern.enabled && context.candReady[0] && context.cands[0].viable &&
+    // Wave pattern (AP08/AP09): early edges may wait for the locked hold/release
+    // phase. Late edges Pass into ordinary IW — never invent a missing past click.
+    // CollisionRescue / dash lanes skip rhythm preference (combineLane gate).
+    if (combineLane == EbFlightAssistCombine::Lane::AlternateRhythm &&
+        context.options.wavePattern.enabled && context.candReady[0] && context.cands[0].viable &&
         !dual) {
         int const target = EbWavePatternPolicy::suggestedDelayTicks(
             context.options.wavePattern, context.deltaTime, context.limit);

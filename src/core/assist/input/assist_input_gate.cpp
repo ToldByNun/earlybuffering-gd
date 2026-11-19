@@ -120,17 +120,10 @@ bool EbAssistInputGate::releaseGateSelfCheck(std::string& report) {
     return false;
 }
 
-int EbAssistInputGate::activeLimit(EbAssistController const& controller, PlayerObject* player) {
-    int const ticks = EbStageConfig::paramsFor(player).ticks;
-    // Ship-line ranking needs a usable delay band; Main ticks=4 is ~16ms @240 and
-    // cannot express line corrections. Floor while the session toggle is on.
-    if (controller.shipLineAssistActive() && player &&
-        EbStageConfig::kindOf(player) == GameModeKind::Ship)
-        return std::max(ticks, 20);
-    if (controller.wavePatternAssistActive() && player &&
-        EbStageConfig::kindOf(player) == GameModeKind::Wave)
-        return std::max(ticks, 20);
-    return ticks;
+int EbAssistInputGate::activeLimit(EbAssistController const&, PlayerObject* player) {
+    // Always the configured mode ticks (Main / Wave / Ship …). Ship-line and
+    // Wave-pattern must never raise Max Assist above what the user set.
+    return EbStageConfig::paramsFor(player).ticks;
 }
 
 bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller, PlayerObject* player) {
