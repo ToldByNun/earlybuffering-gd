@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.7.1
+
+Release notes: [v1.7.1](releases/v1.7.1.md).
+
+- Turn Hybrid into player-driven tabular RL: UCB explore order, shaped rewards, neighbor bleed, verify-probe feedback and eligibility traces.
+- Keep Hybrid-first verify, capacity caps and survival-band interpolation; expose UCB / neighbor / eligibility in Learn → Advanced.
+- Combine flight intent, alternation and ordinary assist (AP09); Ship / Wave corridor line policy; stop Max Assist tick floors from inflating Hybrid / straight-fly windows.
+- Pin package metadata and CI asserts to **v1.7.1** (Geode SDK 5.11.1 / GD 2.2081).
+
 ## v1.7.0
 
 Release notes: [v1.7.0](releases/v1.7.0.md).

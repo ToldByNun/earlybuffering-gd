@@ -1,6 +1,6 @@
 # Contributing
 
-For v1.7.0 desktop menu / Adaptive / Live IW / Cloud Config / Assist Pack AP-L changes, verify the ImGui shell tabs + Accent Color + Lag Warning card, Adaptive Plan Live Delay vs classic fallthrough (shared soft wall), Wave help-only / orb-under-IW, Cloud Configs under Learn/Config, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Ship packages must pass `geode_package_check.py --forbid-zstd`. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md) and Adaptive notes in `docs/assist_reference.md`.
+For v1.7.1 desktop menu / Hybrid RL / Adaptive / Live IW / Cloud Config / Assist Pack AP-L changes, verify the ImGui shell tabs + Accent Color + Lag Warning card, Learn → Advanced RL knobs (UCB / neighbor / eligibility), Hybrid-first verify probe updates, Adaptive Plan Live Delay vs classic fallthrough (shared soft wall), Wave help-only / orb-under-IW, Cloud Configs under Learn/Config, catalog loading, config installation, settings refresh, sharing failures and offline fallback. Ship packages must pass `geode_package_check.py --forbid-zstd`. Submission credentials belong in server environment variables. See [Cloud Configs](docs/cloud_configs.md) and Adaptive notes in `docs/assist_reference.md`.
 
 Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) development / authorship notes: direction and review are human-led; AI may assist drafting. Prefer small, testable PRs.
 

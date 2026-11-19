@@ -101,8 +101,8 @@ jobs:
           with zipfile.ZipFile(sys.argv[1]) as package:
               manifest = json.loads(package.read("mod.json"))
           assert manifest["geode"] == "5.11.1", manifest
-          assert manifest["version"] == "v1.7.0", manifest
-          print("Verified package metadata: Geode 5.11.1 / EarlyBuffer v1.7.0")
+          assert manifest["version"] == "v1.7.1", manifest
+          print("Verified package metadata: Geode 5.11.1 / EarlyBuffer v1.7.1")
           PY
           cp "${PKG}" "platform-out/audesign.earlybuffer.geode"
           echo "Staged ${PKG} ($(wc -c < platform-out/audesign.earlybuffer.geode) bytes)"

@@ -4,18 +4,27 @@
 
 Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.x** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.7.0** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
 
 ## Modes (honest)
 
 | Mode | Role |
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
-| Hybrid | Bake window if near + live verify clearsThreat, else Live (+ foresight / miss-assist). |
-| Replay | Precomputed click windows from imported macro bake (TAS-like timing map). |
-| BruteForce | Precomputed exhaustive safe timings (TAS-like generator). Not a live multi-click bot queue. |
+| Hybrid | Player-driven tabular RL over Live: learns delay preferences per situation, then Hybrid-first `verifyDelay` before ordinary Live search. |
 
-Live/Hybrid never block hopeless clicks. Replay/Brute are precomputed windows, not a live macro injector queue.
+Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were removed from the 1.7.x ship line (historical bake-verify notes below remain for older captures / Dev tooling).
+
+## Hybrid RL (v1.7.1)
+
+With **Assist Mode = Hybrid** and **Auto-Tune** on, `EbHybridLearning` stores per-level `.hybrid` evidence (situation key → delay actions with score / visit counts).
+
+- **Proposal** still requires independent-attempt maturity (score + count gates).
+- **Hybrid-first verify** ranks delays with **UCB** (mature first, then under-explored), then interpolated mids between strong survivors when bridge-interpolate is on.
+- **Probe outcomes** (`noteVerifyOutcome`) soft-update within the same attempt on verify-safe / verify-fail.
+- **Shaped rewards** strengthen early local deaths and verified rescues; **neighbor bleed** shares updates with delay±1 without evicting primary slots.
+- **Eligibility traces** soft-penalize recently delivered successes when a later local death attributes credit.
+- Learn → Advanced: UCB Exploration, Neighbor Bleed, Eligibility Trace, max keys / delays per spot, verify-learned-first.
 
 ## Bake verify (Hybrid / Replay / Brute)
 
@@ -154,7 +163,7 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.7.0**). Tab IA: **Main → Assist → Learn → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.7.1**). Tab IA: **Main → Assist → Learn → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
 
 **Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 
@@ -176,7 +185,7 @@ Every `mod.json` key (including `title-*` and `custom:eb-action`) maps to exactl
 
 With **Dev Record** on, each session writes `devtraces/session-*.json` under the mod save dir. Full schema + Research Pack / Compare / CLI: [`docs/dev/traces.md`](dev/traces.md).
 
-**Research workflow (1.7.0):** Apply Research Preset → Record → die a few times → **Export Research Pack** (one folder on clipboard). Optional **Compare Sessions** for Gain/Flat/Regress on the same `levelKey`. Offline: `tools/scan_devlab_assists.py` (session or pack) and `tools/compare_devlab_sessions.py`.
+**Research workflow (1.7.1):** Apply Research Preset → Record → die a few times → **Export Research Pack** (one folder on clipboard). Optional **Compare Sessions** for Gain/Flat/Regress on the same `levelKey`. Offline: `tools/scan_devlab_assists.py` (session or pack) and `tools/compare_devlab_sessions.py`.
 
 | Field | Where | Meaning |
 |-------|--------|---------|
@@ -250,13 +259,13 @@ Older flat files (`{ "version": 1, "preset": "...", "ticks-all": 2, ... }` witho
 
 ## Settings table
 
-Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assist** (where it runs + Algorithm) → **Learn** (Learning + Config) → **Bake** → **Modes** → **Visual** → **UI** (Accent + chrome) → **Keys** → **Dev**. Preset packs are removed — windows live only on Main. Scope gates live under Assist.
+Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assist** (where it runs + Algorithm) → **Learn** (Learning + Config) → **Modes** → **Visual** → **UI** (Accent + chrome) → **Keys** → **Dev**. Preset packs are removed — windows live only on Main. Scope gates live under Assist.
 
 | Key | Type | Default | Min | Max | Group / notes |
 |-----|------|---------|-----|-----|-------|
 | enabled | bool | true | | | Main — master |
 | safe-mode | bool | true | | | Main — ON: block saves when enabled or assist-touched; OFF: vanilla progress |
-| assist-mode | string | Live | Live/Replay/Hybrid/BruteForce | | Main — same as Bake Cycle Assist Mode / Ctrl+Shift+M |
+| assist-mode | string | Live | Live/Hybrid | | Main — Assist Mode / Ctrl+Shift+M |
 | window-unit | string | Ticks | Ticks/Frames | | Main / Window — Frames→×4 ticks @240; per-mode `*-ticks` use same unit |
 | ticks-all | int | 4 | 0 | 48 | Main / Window |
 | ticks-wave | int | 4 | 0 | 48 | Main / Window |

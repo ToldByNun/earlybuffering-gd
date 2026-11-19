@@ -32,11 +32,11 @@ Wave is sensitive — keep its window low until you have a reason.
 
 ## Smart / Adaptive (folded into Main)
 
-Smart prediction knobs and Adaptive Plan toggles that used to sit under a separate Smart tab live here in **v1.6.x**. See [Adaptive Plan](/features/adaptive).
+Smart prediction knobs and Adaptive Plan toggles that used to sit under a separate Smart tab live here in **v1.7.x**. See [Adaptive Plan](/features/adaptive).
 
 ## Overlay / Pause UI
 
-Desktop chrome (Accent Color, overlay / pause toggles, Lag Warning) lives under the **UI** tab. Pause EB still opens the ImGui shell on Windows (version label = package version, currently **1.7.0**).
+Desktop chrome (Accent Color, overlay / pause toggles, Lag Warning) lives under the **UI** tab. Pause EB still opens the ImGui shell on Windows (version label = package version, currently **1.7.1**).
 
 | Setting | Effect |
 |---|---|

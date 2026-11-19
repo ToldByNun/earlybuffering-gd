@@ -1,6 +1,6 @@
 # PLEASE READ THIS
 
-Version **1.6.0** adds the desktop ImGui settings shell (Accent Color, Modes icon bar, clearer tabs) on top of the v1.5.1 Live hitch / Wave / orbs line, Adaptive Prediction Planner (`adaptive-plan`), and Cloud Configs. Open **Settings → Learn → Config** (or Assist/Learn actions) for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
+Version **1.7.1** ships player-driven Hybrid RL (UCB / neighbor bleed / verify-probe feedback) on the Live + Hybrid 1.7.x line, plus the desktop ImGui settings shell (Accent Color, Modes icon bar, Learn → Advanced RL knobs), Adaptive Prediction Planner (`adaptive-plan`), and Cloud Configs. Open **Settings → Learn → Config** (or Assist/Learn actions) for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
 
 EarlyBuffer was written with a lot of AI-assisted drafting.
 
@@ -21,7 +21,7 @@ You jump a little soon — the mod holds that press and lands it on the first ph
 
 You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you. It only decides *when* a press you already made is allowed to land — inside the windows and modes you set.
 
-> **v1.6.0** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
+> **v1.7.1** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
 
 ---
 

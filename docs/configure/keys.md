@@ -29,6 +29,6 @@ Desktop menu: **Learn → Config**. Classic popup: Assist Actions.
 
 Keybinds + Dev settings are preserved across cloud installs.
 
-## UI extras (v1.6.x)
+## UI extras (v1.7.x)
 
 **Accent Color**, overlay / pause chrome, and **Lag Warning** live under the **UI** tab on the desktop shell.

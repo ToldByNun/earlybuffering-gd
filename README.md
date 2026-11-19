@@ -33,7 +33,7 @@ You still click. EarlyBuffer only holds a slightly early jump and fires it on th
 <br/>
 
 <strong>Not on the Geode Index.</strong> Install from <a href="https://github.com/ToldByNun/earlybuffering-gd/releases">GitHub Releases</a> only.<br/>
-<strong>Last 2.2081 line</strong> — v1.7.0 does not support newer Geometry Dash builds.
+<strong>Last 2.2081 line</strong> — v1.7.1 does not support newer Geometry Dash builds.
 
 </div>
 
@@ -73,16 +73,14 @@ It does **not** invent clicks. It does **not** rewind late clicks. Assist, not b
 | Mode | What you get |
 |---|---|
 | **Live** | Plans each click with a shadow sim. Optional Adaptive Prediction Planner. |
-| **Hybrid** | Bake window when near + live verify, otherwise Live. |
-| **Replay** | Timing windows from an imported macro bake. |
-| **BruteForce** | Serial search bake into a timing map. |
+| **Hybrid** | Player-driven tabular RL on top of Live verify — learns timings from your attempts. |
 
 Also built in:
 
 - **Safe Mode** — when assist is on (or has touched a run), progress / bests are not saved as legit clears
 - **Scope gates** — platformer hard-off; practice / startpos / percent window; assist-off ranges
 - **Orbs / Wave / CPS budgets** — algorithm limits you can tune
-- **Learning** — optional per-level bias (off by default)
+- **Learning** — Hybrid Auto-Tune per level (UCB explore, neighbor bleed, verify-first probes)
 - **Trigger World Bake** — cache static movers so the shadow sim can collide them
 - **Cloud Configs** — browse / rate / install / share community settings packs (classic Geode popup in v1.6.x)
 - **Lag Warning** — once-per-level ImGui card when a Live click feels hitchy (UI → Notifications)
@@ -91,14 +89,15 @@ Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_refer
 
 ---
 
-## Desktop settings (v1.7.0)
+## Desktop settings (v1.7.1)
 
 On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
 
-**Main → Assist → Learn → Bake → Modes → Visual → UI → Keys | Dev**
+**Main → Assist → Learn → Modes → Visual → UI → Keys | Dev**
 
 - Accent Color drives the purple theme + sidebar wave
 - Modes icon bar (Cube → Swing) with per-mode cards
+- Learn → Advanced exposes Hybrid RL knobs (UCB / neighbor / eligibility)
 - Assist Off Ranges as an editable list
 - Styled in-shell confirm / info modals
 
@@ -124,7 +123,7 @@ See [Cloud Configs](docs/cloud_configs.md).
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.7.0** |
+| Version | **1.7.1** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows · macOS · iOS · Android |
 | License | [MIT](LICENSE) |
