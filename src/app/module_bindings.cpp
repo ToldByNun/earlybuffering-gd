@@ -23,6 +23,7 @@
 #include "../ui/visualizers/bake_path_visualizer.hpp"
 #include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
+#include "../ui/visualizers/wave_pattern_visualizer.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
 
@@ -184,6 +185,19 @@ void EbModuleBindings::registerSettings() {
                 EbStraightflyVisualizer::get().attach(pl);
         } else {
             EbStraightflyVisualizer::get().clear();
+        }
+        EbAssistController::get().updateOverlay();
+    });
+    geode::prelude::listenForSettingChanges<bool>("show-wave-pattern", [](bool value) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbWavePatternVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get())
+                EbWavePatternVisualizer::get().attach(pl);
+        } else {
+            EbWavePatternVisualizer::get().clear();
         }
         EbAssistController::get().updateOverlay();
     });

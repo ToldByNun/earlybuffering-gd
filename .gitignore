@@ -200,3 +200,6 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/test_flight_mode_policy.cpp
 !/tools/test_flight_mode_policy.hpp
+
+!/tools/test_wave_pattern_recognizer.cpp
+!/tools/test_wave_pattern_recognizer.hpp

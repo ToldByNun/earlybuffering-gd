@@ -14,6 +14,7 @@
 #include "contracts/assist_verdict.hpp"
 #include "flight/flight_mode_policy.hpp"
 #include "flight/ship_line_policy.hpp"
+#include "flight/wave_pattern_policy.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../ui/visualizers/straightfly_visualizer.hpp"
 #include "input/assist_input_gate.hpp"
@@ -418,11 +419,14 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
     bool const liveOk = !player->m_controlsDisabled && !player->m_isDashing &&
                         !EbSimTrust::get().parityDrift() &&
                         !EbDivergenceTracker::get().simUntrusted();
-    // AP06: Ship may acquire a straight-flight target. Wave/Swing measure heading
-    // only until their own control models arm (AP07+). Ordinary modes never target.
+    // AP06/AP07: Ship acquires a straight-flight target. Wave recognizes hold/release
+    // patterns (AP07). Swing measures heading only until its control model arms.
     bool const lineTargeting = EbFlightModePolicy::allowsLineTargeting(kind) && liveOk;
+    bool const wavePattern = EbFlightModePolicy::allowsWavePatternRecognition(kind) && liveOk;
     m_flightIntent[slot].observe(m_flightMeasurement[slot].result(), sample.dt, lineTargeting,
                                  assisted);
+    m_wavePattern[slot].observe(m_flightMeasurement[slot].result(), sample.dt, wavePattern,
+                                assisted);
     m_flightCorrectionObserved[slot] = false;
     auto const& intent = m_flightIntent[slot].result();
     if (lineTargeting && intent.targetValid && intent.state == EbFlightIntent::State::Tracking) {
@@ -475,6 +479,11 @@ EbFlightIntent::Result EbAssistController::flightIntent(int player) const {
         return {};
     return m_flightIntent[player].result();
 }
+EbWavePatternRecognizer::Result EbAssistController::wavePattern(int player) const {
+    if (player < 0 || player >= 2)
+        return {};
+    return m_wavePattern[player].result();
+}
 EbAssistController::StraightflyView EbAssistController::straightflyView(int player) const {
     StraightflyView view;
     if (player < 0 || player >= 2 || !m_shipLineHasAnchor[player])
@@ -494,6 +503,39 @@ EbAssistController::StraightflyView EbAssistController::straightflyView(int play
     view.degrees = intent.targetDegrees;
     view.bodySize = 30. * (context.size > 0.f ? context.size : 1.f);
     view.confidence = intent.confidence;
+    return view;
+}
+EbAssistController::WavePatternView EbAssistController::wavePatternView(int player) const {
+    WavePatternView view;
+    if (player < 0 || player >= 2)
+        return view;
+    auto const& pattern = m_wavePattern[player].result();
+    if (!pattern.targetValid || pattern.state != EbWavePatternRecognizer::State::Tracking)
+        return view;
+    auto const& context = m_flightContext[player];
+    if (!context.valid ||
+        !EbFlightModePolicy::allowsWavePatternRecognition(
+            static_cast<GameModeKind>(context.mode)))
+        return view;
+    if (!(pattern.holdSeconds > 0. && pattern.releaseSeconds > 0.))
+        return view;
+    auto const& measurement = m_flightMeasurement[player].result();
+    double speed = std::hypot(measurement.vx, measurement.vy);
+    if (!(speed > 1.))
+        speed = 311. * (context.speed > 0. ? context.speed : 1.);
+    view.valid = true;
+    view.holding = pattern.holding;
+    view.sideways = context.sideways;
+    view.reversed = context.reversed;
+    view.inverted = context.inverted;
+    view.x = context.x;
+    view.y = context.y;
+    view.speed = speed;
+    view.holdSeconds = pattern.holdSeconds;
+    view.releaseSeconds = pattern.releaseSeconds;
+    view.phaseSeconds = pattern.phaseSeconds;
+    view.bodySize = 30. * (context.size > 0.f ? context.size : 1.f);
+    view.confidence = pattern.confidence;
     return view;
 }
 void EbAssistController::configureFlightIntent(bool manualTarget, double degrees) {
@@ -535,6 +577,82 @@ bool EbAssistController::shipLineAssistActive() const {
     // Visualize Straightfly alone used to draw the line with zero corrections.
     // Arm planning whenever the player is looking at the line or opted into Dev.
     return m_shipLineEnabled || EbStageConfig::showStraightfly();
+}
+void EbAssistController::configureWavePatternManual(bool manual, double holdSeconds,
+                                                    double releaseSeconds) {
+    m_wavePatternManual = manual;
+    if (std::isfinite(holdSeconds) && holdSeconds > .01)
+        m_wavePatternManualHold = std::clamp(holdSeconds, .02, 1.);
+    if (std::isfinite(releaseSeconds) && releaseSeconds > .01)
+        m_wavePatternManualRelease = std::clamp(releaseSeconds, .02, 1.);
+}
+void EbAssistController::setWavePatternEnabled(bool enabled) {
+    if (!enabled && m_buffer.wavePatternOwned && m_buffer.state == BufferState::Buffered) {
+        int const slot = m_buffer.player1 ? 0 : 1;
+        clearBuffer();
+        auto* layer = PlayLayer::get();
+        if (layer && m_inputReconciler.state(slot).dispatched != m_userHolding[slot]) {
+            m_injecting = true;
+            layer->handleButton(m_userHolding[slot], EbAssistControllerImplementation::JUMP_BUTTON,
+                                slot == 0);
+            m_injecting = false;
+        }
+    }
+    m_wavePatternEnabled = enabled;
+}
+bool EbAssistController::wavePatternEnabled() const {
+    return m_wavePatternEnabled;
+}
+bool EbAssistController::wavePatternAssistActive() const {
+    return m_wavePatternEnabled || EbStageConfig::showWavePattern();
+}
+void EbAssistController::fillWavePatternOptions(EbPlanOptions& options, PlayLayer* layer,
+                                                PlayerObject* player) {
+    if (!wavePatternAssistActive() || !EbStageConfig::assistPress() ||
+        !EbStageConfig::assistRelease() || !layer || !player || player->m_isDashing ||
+        layer->m_gameState.m_isDualMode || player->m_controlsDisabled)
+        return;
+    auto const kind = EbStageConfig::kindOf(player);
+    if (!EbFlightModePolicy::allowsWavePatternAssist(kind))
+        return;
+    int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
+    if (slot < 0)
+        return;
+    auto const& context = m_flightContext[slot];
+    if (!context.valid || context.mode != static_cast<int>(kind) ||
+        context.inverted != player->m_isUpsideDown || context.sideways != player->m_isSideways ||
+        context.reversed != player->m_isGoingLeft)
+        return;
+    auto const pattern = m_wavePattern[slot].result();
+    bool const tracking =
+        pattern.targetValid && pattern.state == EbWavePatternRecognizer::State::Tracking;
+    if (!tracking && !m_wavePatternManual)
+        return;
+    if (!pattern.hasLastCompleted || pattern.yieldRequested)
+        return;
+    if (!m_wavePatternManual && pattern.confidence < .2)
+        return;
+    double hold = m_wavePatternManual ? m_wavePatternManualHold : pattern.holdSeconds;
+    double release = m_wavePatternManual ? m_wavePatternManualRelease : pattern.releaseSeconds;
+    if (!(hold > 0.) || !(release > 0.))
+        return;
+    double const expected =
+        pattern.lastCompletedHold ? hold : release;
+    double const error =
+        EbWavePatternPolicy::phaseError(pattern.lastCompletedSeconds, expected);
+    // Late edges pass through for ordinary rescue — do not arm a past invent.
+    if (error > .04)
+        return;
+    options.wavePattern.enabled = true;
+    options.wavePattern.closingHold = pattern.lastCompletedHold;
+    options.wavePattern.phaseErrorSeconds = error;
+    options.wavePattern.holdSeconds = hold;
+    options.wavePattern.releaseSeconds = release;
+    options.smartDepth = 1;
+    EbAssistLog::debug(fmt::format(
+        "WAVE-PATTERN arm {} err={:+.0f}ms hold={:.0f}/{:.0f}ms conf={:.0f}%",
+        pattern.lastCompletedHold ? "hold→up" : "rel→down", error * 1000., hold * 1000.,
+        release * 1000., pattern.confidence * 100.));
 }
 void EbAssistController::fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer,
                                              PlayerObject* player) {
@@ -580,16 +698,17 @@ void EbAssistController::invalidateFlightForModeChange(PlayLayer* layer, PlayerO
     if (slot < 0)
         return;
     m_flightIntent[slot].reset();
+    m_wavePattern[slot].reset();
     m_flightMeasurement[slot].reset();
     m_shipLineHasAnchor[slot] = false;
     m_shipLineOffSeconds[slot] = 0.;
     m_flightCorrectionObserved[slot] = false;
-    // Do not carry a Ship-line timing into the next mode's controls.
-    if (m_buffer.state == BufferState::Buffered && m_buffer.shipLineOwned &&
-        m_buffer.player1 == (slot == 0)) {
+    // Do not carry a Ship-line / Wave-pattern timing into the next mode's controls.
+    if (m_buffer.state == BufferState::Buffered &&
+        (m_buffer.shipLineOwned || m_buffer.wavePatternOwned) && m_buffer.player1 == (slot == 0)) {
         clearBuffer();
         syncButtonState(layer);
-        noteVerdict(AssistReason::PassNoThreat, "ship-line-mode-boundary");
+        noteVerdict(AssistReason::PassNoThreat, "flight-mode-boundary");
     }
 }
 bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down) {
@@ -615,5 +734,30 @@ bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, b
         return m_flightIntent[slot].result().yieldRequested || ours;
     }
     // yieldRequested without an owned buffer must not blanket-block ordinary assist.
+    return false;
+}
+bool EbAssistController::yieldWavePattern(PlayLayer* layer, PlayerObject* player, bool down) {
+    if (!wavePatternAssistActive() || !layer || !player ||
+        !EbFlightModePolicy::allowsWavePatternAssist(EbStageConfig::kindOf(player)))
+        return false;
+    int const slot = player == layer->m_player1 ? 0 : player == layer->m_player2 ? 1 : -1;
+    if (slot < 0)
+        return false;
+    auto const& pattern = m_wavePattern[slot].result();
+    bool const ours = m_buffer.state == BufferState::Buffered && m_buffer.wavePatternOwned &&
+                      m_buffer.player1 == (slot == 0);
+    if (ours) {
+        bool const delayedDown = m_buffer.down;
+        clearBuffer();
+        if (!delayedDown && down) {
+            m_injecting = true;
+            layer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
+            m_injecting = false;
+        } else if (delayedDown && !down) {
+            return true;
+        }
+        return pattern.yieldRequested || ours;
+    }
+    // Sustained climb/dive / motif change: cancel only owned buffers above.
     return false;
 }

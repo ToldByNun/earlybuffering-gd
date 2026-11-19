@@ -5,6 +5,7 @@
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
+#include "../../../ui/visualizers/wave_pattern_visualizer.hpp"
 #include "../../bake/bake_map.hpp"
 #include "../../diagnostics/assist_perf_stats.hpp"
 #include "../../diagnostics/assist_real_metrics.hpp"
@@ -20,6 +21,7 @@
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
 #include "../flight/ship_line_policy.hpp"
+#include "../flight/wave_pattern_recognizer.hpp"
 #include <cstring>
 #include <string>
 
@@ -60,6 +62,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         }
         std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
         std::string straightflyBit = EbStraightflyVisualizer::get().statusHint();
+        std::string wavePatternBit = EbWavePatternVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
@@ -83,6 +86,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + trajBit;
         if (!straightflyBit.empty())
             controller.m_overlayText += " | " + straightflyBit;
+        if (!wavePatternBit.empty())
+            controller.m_overlayText += " | " + wavePatternBit;
         if (controller.shipLineAssistActive()) {
             std::string shipLineBit;
             if (controller.m_buffer.state == BufferState::Buffered &&
@@ -115,6 +120,17 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
                     shipLineBit = "sf arming";
             }
             controller.m_overlayText += " | " + shipLineBit;
+        }
+        {
+            auto const wave = controller.wavePattern(0);
+            if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
+                controller.m_overlayText += fmt::format(
+                    " | wp {:.0f}% {:.0f}/{:.0f}ms", wave.confidence * 100.,
+                    wave.holdSeconds * 1000., wave.releaseSeconds * 1000.);
+            } else if (wave.state == EbWavePatternRecognizer::State::Acquiring ||
+                       wave.state == EbWavePatternRecognizer::State::Reacquiring) {
+                controller.m_overlayText += " | wp arming";
+            }
         }
         if (EbStageConfig::triggerBake()) {
             if (EbTriggerWorldBaker::get().running()) {

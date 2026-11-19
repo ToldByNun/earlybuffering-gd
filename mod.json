@@ -1272,6 +1272,12 @@
 			"description": "Draws the acquired Straight Flight target line and body-width corridor once intent is Tracking. Cyan = predicted line; opacity follows confidence. Off = no draw cost.",
 			"default": false
 		},
+		"show-wave-pattern": {
+			"type": "bool",
+			"name": "Visualize Wave Pattern",
+			"description": "When a Wave hold/release pattern is locked, draws the predicted zigzag path and upcoming click edges (amber path, bright next-click markers). Not a straight corridor — shows the next clicks / wave lane. Off = no draw cost.",
+			"default": false
+		},
 		"save-feedback-sound": {
 			"type": "bool",
 			"name": "Save Feedback Sound",

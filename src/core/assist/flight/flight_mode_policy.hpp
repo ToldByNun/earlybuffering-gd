@@ -11,7 +11,7 @@ public:
     enum class FlightRole {
         OrdinaryOnly = 0, // Cube / Ball / UFO / Robot / Spider
         ShipLine = 1,     // Ship straight-flight targeting
-        WavePattern = 2,  // Wave cadence (AP07+) — measurement only for now
+        WavePattern = 2,  // Wave cadence — AP07 recognition, AP08 corrections
         SwingFlip = 3,    // Swing flip model (later) — measurement only for now
     };
 
@@ -19,6 +19,7 @@ public:
     static bool measuresHeading(GameModeKind kind);
     static bool allowsLineTargeting(GameModeKind kind);
     static bool allowsShipLineAssist(GameModeKind kind);
+    static bool allowsWavePatternRecognition(GameModeKind kind);
     static bool allowsWavePatternAssist(GameModeKind kind);
     static bool allowsSwingFlipAssist(GameModeKind kind);
     static bool allowsSharedDualCorrection(GameModeKind kind);

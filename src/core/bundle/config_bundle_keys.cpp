@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[192] = {
     {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
     {"ball-ground-check", EbConfigBundleKeys::Kind::String},
     {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
@@ -24,6 +24,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[191] = {
     {"lag-probe", EbConfigBundleKeys::Kind::Bool},
     {"show-trajectory", EbConfigBundleKeys::Kind::Bool},
     {"show-straightfly", EbConfigBundleKeys::Kind::Bool},
+    {"show-wave-pattern", EbConfigBundleKeys::Kind::Bool},
     {"show-pause-hub", EbConfigBundleKeys::Kind::Bool},
     {"desktop-classic-settings", EbConfigBundleKeys::Kind::Bool},
     {"ui-render-quality", EbConfigBundleKeys::Kind::String},

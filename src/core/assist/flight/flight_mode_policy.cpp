@@ -34,10 +34,12 @@ bool EbFlightModePolicy::allowsShipLineAssist(GameModeKind kind) {
     return allowsLineTargeting(kind);
 }
 
+bool EbFlightModePolicy::allowsWavePatternRecognition(GameModeKind kind) {
+    return role(kind) == FlightRole::WavePattern;
+}
+
 bool EbFlightModePolicy::allowsWavePatternAssist(GameModeKind kind) {
-    // AP07/AP08 arm Wave pattern corrections. AP06 only freezes the contract.
-    (void)kind;
-    return false;
+    return role(kind) == FlightRole::WavePattern;
 }
 
 bool EbFlightModePolicy::allowsSwingFlipAssist(GameModeKind kind) {
@@ -92,7 +94,10 @@ bool EbFlightModePolicy::selfCheck(std::string& report) {
     expect(measuresHeading(GameModeKind::Wave), "wave-measure");
     expect(measuresHeading(GameModeKind::Swing), "swing-measure");
     expect(!measuresHeading(GameModeKind::Cube), "cube-no-measure");
-    expect(!allowsWavePatternAssist(GameModeKind::Wave), "wave-assist-deferred");
+    expect(allowsWavePatternRecognition(GameModeKind::Wave), "wave-recognize-on");
+    expect(!allowsWavePatternRecognition(GameModeKind::Ship), "ship-recognize-off");
+    expect(allowsWavePatternAssist(GameModeKind::Wave), "wave-assist-on");
+    expect(!allowsWavePatternAssist(GameModeKind::Ship), "ship-wave-assist-off");
     expect(!allowsSwingFlipAssist(GameModeKind::Swing), "swing-assist-deferred");
     expect(!allowsSharedDualCorrection(GameModeKind::Ship), "dual-shared-off");
     expect(!allowsShipLineAssist(GameModeKind::Wave), "wave-no-ship-assist");

@@ -10,6 +10,7 @@
 #include "flight/flight_intent.hpp"
 #include "flight/flight_measurement.hpp"
 #include "flight/flight_mode_policy.hpp"
+#include "flight/wave_pattern_recognizer.hpp"
 #include "input/input_reconciler.hpp"
 #include "planning/orb_align.hpp"
 #include <Geode/Geode.hpp>
@@ -27,6 +28,7 @@ enum class BufferState {
 class EbBufferedInput {
 public:
     bool shipLineOwned = false;
+    bool wavePatternOwned = false;
     bool fixedFireTick = false;
     BufferState state = BufferState::Idle;
     bool down = true;
@@ -90,17 +92,44 @@ public:
 
     private:
     };
+    class WavePatternView {
+    public:
+        bool valid = false;
+        bool holding = false;
+        bool sideways = false;
+        bool reversed = false;
+        bool inverted = false;
+        double x = 0.;
+        double y = 0.;
+        double speed = 0.;
+        double holdSeconds = 0.;
+        double releaseSeconds = 0.;
+        double phaseSeconds = 0.;
+        double bodySize = 30.;
+        double confidence = 0.;
+
+    private:
+    };
     void measureFlight(PlayerObject* player, float deltaTime);
     EbFlightMeasurement::Result flightMeasurement(int player) const;
     EbFlightIntent::Result flightIntent(int player) const;
+    EbWavePatternRecognizer::Result wavePattern(int player) const;
     StraightflyView straightflyView(int player) const;
+    WavePatternView wavePatternView(int player) const;
     void configureFlightIntent(bool manualTarget, double degrees);
+    void configureWavePatternManual(bool manual, double holdSeconds, double releaseSeconds);
     void setShipLineEnabled(bool enabled);
     bool shipLineEnabled() const;
     // Session Dev toggle, or Visualize Straightfly while a Ship target is live.
     bool shipLineAssistActive() const;
+    void setWavePatternEnabled(bool enabled);
+    bool wavePatternEnabled() const;
+    // Session Dev toggle, or Visualize Wave Pattern while Tracking.
+    bool wavePatternAssistActive() const;
     void fillShipLineOptions(EbPlanOptions& options, PlayLayer* layer, PlayerObject* player);
+    void fillWavePatternOptions(EbPlanOptions& options, PlayLayer* layer, PlayerObject* player);
     bool yieldShipLine(PlayLayer* layer, PlayerObject* player, bool down);
+    bool yieldWavePattern(PlayLayer* layer, PlayerObject* player, bool down);
     // AP06: portal / gamemode boundary — drop ship-line ownership, keep ordinary assist.
     void invalidateFlightForModeChange(PlayLayer* layer, PlayerObject* player);
 
@@ -271,15 +300,22 @@ private:
                        EbDecisionEntry& dec);
 
     bool m_shipLineEnabled = false;
+    bool m_wavePatternEnabled = false;
+    bool m_wavePatternManual = false;
+    double m_wavePatternManualHold = .10;
+    double m_wavePatternManualRelease = .05;
     bool m_shipLineHasAnchor[2]{};
     double m_shipLineX[2]{};
     double m_shipLineY[2]{};
     double m_shipLineOffSeconds[2]{};
     int m_lastShipLineDelay = 0;
     int m_lastShipLineTick = -1;
+    int m_lastWavePatternDelay = 0;
+    int m_lastWavePatternTick = -1;
     EbFlightMeasurement::Sample m_flightContext[2];
     EbFlightMeasurement m_flightMeasurement[2];
     EbFlightIntent m_flightIntent[2];
+    EbWavePatternRecognizer m_wavePattern[2];
     bool m_flightCorrectionObserved[2]{};
     EbInputReconciler m_inputReconciler;
     EbFramePlanBudget m_framePlanBudget;

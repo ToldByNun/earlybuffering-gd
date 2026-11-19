@@ -30,6 +30,8 @@ std::string EbDevStateDiagnostics::buildSettings() {
       << "\n";
     o << "showStraightfly="
       << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showStraightfly()) << "\n";
+    o << "showWavePattern="
+      << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showWavePattern()) << "\n";
     o << "showBakePath=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::showBakePath()) << "\n";
     o << "triggerBake=" << EbDevDiagDumpImplementation::boolStr(EbStageConfig::triggerBake()) << "\n";
     o << "triggerBakeSkipDynamic="

@@ -12,6 +12,7 @@
 #include "../../visualizers/bake_path_visualizer.hpp"
 #include "../../visualizers/straightfly_visualizer.hpp"
 #include "../../visualizers/trajectory_visualizer.hpp"
+#include "../../visualizers/wave_pattern_visualizer.hpp"
 #include "../pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
@@ -144,6 +145,15 @@ void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
             }
         } else {
             EbStraightflyVisualizer::get().clear();
+        }
+        bool const wavePattern = EbStageConfig::showWavePattern();
+        EbWavePatternVisualizer::get().setEnabled(wavePattern);
+        if (wavePattern) {
+            if (auto* pl = PlayLayer::get()) {
+                EbWavePatternVisualizer::get().attach(pl);
+            }
+        } else {
+            EbWavePatternVisualizer::get().clear();
         }
         bool const bakePath = EbStageConfig::showBakePath();
         EbBakePathVisualizer::get().setEnabled(bakePath);

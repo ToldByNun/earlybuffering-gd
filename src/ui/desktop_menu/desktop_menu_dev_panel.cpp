@@ -1,5 +1,6 @@
 #include "desktop_menu_dev_panel.hpp"
 #include "../../core/assist/assist_controller.hpp"
+#include "../../core/assist/flight/wave_pattern_recognizer.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
@@ -388,6 +389,15 @@ public:
                     ImGui::Text("Target %.1f deg   Hold %.0f ms / Release %.0f ms",
                                 intent.targetDegrees, intent.holdSeconds * 1000.,
                                 intent.releaseSeconds * 1000.);
+                auto const wave = EbAssistController::get().wavePattern(player);
+                ImGui::Text("P%d wave: %s   confidence %.0f%%", player + 1,
+                            EbWavePatternRecognizer::stateName(wave.state), wave.confidence * 100.);
+                if (wave.targetValid)
+                    ImGui::Text("Hold %.0f ms / Release %.0f ms   duty %.0f%%   motif %dp  "
+                                "travel %.1f deg   jitter %.0f ms",
+                                wave.holdSeconds * 1000., wave.releaseSeconds * 1000.,
+                                wave.dutyCycle * 100., wave.motifPairs, wave.averageTravelDegrees,
+                                wave.jitterSeconds * 1000.);
                 auto const result = EbAssistController::get().flightMeasurement(player);
                 ImGui::Text("Player %d: %s", player + 1,
                             result.headingValid ? "Measured" : "Acquiring / unavailable");
@@ -398,8 +408,9 @@ public:
                                 result.vy, result.velocityVariance);
                 }
             }
-            ImGui::TextWrapped("Target angle and intent confidence become available with intent "
-                               "recognition. These measurements describe actual movement.");
+            ImGui::TextWrapped(
+                "Ship intent locks a straight-flight line. Wave pattern recognition (AP07) locks "
+                "hold/release spam and short motifs — corrections arrive in AP08.");
         }
         EbSectionCard::end();
         drawStatus();

@@ -11,6 +11,7 @@
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
+#include "../../../ui/visualizers/wave_pattern_visualizer.hpp"
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
 #include "../../learning/hybrid_learning.hpp"
@@ -195,6 +196,10 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         EbStraightflyVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
     {
+        EbPerfTrace::Scope const scope("wavePattern");
+        EbWavePatternVisualizer::get().onPhysicsTick(playLayer, deltaTime);
+    }
+    {
         EbPerfTrace::Scope const scope("bakePath");
         EbBakePathVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
@@ -270,8 +275,11 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
                                          std::chrono::duration_cast<std::chrono::microseconds>(
                                              std::chrono::steady_clock::now().time_since_epoch())
                                              .count());
-    if (controller.m_userHolding[player1 ? 0 : 1] != down)
-        controller.m_flightIntent[player1 ? 0 : 1].rawEdge(down);
+    if (controller.m_userHolding[player1 ? 0 : 1] != down) {
+        int const slot = player1 ? 0 : 1;
+        controller.m_flightIntent[slot].rawEdge(down);
+        controller.m_wavePattern[slot].rawEdge(down);
+    }
     controller.m_userHolding[player1 ? 0 : 1] = down;
 
     // Second click while a hold-assist release is armed: cancel it and re-plan.

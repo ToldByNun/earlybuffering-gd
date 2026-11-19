@@ -39,6 +39,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "show-trajectory", false);
     EbStageConfigImplementation::s_cachedShowStraightfly =
         EbStageConfigImplementation::readBool(mod, "show-straightfly", false);
+    EbStageConfigImplementation::s_cachedShowWavePattern =
+        EbStageConfigImplementation::readBool(mod, "show-wave-pattern", false);
     EbStageConfigImplementation::s_cachedShowBakePath = false;
     EbStageConfigImplementation::s_cachedShowPauseBake = false;
     EbStageConfigImplementation::s_cachedShowPauseHub =

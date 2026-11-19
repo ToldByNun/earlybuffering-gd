@@ -41,6 +41,7 @@ bool EbStageConfigImplementation::s_cachedShowOverlay = true;
 bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
 bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
 bool EbStageConfigImplementation::s_cachedShowStraightfly = false;
+bool EbStageConfigImplementation::s_cachedShowWavePattern = false;
 bool EbStageConfigImplementation::s_cachedShowBakePath = false;
 bool EbStageConfigImplementation::s_cachedShowPauseBake = true;
 bool EbStageConfigImplementation::s_cachedShowPauseHub = true;
@@ -450,6 +451,10 @@ bool EbStageConfig::showTrajectory() {
 bool EbStageConfig::showStraightfly() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowStraightfly;
+}
+bool EbStageConfig::showWavePattern() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowWavePattern;
 }
 bool EbStageConfig::showBakePath() {
     return false;
