@@ -121,7 +121,27 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             }
             controller.m_overlayText += " | " + shipLineBit;
         }
-        {
+        if (controller.wavePatternAssistActive()) {
+            std::string waveBit;
+            if (controller.m_buffer.state == BufferState::Buffered &&
+                controller.m_buffer.wavePatternOwned) {
+                waveBit = fmt::format("wp-corr +{}", controller.m_buffer.planDelay);
+            } else if (controller.m_lastWavePatternTick >= 0 &&
+                       controller.m_attemptTick - controller.m_lastWavePatternTick <= 90) {
+                waveBit = fmt::format("wp-corr +{}", controller.m_lastWavePatternDelay);
+            } else {
+                auto const wave = controller.wavePattern(0);
+                if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
+                    waveBit = fmt::format("wp {:.0f}% {:.0f}/{:.0f}ms", wave.confidence * 100.,
+                                          wave.holdSeconds * 1000., wave.releaseSeconds * 1000.);
+                } else if (wave.state == EbWavePatternRecognizer::State::Acquiring ||
+                           wave.state == EbWavePatternRecognizer::State::Reacquiring) {
+                    waveBit = "wp arming";
+                }
+            }
+            if (!waveBit.empty())
+                controller.m_overlayText += " | " + waveBit;
+        } else {
             auto const wave = controller.wavePattern(0);
             if (wave.targetValid && wave.state == EbWavePatternRecognizer::State::Tracking) {
                 controller.m_overlayText += fmt::format(

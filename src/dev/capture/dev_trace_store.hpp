@@ -89,6 +89,7 @@ public:
     // 1.5.1 AP0: hitch / Adaptive shell diagnostics on planFinished (additive JSON).
     bool hasPlanCost = false;
     bool shipLineCorrection = false;
+    bool wavePatternCorrection = false;
     int planUs = 0;
     long long renderFrame = 0;
     int frameBudgetUs = 0;

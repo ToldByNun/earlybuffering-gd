@@ -9,6 +9,7 @@
 #include "../../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../../../assist/contracts/orb_probe_order.hpp"
 #include "../../../../assist/contracts/subtick_timing.hpp"
+#include "../../../../assist/flight/wave_pattern_policy.hpp"
 #include "../../../../assist/planning/assist_pick_v1.hpp"
 #include "../../../shadow_simulator.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -432,6 +433,66 @@ bool EbShadowPlanInputWindow::evaluate(EbShadowPlanContext& context) {
             "SHIP-LINE fallback-safe liveXt={:.3f} helps={} samples={} lastXt={:.3f}", liveSigned,
             edgeHelps ? 1 : 0, baselineMetrics.samples, baselineMetrics.lastSignedError));
         // No line winner → ordinary IW safe/threat (priority 2).
+    }
+
+    // Wave pattern (AP08): early edges may wait for the locked hold/release phase.
+    // Late edges Pass into ordinary IW — never invent a missing past click.
+    if (context.options.wavePattern.enabled && context.candReady[0] && context.cands[0].viable &&
+        !dual) {
+        int const target = EbWavePatternPolicy::suggestedDelayTicks(
+            context.options.wavePattern, context.deltaTime, context.limit);
+        int selected = 0;
+        auto tryDelay = [&](int delay) -> bool {
+            if (delay <= 0 || delay > context.limit)
+                return false;
+            if (!context.candReady[static_cast<size_t>(delay)]) {
+                if (context.wallExceeded() || context.tickBudget <= 0) {
+                    context.plan.budgetHit = true;
+                    return false;
+                }
+                auto candidate = evaluateCandidate(delay);
+                if (candidate.raw.ticksRan == 0)
+                    return false;
+                if (!ingest(delay, candidate))
+                    return false;
+            }
+            auto const& stored = context.cands[static_cast<size_t>(delay)];
+            if (!stored.viable || stored.raw.died || stored.activatedRing)
+                return false;
+            selected = delay;
+            return true;
+        };
+        if (target > 0) {
+            if (!tryDelay(target)) {
+                for (int delta = 1; delta <= context.limit && selected <= 0; ++delta) {
+                    if (tryDelay(target - delta) || tryDelay(target + delta))
+                        break;
+                }
+            }
+        }
+        if (selected > 0 && context.options.robustJitter && !context.jitterOk(selected, -1, true))
+            selected = 0;
+        if (selected > 0) {
+            context.plan.action = PlanAction::Delay;
+            context.plan.reason = AssistReason::DelayThreat;
+            context.plan.wavePatternCorrection = true;
+            context.plan.delay = context.plan.jumpTick = selected;
+            context.plan.nowIsSafe = false;
+            context.plan.threatCleared = true;
+            context.plan.guardOriginalDelay = selected;
+            context.plan.viableDelays = std::vector<int>{selected};
+            context.plan.dMin = context.plan.dMax = selected;
+            EbAssistLog::info(fmt::format(
+                "WAVE-PATTERN steer +{} err={:+.0f}ms {} down={}", selected,
+                context.options.wavePattern.phaseErrorSeconds * 1000.,
+                context.options.wavePattern.closingHold ? "hold" : "release",
+                context.down ? 1 : 0));
+            context.publishLedger(selected, false, context.ledgerEarlyExit());
+            return true;
+        }
+        EbAssistLog::debug(fmt::format(
+            "WAVE-PATTERN fallback-safe target={} err={:+.0f}ms", target,
+            context.options.wavePattern.phaseErrorSeconds * 1000.));
     }
 
     // Orb scans already measured a reachable activation band. Verify that band

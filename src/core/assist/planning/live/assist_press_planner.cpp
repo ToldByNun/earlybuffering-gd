@@ -127,7 +127,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
     controller.fillShipLineOptions(learnedContext, playLayer, player);
-    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled;
+    controller.fillWavePatternOptions(learnedContext, playLayer, player);
+    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
+                           learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -253,7 +255,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     if (opts.hybridDelay > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
-    if (opts.shipLine.enabled)
+    opts.wavePattern = learnedContext.wavePattern;
+    if (opts.shipLine.enabled || opts.wavePattern.enabled)
         opts.smartDepth = 1;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
@@ -266,7 +269,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
-    if (!opts.shipLine.enabled && opts.hybridDelay >= 0)
+    if (!opts.shipLine.enabled && !opts.wavePattern.enabled && opts.hybridDelay >= 0)
         opts.smartDepth = std::max(opts.smartDepth, EbHybridLearning::get().lineupDepth);
     bool useSequence = opts.smartDepth > 1;
 
@@ -439,6 +442,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.m_buffer.down = true;
     controller.m_buffer.firePhase = plan.firePhase;
     controller.m_buffer.shipLineOwned = opts.shipLine.enabled && plan.shipLineCorrection;
+    controller.m_buffer.wavePatternOwned =
+        opts.wavePattern.enabled && plan.wavePatternCorrection;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;
@@ -448,6 +453,11 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         controller.m_lastShipLineDelay = delay;
         controller.m_lastShipLineTick = effectTick;
         EbAssistLog::info(fmt::format("SHIP-LINE press corr +{}", delay));
+    }
+    if (controller.m_buffer.wavePatternOwned) {
+        controller.m_lastWavePatternDelay = delay;
+        controller.m_lastWavePatternTick = effectTick;
+        EbAssistLog::info(fmt::format("WAVE-PATTERN press corr +{}", delay));
     }
     controller.m_buffer.limit = limit;
     int const jumpRel = plan.jumpTick > 0 ? plan.jumpTick : delay;

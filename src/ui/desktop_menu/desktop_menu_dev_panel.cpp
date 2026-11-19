@@ -369,6 +369,32 @@ public:
                     "Straightfly also arms this while Tracking. Modes → Ship may stay off. Delay "
                     "window ≥20 ticks. Session-only — not saved."))
                 EbAssistController::get().setShipLineEnabled(shipLineEnabled);
+            bool wavePatternEnabled = EbAssistController::get().wavePatternEnabled();
+            if (EbCheckbox::draw(
+                    "wave-pattern-enable", "Wave pattern assistance (session)", &wavePatternEnabled,
+                    true,
+                    "Stabilizes a locked Wave hold/release motif by delaying early edges to the "
+                    "expected phase (late edges pass to ordinary Wave rescue). Never invents "
+                    "missing clicks. Requires press + release assist. Solo Wave only. Visualize "
+                    "Wave Pattern also arms this while Tracking. Delay window ≥20 ticks. "
+                    "Session-only — not saved."))
+                EbAssistController::get().setWavePatternEnabled(wavePatternEnabled);
+            static bool waveManual = false;
+            static float waveHoldMs = 100.f;
+            static float waveReleaseMs = 50.f;
+            bool waveManualChanged = EbCheckbox::draw(
+                "wave-pattern-manual", "Manual Wave pattern (session)", &waveManual, true,
+                "Overrides recognized hold/release targets with the values below when pattern "
+                "assist is armed. Still needs a recent real edge for phase error. Session-only.");
+            waveManualChanged |=
+                EbSlider::drawFloat("wave-hold-ms", "Hold", &waveHoldMs, 20.f, 400.f, 1, " ms",
+                                    waveManual, "Target hold duration for manual Wave pattern.");
+            waveManualChanged |= EbSlider::drawFloat(
+                "wave-release-ms", "Release", &waveReleaseMs, 20.f, 400.f, 1, " ms", waveManual,
+                "Target release duration for manual Wave pattern.");
+            if (waveManualChanged)
+                EbAssistController::get().configureWavePatternManual(
+                    waveManual, waveHoldMs / 1000.f, waveReleaseMs / 1000.f);
             static bool manualTarget = false;
             static float targetAngle = 0.f;
             bool changed = EbCheckbox::draw(

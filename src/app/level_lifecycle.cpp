@@ -110,6 +110,8 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_shipLineOffSeconds[0] = controller.m_shipLineOffSeconds[1] = 0.;
     controller.m_lastShipLineDelay = 0;
     controller.m_lastShipLineTick = -1;
+    controller.m_lastWavePatternDelay = 0;
+    controller.m_lastWavePatternTick = -1;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -158,6 +160,8 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     controller.m_shipLineOffSeconds[0] = controller.m_shipLineOffSeconds[1] = 0.;
     controller.m_lastShipLineDelay = 0;
     controller.m_lastShipLineTick = -1;
+    controller.m_lastWavePatternDelay = 0;
+    controller.m_lastWavePatternTick = -1;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();
@@ -261,6 +265,8 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     controller.m_shipLineOffSeconds[0] = controller.m_shipLineOffSeconds[1] = 0.;
     controller.m_lastShipLineDelay = 0;
     controller.m_lastShipLineTick = -1;
+    controller.m_lastWavePatternDelay = 0;
+    controller.m_lastWavePatternTick = -1;
     controller.m_flightMeasurement[0].reset();
     controller.m_flightMeasurement[1].reset();
     controller.m_inputReconciler.reset();

@@ -117,7 +117,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         EbHybridLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
     controller.fillShipLineOptions(learnedContext, playLayer, player);
-    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled;
+    controller.fillWavePatternOptions(learnedContext, playLayer, player);
+    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
+                           learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -215,7 +217,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     if (opts.hybridDelay > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
-    if (opts.shipLine.enabled)
+    opts.wavePattern = learnedContext.wavePattern;
+    if (opts.shipLine.enabled || opts.wavePattern.enabled)
         opts.smartDepth = 1;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
     if (remainingFrameUs <= 0)
@@ -310,6 +313,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     controller.m_buffer.state = BufferState::Buffered;
     controller.m_buffer.down = false;
     controller.m_buffer.shipLineOwned = opts.shipLine.enabled && plan.shipLineCorrection;
+    controller.m_buffer.wavePatternOwned =
+        opts.wavePattern.enabled && plan.wavePatternCorrection;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;
@@ -327,6 +332,11 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         controller.m_lastShipLineDelay = delay;
         controller.m_lastShipLineTick = effectTick;
         EbAssistLog::info(fmt::format("SHIP-LINE release corr +{}", delay));
+    }
+    if (controller.m_buffer.wavePatternOwned) {
+        controller.m_lastWavePatternDelay = delay;
+        controller.m_lastWavePatternTick = effectTick;
+        EbAssistLog::info(fmt::format("WAVE-PATTERN release corr +{}", delay));
     }
 
     EbAssistLog::debug(

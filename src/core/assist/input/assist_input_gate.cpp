@@ -127,6 +127,9 @@ int EbAssistInputGate::activeLimit(EbAssistController const& controller, PlayerO
     if (controller.shipLineAssistActive() && player &&
         EbStageConfig::kindOf(player) == GameModeKind::Ship)
         return std::max(ticks, 20);
+    if (controller.wavePatternAssistActive() && player &&
+        EbStageConfig::kindOf(player) == GameModeKind::Wave)
+        return std::max(ticks, 20);
     return ticks;
 }
 
@@ -141,7 +144,10 @@ bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller,
     bool const modeEnabled = EbStageConfig::paramsFor(player).enabled;
     // Straightfly viz / Dev ship-line imply Solo Ship assist even if Modes → Ship is off.
     bool const shipLineBypass = controller.shipLineAssistActive() && kind == GameModeKind::Ship;
-    if (!modeEnabled && !shipLineBypass)
+    // Wave pattern viz / Dev toggle imply Solo Wave assist even if Modes → Wave is off.
+    bool const wavePatternBypass =
+        controller.wavePatternAssistActive() && kind == GameModeKind::Wave;
+    if (!modeEnabled && !shipLineBypass && !wavePatternBypass)
         return false;
     if (!(!EbAssistScopeGate::allowAssist(PlayLayer::get(), player))) {
         return true;

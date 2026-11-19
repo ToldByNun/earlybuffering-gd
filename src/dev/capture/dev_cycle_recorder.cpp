@@ -195,6 +195,7 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->plannedFirePhase = plan.firePhase;
     cycle->plannedFirePhase = plan.firePhase;
     width->shipLineCorrection = plan.shipLineCorrection;
+    width->wavePatternCorrection = plan.wavePatternCorrection;
     width->planUs = plan.planUs;
     width->renderFrame = plan.renderFrame;
     width->frameBudgetUs = plan.frameBudgetUs;

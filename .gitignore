@@ -203,3 +203,6 @@ docs/dev/flight-and-alternate-assist-plan.md
 
 !/tools/test_wave_pattern_recognizer.cpp
 !/tools/test_wave_pattern_recognizer.hpp
+
+!/tools/test_wave_pattern_policy.cpp
+!/tools/test_wave_pattern_policy.hpp

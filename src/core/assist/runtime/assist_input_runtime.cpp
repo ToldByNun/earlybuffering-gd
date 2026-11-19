@@ -333,6 +333,16 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
             controller.m_log.noteInput(effectTick, down);
         return finish(deliver);
     }
+    if (controller.yieldWavePattern(playLayer, player, down)) {
+        bool const dispatched = controller.m_inputReconciler.state(player1 ? 0 : 1).dispatched;
+        bool const deliver = down != dispatched;
+        beginDevPress();
+        EbDevCycleRecorder::get().noteGatePass(AssistReason::PassNoThreat, "wave-pattern-yield");
+        controller.noteVerdict(AssistReason::PassNoThreat, "wave-pattern-yield");
+        if (deliver)
+            controller.m_log.noteInput(effectTick, down);
+        return finish(deliver);
+    }
 
     // Min click interval: skip assist only — never block the vanilla click.
     if (down) {

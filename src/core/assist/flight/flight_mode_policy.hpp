@@ -11,7 +11,7 @@ public:
     enum class FlightRole {
         OrdinaryOnly = 0, // Cube / Ball / UFO / Robot / Spider
         ShipLine = 1,     // Ship straight-flight targeting
-        WavePattern = 2,  // Wave cadence — AP07 recognition, AP08 corrections
+        WavePattern = 2,  // Wave cadence recognition + AP08 timing corrections
         SwingFlip = 3,    // Swing flip model (later) — measurement only for now
     };
 
