@@ -29,7 +29,7 @@ Scrape:
 - `%LOCALAPPDATA%\GeometryDash\geode\mods\audesign.earlybuffer\real_assist\last_run.txt`
 - `real_assist/session_*.json` after PlayLayer attempts
 
-Single case:
+Single case (prep only — stays on menu):
 
 ```bat
 set EB_REAL_ASSIST_AUTO=1
@@ -39,6 +39,12 @@ set EB_REAL_ASSIST_PROTOCOL=Frozen
 geode run
 ```
 
+Opt-in level enter (normally off):
+
+```bat
+set EB_REAL_ASSIST_OPEN_LEVEL=1
+```
+
 ## Manual Dev
 
 Dev → Real Assist → **Run Real Assist Case** (uses `real-assist-case` / `real-assist-mode` / `real-assist-protocol` settings).
@@ -46,5 +52,7 @@ Dev → Real Assist → **Run Real Assist Case** (uses `real-assist-case` / `rea
 ## Notes
 
 - Prep-only matrix does **not** invent SurviveRate; open level + attempts fill session JSON.
-- `PhysicsHitRate` / `InventRate` stay `n/a` until APR3 scorer + PhysicsSafeSet (`reproduce=pass` required).
+- Offline score: `python tools/score_session.py <session.json>` (PhysicsHitRate acceptance)
+- Mode compare: `python tools/compare_modes.py <sessions…>` — Frozen vs Online stay separate
+- CI goldens: `python tools/test_real_assist_score.py`
 - Frozen: Hybrid write-guarded (`freeze(true)`), Auto-Tune off. Online: reset + Auto-Tune on.

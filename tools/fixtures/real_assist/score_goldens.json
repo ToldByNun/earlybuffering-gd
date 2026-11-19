@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "description": "APR3 frozen offline score expectations (synthetic sessions; no GD required).",
+  "cases": [
+    {
+      "name": "slaughterhouse-on-time-live-frozen",
+      "session": "sessions/slaughterhouse_on-time_Live_Frozen.json",
+      "physics": "oracles/slaughterhouse_on-time.physics_safe.json",
+      "verifier": "oracles/slaughterhouse_on-time.verifier_safe.json",
+      "expect": {
+        "SurviveRate": 1.0,
+        "PhysicsHitRate": 1.0,
+        "VerifierHitRate": 1.0,
+        "InventRate": 0.0,
+        "hardFail": false,
+        "disagreementCount": 0
+      }
+    },
+    {
+      "name": "slaughterhouse-pulse-live-frozen",
+      "session": "sessions/slaughterhouse_pulse-shift-early-2_Live_Frozen.json",
+      "physics": "oracles/slaughterhouse_pulse-shift-early-2.physics_safe.json",
+      "verifier": "oracles/slaughterhouse_pulse-shift-early-2.verifier_safe.json",
+      "expect": {
+        "SurviveRate": 1.0,
+        "PhysicsHitRate": 1.0,
+        "VerifierHitRate": 1.0,
+        "InventRate": 0.0,
+        "hardFail": false,
+        "disagreementCount": 1
+      }
+    },
+    {
+      "name": "slaughterhouse-pulse-hybrid-frozen",
+      "session": "sessions/slaughterhouse_pulse-shift-early-2_Hybrid_Frozen.json",
+      "physics": "oracles/slaughterhouse_pulse-shift-early-2.physics_safe.json",
+      "verifier": "oracles/slaughterhouse_pulse-shift-early-2.verifier_safe.json",
+      "expect": {
+        "SurviveRate": 1.0,
+        "PhysicsHitRate": 1.0,
+        "VerifierHitRate": 1.0,
+        "InventRate": 0.0,
+        "hardFail": false,
+        "disagreementCount": 1
+      }
+    },
+    {
+      "name": "invent-hard-fail",
+      "session": "sessions/slaughterhouse_pulse-shift-early-2_Live_invent.json",
+      "physics": "oracles/slaughterhouse_pulse-shift-early-2.physics_safe.json",
+      "verifier": "oracles/slaughterhouse_pulse-shift-early-2.verifier_safe.json",
+      "expect": {
+        "SurviveRate": 0.0,
+        "PhysicsHitRate": 0.0,
+        "InventRate": 1.0,
+        "hardFail": true,
+        "disagreementCount": 1
+      }
+    }
+  ],
+  "onTimeSurviveFloor": {
+    "slaughterhouse/on-time/Live/Frozen": 1.0
+  }
+}

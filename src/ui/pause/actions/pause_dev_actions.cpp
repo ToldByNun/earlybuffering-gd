@@ -332,7 +332,8 @@ void EbPauseDevActions::devRunRealAssist() {
     std::string report;
     bool const ok = EbRealAssistRunner::get().runDevAction(report);
     auto const message =
-        ok ? fmt::format("Real Assist armed (prep/open).\n\n{}\n\n"
+        ok ? fmt::format("Real Assist prep OK (stays on menu).\n\n{}\n\n"
+                         "No level enter unless EB_REAL_ASSIST_OPEN_LEVEL=1.\n"
                          "PASS needs reproduce=pass + real attempts.\n"
                          "Details: saveDir/real_assist/last_run.txt",
                          report)

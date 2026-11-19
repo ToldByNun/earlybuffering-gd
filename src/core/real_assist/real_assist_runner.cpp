@@ -10,49 +10,14 @@
 #include "gold_reproduce_gate.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/GJGameLevel.hpp>
-#include <Geode/binding/MenuLayer.hpp>
 #include <Geode/binding/PlayLayer.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
 #include <cstdlib>
 #include <system_error>
 
-class EbRealAssistAutoPollNode : public cocos2d::CCNode {
-public:
-    static EbRealAssistAutoPollNode* create() {
-        auto* node = new EbRealAssistAutoPollNode();
-        if (node && node->init()) {
-            node->autorelease();
-            return node;
-        }
-        delete node;
-        return nullptr;
-    }
-
-    bool init() override {
-        if (!CCNode::init())
-            return false;
-        m_frames = 0;
-        this->schedule(schedule_selector(EbRealAssistAutoPollNode::onTick), 0.25f);
-        return true;
-    }
-
-    void onTick(float) {
-        ++m_frames;
-        auto* scene = cocos2d::CCDirector::sharedDirector()->getRunningScene();
-        bool const menuReady =
-            scene && scene->getChildByType<MenuLayer>(0) != nullptr;
-        if (!menuReady && m_frames < 120)
-            return;
-        this->unschedule(schedule_selector(EbRealAssistAutoPollNode::onTick));
-        std::string report;
-        (void)EbRealAssistRunner::get().runDevAction(report);
-        this->removeFromParentAndCleanup(true);
-    }
-
-private:
-    int m_frames = 0;
-};
+bool EbRealAssistRunner::s_autoArmed = false;
+bool EbRealAssistRunner::s_autoFired = false;
 
 EbRealAssistRunner& EbRealAssistRunner::get() {
     static EbRealAssistRunner runner;
@@ -411,13 +376,15 @@ std::string EbRealAssistRunner::summaryBlock(bool prepOk) const {
         else
             verdict = "PASS";
     }
-    char const* notes = "notes=armed-for-PlayLayer-attempts";
+    char const* notes = "notes=prep-only-menu-no-level";
     if (!m_lastError.empty())
         notes = m_lastError.c_str();
+    else if (m_levelOpened && m_attempts.empty())
+        notes = "notes=waiting-for-PlayLayer-attempts";
+    else if (!m_levelOpened)
+        notes = "notes=prep-only-set-EB_REAL_ASSIST_OPEN_LEVEL=1-to-enter-level";
     else if (!repro)
         notes = "notes=reproduce-pending-blocks-oracle-and-PASS";
-    else if (m_attempts.empty())
-        notes = "notes=waiting-for-PlayLayer-attempts";
     return fmt::format(
         "=== REAL ASSIST RUNNER {} ===\n"
         "case={}/{}\n"
@@ -440,7 +407,7 @@ std::string EbRealAssistRunner::summaryBlock(bool prepOk) const {
         m_case.wavePattern, notes);
 }
 
-bool EbRealAssistRunner::prepare(CaseSpec const& spec, std::string& report) {
+bool EbRealAssistRunner::prepare(CaseSpec const& spec, std::string& report, bool quiet) {
     report.clear();
     if (m_active)
         finish(report);
@@ -457,23 +424,28 @@ bool EbRealAssistRunner::prepare(CaseSpec const& spec, std::string& report) {
     std::filesystem::path levelPath;
     std::filesystem::path replayPath;
     std::string err;
+    auto publishFail = [&](bool ok) {
+        report = summaryBlock(ok);
+        if (!quiet) {
+            (void)writeLastRun(report, err);
+            EbAssistLog::info(report);
+            geode::log::info("{}", report);
+        }
+    };
     if (!resolvePaths(spec, levelPath, replayPath, err)) {
         m_lastError = err;
-        report = summaryBlock(false);
-        (void)writeLastRun(report, err);
+        publishFail(false);
         return false;
     }
     if (!applyProtocol(spec, err)) {
         m_lastError = err;
-        report = summaryBlock(false);
-        (void)writeLastRun(report, err);
+        publishFail(false);
         return false;
     }
     if (!importReplayFile(replayPath, err)) {
         m_lastError = err;
         (void)restoreProtocol(err);
-        report = summaryBlock(false);
-        (void)writeLastRun(report, err);
+        publishFail(false);
         return false;
     }
 
@@ -490,9 +462,11 @@ bool EbRealAssistRunner::prepare(CaseSpec const& spec, std::string& report) {
     report = summaryBlock(true);
     report += fmt::format("level={}\nreplay={}\n", levelPath.string(), replayPath.string());
     (void)writeSession(err);
-    (void)writeLastRun(report, err);
-    EbAssistLog::info(report);
-    geode::log::info("{}", report);
+    if (!quiet) {
+        (void)writeLastRun(report, err);
+        EbAssistLog::info(report);
+        geode::log::info("{}", report);
+    }
     return true;
 }
 
@@ -545,13 +519,15 @@ bool EbRealAssistRunner::openPreparedLevel(std::string& report) {
     return true;
 }
 
-bool EbRealAssistRunner::runCase(CaseSpec const& spec, std::string& report) {
-    std::string prepReport;
-    if (!prepare(spec, prepReport)) {
-        report = std::move(prepReport);
+bool EbRealAssistRunner::wantOpenLevel() {
+    return envTruthy(kEnvOpenLevel);
+}
+
+bool EbRealAssistRunner::runCase(CaseSpec const& spec, std::string& report, bool openLevel) {
+    if (!prepare(spec, report))
         return false;
-    }
-    // Alert / auto scrape get only the final open summary (not prepare+open glued).
+    if (!openLevel)
+        return true;
     return openPreparedLevel(report);
 }
 
@@ -663,8 +639,7 @@ bool EbRealAssistRunner::runDevAction(std::string& report) {
         for (auto row : rows) {
             row.protocol = Protocol::Frozen;
             std::string one;
-            // Force mode from matrix row.
-            if (!prepare(row, one)) {
+            if (!prepare(row, one, /*quiet=*/true)) {
                 ++fails;
                 lines += fmt::format("FAIL {}/{} {}\n", row.corpusId, row.variant,
                                      EbStageConfig::assistModeName(row.mode));
@@ -672,7 +647,10 @@ bool EbRealAssistRunner::runDevAction(std::string& report) {
                 lines += fmt::format("PASS {}/{} {}\n", row.corpusId, row.variant,
                                      EbStageConfig::assistModeName(row.mode));
             }
-            finish(one);
+            // Quiet restore — avoid per-row ARMED last_run spam.
+            std::string restoreErr;
+            (void)restoreProtocol(restoreErr);
+            m_active = false;
         }
         lines += fmt::format("prepFails={}/{}\n", fails, rows.size());
         report = lines;
@@ -696,38 +674,36 @@ bool EbRealAssistRunner::runDevAction(std::string& report) {
     std::string importReport;
     (void)EbGoldReproduceGate::importAndStamp(spec.corpusId, importReport);
 
-    bool const ok = runCase(spec, report);
+    bool const ok = runCase(spec, report, wantOpenLevel());
     return ok;
-}
-
-void EbRealAssistRunner::queueAutoWhenMenuReady() {
-    auto* loader = geode::Loader::get();
-    if (!loader)
-        return;
-    loader->queueInMainThread([] {
-        auto* scene = cocos2d::CCDirector::sharedDirector()->getRunningScene();
-        if (!scene) {
-            // Try again shortly.
-            geode::Loader::get()->queueInMainThread([] { queueAutoWhenMenuReady(); });
-            return;
-        }
-        constexpr int kAutoTag = 0x45425241; // 'EBRA'
-        if (scene->getChildByTag(kAutoTag))
-            return;
-        auto* node = EbRealAssistAutoPollNode::create();
-        if (node) {
-            node->setTag(kAutoTag);
-            scene->addChild(node);
-        }
-    });
 }
 
 void EbRealAssistRunner::maybeQueueAutoFromEnv() {
     auto const autoVal = envOrEmpty(kEnvAuto);
     if (autoVal.empty())
         return;
-    // Prefer runner over reproduce-only auto (1/true/matrix/…).
-    queueAutoWhenMenuReady();
+    // Arm only — fire from MenuLayer::init so we survive LoadingLayer teardown.
+    s_autoArmed = true;
+    s_autoFired = false;
+    geode::log::info("RealAssist auto armed (EB_REAL_ASSIST_AUTO={})", autoVal);
+}
+
+void EbRealAssistRunner::onMenuLayerReady() {
+    if (!s_autoArmed || s_autoFired)
+        return;
+    s_autoFired = true;
+    s_autoArmed = false;
+    // Defer one frame so MenuLayer finishes presenting before prep I/O.
+    auto* loader = geode::Loader::get();
+    if (!loader) {
+        std::string report;
+        (void)get().runDevAction(report);
+        return;
+    }
+    loader->queueInMainThread([] {
+        std::string report;
+        (void)get().runDevAction(report);
+    });
 }
 
 bool EbRealAssistRunner::selfCheck(std::string& report) {
@@ -740,6 +716,8 @@ bool EbRealAssistRunner::selfCheck(std::string& report) {
         }
     };
     expect(std::string(kEnvAuto) == "EB_REAL_ASSIST_AUTO", "env-auto");
+    expect(std::string(kEnvOpenLevel) == "EB_REAL_ASSIST_OPEN_LEVEL", "env-open");
+    expect(!wantOpenLevel() || envTruthy(kEnvOpenLevel), "open-default-off");
     expect(std::string(protocolName(Protocol::Frozen)) == "Frozen", "proto-frozen");
     expect(std::string(protocolName(Protocol::Online)) == "Online", "proto-online");
     Protocol protocol = Protocol::Frozen;

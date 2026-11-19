@@ -74,3 +74,16 @@ geode run
 - Env: `EB_REAL_ASSIST_AUTO`, `EB_REAL_ASSIST_CASE`, `EB_REAL_ASSIST_MODE`, `EB_REAL_ASSIST_PROTOCOL`
 - Matrix + agent loop: `tools/real_assist/run_matrix.md`
 - Outputs: `saveDir/real_assist/last_run.txt` + `session_*.json`
+
+## APR3 — Offline score + compare
+
+```bat
+python tools/score_session.py path\to\session.json --physics path\to.physics_safe.json
+python tools/compare_modes.py path\to\real_assist_dir --out compare.json
+python tools/test_real_assist_score.py
+python tools/test_real_assist_score.py --freeze
+```
+
+- **PhysicsHitRate** = acceptance; **VerifierHitRate** = diagnostic only
+- InventRate > 0 → hard fail; on-time SurviveRate floor regression → fail
+- Verifier↔Physics set disagreements → `diagnosticFailures` (investigate, not acceptance)

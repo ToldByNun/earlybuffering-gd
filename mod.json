@@ -1672,7 +1672,7 @@
 		"dev-run-real-assist-action": {
 			"type": "custom:eb-action",
 			"name": "Run Real Assist Case",
-			"description": "APR2: prepare case (mode/protocol/import shifted gdr2), open level.gmd, record attempts to real_assist/session_*.json + last_run.txt. geode run with EB_REAL_ASSIST_AUTO=1 waits for MenuLayer then runs.",
+			"description": "APR2: prepare case (mode/protocol/import shifted gdr2) without entering the level. Writes real_assist/session_*.json + last_run.txt. Opt-in level enter: EB_REAL_ASSIST_OPEN_LEVEL=1. geode run + EB_REAL_ASSIST_AUTO=1 waits for MenuLayer then preps.",
 			"button-text": "run"
 		},
 		"title-dev-diag": {

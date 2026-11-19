@@ -46,6 +46,8 @@ public:
     static constexpr char const* kEnvCase = "EB_REAL_ASSIST_CASE";
     static constexpr char const* kEnvMode = "EB_REAL_ASSIST_MODE";
     static constexpr char const* kEnvProtocol = "EB_REAL_ASSIST_PROTOCOL";
+    // Opt-in only: default runner stays on the menu (prep/import, no PlayLayer scene).
+    static constexpr char const* kEnvOpenLevel = "EB_REAL_ASSIST_OPEN_LEVEL";
 
     static char const* protocolName(Protocol protocol);
     static bool parseProtocol(std::string const& text, Protocol& out);
@@ -59,11 +61,13 @@ public:
     CaseSpec const& current() const;
 
     // Resolve files, apply mode/protocol, import shifted replay, start session JSON.
-    bool prepare(CaseSpec const& spec, std::string& report);
-    // Load corpus level.gmd into PlayLayer (GDShare plist via DS_Dictionary).
+    // quiet: skip ARMED last_run/console spam (matrix prep uses this).
+    bool prepare(CaseSpec const& spec, std::string& report, bool quiet = false);
+    // Load corpus level.gmd into PlayLayer (opt-in; default runner never calls this).
     bool openPreparedLevel(std::string& report);
-    // prepare + open in one shot.
-    bool runCase(CaseSpec const& spec, std::string& report);
+    // Default: prepare only (menu stays). Pass openLevel=true or EB_REAL_ASSIST_OPEN_LEVEL=1 to enter.
+    bool runCase(CaseSpec const& spec, std::string& report, bool openLevel = false);
+    static bool wantOpenLevel();
 
     void onLevelInit(PlayLayer* layer);
     void onAttemptEnd(PlayLayer* layer, bool completed, float endPercent);
@@ -71,8 +75,10 @@ public:
 
     // Dev / Lab button.
     bool runDevAction(std::string& report);
-    // After mod load: wait for MenuLayer, then auto case or matrix.
+    // After mod load: arm auto; fires once from MenuLayer::init (survives loading scenes).
     static void maybeQueueAutoFromEnv();
+    // Called from EbMenuLayer::init — runs armed auto once on the main menu.
+    static void onMenuLayerReady();
 
     static bool selfCheck(std::string& report);
 
@@ -89,7 +95,9 @@ private:
     std::string summaryBlock(bool prepOk) const;
     static std::string envOrEmpty(char const* name);
     static bool envTruthy(char const* name);
-    static void queueAutoWhenMenuReady();
+
+    static bool s_autoArmed;
+    static bool s_autoFired;
 
     bool m_active = false;
     bool m_levelOpened = false;
