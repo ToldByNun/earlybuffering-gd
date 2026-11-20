@@ -69,6 +69,10 @@ bool EbRealAssistRunner::parseMode(std::string const& text, EbStageConfig::Assis
         out = EbStageConfig::AssistMode::Hybrid;
         return true;
     }
+    if (value == "ai") {
+        out = EbStageConfig::AssistMode::AI;
+        return true;
+    }
     return false;
 }
 
@@ -1539,6 +1543,7 @@ bool EbRealAssistRunner::selfCheck(std::string& report) {
     expect(parseProtocol("online", protocol) && protocol == Protocol::Online, "parse-online");
     EbStageConfig::AssistMode mode = EbStageConfig::AssistMode::Live;
     expect(parseMode("Hybrid", mode) && mode == EbStageConfig::AssistMode::Hybrid, "parse-hybrid");
+    expect(parseMode("AI", mode) && mode == EbStageConfig::AssistMode::AI, "parse-ai");
     CaseSpec spec;
     std::string err;
     expect(parseCaseString("cataclysm/pulse-shift-early-2", spec, err) &&

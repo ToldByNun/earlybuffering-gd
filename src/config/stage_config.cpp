@@ -328,6 +328,8 @@ char const* EbStageConfig::assistModeName(AssistMode mode) {
         return "Live";
     case AssistMode::Hybrid:
         return "Hybrid";
+    case AssistMode::AI:
+        return "AI";
     }
     return "Live";
 }
@@ -338,6 +340,8 @@ char const* EbStageConfig::assistModeHint(AssistMode mode) {
         return "live plan each click";
     case AssistMode::Hybrid:
         return "Checks learned timings on familiar clicks";
+    case AssistMode::AI:
+        return "Neural timing assist — learns a per-level network from your play";
     }
     return "";
 }
@@ -351,7 +355,7 @@ void EbStageConfig::setAssistMode(AssistMode mode) {
 
 void EbStageConfig::cycleAssistMode() {
     EbStageConfigImplementation::ensureCache();
-    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 2;
+    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 3;
     setAssistMode(static_cast<AssistMode>(next));
 }
 
@@ -662,6 +666,10 @@ bool EbStageConfig::selfCheck(std::string& report) {
     expect(std::string(assistPickName()) == "v1", "fixed-pick-name");
     expect(assistEngine() == AssistEngineKind::ShadowPlayer, "fixed-engine");
     expect(effectiveAssistEngine() == AssistEngineKind::ShadowPlayer, "fixed-effective-engine");
+    expect(std::string(assistModeName(AssistMode::Live)) == "Live", "mode-name-live");
+    expect(std::string(assistModeName(AssistMode::Hybrid)) == "Hybrid", "mode-name-hybrid");
+    expect(std::string(assistModeName(AssistMode::AI)) == "AI", "mode-name-ai");
+    expect(assistModeHint(AssistMode::AI)[0] != '\0', "mode-hint-ai");
 
     // Pure resolve: overwrite off → global; overwrite on → mode value.
     auto resolveBool = [](bool overwrite, bool modeValue, bool globalValue) {

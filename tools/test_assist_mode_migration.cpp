@@ -6,8 +6,12 @@
 int AssistModeMigrationTests::run() {
     int failures = 0;
     for (std::string const value :
-         {"Live", "Hybrid", "Replay", "BruteForce", "Route", "", "unknown"}) {
-        std::string const expected = value == "Hybrid" ? "Hybrid" : "Live";
+         {"Live", "Hybrid", "AI", "Replay", "BruteForce", "Route", "", "unknown"}) {
+        std::string expected = "Live";
+        if (value == "Hybrid")
+            expected = "Hybrid";
+        else if (value == "AI")
+            expected = "AI";
         std::string const migrated = EbAssistModeMigration::canonical(value);
         failures += migrated != expected;
         failures += migrated != EbAssistModeMigration::canonical(migrated);

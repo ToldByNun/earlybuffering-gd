@@ -8,7 +8,7 @@
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.7.1",
+	"version": "v1.8.0",
 	"developer": "Audesign",
 	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
@@ -51,10 +51,11 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Hybrid with Auto-Tune learns timings across attempts and checks them with Live physics. See Learn for progress.",
+			"description": "Live plans each click. Hybrid learns tabular timings with Auto-Tune and checks them with Live physics. AI uses a per-level neural scorer with the same verify gate (scaffolding in 1.8.0). See Learn for progress.",
 			"one-of": [
 				"Live",
-				"Hybrid"
+				"Hybrid",
+				"AI"
 			],
 			"default": "Live"
 		},
@@ -1655,7 +1656,8 @@
 			"description": "Assist mode for the Real Assist Runner. Overridden by EB_REAL_ASSIST_MODE.",
 			"one-of": [
 				"Live",
-				"Hybrid"
+				"Hybrid",
+				"AI"
 			],
 			"default": "Live"
 		},

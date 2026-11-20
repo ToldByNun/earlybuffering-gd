@@ -58,4 +58,4 @@ only single clicks). Real PlayLayer bands replace synthetics after `reproduce=pa
 
 ## AP00 rule
 
-Do not start AP00 (AI mode / neural scaffolding) until this baseline file exists and `python tools/test_real_assist_smoke.py` is green. Keep the dense gate green for meaningful assist results.
+AP00 (`AssistMode::AI` scaffolding) may proceed only while this baseline file exists and `python tools/test_real_assist_smoke.py` stays green. Keep the dense gate green for meaningful assist results.

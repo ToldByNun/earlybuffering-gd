@@ -39,7 +39,7 @@ class EbStageConfig {
 public:
     enum class GameModeKind { Cube = 0, Ship, Ball, Ufo, Wave, Robot, Spider, Swing, Count };
 
-    enum class AssistMode { Live = 0, Hybrid };
+    enum class AssistMode { Live = 0, Hybrid, AI };
 
     // Live V2 sim backend (WU8). V1 effective engine is always ShadowPlayer.
     enum class AssistEngineKind { ShadowPlayer = 0, Trajectory };

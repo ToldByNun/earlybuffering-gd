@@ -117,6 +117,10 @@ public:
             auto& learning = EbHybridLearning::get();
             if (!EbLevelProfile::get().loaded())
                 ImGui::TextWrapped("Open a level to see its learning progress.");
+            else if (EbStageConfig::assistMode() == AssistMode::AI)
+                ImGui::TextWrapped("AI mode is scaffolded. Neural training UI lands with the "
+                                   "candidate scorer; until then AI falls through to Live "
+                                   "planning with the same verify gate as Hybrid.");
             else if (EbStageConfig::assistMode() != AssistMode::Hybrid)
                 ImGui::TextWrapped("Live uses its own timing adjustments. Choose Hybrid to learn "
                                    "which timings work on repeated attempts.");

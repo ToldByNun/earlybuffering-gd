@@ -140,11 +140,14 @@ void EbStageSettingsCache::refreshCache() {
     try {
         auto const storedMode = mod->getSettingValue<std::string>("assist-mode");
         std::string const modeStr = EbAssistModeMigration::canonical(storedMode);
-        EbStageConfigImplementation::s_cachedAssistMode = modeStr == "Hybrid"
-                                                              ? EbStageConfig::AssistMode::Hybrid
-                                                              : EbStageConfig::AssistMode::Live;
+        if (modeStr == "Hybrid")
+            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Hybrid;
+        else if (modeStr == "AI")
+            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::AI;
+        else
+            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Live;
         if (storedMode != modeStr)
-            mod->setSettingValue<std::string>("assist-mode", "Live");
+            mod->setSettingValue<std::string>("assist-mode", modeStr);
     } catch (...) {
         EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Live;
     }

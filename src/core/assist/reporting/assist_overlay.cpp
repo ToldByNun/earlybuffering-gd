@@ -65,7 +65,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         std::string wavePatternBit = EbWavePatternVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
-        if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
+        if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid ||
+                               mode == AssistMode::AI)) {
             smartBit = fmt::format("smart {}j/{}c", smartDepth, EbStageConfig::smartCombos());
         }
         int const cpsLim = EbStageConfig::cpsLimit();

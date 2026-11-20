@@ -3,5 +3,7 @@
 char const* EbAssistModeMigration::canonical(std::string const& stored) {
     if (stored == "Hybrid")
         return "Hybrid";
+    if (stored == "AI")
+        return "AI";
     return "Live";
 }

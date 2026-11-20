@@ -92,7 +92,7 @@ Dense (multi-click sequences × tick windows `4/8/12/24` × delay bands):
 python tools/test_real_assist_dense.py --freeze
 ```
 
-`tools/run_live_regression_ap07.py` includes the Real Assist scripts. **AP00 stays blocked until the smoke gate is green**; dense is the coverage floor for good assist results. See [Real Assist baseline](/dev/real_assist_baseline).
+`tools/run_live_regression_ap07.py` includes the Real Assist scripts. **Keep the smoke gate green while AP00+ lands**; dense is the coverage floor for good assist results. See [Real Assist baseline](/dev/real_assist_baseline).
 
 ## Wave regression
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.8.0
+
+- Add `AssistMode::AI` scaffolding (settings one-of, migration, cycle Live→Hybrid→AI). Neural candidate scorer lands in later AP slices; AI falls through to Live until then.
+- Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
+
 ## v1.7.1
 
 Release notes: [v1.7.1](releases/v1.7.1.md).

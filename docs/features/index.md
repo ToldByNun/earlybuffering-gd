@@ -4,7 +4,7 @@ Short list of what EarlyBuffer can do. Each item has a deeper page.
 
 | Feature | One-line meaning |
 |---|---|
-| [Assist modes](/features/modes) | Live / Hybrid / Replay / BruteForce — how timing is chosen |
+| [Assist modes](/features/modes) | Live / Hybrid / AI — how timing is chosen |
 | [Adaptive Plan](/features/adaptive) | Smarter Live planner (screen → verify → decide) |
 | [Cloud Configs](/features/cloud-configs) | Download / share settings packs |
 | [Safe Mode](/features/safe-mode) | Do not treat assisted runs as normal clears |
