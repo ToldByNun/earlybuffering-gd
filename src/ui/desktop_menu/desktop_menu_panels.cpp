@@ -382,6 +382,15 @@ public:
         }
         EbSectionCard::end();
 
+        if (EbSectionCard::begin("ai-viz", "Visualization")) {
+            EbCheckbox::drawSetting("show-ai", "Visualize AI");
+            ImGui::TextWrapped(
+                "Shows the local grid the scorer reads (solids / hazards / orbs), top-k delay "
+                "markers by confidence, last armed delay, and a green pulse on weight updates. "
+                "Same toggle as Visual → Visualize AI — draw only, never arms.");
+        }
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ai-knobs", "Scorer Knobs")) {
             auto& neural = EbNeuralLearning::get();
             bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
@@ -545,6 +554,8 @@ public:
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
             EbCheckbox::drawSetting("show-straightfly", "Visualize Straightfly");
             EbCheckbox::drawSetting("show-wave-pattern", "Visualize Wave Pattern");
+            EbCheckbox::drawSetting("show-ai", "Visualize AI");
+            ImGui::TextDisabled("AI: purple frame = perception grid; dots = ranked delays.");
         }
         EbSectionCard::end();
 

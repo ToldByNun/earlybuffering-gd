@@ -11,6 +11,9 @@
 - AP06: Hybrid bootstrap into AI verify order (read-only `.hybrid` tables) + ship `resources/ai/prior.ebnn` from supervised Real Assist bands.
 - AP07: Persist `ship-line-enable` / `wave-pattern-enable`; Flight assist no longer arms from viz toggles (Dev session override still OR’d in).
 - AP08: Desktop **Flight** tab (enables, corridor knobs, tracking status); dissolve **Keys** tab — hotkeys live on Assist / Learn / Visual / UI / Dev.
+- Visualize AI: purple perception grid (solid / hazard / orb), ranked delay markers, last armed, train pulse (`show-ai` on Visual + AI tabs).
+- AI perception / Visualize AI use GD `getObjectRect` + OBB only (OpenHack/RobTop ground truth; no sprite `contentSize` fabrication).
+- Visualize AI perf: no force-dirty of every object; spatial cull; rebuild every 8 ticks; click prepare skips viz hitbox copies.
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
 
 ## v1.7.1

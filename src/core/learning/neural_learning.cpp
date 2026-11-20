@@ -7,6 +7,7 @@
 #include "hybrid_learning.hpp"
 #include "neural_bootstrap.hpp"
 #include "neural_grid.hpp"
+#include "neural_hitbox.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <cmath>
@@ -175,8 +176,144 @@ std::uint8_t EbNeuralLearning::channelBitsForObject(GameObject* object) {
     }
 }
 
+void EbNeuralLearning::captureGrid(PlayLayer* layer, PlayerObject* player, EbNeuralGrid& outGrid,
+                                   float& originX, float& originY, bool storeVizHitboxes) {
+    outGrid.clear();
+    originX = 0.0f;
+    originY = 0.0f;
+    if (storeVizHitboxes) {
+        m_viz.hitboxCount = 0;
+        m_viz.playerHitboxValid = false;
+    }
+    if (!layer || !player)
+        return;
+    float const playerX = player->getPositionX();
+    float const playerY = player->getPositionY();
+    originX = EbNeuralGrid::gridStartX(playerX);
+    originY = EbNeuralGrid::gridStartY(playerY);
+    float const maxX = originX + EbNeuralGrid::kGridWidth;
+    float const maxY = originY + EbNeuralGrid::kGridHeight;
+    // Cheap position pad before getObjectRect (avoids hitbox work far off-grid).
+    float const pad = 90.0f;
+
+    std::vector<EbNeuralGridObject> objects;
+    objects.reserve(96);
+
+    EbSectionObjectWalk::forEachOwnedObject(layer, [&](GameObject* object) {
+        if (!object)
+            return;
+        std::uint8_t const bits = channelBitsForObject(object);
+        if (!bits)
+            return;
+        float const ox = object->getPositionX();
+        float const oy = object->getPositionY();
+        if (ox < originX - pad || ox > maxX + pad || oy < originY - pad || oy > maxY + pad)
+            return;
+
+        EbNeuralHitbox const hit = EbNeuralHitbox::read(object);
+        if (!hit.valid)
+            return;
+        if (hit.aabbX + hit.aabbW < originX || hit.aabbX > maxX ||
+            hit.aabbY + hit.aabbH < originY || hit.aabbY > maxY)
+            return;
+
+        EbNeuralGridObject entry;
+        entry.x = hit.aabbX;
+        entry.y = hit.aabbY;
+        entry.width = hit.aabbW;
+        entry.height = hit.aabbH;
+        entry.channelBits = bits;
+        entry.oriented = hit.oriented;
+        for (int corner = 0; corner < 4; ++corner) {
+            entry.cornerX[corner] = hit.cornerX[corner];
+            entry.cornerY[corner] = hit.cornerY[corner];
+        }
+        objects.push_back(entry);
+
+        if (storeVizHitboxes && m_viz.hitboxCount < EbNeuralVizSnapshot::kMaxHitboxes) {
+            auto& draw = m_viz.hitboxes[m_viz.hitboxCount++];
+            draw.channelBits = bits;
+            draw.oriented = hit.oriented;
+            draw.aabbX = hit.aabbX;
+            draw.aabbY = hit.aabbY;
+            draw.aabbW = hit.aabbW;
+            draw.aabbH = hit.aabbH;
+            for (int corner = 0; corner < 4; ++corner) {
+                draw.cornerX[corner] = hit.cornerX[corner];
+                draw.cornerY[corner] = hit.cornerY[corner];
+            }
+        }
+    });
+    outGrid.rasterize(playerX, playerY, objects.data(), static_cast<int>(objects.size()));
+
+    if (storeVizHitboxes) {
+        EbNeuralHitbox const playerHit = EbNeuralHitbox::readPlayer(player);
+        if (playerHit.valid) {
+            m_viz.playerHitboxValid = true;
+            m_viz.playerAabbX = playerHit.aabbX;
+            m_viz.playerAabbY = playerHit.aabbY;
+            m_viz.playerAabbW = playerHit.aabbW;
+            m_viz.playerAabbH = playerHit.aabbH;
+        }
+    }
+}
+
+void EbNeuralLearning::publishVizRanks() {
+    m_viz.rankedCount = 0;
+    m_viz.hintDelay = -1;
+    for (auto const& edge : m_edges) {
+        if (!edge.valid || edge.verifyOrder.empty())
+            continue;
+        m_viz.hintDelay = edge.hint;
+        int const count =
+            std::min(EbNeuralVizSnapshot::kMaxRanked, static_cast<int>(edge.verifyOrder.size()));
+        for (int index = 0; index < count; ++index) {
+            int const delay = edge.verifyOrder[static_cast<size_t>(index)];
+            m_viz.rankedDelays[index] = delay;
+            float scratch[EbNeuralModel::kFeatureDim];
+            std::memcpy(scratch, edge.features, sizeof(scratch));
+            EbNeuralModel::writeCandidateDelay(scratch, delay);
+            m_viz.rankedConfidence[index] = m_model.confidence(scratch);
+        }
+        m_viz.rankedCount = count;
+        break;
+    }
+    m_viz.lastArmedDelay = lastArmedDelay;
+    m_viz.lastArmedConfidence = lastArmedConfidence;
+    m_viz.updates = updates;
+    m_viz.inferences = inferences;
+    m_viz.verifies = verifies;
+    m_viz.verifyHits = verifyHits;
+    m_viz.training = training();
+    m_viz.hasWeights = m_hasPriorOrWeights;
+}
+
+void EbNeuralLearning::refreshViz(PlayLayer* layer) {
+    if (!layer || !layer->m_player1)
+        return;
+    PlayerObject* player = layer->m_player1;
+    EbNeuralGrid grid;
+    float originX = 0.0f;
+    float originY = 0.0f;
+    captureGrid(layer, player, grid, originX, originY, true);
+    m_viz.originX = originX;
+    m_viz.originY = originY;
+    m_viz.playerX = player->getPositionX();
+    m_viz.playerY = player->getPositionY();
+    m_viz.playerSpeed = std::max(0.2f, player->m_playerSpeed);
+    m_viz.goingLeft = player->m_isGoingLeft;
+    m_viz.sideways = player->m_isSideways;
+    grid.copyCells(m_viz.cells);
+    publishVizRanks();
+    m_viz.valid = true;
+}
+
+EbNeuralVizSnapshot const& EbNeuralLearning::viz() const {
+    return m_viz;
+}
+
 void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
-                                    int limit, float dt, float firstDt, float* outFeatures) const {
+                                    int limit, float dt, float firstDt, float* outFeatures) {
     if (!outFeatures || !layer || !player)
         return;
     auto clampGeom = [](float value) {
@@ -188,36 +325,10 @@ void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool
     };
     float const playerX = player->getPositionX();
     float const playerY = player->getPositionY();
-    float const originX = EbNeuralGrid::gridStartX(playerX);
-    float const originY = EbNeuralGrid::gridStartY(playerY);
-    float const maxX = originX + EbNeuralGrid::kGridWidth;
-    float const maxY = originY + EbNeuralGrid::kGridHeight;
-
-    std::vector<EbNeuralGridObject> objects;
-    objects.reserve(128);
-    EbSectionObjectWalk::forEachOwnedObject(layer, [&](GameObject* object) {
-        if (!object)
-            return;
-        std::uint8_t const bits = channelBitsForObject(object);
-        if (!bits)
-            return;
-        float const width = object->getContentSize().width * std::fabs(object->getScaleX());
-        float const height = object->getContentSize().height * std::fabs(object->getScaleY());
-        float const x = object->getPositionX() - width * 0.5f;
-        float const y = object->getPositionY() - height * 0.5f;
-        if (x + width < originX || x > maxX || y + height < originY || y > maxY)
-            return;
-        EbNeuralGridObject entry;
-        entry.x = x;
-        entry.y = y;
-        entry.width = std::max(1.0f, width);
-        entry.height = std::max(1.0f, height);
-        entry.channelBits = bits;
-        objects.push_back(entry);
-    });
-
     EbNeuralGrid grid;
-    grid.rasterize(playerX, playerY, objects.data(), static_cast<int>(objects.size()));
+    float originX = 0.0f;
+    float originY = 0.0f;
+    captureGrid(layer, player, grid, originX, originY, false);
 
     EbNeuralFeatureState state;
     state.modeKind = static_cast<int>(EbStageConfig::kindOf(player));
@@ -249,6 +360,16 @@ void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool
     state.geometry[2] = clampGeom(layer->m_gameState.m_timeWarp);
 
     EbNeuralFeatures::build(outFeatures, grid, state);
+
+    m_viz.originX = originX;
+    m_viz.originY = originY;
+    m_viz.playerX = playerX;
+    m_viz.playerY = playerY;
+    m_viz.playerSpeed = std::max(0.2f, player->m_playerSpeed);
+    m_viz.goingLeft = player->m_isGoingLeft;
+    m_viz.sideways = player->m_isSideways;
+    grid.copyCells(m_viz.cells);
+    m_viz.valid = true;
 }
 
 void EbNeuralLearning::edge(bool player1, int tick, bool down) {
@@ -302,6 +423,7 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
         m_hasPriorOrWeights = true;
     }
     ++inferences;
+    publishVizRanks();
     if (edge.verifyOrder.empty())
         return -1;
     edge.hint = edge.verifyOrder.front();
@@ -474,6 +596,10 @@ bool EbNeuralLearning::selfCheck(std::string& report) {
     expect(get().topK >= 1 && get().topK <= 8, "topk-range");
     expect(EbNeuralModel::kFeatureDim == 3512, "feature-dim");
     expect(channelBitsForObject(nullptr) == 0, "null-object");
+    std::string hitboxReport;
+    expect(EbNeuralHitbox::selfCheck(hitboxReport), hitboxReport.c_str());
+    std::string gridReport;
+    expect(EbNeuralGrid::selfCheck(gridReport), gridReport.c_str());
     std::string bootstrapReport;
     expect(EbNeuralBootstrap::selfCheck(bootstrapReport), bootstrapReport.c_str());
 

@@ -79,6 +79,7 @@ public:
     static bool showTrajectory();
     static bool showStraightfly(); // acquired Straight Flight target line (viz only)
     static bool showWavePattern(); // locked Wave zigzag + upcoming click edges (viz only)
+    static bool showAi();          // neural grid + ranked delay markers (viz only)
     // Persisted Flight assists (AP07). Dev session overrides still OR in via controller.
     static bool shipLineEnable();
     static bool wavePatternEnable();
@@ -338,6 +339,7 @@ private:
     static bool s_cachedShowTrajectory;
     static bool s_cachedShowStraightfly;
     static bool s_cachedShowWavePattern;
+    static bool s_cachedShowAi;
     static bool s_cachedShipLineEnable;
     static bool s_cachedWavePatternEnable;
     static int s_cachedWaveAngleSnapDegrees;

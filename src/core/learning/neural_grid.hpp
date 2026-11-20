@@ -8,12 +8,19 @@
 
 // Nova-like player-relative raster. Only confirmed category channels are written;
 // unknown object kinds leave all channels zero (no invented Nova labels).
+// Geometry is GameObject hitbox space (getObjectRect / oriented corners), not sprite
+// contentSize — contentSize inflated the perception window past real collision.
 class EbNeuralGridObject {
 public:
+    // Axis-aligned hitbox (getObjectRect). Always set for culling / AABB stamp.
     float x = 0.0f;
     float y = 0.0f;
     float width = 0.0f;
     float height = 0.0f;
+    // When true, stamp cells whose centers lie inside the oriented quad (OBB2D).
+    bool oriented = false;
+    float cornerX[4]{};
+    float cornerY[4]{};
     // Bits 0..5 map to raster channels 0..5. Channels 6..8 reserved until confirmed.
     std::uint8_t channelBits = 0;
 
@@ -42,6 +49,8 @@ public:
     void scatterTo(float* features) const;
     void collectActiveIndices(std::vector<int>& outIndices) const;
     int activeCellCount() const;
+    // Copy packed channel bits per cell (same layout as internal stamp buffer).
+    void copyCells(std::uint8_t* outCells) const;
 
     static bool selfCheck(std::string& report);
 

@@ -29,6 +29,7 @@
 #include "../ui/feedback/save_feedback.hpp"
 #include "../ui/feedback/save_frame_counter.hpp"
 #include "../ui/overlays/status_overlay.hpp"
+#include "../ui/visualizers/ai_visualizer.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
 #include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
@@ -157,6 +158,9 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
         EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
         if (EbStageConfig::showWavePattern())
             EbWavePatternVisualizer::get().attach(playLayer);
+        EbAiVisualizer::get().setEnabled(EbStageConfig::showAi());
+        if (EbStageConfig::showAi())
+            EbAiVisualizer::get().attach(playLayer);
     }
     {
         EbLagProbe::Scope const state("eb.updateOverlay");
@@ -206,6 +210,8 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbStraightflyVisualizer::get().attach(playLayer);
     EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
     EbWavePatternVisualizer::get().attach(playLayer);
+    EbAiVisualizer::get().setEnabled(EbStageConfig::showAi());
+    EbAiVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
     EbBakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
@@ -242,6 +248,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbTrajectoryVisualizer::get().detach(!layerAlive);
     EbStraightflyVisualizer::get().detach(!layerAlive);
     EbWavePatternVisualizer::get().detach(!layerAlive);
+    EbAiVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);
 

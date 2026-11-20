@@ -20,6 +20,7 @@
 #include "../ui/pause/pause_action_bridge.hpp"
 #include "../ui/settings/action_button_setting.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
+#include "../ui/visualizers/ai_visualizer.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
 #include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
@@ -198,6 +199,19 @@ void EbModuleBindings::registerSettings() {
                 EbWavePatternVisualizer::get().attach(pl);
         } else {
             EbWavePatternVisualizer::get().clear();
+        }
+        EbAssistController::get().updateOverlay();
+    });
+    geode::prelude::listenForSettingChanges<bool>("show-ai", [](bool value) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbAiVisualizer::get().setEnabled(value);
+        if (value) {
+            if (auto* pl = PlayLayer::get())
+                EbAiVisualizer::get().attach(pl);
+        } else {
+            EbAiVisualizer::get().clear();
         }
         EbAssistController::get().updateOverlay();
     });

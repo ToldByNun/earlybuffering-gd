@@ -1301,6 +1301,12 @@
 			"description": "When a Wave hold/release pattern is locked, draws the predicted zigzag path and upcoming click edges (amber path, bright next-click markers). Visualization only — does not arm corrections (use Wave Pattern Assist). Off = no draw cost.",
 			"default": false
 		},
+		"show-ai": {
+			"type": "bool",
+			"name": "Visualize AI",
+			"description": "Draws exact Geometry Dash collision hitboxes the scorer reads (forced getObjectRect / oriented box refresh — same source as RobTop debug draw / OpenHack): blue = solid, red = hazard, green = orb/pad, yellow = player. Also shows ranked delay markers and a train pulse. Visualization only — does not change scoring or arming. Off = no draw cost.",
+			"default": false
+		},
 		"wave-angle-snap": {
 			"type": "int",
 			"name": "Flight Angle Snap (deg)",

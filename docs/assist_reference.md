@@ -275,6 +275,7 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | show-overlay | bool | false | | | Main |
 | lag-warning-toast | bool | true | | | UI → Notifications — once-per-level lag card; independent of overlay / sim-budget |
 | show-trajectory | bool | false | | | Visual — HOLD/coast ghosts; **v2** also LongForesight horizon + yellow prediction windows + dark-green best path |
+| show-ai | bool | false | | | Visual / AI — neural perception grid + ranked delay markers + train pulse (viz only) |
 | show-bake-path | bool | false | | | Visual — green BakeMap **press windows** near player (no connector line; release marks omitted) |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
 | show-pause-hub | bool | true | | | Main — EB button |

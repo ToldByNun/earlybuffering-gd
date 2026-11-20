@@ -2,6 +2,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../ui/overlays/dev_overlay.hpp"
 #include "../../../ui/overlays/status_overlay.hpp"
+#include "../../../ui/visualizers/ai_visualizer.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
@@ -75,6 +76,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
         std::string straightflyBit = EbStraightflyVisualizer::get().statusHint();
         std::string wavePatternBit = EbWavePatternVisualizer::get().statusHint();
+        std::string aiVizBit = EbAiVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
         if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid ||
@@ -101,6 +103,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + straightflyBit;
         if (!wavePatternBit.empty())
             controller.m_overlayText += " | " + wavePatternBit;
+        if (!aiVizBit.empty())
+            controller.m_overlayText += " | " + aiVizBit;
         if (controller.shipLineAssistActive()) {
             std::string shipLineBit;
             if (controller.m_buffer.state == BufferState::Buffered &&

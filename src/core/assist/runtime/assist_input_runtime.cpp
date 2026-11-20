@@ -8,6 +8,7 @@
 #include "../../../dev/capture/dev_trace_store.hpp"
 #include "../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../ui/feedback/save_feedback.hpp"
+#include "../../../ui/visualizers/ai_visualizer.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
@@ -203,6 +204,10 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
     {
         EbPerfTrace::Scope const scope("wavePattern");
         EbWavePatternVisualizer::get().onPhysicsTick(playLayer, deltaTime);
+    }
+    {
+        EbPerfTrace::Scope const scope("aiViz");
+        EbAiVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
     {
         EbPerfTrace::Scope const scope("bakePath");

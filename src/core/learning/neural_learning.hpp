@@ -4,6 +4,7 @@
 #include "neural_features.hpp"
 #include "neural_model.hpp"
 #include "neural_replay.hpp"
+#include "neural_viz_snapshot.hpp"
 #include <array>
 #include <filesystem>
 #include <string>
@@ -57,6 +58,9 @@ public:
     EbNeuralModel& model();
     EbNeuralModel const& model() const;
     EbNeuralReplay& replay();
+    // Rebuild local grid + pull last ranked delays for Visualize AI (cheap vs prepare).
+    void refreshViz(PlayLayer* layer);
+    EbNeuralVizSnapshot const& viz() const;
 
     bool preferAiFirst = true;
     int topK = 2;
@@ -97,6 +101,7 @@ private:
 
     EbNeuralModel m_model;
     EbNeuralReplay m_replay;
+    EbNeuralVizSnapshot m_viz;
     std::filesystem::path m_path;
     std::array<EdgeState, 2> m_edges{};
     bool m_loaded = false;
@@ -105,7 +110,11 @@ private:
     void clearEdges();
     bool tryLoadPrior();
     void fillFeatures(PlayLayer* layer, PlayerObject* player, bool down, bool player1, int limit,
-                      float dt, float firstDt, float* outFeatures) const;
+                      float dt, float firstDt, float* outFeatures);
+    // storeVizHitboxes: only for Visualize AI (skip on click prepare — cheaper).
+    void captureGrid(PlayLayer* layer, PlayerObject* player, EbNeuralGrid& outGrid, float& originX,
+                     float& originY, bool storeVizHitboxes);
+    void publishVizRanks();
     static std::uint8_t channelBitsForObject(GameObject* object);
 };
 

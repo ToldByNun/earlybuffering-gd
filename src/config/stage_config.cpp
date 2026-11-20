@@ -43,6 +43,7 @@ bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
 bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
 bool EbStageConfigImplementation::s_cachedShowStraightfly = false;
 bool EbStageConfigImplementation::s_cachedShowWavePattern = false;
+bool EbStageConfigImplementation::s_cachedShowAi = false;
 bool EbStageConfigImplementation::s_cachedShipLineEnable = false;
 bool EbStageConfigImplementation::s_cachedWavePatternEnable = false;
 int EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees = 0;
@@ -465,6 +466,10 @@ bool EbStageConfig::showStraightfly() {
 bool EbStageConfig::showWavePattern() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowWavePattern;
+}
+bool EbStageConfig::showAi() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowAi;
 }
 bool EbStageConfig::shipLineEnable() {
     EbStageConfigImplementation::ensureCache();

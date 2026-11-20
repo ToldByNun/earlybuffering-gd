@@ -209,7 +209,7 @@ bool EbConfigBundle::selfCheck(std::string& report) {
     };
 
     expect(EbConfigBundle::kFormatVersion == 2, "format-v2");
-    expect(EbConfigBundleKeys::count() == 199, "portable-keys");
+    expect(EbConfigBundleKeys::count() == 200, "portable-keys");
     expect(EbConfigBundleApplyHelpers::isDevKey("dev-overlay"), "dev-key-yes");
     expect(!EbConfigBundleApplyHelpers::isDevKey("look-ahead-cap"), "dev-key-no");
     expect(!EbConfigBundleApplyHelpers::isDevKey(nullptr), "dev-key-null");

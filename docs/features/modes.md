@@ -8,7 +8,9 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 | Hybrid | Tabular learning: with Auto-Tune enabled, learns timings across attempts and tests familiar timings in the Live input window. See Learn for this level’s progress. |
 | AI | Neural candidate scorer (1.8.0): ranks delays to verify; Shadow physics still decides what may arm. Per-level `.neural` weights; packaged `resources/ai/prior.ebnn`. When a level already has Hybrid tables, AI blends those mature delays into its verify order (bootstrap — AI does not require Hybrid). |
 
-**Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, top-k / learning-rate knobs, freeze, and prior load. Auto-Tune (on Learn) still gates AI training writes. The Bake tab and macro/bake mode selection have been removed.
+**Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, top-k / learning-rate knobs, freeze, prior load, and **Visualize AI**. Auto-Tune (on Learn) still gates AI training writes. The Bake tab and macro/bake mode selection have been removed.
+
+**Visualize AI** (`show-ai`, also on Visual): draws exact GD collision hitboxes (`getObjectRect` / OBB after dirty refresh — same ground truth as RobTop debug draw): blue solid, red hazard, green orb/pad, yellow player. Scorer grid stamps those same rects. Ranked delay dots + train pulse. Draw only — never arms.
 
 **Hybrid is tabular; AI is neural.** Both reuse the same propose → `verifyDelay` contract. Live is the base planner.
 

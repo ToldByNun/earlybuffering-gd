@@ -41,6 +41,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "show-straightfly", false);
     EbStageConfigImplementation::s_cachedShowWavePattern =
         EbStageConfigImplementation::readBool(mod, "show-wave-pattern", false);
+    EbStageConfigImplementation::s_cachedShowAi =
+        EbStageConfigImplementation::readBool(mod, "show-ai", false);
     EbStageConfigImplementation::s_cachedShipLineEnable =
         EbStageConfigImplementation::readBool(mod, "ship-line-enable", false);
     EbStageConfigImplementation::s_cachedWavePatternEnable =

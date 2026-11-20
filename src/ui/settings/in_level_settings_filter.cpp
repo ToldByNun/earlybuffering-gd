@@ -144,6 +144,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
            "cat-wave-pattern-enable-flight");
     expect(categoryForKey("show-straightfly") == SettingsCategory::Visual, "cat-straightfly-visual");
     expect(categoryForKey("show-wave-pattern") == SettingsCategory::Visual, "cat-wave-pattern-visual");
+    expect(categoryForKey("show-ai") == SettingsCategory::Visual, "cat-show-ai-visual");
     expect(categoryForKey("wave-angle-snap") == SettingsCategory::Flight, "cat-flight-angle-snap");
     expect(categoryForKey("ship-room-of-error") == SettingsCategory::Flight, "cat-ship-room");
     expect(categoryForKey("show-bake-path") == SettingsCategory::Count, "cat-bake-path-visual");
@@ -182,7 +183,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
         expect(candidate != SettingsCategory::Count, it->key);
         ++mapped;
     }
-    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-244");
+    expect(mapped == EbSettingsCategoryMap::kCount, "map-count-245");
 
     for (auto const* it = EbConfigBundleKeys::begin(); it != EbConfigBundleKeys::end(); ++it) {
         auto const candidate = categoryForKey(it->key);
