@@ -52,6 +52,8 @@ class LiveRegressionGate:
                                 output=ran.stdout + ran.stderr, buildExit=built.returncode))
             print(name, "PASS" if results[-1]["passed"] else "FAIL", flush=True)
         for name in ("test_recorded_misses_ap01.py", "test_policy_registration_ap06.py",
+                     "test_real_assist_score.py", "test_real_assist_smoke.py",
+                     "test_real_assist_dense.py",
                      "test_geode_package_check.py", "test_bundle_geode.py", "check_cpp_style.py"):
             ran = subprocess.run([sys.executable, "tools/" + name], cwd=root, capture_output=True, text=True)
             results.append(dict(name=name, passed=ran.returncode == 0, output=ran.stdout + ran.stderr))

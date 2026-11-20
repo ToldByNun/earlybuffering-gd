@@ -87,3 +87,36 @@ python tools/test_real_assist_score.py --freeze
 - **PhysicsHitRate** = acceptance; **VerifierHitRate** = diagnostic only
 - InventRate > 0 → hard fail; on-time SurviveRate floor regression → fail
 - Verifier↔Physics set disagreements → `diagnosticFailures` (investigate, not acceptance)
+
+## APR4 — Freeze goldens + gate before AP00
+
+```bat
+python tools/test_real_assist_smoke.py --freeze
+python tools/test_real_assist_smoke.py
+python tools/run_live_regression_ap07.py
+```
+
+- Smoke PhysicsSafeSet (+ VerifierSafeSet diagnostic): `cataclysm/pulse-shift-early-2`, `hoveropolis/pulse-shift-early-2`, `slaughterhouse/pulse-shift-early-2`, `quantum/on-time`
+- Baseline report: `docs/dev/real_assist_baseline.md` (Live vs Hybrid, Frozen)
+- Pulse-shift ≠ edge-only — do not alias families
+- Dual corpora graded fairly (no Hybrid/AI-first); AP00 blocked until smoke gate is green
+
+## Dense coverage (multi-click sequences × tick windows)
+
+Smoke (4 keys) is only the AP00 gate. Lab/CI density uses:
+
+- multi-click **sequences** (1, 2, 3 hintereinander)
+- several **max tick windows** (`4,8,12,24` — ticks-all style)
+- full delay bands `0..limit` per window
+
+```bat
+python tools/shift_replay.py --dense --quiet
+python tools/test_real_assist_dense.py --freeze
+python tools/test_real_assist_dense.py
+```
+
+- Default clicks: `quantile:8`; sequences: `1,2,3` (`--sequences 1,2,3`)
+- Seq length >1: early families × k in `{2,4,6}` (consecutive assists / smart-depth path)
+- Windows: `--windows 4,8,12,24` on `build_dense_safe_fixtures.py`
+- Floor: >=200 delay probes and >=100 safe points per level (synthetic until `reproduce=pass`)
+- Optional denser: `--clicks every:5` / `--clicks all`

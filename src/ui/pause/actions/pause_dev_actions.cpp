@@ -332,10 +332,10 @@ void EbPauseDevActions::devRunRealAssist() {
     std::string report;
     bool const ok = EbRealAssistRunner::get().runDevAction(report);
     auto const message =
-        ok ? fmt::format("Real Assist prep OK (stays on menu).\n\n{}\n\n"
-                         "No level enter unless EB_REAL_ASSIST_OPEN_LEVEL=1.\n"
-                         "PASS needs reproduce=pass + real attempts.\n"
-                         "Details: saveDir/real_assist/last_run.txt",
+        ok ? fmt::format("Real Assist OK.\n\n{}\n\n"
+                         "AUTO=modes opens once and plans offline (bake-speed).\n"
+                         "Otherwise prep-only unless EB_REAL_ASSIST_OPEN_LEVEL=1.\n"
+                         "Details: saveDir/real_assist/last_run.txt + mode_compare.json",
                          report)
            : fmt::format("Real Assist runner failed.\n\n{}\n\n"
                          "Sync + shift:\n"

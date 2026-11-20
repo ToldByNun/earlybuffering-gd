@@ -16,6 +16,7 @@
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
 #include "../../../learning/level_profile.hpp"
+#include "../../../real_assist/real_assist_runner.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
 #include "../../../sim/shadow_simulator.hpp"
@@ -580,6 +581,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.noteVerdict(delayReason, "press-delay");
     if (delay > 0)
         EbAssistRealMetrics::get().noteArm();
+    EbRealAssistRunner::get().notePress(delay, plan.planUs, plan.hybridTried);
     controller.recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     controller.updateOverlay();
     return false;

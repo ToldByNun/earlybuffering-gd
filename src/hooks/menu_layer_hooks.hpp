@@ -8,6 +8,8 @@
 class $modify(EbMenuLayer, MenuLayer) {
 public:
     bool init();
+
+private:
 };
 
 #endif

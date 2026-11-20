@@ -5,6 +5,8 @@
   "corpusId": "slaughterhouse",
   "status": "ready",
   "family": "pulse-shift-early-2",
+  "fixture": "synthetic-apr4",
+  "notes": "Synthetic freeze until reproduce=pass. pulse-shift family — not edge-only.",
   "safeDelays": [2, 3],
   "band": [
     { "delay": 0, "survived": false, "tailComplete": false, "unknown": false, "budgetHit": false },

@@ -14,6 +14,7 @@ Player docs stay simple. This section is the **map into the codebase**, planner,
 | [Settings & mod.json](/dev/settings) | Adding a setting the right way |
 | [Dev traces & reports](/dev/traces) | Sessions, candNotes, bestSurv, lag probes |
 | [Tests & style](/dev/testing) | Self-checks, PlanGold, clang-format |
+| [Real Assist baseline](/dev/real_assist_baseline) | APR4 Live/Hybrid freeze — gate before AP00 |
 | [Contributing](/dev/contributing) | PR expectations |
 
 ## Long-form contracts (repo markdown)

@@ -15,6 +15,7 @@
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
 #include "../../learning/hybrid_learning.hpp"
+#include "../../real_assist/real_assist_runner.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../sim/sim_trust.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -80,6 +81,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
             0.1f * std::abs(errorMessage) / denom + 0.9f * controller.m_dtVarEma;
     }
     ++controller.m_attemptTick;
+    EbRealAssistRunner::get().onPhysicsTick(playLayer);
     {
         double const simTps = EbAssistClock::get().simTpsFromDt(controller.m_simDt);
         if (EbAssistClock::get().noteSpeedScale(timeWarp, simTps, controller.m_attemptTick)) {

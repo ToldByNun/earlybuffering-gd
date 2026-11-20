@@ -134,112 +134,21 @@ def _clamp(value: int, lo: int, hi: int) -> tuple[int, bool]:
     return value, clamped
 
 
-def apply_shift(
-    replay: Gdr2Replay,
-    family: Family,
-    k: int = 0,
-    click_index: int | None = None,
-) -> ShiftResult:
-    inputs = [
-        Gdr2Input(frame=e.frame, button=e.button, player2=e.player2, down=e.down)
-        for e in replay.inputs
-    ]
-    pairs = pair_clicks(inputs)
-    if family == "on-time":
-        name = family_name(family)
-        out = clone_replay(replay, inputs)
-        sidecar = {
-            "schema": 1,
-            "family": name,
-            "k": 0,
-            "clickIndex": None,
-            "shiftedIndices": [],
-            "originalHoldLength": None,
-            "newHoldLength": None,
-            "clamped": False,
-            "capture": {
-                "mode": "none",
-                "priorEventCount": 0,
-                "captureFrame": None,
-                "notes": "on-time has no shifted press",
-            },
-        }
-        return ShiftResult(name, 0, -1, out, sidecar, False)
-
-    if not pairs:
-        raise ValueError("no paired Jump clicks to shift")
-    if click_index is None:
-        click_index = default_click_index(pairs)
-    if click_index < 0 or click_index >= len(pairs):
-        raise ValueError(f"click_index {click_index} out of range 0..{len(pairs)-1}")
-    pair = pairs[click_index]
-    name = family_name(family, k)
-    original_hold = pair.hold_length
-
-    if family == "drop-click":
-        drop = {pair.press_index, pair.release_index}
-        kept = [ev for i, ev in enumerate(inputs) if i not in drop]
-        out = clone_replay(replay, kept)
-        sidecar = {
-            "schema": 1,
-            "family": name,
-            "k": 0,
-            "clickIndex": click_index,
-            "player2": pair.player2,
-            "button": pair.button,
-            "shiftedIndices": [],
-            "removedIndices": sorted(drop),
-            "originalHoldLength": original_hold,
-            "newHoldLength": None,
-            "clamped": False,
-            "goldPressFrame": pair.press_frame,
-            "goldReleaseFrame": pair.release_frame,
-            "capture": {
-                "mode": "pre_would_be_press",
-                "priorEventCount": sum(1 for ev in kept if ev.frame < pair.press_frame),
-                "captureFrame": pair.press_frame,
-                "notes": "drop-click: capture before missing press after prior derived events",
-            },
-        }
-        return ShiftResult(name, 0, click_index, out, sidecar, False)
-
+def _plan_shift_frames(
+    inputs: list[Gdr2Input], pair: ClickPair, family: Family, k: int
+) -> tuple[int, int, bool]:
+    """Return (new_press, new_release, clamped) for one pair against current inputs."""
     if k < 0:
         raise ValueError("k must be >= 0")
     if k == 0:
-        # Identity edit of the selected click — must equal gold timeline.
-        out = clone_replay(replay, inputs)
-        sidecar = {
-            "schema": 1,
-            "family": name,
-            "k": 0,
-            "clickIndex": click_index,
-            "player2": pair.player2,
-            "button": pair.button,
-            "shiftedIndices": [pair.press_index, pair.release_index],
-            "originalHoldLength": original_hold,
-            "newHoldLength": original_hold,
-            "clamped": False,
-            "goldPressFrame": pair.press_frame,
-            "goldReleaseFrame": pair.release_frame,
-            "newPressFrame": pair.press_frame,
-            "newReleaseFrame": pair.release_frame,
-            "capture": {
-                "mode": "pre_shifted_press",
-                "priorEventCount": pair.press_index,
-                "captureFrame": pair.press_frame,
-                "notes": "k=0 identity",
-            },
-        }
-        return ShiftResult(name, 0, click_index, out, sidecar, False)
+        return pair.press_frame, pair.release_frame, False
 
     press_lo, press_hi, release_lo, release_hi = _neighbor_bounds(inputs, pair)
     clamped = False
-
     if family.endswith("early"):
         new_press, c1 = _clamp(pair.press_frame - k, press_lo, press_hi)
         clamped |= c1
         if family.startswith("pulse-shift"):
-            # Preserve hold: release moves by the same delta as the (possibly clamped) press.
             delta = pair.press_frame - new_press
             new_release, c2 = _clamp(
                 pair.release_frame - delta, max(release_lo, new_press + 1), release_hi
@@ -268,77 +177,198 @@ def apply_shift(
                 clamped = True
     else:
         raise ValueError(f"unknown family {family}")
+    return new_press, new_release, clamped
 
-    inputs[pair.press_index].frame = new_press
-    if family.startswith("pulse-shift"):
-        inputs[pair.release_index].frame = new_release
-    # edge-only leaves release frame unchanged
 
-    new_hold = inputs[pair.release_index].frame - inputs[pair.press_index].frame
+def apply_shift(
+    replay: Gdr2Replay,
+    family: Family,
+    k: int = 0,
+    click_index: int | None = None,
+) -> ShiftResult:
+    if click_index is None and family != "on-time":
+        pairs = pair_clicks(replay.inputs)
+        click_index = default_click_index(pairs)
+    return apply_multi_shift(
+        replay,
+        family,
+        k=k,
+        click_indices=[] if family == "on-time" else [int(click_index)],
+    )
+
+
+def apply_multi_shift(
+    replay: Gdr2Replay,
+    family: Family,
+    k: int = 0,
+    click_indices: list[int] | None = None,
+) -> ShiftResult:
+    """Shift one or more paired clicks (consecutive sequences for dense multi-press tests)."""
+    inputs = [
+        Gdr2Input(frame=e.frame, button=e.button, player2=e.player2, down=e.down)
+        for e in replay.inputs
+    ]
+    pairs = pair_clicks(inputs)
+    name = family_name(family, k)
+
+    if family == "on-time":
+        out = clone_replay(replay, inputs)
+        sidecar = {
+            "schema": 1,
+            "family": name,
+            "k": 0,
+            "clickIndex": None,
+            "clickIndices": [],
+            "sequenceLength": 0,
+            "shiftedIndices": [],
+            "originalHoldLength": None,
+            "newHoldLength": None,
+            "clamped": False,
+            "capture": {
+                "mode": "none",
+                "priorEventCount": 0,
+                "captureFrame": None,
+                "notes": "on-time has no shifted press",
+            },
+        }
+        return ShiftResult(name, 0, -1, out, sidecar, False)
+
+    if not pairs:
+        raise ValueError("no paired Jump clicks to shift")
+    indices = list(click_indices or [])
+    if not indices:
+        indices = [default_click_index(pairs)]
+    for click_index in indices:
+        if click_index < 0 or click_index >= len(pairs):
+            raise ValueError(f"click_index {click_index} out of range 0..{len(pairs)-1}")
+    # Stable ascending by gold press so earlier edits settle before later neighbor clamps.
+    ordered = sorted(indices, key=lambda idx: (pairs[idx].press_frame, idx))
+    primary = ordered[0]
+    sequence_length = len(ordered)
+
+    if family == "drop-click":
+        drop: set[int] = set()
+        removed_clicks = []
+        for click_index in ordered:
+            pair = pairs[click_index]
+            drop.add(pair.press_index)
+            drop.add(pair.release_index)
+            removed_clicks.append(click_index)
+        kept = [ev for i, ev in enumerate(inputs) if i not in drop]
+        out = clone_replay(replay, kept)
+        first = pairs[ordered[0]]
+        sidecar = {
+            "schema": 1,
+            "family": name,
+            "k": 0,
+            "clickIndex": primary,
+            "clickIndices": ordered,
+            "sequenceLength": sequence_length,
+            "player2": first.player2,
+            "button": first.button,
+            "shiftedIndices": [],
+            "removedIndices": sorted(drop),
+            "removedClicks": removed_clicks,
+            "originalHoldLength": first.hold_length,
+            "newHoldLength": None,
+            "clamped": False,
+            "goldPressFrame": first.press_frame,
+            "goldReleaseFrame": first.release_frame,
+            "capture": {
+                "mode": "pre_would_be_press",
+                "priorEventCount": sum(1 for ev in kept if ev.frame < first.press_frame),
+                "captureFrame": first.press_frame,
+                "notes": "drop-click sequence: capture before first missing press",
+            },
+        }
+        return ShiftResult(name, 0, primary, out, sidecar, False)
+
+    if k < 0:
+        raise ValueError("k must be >= 0")
+
+    edits = []
+    clamped_any = False
+    # Mutate in-place by original indices (no re-sort until the end).
+    for click_index in ordered:
+        pair = pairs[click_index]
+        # Refresh pair frames from current inputs (prior edits may have moved neighbors only).
+        live = ClickPair(
+            player2=pair.player2,
+            button=pair.button,
+            press_index=pair.press_index,
+            release_index=pair.release_index,
+            press_frame=inputs[pair.press_index].frame,
+            release_frame=inputs[pair.release_index].frame,
+        )
+        new_press, new_release, clamped = _plan_shift_frames(inputs, live, family, k)
+        clamped_any |= clamped
+        inputs[pair.press_index].frame = new_press
+        if family.startswith("pulse-shift"):
+            inputs[pair.release_index].frame = new_release
+        edits.append(
+            {
+                "clickIndex": click_index,
+                "player2": pair.player2,
+                "button": pair.button,
+                "goldPressFrame": pair.press_frame,
+                "goldReleaseFrame": pair.release_frame,
+                "newPressFrame": new_press,
+                "newReleaseFrame": (
+                    new_release if family.startswith("pulse-shift") else pair.release_frame
+                ),
+                "originalHoldLength": pair.hold_length,
+                "newHoldLength": (
+                    (new_release if family.startswith("pulse-shift") else pair.release_frame)
+                    - new_press
+                ),
+                "clamped": clamped,
+            }
+        )
+
     out = clone_replay(replay, inputs)
-    # Re-sort for stable same-tick order (frame, player2, button, down)
     out.inputs.sort(key=lambda item: (item.frame, item.player2, item.button, 0 if item.down else 1))
 
-    # After sort, find new indices for sidecar
+    first_edit = edits[0]
+    new_press = int(first_edit["newPressFrame"])
     press_indices = [
         i
         for i, ev in enumerate(out.inputs)
         if ev.frame == new_press
-        and ev.player2 == pair.player2
-        and ev.button == pair.button
+        and ev.player2 == first_edit["player2"]
+        and ev.button == first_edit["button"]
         and ev.down
     ]
-    release_indices = [
-        i
-        for i, ev in enumerate(out.inputs)
-        if ev.frame == (new_release if family.startswith("pulse-shift") else pair.release_frame)
-        and ev.player2 == pair.player2
-        and ev.button == pair.button
-        and not ev.down
-    ]
-    shifted = []
-    if press_indices:
-        shifted.append(press_indices[0])
-    if family.startswith("pulse-shift") and release_indices:
-        shifted.append(release_indices[0])
-    elif family.startswith("edge-only") and release_indices:
-        shifted.append(release_indices[0])  # unmoved but paired
-
-    prior = sum(1 for ev in out.inputs if ev.frame < new_press or (ev.frame == new_press and not ev.down))
-    # Capture immediately before shifted press: count events strictly before the press event.
-    if press_indices:
-        prior = press_indices[0]
-
+    prior = press_indices[0] if press_indices else 0
     sidecar = {
         "schema": 1,
         "family": name,
         "baseFamily": family,
         "k": k,
-        "clickIndex": click_index,
-        "player2": pair.player2,
-        "button": pair.button,
-        "shiftedIndices": shifted,
-        "originalHoldLength": original_hold,
-        "newHoldLength": new_hold,
-        "clamped": clamped,
-        "goldPressFrame": pair.press_frame,
-        "goldReleaseFrame": pair.release_frame,
-        "newPressFrame": new_press,
-        "newReleaseFrame": (
-            new_release if family.startswith("pulse-shift") else pair.release_frame
-        ),
-        "pair": asdict(pair),
+        "clickIndex": primary,
+        "clickIndices": ordered,
+        "sequenceLength": sequence_length,
+        "player2": first_edit["player2"],
+        "button": first_edit["button"],
+        "shiftedIndices": press_indices[:1],
+        "edits": edits,
+        "originalHoldLength": first_edit["originalHoldLength"],
+        "newHoldLength": first_edit["newHoldLength"],
+        "clamped": clamped_any,
+        "goldPressFrame": first_edit["goldPressFrame"],
+        "goldReleaseFrame": first_edit["goldReleaseFrame"],
+        "newPressFrame": first_edit["newPressFrame"],
+        "newReleaseFrame": first_edit["newReleaseFrame"],
         "capture": {
             "mode": "pre_shifted_press",
             "priorEventCount": prior,
             "captureFrame": new_press,
             "notes": (
-                "Replay all prior events of this derived file, then capture state "
-                "immediately before the shifted press (not gold frame F)."
+                "Replay prior events, capture before the first shifted press in the sequence. "
+                "Multi-click sequences exercise consecutive assists / smart-depth paths."
             ),
         },
     }
-    return ShiftResult(name, k, click_index, out, sidecar, clamped)
+    return ShiftResult(name, k, primary, out, sidecar, clamped_any)
 
 
 def events_equal(a: list[Gdr2Input], b: list[Gdr2Input]) -> bool:

@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 
 from real_assist.gdr2 import Gdr2Input, Gdr2Replay, export_gdr2, parse_gdr2
 from real_assist.oracle import require_reproduce_pass
-from real_assist.shift import apply_shift, events_equal, pair_clicks
+from real_assist.shift import apply_multi_shift, apply_shift, events_equal, pair_clicks
 
 
 def _toy_replay() -> Gdr2Replay:
@@ -93,6 +93,23 @@ def test_drop_click() -> None:
     assert all(not (ev.frame == 10 and ev.down and not ev.player2) for ev in result.replay.inputs)
 
 
+def test_multi_click_sequence() -> None:
+    replay = _toy_replay()
+    # P1 pairs are click indices 0 and 2 in pair_clicks order (P2 is 1).
+    pairs = pair_clicks(replay.inputs)
+    p1 = [i for i, pair in enumerate(pairs) if not pair.player2]
+    assert len(p1) >= 2
+    result = apply_multi_shift(
+        replay, "pulse-shift-early", k=2, click_indices=[p1[0], p1[1]]
+    )
+    assert result.sidecar["sequenceLength"] == 2
+    assert result.sidecar["clickIndices"] == [p1[0], p1[1]]
+    assert len(result.sidecar["edits"]) == 2
+    # Both holds preserved under pulse-shift.
+    for edit in result.sidecar["edits"]:
+        assert edit["newHoldLength"] == edit["originalHoldLength"]
+
+
 def test_roundtrip_export() -> None:
     replay = _toy_replay()
     shifted = apply_shift(replay, "pulse-shift-early", k=1, click_index=0)
@@ -142,6 +159,7 @@ def run() -> None:
     test_edge_only_lengthens()
     test_no_neighbor_cross()
     test_drop_click()
+    test_multi_click_sequence()
     test_roundtrip_export()
     test_oracle_refuses_without_pass()
     test_corpus_smoke_if_present()

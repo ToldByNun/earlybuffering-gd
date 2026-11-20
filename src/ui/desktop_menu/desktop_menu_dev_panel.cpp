@@ -310,7 +310,7 @@ public:
         }
         gap();
         mutedText("Case / mode / protocol: settings real-assist-* or env "
-                  "EB_REAL_ASSIST_CASE/MODE/PROTOCOL. AUTO=matrix = prep smoke.");
+                  "EB_REAL_ASSIST_CASE/MODE/PROTOCOL. AUTO=modes = all 4 corpora (or CASE=id).");
         gap();
         if (EbButton::draw("##dev-run-real-assist", "Run Real Assist Case", true,
                            "Prep only (menu stays): mode/protocol + import shifted gdr2. Set "

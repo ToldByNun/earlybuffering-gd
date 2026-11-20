@@ -70,6 +70,30 @@ npm run docs:dev
 npm run docs:build
 ```
 
+## Real Assist (APR0–APR4)
+
+Offline gates (no GD required once fixtures exist):
+
+```bash
+python tools/test_real_assist_score.py
+python tools/test_real_assist_smoke.py
+python tools/test_real_assist_dense.py
+```
+
+Freeze smoke PhysicsSafeSet / score expects + refresh `docs/dev/real_assist_baseline.md`:
+
+```bash
+python tools/test_real_assist_smoke.py --freeze
+```
+
+Dense (multi-click sequences × tick windows `4/8/12/24` × delay bands):
+
+```bash
+python tools/test_real_assist_dense.py --freeze
+```
+
+`tools/run_live_regression_ap07.py` includes the Real Assist scripts. **AP00 stays blocked until the smoke gate is green**; dense is the coverage floor for good assist results. See [Real Assist baseline](/dev/real_assist_baseline).
+
 ## Wave regression
 
 Required when changing or refactoring input planning (`AGENTS.md`).

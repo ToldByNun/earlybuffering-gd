@@ -216,6 +216,10 @@ docs/dev/flight-and-alternate-assist-plan.md
 !/tools/score_session.py
 !/tools/compare_modes.py
 !/tools/test_real_assist_score.py
+!/tools/test_real_assist_smoke.py
+!/tools/test_real_assist_dense.py
+!/tools/build_dense_safe_fixtures.py
+!/tools/report_dense_diffs.py
 !/tools/real_assist/
 !/tools/real_assist/__init__.py
 !/tools/real_assist/gdr2.py
@@ -223,9 +227,14 @@ docs/dev/flight-and-alternate-assist-plan.md
 !/tools/real_assist/oracle.py
 !/tools/real_assist/score.py
 !/tools/real_assist/compare_support.py
+!/tools/real_assist/dense.py
 !/tools/real_assist/run_matrix.md
 !/tools/fixtures/real_assist/
 !/tools/fixtures/real_assist/score_goldens.json
+!/tools/fixtures/real_assist/smoke_goldens.json
+!/tools/fixtures/real_assist/dense/
+!/tools/fixtures/real_assist/dense/dense_goldens.json
+tools/fixtures/real_assist/dense/oracles/
 !/tools/fixtures/real_assist/sessions/
 !/tools/fixtures/real_assist/sessions/**
 !/tools/fixtures/real_assist/oracles/
@@ -250,3 +259,4 @@ tools/fixtures/real_assist/compare_smoke.json
 tools/fixtures/real_corpus/**/level.gmd
 tools/fixtures/real_corpus/**/clear.gdr2
 tools/fixtures/real_corpus/derived/
+/tools/fixtures/real_assist

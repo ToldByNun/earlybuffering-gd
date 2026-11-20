@@ -55,4 +55,6 @@ Dev → Real Assist → **Run Real Assist Case** (uses `real-assist-case` / `rea
 - Offline score: `python tools/score_session.py <session.json>` (PhysicsHitRate acceptance)
 - Mode compare: `python tools/compare_modes.py <sessions…>` — Frozen vs Online stay separate
 - CI goldens: `python tools/test_real_assist_score.py`
+- APR4 smoke gate: `python tools/test_real_assist_smoke.py` (+ `--freeze`); baseline `docs/dev/real_assist_baseline.md`
+- Dense coverage: `python tools/shift_replay.py --dense` then `python tools/test_real_assist_dense.py` (~3k+ delay probes/level)
 - Frozen: Hybrid write-guarded (`freeze(true)`), Auto-Tune off. Online: reset + Auto-Tune on.
