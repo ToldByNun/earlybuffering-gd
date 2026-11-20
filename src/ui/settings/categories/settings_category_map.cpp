@@ -196,16 +196,22 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"swing-adaptive-verify-quantum", SettingsCategory::Modes},
         {"swing-adaptive-reserve-pct", SettingsCategory::Modes},
 
+        // Flight — assist enables + corridor knobs (viz stays on Visual)
+        {"title-flight", SettingsCategory::Flight},
+        {"ship-line-enable", SettingsCategory::Flight},
+        {"wave-pattern-enable", SettingsCategory::Flight},
+        {"wave-angle-snap", SettingsCategory::Flight},
+        {"ship-room-of-error", SettingsCategory::Flight},
+
         // Visual
         {"show-trajectory", SettingsCategory::Visual},
         {"show-straightfly", SettingsCategory::Visual},
         {"show-wave-pattern", SettingsCategory::Visual},
-        {"wave-angle-snap", SettingsCategory::Visual},
-        {"ship-room-of-error", SettingsCategory::Visual},
         {"save-feedback-sound", SettingsCategory::Visual},
         {"save-feedback-color", SettingsCategory::Visual},
         {"save-feedback-counter", SettingsCategory::Visual},
         {"save-icon-color", SettingsCategory::Visual},
+        {"hotkey-trajectory", SettingsCategory::Visual},
 
         // UI — chrome + accent + light diagnostics
         {"title-ui", SettingsCategory::UI},
@@ -224,18 +230,18 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"debug-logging", SettingsCategory::UI},
         {"perf-trace", SettingsCategory::UI},
         {"lag-probe", SettingsCategory::UI},
+        {"hotkey-desktop-menu", SettingsCategory::UI},
 
-        // Keys
-        {"title-keys", SettingsCategory::Keys},
-        {"hotkey-desktop-menu", SettingsCategory::Keys},
-        {"hotkey-debug", SettingsCategory::Keys},
-        {"hotkey-reset-level", SettingsCategory::Keys},
-        {"hotkey-auto-tune", SettingsCategory::Keys},
-        {"hotkey-assist-mode", SettingsCategory::Keys},
-        {"hotkey-trajectory", SettingsCategory::Keys},
+        // Learn hotkeys (Auto-Tune / reset)
+        {"hotkey-auto-tune", SettingsCategory::Learn},
+        {"hotkey-reset-level", SettingsCategory::Learn},
+
+        // Assist hotkey (cycle mode)
+        {"hotkey-assist-mode", SettingsCategory::Assist},
 
         // Dev
         {"title-dev", SettingsCategory::Dev},
+        {"hotkey-debug", SettingsCategory::Dev},
         {"title-dev-session", SettingsCategory::Dev},
         {"dev-record-enable", SettingsCategory::Dev},
         {"dev-record-count", SettingsCategory::Dev},

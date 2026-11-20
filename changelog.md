@@ -9,6 +9,8 @@
 - AI-first planner path: score → top-k → `verifyDelay` → arm (press/release); overlay shows AI delay/confidence; never argmax-arm.
 - Add a desktop **AI** settings tab (separate from Learn): Candidate Scorer status, top-k / LR knobs, freeze, prior load; Learn stays Hybrid-only.
 - AP06: Hybrid bootstrap into AI verify order (read-only `.hybrid` tables) + ship `resources/ai/prior.ebnn` from supervised Real Assist bands.
+- AP07: Persist `ship-line-enable` / `wave-pattern-enable`; Flight assist no longer arms from viz toggles (Dev session override still OR’d in).
+- AP08: Desktop **Flight** tab (enables, corridor knobs, tracking status); dissolve **Keys** tab — hotkeys live on Assist / Learn / Visual / UI / Dev.
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
 
 ## v1.7.1

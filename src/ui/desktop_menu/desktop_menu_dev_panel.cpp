@@ -2,6 +2,7 @@
 #include "../../core/assist/assist_controller.hpp"
 #include "../../core/assist/flight/wave_pattern_recognizer.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -17,6 +18,7 @@
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_dropdown.hpp"
+#include "widgets/eb_keybind.hpp"
 #include "widgets/eb_section_card.hpp"
 #include "widgets/eb_slider.hpp"
 #include <Geode/Geode.hpp>
@@ -394,21 +396,21 @@ public:
         if (EbSectionCard::begin("dev-flight-measurement", "Flight Measurement")) {
             bool shipLineEnabled = EbAssistController::get().shipLineEnabled();
             if (EbCheckbox::draw(
-                    "ship-line-enable", "Ship line assistance (session)", &shipLineEnabled, true,
-                    "Stabilizes an acquired Ship line by delaying real inputs (line first, ordinary "
-                    "safe as fallback). Requires press + release assist. Solo Ship only. Visualize "
-                    "Straightfly also arms this while Tracking. Modes → Ship may stay off. Delay "
-                    "window ≥20 ticks. Session-only — not saved."))
+                    "ship-line-enable-session", "Ship line assistance (session)", &shipLineEnabled,
+                    true,
+                    "Session override for Straightfly Assist (Flight tab setting also arms). "
+                    "Stabilizes an acquired Ship line by delaying real inputs. Requires press + "
+                    "release assist. Solo Ship only. Viz alone never corrects. Modes → Ship may "
+                    "stay off. Delay window ≥20 ticks. Not saved."))
                 EbAssistController::get().setShipLineEnabled(shipLineEnabled);
             bool wavePatternEnabled = EbAssistController::get().wavePatternEnabled();
             if (EbCheckbox::draw(
-                    "wave-pattern-enable", "Wave pattern assistance (session)", &wavePatternEnabled,
-                    true,
-                    "Stabilizes a locked Wave hold/release motif by delaying early edges to the "
-                    "expected phase (late edges pass to ordinary Wave rescue). Never invents "
-                    "missing clicks. Requires press + release assist. Solo Wave only. Visualize "
-                    "Wave Pattern also arms this while Tracking. Delay window ≥20 ticks. "
-                    "Session-only — not saved."))
+                    "wave-pattern-enable-session", "Wave pattern assistance (session)",
+                    &wavePatternEnabled, true,
+                    "Session override for Wave Pattern Assist (Flight tab setting also arms). "
+                    "Stabilizes a locked Wave motif by delaying early edges. Never invents "
+                    "missing clicks. Viz alone never corrects. Delay window ≥20 ticks. Not "
+                    "saved."))
                 EbAssistController::get().setWavePatternEnabled(wavePatternEnabled);
             static bool waveManual = false;
             static float waveHoldMs = 100.f;
@@ -466,11 +468,16 @@ public:
                 }
             }
             ImGui::TextWrapped(
-                "Ship intent locks a straight-flight line. Wave pattern (AP07/08) locks "
-                "hold/release spam. AP09 combines both with ordinary assist: direction change "
-                "wins, then collision rescue, then Ship/Wave preference, else ordinary.");
+                "Ship intent locks a straight-flight line. Wave pattern locks hold/release spam. "
+                "Persisted enables live on the Flight tab; this block is session overrides + "
+                "diagnostics.");
         }
         EbSectionCard::end();
+        if (EbUiCapabilities::keybindUI()) {
+            if (EbSectionCard::begin("dev-hotkeys", "Hotkeys"))
+                EbKeybind::drawSetting("hotkey-debug", "Debug Logging");
+            EbSectionCard::end();
+        }
         drawStatus();
         gap();
         drawSetup();

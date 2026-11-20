@@ -93,7 +93,7 @@ Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_refer
 
 On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
 
-**Main → Assist → Learn → AI → Modes → Visual → UI → Keys | Dev**
+**Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**
 
 - Accent Color drives the purple theme + sidebar wave
 - Modes icon bar (Cube → Swing) with per-mode cards

@@ -1,6 +1,9 @@
 #include "desktop_menu_panels.hpp"
 #include "../../config/assist_policy_settings.hpp"
 #include "../../config/stage_config.hpp"
+#include "../../core/assist/assist_controller.hpp"
+#include "../../core/assist/flight/flight_intent.hpp"
+#include "../../core/assist/flight/wave_pattern_recognizer.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
 #include "../../core/learning/neural_learning.hpp"
@@ -111,6 +114,12 @@ public:
             EbCheckbox::drawSetting("trigger-bake-skip-dynamic", "Skip Dynamic Triggers");
         }
         EbSectionCard::end();
+
+        if (EbUiCapabilities::keybindUI()) {
+            if (EbSectionCard::begin("assist-hotkeys", "Hotkeys"))
+                EbKeybind::drawSetting("hotkey-assist-mode", "Cycle Assist Mode");
+            EbSectionCard::end();
+        }
     }
 
     static void drawLearn() {
@@ -303,6 +312,14 @@ public:
             ImGui::TextDisabled("Reset clears Hybrid tables and AI weights for this level.");
         }
         EbSectionCard::end();
+
+        if (EbUiCapabilities::keybindUI()) {
+            if (EbSectionCard::begin("learn-hotkeys", "Hotkeys")) {
+                EbKeybind::drawSetting("hotkey-auto-tune", "Auto-Tune");
+                EbKeybind::drawSetting("hotkey-reset-level", "Reset Level Learning");
+            }
+            EbSectionCard::end();
+        }
     }
 
     static void drawAi() {
@@ -484,15 +501,58 @@ public:
         EbSectionCard::end();
     }
 
+    static void drawFlight() {
+        if (EbSectionCard::begin("flight-assist", "Assist")) {
+            EbCheckbox::drawSetting("ship-line-enable", "Straightfly Assist");
+            EbCheckbox::drawSetting("wave-pattern-enable", "Wave Pattern Assist");
+            EbSlider::drawIntSetting("wave-angle-snap", "Flight Angle Snap", 0, 45, " deg");
+            EbSlider::drawFloatSetting("ship-room-of-error", "Flight Room of Error", .4f, 3.f, 1,
+                                       "x");
+            ImGui::TextDisabled("Assist arms corrections. Visual tab only draws the lines.");
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("flight-status", "Status")) {
+            auto& controller = EbAssistController::get();
+            if (!EbLevelProfile::get().loaded())
+                ImGui::TextWrapped("Open a level to see Ship / Wave tracking status.");
+            else {
+                for (int player = 0; player < 2; ++player) {
+                    auto const intent = controller.flightIntent(player);
+                    ImGui::Text("P%d Ship: %s   %.0f%%", player + 1,
+                                EbFlightIntent::stateName(intent.state), intent.confidence * 100.);
+                    if (intent.targetValid)
+                        ImGui::Text("  Target %.1f°   Hold %.0f / Release %.0f ms",
+                                    intent.targetDegrees, intent.holdSeconds * 1000.,
+                                    intent.releaseSeconds * 1000.);
+                    auto const wave = controller.wavePattern(player);
+                    ImGui::Text("P%d Wave: %s   %.0f%%", player + 1,
+                                EbWavePatternRecognizer::stateName(wave.state),
+                                wave.confidence * 100.);
+                    if (wave.targetValid)
+                        ImGui::Text("  Hold %.0f / Release %.0f ms   duty %.0f%%",
+                                    wave.holdSeconds * 1000., wave.releaseSeconds * 1000.,
+                                    wave.dutyCycle * 100.);
+                }
+            }
+            ImGui::TextDisabled("Manual motif / angle overrides stay on Dev.");
+        }
+        EbSectionCard::end();
+    }
+
     static void drawVisual() {
         if (EbSectionCard::begin("visual-viz", "Visualizers")) {
             EbCheckbox::drawSetting("show-trajectory", "Trajectory Visualizer");
             EbCheckbox::drawSetting("show-straightfly", "Visualize Straightfly");
             EbCheckbox::drawSetting("show-wave-pattern", "Visualize Wave Pattern");
-            EbSlider::drawIntSetting("wave-angle-snap", "Flight Angle Snap", 0, 45, " deg");
-            EbSlider::drawFloatSetting("ship-room-of-error", "Flight Room of Error", .4f, 3.f, 1, "x");
         }
         EbSectionCard::end();
+
+        if (EbUiCapabilities::keybindUI()) {
+            if (EbSectionCard::begin("visual-hotkeys", "Hotkeys"))
+                EbKeybind::drawSetting("hotkey-trajectory", "Trajectory Viz");
+            EbSectionCard::end();
+        }
 
         if (EbSectionCard::begin("visual-save", "Save Feedback")) {
             EbCheckbox::drawSetting("save-feedback-sound", "Feedback Sound");
@@ -532,6 +592,12 @@ public:
         }
         EbSectionCard::end();
 
+        if (EbUiCapabilities::keybindUI()) {
+            if (EbSectionCard::begin("ui-hotkeys", "Hotkeys"))
+                EbKeybind::drawSetting("hotkey-desktop-menu", "Desktop Menu");
+            EbSectionCard::end();
+        }
+
         if (EbSectionCard::begin("ui-notifications", "Notifications")) {
             EbCheckbox::drawSetting("lag-warning-toast", "Lag Warning");
         }
@@ -550,20 +616,6 @@ public:
             EbCheckbox::drawSetting("debug-logging", "Debug Logging");
             EbCheckbox::drawSetting("perf-trace", "Perf Trace");
             EbCheckbox::drawSetting("lag-probe", "Lag Probe");
-        }
-        EbSectionCard::end();
-    }
-
-    static void drawKeys() {
-        if (!EbUiCapabilities::keybindUI())
-            return;
-        if (EbSectionCard::begin("keys-hotkeys", "Hotkeys")) {
-            EbKeybind::drawSetting("hotkey-desktop-menu", "Desktop Menu");
-            EbKeybind::drawSetting("hotkey-debug", "Debug Logging");
-            EbKeybind::drawSetting("hotkey-reset-level", "Reset Level Learning");
-            EbKeybind::drawSetting("hotkey-auto-tune", "Auto-Tune");
-            EbKeybind::drawSetting("hotkey-assist-mode", "Cycle Assist Mode");
-            EbKeybind::drawSetting("hotkey-trajectory", "Trajectory Viz");
         }
         EbSectionCard::end();
     }
@@ -593,14 +645,14 @@ void EbDesktopMenuPanels::draw(SettingsCategory category) {
     case SettingsCategory::Modes:
         EbDesktopMenuPanelsDraw::drawModes();
         break;
+    case SettingsCategory::Flight:
+        EbDesktopMenuPanelsDraw::drawFlight();
+        break;
     case SettingsCategory::Visual:
         EbDesktopMenuPanelsDraw::drawVisual();
         break;
     case SettingsCategory::UI:
         EbDesktopMenuPanelsDraw::drawUI();
-        break;
-    case SettingsCategory::Keys:
-        EbDesktopMenuPanelsDraw::drawKeys();
         break;
     case SettingsCategory::Dev:
         EbDesktopMenuPanelsDraw::drawDev();

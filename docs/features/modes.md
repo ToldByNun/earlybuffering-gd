@@ -22,4 +22,6 @@ Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existi
 
 The player initiates every input. The planner can delay it within the configured window. Press/release cleanup continues when changing modes.
 
+**Flight:** The **Flight** tab holds **Straightfly Assist** / **Wave Pattern Assist**, angle snap, room-of-error, and live tracking status. **Visual** only draws (**Visualize Straightfly** / **Wave Pattern**). Dev session toggles still OR into assist for testing. Modes → Ship/Wave off is bypassed only when the assist enable is on — not by viz alone.
+
 The planner always uses v1 and ShadowPlayer. Their former dropdowns have been removed.

@@ -48,7 +48,7 @@ public:
     static void devReproduceGold();
     static void devRunRealAssist();
 
-    // Desktop ImGui shell / Geode popup: Main/Assist/Learn/Bake/Modes/Visual/UI/Keys/Dev.
+    // Desktop ImGui shell / Geode popup: Main/Assist/Learn/AI/Modes/Flight/Visual/UI/Dev.
     static void openModSettings();
     static void openClassicSettings();
     // Same as openModSettings (EB pause button). No-op if already open.

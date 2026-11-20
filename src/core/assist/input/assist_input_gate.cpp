@@ -135,9 +135,9 @@ bool EbAssistInputGate::shouldAssistPlayer(EbAssistController const& controller,
         return false;
     auto const kind = EbStageConfig::kindOf(player);
     bool const modeEnabled = EbStageConfig::paramsFor(player).enabled;
-    // Straightfly viz / Dev ship-line imply Solo Ship assist even if Modes → Ship is off.
+    // Straightfly / Wave pattern assist (setting or Dev session) may run even if
+    // Modes → Ship/Wave is off. Viz-only never bypasses.
     bool const shipLineBypass = controller.shipLineAssistActive() && kind == GameModeKind::Ship;
-    // Wave pattern viz / Dev toggle imply Solo Wave assist even if Modes → Wave is off.
     bool const wavePatternBypass =
         controller.wavePatternAssistActive() && kind == GameModeKind::Wave;
     if (!modeEnabled && !shipLineBypass && !wavePatternBypass)

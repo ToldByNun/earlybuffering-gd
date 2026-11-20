@@ -41,6 +41,10 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "show-straightfly", false);
     EbStageConfigImplementation::s_cachedShowWavePattern =
         EbStageConfigImplementation::readBool(mod, "show-wave-pattern", false);
+    EbStageConfigImplementation::s_cachedShipLineEnable =
+        EbStageConfigImplementation::readBool(mod, "ship-line-enable", false);
+    EbStageConfigImplementation::s_cachedWavePatternEnable =
+        EbStageConfigImplementation::readBool(mod, "wave-pattern-enable", false);
     EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees =
         std::clamp(EbStageConfigImplementation::readInt(mod, "wave-angle-snap", 0), 0, 45);
     EbStageConfigImplementation::s_cachedShipRoomOfError = std::clamp(

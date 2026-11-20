@@ -1272,16 +1272,33 @@
 			"description": "Draws predicted paths: gray = no click, green = earliest safe, yellow = chosen, red = latest. Helps see how wide your click window is. Off = no draw cost. Toggle: Ctrl+Shift+T.",
 			"default": false
 		},
+		"title-flight": {
+			"type": "title",
+			"name": "Flight",
+			"description": "Ship straightfly and Wave pattern assists. Visualizers for these modes stay on the Visual tab; this tab arms corrections and shows tracking status."
+		},
+		"ship-line-enable": {
+			"type": "bool",
+			"name": "Straightfly Assist",
+			"description": "Delays real Ship inputs to stabilize an acquired straight-flight line (line first, ordinary safe as fallback). Requires press + release assist. Solo Ship only. Independent of Visualize Straightfly — viz alone never corrects. Modes → Ship may stay off while this is on. Delay window ≥20 ticks.",
+			"default": false
+		},
+		"wave-pattern-enable": {
+			"type": "bool",
+			"name": "Wave Pattern Assist",
+			"description": "Delays early Wave edges toward a locked hold/release motif (late edges fall through to ordinary Wave rescue). Never invents missing clicks. Requires press + release assist. Solo Wave only. Independent of Visualize Wave Pattern — viz alone never corrects. Delay window ≥20 ticks.",
+			"default": false
+		},
 		"show-straightfly": {
 			"type": "bool",
 			"name": "Visualize Straightfly",
-			"description": "Draws the acquired Straight Flight target line and body-width corridor once intent is Tracking. Cyan = predicted line; opacity follows confidence. Off = no draw cost.",
+			"description": "Draws the acquired Straight Flight target line and body-width corridor once intent is Tracking. Cyan = predicted line; opacity follows confidence. Visualization only — does not arm corrections (use Straightfly Assist). Off = no draw cost.",
 			"default": false
 		},
 		"show-wave-pattern": {
 			"type": "bool",
 			"name": "Visualize Wave Pattern",
-			"description": "When a Wave hold/release pattern is locked, draws the predicted zigzag path and upcoming click edges (amber path, bright next-click markers). Not a straight corridor — shows the next clicks / wave lane. Off = no draw cost.",
+			"description": "When a Wave hold/release pattern is locked, draws the predicted zigzag path and upcoming click edges (amber path, bright next-click markers). Visualization only — does not arm corrections (use Wave Pattern Assist). Off = no draw cost.",
 			"default": false
 		},
 		"wave-angle-snap": {
@@ -1384,43 +1401,38 @@
 			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
 			"default": false
 		},
-		"title-keys": {
-			"type": "title",
-			"name": "Keys",
-			"description": "In-game hotkeys. Each hotkey edits the same setting as the matching Main / Assist / Visual control."
-		},
 		"hotkey-desktop-menu": {
 			"type": "keybind",
 			"name": "Toggle Desktop Menu",
-			"description": "Desktop: toggles the ImGui settings menu when Classic Settings Menu is off. When Classic is on (or on mobile), opens the Geode settings popup. Default Right Shift.",
+			"description": "Desktop: toggles the ImGui settings menu when Classic Settings Menu is off. When Classic is on (or on mobile), opens the Geode settings popup. Same as UI → Desktop Menu hotkey.",
 			"default": "RightShift",
 			"category": "gameplay"
 		},
 		"hotkey-debug": {
 			"type": "keybind",
 			"name": "Toggle Debug Logging",
-			"description": "Toggles Debug Logging on/off (same as Main → Debug Logging).",
+			"description": "Toggles Debug Logging on/off (same as UI → Debug Logging / Dev hotkey).",
 			"default": "Ctrl+Shift+D",
 			"category": "gameplay"
 		},
 		"hotkey-reset-level": {
 			"type": "keybind",
 			"name": "Reset Level Learning",
-			"description": "Clears learning data for the current level (same as Assist → Reset Level Learning).",
+			"description": "Clears Hybrid + AI learning for the current level (same as Learn → Reset This Level).",
 			"default": "Ctrl+Shift+R",
 			"category": "gameplay"
 		},
 		"hotkey-auto-tune": {
 			"type": "keybind",
 			"name": "Toggle Auto-Tune",
-			"description": "Toggles Auto-Tune Per Level on/off (same as Assist → Auto-Tune Per Level). Does not change tick windows.",
+			"description": "Toggles Auto-Tune Per Level on/off (same as Learn → Auto-Tune). Does not change tick windows.",
 			"default": "Ctrl+Shift+L",
 			"category": "gameplay"
 		},
 		"hotkey-assist-mode": {
 			"type": "keybind",
 			"name": "Cycle Assist Mode",
-			"description": "Cycles Live → Hybrid → AI. Same setting as Main → Assist Mode.",
+			"description": "Cycles Live → Hybrid → AI. Same as Main → Assist Mode / Assist → Cycle Assist Mode hotkey.",
 			"default": "Ctrl+Shift+M",
 			"category": "gameplay"
 		},

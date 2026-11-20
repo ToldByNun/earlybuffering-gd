@@ -163,7 +163,7 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.7.1**). Tab IA: **Main → Assist → Learn → AI → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.7.1**). Tab IA: **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev** (hotkeys live on feature tabs). Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
 
 **Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 

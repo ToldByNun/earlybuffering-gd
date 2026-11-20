@@ -1,6 +1,6 @@
 # PLEASE READ THIS
 
-Version **1.8.0** continues the Live + Hybrid 1.7.x line and adds `AssistMode::AI` with a neural Candidate Scorer (verify-gated). Desktop tabs are **Main → Assist → Learn → AI → …**; Learn stays Hybrid tabular, AI owns the scorer UI. Open **Settings → Learn → Config** for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
+Version **1.8.0** continues the Live + Hybrid 1.7.x line and adds `AssistMode::AI` with a neural Candidate Scorer (verify-gated). Desktop tabs are **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**; Learn stays Hybrid tabular, AI owns the scorer UI, Flight owns Ship/Wave assists. Hotkeys live on their feature tabs (no Keys tab). Open **Settings → Learn → Config** for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
 
 EarlyBuffer was written with a lot of AI-assisted drafting.
 

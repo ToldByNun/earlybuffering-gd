@@ -630,9 +630,8 @@ bool EbAssistController::shipLineEnabled() const {
     return m_shipLineEnabled;
 }
 bool EbAssistController::shipLineAssistActive() const {
-    // Visualize Straightfly alone used to draw the line with zero corrections.
-    // Arm planning whenever the player is looking at the line or opted into Dev.
-    return m_shipLineEnabled || EbStageConfig::showStraightfly();
+    // AP07: persisted setting OR Dev session override — never viz alone.
+    return m_shipLineEnabled || EbStageConfig::shipLineEnable();
 }
 void EbAssistController::configureWavePatternManual(bool manual, double holdSeconds,
                                                     double releaseSeconds) {
@@ -664,7 +663,8 @@ bool EbAssistController::wavePatternEnabled() const {
     return m_wavePatternEnabled;
 }
 bool EbAssistController::wavePatternAssistActive() const {
-    return m_wavePatternEnabled || EbStageConfig::showWavePattern();
+    // AP07: persisted setting OR Dev session override — never viz alone.
+    return m_wavePatternEnabled || EbStageConfig::wavePatternEnable();
 }
 void EbAssistController::fillWavePatternOptions(EbPlanOptions& options, PlayLayer* layer,
                                                 PlayerObject* player) {

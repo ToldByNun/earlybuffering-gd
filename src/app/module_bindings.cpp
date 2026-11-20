@@ -201,6 +201,19 @@ void EbModuleBindings::registerSettings() {
         }
         EbAssistController::get().updateOverlay();
     });
+    // AP07: assist enables — cache + overlay only (no viz attach).
+    geode::prelude::listenForSettingChanges<bool>("ship-line-enable", [](bool) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbAssistController::get().updateOverlay();
+    });
+    geode::prelude::listenForSettingChanges<bool>("wave-pattern-enable", [](bool) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbStageConfig::refreshCache();
+        EbAssistController::get().updateOverlay();
+    });
     watchInt("wave-angle-snap");
     watchBool("show-pause-hub");
     watchBool("lag-warning-toast");

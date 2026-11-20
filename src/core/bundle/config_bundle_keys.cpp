@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[197] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[199] = {
     {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
     {"ball-ground-check", EbConfigBundleKeys::Kind::String},
     {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
@@ -23,6 +23,8 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[197] = {
     {"perf-trace", EbConfigBundleKeys::Kind::Bool},
     {"lag-probe", EbConfigBundleKeys::Kind::Bool},
     {"show-trajectory", EbConfigBundleKeys::Kind::Bool},
+    {"ship-line-enable", EbConfigBundleKeys::Kind::Bool},
+    {"wave-pattern-enable", EbConfigBundleKeys::Kind::Bool},
     {"show-straightfly", EbConfigBundleKeys::Kind::Bool},
     {"show-wave-pattern", EbConfigBundleKeys::Kind::Bool},
     {"wave-angle-snap", EbConfigBundleKeys::Kind::Int},
@@ -236,7 +238,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 197, "count-197");
+    expect(EbConfigBundleKeysTable::kEntryCount == 199, "count-199");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -279,7 +281,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 72, "kind-bool-72");
+    expect(kindBool == 74, "kind-bool-74");
     expect(kindInt == 71, "kind-int-71");
     expect(kindFloat == 22, "kind-float-22");
     expect(kindString == 24, "kind-string-24");

@@ -383,11 +383,9 @@ public:
         navGroupLabel("SETTINGS");
         SettingsCategory const settingsTabs[] = {
             SettingsCategory::Main,   SettingsCategory::Assist, SettingsCategory::Learn,
-            SettingsCategory::AI,     SettingsCategory::Modes,  SettingsCategory::Visual,
-            SettingsCategory::UI,     SettingsCategory::Keys};
+            SettingsCategory::AI,     SettingsCategory::Modes,  SettingsCategory::Flight,
+            SettingsCategory::Visual, SettingsCategory::UI};
         for (SettingsCategory category : settingsTabs) {
-            if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
-                continue;
             bool const selected = EbDesktopMenuShellState::active() == category;
             if (navTab(EbInLevelSettingsFilter::categoryName(category), selected, tabWidth)) {
                 EbDesktopMenuShellAnim::beginTabSwitch(category);
@@ -707,8 +705,6 @@ SettingsCategory EbDesktopMenuShell::activeCategory() {
 }
 
 void EbDesktopMenuShell::setActiveCategory(SettingsCategory category) {
-    if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
-        category = SettingsCategory::Main;
     EbDesktopMenuShellAnim::beginTabSwitch(category);
 }
 
