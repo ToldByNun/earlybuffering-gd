@@ -52,6 +52,8 @@ public:
     bool frozen() const;
     bool loaded() const;
     bool hasUsableWeights() const;
+    // Load packaged prior into the in-memory model (keeps per-level path).
+    bool loadPrior();
     EbNeuralModel& model();
     EbNeuralModel const& model() const;
     EbNeuralReplay& replay();

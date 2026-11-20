@@ -9,5 +9,6 @@
 - Do not declare named or anonymous namespaces, namespace aliases, or `using namespace` directives in project code. Qualify dependency types and functions explicitly.
 - Use meaningful parameter and variable names. Preserve serialized setting keys, JSON fields, IDs, and externally defined API names when renaming C++ identifiers.
 - Format C++ with `.clang-format` and run `python tools/check_cpp_style.py`.
-- Build with `geode build` and install the generated package. Run the recorded Wave regression when changing or refactoring input planning.
+- Always build yourself after C++ / settings / planner / learning changes (`geode build --config RelWithDebInfo`) and install the package when GD must show the change. Do not ask the user to build.
+- Always run the project’s existing offline / Real Assist / Wave gates when there is something to test (`python tools/test_real_assist_smoke.py`, `python tools/run_live_regression_ap07.py`, Wave regression when changing input planning). Prefer the fixtures and scripts under `tools/` — do not skip them.
 - Keep generated output and third-party dependency sources outside project refactors.

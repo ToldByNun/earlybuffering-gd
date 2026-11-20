@@ -79,7 +79,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"assist-press", SettingsCategory::Assist},
         {"assist-release", SettingsCategory::Assist},
 
-        // Learn — per-level learning + config I/O
+        // Learn — Hybrid tabular learning + config I/O
         {"title-learning", SettingsCategory::Learn},
         {"auto-tune", SettingsCategory::Learn},
         {"title-assist-actions", SettingsCategory::Learn},
@@ -87,6 +87,9 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"export-config-action", SettingsCategory::Learn},
         {"import-config-action", SettingsCategory::Learn},
         {"browse-cloud-configs-action", SettingsCategory::Learn},
+
+        // AI — neural Candidate Scorer (desktop ImGui owns knobs; classic shows title)
+        {"title-ai", SettingsCategory::AI},
 
         // Bake — bake actions + trigger world
         {"cycle-assist-mode", SettingsCategory::Assist},

@@ -51,7 +51,7 @@
 		"assist-mode": {
 			"type": "string",
 			"name": "Assist Mode",
-			"description": "Live plans each click. Hybrid learns tabular timings with Auto-Tune and checks them with Live physics. AI uses a per-level neural scorer with the same verify gate (scaffolding in 1.8.0). See Learn for progress.",
+			"description": "Live plans each click. Hybrid learns tabular timings with Auto-Tune and checks them with Live physics. AI ranks delays with a per-level neural Candidate Scorer and verifies them before arming. See Learn (Hybrid) and AI tabs for progress.",
 			"one-of": [
 				"Live",
 				"Hybrid",
@@ -454,13 +454,18 @@
 		"title-learning": {
 			"type": "title",
 			"name": "Learn",
-			"description": "Per-level learning and config import/export. Auto Tune adjusts soft bias and trust within the configured input window."
+			"description": "Hybrid tabular learning and config import/export. Auto-Tune also trains AI when Assist Mode is AI. Neural scorer controls live on the AI tab."
 		},
 		"auto-tune": {
 			"type": "bool",
 			"name": "Auto-Tune Per Level",
-			"description": "Live adapts local timing. Hybrid remembers timings that work across attempts and checks them against the current level. See Learn for progress. Toggle with Ctrl+Shift+L.",
+			"description": "Live adapts local timing. Hybrid remembers timings that work across attempts. With Assist Mode AI, trains the per-level neural scorer. See Learn (Hybrid) and AI tabs. Toggle with Ctrl+Shift+L.",
 			"default": false
+		},
+		"title-ai": {
+			"type": "title",
+			"name": "AI",
+			"description": "Neural Candidate Scorer: ranks delays, verifies with Live physics, then arms. Desktop menu AI tab shows top-k, confidence, freeze, and prior load. Never arms from raw score alone."
 		},
 		"title-assist-actions": {
 			"type": "title",
@@ -470,7 +475,7 @@
 		"reset-learn-action": {
 			"type": "custom:eb-action",
 			"name": "Reset Level Learning",
-			"description": "Clears Live and Hybrid learning for the current level revision.",
+			"description": "Clears Hybrid tables (.hybrid) and AI weights (.neural) for the current level revision.",
 			"button-text": "reset"
 		},
 		"export-config-action": {
@@ -494,7 +499,7 @@
 		"cycle-assist-mode": {
 			"type": "custom:eb-action",
 			"name": "Cycle Assist Mode",
-			"description": "Cycles Live and Hybrid.",
+			"description": "Cycles Live → Hybrid → AI.",
 			"button-text": "cycle"
 		},
 		"title-trigger-world": {
@@ -1415,7 +1420,7 @@
 		"hotkey-assist-mode": {
 			"type": "keybind",
 			"name": "Cycle Assist Mode",
-			"description": "Cycles Live → Hybrid. Same setting as Main → Assist Mode and Main → Assist Mode.",
+			"description": "Cycles Live → Hybrid → AI. Same setting as Main → Assist Mode.",
 			"default": "Ctrl+Shift+M",
 			"category": "gameplay"
 		},

@@ -23,6 +23,8 @@ char const* EbInLevelSettingsFilter::categoryName(SettingsCategory category) {
         return "Assist";
     case SettingsCategory::Learn:
         return "Learn";
+    case SettingsCategory::AI:
+        return "AI";
     case SettingsCategory::Modes:
         return "Modes";
     case SettingsCategory::Visual:
@@ -98,10 +100,11 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
         }
     };
 
-    expect(static_cast<int>(SettingsCategory::Count) == 8, "cat-count-8");
+    expect(static_cast<int>(SettingsCategory::Count) == 9, "cat-count-9");
     expect(std::strcmp(categoryName(SettingsCategory::Main), "Main") == 0, "cat-name-main");
     expect(std::strcmp(categoryName(SettingsCategory::Assist), "Assist") == 0, "cat-name-assist");
     expect(std::strcmp(categoryName(SettingsCategory::Learn), "Learn") == 0, "cat-name-learn");
+    expect(std::strcmp(categoryName(SettingsCategory::AI), "AI") == 0, "cat-name-ai");
     expect(std::strcmp(categoryName(SettingsCategory::Modes), "Modes") == 0, "cat-name-modes");
     expect(std::strcmp(categoryName(SettingsCategory::Visual), "Visual") == 0, "cat-name-visual");
     expect(std::strcmp(categoryName(SettingsCategory::UI), "UI") == 0, "cat-name-ui");
@@ -132,6 +135,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("trigger-bake") == SettingsCategory::Assist, "cat-trigger-bake");
     expect(categoryForKey("reset-learn-action") == SettingsCategory::Learn, "cat-reset-learn");
     expect(categoryForKey("auto-tune") == SettingsCategory::Learn, "cat-auto-tune-learn");
+    expect(categoryForKey("title-ai") == SettingsCategory::AI, "cat-title-ai");
     expect(categoryForKey("assist-pick") == SettingsCategory::Count, "cat-assist-pick");
     expect(categoryForKey("assist-engine") == SettingsCategory::Count, "cat-assist-engine");
     expect(categoryForKey("show-trajectory") == SettingsCategory::Visual, "cat-traj-visual");

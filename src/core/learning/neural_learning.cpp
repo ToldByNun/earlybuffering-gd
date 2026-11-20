@@ -1,8 +1,8 @@
 #include "neural_learning.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
-#include "../../level/section_object_walk.hpp"
-#include "../../platform/platform_limits.hpp"
+#include "../level/section_object_walk.hpp"
+#include "../platform/platform_limits.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "neural_grid.hpp"
 #include <Geode/Geode.hpp>
@@ -53,6 +53,17 @@ bool EbNeuralLearning::tryLoadPrior() {
     if (!std::filesystem::exists(prior))
         return false;
     return m_model.load(prior);
+}
+
+bool EbNeuralLearning::loadPrior() {
+    if (!tryLoadPrior())
+        return false;
+    m_hasPriorOrWeights = true;
+    m_loaded = true;
+    m_model.setFrozen(false);
+    // Persist into the per-level path immediately when a level file is open.
+    save();
+    return true;
 }
 
 void EbNeuralLearning::close() {

@@ -1,6 +1,6 @@
 # PLEASE READ THIS
 
-Version **1.8.0** continues the Live + Hybrid 1.7.x line and adds `AssistMode::AI` scaffolding for the neural candidate scorer (verify-gated; network lands in later AP slices). Desktop ImGui shell, Adaptive Plan, and Cloud Configs remain. Open **Settings → Learn → Config** (or Assist/Learn actions) for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
+Version **1.8.0** continues the Live + Hybrid 1.7.x line and adds `AssistMode::AI` with a neural Candidate Scorer (verify-gated). Desktop tabs are **Main → Assist → Learn → AI → …**; Learn stays Hybrid tabular, AI owns the scorer UI. Open **Settings → Learn → Config** for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
 
 EarlyBuffer was written with a lot of AI-assisted drafting.
 

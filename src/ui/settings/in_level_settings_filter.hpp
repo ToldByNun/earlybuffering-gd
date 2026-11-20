@@ -14,7 +14,18 @@ class EbSettingsTabWatchdogState;
 
 // Categories for the Geode ModSettingsPopup chip / segment bar + desktop shell.
 // Smart folded into Main; Scope folded into Assist; UI chrome on its own tab.
-enum class SettingsCategory : int { Main = 0, Assist, Learn, Modes, Visual, UI, Keys, Dev, Count };
+enum class SettingsCategory : int {
+    Main = 0,
+    Assist,
+    Learn,
+    AI,
+    Modes,
+    Visual,
+    UI,
+    Keys,
+    Dev,
+    Count
+};
 
 // Filters Geode settings rows by SettingsCategory.
 // Non-matching rows are reparented out of the list (Geode search style); scroll Y preserved.

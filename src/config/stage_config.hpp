@@ -61,7 +61,7 @@ public:
     static void beginApplying();
     static void endApplying();
 
-    // Setting groups mirror mod.json / tabs: Main → Assist → Learn → Bake →
+    // Setting groups mirror mod.json / tabs: Main → Assist → Learn → AI →
     // Modes → Visual → UI → Keys → Dev.
 
     // --- General / UI ---

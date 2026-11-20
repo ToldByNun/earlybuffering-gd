@@ -1,7 +1,9 @@
 #include "desktop_menu_panels.hpp"
 #include "../../config/assist_policy_settings.hpp"
+#include "../../config/stage_config.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
+#include "../../core/learning/neural_learning.hpp"
 #include "../../core/platform/ui_capabilities.hpp"
 #include "../pause/pause_action_bridge.hpp"
 #include "desktop_menu_background.hpp"
@@ -36,8 +38,8 @@ public:
             EbCheckbox::drawSetting("enabled", "Enabled");
             EbCheckbox::drawSetting("safe-mode", "Safe Mode");
             {
-                char const* opts[] = {"Live", "Hybrid"};
-                EbComboBox::drawSetting("assist-mode", "Assist Mode", opts, 2);
+                char const* opts[] = {"Live", "Hybrid", "AI"};
+                EbComboBox::drawSetting("assist-mode", "Assist Mode", opts, 3);
             }
         }
         EbSectionCard::end();
@@ -117,13 +119,10 @@ public:
             auto& learning = EbHybridLearning::get();
             if (!EbLevelProfile::get().loaded())
                 ImGui::TextWrapped("Open a level to see its learning progress.");
-            else if (EbStageConfig::assistMode() == AssistMode::AI)
-                ImGui::TextWrapped("AI mode is scaffolded. Neural training UI lands with the "
-                                   "candidate scorer; until then AI falls through to Live "
-                                   "planning with the same verify gate as Hybrid.");
             else if (EbStageConfig::assistMode() != AssistMode::Hybrid)
                 ImGui::TextWrapped("Live uses its own timing adjustments. Choose Hybrid to learn "
-                                   "which timings work on repeated attempts.");
+                                   "which timings work on repeated attempts. AI training lives "
+                                   "on the AI tab.");
             else if (!EbStageConfig::autoTuneEnabled())
                 ImGui::TextWrapped("Learning is paused. Turn on Auto-Tune to continue with this "
                                    "level's saved experience.");
@@ -301,6 +300,97 @@ public:
             EbButton::drawAction("reset-learn-action", "Reset This Level");
             EbButton::drawAction("browse-cloud-configs-action", "Cloud Configs");
             EbButton::endRow();
+            ImGui::TextDisabled("Reset clears Hybrid tables and AI weights for this level.");
+        }
+        EbSectionCard::end();
+    }
+
+    static void drawAi() {
+        if (EbSectionCard::begin("ai-status", "Candidate Scorer")) {
+            auto& neural = EbNeuralLearning::get();
+            if (EbStageConfig::assistMode() != AssistMode::AI)
+                ImGui::TextWrapped("Choose Assist Mode → AI on Main to score delays with the "
+                                   "neural candidate scorer. Shadow physics still decides what "
+                                   "may arm.");
+            else if (!EbLevelProfile::get().loaded())
+                ImGui::TextWrapped("Open a level to load or train per-level .neural weights.");
+            else {
+                bool frozen = neural.frozen();
+                if (EbCheckbox::draw("freeze-ai", "Keep current weights", &frozen, true,
+                                     "Infer with the loaded prior / level weights without "
+                                     "updating them. Applies until you leave this level."))
+                    neural.freeze(frozen);
+                if (!neural.hasUsableWeights())
+                    ImGui::TextWrapped(
+                        "No usable weights yet. Play with Auto-Tune on to train, or load the "
+                        "packaged prior below.");
+                else if (frozen)
+                    ImGui::TextWrapped(
+                        "Weights are fixed for this visit. AI still ranks delays and verifies "
+                        "them before arming.");
+                else if (!EbStageConfig::autoTuneEnabled())
+                    ImGui::TextWrapped(
+                        "Auto-Tune is off: AI infers from loaded weights but does not train. "
+                        "Turn Auto-Tune on (Learn tab) to update weights while you play.");
+                else
+                    ImGui::TextWrapped(
+                        "Training on verified outcomes. AI ranks top-k delays, verifies each "
+                        "with Live physics, then arms the first safe delay — never from raw "
+                        "score alone.");
+                ImGui::Separator();
+                if (ImGui::BeginTable("ai-stats", 2, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled("VERIFY HITS");
+                    ImGui::Text("%d / %d", neural.verifyHits, neural.verifies);
+                    ImGui::TableNextColumn();
+                    ImGui::TextDisabled("LAST ARMED");
+                    if (neural.lastArmedDelay >= 0)
+                        ImGui::Text("d=%d  %.0f%%", neural.lastArmedDelay,
+                                    neural.lastArmedConfidence * 100.0f);
+                    else
+                        ImGui::TextDisabled("—");
+                    ImGui::EndTable();
+                }
+                float hitRate =
+                    neural.verifies ? float(neural.verifyHits) / float(neural.verifies) : 0.f;
+                ImGui::ProgressBar(hitRate, ImVec2(-1.f, 5.f), "");
+                ImGui::Separator();
+                ImGui::Text("Inferences this visit   %d", neural.inferences);
+                ImGui::Text("Edges seen   %d", neural.edges);
+                ImGui::Text("Weight updates   %d", neural.updates);
+                ImGui::Text("Tried / confirmed   %d / %d", neural.tried, neural.confirmed);
+                ImGui::Text("Local deaths   %d", neural.deaths);
+                ImGui::Text("Replay size   %d", neural.replay().size());
+            }
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("ai-knobs", "Scorer Knobs")) {
+            auto& neural = EbNeuralLearning::get();
+            bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
+            EbCheckbox::draw("ai-prefer-first", "Verify AI First", &neural.preferAiFirst, aiOn,
+                             "Rank delays with the scorer and verify top-k with Live physics "
+                             "before ordinary Live search. Off = Live proposes first.");
+            EbSlider::drawInt("ai-topk", "Top-K Verify", &neural.topK, 1, 8, "", aiOn,
+                              "How many highest-scoring delays to verify before falling through "
+                              "to Live. Lower is cheaper; higher explores more candidates.");
+            EbSlider::drawFloat("ai-lr", "Learning Rate", &neural.learningRate, 0.001f, 0.05f, 3,
+                                "", aiOn,
+                                "Step size for on-play weight updates when Auto-Tune is on and "
+                                "weights are not frozen.");
+            EbSlider::drawInt("ai-observation", "Observation", &neural.observationTicks, 24, 96,
+                              " ticks", aiOn,
+                              "How long after an AI-armed input to attribute survival or death.");
+            if (EbButton::draw("ai-load-prior", "Load Packaged Prior",
+                               aiOn && EbLevelProfile::get().loaded(),
+                               "Replace in-memory weights with resources/ai/prior.ebnn and write "
+                               "them into this level's .neural file."))
+                (void)neural.loadPrior();
+            if (EbButton::draw("ai-reset-weights", "Reset AI Weights",
+                               aiOn && EbLevelProfile::get().loaded(),
+                               "Clear this level's .neural weights (Hybrid tables stay). Same as "
+                               "the AI half of Reset This Level."))
+                neural.reset();
         }
         EbSectionCard::end();
     }
@@ -496,6 +586,9 @@ void EbDesktopMenuPanels::draw(SettingsCategory category) {
         break;
     case SettingsCategory::Learn:
         EbDesktopMenuPanelsDraw::drawLearn();
+        break;
+    case SettingsCategory::AI:
+        EbDesktopMenuPanelsDraw::drawAi();
         break;
     case SettingsCategory::Modes:
         EbDesktopMenuPanelsDraw::drawModes();

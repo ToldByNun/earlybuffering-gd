@@ -8,7 +8,7 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 | Hybrid | Tabular learning: with Auto-Tune enabled, learns timings across attempts and tests familiar timings in the Live input window. See Learn for this level’s progress. |
 | AI | Neural candidate scorer (1.8.0): ranks delays to verify; Shadow physics still decides what may arm. Per-level `.neural` weights; optional `resources/ai/prior.ebnn`. |
 
-Learn contains Auto Tune, learning reset and config import/export. The Bake tab and macro/bake mode selection have been removed.
+**Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, top-k / learning-rate knobs, freeze, and prior load. Auto-Tune (on Learn) still gates AI training writes. The Bake tab and macro/bake mode selection have been removed.
 
 **Hybrid is tabular; AI is neural.** Both reuse the same propose → `verifyDelay` contract. Live is the base planner.
 

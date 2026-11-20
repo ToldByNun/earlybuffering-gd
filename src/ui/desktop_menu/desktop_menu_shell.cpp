@@ -381,10 +381,10 @@ public:
         float const tabWidth = width - 32.0f;
 
         navGroupLabel("SETTINGS");
-        SettingsCategory const settingsTabs[] = {SettingsCategory::Main,   SettingsCategory::Assist,
-                                                 SettingsCategory::Learn,  SettingsCategory::Modes,
-                                                 SettingsCategory::Visual, SettingsCategory::UI,
-                                                 SettingsCategory::Keys};
+        SettingsCategory const settingsTabs[] = {
+            SettingsCategory::Main,   SettingsCategory::Assist, SettingsCategory::Learn,
+            SettingsCategory::AI,     SettingsCategory::Modes,  SettingsCategory::Visual,
+            SettingsCategory::UI,     SettingsCategory::Keys};
         for (SettingsCategory category : settingsTabs) {
             if (category == SettingsCategory::Keys && !EbUiCapabilities::keybindUI())
                 continue;
