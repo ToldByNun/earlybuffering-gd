@@ -21,6 +21,13 @@ class LiveRegressionGate:
             "input_search_policy": ["src/core/assist/contracts/input_search_policy.cpp"],
             "hybrid_model": ["src/core/learning/hybrid_model.cpp", "src/core/learning/hybrid_observation.cpp"],
             "neural_model": ["src/core/learning/neural_model.cpp"],
+            "neural_features": [
+                "src/core/learning/neural_model.cpp",
+                "src/core/learning/neural_grid.cpp",
+                "src/core/learning/neural_features.cpp",
+                "src/core/learning/neural_replay.cpp",
+                "src/core/learning/neural_supervised.cpp",
+            ],
             "assist_mode_migration": ["src/config/assist_mode_migration.cpp"],
             "config_keys": ["src/core/bundle/config_bundle_keys.cpp"],
             "wave_input_window": ["src/core/assist/contracts/miss_assist_contracts.cpp",
@@ -54,7 +61,7 @@ class LiveRegressionGate:
             print(name, "PASS" if results[-1]["passed"] else "FAIL", flush=True)
         for name in ("test_recorded_misses_ap01.py", "test_policy_registration_ap06.py",
                      "test_real_assist_score.py", "test_real_assist_smoke.py",
-                     "test_real_assist_dense.py",
+                     "test_real_assist_dense.py", "build_neural_dataset.py",
                      "test_geode_package_check.py", "test_bundle_geode.py", "check_cpp_style.py"):
             ran = subprocess.run([sys.executable, "tools/" + name], cwd=root, capture_output=True, text=True)
             results.append(dict(name=name, passed=ran.returncode == 0, output=ran.stdout + ran.stderr))
