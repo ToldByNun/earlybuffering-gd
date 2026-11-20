@@ -111,6 +111,9 @@ public:
     bool wavePatternCorrection = false;
     int hybridHint = -1;
     bool hybridTried = false;
+    int aiHint = -1;
+    bool aiTried = false;
+    float aiConfidence = 0.f;
     bool fixedFireTick = false;
     PlanAction action = PlanAction::Pass;
     AssistReason reason = AssistReason::None;

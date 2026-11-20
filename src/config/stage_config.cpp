@@ -1,5 +1,6 @@
 #include "stage_config.hpp"
 #include "../core/learning/hybrid_learning.hpp"
+#include "../core/learning/neural_learning.hpp"
 #include "../core/assist/assist_clock.hpp"
 #include "../core/platform/platform_limits.hpp"
 #include "cache/stage_settings_cache.hpp"
@@ -301,6 +302,7 @@ void EbStageConfigImplementation::loadAssistOffSlots(
 void EbStageConfig::refreshCache() {
     EbStageSettingsCache::refreshCache();
     EbHybridLearning::get().settingsChanged();
+    EbNeuralLearning::get().settingsChanged();
 }
 
 void EbStageConfigImplementation::ensureCache() {

@@ -15,6 +15,7 @@
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
 #include "../../learning/hybrid_learning.hpp"
+#include "../../learning/neural_learning.hpp"
 #include "../../real_assist/real_assist_runner.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../sim/sim_trust.hpp"
@@ -101,6 +102,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         EbPerfTrace::Scope const scope("pollOutcome");
         controller.pollOutcome(playLayer);
         EbHybridLearning::get().poll(playLayer, controller.m_attemptTick);
+        EbNeuralLearning::get().poll(playLayer, controller.m_attemptTick);
     }
     {
         EbPerfTrace::Scope const scope("flushPendingRelease");
@@ -308,12 +310,16 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
     bool const learningReleaseBuffered =
         !down && controller.m_buffer.state == BufferState::Buffered &&
         controller.m_buffer.player1 == player1 && controller.m_buffer.down;
-    if (!learningReleaseBuffered)
+    if (!learningReleaseBuffered) {
         EbHybridLearning::get().edge(player1, effectTick, down);
+        EbNeuralLearning::get().edge(player1, effectTick, down);
+    }
     auto finish = [&](bool passThrough) -> bool {
         if (passThrough) {
             EbHybridLearning::get().vanilla(playLayer, player, down, player1, effectTick,
                                             controller.m_simDt);
+            EbNeuralLearning::get().vanilla(playLayer, player, down, player1, effectTick,
+                                           controller.m_simDt);
             EbSelfBakeRecorder::get().noteVanillaInput(playLayer, player, player1, down, effectTick,
                                                        controller.m_simDt);
         }

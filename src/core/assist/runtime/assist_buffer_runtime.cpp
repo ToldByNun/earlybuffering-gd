@@ -5,6 +5,7 @@
 #include "../../../dev/capture/dev_cycle_recorder.hpp"
 #include "../../../ui/feedback/save_feedback.hpp"
 #include "../../learning/hybrid_learning.hpp"
+#include "../../learning/neural_learning.hpp"
 #include "../../learning/level_profile.hpp"
 #include "../../sim/planning/simulation_plan.hpp"
 #include "../../sim/shadow_simulator.hpp"
@@ -257,6 +258,7 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
     EbDevCycleRecorder::get().noteFire(devPressId, controller.m_attemptTick, actualPhase);
 
     EbHybridLearning::get().fired(player1, planId, delayed, actualPhase);
+    EbNeuralLearning::get().fired(player1, planId, delayed, actualPhase);
     controller.inject(playLayer, controller.m_buffer.down);
     // Real-harm watch: death after a fired Delay inject (Commit 2 DAF).
     if (delayed > 0 && wasPress) {

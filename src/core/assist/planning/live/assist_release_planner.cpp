@@ -14,6 +14,7 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
+#include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
@@ -117,10 +118,13 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
+    int const aiOpportunity =
+        EbNeuralLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, learnedContext);
     controller.fillShipLineOptions(learnedContext, playLayer, player);
     controller.fillWavePatternOptions(learnedContext, playLayer, player);
-    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
-                           learnedContext.wavePattern.enabled;
+    bool mustDelaySearch = learnedOpportunity > 0 || aiOpportunity > 0 ||
+                           learnedContext.shipLine.enabled || learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -215,7 +219,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
                                                             spamDenseRel);
     opts.hybridDelay = EbHybridLearning::get().prepare(
         playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
-    if (opts.hybridDelay > 0)
+    int const aiHint = EbNeuralLearning::get().prepare(
+        playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
+    if (opts.hybridDelay > 0 || aiHint > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
     opts.wavePattern = learnedContext.wavePattern;
@@ -317,7 +323,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         plan.toggleUnknown = true;
     }
 
+    plan.aiHint = aiHint;
     EbHybridLearning::get().decision(player1, plan);
+    EbNeuralLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {

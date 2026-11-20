@@ -28,6 +28,13 @@ class LiveRegressionGate:
                 "src/core/learning/neural_replay.cpp",
                 "src/core/learning/neural_supervised.cpp",
             ],
+            "neural_learning": [
+                "src/core/learning/neural_model.cpp",
+                "src/core/learning/neural_replay.cpp",
+                "src/core/learning/neural_supervised.cpp",
+                "src/core/learning/neural_grid.cpp",
+                "src/core/learning/neural_features.cpp",
+            ],
             "assist_mode_migration": ["src/config/assist_mode_migration.cpp"],
             "config_keys": ["src/core/bundle/config_bundle_keys.cpp"],
             "wave_input_window": ["src/core/assist/contracts/miss_assist_contracts.cpp",

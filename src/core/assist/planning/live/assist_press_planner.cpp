@@ -15,6 +15,7 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
+#include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../real_assist/real_assist_runner.hpp"
 #include "../../../learning/spot_trust_map.hpp"
@@ -128,10 +129,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
+    int const aiOpportunity =
+        EbNeuralLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, learnedContext);
     controller.fillShipLineOptions(learnedContext, playLayer, player);
     controller.fillWavePatternOptions(learnedContext, playLayer, player);
-    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
-                           learnedContext.wavePattern.enabled;
+    bool mustDelaySearch = learnedOpportunity > 0 || aiOpportunity > 0 ||
+                           learnedContext.shipLine.enabled || learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -254,7 +258,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                                                             spamDense);
     opts.hybridDelay = EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick,
                                                        limit, controller.m_simDt, firstDt, opts);
-    if (opts.hybridDelay > 0)
+    int const aiHint =
+        EbNeuralLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, opts);
+    if (opts.hybridDelay > 0 || aiHint > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
     opts.wavePattern = learnedContext.wavePattern;
@@ -377,7 +384,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Commit 11: do not invent Delay without a viable cand (plan already gated).
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
+    plan.aiHint = aiHint;
     EbHybridLearning::get().decision(player1, plan);
+    EbNeuralLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
