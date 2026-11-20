@@ -20,6 +20,7 @@ class LiveRegressionGate:
             "input_reconciler": ["src/core/assist/input/input_reconciler.cpp"],
             "input_search_policy": ["src/core/assist/contracts/input_search_policy.cpp"],
             "hybrid_model": ["src/core/learning/hybrid_model.cpp", "src/core/learning/hybrid_observation.cpp"],
+            "neural_model": ["src/core/learning/neural_model.cpp"],
             "assist_mode_migration": ["src/config/assist_mode_migration.cpp"],
             "config_keys": ["src/core/bundle/config_bundle_keys.cpp"],
             "wave_input_window": ["src/core/assist/contracts/miss_assist_contracts.cpp",
