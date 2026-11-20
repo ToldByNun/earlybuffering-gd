@@ -36,7 +36,12 @@ public:
     int prepare(PlayLayer* layer, PlayerObject* player, bool down, bool player1, int tick,
                 int limit, float dt, float firstDt, EbPlanOptions const& options);
     std::vector<int> rankedVerifyDelays(int limit) const;
+    // Sigmoid confidence for a candidate delay using the last prepare features.
+    float confidenceForDelay(int delay) const;
+    // Skip AI-first when frame remUs is below this (400 desktop / 250 constrained).
+    static int minRemUsForAiFirst();
     void noteVerifyOutcome(int delay, bool verifiedSafe);
+    void noteArmed(int delay, float confidence);
     void vanilla(PlayLayer* layer, PlayerObject* player, bool down, bool player1, int tick,
                  float dt);
     void decision(bool player1, EbSimPlan const& plan);
@@ -51,6 +56,7 @@ public:
     EbNeuralModel const& model() const;
     EbNeuralReplay& replay();
 
+    bool preferAiFirst = true;
     int topK = 2;
     float learningRate = 0.01f;
     int observationTicks = 48;
@@ -62,6 +68,8 @@ public:
     int deaths = 0;
     int tried = 0;
     int confirmed = 0;
+    int lastArmedDelay = -1;
+    float lastArmedConfidence = 0.0f;
 
     static bool selfCheck(std::string& report);
 

@@ -12,7 +12,9 @@ Learn contains Auto Tune, learning reset and config import/export. The Bake tab 
 
 **Hybrid is tabular; AI is neural.** Both reuse the same propose → `verifyDelay` contract. Live is the base planner.
 
-**Reset This Level** clears Hybrid tables (`.hybrid`) and AI weights (`.neural`) together. Auto-Tune trains AI; with Auto-Tune off, AI still infers if prior/level weights exist (Frozen). AI-first verify ordering lands in AP04.
+**Reset This Level** clears Hybrid tables (`.hybrid`) and AI weights (`.neural`) together. Auto-Tune trains AI; with Auto-Tune off, AI still infers if prior/level weights exist (Frozen).
+
+**AI-first path:** score → top-k → `verifyDelay` → arm, else Live fallthrough. Never arms from raw score. Skips when Flight-owned, dual, or remUs is too low. Hybrid-first stays Hybrid-only (no double verify stack).
 
 Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existing AI settings stay AI. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.
 

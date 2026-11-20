@@ -2,6 +2,7 @@
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../level/section_object_walk.hpp"
+#include "../../platform/platform_limits.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "neural_grid.hpp"
 #include <Geode/Geode.hpp>
@@ -62,6 +63,8 @@ void EbNeuralLearning::close() {
     m_model.reset();
     m_replay.clear();
     edges = inferences = verifies = verifyHits = updates = deaths = tried = confirmed = 0;
+    lastArmedDelay = -1;
+    lastArmedConfidence = 0.0f;
     clearEdges();
 }
 
@@ -73,6 +76,8 @@ void EbNeuralLearning::reset() {
     m_hasPriorOrWeights = false;
     m_replay.clear();
     edges = inferences = verifies = verifyHits = updates = deaths = tried = confirmed = 0;
+    lastArmedDelay = -1;
+    lastArmedConfidence = 0.0f;
     clearEdges();
     save();
 }
@@ -261,7 +266,8 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
     edge.fired = false;
     edge.pending = false;
 
-    auto ranked = m_model.rankedDelays(edge.features, edge.limit, std::max(1, topK));
+    int const k = std::clamp(topK, 1, 3);
+    auto ranked = m_model.rankedDelays(edge.features, edge.limit, k);
     ++inferences;
     if (ranked.empty())
         return -1;
@@ -272,13 +278,37 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
 std::vector<int> EbNeuralLearning::rankedVerifyDelays(int limit) const {
     if (!active() || !m_loaded)
         return {};
+    int const k = std::clamp(topK, 1, 3);
     for (auto const& edge : m_edges) {
         if (!edge.valid)
             continue;
         int const clamped = EbNeuralModel::clampLimit(limit > 0 ? limit : edge.limit);
-        return m_model.rankedDelays(edge.features, clamped, std::max(1, topK));
+        return m_model.rankedDelays(edge.features, clamped, k);
     }
     return {};
+}
+
+float EbNeuralLearning::confidenceForDelay(int delay) const {
+    if (!active() || !m_loaded || delay < 0)
+        return 0.0f;
+    for (auto const& edge : m_edges) {
+        if (!edge.valid)
+            continue;
+        float scratch[EbNeuralModel::kFeatureDim];
+        std::memcpy(scratch, edge.features, sizeof(scratch));
+        EbNeuralModel::writeCandidateDelay(scratch, delay);
+        return m_model.confidence(scratch);
+    }
+    return 0.0f;
+}
+
+int EbNeuralLearning::minRemUsForAiFirst() {
+    return EbPlatformLimits::isConstrainedDevice() ? 250 : 400;
+}
+
+void EbNeuralLearning::noteArmed(int delay, float confidence) {
+    lastArmedDelay = delay;
+    lastArmedConfidence = confidence;
 }
 
 void EbNeuralLearning::noteVerifyOutcome(int delay, bool verifiedSafe) {

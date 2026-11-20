@@ -6,6 +6,7 @@
 - Add `EbNeuralModel` Candidate Scorer (Nova trunk `3512→128→64`, masked 49-way + sigmoid confidence, EBNN2) with unit coverage for mask + rank stability.
 - Add Nova-like `EbNeuralGrid` / `EbNeuralFeatures` / `EbNeuralReplay` / supervised prior train from PhysicsSafeSet labels (`tools/build_neural_dataset.py`).
 - Wire `EbNeuralLearning` lifecycle (open/save/prepare/verify/outcome hooks) like Hybrid; per-level `.neural`; Reset This Level clears Hybrid + AI.
+- AI-first planner path: score → top-k → `verifyDelay` → arm (press/release); overlay shows AI delay/confidence; never argmax-arm.
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
 
 ## v1.7.1

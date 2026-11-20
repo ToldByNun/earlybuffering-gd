@@ -283,12 +283,77 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     bool useSequence = opts.smartDepth > 1;
 
     EbSimPlan plan{};
-    bool hybridWon = false;
-    // Hybrid-first: verify known/learned delays (best first) before Live search.
-    // Take the first that clears current physics; otherwise fall through to Live.
+    bool scorerWon = false;
+    auto armFromVerify = [&](int delayValue, bool aiPath, float confidence) {
+        plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        plan.fixedFireTick = true;
+        if (delayValue <= 0) {
+            plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassNoThreat;
+            plan.nowIsSafe = true;
+            plan.delay = 0;
+        } else {
+            plan.action = PlanAction::Delay;
+            plan.reason = AssistReason::DelayThreat;
+            plan.delay = plan.jumpTick = delayValue;
+            plan.viableDelays = std::vector<int>{delayValue};
+            plan.dMin = plan.dMax = delayValue;
+            plan.guardOriginalDelay = delayValue;
+            plan.threatCleared = true;
+            plan.nowIsSafe = false;
+        }
+        if (aiPath) {
+            plan.aiTried = true;
+            plan.aiHint = delayValue;
+            plan.aiConfidence = confidence;
+            EbNeuralLearning::get().noteArmed(delayValue, confidence);
+        } else {
+            plan.hybridTried = true;
+            plan.hybridHint = opts.hybridDelay;
+        }
+        scorerWon = true;
+    };
+    // AI-first: score → top-k → verifyDelay → arm (never argmax-arm). Hybrid stays Hybrid-only.
+    auto& neural = EbNeuralLearning::get();
+    if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
+        !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
+        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
+        auto const order = neural.rankedVerifyDelays(limit);
+        for (int delayValue : order) {
+            if (delayValue < 0 || delayValue > limit)
+                continue;
+            int const remUs = frameScope.remaining(frameLimitUs);
+            if (remUs < EbNeuralLearning::minRemUsForAiFirst()) {
+                opts.budgetUs = std::min(opts.budgetUs, remUs);
+                break;
+            }
+            EbPlanOptions vopts = opts;
+            vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
+            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.maxBranches = 0;
+            vopts.smartDepth = 1;
+            auto const vr = EbShadowSimulator::get().verifyDelay(
+                playLayer, player, true, delayValue, limit, controller.m_simDt, firstDt, vopts);
+            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            if (vr.budgetHit || vr.unknown)
+                continue;
+            if (!vr.ok) {
+                neural.noteVerifyOutcome(delayValue, false);
+                continue;
+            }
+            float const confidence = neural.confidenceForDelay(delayValue);
+            neural.noteVerifyOutcome(delayValue, true);
+            armFromVerify(delayValue, true, confidence);
+            EbAssistLog::info(fmt::format("AI-FIRST {} d={} ({:.0f}% sure)",
+                                          delayValue <= 0 ? "pass" : "delay", delayValue,
+                                          confidence * 100.0f));
+            break;
+        }
+    }
+    // Hybrid-first: tabular UCB order → verify (does not run under AI mode; enabled() gates).
     auto& hybrid = EbHybridLearning::get();
-    if (hybrid.preferHybridFirst && !opts.shipLine.enabled && !opts.wavePattern.enabled &&
-        !playLayer->m_gameState.m_isDualMode) {
+    if (!scorerWon && hybrid.preferHybridFirst && !opts.shipLine.enabled &&
+        !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode) {
         auto const order = hybrid.rankedVerifyDelays(limit);
         for (int delayValue : order) {
             if (delayValue < 0 || delayValue > limit)
@@ -313,32 +378,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                 continue;
             }
             hybrid.noteVerifyOutcome(delayValue, true);
-            plan.hybridTried = true;
-            plan.hybridHint = opts.hybridDelay;
-            plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            plan.fixedFireTick = true;
-            if (delayValue <= 0) {
-                plan.action = PlanAction::Pass;
-                plan.reason = AssistReason::PassNoThreat;
-                plan.nowIsSafe = true;
-                plan.delay = 0;
-            } else {
-                plan.action = PlanAction::Delay;
-                plan.reason = AssistReason::DelayThreat;
-                plan.delay = plan.jumpTick = delayValue;
-                plan.viableDelays = std::vector<int>{delayValue};
-                plan.dMin = plan.dMax = delayValue;
-                plan.guardOriginalDelay = delayValue;
-                plan.threatCleared = true;
-                plan.nowIsSafe = false;
-            }
-            hybridWon = true;
+            armFromVerify(delayValue, false, 0.0f);
             EbAssistLog::info(fmt::format("HYBRID-FIRST {} d={}",
                                           delayValue <= 0 ? "pass" : "delay", delayValue));
             break;
         }
     }
-    if (!hybridWon) {
+    if (!scorerWon) {
         plan = useSequence ? EbShadowSimulator::get().planSequence(
                                  playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
                            : EbShadowSimulator::get().plan(playLayer, player, true, limit,
@@ -384,7 +430,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Commit 11: do not invent Delay without a viable cand (plan already gated).
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
-    plan.aiHint = aiHint;
+    if (!plan.aiTried)
+        plan.aiHint = aiHint;
     EbHybridLearning::get().decision(player1, plan);
     EbNeuralLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {

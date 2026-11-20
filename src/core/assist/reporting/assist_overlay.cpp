@@ -13,6 +13,7 @@
 #include "../../diagnostics/divergence_tracker.hpp"
 #include "../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../learning/level_profile.hpp"
+#include "../../learning/neural_learning.hpp"
 #include "../../sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../../sim/sim_trust.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -50,8 +51,19 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         auto mode = EbStageConfig::assistMode();
         auto const* modeName = EbStageConfig::assistModeName(mode);
         std::string learnBit;
-        // Learning only applies to Live / Hybrid fallback — not bake windows.
-        if (EbStageConfig::autoTune()) {
+        if (mode == AssistMode::AI) {
+            auto& neural = EbNeuralLearning::get();
+            if (neural.lastArmedDelay >= 0) {
+                learnBit = fmt::format("ai d={} {:.0f}% v{}/{}", neural.lastArmedDelay,
+                                       neural.lastArmedConfidence * 100.0f, neural.verifyHits,
+                                       neural.verifies);
+            } else if (EbStageConfig::autoTune()) {
+                learnBit = fmt::format("ai train v{}/{} u{}", neural.verifyHits, neural.verifies,
+                                       neural.updates);
+            } else {
+                learnBit = neural.hasUsableWeights() ? "ai frozen" : "ai no-prior";
+            }
+        } else if (EbStageConfig::autoTune()) {
             auto spot =
                 EbLevelProfile::get().overlaySpot(controller.m_lastMode, controller.m_lastPlayerX);
             learnBit =
