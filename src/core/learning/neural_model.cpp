@@ -1,5 +1,6 @@
 #include "neural_model.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -11,6 +12,8 @@ EbNeuralModel::EbNeuralModel() {
 }
 
 void EbNeuralModel::reset() {
+    m_online.assign(static_cast<size_t>(kWeightCount), 0.0f);
+    m_target.assign(static_cast<size_t>(kWeightCount), 0.0f);
     initWeights(m_online, 0xEB001848u);
     hardCopyTarget();
     m_frozen = false;
@@ -29,7 +32,7 @@ bool EbNeuralModel::dirty() const {
     return m_dirty;
 }
 
-EbNeuralModel::LayerViews EbNeuralModel::views(WeightBank& bank) {
+EbNeuralModel::LayerViews EbNeuralModel::views(std::vector<float>& bank) {
     LayerViews out;
     float* cursor = bank.data();
     out.w1 = cursor;
@@ -43,14 +46,18 @@ EbNeuralModel::LayerViews EbNeuralModel::views(WeightBank& bank) {
     out.w3 = cursor;
     cursor += kW3;
     out.b3 = cursor;
+    cursor += kB3;
+    out.wConf = cursor;
+    cursor += kWConf;
+    out.bConf = cursor;
     return out;
 }
 
-EbNeuralModel::LayerViews EbNeuralModel::constViews(WeightBank const& bank) {
-    return views(const_cast<WeightBank&>(bank));
+EbNeuralModel::LayerViews EbNeuralModel::constViews(std::vector<float> const& bank) {
+    return views(const_cast<std::vector<float>&>(bank));
 }
 
-void EbNeuralModel::initWeights(WeightBank& bank, std::uint32_t seed) {
+void EbNeuralModel::initWeights(std::vector<float>& bank, std::uint32_t seed) {
     std::uint32_t state = seed ? seed : 1u;
     auto next = [&]() {
         state = state * 1664525u + 1013904223u;
@@ -59,8 +66,8 @@ void EbNeuralModel::initWeights(WeightBank& bank, std::uint32_t seed) {
     };
     LayerViews net = views(bank);
     float const scale1 = 0.15f / std::sqrt(static_cast<float>(kFeatureDim));
-    float const scale2 = 0.15f / std::sqrt(static_cast<float>(kHiddenDim));
-    float const scale3 = 0.15f / std::sqrt(static_cast<float>(kHiddenDim));
+    float const scale2 = 0.15f / std::sqrt(static_cast<float>(kHidden1));
+    float const scale3 = 0.15f / std::sqrt(static_cast<float>(kHidden2));
     for (int index = 0; index < kW1; ++index)
         net.w1[index] = next() * scale1;
     for (int index = 0; index < kB1; ++index)
@@ -73,10 +80,21 @@ void EbNeuralModel::initWeights(WeightBank& bank, std::uint32_t seed) {
         net.w3[index] = next() * scale3;
     for (int index = 0; index < kB3; ++index)
         net.b3[index] = 0.0f;
+    for (int index = 0; index < kWConf; ++index)
+        net.wConf[index] = next() * scale3;
+    net.bConf[0] = 0.0f;
 }
 
 float EbNeuralModel::relu(float value) {
     return value > 0.0f ? value : 0.0f;
+}
+
+float EbNeuralModel::sigmoid(float value) {
+    if (value > 20.0f)
+        return 1.0f;
+    if (value < -20.0f)
+        return 0.0f;
+    return 1.0f / (1.0f + std::exp(-value));
 }
 
 bool EbNeuralModel::featuresFinite(float const* features) {
@@ -97,29 +115,47 @@ int EbNeuralModel::clampLimit(int limit) {
     return limit;
 }
 
-void EbNeuralModel::forward(LayerViews const& net, float const* features, float* hidden1,
-                            float* hidden2, float* logits) {
-    for (int row = 0; row < kHiddenDim; ++row) {
+void EbNeuralModel::writeCandidateDelay(float* features, int delay) {
+    if (!features)
+        return;
+    int const clamped = clampLimit(delay);
+    features[kCandidateDelayFeature] =
+        static_cast<float>(clamped) / static_cast<float>(kMaxDelay);
+}
+
+void EbNeuralModel::forwardTrunk(LayerViews const& net, float const* features, float* hidden1,
+                                 float* hidden2) {
+    for (int row = 0; row < kHidden1; ++row) {
         float sum = net.b1[row];
         float const* weights = net.w1 + row * kFeatureDim;
         for (int col = 0; col < kFeatureDim; ++col)
             sum += weights[col] * features[col];
         hidden1[row] = relu(sum);
     }
-    for (int row = 0; row < kHiddenDim; ++row) {
+    for (int row = 0; row < kHidden2; ++row) {
         float sum = net.b2[row];
-        float const* weights = net.w2 + row * kHiddenDim;
-        for (int col = 0; col < kHiddenDim; ++col)
+        float const* weights = net.w2 + row * kHidden1;
+        for (int col = 0; col < kHidden1; ++col)
             sum += weights[col] * hidden1[col];
         hidden2[row] = relu(sum);
     }
+}
+
+void EbNeuralModel::forwardRank(LayerViews const& net, float const* hidden2, float* logits) {
     for (int row = 0; row < kActionCount; ++row) {
         float sum = net.b3[row];
-        float const* weights = net.w3 + row * kHiddenDim;
-        for (int col = 0; col < kHiddenDim; ++col)
+        float const* weights = net.w3 + row * kHidden2;
+        for (int col = 0; col < kHidden2; ++col)
             sum += weights[col] * hidden2[col];
         logits[row] = sum;
     }
+}
+
+float EbNeuralModel::forwardConfidenceLogit(LayerViews const& net, float const* hidden2) {
+    float sum = net.bConf[0];
+    for (int col = 0; col < kHidden2; ++col)
+        sum += net.wConf[col] * hidden2[col];
+    return sum;
 }
 
 void EbNeuralModel::applyMask(float* scores, int limit) {
@@ -136,10 +172,20 @@ void EbNeuralModel::score(float const* features, int limit, float* outScores) co
             outScores[delay] = kMaskedScore;
         return;
     }
-    std::array<float, kHiddenDim> hidden1{};
-    std::array<float, kHiddenDim> hidden2{};
-    forward(constViews(m_online), features, hidden1.data(), hidden2.data(), outScores);
+    std::array<float, kHidden1> hidden1{};
+    std::array<float, kHidden2> hidden2{};
+    forwardTrunk(constViews(m_online), features, hidden1.data(), hidden2.data());
+    forwardRank(constViews(m_online), hidden2.data(), outScores);
     applyMask(outScores, limit);
+}
+
+float EbNeuralModel::confidence(float const* features) const {
+    if (!featuresFinite(features))
+        return 0.0f;
+    std::array<float, kHidden1> hidden1{};
+    std::array<float, kHidden2> hidden2{};
+    forwardTrunk(constViews(m_online), features, hidden1.data(), hidden2.data());
+    return sigmoid(forwardConfidenceLogit(constViews(m_online), hidden2.data()));
 }
 
 std::vector<int> EbNeuralModel::rankedDelays(float const* features, int limit, int topK) const {
@@ -162,36 +208,49 @@ std::vector<int> EbNeuralModel::rankedDelays(float const* features, int limit, i
     return ranked;
 }
 
-void EbNeuralModel::backpropOutput(float const* features, float const* hidden1,
-                                   float const* hidden2, float const* outputGrad,
-                                   float learningRate) {
-    if (m_frozen || learningRate <= 0.0f)
-        return;
-    LayerViews net = views(m_online);
-    std::array<float, kHiddenDim> gradHidden2{};
-    for (int row = 0; row < kActionCount; ++row) {
-        float const grad = outputGrad[row];
-        if (grad == 0.0f)
-            continue;
-        float* weights = net.w3 + row * kHiddenDim;
-        for (int col = 0; col < kHiddenDim; ++col) {
-            gradHidden2[col] += grad * weights[col];
-            weights[col] -= learningRate * grad * hidden2[col];
-        }
-        net.b3[row] -= learningRate * grad;
+std::vector<int> EbNeuralModel::rankedDelaysByConfidence(float const* features, int limit,
+                                                         int topK) const {
+    std::vector<int> ranked;
+    if (!featuresFinite(features) || topK <= 0)
+        return ranked;
+    int const clamped = clampLimit(limit);
+    std::vector<float> scratch(features, features + kFeatureDim);
+    std::array<float, kActionCount> scores{};
+    for (int delay = 0; delay <= clamped; ++delay) {
+        writeCandidateDelay(scratch.data(), delay);
+        scores[static_cast<size_t>(delay)] = confidence(scratch.data());
     }
-    std::array<float, kHiddenDim> gradHidden1{};
-    for (int row = 0; row < kHiddenDim; ++row) {
+    for (int delay = clamped + 1; delay < kActionCount; ++delay)
+        scores[static_cast<size_t>(delay)] = kMaskedScore;
+    ranked.reserve(static_cast<size_t>(clamped + 1));
+    for (int delay = 0; delay <= clamped; ++delay)
+        ranked.push_back(delay);
+    std::stable_sort(ranked.begin(), ranked.end(), [&](int left, int right) {
+        if (scores[left] != scores[right])
+            return scores[left] > scores[right];
+        return left < right;
+    });
+    if (topK < static_cast<int>(ranked.size()))
+        ranked.resize(static_cast<size_t>(topK));
+    return ranked;
+}
+
+void EbNeuralModel::backpropFromHidden2(float const* features, float const* hidden1,
+                                        float const* hidden2, float const* gradHidden2,
+                                        float learningRate) {
+    LayerViews net = views(m_online);
+    std::array<float, kHidden1> gradHidden1{};
+    for (int row = 0; row < kHidden2; ++row) {
         float const gate = hidden2[row] > 0.0f ? 1.0f : 0.0f;
         float const gated = gradHidden2[row] * gate;
-        float* weights = net.w2 + row * kHiddenDim;
-        for (int col = 0; col < kHiddenDim; ++col) {
+        float* weights = net.w2 + row * kHidden1;
+        for (int col = 0; col < kHidden1; ++col) {
             gradHidden1[col] += gated * weights[col];
             weights[col] -= learningRate * gated * hidden1[col];
         }
         net.b2[row] -= learningRate * gated;
     }
-    for (int row = 0; row < kHiddenDim; ++row) {
+    for (int row = 0; row < kHidden1; ++row) {
         float const gate = hidden1[row] > 0.0f ? 1.0f : 0.0f;
         float const gated = gradHidden1[row] * gate;
         float* weights = net.w1 + row * kFeatureDim;
@@ -202,6 +261,40 @@ void EbNeuralModel::backpropOutput(float const* features, float const* hidden1,
     m_dirty = true;
 }
 
+void EbNeuralModel::backpropRank(float const* features, float const* hidden1, float const* hidden2,
+                                 float const* outputGrad, float learningRate) {
+    if (m_frozen || learningRate <= 0.0f)
+        return;
+    LayerViews net = views(m_online);
+    std::array<float, kHidden2> gradHidden2{};
+    for (int row = 0; row < kActionCount; ++row) {
+        float const grad = outputGrad[row];
+        if (grad == 0.0f)
+            continue;
+        float* weights = net.w3 + row * kHidden2;
+        for (int col = 0; col < kHidden2; ++col) {
+            gradHidden2[col] += grad * weights[col];
+            weights[col] -= learningRate * grad * hidden2[col];
+        }
+        net.b3[row] -= learningRate * grad;
+    }
+    backpropFromHidden2(features, hidden1, hidden2, gradHidden2.data(), learningRate);
+}
+
+void EbNeuralModel::backpropConfidence(float const* features, float const* hidden1,
+                                       float const* hidden2, float logitGrad, float learningRate) {
+    if (m_frozen || learningRate <= 0.0f || logitGrad == 0.0f)
+        return;
+    LayerViews net = views(m_online);
+    std::array<float, kHidden2> gradHidden2{};
+    for (int col = 0; col < kHidden2; ++col) {
+        gradHidden2[col] += logitGrad * net.wConf[col];
+        net.wConf[col] -= learningRate * logitGrad * hidden2[col];
+    }
+    net.bConf[0] -= learningRate * logitGrad;
+    backpropFromHidden2(features, hidden1, hidden2, gradHidden2.data(), learningRate);
+}
+
 void EbNeuralModel::learnTd(float const* features, int action, float reward,
                             float const* nextFeatures, bool done, int nextLimit,
                             float learningRate, float gamma) {
@@ -209,18 +302,21 @@ void EbNeuralModel::learnTd(float const* features, int action, float reward,
         return;
     if (action < 0 || action > kMaxDelay)
         return;
-    std::array<float, kHiddenDim> hidden1{};
-    std::array<float, kHiddenDim> hidden2{};
+    std::array<float, kHidden1> hidden1{};
+    std::array<float, kHidden2> hidden2{};
     std::array<float, kActionCount> onlineScores{};
-    forward(views(m_online), features, hidden1.data(), hidden2.data(), onlineScores.data());
+    LayerViews online = views(m_online);
+    forwardTrunk(online, features, hidden1.data(), hidden2.data());
+    forwardRank(online, hidden2.data(), onlineScores.data());
 
     float bootstrap = 0.0f;
     if (!done && featuresFinite(nextFeatures)) {
-        std::array<float, kHiddenDim> nextH1{};
-        std::array<float, kHiddenDim> nextH2{};
+        std::array<float, kHidden1> nextH1{};
+        std::array<float, kHidden2> nextH2{};
         std::array<float, kActionCount> targetScores{};
-        forward(constViews(m_target), nextFeatures, nextH1.data(), nextH2.data(),
-                targetScores.data());
+        LayerViews target = constViews(m_target);
+        forwardTrunk(target, nextFeatures, nextH1.data(), nextH2.data());
+        forwardRank(target, nextH2.data(), targetScores.data());
         applyMask(targetScores.data(), nextLimit);
         int const nextClamped = clampLimit(nextLimit);
         bootstrap = targetScores[0];
@@ -233,7 +329,7 @@ void EbNeuralModel::learnTd(float const* features, int action, float reward,
     float const prediction = onlineScores[action];
     std::array<float, kActionCount> outputGrad{};
     outputGrad[action] = prediction - targetValue;
-    backpropOutput(features, hidden1.data(), hidden2.data(), outputGrad.data(), learningRate);
+    backpropRank(features, hidden1.data(), hidden2.data(), outputGrad.data(), learningRate);
     softUpdateTarget();
 }
 
@@ -244,10 +340,12 @@ void EbNeuralModel::learnRank(float const* features, int positiveDelay, int limi
     int const clamped = clampLimit(limit);
     if (positiveDelay < 0 || positiveDelay > clamped)
         return;
-    std::array<float, kHiddenDim> hidden1{};
-    std::array<float, kHiddenDim> hidden2{};
+    std::array<float, kHidden1> hidden1{};
+    std::array<float, kHidden2> hidden2{};
     std::array<float, kActionCount> scores{};
-    forward(views(m_online), features, hidden1.data(), hidden2.data(), scores.data());
+    LayerViews online = views(m_online);
+    forwardTrunk(online, features, hidden1.data(), hidden2.data());
+    forwardRank(online, hidden2.data(), scores.data());
     applyMask(scores.data(), clamped);
 
     std::array<float, kActionCount> outputGrad{};
@@ -263,7 +361,6 @@ void EbNeuralModel::learnRank(float const* features, int positiveDelay, int limi
     if (negatives == 0)
         return;
     float const meanNegative = negativeSum / static_cast<float>(negatives);
-    // Softplus-style pairwise: push positive up, pull mean negative down.
     float const margin = meanNegative + 0.5f - positive;
     if (margin <= 0.0f)
         return;
@@ -274,7 +371,23 @@ void EbNeuralModel::learnRank(float const* features, int positiveDelay, int limi
             continue;
         outputGrad[delay] = share;
     }
-    backpropOutput(features, hidden1.data(), hidden2.data(), outputGrad.data(), learningRate);
+    backpropRank(features, hidden1.data(), hidden2.data(), outputGrad.data(), learningRate);
+    softUpdateTarget();
+}
+
+void EbNeuralModel::learnConfidence(float const* features, float target01, float learningRate) {
+    if (m_frozen || !featuresFinite(features))
+        return;
+    float const clampedTarget = std::clamp(target01, 0.0f, 1.0f);
+    std::array<float, kHidden1> hidden1{};
+    std::array<float, kHidden2> hidden2{};
+    LayerViews online = views(m_online);
+    forwardTrunk(online, features, hidden1.data(), hidden2.data());
+    float const logit = forwardConfidenceLogit(online, hidden2.data());
+    float const prediction = sigmoid(logit);
+    // dL/dlogit for BCE = prediction - target
+    float const logitGrad = prediction - clampedTarget;
+    backpropConfidence(features, hidden1.data(), hidden2.data(), logitGrad, learningRate);
     softUpdateTarget();
 }
 
@@ -287,7 +400,8 @@ void EbNeuralModel::softUpdateTarget(float tau) {
     }
     float const keep = 1.0f - tau;
     for (int index = 0; index < kWeightCount; ++index)
-        m_target[index] = keep * m_target[index] + tau * m_online[index];
+        m_target[static_cast<size_t>(index)] =
+            keep * m_target[static_cast<size_t>(index)] + tau * m_online[static_cast<size_t>(index)];
 }
 
 void EbNeuralModel::hardCopyTarget() {
@@ -302,12 +416,14 @@ bool EbNeuralModel::save(std::filesystem::path const& path) {
     if (!m_dirty)
         return true;
     std::int32_t const featureDim = kFeatureDim;
-    std::int32_t const hiddenDim = kHiddenDim;
+    std::int32_t const hidden1 = kHidden1;
+    std::int32_t const hidden2 = kHidden2;
     std::int32_t const actionCount = kActionCount;
     std::uint32_t const flags = m_frozen ? 1u : 0u;
     std::ostringstream payload;
     payload.write(reinterpret_cast<char const*>(&featureDim), sizeof(featureDim));
-    payload.write(reinterpret_cast<char const*>(&hiddenDim), sizeof(hiddenDim));
+    payload.write(reinterpret_cast<char const*>(&hidden1), sizeof(hidden1));
+    payload.write(reinterpret_cast<char const*>(&hidden2), sizeof(hidden2));
     payload.write(reinterpret_cast<char const*>(&actionCount), sizeof(actionCount));
     payload.write(reinterpret_cast<char const*>(&flags), sizeof(flags));
     payload.write(reinterpret_cast<char const*>(m_online.data()),
@@ -320,13 +436,15 @@ bool EbNeuralModel::save(std::filesystem::path const& path) {
         checksum = mix(checksum, byte);
 
     std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error)
-        return false;
+    if (!path.parent_path().empty()) {
+        std::filesystem::create_directories(path.parent_path(), error);
+        if (error)
+            return false;
+    }
     auto temporary = path;
     temporary += ".tmp";
     std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-    output << "EBNN1 " << checksum << '\n';
+    output << "EBNN2 " << checksum << '\n';
     output.write(body.data(), static_cast<std::streamsize>(body.size()));
     output.close();
     if (!output)
@@ -344,7 +462,7 @@ bool EbNeuralModel::load(std::filesystem::path const& path) {
     std::ifstream input(path, std::ios::binary);
     std::string version;
     std::uint64_t expected = 0;
-    if (!(input >> version >> expected) || version != "EBNN1" || input.get() != '\n')
+    if (!(input >> version >> expected) || version != "EBNN2" || input.get() != '\n')
         return false;
     std::string body{std::istreambuf_iterator<char>(input), {}};
     std::uint64_t checksum = 1;
@@ -352,11 +470,10 @@ bool EbNeuralModel::load(std::filesystem::path const& path) {
         checksum = mix(checksum, byte);
     if (checksum != expected)
         return false;
-    if (body.size() < sizeof(std::int32_t) * 3 + sizeof(std::uint32_t))
-        return false;
 
     std::int32_t featureDim = 0;
-    std::int32_t hiddenDim = 0;
+    std::int32_t hidden1 = 0;
+    std::int32_t hidden2 = 0;
     std::int32_t actionCount = 0;
     std::uint32_t flags = 0;
     char const* cursor = body.data();
@@ -368,16 +485,18 @@ bool EbNeuralModel::load(std::filesystem::path const& path) {
         cursor += sizeof(value);
         return true;
     };
-    if (!readPod(featureDim) || !readPod(hiddenDim) || !readPod(actionCount) || !readPod(flags))
+    if (!readPod(featureDim) || !readPod(hidden1) || !readPod(hidden2) || !readPod(actionCount) ||
+        !readPod(flags))
         return false;
-    if (featureDim != kFeatureDim || hiddenDim != kHiddenDim || actionCount != kActionCount)
+    if (featureDim != kFeatureDim || hidden1 != kHidden1 || hidden2 != kHidden2 ||
+        actionCount != kActionCount)
         return false;
     size_t const weightBytes = sizeof(float) * static_cast<size_t>(kWeightCount);
     if (static_cast<size_t>(end - cursor) != weightBytes * 2)
         return false;
 
-    WeightBank online{};
-    WeightBank target{};
+    std::vector<float> online(static_cast<size_t>(kWeightCount));
+    std::vector<float> target(static_cast<size_t>(kWeightCount));
     std::memcpy(online.data(), cursor, weightBytes);
     cursor += weightBytes;
     std::memcpy(target.data(), cursor, weightBytes);
@@ -389,8 +508,8 @@ bool EbNeuralModel::load(std::filesystem::path const& path) {
         if (!std::isfinite(weight))
             return false;
     }
-    m_online = online;
-    m_target = target;
+    m_online = std::move(online);
+    m_target = std::move(target);
     m_frozen = (flags & 1u) != 0u;
     m_dirty = false;
     return true;
