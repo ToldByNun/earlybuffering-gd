@@ -4,6 +4,8 @@
 #include "../level/section_object_walk.hpp"
 #include "../platform/platform_limits.hpp"
 #include "../sim/planning/simulation_plan.hpp"
+#include "hybrid_learning.hpp"
+#include "neural_bootstrap.hpp"
 #include "neural_grid.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
@@ -49,10 +51,17 @@ bool EbNeuralLearning::tryLoadPrior() {
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return false;
-    auto prior = mod->getResourcesDir() / "ai" / "prior.ebnn";
-    if (!std::filesystem::exists(prior))
-        return false;
-    return m_model.load(prior);
+    // Geode packages resource files flat under getResourcesDir(); also try ai/.
+    auto const root = mod->getResourcesDir();
+    std::filesystem::path const candidates[] = {root / "prior.ebnn", root / "ai" / "prior.ebnn",
+                                                root / "resources" / "ai" / "prior.ebnn"};
+    for (auto const& prior : candidates) {
+        if (!std::filesystem::exists(prior))
+            continue;
+        if (m_model.load(prior))
+            return true;
+    }
+    return false;
 }
 
 bool EbNeuralLearning::loadPrior() {
@@ -277,22 +286,37 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
     edge.fired = false;
     edge.pending = false;
 
-    int const k = std::clamp(topK, 1, 3);
-    auto ranked = m_model.rankedDelays(edge.features, edge.limit, k);
+    int const k = std::clamp(topK, 1, 8);
+    auto neuralRanked = m_model.rankedDelays(edge.features, edge.limit, k);
+    // AP06: Hybrid tables may propose when present (planner already called Hybrid prepare).
+    std::vector<int> hybridRanked;
+    if (EbHybridLearning::tablesReadable())
+        hybridRanked = EbHybridLearning::get().rankedVerifyDelays(edge.limit);
+    edge.verifyOrder = EbNeuralBootstrap::mergeVerifyOrder(hybridRanked, neuralRanked, k);
+    // Soft distill Hybrid mature delays into the scorer while training (transfer).
+    if (training() && !hybridRanked.empty()) {
+        int const distill = std::min(2, static_cast<int>(hybridRanked.size()));
+        for (int index = 0; index < distill; ++index)
+            m_model.learnRank(edge.features, hybridRanked[static_cast<size_t>(index)], edge.limit,
+                              learningRate * 0.25f);
+        m_hasPriorOrWeights = true;
+    }
     ++inferences;
-    if (ranked.empty())
+    if (edge.verifyOrder.empty())
         return -1;
-    edge.hint = ranked.front();
+    edge.hint = edge.verifyOrder.front();
     return edge.hint;
 }
 
 std::vector<int> EbNeuralLearning::rankedVerifyDelays(int limit) const {
     if (!active() || !m_loaded)
         return {};
-    int const k = std::clamp(topK, 1, 3);
     for (auto const& edge : m_edges) {
         if (!edge.valid)
             continue;
+        if (!edge.verifyOrder.empty())
+            return edge.verifyOrder;
+        int const k = std::clamp(topK, 1, 8);
         int const clamped = EbNeuralModel::clampLimit(limit > 0 ? limit : edge.limit);
         return m_model.rankedDelays(edge.features, clamped, k);
     }
@@ -447,9 +471,11 @@ bool EbNeuralLearning::selfCheck(std::string& report) {
             report += std::string("FAIL ") + name + "; ";
         }
     };
-    expect(get().topK >= 1 && get().topK <= 3, "topk-range");
+    expect(get().topK >= 1 && get().topK <= 8, "topk-range");
     expect(EbNeuralModel::kFeatureDim == 3512, "feature-dim");
     expect(channelBitsForObject(nullptr) == 0, "null-object");
+    std::string bootstrapReport;
+    expect(EbNeuralBootstrap::selfCheck(bootstrapReport), bootstrapReport.c_str());
 
     EbNeuralModel model;
     model.reset();

@@ -334,9 +334,9 @@ public:
                         "Turn Auto-Tune on (Learn tab) to update weights while you play.");
                 else
                     ImGui::TextWrapped(
-                        "Training on verified outcomes. AI ranks top-k delays, verifies each "
-                        "with Live physics, then arms the first safe delay — never from raw "
-                        "score alone.");
+                        "Training on verified outcomes. AI ranks top-k delays (Hybrid mature "
+                        "timings first when this level has .hybrid tables), verifies each with "
+                        "Live physics, then arms the first safe delay — never from raw score.");
                 ImGui::Separator();
                 if (ImGui::BeginTable("ai-stats", 2, ImGuiTableFlags_SizingStretchSame)) {
                     ImGui::TableNextColumn();
@@ -383,7 +383,7 @@ public:
                               "How long after an AI-armed input to attribute survival or death.");
             if (EbButton::draw("ai-load-prior", "Load Packaged Prior",
                                aiOn && EbLevelProfile::get().loaded(),
-                               "Replace in-memory weights with resources/ai/prior.ebnn and write "
+                               "Replace in-memory weights with the packaged prior.ebnn and write "
                                "them into this level's .neural file."))
                 (void)neural.loadPrior();
             if (EbButton::draw("ai-reset-weights", "Reset AI Weights",

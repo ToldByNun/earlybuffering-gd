@@ -89,6 +89,8 @@ private:
         bool fired = false;
         bool pending = false;
         float features[EbNeuralModel::kFeatureDim]{};
+        // Blended AI ± Hybrid verify order from last prepare (AP06).
+        std::vector<int> verifyOrder;
 
     private:
     };

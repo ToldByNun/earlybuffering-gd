@@ -352,8 +352,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     }
     // Hybrid-first: tabular UCB order → verify (does not run under AI mode; enabled() gates).
     auto& hybrid = EbHybridLearning::get();
-    if (!scorerWon && hybrid.preferHybridFirst && !opts.shipLine.enabled &&
-        !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode) {
+    // Hybrid-first stays Hybrid-only (AI may read tables for bootstrap, not this arm path).
+    if (!scorerWon && EbHybridLearning::enabled() && hybrid.preferHybridFirst &&
+        !opts.shipLine.enabled && !opts.wavePattern.enabled &&
+        !playLayer->m_gameState.m_isDualMode) {
         auto const order = hybrid.rankedVerifyDelays(limit);
         for (int delayValue : order) {
             if (delayValue < 0 || delayValue > limit)

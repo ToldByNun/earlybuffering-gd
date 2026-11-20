@@ -465,7 +465,7 @@
 		"title-ai": {
 			"type": "title",
 			"name": "AI",
-			"description": "Neural Candidate Scorer: ranks delays, verifies with Live physics, then arms. Desktop menu AI tab shows top-k, confidence, freeze, and prior load. Never arms from raw score alone."
+			"description": "Neural Candidate Scorer: ranks delays, verifies with Live physics, then arms. Bootstraps from Hybrid tables when present; ships resources/ai/prior.ebnn. Desktop AI tab: top-k, confidence, freeze, prior load. Never arms from raw score alone."
 		},
 		"title-assist-actions": {
 			"type": "title",
@@ -1823,7 +1823,8 @@
 			"resources/cues/*.mp3",
 			"resources/liquid_glass_license.txt",
 			"resources/fonts/Inter-Regular.ttf",
-			"resources/fonts/Inter-SemiBold.ttf"
+			"resources/fonts/Inter-SemiBold.ttf",
+			"resources/ai/prior.ebnn"
 		],
 		"sprites": [
 			"resources/ui/eb_star.png",
