@@ -120,12 +120,14 @@ public:
     int routeCacheSize = 4;
     int replanEveryTicks = 8;
     int minVerifiedPrefix = 1;
-    int maxCommittedEvents = 3;
+    int maxCommittedEvents = 6;
     int searchTimeoutUs = 2500;
     int cpuBudgetUsPerTick = 2000;
 
     // --- Training ---
     bool trainingEnabled = true;
+    // When on, each attempt boundary writes new IL/RL samples to saveDir/ai/sessions/*.ebns.
+    bool persistSessions = false;
     float learningRate = 0.01f;
     int batchSize = 16;
     int replayCapacity = 4096;

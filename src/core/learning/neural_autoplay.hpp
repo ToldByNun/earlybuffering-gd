@@ -117,11 +117,14 @@ private:
     void release(PlayLayer* layer);
     int holdTicksForPlayer(PlayLayer* layer) const;
     bool armFromRoute(PlayLayer* layer, bool& exploreOut);
+    // Schedule the event at m_routeIndex (Press or Release) by absolute tick.
+    bool scheduleNextRouteEvent(PlayLayer* layer);
     void applyTimeWarp(PlayLayer* layer);
     void restoreTimeWarp(PlayLayer* layer);
     void stickTimeWarp(PlayLayer* layer);
     void clearSchedule() {
         m_scheduledPressTick = -1;
+        m_scheduledReleaseTick = -1;
         m_scheduledExplore = false;
         m_plannedHoldTicks = -1;
     }
@@ -143,6 +146,7 @@ private:
     int m_nextProbeTick = 0;
     int m_restartAtTick = -1;
     int m_scheduledPressTick = -1;
+    int m_scheduledReleaseTick = -1;
     int m_plannedHoldTicks = -1;
     int m_presses = 0;
     int m_explorePresses = 0;

@@ -28,6 +28,9 @@
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
 - Pause: strip leftover Import/Export Cfg / Cycle Preset / … side buttons from older installs.
 - Hitboxes-on-death: scrub ghost deaths immediately (clear real death flags + hide debug draw) so MH/OpenHack cannot flash overlays when the shadow dies mid-plan.
+- AI sessions: optional Persist Sessions (Dev + AI tabs) writes attempt IL/RL buffers to `saveDir/ai/sessions/*.ebns`; Load / Train From Disk for larger offline datasets.
+- AI route planner: full-timeline Shadow verify (Press→Release→Press from start snapshot), beam search to `maxRouteDepth`, releases verified separately; gating requires threshold ∧ minConfidence; adaptive keep = top percentile.
+- AI Autoplay: schedule Press and Release as first-class route events (not hold-ticks-only).
 
 ## v1.7.1
 

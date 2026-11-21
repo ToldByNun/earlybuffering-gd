@@ -224,6 +224,7 @@ void EbAiConfig::resetCategory(char const* category) {
         cpuBudgetUsPerTick = fresh.cpuBudgetUsPerTick;
     } else if (name == "train") {
         trainingEnabled = fresh.trainingEnabled;
+        persistSessions = fresh.persistSessions;
         learningRate = fresh.learningRate;
         batchSize = fresh.batchSize;
         replayCapacity = fresh.replayCapacity;
@@ -328,6 +329,7 @@ static matjson::Value dumpConfig(EbAiConfig const& c) {
     o["searchTimeoutUs"] = c.searchTimeoutUs;
     o["cpuBudgetUsPerTick"] = c.cpuBudgetUsPerTick;
     o["trainingEnabled"] = c.trainingEnabled;
+    o["persistSessions"] = c.persistSessions;
     o["learningRate"] = c.learningRate;
     o["batchSize"] = c.batchSize;
     o["replayCapacity"] = c.replayCapacity;
@@ -455,6 +457,7 @@ void EbAiConfig::load() {
     loadField(root, "searchTimeoutUs", searchTimeoutUs);
     loadField(root, "cpuBudgetUsPerTick", cpuBudgetUsPerTick);
     loadField(root, "trainingEnabled", trainingEnabled);
+    loadField(root, "persistSessions", persistSessions);
     loadField(root, "learningRate", learningRate);
     loadField(root, "batchSize", batchSize);
     loadField(root, "replayCapacity", replayCapacity);

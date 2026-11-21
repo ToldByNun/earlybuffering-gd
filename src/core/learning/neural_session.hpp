@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,8 @@
 class EbNeuralSession {
 public:
     static constexpr int kCapacity = 4096;
+    static constexpr std::uint32_t kFileMagic = 0x534E4245u; // "EBNS" LE
+    static constexpr std::uint32_t kFileVersion = 1;
 
     class Sample {
     public:
@@ -35,6 +38,9 @@ public:
         m_attempts = 0;
         m_lastTrainUpdates = 0;
         m_attemptOpen = false;
+        m_persistedThrough = 0;
+        m_lastPersistPath.clear();
+        m_filesSaved = 0;
     }
     void beginAttempt() {
         m_attemptOpen = true;
@@ -43,6 +49,7 @@ public:
         if (m_attemptOpen)
             ++m_attempts;
         m_attemptOpen = false;
+        maybePersistAttempt();
     }
     // Push a labeled transition (reject NaN). Survives across attempts until clear/train.
     bool push(float const* state, int action, int limit, float reward, float const* next,
@@ -75,6 +82,22 @@ public:
     int lastTrainUpdates() const {
         return m_lastTrainUpdates;
     }
+    int filesSaved() const {
+        return m_filesSaved;
+    }
+    std::string const& lastPersistPath() const {
+        return m_lastPersistPath;
+    }
+
+    // Dev/AI: write new samples since last persist under saveDir/ai/sessions/.
+    bool maybePersistAttempt();
+    // Write [start, end) logical samples to path. Returns false on I/O error.
+    bool saveRange(std::filesystem::path const& path, int startIndex, int endIndex) const;
+    // Append samples from a .ebns file into the ring buffer. Returns added count.
+    int loadFile(std::filesystem::path const& path);
+    // Load every *.ebns under dir (newest first, capacity-capped). Returns added count.
+    int loadDirectory(std::filesystem::path const& dir);
+    static std::filesystem::path sessionsDir();
 
     // Batch IL/RL update. startIndex/endIndex are logical buffer indices [0, size).
     // maxUpdates caps work (death/reset must stay hitch-free).
@@ -130,48 +153,29 @@ public:
         return updates;
     }
 
-    static bool selfCheck(std::string& report) {
-        int fails = 0;
-        auto expect = [&](bool ok, char const* name) {
-            if (!ok) {
-                ++fails;
-                report += std::string("FAIL ") + name + "; ";
-            }
-        };
-        EbNeuralSession session;
-        session.clear();
-        expect(session.size() == 0, "empty");
-        float state[EbNeuralModel::kFeatureDim]{};
-        float next[EbNeuralModel::kFeatureDim]{};
-        state[0] = 0.25f;
-        next[0] = 0.5f;
-        expect(session.push(state, 3, 12, 1.0f, next, false), "push");
-        expect(session.size() == 1, "size-1");
-        session.beginAttempt();
-        session.endAttempt();
-        expect(session.attemptCount() == 1, "attempt");
-        EbNeuralModel model;
-        model.reset();
-        expect(session.train(model, 0.01f, 1) > 0, "train");
-        if (fails == 0) {
-            report = "NeuralSession OK";
-            return true;
-        }
-        report = std::string("NeuralSession fails: ") + report;
-        return false;
-    }
+    static bool selfCheck(std::string& report);
 
 private:
     friend class EbServiceStore;
 
     EbNeuralSession() = default;
 
+    Sample const* logicalAt(int index) const {
+        if (index < 0 || index >= m_count)
+            return nullptr;
+        int const slot = (m_next - m_count + index + kCapacity * 2) % kCapacity;
+        return &m_samples[static_cast<size_t>(slot)];
+    }
+
     std::vector<Sample> m_samples;
     int m_count = 0;
     int m_next = 0;
     int m_attempts = 0;
     int m_lastTrainUpdates = 0;
+    int m_persistedThrough = 0;
+    int m_filesSaved = 0;
     bool m_attemptOpen = false;
+    std::string m_lastPersistPath;
 };
 
 #endif

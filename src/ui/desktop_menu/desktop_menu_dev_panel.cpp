@@ -1,7 +1,9 @@
 #include "desktop_menu_dev_panel.hpp"
 #include "../../core/assist/assist_controller.hpp"
 #include "../../core/assist/flight/wave_pattern_recognizer.hpp"
+#include "../../core/learning/ai_config.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
+#include "../../core/learning/neural_session.hpp"
 #include "../../core/platform/ui_capabilities.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
@@ -147,6 +149,16 @@ public:
         EbCheckbox::drawSetting("dev-eval-on-death", "Eval On Death");
         EbCheckbox::drawSetting("dev-overlay", "Dev Overlay");
         EbSlider::drawIntSetting("dev-record-count", "Keep last N attempts", 1, 50);
+
+        auto& aiCfg = EbAiConfig::get();
+        if (EbCheckbox::draw("dev-persist-ai-sessions", "Persist AI Sessions",
+                             &aiCfg.persistSessions, true,
+                             "Save every AI IL/RL attempt buffer to saveDir/ai/sessions/*.ebns "
+                             "(same as AI → Persist Sessions). Train later from disk.")) {
+            aiCfg.markCustom();
+            aiCfg.save();
+        }
+        ImGui::TextDisabled("AI session files saved: %d", EbNeuralSession::get().filesSaved());
 
         EbSectionCard::end();
     }

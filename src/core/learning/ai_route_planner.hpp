@@ -2,6 +2,7 @@
 #define AI_ROUTE_PLANNER_HPP
 
 #include "ai_config.hpp"
+#include "../sim/planning/simulation_plan.hpp"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -15,8 +16,8 @@ public:
     enum class Kind : std::uint8_t { Press = 0, Release = 1 };
 
     Kind kind = Kind::Press;
-    int delay = 0;          // ticks from route start (absolute relative to plan tick)
-    int holdTicks = 0;      // for Press: planned hold before Release
+    int delay = 0;     // ticks from route start (relative to plan tick)
+    int holdTicks = 0; // for Press: planned hold before Release
     float neuralScore = 0.f;
     bool verified = false;
     bool clearsThreat = false;
@@ -72,6 +73,15 @@ public:
     int verifyHits = 0;
     int verifyTries = 0;
 
+    // Convert route events → absolute-tick press/release timeline for Shadow replay.
+    static std::vector<EbInputEvent> timelineFromEvents(std::vector<EbAiRouteEvent> const& events,
+                                                        int planTick);
+    // Passes gating: requires confidenceThreshold AND minCandidateConfidence when enabled.
+    static bool passesGate(float neural, EbAiConfig const& cfg);
+    // Keep the best adaptivePercentile fraction of a descending-sorted score list.
+    static void keepTopPercentile(std::vector<float>& descendingScores, float percentile,
+                                  float& outFloor);
+
     static bool selfCheck(std::string& report);
 
 private:
@@ -83,7 +93,28 @@ private:
         int delay = 0;
         bool press = true;
         float neural = 0.f;
-        float routePartial = 0.f;
+
+    private:
+    };
+
+    class EbAiBeamNode {
+    public:
+        std::vector<EbAiRouteEvent> events;
+        float score = 0.f;
+        bool holding = false; // true after verified Press with no Release yet
+        int lastAbsDelay = 0; // last event delay relative to plan start
+        bool ok = false;
+
+    private:
+    };
+
+    class EbAiVerifyOutcome {
+    public:
+        bool ok = false;
+        bool clearsThreat = false;
+        bool budgetHit = false;
+        bool unknown = false;
+        float progress = 0.f;
 
     private:
     };
@@ -94,6 +125,11 @@ private:
 
     std::vector<int> enumerateDelays(EbAiConfig const& cfg, int limit) const;
     float encodeAndScore(float const* baseFeatures, int delay, bool press) const;
+    // Verify the FULL event sequence from a start snapshot (chained correctness).
+    EbAiVerifyOutcome verifyTimeline(PlayLayer* layer, int snapshotSlot, int planTick,
+                                     std::vector<EbAiRouteEvent> const& events, float dt,
+                                     EbAiConfig const& cfg);
+    // Single-action verify (depth-1 seed / orb path). Prefer verifyTimeline for depth>1.
     bool verifyCandidate(PlayLayer* layer, PlayerObject* player, bool press, int delay, int limit,
                          float dt, EbAiConfig const& cfg, float& outProgress,
                          bool& outClearsThreat);

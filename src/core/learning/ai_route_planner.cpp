@@ -36,6 +36,46 @@ bool EbAiRoutePlanner::needsReplan(int tick, float liveX) const {
     return false;
 }
 
+std::vector<EbInputEvent>
+EbAiRoutePlanner::timelineFromEvents(std::vector<EbAiRouteEvent> const& events, int planTick) {
+    std::vector<EbInputEvent> timeline;
+    timeline.reserve(events.size());
+    int base = std::max(0, planTick);
+    for (auto const& ev : events) {
+        EbInputEvent input;
+        input.tick = base + std::max(0, ev.delay);
+        input.down = (ev.kind == EbAiRouteEvent::Kind::Press);
+        timeline.push_back(input);
+    }
+    std::sort(timeline.begin(), timeline.end(),
+              [](EbInputEvent const& a, EbInputEvent const& b) {
+                  if (a.tick != b.tick)
+                      return a.tick < b.tick;
+                  return a.down && !b.down; // press before release on same tick
+              });
+    return timeline;
+}
+
+bool EbAiRoutePlanner::passesGate(float neural, EbAiConfig const& cfg) {
+    if (!cfg.gatingEnabled)
+        return true;
+    // Both floors must clear — minCandidateConfidence alone must not bypass threshold.
+    return neural >= cfg.confidenceThreshold && neural >= cfg.minCandidateConfidence;
+}
+
+void EbAiRoutePlanner::keepTopPercentile(std::vector<float>& descendingScores, float percentile,
+                                         float& outFloor) {
+    outFloor = 0.f;
+    if (descendingScores.empty())
+        return;
+    float const keep = std::clamp(percentile, 0.05f, 1.0f);
+    // Keep the best `keep` fraction: floor is the score at that cutoff index.
+    size_t const keepCount =
+        std::max<size_t>(1, static_cast<size_t>(std::ceil(keep * descendingScores.size())));
+    size_t const idx = std::min(keepCount, descendingScores.size()) - 1;
+    outFloor = descendingScores[idx];
+}
+
 std::vector<int> EbAiRoutePlanner::enumerateDelays(EbAiConfig const& cfg, int limit) const {
     std::vector<int> out;
     int const hi = std::min(cfg.maxDelay, std::min(limit, cfg.candidateWindow));
@@ -48,7 +88,6 @@ std::vector<int> EbAiRoutePlanner::enumerateDelays(EbAiConfig const& cfg, int li
             out.push_back(0);
         return out;
     }
-    // Nova-confirmed base table at unk_180815298, scaled by unit=0.25/dt (sub_18030FC30).
     static constexpr int kNovaDelayBase[] = {1,  2,  3,  4,  5,  6,  8,  10, 12, 15, 18, 22, 27,
                                              33, 40, 50, 62, 78, 96, 120, 150, 190, 240, 300, 380,
                                              480};
@@ -84,7 +123,6 @@ float EbAiRoutePlanner::encodeAndScore(float const* baseFeatures, int delay, boo
     auto const& cfg = EbAiConfig::get();
     bool const nova = cfg.delayEncoding == EbAiConfig::DelayEncoding::Log1p;
     EbNeuralModel::writeCandidateForPolicy(scratch, delay, press, nova);
-    // EB layout still exposes press at continuous[8]; keep consistent for mixed priors.
     scratch[EbNeuralModel::kContinuousOffset + 8] = press ? 1.0f : 0.0f;
     float score = neural.model().confidence(scratch);
     score = std::clamp(score * cfg.scoreCalibration, 0.0f, 1.0f);
@@ -92,7 +130,6 @@ float EbAiRoutePlanner::encodeAndScore(float const* baseFeatures, int delay, boo
 }
 
 static bool novaCanHold(GameModeKind kind) {
-    // Nova: can_hold for packed gm ∈ {0,2,3,6,7} (cube/ball/ufo/spider/swing).
     switch (kind) {
     case GameModeKind::Cube:
     case GameModeKind::Ball:
@@ -105,13 +142,53 @@ static bool novaCanHold(GameModeKind kind) {
     }
 }
 
+EbAiRoutePlanner::EbAiVerifyOutcome
+EbAiRoutePlanner::verifyTimeline(PlayLayer* layer, int snapshotSlot, int planTick,
+                                 std::vector<EbAiRouteEvent> const& events, float dt,
+                                 EbAiConfig const& cfg) {
+    EbAiVerifyOutcome out;
+    if (!cfg.simulationEnabled) {
+        out.ok = true;
+        out.progress = 1.f;
+        return out;
+    }
+    if (!layer || snapshotSlot < 0 || events.empty() || dt <= 0.f)
+        return out;
+    auto timeline = timelineFromEvents(events, planTick);
+    int const horizon =
+        std::min(cfg.planningHorizon, std::max(32, events.back().delay + cfg.maxSimTicks / 4));
+    auto rr = EbShadowSimulator::get().replay(layer, snapshotSlot, planTick, timeline, dt, horizon,
+                                              false, 0, cfg.simBudgetUs);
+    ++verifyTries;
+    ++m_last.simCalls;
+    if (rr.unknown && cfg.rejectUnknown) {
+        out.unknown = true;
+        return out;
+    }
+    out.unknown = rr.unknown;
+    if (!rr.died) {
+        out.ok = true;
+        out.progress = 1.f;
+        ++verifyHits;
+        return out;
+    }
+    // Partial credit if we got further than the first press delay.
+    if (rr.deathTick > events.front().delay) {
+        out.clearsThreat = true;
+        out.progress = 0.55f;
+        if (!cfg.strictVerify)
+            out.ok = true;
+    }
+    return out;
+}
+
 bool EbAiRoutePlanner::verifyCandidate(PlayLayer* layer, PlayerObject* player, bool press,
                                        int delay, int limit, float dt, EbAiConfig const& cfg,
                                        float& outProgress, bool& outClearsThreat) {
     outProgress = 0.f;
     outClearsThreat = false;
     if (!cfg.simulationEnabled)
-        return true; // neural-only path (unsafe policies only)
+        return true;
     EbPlanOptions opts{};
     opts.budgetUs = cfg.simBudgetUs;
     opts.tickBudget = cfg.maxSimTicks;
@@ -174,14 +251,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
 
     EbPlanOptions prep{};
     (void)neural.prepare(layer, player, true, player1, tick, limit, dt, dt, prep);
-    float const* features = nullptr;
-    // Access last edge features via ranked path side effect — rebuild via prepare's edge.
-    // prepare already filled edge; score using confidenceForDelay which copies that edge.
-    // For multi-candidate we need the base feature vector: use confidenceForDelay's path.
-    // Collect scores for press delays first.
+
     auto delays = enumerateDelays(cfg, limit);
     std::vector<EbAiScoredCandidate> scored;
-    scored.reserve(delays.size() * 2);
+    scored.reserve(delays.size());
 
     for (int delay : delays) {
         if (timedOut()) {
@@ -190,36 +263,52 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         }
         if (static_cast<int>(scored.size()) >= cfg.maxCandidates)
             break;
-        if (cfg.generatePress) {
-            float const n = neural.confidenceForDelay(delay);
-            ++route.neuralEvals;
-            float gate = cfg.confidenceThreshold;
-            if (cfg.adaptiveThreshold) {
-                // Soft adaptive: keep percentile of so-far scores as floor later.
-                gate = std::min(gate, cfg.minCandidateConfidence);
-            }
-            if (!cfg.gatingEnabled || n >= gate || n >= cfg.minCandidateConfidence) {
-                EbAiScoredCandidate c;
-                c.delay = delay;
-                c.press = true;
-                c.neural = n;
-                scored.push_back(c);
-            }
+        if (!cfg.generatePress)
+            break;
+        float const n = neural.confidenceForDelay(delay);
+        ++route.neuralEvals;
+        if (passesGate(n, cfg)) {
+            EbAiScoredCandidate c;
+            c.delay = delay;
+            c.press = true;
+            c.neural = n;
+            scored.push_back(c);
         }
     }
 
-    // Sort by neural descending (Nova keeps best).
-    std::sort(scored.begin(), scored.end(), [](EbAiScoredCandidate const& a,
-                                               EbAiScoredCandidate const& b) {
-        return a.neural > b.neural;
-    });
+    std::sort(scored.begin(), scored.end(),
+              [](EbAiScoredCandidate const& a, EbAiScoredCandidate const& b) {
+                  return a.neural > b.neural;
+              });
     if (cfg.gatingEnabled && cfg.adaptiveThreshold && !scored.empty()) {
-        size_t idx = static_cast<size_t>(
-            std::clamp(cfg.adaptivePercentile, 0.5f, 0.95f) * (scored.size() - 1));
-        float const floor = scored[idx].neural;
+        std::vector<float> scores;
+        scores.reserve(scored.size());
+        for (auto const& c : scored)
+            scores.push_back(c.neural);
+        float floor = 0.f;
+        keepTopPercentile(scores, cfg.adaptivePercentile, floor);
         scored.erase(std::remove_if(scored.begin(), scored.end(),
                                     [&](EbAiScoredCandidate const& c) { return c.neural < floor; }),
                      scored.end());
+        // Always keep at least minRetained of the original top scores.
+        if (static_cast<int>(scored.size()) < cfg.minRetained) {
+            scored.clear();
+            for (int delay : delays) {
+                if (static_cast<int>(scored.size()) >= cfg.minRetained)
+                    break;
+                EbAiScoredCandidate c;
+                c.delay = delay;
+                c.press = true;
+                c.neural = neural.confidenceForDelay(delay);
+                scored.push_back(c);
+            }
+            std::sort(scored.begin(), scored.end(),
+                      [](EbAiScoredCandidate const& a, EbAiScoredCandidate const& b) {
+                          return a.neural > b.neural;
+                      });
+            if (static_cast<int>(scored.size()) > cfg.minRetained)
+                scored.resize(static_cast<size_t>(cfg.minRetained));
+        }
     }
     if (static_cast<int>(scored.size()) > cfg.maxRetained)
         scored.resize(static_cast<size_t>(cfg.maxRetained));
@@ -233,52 +322,71 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
             c.neural = neural.confidenceForDelay(delay);
             scored.push_back(c);
         }
-        std::sort(scored.begin(), scored.end(), [](EbAiScoredCandidate const& a,
-                                                   EbAiScoredCandidate const& b) {
-            return a.neural > b.neural;
-        });
+        std::sort(scored.begin(), scored.end(),
+                  [](EbAiScoredCandidate const& a, EbAiScoredCandidate const& b) {
+                      return a.neural > b.neural;
+                  });
     }
 
-    // Beam: verify top candidates; extend with release / second press when depth > 1.
-    class EbAiBeamNode {
-    public:
-        EbAiRouteEvent first{};
-        float score = 0.f;
-        bool ok = false;
+    int const startSlot = EbShadowSimulator::get().captureSnapshot(player);
+    if (startSlot < 0 && cfg.simulationEnabled) {
+        route.reason = "no-snapshot";
+        m_last = route;
+        return route;
+    }
 
-    private:
-    };
+    GameModeKind const mode = EbStageConfig::kindOf(player);
+    bool const canHold = novaCanHold(mode);
+    std::vector<int> holdChoices = {2, 4, 6, 8, 10, 12, 16, 24};
+    if (cfg.adaptiveSampling) {
+        holdChoices.clear();
+        for (int d : delays) {
+            if (d >= 2 && d <= 40)
+                holdChoices.push_back(d);
+            if (static_cast<int>(holdChoices.size()) >= 6)
+                break;
+        }
+        if (holdChoices.empty())
+            holdChoices = {4, 8};
+    }
+
+    // Depth-1 seeds: verified single presses (full timeline = one press).
     std::vector<EbAiBeamNode> beam;
     int simCalls = 0;
     for (auto const& cand : scored) {
         if (timedOut() || simCalls >= cfg.maxSimCalls)
             break;
-        float progress = 0.f;
-        bool clears = false;
-        bool ok = verifyCandidate(layer, player, cand.press, cand.delay, limit, dt, cfg, progress,
-                                  clears);
-        ++simCalls;
-        if (!ok && cfg.pruneDeadBranches)
-            continue;
+        EbAiRouteEvent press;
+        press.kind = EbAiRouteEvent::Kind::Press;
+        press.delay = cand.delay;
+        press.neuralScore = cand.neural;
+        press.holdTicks = holdChoices.empty() ? 4 : holdChoices.front();
         EbAiBeamNode node;
-        node.first.kind = cand.press ? EbAiRouteEvent::Kind::Press : EbAiRouteEvent::Kind::Release;
-        node.first.delay = cand.delay;
-        node.first.neuralScore = cand.neural;
-        node.first.verified = ok;
-        node.first.clearsThreat = clears;
-        node.first.holdTicks = 4;
-        node.ok = ok;
-        node.score = cfg.weightNeural * cand.neural + cfg.weightProgress * progress +
-                     cfg.weightSafety * (clears ? 0.5f : 0.0f);
-        if (!ok)
+        node.events.push_back(press);
+        EbAiVerifyOutcome vo =
+            verifyTimeline(layer, startSlot, tick, node.events, dt, cfg);
+        ++simCalls;
+        if (vo.budgetHit) {
+            route.budgetHit = true;
+            ++budgetHits;
+        }
+        if (!vo.ok && cfg.pruneDeadBranches)
+            continue;
+        node.events.front().verified = vo.ok;
+        node.events.front().clearsThreat = vo.clearsThreat;
+        node.ok = vo.ok;
+        node.holding = vo.ok;
+        node.lastAbsDelay = press.delay;
+        node.score = cfg.weightNeural * cand.neural + cfg.weightProgress * vo.progress +
+                     cfg.weightSafety * (vo.clearsThreat ? 0.5f : 0.0f);
+        if (!vo.ok)
             node.score -= cfg.deathPenalty;
-        beam.push_back(node);
+        beam.push_back(std::move(node));
         if (static_cast<int>(beam.size()) >= cfg.beamWidth)
             break;
     }
 
     if (beam.empty()) {
-        // Orb soft fallback
         if (cfg.orbCandidates &&
             EbAssistControllerImplementation::nearOrbOrPadHint(layer, player, limit, dt)) {
             int delayHint = delays.empty() ? 0 : delays.front();
@@ -307,80 +415,110 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         return route;
     }
 
-    std::sort(beam.begin(), beam.end(),
-              [](EbAiBeamNode const& a, EbAiBeamNode const& b) { return a.score > b.score; });
-    auto best = beam.front();
+    // Expand beam up to maxRouteDepth. Every extension re-verifies the FULL sequence
+    // from the start snapshot (so Press→Release→Press cannot skip a lethal middle).
+    int depth = 1;
+    while (depth < cfg.maxRouteDepth && !timedOut() && simCalls < cfg.maxSimCalls) {
+        std::vector<EbAiBeamNode> nextBeam;
+        std::sort(beam.begin(), beam.end(),
+                  [](EbAiBeamNode const& a, EbAiBeamNode const& b) { return a.score > b.score; });
+        int branches = 0;
+        for (auto const& parent : beam) {
+            if (timedOut() || simCalls >= cfg.maxSimCalls || branches >= cfg.maxBranches)
+                break;
+            // Always keep the parent as a complete route candidate.
+            nextBeam.push_back(parent);
 
-    // Depth ≥ 2: plan hold/release when mode supports variable holds (Nova can_hold).
-    GameModeKind const mode = EbStageConfig::kindOf(player);
-    bool const canHold = novaCanHold(mode);
-    if (cfg.maxRouteDepth >= 2 && cfg.generateRelease && canHold &&
-        best.first.kind == EbAiRouteEvent::Kind::Press) {
-        auto sample =
-            EbShadowSimulator::get().sampleActionVsIdle(layer, player, true, limit, dt, dt);
-        int hold = 4;
-        if (sample.valid && !sample.unknown) {
-            if (!sample.actionDied && sample.idleDied)
-                hold = 10;
-            else if (sample.actionDied && !sample.idleDied)
-                hold = 2;
-            else if (sample.actionEndX > sample.idleEndX + 8.f)
-                hold = 8;
-        }
-        // Prefer a table delay ≥ 2 as hold length when adaptive (Nova schedule a7).
-        if (cfg.adaptiveSampling && !delays.empty()) {
-            for (int d : delays) {
-                if (d >= 2 && d <= 40) {
-                    hold = d;
-                    break;
+            if (parent.holding && cfg.generateRelease && canHold) {
+                for (int hold : holdChoices) {
+                    if (timedOut() || simCalls >= cfg.maxSimCalls || branches >= cfg.maxBranches)
+                        break;
+                    EbAiBeamNode child = parent;
+                    EbAiRouteEvent release;
+                    release.kind = EbAiRouteEvent::Kind::Release;
+                    release.delay = parent.lastAbsDelay + hold;
+                    if (release.delay > cfg.planningHorizon)
+                        continue;
+                    release.neuralScore = parent.events.back().neuralScore * 0.9f;
+                    if (!child.events.empty() && child.events.back().kind == EbAiRouteEvent::Kind::Press)
+                        child.events.back().holdTicks = hold;
+                    child.events.push_back(release);
+                    EbAiVerifyOutcome vo =
+                        verifyTimeline(layer, startSlot, tick, child.events, dt, cfg);
+                    ++simCalls;
+                    ++branches;
+                    if (!vo.ok && cfg.pruneDeadBranches)
+                        continue;
+                    child.events.back().verified = vo.ok;
+                    child.events.back().clearsThreat = vo.clearsThreat;
+                    child.ok = vo.ok;
+                    child.holding = false;
+                    child.lastAbsDelay = release.delay;
+                    child.score = parent.score * 0.85f + cfg.weightProgress * vo.progress +
+                                  cfg.weightSafety * (vo.ok ? 0.35f : 0.f);
+                    if (!vo.ok)
+                        child.score -= cfg.deathPenalty;
+                    nextBeam.push_back(std::move(child));
+                }
+            } else if (!parent.holding && cfg.generatePress) {
+                // Next press after a release (or depth-1 press without hold path).
+                int const gap = std::max(4, cfg.gapTicks / 2);
+                for (auto const& cand : scored) {
+                    if (timedOut() || simCalls >= cfg.maxSimCalls || branches >= cfg.maxBranches)
+                        break;
+                    int nextDelay = parent.lastAbsDelay + gap + cand.delay;
+                    if (nextDelay > cfg.planningHorizon)
+                        continue;
+                    EbAiBeamNode child = parent;
+                    EbAiRouteEvent press;
+                    press.kind = EbAiRouteEvent::Kind::Press;
+                    press.delay = nextDelay;
+                    press.neuralScore = cand.neural;
+                    press.holdTicks = holdChoices.empty() ? 4 : holdChoices.front();
+                    child.events.push_back(press);
+                    EbAiVerifyOutcome vo =
+                        verifyTimeline(layer, startSlot, tick, child.events, dt, cfg);
+                    ++simCalls;
+                    ++branches;
+                    if (!vo.ok && cfg.pruneDeadBranches)
+                        continue;
+                    child.events.back().verified = vo.ok;
+                    child.events.back().clearsThreat = vo.clearsThreat;
+                    child.ok = vo.ok;
+                    child.holding = vo.ok;
+                    child.lastAbsDelay = nextDelay;
+                    child.score = parent.score * 0.7f + cfg.weightNeural * cand.neural +
+                                  cfg.weightProgress * vo.progress;
+                    if (!vo.ok)
+                        child.score -= cfg.deathPenalty;
+                    nextBeam.push_back(std::move(child));
                 }
             }
         }
-        best.first.holdTicks = hold;
-        if (cfg.maxRouteDepth >= 2) {
-            EbAiRouteEvent release;
-            release.kind = EbAiRouteEvent::Kind::Release;
-            release.delay = best.first.delay + hold;
-            release.neuralScore = best.first.neuralScore * 0.9f;
-            release.verified = best.first.verified;
-            // Optional third event: next press further out when depth allows.
-            route.events.push_back(best.first);
-            route.events.push_back(release);
-            if (cfg.maxRouteDepth >= 3 && !timedOut() && simCalls < cfg.maxSimCalls) {
-                int nextDelay = best.first.delay + hold + std::max(4, cfg.gapTicks / 2);
-                if (nextDelay <= cfg.planningHorizon) {
-                    float n2 = neural.confidenceForDelay(std::min(limit, nextDelay - best.first.delay));
-                    if (!cfg.gatingEnabled || n2 >= cfg.confidenceThreshold * 0.85f) {
-                        float progress = 0.f;
-                        bool clears = false;
-                        int relDelay = std::min(limit, nextDelay - best.first.delay);
-                        bool ok = verifyCandidate(layer, player, true, relDelay, limit, dt, cfg,
-                                                  progress, clears);
-                        ++simCalls;
-                        if (ok || clears) {
-                            EbAiRouteEvent second;
-                            second.kind = EbAiRouteEvent::Kind::Press;
-                            second.delay = nextDelay;
-                            second.neuralScore = n2;
-                            second.holdTicks = hold;
-                            second.verified = ok;
-                            second.clearsThreat = clears;
-                            route.events.push_back(second);
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        route.events.push_back(best.first);
+        if (nextBeam.empty())
+            break;
+        std::sort(nextBeam.begin(), nextBeam.end(),
+                  [](EbAiBeamNode const& a, EbAiBeamNode const& b) { return a.score > b.score; });
+        if (static_cast<int>(nextBeam.size()) > cfg.beamWidth)
+            nextBeam.resize(static_cast<size_t>(cfg.beamWidth));
+        beam = std::move(nextBeam);
+        ++depth;
     }
 
-    // Cap committed events
+    std::sort(beam.begin(), beam.end(),
+              [](EbAiBeamNode const& a, EbAiBeamNode const& b) { return a.score > b.score; });
+    auto const& best = beam.front();
+    route.events = best.events;
     if (static_cast<int>(route.events.size()) > cfg.maxCommittedEvents)
         route.events.resize(static_cast<size_t>(cfg.maxCommittedEvents));
 
-    route.valid = !route.events.empty() &&
-                  static_cast<int>(route.events.size()) >= cfg.minVerifiedPrefix;
+    int verifiedPrefix = 0;
+    for (auto const& ev : route.events) {
+        if (!ev.verified)
+            break;
+        ++verifiedPrefix;
+    }
+    route.valid = !route.events.empty() && verifiedPrefix >= cfg.minVerifiedPrefix;
     route.routeScore = best.score;
     route.startX = player->getPositionX();
     route.simCalls = simCalls;
@@ -392,8 +530,6 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     m_lastPlanTick = tick;
     m_lastPlanX = route.startX;
     ++plans;
-    (void)features;
-    (void)player1;
     return route;
 }
 
@@ -410,6 +546,54 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
     planner.invalidate("test");
     expect(planner.invalidations == 1, "invalidate");
     expect(planner.needsReplan(0, 0.f), "needs-replan-empty");
+
+    auto& gateCfg = EbAiConfig::get();
+    bool const savedGate = gateCfg.gatingEnabled;
+    float const savedThresh = gateCfg.confidenceThreshold;
+    float const savedMin = gateCfg.minCandidateConfidence;
+    gateCfg.gatingEnabled = true;
+    gateCfg.confidenceThreshold = 0.6f;
+    gateCfg.minCandidateConfidence = 0.3f;
+    expect(!passesGate(0.4f, gateCfg), "gate-blocks-below-threshold");
+    expect(passesGate(0.65f, gateCfg), "gate-allows-above-both");
+    gateCfg.minCandidateConfidence = 0.7f;
+    expect(!passesGate(0.65f, gateCfg), "gate-requires-min-too");
+    gateCfg.gatingEnabled = savedGate;
+    gateCfg.confidenceThreshold = savedThresh;
+    gateCfg.minCandidateConfidence = savedMin;
+
+    std::vector<float> scores = {0.9f, 0.8f, 0.7f, 0.6f, 0.5f};
+    float floor = 0.f;
+    keepTopPercentile(scores, 0.8f, floor);
+    // Best 80% of 5 = 4 → floor at index 3 = 0.6
+    expect(std::fabs(floor - 0.6f) < 0.001f, "percentile-floor");
+
+    std::vector<EbAiRouteEvent> events;
+    EbAiRouteEvent press;
+    press.kind = EbAiRouteEvent::Kind::Press;
+    press.delay = 5;
+    press.holdTicks = 4;
+    press.verified = true;
+    events.push_back(press);
+    EbAiRouteEvent release;
+    release.kind = EbAiRouteEvent::Kind::Release;
+    release.delay = 9;
+    release.verified = true;
+    events.push_back(release);
+    EbAiRouteEvent press2;
+    press2.kind = EbAiRouteEvent::Kind::Press;
+    press2.delay = 20;
+    press2.verified = false;
+    events.push_back(press2);
+    auto tl = timelineFromEvents(events, 100);
+    expect(tl.size() == 3, "timeline-size");
+    expect(tl[0].tick == 105 && tl[0].down, "timeline-press1");
+    expect(tl[1].tick == 109 && !tl[1].down, "timeline-release");
+    expect(tl[2].tick == 120 && tl[2].down, "timeline-press2");
+    // Release is its own verified event — not copied from the press.
+    expect(events[1].verified && events[1].kind == EbAiRouteEvent::Kind::Release,
+           "release-own-flag");
+
     if (fails == 0) {
         report = "AiRoutePlanner OK";
         return true;

@@ -5,8 +5,9 @@
 #include <filesystem>
 #include <vector>
 
-// Nova-inspired Candidate Scorer: 3512 → 128 → 64 → {49 rank | 1 sigmoid}.
-// Scores rank which delays deserve verifyDelay budget; never arm from raw score.
+// Candidate Scorer trunk (EBNN-compatible): 3512 → 128 → 64 → {49 rank | 1 conf}.
+// CandidateSigmoid scores via confidence(); DualHeadLegacy also uses rank.
+// Hidden sizes fixed for prior.ebnn — EbAiConfig::hidden1/2 mirror these, not resize.
 class EbNeuralModel {
 public:
     // Local env grid (Nova): 24×16×9 sparse channels + 56 continuous floats.
@@ -23,6 +24,7 @@ public:
     static constexpr int kCandidateDelayFeature =
         kContinuousOffset + 15; // delay / kMaxDelay ∈ [0,1]
 
+    // Compile-time trunk (must match shipped prior.ebnn).
     static constexpr int kHidden1 = 128;
     static constexpr int kHidden2 = 64;
     static constexpr int kActionCount = 49;

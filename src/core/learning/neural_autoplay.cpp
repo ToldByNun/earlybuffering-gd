@@ -102,17 +102,19 @@ int EbNeuralAutoplay::holdTicksForPlayer(PlayLayer* layer) const {
 void EbNeuralAutoplay::press(PlayLayer* layer, bool explore) {
     if (!layer)
         return;
-    auto& controller = EbAssistController::get();
     int const jump = EbAssistControllerImplementation::JUMP_BUTTON;
     layer->handleButton(true, jump, true);
     m_holding = true;
-    int const hold =
-        m_plannedHoldTicks > 0 ? m_plannedHoldTicks : holdTicksForPlayer(layer);
+    m_holdUntilTick = -1; // release comes from scheduled route event when present
     m_plannedHoldTicks = -1;
-    m_holdUntilTick = controller.attemptTick() + hold;
     ++m_presses;
     if (explore)
         ++m_explorePresses;
+    // If the route has an explicit Release next, schedule it; else fall back to hold ticks.
+    if (!scheduleNextRouteEvent(layer) && m_holding) {
+        int const hold = holdTicksForPlayer(layer);
+        m_holdUntilTick = EbAssistController::get().attemptTick() + hold;
+    }
 }
 
 void EbNeuralAutoplay::release(PlayLayer* layer) {
@@ -123,30 +125,49 @@ void EbNeuralAutoplay::release(PlayLayer* layer) {
     layer->handleButton(false, jump, true);
     m_holding = false;
     m_holdUntilTick = -1;
+    m_scheduledReleaseTick = -1;
     m_nextPressTick = controller.attemptTick() + m_gapTicks;
     m_nextProbeTick = m_nextPressTick;
+    if (!scheduleNextRouteEvent(layer))
+        clearRoute();
+}
 
-    // Continue multi-event route: arm next Press if present.
-    while (m_routeIndex < static_cast<int>(m_activeRoute.events.size())) {
-        auto const& ev = m_activeRoute.events[static_cast<size_t>(m_routeIndex)];
-        ++m_routeIndex;
-        if (ev.kind != EbAiRouteEvent::Kind::Press)
-            continue;
-        int const tick = controller.attemptTick();
-        int const absTick = m_activeRoute.planTick + ev.delay;
-        m_plannedHoldTicks = ev.holdTicks > 0 ? ev.holdTicks : holdTicksForPlayer(layer);
-        if (absTick <= tick) {
-            press(layer, false);
-            m_lastProbeReason = "route-continue";
-            return;
-        }
-        m_scheduledPressTick = absTick;
-        m_scheduledExplore = false;
-        m_lastProbeReason = "route-next";
-        m_nextProbeTick = absTick + 1;
-        return;
+bool EbNeuralAutoplay::scheduleNextRouteEvent(PlayLayer* layer) {
+    if (!layer || m_activeRoute.events.empty())
+        return false;
+    if (m_routeIndex >= static_cast<int>(m_activeRoute.events.size())) {
+        clearRoute();
+        return false;
     }
-    clearRoute();
+    auto const& ev = m_activeRoute.events[static_cast<size_t>(m_routeIndex)];
+    ++m_routeIndex;
+    int const tick = EbAssistController::get().attemptTick();
+    int const absTick = m_activeRoute.planTick + std::max(0, ev.delay);
+    if (ev.kind == EbAiRouteEvent::Kind::Press) {
+        m_plannedHoldTicks = ev.holdTicks > 0 ? ev.holdTicks : holdTicksForPlayer(layer);
+        m_scheduledExplore = false;
+        m_scheduledReleaseTick = -1;
+        if (absTick <= tick) {
+            m_scheduledPressTick = tick;
+        } else {
+            m_scheduledPressTick = absTick;
+        }
+        m_lastProbeReason = ev.verified ? "route-press" : "route-press-soft";
+        m_nextProbeTick = m_scheduledPressTick + 1;
+        return true;
+    }
+    // Release is a first-class scheduled event (not only holdUntilTick).
+    m_scheduledPressTick = -1;
+    m_plannedHoldTicks = -1;
+    if (absTick <= tick) {
+        m_scheduledReleaseTick = tick;
+    } else {
+        m_scheduledReleaseTick = absTick;
+    }
+    m_holdUntilTick = m_scheduledReleaseTick;
+    m_lastProbeReason = ev.verified ? "route-release" : "route-release-soft";
+    m_nextProbeTick = m_scheduledReleaseTick + 1;
+    return true;
 }
 
 bool EbNeuralAutoplay::armFromRoute(PlayLayer* layer, bool& exploreOut) {
@@ -185,6 +206,7 @@ bool EbNeuralAutoplay::armFromRoute(PlayLayer* layer, bool& exploreOut) {
                 m_activeRoute.clear();
                 m_routeIndex = 0;
                 m_scheduledPressTick = tick;
+                m_scheduledReleaseTick = -1;
                 return true;
             }
         }
@@ -194,21 +216,12 @@ bool EbNeuralAutoplay::armFromRoute(PlayLayer* layer, bool& exploreOut) {
 
     m_activeRoute = route;
     m_routeIndex = 0;
-    // Find first Press event.
-    for (; m_routeIndex < static_cast<int>(m_activeRoute.events.size()); ++m_routeIndex) {
-        auto const& ev = m_activeRoute.events[static_cast<size_t>(m_routeIndex)];
-        if (ev.kind != EbAiRouteEvent::Kind::Press)
-            continue;
-        m_plannedHoldTicks = ev.holdTicks > 0 ? ev.holdTicks : holdTicksForPlayer(layer);
-        m_scheduledPressTick = tick + std::max(0, ev.delay);
-        m_scheduledExplore = false;
-        m_lastProbeReason = ev.verified ? "route-verified" : "route-soft";
-        ++m_routeIndex; // next after this press
-        return true;
+    if (!scheduleNextRouteEvent(layer)) {
+        clearRoute();
+        m_lastProbeReason = "no-event";
+        return false;
     }
-    clearRoute();
-    m_lastProbeReason = "no-press";
-    return false;
+    return true;
 }
 
 void EbNeuralAutoplay::onDeath(PlayLayer* layer) {
@@ -263,6 +276,13 @@ void EbNeuralAutoplay::onPhysicsTick(PlayLayer* layer) {
     if (!layer->m_player1 || layer->m_player1->m_isDead)
         return;
 
+    // Explicit Release from the route scheduler (preferred over holdUntilTick alone).
+    if (m_scheduledReleaseTick >= 0 && tick >= m_scheduledReleaseTick) {
+        m_scheduledReleaseTick = -1;
+        release(layer);
+        return;
+    }
+
     if (m_holding) {
         if (m_holdUntilTick >= 0 && tick >= m_holdUntilTick)
             release(layer);
@@ -277,7 +297,8 @@ void EbNeuralAutoplay::onPhysicsTick(PlayLayer* layer) {
             return;
         }
         bool const explore = m_scheduledExplore;
-        clearSchedule();
+        m_scheduledPressTick = -1;
+        m_scheduledExplore = false;
         press(layer, explore);
         return;
     }
@@ -297,10 +318,13 @@ void EbNeuralAutoplay::onPhysicsTick(PlayLayer* layer) {
     bool explore = false;
     if (!armFromRoute(layer, explore))
         return;
-    if (m_scheduledPressTick > tick) {
-        m_nextProbeTick = m_scheduledPressTick + 1;
+    if (m_scheduledPressTick > tick || m_scheduledReleaseTick > tick) {
+        m_nextProbeTick =
+            std::max(m_scheduledPressTick, m_scheduledReleaseTick) + 1;
         return;
     }
-    clearSchedule();
-    press(layer, explore);
+    if (m_scheduledPressTick == tick) {
+        m_scheduledPressTick = -1;
+        press(layer, explore);
+    }
 }

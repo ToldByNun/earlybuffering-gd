@@ -575,6 +575,11 @@ public:
             ImGui::Text("Route events / last probe   %d / %s", autoplay.routeEvents(),
                         autoplay.lastProbeReason());
             ImGui::Separator();
+            if (EbCheckbox::draw("ai-persist-sessions", "Persist Sessions to Disk",
+                                 &cfg.persistSessions, aiOn,
+                                 "On attempt end, write new IL/RL samples to "
+                                 "saveDir/ai/sessions/*.ebns for later training."))
+                dirty();
             if (EbButton::draw("ai-train-session", "Train Session",
                                aiOn && EbLevelProfile::get().loaded() &&
                                    EbNeuralSession::get().size() > 0,
@@ -582,14 +587,34 @@ public:
                 int const n = neural.trainSession(cfg.trainStepsPerUpdate, true);
                 ImGui::Text("Trained %d updates", n);
             }
+            if (EbButton::draw("ai-load-disk-sessions", "Load Disk Sessions", aiOn,
+                               "Append saveDir/ai/sessions/*.ebns into the buffer.")) {
+                int const added =
+                    EbNeuralSession::get().loadDirectory(EbNeuralSession::sessionsDir());
+                ImGui::Text("Loaded %d samples", added);
+            }
+            if (EbButton::draw("ai-train-disk", "Train From Disk Sessions",
+                               aiOn && EbLevelProfile::get().loaded(),
+                               "Load all on-disk sessions into the buffer, then train.")) {
+                int const added =
+                    EbNeuralSession::get().loadDirectory(EbNeuralSession::sessionsDir());
+                int const n = neural.trainSession(cfg.trainStepsPerUpdate, true);
+                ImGui::Text("Loaded %d · trained %d", added, n);
+            }
             if (EbButton::draw("ai-clear-session", "Clear Session",
                                EbNeuralSession::get().size() > 0 ||
                                    EbNeuralSession::get().attemptCount() > 0,
                                "Drop session samples without touching weights."))
                 EbNeuralSession::get().clear();
+            ImGui::TextDisabled("Buffer %d · attempts %d · files saved %d",
+                                EbNeuralSession::get().size(),
+                                EbNeuralSession::get().attemptCount(),
+                                EbNeuralSession::get().filesSaved());
             if (EbNeuralSession::get().lastTrainUpdates() > 0)
                 ImGui::TextDisabled("Last train: %d updates",
                                     EbNeuralSession::get().lastTrainUpdates());
+            if (!EbNeuralSession::get().lastPersistPath().empty())
+                ImGui::TextDisabled("%s", EbNeuralSession::get().lastPersistPath().c_str());
         }
         EbSectionCard::end();
 
