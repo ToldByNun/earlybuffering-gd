@@ -12,8 +12,13 @@ Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
 | Hybrid | Player-driven tabular RL over Live: learns delay preferences per situation, then Hybrid-first `verifyDelay` before ordinary Live search. |
+| AI | Neural Candidate Scorer (1.8.0): ranks delays → verify → arm; per-level `.neural` + packaged prior. Opt-in **Autoplay** synthesizes Jump for RL self-play; **Train Session** batch-IL/RL from the attempt buffer. |
 
 Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were removed from the 1.7.x ship line (historical bake-verify notes below remain for older captures / Dev tooling).
+
+## AI Autoplay + session train (v1.8.0)
+
+With **Assist Mode = AI**, the AI tab exposes **Autoplay** (Jump edges through the normal assist path; enable Auto-Tune for online weight writes) and **Train Session** (batch TD/rank/confidence from the session buffer filled by every attempt — your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.
 
 ## Hybrid RL (v1.7.1)
 

@@ -16,6 +16,7 @@
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
 #include "../../learning/hybrid_learning.hpp"
+#include "../../learning/neural_autoplay.hpp"
 #include "../../learning/neural_learning.hpp"
 #include "../../real_assist/real_assist_runner.hpp"
 #include "../../sim/shadow_simulator.hpp"
@@ -191,6 +192,10 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
             EbPerfTrace::Scope const scope("tickLearning");
             controller.tickLearning(playLayer, playerOne);
         }
+    }
+    {
+        EbPerfTrace::Scope const scope("aiAutoplay");
+        EbNeuralAutoplay::get().onPhysicsTick(playLayer);
     }
 
     {

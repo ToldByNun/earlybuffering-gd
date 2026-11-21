@@ -5,9 +5,11 @@
 #include "../platform/platform_limits.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "hybrid_learning.hpp"
+#include "neural_autoplay.hpp"
 #include "neural_bootstrap.hpp"
 #include "neural_grid.hpp"
 #include "neural_hitbox.hpp"
+#include "neural_session.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <cmath>
@@ -33,6 +35,7 @@ void EbNeuralLearning::clearEdges() {
 void EbNeuralLearning::open(std::filesystem::path path) {
     close();
     m_path = std::move(path);
+    EbNeuralSession::get().clear();
     settingsChanged();
 }
 
@@ -83,6 +86,8 @@ void EbNeuralLearning::close() {
     m_hasPriorOrWeights = false;
     m_model.reset();
     m_replay.clear();
+    EbNeuralSession::get().clear();
+    EbNeuralAutoplay::get().setEnabled(false);
     edges = inferences = verifies = verifyHits = updates = deaths = tried = confirmed = 0;
     lastArmedDelay = -1;
     lastArmedConfidence = 0.0f;
@@ -96,6 +101,7 @@ void EbNeuralLearning::reset() {
     m_model.reset();
     m_hasPriorOrWeights = false;
     m_replay.clear();
+    EbNeuralSession::get().clear();
     edges = inferences = verifies = verifyHits = updates = deaths = tried = confirmed = 0;
     lastArmedDelay = -1;
     lastArmedConfidence = 0.0f;
@@ -110,9 +116,24 @@ void EbNeuralLearning::save() {
         EbAssistLog::info("AI: could not save level neural weights");
 }
 
+int EbNeuralLearning::trainSession(int passes) {
+    if (!m_loaded)
+        return 0;
+    int const trained = EbNeuralSession::get().train(m_model, learningRate, passes);
+    if (trained > 0) {
+        this->updates += trained;
+        m_hasPriorOrWeights = true;
+        save();
+    }
+    return trained;
+}
+
 void EbNeuralLearning::boundary(bool newAttempt) {
     clearEdges();
-    (void)newAttempt;
+    if (newAttempt) {
+        EbNeuralSession::get().endAttempt();
+        EbNeuralSession::get().beginAttempt();
+    }
 }
 
 void EbNeuralLearning::freeze(bool value) {
@@ -551,15 +572,20 @@ void EbNeuralLearning::poll(PlayLayer* layer, int tick) {
             continue;
         if (tick - edge.tick < observationTicks)
             continue;
-        if (training() && edge.plannedDelay >= 0) {
+        if (edge.plannedDelay >= 0) {
             float next[EbNeuralModel::kFeatureDim];
             std::memcpy(next, edge.features, sizeof(next));
-            m_model.learnTd(edge.features, edge.plannedDelay, 1.0f, next, false, edge.limit,
-                            learningRate);
-            m_model.learnRank(edge.features, edge.plannedDelay, edge.limit, learningRate);
-            m_replay.push(edge.features, edge.plannedDelay, 1.0f, next, false);
-            ++updates;
-            m_hasPriorOrWeights = true;
+            // Always record for IL session (Train Session); online RL only when training().
+            EbNeuralSession::get().push(edge.features, edge.plannedDelay, edge.limit, 1.0f, next,
+                                        false);
+            if (training()) {
+                m_model.learnTd(edge.features, edge.plannedDelay, 1.0f, next, false, edge.limit,
+                                learningRate);
+                m_model.learnRank(edge.features, edge.plannedDelay, edge.limit, learningRate);
+                m_replay.push(edge.features, edge.plannedDelay, 1.0f, next, false);
+                ++updates;
+                m_hasPriorOrWeights = true;
+            }
         }
         edge.pending = false;
     }
@@ -572,14 +598,18 @@ void EbNeuralLearning::death(bool player1, int tick) {
     auto& edge = m_edges[player1 ? 0 : 1];
     if (!edge.valid || !edge.pending)
         return;
-    if (training() && edge.plannedDelay >= 0) {
+    if (edge.plannedDelay >= 0) {
         float next[EbNeuralModel::kFeatureDim];
         std::memcpy(next, edge.features, sizeof(next));
-        m_model.learnTd(edge.features, edge.plannedDelay, -2.0f, next, true, edge.limit,
-                        learningRate);
-        m_replay.push(edge.features, edge.plannedDelay, -2.0f, next, true);
-        ++updates;
-        m_hasPriorOrWeights = true;
+        EbNeuralSession::get().push(edge.features, edge.plannedDelay, edge.limit, -2.0f, next,
+                                    true);
+        if (training()) {
+            m_model.learnTd(edge.features, edge.plannedDelay, -2.0f, next, true, edge.limit,
+                            learningRate);
+            m_replay.push(edge.features, edge.plannedDelay, -2.0f, next, true);
+            ++updates;
+            m_hasPriorOrWeights = true;
+        }
     }
     edge.pending = false;
     (void)tick;
@@ -600,6 +630,10 @@ bool EbNeuralLearning::selfCheck(std::string& report) {
     expect(EbNeuralHitbox::selfCheck(hitboxReport), hitboxReport.c_str());
     std::string gridReport;
     expect(EbNeuralGrid::selfCheck(gridReport), gridReport.c_str());
+    std::string sessionReport;
+    expect(EbNeuralSession::selfCheck(sessionReport), sessionReport.c_str());
+    std::string autoplayReport;
+    expect(EbNeuralAutoplay::selfCheck(autoplayReport), autoplayReport.c_str());
     std::string bootstrapReport;
     expect(EbNeuralBootstrap::selfCheck(bootstrapReport), bootstrapReport.c_str());
 

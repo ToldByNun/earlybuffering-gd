@@ -8,9 +8,11 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 | Hybrid | Tabular learning: with Auto-Tune enabled, learns timings across attempts and tests familiar timings in the Live input window. See Learn for this level’s progress. |
 | AI | Neural candidate scorer (1.8.0): ranks delays to verify; Shadow physics still decides what may arm. Per-level `.neural` weights; packaged `resources/ai/prior.ebnn`. When a level already has Hybrid tables, AI blends those mature delays into its verify order (bootstrap — AI does not require Hybrid). |
 
-**Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, top-k / learning-rate knobs, freeze, prior load, and **Visualize AI**. Auto-Tune (on Learn) still gates AI training writes. The Bake tab and macro/bake mode selection have been removed.
+**Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, Autoplay / Train Session, top-k / learning-rate knobs, freeze, prior load, and **Visualize AI**. Auto-Tune (on Learn) still gates online AI weight writes. The Bake tab and macro/bake mode selection have been removed.
 
 **Visualize AI** (`show-ai`, also on Visual): draws exact GD collision hitboxes (`getObjectRect` / OBB after dirty refresh — same ground truth as RobTop debug draw): blue solid, red hazard, green orb/pad, yellow player. Scorer grid stamps those same rects. Ranked delay dots + train pulse. Draw only — never arms.
+
+**AP-AUTOPLAY:** AI tab → **Autoplay** synthesizes Jump presses through the normal assist path for RL self-play (enable Auto-Tune to write weights). Attempts also fill a session buffer; **Train Session** batch-trains the level `.neural` file from that buffer (IL from your play + autoplay outcomes). **Clear Session** drops the buffer only.
 
 **Hybrid is tabular; AI is neural.** Both reuse the same propose → `verifyDelay` contract. Live is the base planner.
 
@@ -22,7 +24,7 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existing AI settings stay AI. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.
 
-The player initiates every input. The planner can delay it within the configured window. Press/release cleanup continues when changing modes.
+Normally the player initiates every input; **AI Autoplay** is the opt-in exception for RL self-play. The planner can delay presses within the configured window. Press/release cleanup continues when changing modes.
 
 **Flight:** The **Flight** tab holds **Straightfly Assist** / **Wave Pattern Assist**, angle snap, room-of-error, and live tracking status. **Visual** only draws (**Visualize Straightfly** / **Wave Pattern**). Dev session toggles still OR into assist for testing. Modes → Ship/Wave off is bypassed only when the assist enable is on — not by viz alone.
 

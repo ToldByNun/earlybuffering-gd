@@ -14,8 +14,9 @@
 #include "../core/diagnostics/divergence_tracker.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/learning/hybrid_learning.hpp"
-#include "../core/learning/neural_learning.hpp"
 #include "../core/learning/level_profile.hpp"
+#include "../core/learning/neural_autoplay.hpp"
+#include "../core/learning/neural_learning.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
 #include "../core/sim/world/shadow_world_capture.hpp"
@@ -132,6 +133,7 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_inputReconciler.reset();
     // Death often skips the matching UP — stuck true blocks rawEdge / Wave+Ship lock.
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;
+    EbNeuralAutoplay::get().onAttemptReset();
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;
     controller.m_outcomePending = false;

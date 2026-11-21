@@ -14,6 +14,7 @@
 - Visualize AI: purple perception grid (solid / hazard / orb), ranked delay markers, last armed, train pulse (`show-ai` on Visual + AI tabs).
 - AI perception / Visualize AI use GD `getObjectRect` + OBB only (OpenHack/RobTop ground truth; no sprite `contentSize` fabrication).
 - Visualize AI perf: no force-dirty of every object; spatial cull; rebuild every 8 ticks; click prepare skips viz hitbox copies.
+- AP-AUTOPLAY: AI Autoplay (RL self-play) + session capture + Train Session (IL/offline RL batch).
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
 
 ## v1.7.1

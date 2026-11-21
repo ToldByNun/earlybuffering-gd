@@ -58,6 +58,8 @@ public:
     EbNeuralModel& model();
     EbNeuralModel const& model() const;
     EbNeuralReplay& replay();
+    // Batch-train from the IL/RL session buffer (player demos + autoplay).
+    int trainSession(int passes = 4);
     // Rebuild local grid + pull last ranked delays for Visualize AI (cheap vs prepare).
     void refreshViz(PlayLayer* layer);
     EbNeuralVizSnapshot const& viz() const;

@@ -6,7 +6,9 @@
 #include "../../core/assist/flight/wave_pattern_recognizer.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
+#include "../../core/learning/neural_autoplay.hpp"
 #include "../../core/learning/neural_learning.hpp"
+#include "../../core/learning/neural_session.hpp"
 #include "../../core/platform/ui_capabilities.hpp"
 #include "../pause/pause_action_bridge.hpp"
 #include "desktop_menu_background.hpp"
@@ -378,7 +380,49 @@ public:
                 ImGui::Text("Tried / confirmed   %d / %d", neural.tried, neural.confirmed);
                 ImGui::Text("Local deaths   %d", neural.deaths);
                 ImGui::Text("Replay size   %d", neural.replay().size());
+                ImGui::Text("Session samples / attempts   %d / %d",
+                            EbNeuralSession::get().size(), EbNeuralSession::get().attemptCount());
             }
+        }
+        EbSectionCard::end();
+
+        if (EbSectionCard::begin("ai-train", "Autoplay + Session Train")) {
+            auto& neural = EbNeuralLearning::get();
+            auto& autoplay = EbNeuralAutoplay::get();
+            bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
+            bool autoplayOn = autoplay.enabled();
+            if (EbCheckbox::draw("ai-autoplay", "Autoplay (RL self-play)", &autoplayOn, aiOn,
+                                 "Synthesizes Jump presses through the normal AI assist path so "
+                                 "the scorer can RL-train without a human. Requires Assist Mode → "
+                                 "AI. Turn Auto-Tune on (Learn) to write weights online."))
+                autoplay.setEnabled(autoplayOn);
+            bool restart = autoplay.restartOnDeath();
+            if (EbCheckbox::draw("ai-autoplay-restart", "Restart on Death", &restart, aiOn,
+                                 "When Autoplay is on, reset the attempt shortly after death."))
+                autoplay.setRestartOnDeath(restart);
+            ImGui::Text("Autoplay presses / restarts   %d / %d", autoplay.presses(),
+                        autoplay.restarts());
+            ImGui::Separator();
+            ImGui::TextWrapped(
+                "Every attempt (you or Autoplay) stores scorer transitions. After a session, "
+                "Train Session batch-updates the level .neural weights from that buffer "
+                "(imitation + outcome RL).");
+            if (EbButton::draw("ai-train-session", "Train Session",
+                               aiOn && EbLevelProfile::get().loaded() &&
+                                   EbNeuralSession::get().size() > 0,
+                               "Run several passes of TD / rank / confidence updates from the "
+                               "session buffer, then save .neural.")) {
+                int const n = neural.trainSession(4);
+                ImGui::Text("Trained %d updates", n);
+            }
+            if (EbButton::draw("ai-clear-session", "Clear Session",
+                               EbNeuralSession::get().size() > 0 ||
+                                   EbNeuralSession::get().attemptCount() > 0,
+                               "Drop buffered session samples without touching weights."))
+                EbNeuralSession::get().clear();
+            if (EbNeuralSession::get().lastTrainUpdates() > 0)
+                ImGui::TextDisabled("Last train: %d updates",
+                                    EbNeuralSession::get().lastTrainUpdates());
         }
         EbSectionCard::end();
 

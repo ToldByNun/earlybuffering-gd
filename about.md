@@ -19,7 +19,7 @@ If you are reviewing this for the Geode Index (or as a player who cares how mods
 EarlyBuffer is a timing assist for Geometry Dash **2.2081**.
 You jump a little soon — the mod holds that press and lands it on the first physics tick a **shadow simulation** still considers safe.
 
-You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you. It only decides *when* a press you already made is allowed to land — inside the windows and modes you set.
+You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you — except the opt-in **AI Autoplay** training loop on the AI tab. It only decides *when* a press (yours or Autoplay’s) is allowed to land — inside the windows and modes you set.
 
 > **v1.8.0** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
 

@@ -12,8 +12,9 @@
 #include "../../diagnostics/decision_log.hpp"
 #include "../../diagnostics/divergence_tracker.hpp"
 #include "../../learning/hybrid_learning.hpp"
-#include "../../learning/neural_learning.hpp"
 #include "../../learning/level_profile.hpp"
+#include "../../learning/neural_autoplay.hpp"
+#include "../../learning/neural_learning.hpp"
 #include "../../sim/planning/simulation_plan.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -195,6 +196,7 @@ void EbAssistOutcomes::onRealDeath(EbAssistController& controller, PlayLayer* pl
         return;
     EbHybridLearning::get().death(player == playLayer->m_player1, controller.m_attemptTick);
     EbNeuralLearning::get().death(player == playLayer->m_player1, controller.m_attemptTick);
+    EbNeuralAutoplay::get().onDeath(playLayer);
     (void)object;
 
     EbLagProbe::Scope const deathScope("eb.onRealDeath");
