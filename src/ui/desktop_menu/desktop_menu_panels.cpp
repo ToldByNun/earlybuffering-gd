@@ -629,7 +629,7 @@ public:
                 (void)neural.saveAsBasePrior();
             if (EbButton::draw("ai-load-prior", "Load Base / Packaged Prior",
                                aiOn && EbLevelProfile::get().loaded(),
-                               "Load user base prior or packaged prior.ebnn."))
+                               "Load saveDir/ai prior.ebnn or model.bin (NVM2), else packaged prior."))
                 (void)neural.loadPrior();
             if (EbButton::draw("ai-reset-weights", "Reset AI Weights",
                                aiOn && EbLevelProfile::get().loaded(),

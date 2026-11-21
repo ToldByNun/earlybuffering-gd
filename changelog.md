@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.1-dev
+
+- AI prior: import Nova `NVM2` `model.bin` (float16 trunk `3512→128→64` + scalar conf) into `EbNeuralModel`; rank head stays freshly initialized. `Load Base / Packaged Prior` also checks `saveDir/ai/model.bin`. Offline convert: `tools/convert_nvm2_to_ebnn.py`.
+
 ## v1.8.0
 
 Release notes: [v1.8.0](releases/v1.8.0.md).

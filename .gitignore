@@ -257,3 +257,6 @@ tools/fixtures/real_corpus/derived/
 docs/design/independent-mic-clicks-engine.md
 docs/design/mic-clicks-gui-specification.md
 /releases
+/docs/nova-features
+docs/design/advanced-systems-architecture.md
+docs/design/advanced-systems-roadmap.md

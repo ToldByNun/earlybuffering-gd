@@ -17,7 +17,11 @@
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <vector>
 
 EbNeuralLearning& EbNeuralLearning::get() {
     static EbNeuralLearning instance;
@@ -80,7 +84,7 @@ void EbNeuralLearning::openSharedBase() {
         save();
     m_path = base;
     if (!m_loaded) {
-        m_hasPriorOrWeights = m_model.load(m_path);
+        m_hasPriorOrWeights = m_model.loadAny(m_path);
         if (!m_hasPriorOrWeights)
             m_hasPriorOrWeights = tryLoadPackagedPrior();
         if (!m_hasPriorOrWeights)
@@ -127,7 +131,7 @@ void EbNeuralLearning::settingsChanged() {
     EbNeuralAutoplay::get().syncFromConfig();
     if (m_path.empty() || m_loaded || !active())
         return;
-    m_hasPriorOrWeights = m_model.load(m_path);
+    m_hasPriorOrWeights = m_model.loadAny(m_path);
     if (!m_hasPriorOrWeights)
         m_hasPriorOrWeights = tryLoadPrior();
     if (!m_hasPriorOrWeights)
@@ -145,16 +149,25 @@ bool EbNeuralLearning::tryLoadPackagedPrior() {
     for (auto const& prior : candidates) {
         if (!std::filesystem::exists(prior))
             continue;
-        if (m_model.load(prior))
+        if (m_model.loadAny(prior))
             return true;
     }
     return false;
 }
 
 bool EbNeuralLearning::tryLoadPrior() {
-    auto const user = userPriorPath();
-    if (!user.empty() && std::filesystem::exists(user) && m_model.load(user))
-        return true;
+    auto* mod = geode::prelude::Mod::get();
+    if (mod) {
+        auto const aiDir = mod->getSaveDir() / "ai";
+        std::filesystem::path const userCandidates[] = {
+            aiDir / "prior.ebnn", aiDir / "model.bin", aiDir / "nova.nvm2"};
+        for (auto const& prior : userCandidates) {
+            if (!std::filesystem::exists(prior))
+                continue;
+            if (m_model.loadAny(prior))
+                return true;
+        }
+    }
     return tryLoadPackagedPrior();
 }
 
@@ -1058,6 +1071,47 @@ bool EbNeuralLearning::selfCheck(std::string& report) {
     model.learnConfidence(features, 1.0f, 0.05f);
     expect(model.confidence(features) == before, "frozen-blocks-learn");
     model.setFrozen(false);
+
+    // Synthetic NVM2 (zero trunk) round-trips through importNvm2.
+    {
+        auto const nvm2Path =
+            std::filesystem::temp_directory_path() / "eb-neural-nvm2-smoke.bin";
+        std::ofstream out(nvm2Path, std::ios::binary | std::ios::trunc);
+        std::uint32_t const magic = 0x324D564Eu;
+        std::uint16_t const version = 2;
+        std::uint16_t const feat = static_cast<std::uint16_t>(EbNeuralModel::kFeatureDim);
+        std::uint16_t const h1 = static_cast<std::uint16_t>(EbNeuralModel::kHidden1);
+        std::uint16_t const h2 = static_cast<std::uint16_t>(EbNeuralModel::kHidden2);
+        unsigned char const grid[2] = {static_cast<unsigned char>(EbNeuralModel::kGridCols),
+                                       static_cast<unsigned char>(EbNeuralModel::kGridRows)};
+        char const pad[6]{};
+        unsigned char const nameLen = 4;
+        char const name[4] = {'t', 'e', 's', 't'};
+        out.write(reinterpret_cast<char const*>(&magic), sizeof(magic));
+        out.write(reinterpret_cast<char const*>(&version), sizeof(version));
+        out.write(reinterpret_cast<char const*>(&feat), sizeof(feat));
+        out.write(reinterpret_cast<char const*>(&h1), sizeof(h1));
+        out.write(reinterpret_cast<char const*>(&h2), sizeof(h2));
+        out.write(reinterpret_cast<char const*>(grid), sizeof(grid));
+        out.write(pad, sizeof(pad));
+        out.write(reinterpret_cast<char const*>(&nameLen), 1);
+        out.write(name, sizeof(name));
+        int const trunkFloats = EbNeuralModel::kHidden1 * EbNeuralModel::kFeatureDim +
+                                EbNeuralModel::kHidden1 +
+                                EbNeuralModel::kHidden2 * EbNeuralModel::kHidden1 +
+                                EbNeuralModel::kHidden2 + EbNeuralModel::kHidden2 + 1;
+        std::vector<std::uint16_t> zeros(static_cast<size_t>(trunkFloats), 0);
+        out.write(reinterpret_cast<char const*>(zeros.data()),
+                  static_cast<std::streamsize>(zeros.size() * sizeof(std::uint16_t)));
+        out.close();
+        EbNeuralModel imported;
+        expect(imported.importNvm2(nvm2Path), "nvm2-import");
+        float const conf = imported.confidence(features);
+        expect(std::isfinite(conf) && conf > 0.45f && conf < 0.55f, "nvm2-zero-conf");
+        expect(imported.loadAny(nvm2Path), "nvm2-loadAny");
+        std::error_code removeError;
+        std::filesystem::remove(nvm2Path, removeError);
+    }
 
     if (fails == 0) {
         report = "NeuralLearning OK";

@@ -76,6 +76,10 @@ public:
 
     bool save(std::filesystem::path const& path);
     bool load(std::filesystem::path const& path);
+    // Nova NVM2 (float16 trunk + scalar conf). Rank head stays freshly initialized.
+    bool importNvm2(std::filesystem::path const& path);
+    // EBNN2 first, else NVM2 import (user-dropped model.bin / prior).
+    bool loadAny(std::filesystem::path const& path);
 
     static bool featuresFinite(float const* features);
     static int clampLimit(int limit);
