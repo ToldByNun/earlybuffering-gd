@@ -3,6 +3,7 @@
 
 #include "ai_config.hpp"
 #include "ai_route.hpp"
+#include "route_cand_semantics.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include <cstdint>
 #include <string>
@@ -23,6 +24,14 @@ public:
     EbAiRoute const& lastRoute() const {
         return m_last;
     }
+    // AP-NL3: last expand job / seed cands (Autoplay write; Live read-only diagnose).
+    EbRouteCandSemantics::ExpandJob const& lastExpandJob() const {
+        return m_lastExpandJob;
+    }
+    std::vector<EbRouteCandSemantics::Cand> const& lastSeedCands() const {
+        return m_lastSeedCands;
+    }
+    std::string diagnoseLastExpand() const;
     void invalidate(char const* why);
     bool needsReplan(int tick, float liveX) const;
 
@@ -80,6 +89,10 @@ private:
     };
 
     EbAiRoute m_last;
+    EbRouteCandSemantics::ExpandJob m_lastExpandJob;
+    std::vector<EbRouteCandSemantics::Cand> m_lastSeedCands;
+    std::uint32_t m_nextCandId = 1;
+    std::uint32_t m_nextJobId = 1;
     int m_lastPlanTick = -1;
     float m_lastPlanX = 0.f;
 

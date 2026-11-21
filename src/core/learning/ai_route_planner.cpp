@@ -20,7 +20,17 @@ void EbAiRoutePlanner::invalidate(char const* why) {
     ++invalidations;
     m_last.clear();
     m_last.reason = why ? why : "invalidated";
+    m_lastSeedCands.clear();
+    m_lastExpandJob = {};
     m_lastPlanTick = -1;
+}
+
+std::string EbAiRoutePlanner::diagnoseLastExpand() const {
+    if (m_lastExpandJob.id == 0 && m_lastSeedCands.empty())
+        return "expand: none";
+    std::string line = EbRouteCandSemantics::diagnoseJob(m_lastExpandJob);
+    line += fmt::format(" seeds={}", static_cast<int>(m_lastSeedCands.size()));
+    return line;
 }
 
 bool EbAiRoutePlanner::needsReplan(int tick, float liveX) const {
@@ -343,6 +353,14 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                   });
     }
 
+    // AP-NL3: materialize semantic seed cands for expand handoff / Live diagnose.
+    m_lastSeedCands.clear();
+    m_lastSeedCands.reserve(scored.size());
+    for (auto const& cand : scored) {
+        m_lastSeedCands.push_back(
+            EbRouteCandSemantics::makeSeed(m_nextCandId++, cand.delay, cand.neural, 4));
+    }
+
     int const startSlot = EbShadowSimulator::get().captureSnapshot(player);
     if (startSlot < 0 && cfg.simulationEnabled) {
         route.reason = "no-snapshot";
@@ -571,6 +589,42 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     if (route.budgetHit)
         route.reason = "budget";
 
+    // AP-NL3: record expand job lifecycle from the committed event sequence.
+    {
+        EbRouteCandSemantics::Cand seed =
+            m_lastSeedCands.empty()
+                ? EbRouteCandSemantics::makeSeed(m_nextCandId++, 0, 0.f, 4)
+                : m_lastSeedCands.front();
+        auto job = EbRouteCandSemantics::beginExpand(m_nextJobId++, seed, tick,
+                                                     cfg.planningHorizon);
+        job.events.clear();
+        job.budgetHit = route.budgetHit;
+        for (auto const& ev : route.events) {
+            EbRouteCandSemantics::Cand event;
+            event.id = m_nextCandId++;
+            event.kind = ev.kind;
+            event.delayTicks = ev.delay;
+            event.holdTicks = ev.holdTicks;
+            event.neuralScore = ev.neuralScore;
+            event.clearsThreat = ev.clearsThreat;
+            event.simOk = ev.verified;
+            event.budgetHit = route.budgetHit;
+            event.expandJobId = job.id;
+            event.state = ev.verified ? EbRouteCandSemantics::LifeState::PartiallyChecked
+                                     : EbRouteCandSemantics::LifeState::Rejected;
+            if (event.delayTicks > job.lastEventDelay)
+                job.lastEventDelay = event.delayTicks;
+            job.events.push_back(event);
+        }
+        job.state = EbRouteCandSemantics::LifeState::Expanding;
+        EbRouteCandSemantics::finalizeExpand(job);
+        m_lastExpandJob = job;
+        // Autoplay may still use prefix-valid routes; ShadowVerified is the arm gate (NL5b).
+        if (route.valid && !EbRouteCandSemantics::canArmJob(job) &&
+            job.state == EbRouteCandSemantics::LifeState::PartiallyChecked)
+            route.reason = route.budgetHit ? "budget" : "partial-verify";
+    }
+
     m_last = route;
     m_lastPlanTick = tick;
     m_lastPlanX = route.startX;
@@ -638,6 +692,9 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
     // Release is its own verified event — not copied from the press.
     expect(events[1].verified && events[1].kind == EbAiRouteEvent::Kind::Release,
            "release-own-flag");
+
+    std::string semanticsReport;
+    expect(EbRouteCandSemantics::selfCheck(semanticsReport), "route-cand-semantics");
 
     if (fails == 0) {
         report = "AiRoutePlanner OK";
