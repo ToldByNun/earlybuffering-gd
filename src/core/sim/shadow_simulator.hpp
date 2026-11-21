@@ -135,20 +135,18 @@ public:
     PlayerObject* shadow() const {
         return m_shadow;
     }
+    // Hot path helper — ghost-owned HardStreaks only (never the live stroke).
     bool isShadowTrail(HardStreak* trail) const {
         if (!trail)
             return false;
-        auto owns = [&](PlayerObject* player) {
-            return player && player->m_waveTrail == trail;
-        };
-        if (owns(m_shadow) || owns(m_evalActive))
+        if (m_shadow && m_shadow->m_waveTrail == trail)
             return true;
-        for (auto* ghost : m_evalGhosts) {
-            if (owns(ghost))
+        for (auto* slot : m_snapshots) {
+            if (slot && slot->m_waveTrail == trail)
                 return true;
         }
-        for (auto* slot : m_snapshots) {
-            if (owns(slot))
+        for (auto* entry : m_evalGhosts) {
+            if (entry && entry->m_waveTrail == trail)
                 return true;
         }
         return false;
@@ -640,6 +638,9 @@ private:
     // Layer that owns the ghost children. resetLevel runs during PlayLayer::init
     // (setupHasCompleted) before onLevelInit/attach — evacuate must no-op then.
     GJBaseGameLayer* m_hostLayer = nullptr;
+    // Hidden parent under PlayLayer (NOT objectLayer). Keeps ghosts out of MH
+    // hitbox-trail scans of gameplay objects while sims still set world positions.
+    cocos2d::CCNode* m_ghostRoot = nullptr;
     int m_nextSnapshot = 0;
     bool m_simulating = false;
     bool m_bakeOffline = false;

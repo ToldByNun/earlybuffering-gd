@@ -2,12 +2,16 @@
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 #include "../world/shadow_world_capture.hpp"
+#include "live_wave_trail_guard.hpp"
 
 void EbShadowGhostLifecycle::clearWaveTrailGeometry(PlayerObject* player) {
     if (!player)
         return;
     auto* trail = player->m_waveTrail;
     if (!trail)
+        return;
+    // Never touch the real player's HardStreak — assist seeds must not wipe it.
+    if (EbLiveWaveTrailGuard::refuseMutation(trail))
         return;
     // Owning ghost must still be in the scene graph. After layer teardown /
     // partial destroy, m_waveTrail can be a dangling HardStreak — HardStreak::reset
@@ -22,6 +26,8 @@ void EbShadowGhostLifecycle::clearWaveTrailGeometry(PlayerObject* player) {
         trail->m_pointArray->removeAllObjects();
     }
     trail->m_drawStreak = false;
+    trail->setVisible(false);
+    trail->setOpacity(0);
 }
 
 void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* layer) {
@@ -33,6 +39,17 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
 
     simulator.detach();
 
+    // Parent ghosts under a hidden PlayLayer node — never objectLayer. MH hitbox
+    // trail walks gameplay objects there; ghosts at sim poses painted the red
+    // zigzag that did not match the live white HardStreak.
+    auto* ghostRoot = cocos2d::CCNode::create();
+    if (!ghostRoot)
+        return;
+    ghostRoot->setID("earlybuffer-ghost-root"_spr);
+    ghostRoot->setVisible(false);
+    layer->addChild(ghostRoot);
+    simulator.m_ghostRoot = ghostRoot;
+
     auto makeHidden = [&](char const* id) -> PlayerObject* {
         auto* player = PlayerObject::create(1, 1, layer, layer, true);
         if (!player)
@@ -43,10 +60,10 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
         // PlayerObjects — they are sim ghosts, not the real icon.
         player->setUserObject("audesign.earlybuffer/sim-ghost"_spr,
                               cocos2d::CCBool::create(true));
-        // objectLayer owns the node (addChild retain). Do NOT extra-retain —
+        // ghostRoot owns the node (addChild retain). Do NOT extra-retain —
         // release-on-quit while still parented / double-free in ~PlayerObject
         // during setNextScene was the quit AV (CCObject::release).
-        layer->m_objectLayer->addChild(player);
+        ghostRoot->addChild(player);
         simulator.hideGhost(player);
         return player;
     };
@@ -151,6 +168,12 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
         kill(e);
     simulator.m_evalActive = nullptr;
     simulator.m_evalAbort = false;
+    if (simulator.m_ghostRoot) {
+        if (!abandonGhosts && simulator.m_ghostRoot->getParent())
+            simulator.m_ghostRoot->removeFromParentAndCleanup(true);
+        simulator.m_ghostRoot = nullptr;
+    }
+    EbLiveWaveTrailGuard::clear();
 }
 
 bool EbShadowGhostLifecycle::isOwnedGhost(EbShadowSimulator const& simulator, PlayerObject* player) {
@@ -202,10 +225,11 @@ void EbShadowGhostLifecycle::parkGhosts(EbShadowSimulator& simulator) {
     for (auto* effectObject : simulator.m_evalGhosts) {
         parkOffLevel(effectObject);
     }
-    // Snapshots must keep captured pose for bake / outcome verify / traj
-    // samplePath — scrub+hide only so they leave section vectors.
+    // Snapshots keep captured pose for bake / traj, but their HardStreak point
+    // arrays must not remain drawable in objectLayer (wave-only visual junk).
     for (auto* slot : simulator.m_snapshots) {
         scrub(slot);
+        EbShadowGhostLifecycle::clearWaveTrailGeometry(slot);
     }
 }
 
@@ -277,8 +301,9 @@ void EbShadowGhostLifecycle::hideGhost(PlayerObject* player) {
     player->setVisible(false);
     player->setOpacity(0);
     player->m_playEffects = false;
-    // Only mute a live trail — dangling HardStreak after teardown AVs here too.
-    if (player->m_waveTrail && player->getParent() && player->m_waveTrail->getParent()) {
+    // Only mute the ghost's own trail — never the protected live HardStreak.
+    if (player->m_waveTrail && player->getParent() && player->m_waveTrail->getParent() &&
+        !EbLiveWaveTrailGuard::refuseMutation(player->m_waveTrail)) {
         player->m_waveTrail->m_drawStreak = false;
         player->m_waveTrail->setVisible(false);
         player->m_waveTrail->setOpacity(0);

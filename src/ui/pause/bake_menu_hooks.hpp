@@ -22,11 +22,11 @@ public:
 
     // Remove Import/Export Cfg / Cycle Preset / … leftovers from older installs.
     static void stripLegacySideButtons(PauseLayer* self);
+    static void stripLegacyLabelsFromMenu(geode::prelude::CCMenu* menu);
 
 private:
     static std::string menuItemLabel(geode::prelude::CCNode* node);
     static bool isLegacySideButtonLabel(std::string const& label);
-    static void stripLegacyLabelsFromMenu(geode::prelude::CCMenu* menu);
 };
 
 class $modify(EbPauseLayer, PauseLayer) {

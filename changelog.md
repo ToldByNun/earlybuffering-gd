@@ -35,6 +35,12 @@
 - Wave pattern corridor: while surfing a slope, heading / duty follow `m_slopeAngle` (wider leave hysteresis) instead of duty-only drift.
 - AI planner lag: depth-1 uses light `verifyDelay`, hard wall = min(searchTimeout, cpuBudget, maxAiCpu), tighter Balanced defaults, remaining-µs caps on beam replays.
 - Wave trail: keep ghost streak pointers across `copyAttributes` (no live HardStreak alias), never draw ghost strokes (`drawStreak` off + `updateStroke` skip) so sim no longer shreds the real trail into thick teleport bars.
+- Wave trail (release): ghost seed no longer calls `releaseButton` (flags only); ghost `releaseButton`/`createFadeOutDartStreak`/`activateStreak` are effect-muted — fixes the release-only downward streak paint.
+- Pause: strip legacy Import/Export/Cycle side buttons by fuzzy label + id, recursively, and on every pause poll (not only `customSetup`).
+- Wave trail (root cause): owned-ghost HardStreaks (shadow + snapshots + eval) live in `objectLayer` and were stroking beside the live wave — `isShadowTrail` now covers all of them, `updateStroke`/`addPoint` no-op for those trails, ghost update remutes immediately, snapshot geometry cleared on park. Live trail always grows.
+- Wave trail: `PlayerObject::releaseButton` hook returned `void` instead of `bool` (ABI break on every wave flip); never null streak pointers before `copyAttributes` (AV); never `CCDrawNode::clear` / destroy streaks after `switchedToMode` (quit `~PlayerObject` AV); ghosts parent under hidden PlayLayer root outside `objectLayer`.
+- Wave trail isolation: `EbLiveWaveTrailGuard` pins the real P1/P2 HardStreak; ghost clear/mute/reset/stopStroke refuse it; `addPoint` is never gated; ghost `releaseButton` is flags-only; `copyAttributes` seeds keep exclusive private ghost trails and restore the live pointer — live stroke stays consistent under assist.
+- Wave trail/lag hot path: drop `HardStreak::updateStroke` hook; `isShadowTrail` is O(1); stop replaying full trail point arrays on every seed; skip `switchedToMode` when the ghost is already in the live vehicle.
 
 ## v1.7.1
 

@@ -1,14 +1,62 @@
 #include "player_hooks.hpp"
 #include "../core/assist/assist_controller.hpp"
+#include "../core/sim/runtime/live_wave_trail_guard.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "game_hook_simulation_guard.hpp"
 
+void EbGhostStreakVisuals::mute(PlayerObject* player) {
+    if (!player)
+        return;
+    player->m_playEffects = false;
+    if (player->m_waveTrail && !EbLiveWaveTrailGuard::refuseMutation(player->m_waveTrail)) {
+        player->m_waveTrail->m_drawStreak = false;
+        player->m_waveTrail->setVisible(false);
+        player->m_waveTrail->setOpacity(0);
+    }
+}
+
 auto EbPlayerObject::pushButton(PlayerButton button) -> bool {
+    if (EbShadowSimulator::get().isOwnedGhost(this)) {
+        EbGhostStreakVisuals::mute(this);
+        bool const ok = PlayerObject::pushButton(button);
+        EbGhostStreakVisuals::mute(this);
+        return ok;
+    }
     if (!EbGameHookSimulationGuard::simulating() &&
         !EbAssistController::get().allowPushButton(this, button)) {
         return false;
     }
     return PlayerObject::pushButton(button);
+}
+
+auto EbPlayerObject::releaseButton(PlayerButton button) -> bool {
+    if (EbShadowSimulator::get().isOwnedGhost(this)) {
+        // Flags only — never call vanilla releaseButton on ghosts. Wave release
+        // spawns fade-out HardStreaks into the layer; if the ghost was aliased
+        // that path can touch the live stroke.
+        this->m_holdingButtons[static_cast<int>(button)] = false;
+        EbGhostStreakVisuals::mute(this);
+        return true;
+    }
+    return PlayerObject::releaseButton(button);
+}
+
+auto EbPlayerObject::createFadeOutDartStreak() -> void {
+    if (EbShadowSimulator::get().isOwnedGhost(this))
+        return;
+    PlayerObject::createFadeOutDartStreak();
+}
+
+auto EbPlayerObject::fadeOutStreak2(float duration) -> void {
+    if (EbShadowSimulator::get().isOwnedGhost(this))
+        return;
+    PlayerObject::fadeOutStreak2(duration);
+}
+
+auto EbPlayerObject::activateStreak() -> void {
+    if (EbShadowSimulator::get().isOwnedGhost(this))
+        return;
+    PlayerObject::activateStreak();
 }
 
 auto EbPlayerObject::update(float deltaTime) -> void {
@@ -17,23 +65,29 @@ auto EbPlayerObject::update(float deltaTime) -> void {
         if (!EbGameHookSimulationGuard::simulating())
             return;
         PlayerObject::update(deltaTime);
+        // Vanilla dart update re-enables m_drawStreak / trail visibility — remute.
+        EbGhostStreakVisuals::mute(this);
         return;
     }
-    if (!EbGameHookSimulationGuard::simulating()) {
-        if (auto* playLayer = PlayLayer::get(); playLayer && this == playLayer->m_player1) {
-            auto& ac = EbAssistController::get();
-            ac.onPhysicsTick(playLayer, deltaTime);
-            // begin/endRealUpdate brackets mid-step / CBF clicks for effectTick.
-            ac.beginRealUpdate();
-            PlayerObject::update(deltaTime);
-            ac.endRealUpdate();
-            ac.measureFlight(this, deltaTime);
-            return;
-        }
+    // Pin the live HardStreak before assist sims so every ghost path can refuse it.
+    EbLiveWaveTrailGuard::protectPlayer(this);
+    // Nested ghost sessions must not re-enter live physics.
+    if (EbGameHookSimulationGuard::simulating())
+        return;
+    if (auto* playLayer = PlayLayer::get(); playLayer && this == playLayer->m_player1) {
+        auto& ac = EbAssistController::get();
+        ac.onPhysicsTick(playLayer, deltaTime);
+        // Re-pin after sims — copyAttributes must not leave us unregistered.
+        EbLiveWaveTrailGuard::protectPlayer(this);
+        // begin/endRealUpdate brackets mid-step / CBF clicks for effectTick.
+        ac.beginRealUpdate();
+        PlayerObject::update(deltaTime);
+        ac.endRealUpdate();
+        ac.measureFlight(this, deltaTime);
+        return;
     }
     PlayerObject::update(deltaTime);
-    if (!EbGameHookSimulationGuard::simulating())
-        EbAssistController::get().measureFlight(this, deltaTime);
+    EbAssistController::get().measureFlight(this, deltaTime);
 }
 
 auto EbPlayerObject::incrementJumps() -> void {
@@ -144,31 +198,31 @@ auto EbPlayerObjectLate::update(float deltaTime) -> void {
         PlayerObject::update(deltaTime);
         return;
     }
-    if (!EbGameHookSimulationGuard::simulating()) {
-        auto& controller = EbAssistController::get();
-        float const prefix = controller.bufferedSubstepPrefix(this, deltaTime);
-        if (prefix >= 0.f) {
-            auto* layer = PlayLayer::get();
-            auto const tickStart = this->getPosition();
-            if (prefix > 0.f) {
-                controller.onSubStep(this, prefix);
-                PlayerObject::update(prefix);
-                if (layer && !this->m_isDead)
-                    layer->checkCollisions(this, this->m_isOnSlope ? deltaTime : 0.f, true);
-                EbShadowSimulator::clearCollisionLogs(this);
-            }
-            if (this->m_isDead || (layer && layer->m_playerDied))
-                return;
-            controller.fireBufferedSubstep(this);
-            float const remainder = deltaTime - prefix;
-            if (remainder > 0.f) {
-                controller.onSubStep(this, remainder);
-                PlayerObject::update(remainder);
-            }
-            this->m_lastPosition = tickStart;
-            return;
+    if (EbGameHookSimulationGuard::simulating())
+        return;
+    auto& controller = EbAssistController::get();
+    float const prefix = controller.bufferedSubstepPrefix(this, deltaTime);
+    if (prefix >= 0.f) {
+        auto* layer = PlayLayer::get();
+        auto const tickStart = this->getPosition();
+        if (prefix > 0.f) {
+            controller.onSubStep(this, prefix);
+            PlayerObject::update(prefix);
+            if (layer && !this->m_isDead)
+                layer->checkCollisions(this, this->m_isOnSlope ? deltaTime : 0.f, true);
+            EbShadowSimulator::clearCollisionLogs(this);
         }
-        controller.onSubStep(this, deltaTime);
+        if (this->m_isDead || (layer && layer->m_playerDied))
+            return;
+        controller.fireBufferedSubstep(this);
+        float const remainder = deltaTime - prefix;
+        if (remainder > 0.f) {
+            controller.onSubStep(this, remainder);
+            PlayerObject::update(remainder);
+        }
+        this->m_lastPosition = tickStart;
+        return;
     }
+    controller.onSubStep(this, deltaTime);
     PlayerObject::update(deltaTime);
 }
