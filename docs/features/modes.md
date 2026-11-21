@@ -20,7 +20,7 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **Reset This Level** clears Hybrid tables (`.hybrid`) and AI weights (`.neural`) together. Auto-Tune trains AI; with Auto-Tune off, AI still infers if prior/level weights exist (Frozen).
 
-**AI-first path:** score → top-k → `verifyDelay` on the set → arm a verified **delay>0** when any exists, else d=0 Pass, else Live fallthrough. Never arms from raw score. Live fallthrough Delays distill into the scorer (IL teacher). Skips when Flight-owned, dual, or remUs is too low. Hybrid-first stays Hybrid-only (no double verify stack). Quality = packaged prior + Shadow verify + on-play fine-tune — not offline AGI.
+**AI-first path:** confidence-ranked top-k → `verifyDelay` → arm a verified **delay>0** when any exists, else d=0 Pass, else Live fallthrough. Never arms from raw score. Failed verifies demote both confidence and rank. Live fallthrough Delays are weak teacher labels (not survived truth). Survived observation is the strongest evidence; identical-next buffer samples stay supervised-only (no fake TD). Autoplay schedules the verified delay instead of pressing immediately. Skips when Flight-owned, dual, or remUs is too low. Hybrid-first stays Hybrid-only (no double verify stack).
 
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 

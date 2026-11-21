@@ -6,6 +6,7 @@
 #include "neural_replay.hpp"
 #include "neural_viz_snapshot.hpp"
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -162,6 +163,16 @@ private:
     static float progressNorm(float startX, float endX);
     static float successReward(int plannedDelay, float progress);
     static float deathReward(float progress);
+    // Evidence tiers for IL/RL labels (weight teacher ≪ verify ≪ survived).
+    enum class Evidence : std::uint8_t {
+        TeacherSuggested = 0,
+        SimulationVerified = 1,
+        SurvivedObserved = 2,
+        Death = 3
+    };
+    static float evidenceLearnScale(Evidence evidence);
+    static float evidenceRewardScale(Evidence evidence);
+    static float evidenceConfidenceTarget(Evidence evidence, int plannedDelay, float progress);
     static std::uint8_t channelBitsForObject(GameObject* object);
 };
 

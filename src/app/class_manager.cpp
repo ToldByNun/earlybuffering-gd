@@ -6,6 +6,8 @@
 
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_controller.hpp"
+#include "../core/learning/ai_config.hpp"
+#include "../core/learning/neural_autoplay.hpp"
 #include "../core/assist/contracts/assist_contracts140.hpp"
 #include "../core/bake/bake_map.hpp"
 #include "../core/platform/save_drop_paths.hpp"
@@ -69,6 +71,8 @@ void EbClassManager::initialize() {
 
     EbAssistLog::info(fmt::format("Class registry: {} classes / {} managed services",
                                   EbClassRegistry::all().size(), EbClassRegistry::serviceCount()));
+    service<EbAiConfig>().load();
+    EbNeuralAutoplay::get().syncFromConfig();
     runStartupChecks();
     EbModuleBindings::registerSettings();
     // APR2 runner owns EB_REAL_ASSIST_AUTO (waits for MenuLayer; includes import stamp).
@@ -87,6 +91,8 @@ void EbClassManager::refreshSettings() {
         return;
     EbStageConfig::refreshCache();
     EbDevConfig::refreshCache();
+    service<EbAiConfig>().load();
+    EbNeuralAutoplay::get().syncFromConfig();
     this->syncDiagnostics();
     EbAssistController::get().updateOverlay();
 }

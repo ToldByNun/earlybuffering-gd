@@ -8,9 +8,11 @@ class EbPauseMenuAttach;
 #include "../../debug/assist_log.hpp"
 #include "pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
+#include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/modify/PauseLayer.hpp>
 #include <Geode/ui/BasedButtonSprite.hpp>
 #include <Geode/utils/cocos.hpp>
+#include <string>
 
 class EbPauseMenuAttach {
 public:
@@ -18,7 +20,13 @@ public:
 
     static geode::prelude::CCMenu* rightButtonMenu(PauseLayer* self);
 
+    // Remove Import/Export Cfg / Cycle Preset / … leftovers from older installs.
+    static void stripLegacySideButtons(PauseLayer* self);
+
 private:
+    static std::string menuItemLabel(geode::prelude::CCNode* node);
+    static bool isLegacySideButtonLabel(std::string const& label);
+    static void stripLegacyLabelsFromMenu(geode::prelude::CCMenu* menu);
 };
 
 class $modify(EbPauseLayer, PauseLayer) {

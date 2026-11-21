@@ -39,8 +39,13 @@ public:
     bool frozen() const;
     bool dirty() const;
 
-    // Write candidate delay into the continuous feature slot (mutates features in place).
+    // EB-linear layout: continuous[15] = delay / kMaxDelay (legacy prior-compatible).
     static void writeCandidateDelay(float* features, int delay);
+    // Nova-confirmed pack: continuous[15..17] action one-hot (0 idle / 1 press / 2 release),
+    // continuous[18] = log1p(delay)*0.25. Clears [15..18] then writes.
+    static void writeNovaCandidate(float* features, int delay, int actionKind /*0..2*/);
+    // Dispatches LinearMax → writeCandidateDelay, Log1p → writeNovaCandidate(press?1:2).
+    static void writeCandidateForPolicy(float* features, int delay, bool press, bool novaLog1p);
 
     // Online 49-way rank head → outScores[49]. Delays d > limit get kMaskedScore.
     void score(float const* features, int limit, float* outScores) const;
@@ -49,13 +54,18 @@ public:
     // Descending score order among delays in [0, limit] via 49-way head.
     std::vector<int> rankedDelays(float const* features, int limit, int topK = kActionCount) const;
     // Rank by per-candidate sigmoid (copies features, writes delay slot each time).
+    // novaLog1p: use Nova action-onehot + log1p(delay) slots instead of linear[15].
     std::vector<int> rankedDelaysByConfidence(float const* features, int limit,
-                                              int topK = kActionCount) const;
+                                              int topK = kActionCount,
+                                              bool novaLog1p = false) const;
 
     void learnTd(float const* features, int action, float reward, float const* nextFeatures,
                  bool done, int nextLimit, float learningRate = 0.01f,
                  float gamma = kDefaultGamma);
     void learnRank(float const* features, int positiveDelay, int limit, float learningRate = 0.01f);
+    // Push a failed/rejected delay down the 49-way head (pairs with learnConfidence=0).
+    void learnRankReject(float const* features, int rejectDelay, int limit,
+                         float learningRate = 0.01f);
     // Supervised BCE on sigmoid confidence head; target01 in [0,1].
     void learnConfidence(float const* features, float target01, float learningRate = 0.01f);
 

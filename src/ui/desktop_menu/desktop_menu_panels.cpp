@@ -6,6 +6,8 @@
 #include "../../core/assist/flight/wave_pattern_recognizer.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
 #include "../../core/learning/level_profile.hpp"
+#include "../../core/learning/ai_config.hpp"
+#include "../../core/learning/ai_route_planner.hpp"
 #include "../../core/learning/neural_autoplay.hpp"
 #include "../../core/learning/neural_learning.hpp"
 #include "../../core/learning/neural_session.hpp"
@@ -325,37 +327,52 @@ public:
     }
 
     static void drawAi() {
+        auto& cfg = EbAiConfig::get();
+        auto& neural = EbNeuralLearning::get();
+        auto& autoplay = EbNeuralAutoplay::get();
+        auto& planner = EbAiRoutePlanner::get();
+        bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
+
+        auto dirty = [&]() {
+            cfg.markCustom();
+            cfg.save();
+        };
+        auto applyPreset = [&](EbAiConfig::Preset p) {
+            cfg.applyPreset(p);
+            cfg.save();
+            neural.preferAiFirst = cfg.preferAiFirst;
+            neural.topK = std::clamp(cfg.maxCandidates, 1, 8);
+            neural.learningRate = cfg.learningRate;
+            autoplay.syncFromConfig();
+            autoplay.syncTimeWarp(PlayLayer::get());
+        };
+
+        // —— Status (Learn-style compact header) ——
         if (EbSectionCard::begin("ai-status", "Candidate Scorer")) {
-            auto& neural = EbNeuralLearning::get();
-            if (EbStageConfig::assistMode() != AssistMode::AI)
-                ImGui::TextWrapped("Choose Assist Mode → AI on Main to score delays with the "
-                                   "neural candidate scorer. Shadow physics still decides what "
-                                   "may arm.");
+            if (!aiOn)
+                ImGui::TextWrapped("Choose Assist Mode → AI on Main to use the neural scorer.");
             else if (!EbLevelProfile::get().loaded())
                 ImGui::TextWrapped("Open a level to load or train per-level .neural weights.");
             else {
                 bool frozen = neural.frozen();
                 if (EbCheckbox::draw("freeze-ai", "Keep current weights", &frozen, true,
-                                     "Infer with the loaded prior / level weights without "
-                                     "updating them. Applies until you leave this level."))
+                                     "Infer without updating weights until you leave this level.")) {
                     neural.freeze(frozen);
+                    cfg.freezeWeights = frozen;
+                    dirty();
+                }
                 if (!neural.hasUsableWeights())
                     ImGui::TextWrapped(
-                        "No usable weights yet. Play with Auto-Tune on to train, or load the "
-                        "packaged prior below.");
+                        "No usable weights yet. Play with Auto-Tune on, or load a prior below.");
                 else if (frozen)
                     ImGui::TextWrapped(
-                        "Weights are fixed for this visit. AI still ranks delays and verifies "
-                        "them before arming.");
+                        "Weights are fixed for this visit. AI still ranks and verifies before arming.");
                 else if (!EbStageConfig::autoTuneEnabled())
                     ImGui::TextWrapped(
-                        "Auto-Tune is off: AI infers from loaded weights but does not train. "
-                        "Turn Auto-Tune on (Learn tab) to update weights while you play.");
+                        "Auto-Tune is off: AI infers but does not train. Enable it on Learn.");
                 else
                     ImGui::TextWrapped(
-                        "Training on verified outcomes. AI ranks top-k delays (Hybrid mature "
-                        "timings first when this level has .hybrid tables), verifies each with "
-                        "Live physics, then arms the first safe delay — never from raw score.");
+                        "Training on verified outcomes. Routes are scored, gated, then Shadow-verified.");
                 ImGui::Separator();
                 if (ImGui::BeginTable("ai-stats", 2, ImGuiTableFlags_SizingStretchSame)) {
                     ImGui::TableNextColumn();
@@ -374,74 +391,201 @@ public:
                     neural.verifies ? float(neural.verifyHits) / float(neural.verifies) : 0.f;
                 ImGui::ProgressBar(hitRate, ImVec2(-1.f, 5.f), "");
                 ImGui::Separator();
-                ImGui::Text("Inferences this visit   %d", neural.inferences);
-                ImGui::Text("Edges seen   %d", neural.edges);
-                ImGui::Text("Weight updates   %d", neural.updates);
-                ImGui::Text("Tried / confirmed   %d / %d", neural.tried, neural.confirmed);
-                ImGui::Text("Local deaths   %d", neural.deaths);
-                ImGui::Text("Replay size   %d", neural.replay().size());
-                ImGui::Text("Session samples / attempts   %d / %d",
-                            EbNeuralSession::get().size(), EbNeuralSession::get().attemptCount());
+                ImGui::Text("Inferences / updates   %d / %d", neural.inferences, neural.updates);
+                ImGui::Text("Route plans / invalid   %d / %d", planner.plans, planner.invalidations);
+                ImGui::Text("Route verify   %d / %d", planner.verifyHits, planner.verifyTries);
+                ImGui::Text("Session samples / attempts   %d / %d", EbNeuralSession::get().size(),
+                            EbNeuralSession::get().attemptCount());
             }
         }
         EbSectionCard::end();
 
-        if (EbSectionCard::begin("ai-train", "Autoplay + Session Train")) {
-            auto& neural = EbNeuralLearning::get();
-            auto& autoplay = EbNeuralAutoplay::get();
-            bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
+        // —— Preset + policy ——
+        if (EbSectionCard::begin("ai-general", "General")) {
+            {
+                char const* presets[] = {"Nova Reference", "Balanced", "Performance", "Accuracy",
+                                         "Experimental", "Custom"};
+                int presetIdx = static_cast<int>(cfg.preset);
+                if (presetIdx < 0 || presetIdx > 5)
+                    presetIdx = 5;
+                if (EbDropdown::draw("ai-preset", "Preset", presets, 6, &presetIdx, nullptr, true,
+                                     "Applies a full profile. Custom appears after you tweak knobs.")) {
+                    if (presetIdx <= 4)
+                        applyPreset(static_cast<EbAiConfig::Preset>(presetIdx));
+                }
+            }
+            {
+                char const* backends[] = {"Candidate Sigmoid", "Dual-Head (Experimental)"};
+                int backend = static_cast<int>(cfg.backend);
+                if (EbComboBox::draw("ai-backend", "Backend", backends, 2, &backend,
+                                     cfg.experimentalBackends || backend == 0,
+                                     "Nova-style single sigmoid, or experimental 49-way + confidence.")) {
+                    cfg.backend = static_cast<EbAiConfig::Backend>(backend);
+                    dirty();
+                }
+            }
+            {
+                char const* policies[] = {"Neural → Sim", "Sim First", "Hybrid Teacher",
+                                          "Neural Only (unsafe)"};
+                int policy = static_cast<int>(cfg.policy);
+                if (EbComboBox::draw("ai-policy", "Policy", policies, 4, &policy,
+                                     cfg.experimentalBackends || policy != 3,
+                                     "How candidates are proposed vs Shadow-verified.")) {
+                    cfg.policy = static_cast<EbAiConfig::Policy>(policy);
+                    dirty();
+                }
+            }
+            if (EbCheckbox::draw("ai-cfg-prefer", "Verify AI First", &cfg.preferAiFirst, aiOn,
+                                 "Check neural candidates before ordinary Live search.")) {
+                neural.preferAiFirst = cfg.preferAiFirst;
+                dirty();
+            }
+        }
+        EbSectionCard::end();
+
+        // —— Scorer / candidates / gate ——
+        if (EbSectionCard::begin("ai-scorer", "Scorer")) {
+            {
+                char const* encs[] = {"Linear / maxDelay", "log1p (Nova)"};
+                int enc = static_cast<int>(cfg.delayEncoding);
+                if (EbComboBox::draw("ai-delay-enc", "Delay Encoding", encs, 2, &enc, true,
+                                     "Linear keeps existing priors. log1p matches Nova packing.")) {
+                    cfg.delayEncoding = static_cast<EbAiConfig::DelayEncoding>(enc);
+                    dirty();
+                }
+            }
+            if (EbSlider::drawInt("ai-cand-max", "Top-K / Max Candidates", &cfg.maxCandidates, 1, 32,
+                                  "", true, "How many delays to score and verify.")) {
+                neural.topK = std::clamp(cfg.maxCandidates, 1, 8);
+                dirty();
+            }
+            if (EbCheckbox::draw("ai-adapt-samp", "Adaptive Delay Table", &cfg.adaptiveSampling, true,
+                                 "Nova-style scaled delay table instead of a fixed step."))
+                dirty();
+            if (!cfg.adaptiveSampling &&
+                EbSlider::drawInt("ai-cand-step", "Sample Step", &cfg.sampleStep, 1, 8, "", true,
+                                  "Fixed stride when adaptive sampling is off."))
+                dirty();
+            ImGui::Separator();
+            if (EbCheckbox::draw("ai-gate-on", "Confidence Gating", &cfg.gatingEnabled, true,
+                                 "Drop low-confidence candidates before Shadow verify."))
+                dirty();
+            if (EbSlider::drawFloat("ai-gate-thr", "Confidence Threshold", &cfg.confidenceThreshold,
+                                    0.05f, 0.95f, 2, "", cfg.gatingEnabled,
+                                    "Nova reference default is 0.60."))
+                dirty();
+            if (EbCheckbox::draw("ai-gate-adapt", "Adaptive Threshold", &cfg.adaptiveThreshold,
+                                 cfg.gatingEnabled,
+                                 "Raise the floor to a percentile of scored candidates."))
+                dirty();
+            if (EbSlider::drawFloat("ai-gate-orb", "Orb Hint Confidence", &cfg.orbHintConfidence,
+                                    0.05f, 0.9f, 2, "", true,
+                                    "Soft escape near orbs/pads when the hard gate finds nothing."))
+                dirty();
+            if (EbSlider::drawFloat("ai-lr", "Learning Rate", &cfg.learningRate, 0.001f, 0.05f, 3, "",
+                                    aiOn, "On-play weight step when Auto-Tune is on.")) {
+                neural.learningRate = cfg.learningRate;
+                dirty();
+            }
+        }
+        EbSectionCard::end();
+
+        // —— Route + Shadow ——
+        if (EbSectionCard::begin("ai-route", "Route + Shadow")) {
+            {
+                char const* algos[] = {"Greedy Beam", "Depth First"};
+                int algo = static_cast<int>(cfg.searchAlgo);
+                if (EbComboBox::draw("ai-search-algo", "Search", algos, 2, &algo, true,
+                                     "How multi-event routes are expanded.")) {
+                    cfg.searchAlgo = static_cast<EbAiConfig::SearchAlgo>(algo);
+                    dirty();
+                }
+            }
+            if (EbSlider::drawInt("ai-route-depth", "Max Route Depth", &cfg.maxRouteDepth, 1, 8, "",
+                                  true, "Press/release events per plan."))
+                dirty();
+            if (EbSlider::drawInt("ai-route-beam", "Beam Width", &cfg.beamWidth, 1, 8, "", true,
+                                  "Verified first-events kept in the beam."))
+                dirty();
+            if (EbSlider::drawInt("ai-route-commit", "Committed Events", &cfg.maxCommittedEvents, 1,
+                                  8, "", true, "Future inputs Autoplay may arm."))
+                dirty();
+            if (EbSlider::drawInt("ai-route-horizon", "Planning Horizon", &cfg.planningHorizon, 16,
+                                  480, " t", true, "Future tick window."))
+                dirty();
+            if (EbCheckbox::draw("ai-route-release", "Generate Releases", &cfg.generateRelease, true,
+                                 "Plan hold/release as event 2 when the mode supports holds."))
+                dirty();
+            ImGui::Separator();
+            if (EbCheckbox::draw("ai-sim-on", "Shadow Verify", &cfg.simulationEnabled, true,
+                                 "Off only for unsafe neural-only experiments."))
+                dirty();
+            if (EbSlider::drawInt("ai-sim-us", "Verify Budget", &cfg.simBudgetUs, 200, 8000, " µs",
+                                  cfg.simulationEnabled, "Per-candidate verifyDelay budget."))
+                dirty();
+            if (EbSlider::drawInt("ai-sim-calls", "Max Sim Calls", &cfg.maxSimCalls, 1, 64, "",
+                                  cfg.simulationEnabled, "Hard cap per plan()."))
+                dirty();
+            if (EbSlider::drawInt("ai-route-budget", "Search Timeout", &cfg.searchTimeoutUs, 400,
+                                  12000, " µs", true, "Wall budget for one plan() call."))
+                dirty();
+            if (EbCheckbox::draw("ai-sim-unknown", "Reject Unknown", &cfg.rejectUnknown,
+                                 cfg.simulationEnabled,
+                                 "Drop candidates when Shadow returns unknown."))
+                dirty();
+        }
+        EbSectionCard::end();
+
+        // —— Autoplay ——
+        if (EbSectionCard::begin("ai-autoplay", "Autoplay + Session")) {
             bool autoplayOn = autoplay.enabled();
-            if (EbCheckbox::draw("ai-autoplay", "Autoplay (RL self-play)", &autoplayOn, aiOn,
-                                 "Scorer + verifyDelay gated Jump presses through the normal AI "
-                                 "assist path (not CPS spam). Requires Assist Mode → AI. Turn "
-                                 "Auto-Tune on (Learn) so deaths write weights.")) {
+            if (EbCheckbox::draw("ai-autoplay", "Autoplay", &autoplayOn, aiOn,
+                                 "Multi-event route planner + Shadow-verified Jump schedule.")) {
+                cfg.autoplay = autoplayOn;
                 autoplay.setEnabled(autoplayOn);
                 autoplay.syncTimeWarp(PlayLayer::get());
+                dirty();
             }
             if (autoplayOn && aiOn && !EbStageConfig::autoTuneEnabled())
                 ImGui::TextColored(ImVec4(1.f, 0.75f, 0.35f, 1.f),
                                    "Auto-Tune is off — Autoplay will probe but not train.");
-            bool restart = autoplay.restartOnDeath();
-            if (EbCheckbox::draw("ai-autoplay-restart", "Restart on Death", &restart, aiOn,
-                                 "When Autoplay is on, reset the attempt shortly after death. "
-                                 "Each death also auto-runs a short Train Session pass."))
-                autoplay.setRestartOnDeath(restart);
-            float warp = autoplay.timeWarp();
-            if (EbSlider::drawFloat("ai-autoplay-warp", "Time Warp", &warp, 1.f, 32.f, 0, "x",
-                                    aiOn,
-                                    "Speeds up attempts while Autoplay is on (Real Assist pattern). "
-                                    "8–16x is a good start; higher can hitch on heavy levels.")) {
-                autoplay.setTimeWarp(warp);
-                autoplay.syncTimeWarp(PlayLayer::get());
+            if (EbCheckbox::draw("ai-autoplay-restart", "Restart on Death", &cfg.restartOnDeath,
+                                 aiOn && autoplayOn,
+                                 "Reset the attempt shortly after death.")) {
+                autoplay.setRestartOnDeath(cfg.restartOnDeath);
+                dirty();
             }
-            float explorePct = autoplay.exploreRate() * 100.f;
-            if (EbSlider::drawFloat("ai-autoplay-explore", "Explore", &explorePct, 0.f, 25.f, 0,
-                                    "%", aiOn,
-                                    "Chance to press even when verify finds no useful click "
-                                    "(cold-start exploration)."))
-                autoplay.setExploreRate(explorePct / 100.f);
-            ImGui::TextWrapped(
-                "Presses only when scorer/verify finds a useful click — not CPS spam.");
+            if (EbSlider::drawFloat("ai-autoplay-warp", "Time Warp", &cfg.timeWarp, 1.f, 32.f, 0, "x",
+                                    aiOn && autoplayOn,
+                                    "Speeds up attempts while Autoplay is on.")) {
+                autoplay.setTimeWarp(cfg.timeWarp);
+                autoplay.syncTimeWarp(PlayLayer::get());
+                dirty();
+            }
+            float explorePct = cfg.exploreRate * 100.f;
+            if (EbSlider::drawFloat("ai-autoplay-explore", "Explore", &explorePct, 0.f, 25.f, 0, "%",
+                                    aiOn && autoplayOn,
+                                    "Chance to press when no route is found.")) {
+                cfg.exploreRate = explorePct / 100.f;
+                autoplay.setExploreRate(cfg.exploreRate);
+                dirty();
+            }
             ImGui::Text("Probes / presses / explore   %d / %d / %d", autoplay.probes(),
                         autoplay.presses(), autoplay.explorePresses());
-            ImGui::Text("Restarts   %d", autoplay.restarts());
-            ImGui::Text("Last probe   %s", autoplay.lastProbeReason());
+            ImGui::Text("Route events / last probe   %d / %s", autoplay.routeEvents(),
+                        autoplay.lastProbeReason());
             ImGui::Separator();
-            ImGui::TextWrapped(
-                "Every attempt (you or Autoplay) stores scorer transitions. Deaths under Autoplay "
-                "auto-batch-train; Train Session still works for human IL after a session.");
             if (EbButton::draw("ai-train-session", "Train Session",
                                aiOn && EbLevelProfile::get().loaded() &&
                                    EbNeuralSession::get().size() > 0,
-                               "Run several passes of TD / rank / confidence updates from the "
-                               "session buffer, then save .neural.")) {
-                int const n = neural.trainSession(4, true);
+                               "Batch-train from the session buffer, then save.")) {
+                int const n = neural.trainSession(cfg.trainStepsPerUpdate, true);
                 ImGui::Text("Trained %d updates", n);
             }
             if (EbButton::draw("ai-clear-session", "Clear Session",
                                EbNeuralSession::get().size() > 0 ||
                                    EbNeuralSession::get().attemptCount() > 0,
-                               "Drop buffered session samples without touching weights."))
+                               "Drop session samples without touching weights."))
                 EbNeuralSession::get().clear();
             if (EbNeuralSession::get().lastTrainUpdates() > 0)
                 ImGui::TextDisabled("Last train: %d updates",
@@ -449,65 +593,51 @@ public:
         }
         EbSectionCard::end();
 
-        if (EbSectionCard::begin("ai-viz", "Visualization")) {
-            EbCheckbox::drawSetting("show-ai", "Visualize AI");
-            ImGui::TextWrapped(
-                "Shows the local grid the scorer reads (solids / hazards / orbs), top-k delay "
-                "markers by confidence, last armed delay, and a green pulse on weight updates. "
-                "Same toggle as Visual → Visualize AI — draw only, never arms.");
-        }
-        EbSectionCard::end();
-
-        if (EbSectionCard::begin("ai-base", "Base Prior (cross-level)")) {
-            auto& neural = EbNeuralLearning::get();
-            bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
+        // —— Prior + viz + advanced ——
+        if (EbSectionCard::begin("ai-prior", "Prior + Visual")) {
             bool trainBase = neural.trainBasePrior();
             if (EbCheckbox::draw("ai-train-base", "Train Base Prior", &trainBase, aiOn,
-                                 "Write all IL/RL updates into a shared saveDir/ai/prior.ebnn "
-                                 "across levels (game knowledge). Turn off later for per-level "
-                                 ".neural fine-tune — current weights seed that level."))
+                                 "Write IL/RL into shared saveDir/ai/prior.ebnn across levels."))
                 neural.setTrainBasePrior(trainBase);
-            ImGui::TextWrapped(
-                "Workflow: Auto-Tune on → Train Base Prior on → IL on several levels → "
-                "Save as Base Prior → then disable Train Base for per-level fine-tune.");
-            if (EbButton::draw("ai-save-base", "Save as Base Prior",
-                               aiOn && neural.loaded(),
-                               "Copy current weights to saveDir/ai/prior.ebnn. New levels load "
-                               "this before the packaged resources/ai/prior.ebnn."))
+            if (EbButton::draw("ai-save-base", "Save as Base Prior", aiOn && neural.loaded(),
+                               "Copy current weights to the user base prior."))
                 (void)neural.saveAsBasePrior();
             if (EbButton::draw("ai-load-prior", "Load Base / Packaged Prior",
                                aiOn && EbLevelProfile::get().loaded(),
-                               "Load user base prior if present, else packaged prior.ebnn, and "
-                               "write into the active path (base or this level)."))
+                               "Load user base prior or packaged prior.ebnn."))
                 (void)neural.loadPrior();
-            if (neural.trainBasePrior())
-                ImGui::TextDisabled("Active path: shared base prior");
-            else
-                ImGui::TextDisabled("Active path: per-level .neural");
+            if (EbButton::draw("ai-reset-weights", "Reset AI Weights",
+                               aiOn && EbLevelProfile::get().loaded(),
+                               "Clear active weights. Hybrid tables stay."))
+                neural.reset();
+            ImGui::Separator();
+            EbCheckbox::drawSetting("show-ai", "Visualize AI");
+            if (EbCheckbox::draw("ai-viz-route", "Show Planned Route", &cfg.showRoute, true,
+                                 "Press/release markers when Visualize AI is on."))
+                dirty();
+            if (EbCheckbox::draw("ai-viz-rej", "Show Rejected Candidates", &cfg.showRejected, true,
+                                 "Draw gated-out candidates."))
+                dirty();
         }
         EbSectionCard::end();
 
-        if (EbSectionCard::begin("ai-knobs", "Scorer Knobs")) {
-            auto& neural = EbNeuralLearning::get();
-            bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
-            EbCheckbox::draw("ai-prefer-first", "Verify AI First", &neural.preferAiFirst, aiOn,
-                             "Rank delays with the scorer and verify top-k with Live physics "
-                             "before ordinary Live search. Off = Live proposes first.");
-            EbSlider::drawInt("ai-topk", "Top-K Verify", &neural.topK, 1, 8, "", aiOn,
-                              "How many highest-scoring delays to verify. AI-first prefers a "
-                              "verified delay>0 over d=0 within this set. Default 4.");
-            EbSlider::drawFloat("ai-lr", "Learning Rate", &neural.learningRate, 0.001f, 0.05f, 3,
-                                "", aiOn,
-                                "Step size for on-play weight updates when Auto-Tune is on and "
-                                "weights are not frozen.");
-            EbSlider::drawInt("ai-observation", "Observation", &neural.observationTicks, 24, 96,
-                              " ticks", aiOn,
-                              "How long after an AI-armed input to attribute survival or death.");
-            if (EbButton::draw("ai-reset-weights", "Reset AI Weights",
-                               aiOn && EbLevelProfile::get().loaded(),
-                               "Clear active weights (shared base or this level .neural). Hybrid "
-                               "tables stay."))
-                neural.reset();
+        if (EbSectionCard::begin("ai-advanced", "Advanced")) {
+            if (EbCheckbox::draw("ai-exp", "Experimental Backends", &cfg.experimentalBackends, true,
+                                 "Unlock Dual-Head backend and Neural-Only policy."))
+                dirty();
+            if (EbCheckbox::draw("ai-debug", "Debug Logging", &cfg.debugLogging, true,
+                                 "Extra Assist log lines for plan/gate decisions."))
+                dirty();
+            if (EbCheckbox::draw("ai-replan-div", "Replan on Divergence", &cfg.replanOnDivergence,
+                                 true, "Invalidate the route when live X drifts too far."))
+                dirty();
+            if (EbButton::draw("ai-reset-cfg", "Reset AI Config", true,
+                               "Restore Balanced defaults (weights untouched).")) {
+                cfg.resetAll();
+                cfg.save();
+                autoplay.syncFromConfig();
+            }
+            ImGui::TextDisabled("Persists to saveDir/ai/config-v1.json");
         }
         EbSectionCard::end();
     }

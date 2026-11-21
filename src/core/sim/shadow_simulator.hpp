@@ -97,14 +97,40 @@ public:
     void clearDeathHitboxSuppress() {
         m_suppressDeathHitboxes = false;
     }
+    // Call on every ghost-death swallow: clear false P1/P2 death flags and hide
+    // debug draw immediately so MH cannot flash hitboxes for one frame.
+    void scrubGhostDeathHitboxContamination(PlayLayer* layer) {
+        m_suppressDeathHitboxes = true;
+        clearContaminatedRealDeathFlags(layer);
+        hideDeathHitboxesIfAlive(layer);
+    }
     // While simulating, keep real icons looking alive unless they were already dead.
+    // Outside sim (stale ghost collide): still clear — ghosts must never mark reals dead.
     void clearContaminatedRealDeathFlags(PlayLayer* layer) {
-        if (!layer || !m_simulating)
+        if (!layer)
             return;
-        if (layer->m_player1 && !m_savedP1Dead)
+        if (m_simulating) {
+            if (layer->m_player1 && !m_savedP1Dead)
+                layer->m_player1->m_isDead = false;
+            if (layer->m_player2 && !m_savedP2Dead)
+                layer->m_player2->m_isDead = false;
+            return;
+        }
+        if (layer->m_player1)
             layer->m_player1->m_isDead = false;
-        if (layer->m_player2 && !m_savedP2Dead)
+        if (layer->m_player2)
             layer->m_player2->m_isDead = false;
+    }
+    void hideDeathHitboxesIfAlive(PlayLayer* layer) {
+        if (!layer || !m_suppressDeathHitboxes)
+            return;
+        if (layer->m_player1 && layer->m_player1->m_isDead)
+            return;
+        // Respect explicit practice debug-draw; only undo false death latches.
+        if (layer->m_isDebugDrawEnabled && layer->m_isPracticeMode)
+            return;
+        if (layer->m_debugDrawNode)
+            layer->m_debugDrawNode->setVisible(false);
     }
     PlayerObject* shadow() const {
         return m_shadow;

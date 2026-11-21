@@ -22,6 +22,8 @@ With **Assist Mode = AI**, the AI tab exposes **Autoplay**: scorer + `verifyDela
 
 **Trajectory pair features:** each AI `prepare` runs a short `runOne(d=0)` vs `runBaseline` (idle/coast) and packs idle/action death flags, survive norms, endX delta, `actionHelps` (−1 helpless … +1 chance), `bothDead`, and `idleSafer` into continuous geometry slots. Same comparison Live LongForesight already uses — the scorer can learn not to prefer clicks that die as soon as (or sooner than) doing nothing.
 
+**Search / learning heads:** online verify order uses `rankedDelaysByConfidence` (candidate delay written per forward). The 49-way rank head is trained with a constant delay-slot of 0 so train≈infer. Failed `verifyDelay` calls `learnRankReject` + confidence→0. Evidence weights: teacherSuggested ≪ simulationVerified ≪ survivedObserved. Session TD skips identical `s'=s` non-terminals. Autoplay arms `tick+chosenDelay` rather than discarding the verified delay.
+
 ## Hybrid RL (v1.7.1)
 
 With **Assist Mode = Hybrid** and **Auto-Tune** on, `EbHybridLearning` stores per-level `.hybrid` evidence (situation key → delay actions with score / visit counts).

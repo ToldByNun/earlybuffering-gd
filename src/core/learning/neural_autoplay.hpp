@@ -1,13 +1,14 @@
 #ifndef NEURAL_AUTOPLAY_HPP
 #define NEURAL_AUTOPLAY_HPP
 
+#include "ai_route_planner.hpp"
 #include <algorithm>
 #include <string>
 
 class PlayLayer;
+class PlayerObject;
 
-// AI-mode self-play: scorer + verifyDelay gated Jump edges (not CPS spam),
-// optional timeWarp for attempt throughput, auto session-train on death.
+// AI Mode self-play: multi-event route planner + Shadow-verified Jump schedule.
 class EbNeuralAutoplay {
 public:
     static EbNeuralAutoplay& get();
@@ -25,6 +26,8 @@ public:
             m_restartAtTick = -1;
             m_nextPressTick = 0;
             m_nextProbeTick = 0;
+            clearSchedule();
+            clearRoute();
             m_warpNeedsRestore = true;
         }
     }
@@ -52,9 +55,10 @@ public:
         return m_exploreRate;
     }
 
-    // Apply / restore PlayLayer timeWarp after setEnabled / setTimeWarp.
-    void syncTimeWarp(PlayLayer* layer);
+    // Pull Autoplay knobs from EbAiConfig (presets / UI).
+    void syncFromConfig();
 
+    void syncTimeWarp(PlayLayer* layer);
     void onPhysicsTick(PlayLayer* layer);
     void onDeath(PlayLayer* layer);
     void onAttemptReset();
@@ -70,6 +74,9 @@ public:
     }
     int restarts() const {
         return m_restarts;
+    }
+    int routeEvents() const {
+        return static_cast<int>(m_activeRoute.events.size());
     }
     char const* lastProbeReason() const {
         return m_lastProbeReason ? m_lastProbeReason : "—";
@@ -109,10 +116,19 @@ private:
     void press(PlayLayer* layer, bool explore);
     void release(PlayLayer* layer);
     int holdTicksForPlayer(PlayLayer* layer) const;
-    bool shouldPress(PlayLayer* layer, bool& exploreOut);
+    bool armFromRoute(PlayLayer* layer, bool& exploreOut);
     void applyTimeWarp(PlayLayer* layer);
     void restoreTimeWarp(PlayLayer* layer);
     void stickTimeWarp(PlayLayer* layer);
+    void clearSchedule() {
+        m_scheduledPressTick = -1;
+        m_scheduledExplore = false;
+        m_plannedHoldTicks = -1;
+    }
+    void clearRoute() {
+        m_activeRoute.clear();
+        m_routeIndex = 0;
+    }
 
     bool m_enabled = false;
     bool m_restartOnDeath = true;
@@ -121,10 +137,13 @@ private:
     bool m_warpOwned = false;
     bool m_warpNeedsApply = false;
     bool m_warpNeedsRestore = false;
+    bool m_scheduledExplore = false;
     int m_holdUntilTick = -1;
     int m_nextPressTick = 0;
     int m_nextProbeTick = 0;
     int m_restartAtTick = -1;
+    int m_scheduledPressTick = -1;
+    int m_plannedHoldTicks = -1;
     int m_presses = 0;
     int m_explorePresses = 0;
     int m_probes = 0;
@@ -135,6 +154,8 @@ private:
     float m_savedTimeWarp = 1.f;
     float m_exploreRate = 0.08f;
     char const* m_lastProbeReason = "—";
+    EbAiRoute m_activeRoute;
+    int m_routeIndex = 0;
 };
 
 #endif

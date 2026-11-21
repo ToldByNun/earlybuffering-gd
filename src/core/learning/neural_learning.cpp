@@ -5,6 +5,8 @@
 #include "../platform/platform_limits.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "../sim/shadow_simulator.hpp"
+#include "ai_config.hpp"
+#include "ai_route_planner.hpp"
 #include "hybrid_learning.hpp"
 #include "level_profile.hpp"
 #include "neural_autoplay.hpp"
@@ -115,6 +117,14 @@ void EbNeuralLearning::setTrainBasePrior(bool on) {
 
 void EbNeuralLearning::settingsChanged() {
     boundary(false);
+    auto& cfg = EbAiConfig::get();
+    cfg.load();
+    preferAiFirst = cfg.preferAiFirst;
+    topK = std::clamp(cfg.maxCandidates, 1, 8);
+    learningRate = cfg.learningRate;
+    if (cfg.freezeWeights)
+        freeze(true);
+    EbNeuralAutoplay::get().syncFromConfig();
     if (m_path.empty() || m_loaded || !active())
         return;
     m_hasPriorOrWeights = m_model.load(m_path);
@@ -657,7 +667,13 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
     edge.pending = false;
 
     int const k = std::clamp(topK, 1, 8);
-    auto neuralRanked = m_model.rankedDelays(edge.features, edge.limit, k);
+    auto const& cfg = EbAiConfig::get();
+    // Primary backend: Nova-style per-candidate sigmoid. DualHead is experimental only.
+    bool const novaLog1p = cfg.delayEncoding == EbAiConfig::DelayEncoding::Log1p;
+    auto neuralRanked =
+        cfg.backend == EbAiConfig::Backend::DualHeadLegacy && cfg.experimentalBackends
+            ? m_model.rankedDelays(edge.features, edge.limit, k)
+            : m_model.rankedDelaysByConfidence(edge.features, edge.limit, k, novaLog1p);
     // AP06: Hybrid tables may propose when present (planner already called Hybrid prepare).
     std::vector<int> hybridRanked;
     if (EbHybridLearning::tablesReadable())
@@ -666,9 +682,17 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
     // Soft distill Hybrid mature delays into the scorer while training (transfer).
     if (training() && !hybridRanked.empty()) {
         int const distill = std::min(2, static_cast<int>(hybridRanked.size()));
-        for (int index = 0; index < distill; ++index)
-            m_model.learnRank(edge.features, hybridRanked[static_cast<size_t>(index)], edge.limit,
-                              learningRate * 0.25f);
+        float const scale = evidenceLearnScale(Evidence::TeacherSuggested);
+        for (int index = 0; index < distill; ++index) {
+            int const delay = hybridRanked[static_cast<size_t>(index)];
+            m_model.learnRank(edge.features, delay, edge.limit, learningRate * scale);
+            float scratch[EbNeuralModel::kFeatureDim];
+            std::memcpy(scratch, edge.features, sizeof(scratch));
+            EbNeuralModel::writeCandidateDelay(scratch, delay);
+            m_model.learnConfidence(scratch,
+                                    evidenceConfidenceTarget(Evidence::TeacherSuggested, delay, 0.5f),
+                                    learningRate * scale);
+        }
         m_hasPriorOrWeights = true;
     }
     ++inferences;
@@ -689,7 +713,7 @@ std::vector<int> EbNeuralLearning::rankedVerifyDelays(int limit) const {
             return edge.verifyOrder;
         int const k = std::clamp(topK, 1, 8);
         int const clamped = EbNeuralModel::clampLimit(limit > 0 ? limit : edge.limit);
-        return m_model.rankedDelays(edge.features, clamped, k);
+        return m_model.rankedDelaysByConfidence(edge.features, clamped, k);
     }
     return {};
 }
@@ -702,7 +726,9 @@ float EbNeuralLearning::confidenceForDelay(int delay) const {
             continue;
         float scratch[EbNeuralModel::kFeatureDim];
         std::memcpy(scratch, edge.features, sizeof(scratch));
-        EbNeuralModel::writeCandidateDelay(scratch, delay);
+        bool const nova =
+            EbAiConfig::get().delayEncoding == EbAiConfig::DelayEncoding::Log1p;
+        EbNeuralModel::writeCandidateForPolicy(scratch, delay, edge.down, nova);
         return m_model.confidence(scratch);
     }
     return 0.0f;
@@ -725,19 +751,28 @@ void EbNeuralLearning::noteVerifyOutcome(int delay, bool verifiedSafe) {
         ++verifyHits;
     if (!training())
         return;
-    // Press hot path: one cheap confidence/rank update. No TD backprop on every
-    // failed top-k probe (that was hitching hard with thousands of verifies).
+    // Press hot path: keep rank + confidence heads in sync. No TD on every probe.
+    float const scale = evidenceLearnScale(Evidence::SimulationVerified);
     for (auto& edge : m_edges) {
         if (!edge.valid)
             continue;
         float scratch[EbNeuralModel::kFeatureDim];
         std::memcpy(scratch, edge.features, sizeof(scratch));
-        EbNeuralModel::writeCandidateDelay(scratch, delay);
-        m_model.learnConfidence(scratch, verifiedSafe ? 1.0f : 0.0f, learningRate);
+        bool const nova =
+            EbAiConfig::get().delayEncoding == EbAiConfig::DelayEncoding::Log1p;
+        EbNeuralModel::writeCandidateForPolicy(scratch, delay, edge.down, nova);
         if (verifiedSafe) {
-            m_model.learnRank(edge.features, delay, edge.limit, learningRate);
-            EbNeuralSession::get().push(edge.features, delay, edge.limit, 0.7f, edge.features,
+            m_model.learnConfidence(scratch, 1.0f, learningRate * scale);
+            m_model.learnRank(edge.features, delay, edge.limit, learningRate * scale);
+            // Supervised-only buffer sample (identical next → session skips TD).
+            // Keep reward ≥ 0.5 so session train still updates the rank head.
+            float const reward =
+                0.85f * evidenceRewardScale(Evidence::SimulationVerified);
+            EbNeuralSession::get().push(edge.features, delay, edge.limit, reward, edge.features,
                                         false);
+        } else {
+            m_model.learnConfidence(scratch, 0.0f, learningRate * scale);
+            m_model.learnRankReject(edge.features, delay, edge.limit, learningRate * scale);
         }
         ++updates;
         m_hasPriorOrWeights = true;
@@ -778,15 +813,20 @@ void EbNeuralLearning::decision(bool player1, EbSimPlan const& plan) {
     edge.planId = plan.planId;
     edge.pending = true;
     edge.fired = false;
-    // Live fallthrough Delay is the IL teacher when AI-first did not arm.
+    // Live fallthrough Delay = weak teacher label (not survived / not verified).
     if (training() && !plan.aiTried && delayed && plan.delay > 0) {
-        m_model.learnRank(edge.features, plan.delay, edge.limit, learningRate);
+        Evidence const evidence = Evidence::TeacherSuggested;
+        float const scale = evidenceLearnScale(evidence);
+        m_model.learnRank(edge.features, plan.delay, edge.limit, learningRate * scale);
         float scratch[EbNeuralModel::kFeatureDim];
         std::memcpy(scratch, edge.features, sizeof(scratch));
         EbNeuralModel::writeCandidateDelay(scratch, plan.delay);
-        m_model.learnConfidence(scratch, 1.0f, learningRate);
-        EbNeuralSession::get().push(edge.features, plan.delay, edge.limit,
-                                    successReward(plan.delay, 0.5f), edge.features, false);
+        m_model.learnConfidence(
+            scratch, evidenceConfidenceTarget(evidence, plan.delay, 0.5f), learningRate * scale);
+        float const reward =
+            successReward(plan.delay, 0.5f) * evidenceRewardScale(evidence);
+        EbNeuralSession::get().push(edge.features, plan.delay, edge.limit, reward, edge.features,
+                                    false);
         ++updates;
         m_hasPriorOrWeights = true;
     }
@@ -824,6 +864,49 @@ float EbNeuralLearning::successReward(int plannedDelay, float progress) {
 float EbNeuralLearning::deathReward(float progress) {
     // Farther deaths are slightly less catastrophic (still negative).
     return -2.0f + 0.6f * progress;
+}
+
+float EbNeuralLearning::evidenceLearnScale(Evidence evidence) {
+    switch (evidence) {
+    case Evidence::TeacherSuggested:
+        return 0.25f;
+    case Evidence::SimulationVerified:
+        return 0.85f;
+    case Evidence::SurvivedObserved:
+        return 1.0f;
+    case Evidence::Death:
+        return 1.0f;
+    }
+    return 0.25f;
+}
+
+float EbNeuralLearning::evidenceRewardScale(Evidence evidence) {
+    switch (evidence) {
+    case Evidence::TeacherSuggested:
+        return 0.35f;
+    case Evidence::SimulationVerified:
+        return 0.70f;
+    case Evidence::SurvivedObserved:
+        return 1.0f;
+    case Evidence::Death:
+        return 1.0f;
+    }
+    return 0.35f;
+}
+
+float EbNeuralLearning::evidenceConfidenceTarget(Evidence evidence, int plannedDelay,
+                                                 float progress) {
+    switch (evidence) {
+    case Evidence::TeacherSuggested:
+        return plannedDelay > 0 ? 0.55f : 0.40f;
+    case Evidence::SimulationVerified:
+        return 1.0f;
+    case Evidence::SurvivedObserved:
+        return plannedDelay > 0 ? 1.0f : (0.45f + 0.2f * progress);
+    case Evidence::Death:
+        return 0.0f;
+    }
+    return 0.5f;
 }
 
 void EbNeuralLearning::rememberRecent(EdgeState const& edge) {
@@ -876,23 +959,30 @@ void EbNeuralLearning::poll(PlayLayer* layer, int tick) {
             if (player)
                 endX = player->getPositionX();
         }
-        // Skip fillFeatures on the survival poll — grid walk is too heavy mid-attempt.
+        // No fillFeatures mid-attempt (grid hitch). Identical next ⇒ supervised-only
+        // (session skips TD bootstrap — Problem C). SurvivedObserved is still the
+        // strongest evidence tier for rank/confidence.
         float next[EbNeuralModel::kFeatureDim];
         std::memcpy(next, edge.features, sizeof(next));
         float const progress = progressNorm(edge.startX, endX);
-        float const reward = successReward(edge.plannedDelay, progress);
+        Evidence const evidence = Evidence::SurvivedObserved;
+        float const reward =
+            successReward(edge.plannedDelay, progress) * evidenceRewardScale(evidence);
         EbNeuralSession::get().push(edge.features, edge.plannedDelay, edge.limit, reward, next,
                                     false);
         if (training()) {
-            // One rank/confidence update max; defer TD batch to resetAttempt.
+            float const scale = evidenceLearnScale(evidence);
             if (edge.plannedDelay > 0)
-                m_model.learnRank(edge.features, edge.plannedDelay, edge.limit, learningRate);
+                m_model.learnRank(edge.features, edge.plannedDelay, edge.limit,
+                                  learningRate * scale);
             float scratch[EbNeuralModel::kFeatureDim];
             std::memcpy(scratch, edge.features, sizeof(scratch));
             EbNeuralModel::writeCandidateDelay(scratch, edge.plannedDelay);
-            float const confTarget = edge.plannedDelay > 0 ? 1.0f : (0.45f + 0.2f * progress);
-            m_model.learnConfidence(scratch, confTarget, learningRate);
-            m_replay.push(edge.features, edge.plannedDelay, reward, next, false);
+            m_model.learnConfidence(
+                scratch, evidenceConfidenceTarget(evidence, edge.plannedDelay, progress),
+                learningRate * scale);
+            // Replay TD with done=true so bootstrap is not s'=s.
+            m_replay.push(edge.features, edge.plannedDelay, reward, next, true);
             ++updates;
             m_hasPriorOrWeights = true;
             m_deferTrain = true;
@@ -956,6 +1046,8 @@ bool EbNeuralLearning::selfCheck(std::string& report) {
     expect(EbNeuralAutoplay::selfCheck(autoplayReport), autoplayReport.c_str());
     std::string bootstrapReport;
     expect(EbNeuralBootstrap::selfCheck(bootstrapReport), bootstrapReport.c_str());
+    // AiConfig / RoutePlanner selfChecks run in-game (need ClassManager); offline harness
+    // covers Autoplay/Session/Model only.
 
     EbNeuralModel model;
     model.reset();

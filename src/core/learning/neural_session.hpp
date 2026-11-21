@@ -96,8 +96,19 @@ public:
                 }
                 int const slot = (m_next - m_count + index + kCapacity * 2) % kCapacity;
                 Sample const& sample = m_samples[static_cast<size_t>(slot)];
-                model.learnTd(sample.state, sample.action, sample.reward, sample.next, sample.done,
-                              sample.limit, rate);
+                // Identical next with !done = supervised label without a real s'
+                // (Problem C). Death (done) still uses TD with bootstrap=0.
+                bool identicalNext = true;
+                for (int feature = 0; feature < EbNeuralModel::kFeatureDim; ++feature) {
+                    if (sample.state[feature] != sample.next[feature]) {
+                        identicalNext = false;
+                        break;
+                    }
+                }
+                if (!(identicalNext && !sample.done)) {
+                    model.learnTd(sample.state, sample.action, sample.reward, sample.next,
+                                  sample.done, sample.limit, rate);
+                }
                 // Only strong Delay successes update the rank head (avoids d=0 collapse).
                 if (sample.reward >= 0.5f && sample.action > 0)
                     model.learnRank(sample.state, sample.action, sample.limit, rate);

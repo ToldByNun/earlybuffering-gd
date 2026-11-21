@@ -4,9 +4,11 @@
 #include "../../debug/assist_log.hpp"
 #include "pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
+#include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/modify/PauseLayer.hpp>
 #include <Geode/ui/BasedButtonSprite.hpp>
 #include <Geode/utils/cocos.hpp>
+#include <string>
 
 // Resolve geode.node-ids PauseLayer menus (live under main-layer, not PauseLayer root).
 
@@ -26,11 +28,61 @@ auto EbPauseMenuAttach::rightButtonMenu(PauseLayer* self) -> geode::prelude::CCM
     return nullptr;
 }
 
+auto EbPauseMenuAttach::menuItemLabel(geode::prelude::CCNode* node) -> std::string {
+    auto* item = geode::prelude::typeinfo_cast<CCMenuItemSpriteExtra*>(node);
+    if (!item)
+        return {};
+    auto* sprite = geode::prelude::typeinfo_cast<ButtonSprite*>(item->getNormalImage());
+    if (!sprite || !sprite->m_label)
+        return {};
+    if (auto const* text = sprite->m_label->getString())
+        return text;
+    return {};
+}
+
+auto EbPauseMenuAttach::isLegacySideButtonLabel(std::string const& label) -> bool {
+    return label == "Import Cfg" || label == "Export Cfg" || label == "Trajectory" ||
+           label == "Toggle Learn" || label == "Reset Learn" || label == "Toggle Debug" ||
+           label == "Cycle Preset" || label == "Cycle Mode" || label == "Import Replay" ||
+           label == "Bake Map" || label == "Brute Bake" || label == "Cancel";
+}
+
+auto EbPauseMenuAttach::stripLegacyLabelsFromMenu(geode::prelude::CCMenu* menu) -> void {
+    if (!menu)
+        return;
+    auto* children = menu->getChildren();
+    if (!children)
+        return;
+    for (int index = static_cast<int>(children->count()) - 1; index >= 0; --index) {
+        auto* child = static_cast<geode::prelude::CCNode*>(children->objectAtIndex(index));
+        if (EbPauseMenuAttach::isLegacySideButtonLabel(EbPauseMenuAttach::menuItemLabel(child)))
+            menu->removeChild(child, true);
+    }
+    menu->updateLayout();
+}
+
+auto EbPauseMenuAttach::stripLegacySideButtons(PauseLayer* self) -> void {
+    if (!self)
+        return;
+    if (auto* host = EbPauseMenuAttach::hostLayer(self)) {
+        for (char const* id : {"earlybuffer-assist-menu"_spr, "earlybuffer-bake-menu"_spr}) {
+            if (auto* leftover = host->getChildByID(id))
+                leftover->removeFromParentAndCleanup(true);
+        }
+    }
+    EbPauseMenuAttach::stripLegacyLabelsFromMenu(EbPauseMenuAttach::rightButtonMenu(self));
+    if (auto* left = geode::prelude::typeinfo_cast<geode::prelude::CCMenu*>(
+            self->getChildByIDRecursive("left-button-menu"))) {
+        EbPauseMenuAttach::stripLegacyLabelsFromMenu(left);
+    }
+}
+
 auto EbPauseLayer::customSetup() -> void {
     PauseLayer::customSetup();
 
     // Clean pause: EB opens Geode settings (category pages). Optional status lines only.
     // Bake / Assist action buttons live under EB → Bake / Assist — no side stacks.
+    EbPauseMenuAttach::stripLegacySideButtons(this);
     bool const showStatus = EbStageConfig::showPauseBake();
     bool const showHub = EbStageConfig::showPauseHub();
     if (!showStatus && !showHub)

@@ -22,7 +22,12 @@
 - AI death hitch: no backprop/grid/disk on destroyPlayer — session push only; capped train on attempt reset.
 - AI features: idle-coast vs click-now shadow pair (`actionHelps` / `idleSafer` / survive norms) so the scorer can downrank helpless presses.
 - Visualize AI hitboxes: always refresh oriented boxes on the local window; draw AABB unless truly rotated; reject stale pooled OBBs (solids no longer float off tiles).
+- AI learning harden: search by confidence head; failed verify demotes rank; Autoplay schedules `chosenDelay`; identical-next samples skip TD; supervised rank keeps delay slot=0; evidence tiers (teacher ≪ verify ≪ survived).
+- Desktop menu: GitHub/Discord sidebar icons load dedicated PNGs (atlas UV 0..1 was drawing the sheet as checkerboard).
+- AI Mode redesign: `EbAiConfig` (typed presets + `saveDir/ai/config-v1.json`), `EbAiRoutePlanner` multi-event press/release routes with Shadow verify, Autoplay executes verified routes; desktop AI tab exposes gating/route/sim/candidate controls. Primary backend is candidate sigmoid (Nova-style); dual-head is experimental.
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
+- Pause: strip leftover Import/Export Cfg / Cycle Preset / … side buttons from older installs.
+- Hitboxes-on-death: scrub ghost deaths immediately (clear real death flags + hide debug draw) so MH/OpenHack cannot flash overlays when the shadow dies mid-plan.
 
 ## v1.7.1
 

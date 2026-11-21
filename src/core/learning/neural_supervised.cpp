@@ -15,36 +15,61 @@ int EbNeuralSupervised::train(EbNeuralModel& model, EbNeuralSupervisedRow const*
             if (row.positiveDelays.empty())
                 continue;
             int const limit = EbNeuralModel::clampLimit(row.limit > 0 ? row.limit : row.state.limit);
+
             EbNeuralGrid grid;
             if (!row.objects.empty())
                 grid.rasterize(0.0f, 0.0f, row.objects.data(),
                                static_cast<int>(row.objects.size()));
+
+            // Rank head: candidate-delay feature stays 0 (matches rankedDelays inference).
+            EbNeuralFeatureState rankState = row.state;
+            rankState.candidateDelay = 0;
+            rankState.limit = limit;
+            rankState.limitNorm =
+                static_cast<float>(limit) / static_cast<float>(EbNeuralModel::kMaxDelay);
+            EbNeuralFeatures::build(features.data(), grid, rankState);
+
             for (int positive : row.positiveDelays) {
                 if (positive < 0 || positive > limit)
                     continue;
-                EbNeuralFeatureState state = row.state;
-                state.candidateDelay = positive;
-                state.limit = limit;
-                state.limitNorm = static_cast<float>(limit) / static_cast<float>(EbNeuralModel::kMaxDelay);
-                EbNeuralFeatures::build(features.data(), grid, state);
                 model.learnRank(features.data(), positive, limit, learningRate);
-                model.learnConfidence(features.data(), 1.0f, learningRate);
                 ++updates;
             }
-            // Downweight a delay outside the safe set when one exists.
+
+            int rejectDelay = -1;
             for (int delay = 0; delay <= limit; ++delay) {
                 if (std::find(row.positiveDelays.begin(), row.positiveDelays.end(), delay) !=
                     row.positiveDelays.end())
                     continue;
-                EbNeuralFeatureState state = row.state;
-                state.candidateDelay = delay;
-                state.limit = limit;
-                state.limitNorm =
-                    static_cast<float>(limit) / static_cast<float>(EbNeuralModel::kMaxDelay);
-                EbNeuralFeatures::build(features.data(), grid, state);
-                model.learnConfidence(features.data(), 0.0f, learningRate * 0.5f);
+                rejectDelay = delay;
+                model.learnRankReject(features.data(), delay, limit, learningRate * 0.5f);
                 ++updates;
                 break;
+            }
+
+            // Confidence head AFTER rank updates so trunk drift does not wipe the
+            // sigmoid targets (shared trunk; Problem D separation).
+            for (int positive : row.positiveDelays) {
+                if (positive < 0 || positive > limit)
+                    continue;
+                EbNeuralFeatureState confState = row.state;
+                confState.candidateDelay = positive;
+                confState.limit = limit;
+                confState.limitNorm =
+                    static_cast<float>(limit) / static_cast<float>(EbNeuralModel::kMaxDelay);
+                EbNeuralFeatures::build(features.data(), grid, confState);
+                model.learnConfidence(features.data(), 1.0f, learningRate);
+                ++updates;
+            }
+            if (rejectDelay >= 0) {
+                EbNeuralFeatureState confState = row.state;
+                confState.candidateDelay = rejectDelay;
+                confState.limit = limit;
+                confState.limitNorm =
+                    static_cast<float>(limit) / static_cast<float>(EbNeuralModel::kMaxDelay);
+                EbNeuralFeatures::build(features.data(), grid, confState);
+                model.learnConfidence(features.data(), 0.0f, learningRate * 0.5f);
+                ++updates;
             }
         }
     }
@@ -60,10 +85,13 @@ float EbNeuralSupervised::verifyHitAtK(EbNeuralModel const& model, EbNeuralSuper
     if (!row.objects.empty())
         grid.rasterize(0.0f, 0.0f, row.objects.data(), static_cast<int>(row.objects.size()));
     EbNeuralFeatureState state = row.state;
+    state.candidateDelay = 0;
     state.limit = limit;
     state.limitNorm = static_cast<float>(limit) / static_cast<float>(EbNeuralModel::kMaxDelay);
     std::vector<float> features(static_cast<size_t>(EbNeuralModel::kFeatureDim), 0.0f);
     EbNeuralFeatures::build(features.data(), grid, state);
+    // Prior quality metric uses the 49-way rank head (delay slot = 0, same as
+    // learnRank). Live search uses rankedDelaysByConfidence separately.
     auto ranked = model.rankedDelays(features.data(), limit, k);
     if (ranked.empty())
         return 0.0f;
@@ -106,6 +134,20 @@ bool EbNeuralSupervised::selfCheck(std::string& report) {
     float const after = verifyHitAtK(model, row, 2);
     expect(after >= before, "verifyhit-nonregress");
     expect(after > 0.0f, "verifyhit-positive");
+
+    // Confidence head: delay slot must move the score when trained in isolation.
+    {
+        float probe[EbNeuralModel::kFeatureDim]{};
+        EbNeuralModel::writeCandidateDelay(probe, 3);
+        for (int step = 0; step < 30; ++step)
+            model.learnConfidence(probe, 1.0f, 0.15f);
+        float const up = model.confidence(probe);
+        EbNeuralModel::writeCandidateDelay(probe, 1);
+        for (int step = 0; step < 30; ++step)
+            model.learnConfidence(probe, 0.0f, 0.15f);
+        float const down = model.confidence(probe);
+        expect(up > down, "conf-delay-sensitive");
+    }
 
     auto path = std::filesystem::temp_directory_path() / "eb-neural-supervised-prior.neural";
     expect(model.save(path), "export-prior");

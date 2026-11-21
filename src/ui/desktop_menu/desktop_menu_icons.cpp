@@ -253,29 +253,22 @@ private:
 };
 
 void EbDesktopMenuIcons::load() {
-    EbDesktopMenuIconsState::githubTex() =
-        EbDesktopMenuIconsDraw::textureFromSprite("eb_github.png"_spr);
-    if (!EbDesktopMenuIconsState::githubTex()) {
-        geode::log::warn("[EarlyBuffer] desktop menu: eb_github.png missing");
-    }
-    EbDesktopMenuIconsState::discordTex() =
-        EbDesktopMenuIconsDraw::textureFromSprite("eb_discord.png"_spr);
-    if (!EbDesktopMenuIconsState::discordTex()) {
-        geode::log::warn("[EarlyBuffer] desktop menu: eb_discord.png missing");
-    }
-    // Prefer dedicated file load — atlas UV packing can clip new sprites.
-    {
+    // Dedicated PNG only — never atlas getTexture()+UV 0..1 (that draws the whole
+    // sheet as magenta/black checkerboard in the sidebar).
+    auto loadSidebar = [](cocos2d::CCTexture2D*& slot, char const* fileName) {
+        if (slot) {
+            slot->release();
+            slot = nullptr;
+        }
         float ignoreW = 0.0f;
         float ignoreH = 0.0f;
-        auto* fromFile =
-            EbDesktopMenuIconsDraw::textureFromPngFile("eb_share.png", &ignoreW, &ignoreH);
-        EbDesktopMenuIconsState::shareTex() =
-            fromFile ? fromFile
-                     : EbDesktopMenuIconsDraw::textureFromSprite("eb_share.png"_spr);
-    }
-    if (!EbDesktopMenuIconsState::shareTex()) {
-        geode::log::warn("[EarlyBuffer] desktop menu: eb_share.png missing");
-    }
+        slot = EbDesktopMenuIconsDraw::textureFromPngFile(fileName, &ignoreW, &ignoreH);
+        if (!slot)
+            geode::log::warn("[EarlyBuffer] desktop menu: {} missing", fileName);
+    };
+    loadSidebar(EbDesktopMenuIconsState::githubTex(), "eb_github.png");
+    loadSidebar(EbDesktopMenuIconsState::discordTex(), "eb_discord.png");
+    loadSidebar(EbDesktopMenuIconsState::shareTex(), "eb_share.png");
 
     for (int i = 0; i < kGamemodeCount; ++i) {
         float width = 0.0f;

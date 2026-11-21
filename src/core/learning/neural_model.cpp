@@ -123,6 +123,31 @@ void EbNeuralModel::writeCandidateDelay(float* features, int delay) {
         static_cast<float>(clamped) / static_cast<float>(kMaxDelay);
 }
 
+void EbNeuralModel::writeNovaCandidate(float* features, int delay, int actionKind) {
+    if (!features)
+        return;
+    int const kind = std::clamp(actionKind, 0, 2);
+    int const clamped = clampLimit(delay);
+    // continuous[15..18] — Nova pack offsets (+84..+96 from continuous base).
+    float* continuous = features + kContinuousOffset;
+    continuous[15] = 0.0f;
+    continuous[16] = 0.0f;
+    continuous[17] = 0.0f;
+    continuous[18] = 0.0f;
+    continuous[15 + kind] = 1.0f;
+    continuous[18] = std::log1p(static_cast<float>(clamped)) * 0.25f;
+}
+
+void EbNeuralModel::writeCandidateForPolicy(float* features, int delay, bool press,
+                                            bool novaLog1p) {
+    if (!features)
+        return;
+    if (novaLog1p)
+        writeNovaCandidate(features, delay, press ? 1 : 2);
+    else
+        writeCandidateDelay(features, delay);
+}
+
 void EbNeuralModel::forwardTrunk(LayerViews const& net, float const* features, float* hidden1,
                                  float* hidden2) {
     for (int row = 0; row < kHidden1; ++row) {
@@ -209,7 +234,7 @@ std::vector<int> EbNeuralModel::rankedDelays(float const* features, int limit, i
 }
 
 std::vector<int> EbNeuralModel::rankedDelaysByConfidence(float const* features, int limit,
-                                                         int topK) const {
+                                                         int topK, bool novaLog1p) const {
     std::vector<int> ranked;
     if (!featuresFinite(features) || topK <= 0)
         return ranked;
@@ -217,7 +242,7 @@ std::vector<int> EbNeuralModel::rankedDelaysByConfidence(float const* features, 
     std::vector<float> scratch(features, features + kFeatureDim);
     std::array<float, kActionCount> scores{};
     for (int delay = 0; delay <= clamped; ++delay) {
-        writeCandidateDelay(scratch.data(), delay);
+        writeCandidateForPolicy(scratch.data(), delay, true, novaLog1p);
         scores[static_cast<size_t>(delay)] = confidence(scratch.data());
     }
     for (int delay = clamped + 1; delay < kActionCount; ++delay)
@@ -368,6 +393,49 @@ void EbNeuralModel::learnRank(float const* features, int positiveDelay, int limi
     float const share = margin / static_cast<float>(negatives);
     for (int delay = 0; delay <= clamped; ++delay) {
         if (delay == positiveDelay)
+            continue;
+        outputGrad[delay] = share;
+    }
+    backpropRank(features, hidden1.data(), hidden2.data(), outputGrad.data(), learningRate);
+    softUpdateTarget();
+}
+
+void EbNeuralModel::learnRankReject(float const* features, int rejectDelay, int limit,
+                                    float learningRate) {
+    if (m_frozen || !featuresFinite(features))
+        return;
+    int const clamped = clampLimit(limit);
+    if (rejectDelay < 0 || rejectDelay > clamped)
+        return;
+    std::array<float, kHidden1> hidden1{};
+    std::array<float, kHidden2> hidden2{};
+    std::array<float, kActionCount> scores{};
+    LayerViews online = views(m_online);
+    forwardTrunk(online, features, hidden1.data(), hidden2.data());
+    forwardRank(online, hidden2.data(), scores.data());
+    applyMask(scores.data(), clamped);
+
+    std::array<float, kActionCount> outputGrad{};
+    float const rejected = scores[rejectDelay];
+    int others = 0;
+    float otherSum = 0.0f;
+    for (int delay = 0; delay <= clamped; ++delay) {
+        if (delay == rejectDelay)
+            continue;
+        otherSum += scores[delay];
+        ++others;
+    }
+    if (others == 0)
+        return;
+    float const meanOther = otherSum / static_cast<float>(others);
+    // Want rejected below the mean of the rest by a margin.
+    float const margin = rejected + 0.5f - meanOther;
+    if (margin <= 0.0f)
+        return;
+    outputGrad[rejectDelay] = margin;
+    float const share = -margin / static_cast<float>(others);
+    for (int delay = 0; delay <= clamped; ++delay) {
+        if (delay == rejectDelay)
             continue;
         outputGrad[delay] = share;
     }

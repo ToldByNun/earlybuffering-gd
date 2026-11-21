@@ -48,15 +48,14 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
     if (sim.isOwnedGhost(player)) {
         if (sim.isSimulating()) {
             sim.markDead(player, object);
-        } else {
-            sim.noteGhostDeathHitboxSuppress();
         }
         // Even if not simulating (stale collide): never look "dead" to menus.
         if (player)
             player->m_isDead = false;
         // Real icons must stay "alive" for MH Hitboxes::destroyPlayer which
         // checks m_player1->m_isDead after Parent returns (when MH runs first).
-        sim.clearContaminatedRealDeathFlags(this);
+        // Scrub immediately — waiting for postUpdate lets hitboxes flash one frame.
+        sim.scrubGhostDeathHitboxContamination(this);
         // Do not call PlayLayer::destroyPlayer — Geode hooks after us never run.
         // Standalone MH trampolines that wrap the whole chain still get a call;
         // suppressDeathHitboxes + postUpdate Last hides their false latch.
@@ -114,14 +113,7 @@ auto EbPlayLayer::postUpdate(float deltaTime) -> void {
     // Mega Hack / OpenHack: Hitboxes::destroyPlayer may latch s_isDead on any
     // destroyPlayer call (including ghosts), then postUpdate re-shows
     // m_debugDrawNode while the real icon is still alive. Undo that.
-    if (!sim.suppressDeathHitboxes())
-        return;
-    if (!this->m_player1 || this->m_player1->m_isDead)
-        return;
-    if (this->m_isDebugDrawEnabled && this->m_isPracticeMode)
-        return;
-    if (this->m_debugDrawNode)
-        this->m_debugDrawNode->setVisible(false);
+    sim.hideDeathHitboxesIfAlive(this);
 }
 
 auto EbPlayLayer::playEndAnimationToPos(cocos2d::CCPoint position) -> void {

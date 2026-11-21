@@ -77,9 +77,12 @@ auto EbPlayerObject::collidedWithObjectInternal(float deltaTime, GameObject* obj
     if (this->m_isDead) {
         if (sim.isSimulating())
             sim.markDead(this, object);
+        this->m_isDead = false;
+        // destroyPlayer Stub may not run (or MH wraps the trampoline) — scrub now.
+        if (auto* layer = PlayLayer::get())
+            sim.scrubGhostDeathHitboxContamination(layer);
         else
             sim.noteGhostDeathHitboxSuppress();
-        this->m_isDead = false;
     }
     return result;
 }
