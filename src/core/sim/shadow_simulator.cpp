@@ -12,7 +12,9 @@
 #include "planning/shadow_sequence_planner.hpp"
 #include "planning/simulation_plan.hpp"
 #include "replay/shadow_replay_runner.hpp"
+#include "runtime/live_wave_trail_guard.hpp"
 #include "runtime/shadow_ghost_lifecycle.hpp"
+#include "runtime/shadow_isolation_contracts.hpp"
 #include "runtime/shadow_physics.hpp"
 #include "runtime/shadow_player_state.hpp"
 #include "runtime/shadow_section_safety.hpp"
@@ -42,6 +44,27 @@ void EbShadowSimulator::detach(bool layerDying) {
 
 bool EbShadowSimulator::isOwnedGhost(PlayerObject* player) const {
     return EbShadowGhostLifecycle::isOwnedGhost(*this, player);
+}
+
+bool EbShadowSimulator::isShadowTrail(HardStreak* trail) const {
+    if (!trail)
+        return false;
+    // Live stroke always wins — never mute the real HardStreak.
+    if (EbLiveWaveTrailGuard::isProtected(trail) || EbLiveWaveTrailGuard::isLivePlayerTrail(trail))
+        return false;
+    if (EbShadowIsolationContracts::isSimGhostTrail(trail))
+        return true;
+    if (m_shadow && m_shadow->m_waveTrail == trail)
+        return true;
+    for (auto* slot : m_snapshots) {
+        if (slot && slot->m_waveTrail == trail)
+            return true;
+    }
+    for (auto* entry : m_evalGhosts) {
+        if (entry && entry->m_waveTrail == trail)
+            return true;
+    }
+    return false;
 }
 
 void EbShadowSimulator::abortEval() {

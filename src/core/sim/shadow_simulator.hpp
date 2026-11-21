@@ -136,21 +136,8 @@ public:
         return m_shadow;
     }
     // Hot path helper — ghost-owned HardStreaks only (never the live stroke).
-    bool isShadowTrail(HardStreak* trail) const {
-        if (!trail)
-            return false;
-        if (m_shadow && m_shadow->m_waveTrail == trail)
-            return true;
-        for (auto* slot : m_snapshots) {
-            if (slot && slot->m_waveTrail == trail)
-                return true;
-        }
-        for (auto* entry : m_evalGhosts) {
-            if (entry && entry->m_waveTrail == trail)
-                return true;
-        }
-        return false;
-    }
+    // Also honors the AP-NL1 sim-ghost-trail marker (covers switchedToMode orphans).
+    bool isShadowTrail(HardStreak* trail) const;
 
     void markDead(PlayerObject* player, GameObject* object = nullptr);
     // Park ghosts off-level so stray collision cannot fail the real attempt.

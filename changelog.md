@@ -2,6 +2,8 @@
 
 ## v1.8.1-dev
 
+- AP-NL1: shared Live/Autoplay shadow isolation contracts — sim-ghost player/trail markers, exclusive HardStreak after seed, ghost-root never under `objectLayer`, `isShadowTrail` honors markers; PlanGold `nova-shadow-isolation`.
+- Fix quit/seed AV: ghost HardStreaks live only as ghost-root children; never `CCSprite::addChild`, never reparent opaque/dangling `m_waveTrail`; reuse only via ghost-root child list; null trail pointers on detach before ~PlayerObject.
 - AI prior: import Nova `NVM2` `model.bin` (float16 trunk `3512→128→64` + scalar conf) into `EbNeuralModel`; rank head stays freshly initialized. `Load Base / Packaged Prior` also checks `saveDir/ai/model.bin`. Offline convert: `tools/convert_nvm2_to_ebnn.py`.
 
 ## v1.8.0

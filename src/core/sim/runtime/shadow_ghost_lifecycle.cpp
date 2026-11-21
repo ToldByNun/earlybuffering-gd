@@ -3,6 +3,7 @@
 #include "../shadow_simulator.hpp"
 #include "../world/shadow_world_capture.hpp"
 #include "live_wave_trail_guard.hpp"
+#include "shadow_isolation_contracts.hpp"
 
 void EbShadowGhostLifecycle::clearWaveTrailGeometry(PlayerObject* player) {
     if (!player)
@@ -45,8 +46,9 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
     auto* ghostRoot = cocos2d::CCNode::create();
     if (!ghostRoot)
         return;
-    ghostRoot->setID("earlybuffer-ghost-root"_spr);
+    ghostRoot->setID(EbShadowIsolationContracts::ghostRootId());
     ghostRoot->setVisible(false);
+    // Parent under PlayLayer — never objectLayer (MH hitbox trail walks that).
     layer->addChild(ghostRoot);
     simulator.m_ghostRoot = ghostRoot;
 
@@ -58,12 +60,19 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
         player->setID(id);
         // Explicit marker for other mods (hitbox overlays, etc.): ignore these
         // PlayerObjects — they are sim ghosts, not the real icon.
-        player->setUserObject("audesign.earlybuffer/sim-ghost"_spr,
-                              cocos2d::CCBool::create(true));
+        EbShadowIsolationContracts::markSimGhostPlayer(player);
         // ghostRoot owns the node (addChild retain). Do NOT extra-retain —
         // release-on-quit while still parented / double-free in ~PlayerObject
         // during setNextScene was the quit AV (CCObject::release).
         ghostRoot->addChild(player);
+        // Drop create()'s trail pointer and install a ghostRoot-hosted streak.
+        // Never reparent create()'s object — its lifetime is opaque to us.
+        player->m_waveTrail = nullptr;
+        if (auto* trail = HardStreak::create()) {
+            EbShadowIsolationContracts::markSimGhostTrail(trail);
+            ghostRoot->addChild(trail);
+            player->m_waveTrail = trail;
+        }
         simulator.hideGhost(player);
         return player;
     };
@@ -141,6 +150,12 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
         if (player->m_touchingRings) {
             player->m_touchingRings->removeAllObjects();
         }
+        // Ghost HardStreaks live under ghostRoot (not under the player). Clear
+        // raw pointers before ~PlayerObject so quit cannot double-release the
+        // same node via player dtor + ghostRoot removeChild.
+        player->m_waveTrail = nullptr;
+        player->m_regularTrail = nullptr;
+        player->m_shipStreak = nullptr;
         // Do NOT HardStreak::reset here — detach always destroys or abandons the
         // node next; reset on a dying/ghost streak was the LevelInit AV.
         player->setVisible(false);
@@ -179,6 +194,8 @@ void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDyin
 bool EbShadowGhostLifecycle::isOwnedGhost(EbShadowSimulator const& simulator, PlayerObject* player) {
     if (!player)
         return false;
+    // Pointer table only — never getUserObject here. During setNextScene
+    // teardown the node may be half-destroyed; marker reads AVs.
     if (player == simulator.m_shadow)
         return true;
     for (auto* shadowPlayer : simulator.m_snapshots) {
@@ -304,6 +321,7 @@ void EbShadowGhostLifecycle::hideGhost(PlayerObject* player) {
     // Only mute the ghost's own trail — never the protected live HardStreak.
     if (player->m_waveTrail && player->getParent() && player->m_waveTrail->getParent() &&
         !EbLiveWaveTrailGuard::refuseMutation(player->m_waveTrail)) {
+        EbShadowIsolationContracts::markSimGhostTrail(player->m_waveTrail);
         player->m_waveTrail->m_drawStreak = false;
         player->m_waveTrail->setVisible(false);
         player->m_waveTrail->setOpacity(0);

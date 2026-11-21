@@ -9,6 +9,7 @@
 #include "../core/assist/flight/wave_pattern_recognizer.hpp"
 #include "../core/assist/contracts/assist_verdict.hpp"
 #include "../core/assist/contracts/live_plan_contracts.hpp"
+#include "../core/sim/runtime/shadow_isolation_contracts.hpp"
 #include "../core/assist/contracts/miss_assist_contracts.hpp"
 #include "../core/assist/input/buffer_event_machine.hpp"
 #include "../core/assist/input/click_intent_guard.hpp"
@@ -244,6 +245,9 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string livePlanReport;
     expectReport(EbLivePlanContracts::selfCheck(livePlanReport), "live-plan-contracts",
                  livePlanReport);
+    std::string shadowIsolationReport;
+    expectReport(EbShadowIsolationContracts::selfCheck(shadowIsolationReport),
+                 "nova-shadow-isolation", shadowIsolationReport);
     // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
     expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&

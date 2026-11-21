@@ -21,6 +21,8 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 `src/debug/plan_gold_corpus.cpp` — synthetic planner gold cases. Extend when Pass/Delay contracts change.
 
+Assist Pack AP-NL1 (shadow isolation): PlanGold `nova-shadow-isolation` — ghost player/trail markers, live HardStreak refuseMutation, exclusive trails after seed; ghosts parent under `earlybuffer-ghost-root` (never `objectLayer`).
+
 **v1.7.1** keeps the v1.5.1 / v1.6.x planner contracts (AP0–AP1 / AP3a–AP3b / AP4 hitch / remUs / Wave IW / orbs-under-IW) plus Assist Pack AP-L1–L7 soft-wall honesty, desktop ImGui shell, Hybrid RL unit coverage (`tools/test_hybrid_model.cpp`), and deflate-only ship packages.
 
 ## Adaptive smoke
