@@ -27,6 +27,7 @@
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
 #include "../../contracts/live_plan_contracts.hpp"
+#include "../../contracts/live_stage_parity.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../contracts/selected_tick_guard.hpp"
 #include "../../flight/flight_assist_combine.hpp"
@@ -42,8 +43,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                                      PlayerObject* player, bool player1, int effectTick,
                                      float firstDt, EbDevClockContract::Stamp const& clockIn) {
     EbDevClockContract::Stamp clock = clockIn;
-    int const limit = controller.activeLimit(player);
-    if (limit <= 0) {
+    int limit = controller.activeLimit(player);
+    bool const stageOff =
+        EbLiveStageParity::stageOffEquivalent(EbStageConfig::isEnabled(), limit);
+    if (stageOff) {
+        // Nova Stage-Off equivalent — raw input, no buffering.
+        EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::PassThrough,
+                                                    false);
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "press-limit0");
         controller.noteVerdict(AssistReason::PassLimitZero, "press-limit0");
         return true;
@@ -65,6 +71,17 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     };
     if (frameScope.remaining(frameLimitUs) <= 0)
         return passFrameBudget();
+
+    // AP-NL2: Nova-style lookahead shrink when the shared frame wall is half-spent.
+    {
+        int const softWall = EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+        int const remUs = frameScope.remaining(frameLimitUs);
+        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, softWall);
+        if (shrunk < limit)
+            limit = shrunk;
+        if (limit <= 0)
+            return passFrameBudget();
+    }
 
     // GhostParity / SpotTrust: hard Pass before bake+Live — never soft with orb.
     // Commit 11: reasons via PerfectAssistPolicy / SimTrust (same tokens).
@@ -460,6 +477,12 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
         }
+        // AP-NL2: Pass with buffering on ≡ Nova "in as made" (click as made).
+        EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::AsMade, false);
+        EbAssistLog::debug(fmt::format("live-decision {} reason={}",
+                                       EbLiveStageParity::decisionLabel(
+                                           EbLiveStageParity::DecisionKind::AsMade),
+                                       EbAssistVerdict::name(passReason)));
         EbDevCycleRecorder::get().notePassThrough(passReason, "press-plan");
         controller.noteVerdict(passReason, "press-plan");
         controller.recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
@@ -658,6 +681,24 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.noteVerdict(delayReason, "press-delay");
     if (delay > 0)
         EbAssistRealMetrics::get().noteArm();
+    // AP-NL2: Held(+N) + window legality (DR4 rescue / window metrics).
+    {
+        bool const legal = EbLiveStageParity::windowLegal(
+            delay, limit, effectTick, controller.m_buffer.fireTick);
+        bool const verified = EbLiveStageParity::delayArmVerified(
+            true, plan.budgetHit, plan.unknown || plan.toggleUnknown, false);
+        EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::Held, legal);
+        if (!legal || !verified) {
+            EbAssistLog::debug(fmt::format(
+                "live-decision held legal={} verified={} delay={} fire={} limit={}", legal ? 1 : 0,
+                verified ? 1 : 0, delay, controller.m_buffer.fireTick, limit));
+        } else {
+            EbAssistLog::debug(fmt::format("live-decision {} +{}",
+                                           EbLiveStageParity::decisionLabel(
+                                               EbLiveStageParity::DecisionKind::Held),
+                                           delay));
+        }
+    }
     EbRealAssistRunner::get().notePress(delay, plan.planUs, plan.hybridTried);
     controller.recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     controller.updateOverlay();

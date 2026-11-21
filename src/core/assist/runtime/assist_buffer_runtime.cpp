@@ -12,6 +12,7 @@
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
 #include "../contracts/live_plan_contracts.hpp"
+#include "../contracts/live_stage_parity.hpp"
 #include "../contracts/subtick_timing.hpp"
 #include "../planning/live/live_frame_budget_scope.hpp"
 #include <algorithm>
@@ -19,10 +20,12 @@
 float EbAssistBufferRuntime::substepPrefix(EbAssistController& controller, PlayerObject* player,
                                            float deltaTime) {
     auto* layer = PlayLayer::get();
+    // AP-NL2 / NL-R6: mid-tick CBF prefix only when firePhase∈(0,1) on fireTick.
     if (!layer || player != layer->m_player1 || !player->m_isBird || !controller.m_inRealUpdate ||
         controller.m_buffer.state != BufferState::Buffered || !controller.m_buffer.player1 ||
-        controller.m_buffer.firePhase <= 0.f ||
-        controller.m_attemptTick != controller.m_buffer.fireTick)
+        !EbLiveStageParity::midTickPrefixAllowed(controller.m_buffer.firePhase,
+                                                 controller.m_attemptTick,
+                                                 controller.m_buffer.fireTick))
         return -1.f;
     float const prefix = EbSubtickTiming::segmentPrefix(controller.m_buffer.firePhase,
                                                         controller.m_lastDt, controller.m_subDtSeen,
@@ -34,8 +37,9 @@ void EbAssistBufferRuntime::fireSubstep(EbAssistController& controller, PlayerOb
     auto* layer = PlayLayer::get();
     if (!layer || player != layer->m_player1 || player->m_isDead ||
         controller.m_buffer.state != BufferState::Buffered ||
-        controller.m_buffer.firePhase <= 0.f ||
-        controller.m_attemptTick != controller.m_buffer.fireTick)
+        !EbLiveStageParity::midTickPrefixAllowed(controller.m_buffer.firePhase,
+                                                 controller.m_attemptTick,
+                                                 controller.m_buffer.fireTick))
         return;
     controller.fireBuffered(layer, player, false);
 }

@@ -23,6 +23,8 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 Assist Pack AP-NL1 (shadow isolation): PlanGold `nova-shadow-isolation` — ghost player/trail markers, live HardStreak refuseMutation, exclusive trails after seed; ghosts parent under `earlybuffer-ghost-root` (never `objectLayer`).
 
+Assist Pack AP-NL2 (Live click-timing): PlanGold `nova-live-click-timing` — Nova Stage↔EB ticks map, as-made/held/pass-through vocabulary, mid-tick CBF gate, lookahead shrink under µs wall, Alive-only Delay honesty; Live DR4 metrics via `EbAssistRealMetrics::reportLiveLine` (rescue / false-mutation / Pass honesty / window legality). See `docs/nova-ai/14-live-stage-parity.md`.
+
 **v1.7.1** keeps the v1.5.1 / v1.6.x planner contracts (AP0–AP1 / AP3a–AP3b / AP4 hitch / remUs / Wave IW / orbs-under-IW) plus Assist Pack AP-L1–L7 soft-wall honesty, desktop ImGui shell, Hybrid RL unit coverage (`tools/test_hybrid_model.cpp`), and deflate-only ship packages.
 
 ## Adaptive smoke

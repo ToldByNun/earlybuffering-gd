@@ -25,6 +25,7 @@
 #include "../../assist_controller.hpp"
 #include "../../contracts/assist_verdict.hpp"
 #include "../../contracts/live_plan_contracts.hpp"
+#include "../../contracts/live_stage_parity.hpp"
 #include "../../contracts/miss_assist_contracts.hpp"
 #include "../../contracts/selected_tick_guard.hpp"
 #include "../../flight/flight_assist_combine.hpp"
@@ -53,8 +54,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         return true;
     }
 
-    int const limit = controller.activeLimit(player);
-    if (limit <= 0) {
+    int limit = controller.activeLimit(player);
+    if (EbLiveStageParity::stageOffEquivalent(EbStageConfig::isEnabled(), limit)) {
+        EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::PassThrough,
+                                                    false);
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassLimitZero, "release-limit0");
         controller.noteVerdict(AssistReason::PassLimitZero, "release-limit0");
         return true;
@@ -69,6 +72,16 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     };
     if (frameScope.remaining(frameLimitUs) <= 0)
         return passFrameBudget();
+
+    {
+        int const softWall = EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
+        int const remUs = frameScope.remaining(frameLimitUs);
+        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, softWall);
+        if (shrunk < limit)
+            limit = shrunk;
+        if (limit <= 0)
+            return passFrameBudget();
+    }
 
     // GhostParity / SpotTrust: hard Pass before bake (same honesty as press).
     {
@@ -397,6 +410,7 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         if (passReason == AssistReason::None) {
             passReason = AssistReason::PassUnknown;
         }
+        EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::AsMade, false);
         EbDevCycleRecorder::get().notePassThrough(passReason, "release-plan");
         controller.noteVerdict(passReason, "release-plan");
         controller.recordDecision(playLayer, player, false, plan, effectTick, 0, limit);
@@ -494,6 +508,11 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     controller.noteVerdict(delayReason, "release-delay");
     if (delay > 0)
         EbAssistRealMetrics::get().noteArm();
+    {
+        bool const legal = EbLiveStageParity::windowLegal(
+            delay, limit, effectTick, controller.m_buffer.fireTick);
+        EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::Held, legal);
+    }
     controller.recordDecision(playLayer, player, false, plan, effectTick, delay, limit);
     controller.updateOverlay();
     return false;
