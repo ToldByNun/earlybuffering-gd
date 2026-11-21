@@ -32,6 +32,7 @@
 #include "runtime/assist_lifecycle.hpp"
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <string>
 
 int EbAssistControllerImplementation::roundBias(float bias) {
@@ -483,11 +484,28 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
             m_waveLineHasAnchor[slot] = true;
             m_waveLineOffSeconds[slot] = 0.;
         }
+        // Nova-like: while surfing a slope, corridor heading follows the slope angle
+        // (pattern duty alone drifts off the ramp and false-abandons Tracking).
+        double corridorDegrees = pattern.targetTravelDegrees;
+        bool const onSlope =
+            player->m_isOnSlope || player->m_wasOnSlope || player->m_isCollidingWithSlope;
+        if (onSlope) {
+            double slopeDeg = static_cast<double>(player->m_slopeAngle);
+            if (!std::isfinite(slopeDeg) || std::fabs(slopeDeg) < 1e-4) {
+                double const rad = static_cast<double>(player->m_slopeAngleRadians);
+                if (std::isfinite(rad))
+                    slopeDeg = rad * 180. / std::numbers::pi;
+            }
+            if (std::isfinite(slopeDeg)) {
+                slopeDeg = std::clamp(slopeDeg, -45., 45.);
+                corridorDegrees = EbWavePatternPolicy::snapDegrees(slopeDeg, angleSnap);
+            }
+        }
         EbShipLinePolicy::Target line;
         line.enabled = true;
         line.x = m_waveLineX[slot];
         line.y = m_waveLineY[slot];
-        line.degrees = pattern.targetTravelDegrees;
+        line.degrees = corridorDegrees;
         line.bodySize = 30. * (sample.size > 0. ? sample.size : 1.);
         line.reversed = sample.reversed;
         line.sideways = sample.sideways;
@@ -496,11 +514,12 @@ void EbAssistController::measureFlight(PlayerObject* player, float deltaTime) {
         line.x = m_waveLineX[slot];
         line.y = m_waveLineY[slot];
         double const crossTrack = EbShipLinePolicy::normalizedCrossTrack(line, sample.x, sample.y);
+        // Wider leave on slopes — Nova treats slope contact as geometry, not corridor miss.
         double const room = .5 * static_cast<double>(EbStageConfig::shipRoomOfError());
-        double const leave = room * 1.15;
+        double const leave = room * (onSlope ? 1.45 : 1.15);
         if (crossTrack > leave) {
             m_waveLineOffSeconds[slot] += sample.dt;
-            if (m_waveLineOffSeconds[slot] > .2) {
+            if (m_waveLineOffSeconds[slot] > (onSlope ? .35 : .2)) {
                 m_wavePattern[slot].abandon(EbWavePatternRecognizer::Reason::OffCorridor);
                 m_waveLineHasAnchor[slot] = false;
                 m_waveLineOffSeconds[slot] = 0.;
@@ -705,19 +724,39 @@ void EbAssistController::fillWavePatternOptions(EbPlanOptions& options, PlayLaye
     // Late edges pass through for ordinary rescue — do not arm a past invent.
     if (error > .04)
         return;
+    double travelDegrees = pattern.targetTravelDegrees;
+    bool const onSlope =
+        player->m_isOnSlope || player->m_wasOnSlope || player->m_isCollidingWithSlope;
+    if (onSlope) {
+        double slopeDeg = static_cast<double>(player->m_slopeAngle);
+        if (!std::isfinite(slopeDeg) || std::fabs(slopeDeg) < 1e-4) {
+            double const rad = static_cast<double>(player->m_slopeAngleRadians);
+            if (std::isfinite(rad))
+                slopeDeg = rad * 180. / std::numbers::pi;
+        }
+        if (std::isfinite(slopeDeg)) {
+            travelDegrees = EbWavePatternPolicy::snapDegrees(
+                std::clamp(slopeDeg, -45., 45.), EbStageConfig::flightAngleSnapDegrees());
+            // Keep hold/release duty matched to the slope heading (Nova equal-slope model).
+            if (!m_wavePatternManual && pattern.periodSeconds > 1e-4) {
+                EbWavePatternPolicy::holdReleaseForTravel(travelDegrees, pattern.periodSeconds, hold,
+                                                         release);
+            }
+        }
+    }
     options.wavePattern.enabled = true;
     options.wavePattern.closingHold = pattern.lastCompletedHold;
     options.wavePattern.phaseErrorSeconds = error;
     options.wavePattern.holdSeconds = hold;
     options.wavePattern.releaseSeconds = release;
-    options.wavePattern.travelDegrees = pattern.targetTravelDegrees;
+    options.wavePattern.travelDegrees = travelDegrees;
     options.wavePattern.confidence = pattern.confidence;
     // Average-travel corridor (Ship-like): IW steers cross-track with shipLine metrics.
     if (m_waveLineHasAnchor[slot] && tracking) {
         options.shipLine.enabled = true;
         options.shipLine.x = m_waveLineX[slot];
         options.shipLine.y = m_waveLineY[slot];
-        options.shipLine.degrees = pattern.targetTravelDegrees;
+        options.shipLine.degrees = travelDegrees;
         options.shipLine.bodySize = 30. * player->m_vehicleSize;
         options.shipLine.reversed = player->m_isGoingLeft;
         options.shipLine.sideways = player->m_isSideways;

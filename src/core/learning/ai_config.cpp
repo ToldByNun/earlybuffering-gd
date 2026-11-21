@@ -114,11 +114,14 @@ void EbAiConfig::applyPreset(Preset value) {
         maxCandidates = 4;
         maxRouteDepth = 2;
         beamWidth = 2;
-        simBudgetUs = 800;
-        searchTimeoutUs = 1200;
+        maxSimCalls = 4;
+        simBudgetUs = 600;
+        searchTimeoutUs = 900;
+        planningHorizon = 48;
         neuralEvalBudget = 12;
-        cpuBudgetUsPerTick = 1000;
-        maxAiCpuUsPerTick = 1500;
+        cpuBudgetUsPerTick = 800;
+        maxAiCpuUsPerTick = 1200;
+        replanEveryTicks = 16;
         break;
     case Preset::Accuracy:
         maxCandidates = 16;

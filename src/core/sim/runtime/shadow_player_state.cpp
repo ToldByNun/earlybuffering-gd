@@ -8,6 +8,9 @@ void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObje
     auto* state = source->m_waveTrail;
     if (!delay || !state)
         return;
+    // copyAttributes can alias m_waveTrail onto the live player — never mutate that.
+    if (delay == state)
+        return;
     // Avoid HardStreak::reset / CCDrawNode::clear on ghost streaks (LevelInit AV).
     EbShadowGhostLifecycle::clearWaveTrailGeometry(destination);
     delay->m_currentPoint = state->m_currentPoint;
@@ -15,7 +18,8 @@ void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObje
     delay->m_pulseSize = state->m_pulseSize;
     delay->m_isSolid = state->m_isSolid;
     delay->m_isFlipped = state->m_isFlipped;
-    delay->m_drawStreak = state->m_drawStreak;
+    // Ghost streak is collision/state only — never stroke into the level batch.
+    delay->m_drawStreak = false;
     if (!state->m_pointArray)
         return;
     for (unsigned index = 0; index < state->m_pointArray->count(); ++index) {
@@ -23,6 +27,9 @@ void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObje
             delay->addPoint(node->m_point);
         }
     }
+    delay->m_drawStreak = false;
+    delay->setVisible(false);
+    delay->setOpacity(0);
 }
 
 void EbShadowPlayerState::clearCollisionLogs(PlayerObject* state) {
@@ -40,7 +47,16 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
     if (!destination || !source)
         return;
 
+    // RobTop copyAttributes can overwrite streak pointers with the source's. If the
+    // ghost then shares the live HardStreak, sim clear/addPoint shreds the real wave
+    // trail into thick teleport bars (the "wave trail bug").
+    auto* ownWaveTrail = destination->m_waveTrail;
+    auto* ownRegularTrail = destination->m_regularTrail;
+    auto* ownShipStreak = destination->m_shipStreak;
     destination->copyAttributes(source);
+    destination->m_waveTrail = ownWaveTrail;
+    destination->m_regularTrail = ownRegularTrail;
+    destination->m_shipStreak = ownShipStreak;
     destination->setPosition(source->getPosition());
     destination->setRotation(source->getRotation());
     destination->setScaleX(source->getScaleX());

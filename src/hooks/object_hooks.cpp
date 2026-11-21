@@ -92,3 +92,9 @@ auto EbHardStreak::addPoint(cocos2d::CCPoint point) -> void {
         return;
     HardStreak::addPoint(point);
 }
+
+auto EbHardStreak::updateStroke(float dt) -> void {
+    if (EbShadowSimulator::get().isShadowTrail(this))
+        return;
+    HardStreak::updateStroke(dt);
+}

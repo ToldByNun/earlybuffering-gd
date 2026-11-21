@@ -138,12 +138,20 @@ public:
     bool isShadowTrail(HardStreak* trail) const {
         if (!trail)
             return false;
-        if (m_shadow && trail == m_shadow->m_waveTrail)
+        auto owns = [&](PlayerObject* player) {
+            return player && player->m_waveTrail == trail;
+        };
+        if (owns(m_shadow) || owns(m_evalActive))
             return true;
-        if (!(m_evalActive && trail == m_evalActive->m_waveTrail)) {
-            return false;
+        for (auto* ghost : m_evalGhosts) {
+            if (owns(ghost))
+                return true;
         }
-        return true;
+        for (auto* slot : m_snapshots) {
+            if (owns(slot))
+                return true;
+        }
+        return false;
     }
 
     void markDead(PlayerObject* player, GameObject* object = nullptr);

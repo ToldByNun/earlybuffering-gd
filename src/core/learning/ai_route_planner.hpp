@@ -2,6 +2,7 @@
 #define AI_ROUTE_PLANNER_HPP
 
 #include "ai_config.hpp"
+#include "ai_route.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include <cstdint>
 #include <string>
@@ -10,48 +11,7 @@
 class PlayLayer;
 class PlayerObject;
 
-// Multi-event press/release route for AI Mode (Nova-style ring search, EB Shadow verify).
-class EbAiRouteEvent {
-public:
-    enum class Kind : std::uint8_t { Press = 0, Release = 1 };
-
-    Kind kind = Kind::Press;
-    int delay = 0;     // ticks from route start (relative to plan tick)
-    int holdTicks = 0; // for Press: planned hold before Release
-    float neuralScore = 0.f;
-    bool verified = false;
-    bool clearsThreat = false;
-
-private:
-};
-
-class EbAiRoute {
-public:
-    std::vector<EbAiRouteEvent> events;
-    int planTick = -1;
-    float startX = 0.f;
-    float routeScore = 0.f;
-    int simCalls = 0;
-    int neuralEvals = 0;
-    bool budgetHit = false;
-    bool valid = false;
-    char const* reason = "empty";
-
-    void clear() {
-        events.clear();
-        planTick = -1;
-        startX = 0.f;
-        routeScore = 0.f;
-        simCalls = 0;
-        neuralEvals = 0;
-        budgetHit = false;
-        valid = false;
-        reason = "empty";
-    }
-
-private:
-};
-
+// Multi-event press/release route planner for AI Mode (Nova-style search, EB Shadow verify).
 class EbAiRoutePlanner {
 public:
     static EbAiRoutePlanner& get();
@@ -128,7 +88,7 @@ private:
     // Verify the FULL event sequence from a start snapshot (chained correctness).
     EbAiVerifyOutcome verifyTimeline(PlayLayer* layer, int snapshotSlot, int planTick,
                                      std::vector<EbAiRouteEvent> const& events, float dt,
-                                     EbAiConfig const& cfg);
+                                     EbAiConfig const& cfg, int budgetUs = 0);
     // Single-action verify (depth-1 seed / orb path). Prefer verifyTimeline for depth>1.
     bool verifyCandidate(PlayLayer* layer, PlayerObject* player, bool press, int delay, int limit,
                          float dt, EbAiConfig const& cfg, float& outProgress,

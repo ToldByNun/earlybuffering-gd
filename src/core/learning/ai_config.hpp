@@ -95,9 +95,10 @@ public:
 
     // --- Shadow ---
     bool simulationEnabled = true;
-    int maxSimTicks = 400;
-    int maxSimCalls = 12;
-    int simBudgetUs = 1500;
+    int maxSimTicks = 240;
+    int maxSimCalls = 8;
+    // Nova-like soft walls: keep per-verify + per-plan budgets under a frame slice.
+    int simBudgetUs = 1000;
     float safetyMarginPx = 2.0f;
     int snapshotCacheSize = 8;
     bool reuseSnapshots = true;
@@ -106,11 +107,11 @@ public:
     bool strictVerify = true;
 
     // --- Route ---
-    int planningHorizon = 120;
-    int maxRouteDepth = 4;
-    int beamWidth = 3;
-    int maxBranches = 8;
-    int maxRouteCandidates = 16;
+    int planningHorizon = 80;
+    int maxRouteDepth = 3;
+    int beamWidth = 2;
+    int maxBranches = 6;
+    int maxRouteCandidates = 12;
     SearchAlgo searchAlgo = SearchAlgo::GreedyBeam;
     float weightProgress = 1.0f;
     float weightSafety = 1.0f;
@@ -118,11 +119,11 @@ public:
     float deathPenalty = 2.0f;
     bool pruneDeadBranches = true;
     int routeCacheSize = 4;
-    int replanEveryTicks = 8;
+    int replanEveryTicks = 12;
     int minVerifiedPrefix = 1;
-    int maxCommittedEvents = 6;
-    int searchTimeoutUs = 2500;
-    int cpuBudgetUsPerTick = 2000;
+    int maxCommittedEvents = 4;
+    int searchTimeoutUs = 1500;
+    int cpuBudgetUsPerTick = 1200;
 
     // --- Training ---
     bool trainingEnabled = true;
@@ -153,7 +154,7 @@ public:
     float maxExecDriftPx = 20.0f;
 
     // --- Performance ---
-    int maxAiCpuUsPerTick = 3000;
+    int maxAiCpuUsPerTick = 2000;
     bool backgroundTrain = false;
     int diagnosticSampleEvery = 30;
 

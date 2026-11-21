@@ -52,6 +52,8 @@ private:
 class $modify(EbHardStreak, HardStreak) {
 public:
     void addPoint(cocos2d::CCPoint point);
+    // Ghost streaks must not rebuild CCDrawNode quads into the live batch.
+    void updateStroke(float dt);
 
 private:
 };

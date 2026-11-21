@@ -145,7 +145,7 @@ static bool novaCanHold(GameModeKind kind) {
 EbAiRoutePlanner::EbAiVerifyOutcome
 EbAiRoutePlanner::verifyTimeline(PlayLayer* layer, int snapshotSlot, int planTick,
                                  std::vector<EbAiRouteEvent> const& events, float dt,
-                                 EbAiConfig const& cfg) {
+                                 EbAiConfig const& cfg, int budgetUs) {
     EbAiVerifyOutcome out;
     if (!cfg.simulationEnabled) {
         out.ok = true;
@@ -156,11 +156,19 @@ EbAiRoutePlanner::verifyTimeline(PlayLayer* layer, int snapshotSlot, int planTic
         return out;
     auto timeline = timelineFromEvents(events, planTick);
     int const horizon =
-        std::min(cfg.planningHorizon, std::max(32, events.back().delay + cfg.maxSimTicks / 4));
+        std::min(cfg.planningHorizon, std::max(24, events.back().delay + cfg.maxSimTicks / 6));
+    // Cap each replay by the remaining plan wall (Nova µs hard wall).
+    int const remUs = std::max(200, budgetUs > 0 ? budgetUs : cfg.simBudgetUs);
     auto rr = EbShadowSimulator::get().replay(layer, snapshotSlot, planTick, timeline, dt, horizon,
-                                              false, 0, cfg.simBudgetUs);
+                                              false, 0, remUs);
     ++verifyTries;
     ++m_last.simCalls;
+    // Replay truncates to unknown on µs wall — treat as budget, not a soft reject.
+    if (rr.unknown && !rr.died && remUs > 0 && remUs <= cfg.simBudgetUs) {
+        out.budgetHit = true;
+        out.unknown = true;
+        return out;
+    }
     if (rr.unknown && cfg.rejectUnknown) {
         out.unknown = true;
         return out;
@@ -242,11 +250,18 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     }
 
     auto const t0 = std::chrono::steady_clock::now();
-    auto timedOut = [&]() {
-        auto const us = std::chrono::duration_cast<std::chrono::microseconds>(
-                            std::chrono::steady_clock::now() - t0)
-                            .count();
-        return us >= cfg.searchTimeoutUs || us >= cfg.cpuBudgetUsPerTick;
+    auto elapsedUs = [&]() {
+        return static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                    std::chrono::steady_clock::now() - t0)
+                                    .count());
+    };
+    // Nova-style hard wall: searchTimeout ∧ cpuBudget ∧ maxAiCpu (frame slice).
+    int const hardWallUs =
+        std::min({cfg.searchTimeoutUs, cfg.cpuBudgetUsPerTick, cfg.maxAiCpuUsPerTick});
+    auto timedOut = [&]() { return elapsedUs() >= hardWallUs; };
+    auto remainingSimUs = [&]() {
+        int const rem = hardWallUs - elapsedUs();
+        return std::clamp(std::min(cfg.simBudgetUs, rem), 200, cfg.simBudgetUs);
     };
 
     EbPlanOptions prep{};
@@ -350,7 +365,7 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
             holdChoices = {4, 8};
     }
 
-    // Depth-1 seeds: verified single presses (full timeline = one press).
+    // Depth-1 seeds: light verifyDelay (Nova single-click path), not full replay.
     std::vector<EbAiBeamNode> beam;
     int simCalls = 0;
     for (auto const& cand : scored) {
@@ -363,23 +378,43 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         press.holdTicks = holdChoices.empty() ? 4 : holdChoices.front();
         EbAiBeamNode node;
         node.events.push_back(press);
-        EbAiVerifyOutcome vo =
-            verifyTimeline(layer, startSlot, tick, node.events, dt, cfg);
+        float progress = 0.f;
+        bool clearsThreat = false;
+        EbPlanOptions opts{};
+        opts.budgetUs = remainingSimUs();
+        opts.tickBudget = cfg.maxSimTicks;
+        opts.requireAliveForDelay = cfg.strictVerify;
+        opts.attemptStartTick = tick;
+        auto const vr = EbShadowSimulator::get().verifyDelay(layer, player, true, cand.delay, limit,
+                                                            dt, dt, opts);
         ++simCalls;
-        if (vo.budgetHit) {
+        ++verifyTries;
+        ++m_last.simCalls;
+        if (vr.budgetHit) {
             route.budgetHit = true;
             ++budgetHits;
+            break; // hard wall — stop seeding
         }
-        if (!vo.ok && cfg.pruneDeadBranches)
+        bool ok = vr.ok;
+        if (!ok && vr.clearsThreat && !vr.diedBeforeAction) {
+            progress = 0.55f;
+            clearsThreat = true;
+            ok = true;
+        } else if (ok) {
+            progress = 1.f;
+            clearsThreat = vr.clearsThreat;
+            ++verifyHits;
+        }
+        if (!ok && cfg.pruneDeadBranches)
             continue;
-        node.events.front().verified = vo.ok;
-        node.events.front().clearsThreat = vo.clearsThreat;
-        node.ok = vo.ok;
-        node.holding = vo.ok;
+        node.events.front().verified = ok;
+        node.events.front().clearsThreat = clearsThreat;
+        node.ok = ok;
+        node.holding = ok;
         node.lastAbsDelay = press.delay;
-        node.score = cfg.weightNeural * cand.neural + cfg.weightProgress * vo.progress +
-                     cfg.weightSafety * (vo.clearsThreat ? 0.5f : 0.0f);
-        if (!vo.ok)
+        node.score = cfg.weightNeural * cand.neural + cfg.weightProgress * progress +
+                     cfg.weightSafety * (clearsThreat ? 0.5f : 0.0f);
+        if (!ok)
             node.score -= cfg.deathPenalty;
         beam.push_back(std::move(node));
         if (static_cast<int>(beam.size()) >= cfg.beamWidth)
@@ -443,10 +478,15 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                     if (!child.events.empty() && child.events.back().kind == EbAiRouteEvent::Kind::Press)
                         child.events.back().holdTicks = hold;
                     child.events.push_back(release);
-                    EbAiVerifyOutcome vo =
-                        verifyTimeline(layer, startSlot, tick, child.events, dt, cfg);
+                    EbAiVerifyOutcome vo = verifyTimeline(layer, startSlot, tick, child.events, dt,
+                                                         cfg, remainingSimUs());
                     ++simCalls;
                     ++branches;
+                    if (vo.budgetHit) {
+                        route.budgetHit = true;
+                        ++budgetHits;
+                        break;
+                    }
                     if (!vo.ok && cfg.pruneDeadBranches)
                         continue;
                     child.events.back().verified = vo.ok;
@@ -476,10 +516,15 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                     press.neuralScore = cand.neural;
                     press.holdTicks = holdChoices.empty() ? 4 : holdChoices.front();
                     child.events.push_back(press);
-                    EbAiVerifyOutcome vo =
-                        verifyTimeline(layer, startSlot, tick, child.events, dt, cfg);
+                    EbAiVerifyOutcome vo = verifyTimeline(layer, startSlot, tick, child.events, dt,
+                                                         cfg, remainingSimUs());
                     ++simCalls;
                     ++branches;
+                    if (vo.budgetHit) {
+                        route.budgetHit = true;
+                        ++budgetHits;
+                        break;
+                    }
                     if (!vo.ok && cfg.pruneDeadBranches)
                         continue;
                     child.events.back().verified = vo.ok;

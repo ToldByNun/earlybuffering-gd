@@ -31,6 +31,10 @@
 - AI sessions: optional Persist Sessions (Dev + AI tabs) writes attempt IL/RL buffers to `saveDir/ai/sessions/*.ebns`; Load / Train From Disk for larger offline datasets.
 - AI route planner: full-timeline Shadow verify (Press→Release→Press from start snapshot), beam search to `maxRouteDepth`, releases verified separately; gating requires threshold ∧ minConfidence; adaptive keep = top percentile.
 - AI Autoplay: schedule Press and Release as first-class route events (not hold-ticks-only).
+- Nova 2.6.3 wave slope retry in Shadow candidate runs: first-step crush on a live slope is re-seeded once with forced slope state.
+- Wave pattern corridor: while surfing a slope, heading / duty follow `m_slopeAngle` (wider leave hysteresis) instead of duty-only drift.
+- AI planner lag: depth-1 uses light `verifyDelay`, hard wall = min(searchTimeout, cpuBudget, maxAiCpu), tighter Balanced defaults, remaining-µs caps on beam replays.
+- Wave trail: keep ghost streak pointers across `copyAttributes` (no live HardStreak alias), never draw ghost strokes (`drawStreak` off + `updateStroke` skip) so sim no longer shreds the real trail into thick teleport bars.
 
 ## v1.7.1
 

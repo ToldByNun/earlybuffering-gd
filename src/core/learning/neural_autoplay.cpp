@@ -5,6 +5,7 @@
 #include "../assist/assist_controller.hpp"
 #include "../sim/shadow_simulator.hpp"
 #include "ai_config.hpp"
+#include "ai_route_planner.hpp"
 #include "neural_learning.hpp"
 #include <Geode/Geode.hpp>
 #include <cstdlib>

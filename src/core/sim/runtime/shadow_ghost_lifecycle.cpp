@@ -279,8 +279,17 @@ void EbShadowGhostLifecycle::hideGhost(PlayerObject* player) {
     player->m_playEffects = false;
     // Only mute a live trail — dangling HardStreak after teardown AVs here too.
     if (player->m_waveTrail && player->getParent() && player->m_waveTrail->getParent()) {
+        player->m_waveTrail->m_drawStreak = false;
         player->m_waveTrail->setVisible(false);
         player->m_waveTrail->setOpacity(0);
+    }
+    if (player->m_regularTrail) {
+        player->m_regularTrail->setVisible(false);
+        player->m_regularTrail->setOpacity(0);
+    }
+    if (player->m_shipStreak) {
+        player->m_shipStreak->setVisible(false);
+        player->m_shipStreak->setOpacity(0);
     }
     // Shadow particle emitters must not paint the real level during sim.
     auto mute = [](cocos2d::CCParticleSystemQuad* queryOffset) {
