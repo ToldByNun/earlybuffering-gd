@@ -2,6 +2,8 @@
 
 ## v1.8.0
 
+Release notes: [v1.8.0](releases/v1.8.0.md).
+
 - Add `AssistMode::AI` scaffolding (settings one-of, migration, cycle Live→Hybrid→AI). Neural candidate scorer lands in later AP slices; AI falls through to Live until then.
 - Add `EbNeuralModel` Candidate Scorer (Nova trunk `3512→128→64`, masked 49-way + sigmoid confidence, EBNN2) with unit coverage for mask + rank stability.
 - Add Nova-like `EbNeuralGrid` / `EbNeuralFeatures` / `EbNeuralReplay` / supervised prior train from PhysicsSafeSet labels (`tools/build_neural_dataset.py`).
@@ -41,6 +43,7 @@
 - Wave trail: `PlayerObject::releaseButton` hook returned `void` instead of `bool` (ABI break on every wave flip); never null streak pointers before `copyAttributes` (AV); never `CCDrawNode::clear` / destroy streaks after `switchedToMode` (quit `~PlayerObject` AV); ghosts parent under hidden PlayLayer root outside `objectLayer`.
 - Wave trail isolation: `EbLiveWaveTrailGuard` pins the real P1/P2 HardStreak; ghost clear/mute/reset/stopStroke refuse it; `addPoint` is never gated; ghost `releaseButton` is flags-only; `copyAttributes` seeds keep exclusive private ghost trails and restore the live pointer — live stroke stays consistent under assist.
 - Wave trail/lag hot path: drop `HardStreak::updateStroke` hook; `isShadowTrail` is O(1); stop replaying full trail point arrays on every seed; skip `switchedToMode` when the ghost is already in the live vehicle.
+- iOS: skip `$modify(CCKeyboardDispatcher)` — bindings leave ctor/dtor addresses empty and break the clang build; keyboard source tagging remains on win/mac/android.
 
 ## v1.7.1
 

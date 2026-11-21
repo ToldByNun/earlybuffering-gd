@@ -77,10 +77,17 @@ state/
 # Packaged mods (local)
 *.geode
 
-# Local release staging — keep markdown notes tracked; ignore binaries/checklists junk
+# Local release staging — track markdown notes; ignore binaries/artifacts
 releases/*
+!releases/
 !releases/*.md
-/releases
+!releases/README.md
+!releases/CHECKLIST.md
+!releases/TEMPLATE.md
+!releases/v1.6.2.md
+!releases/v1.7.0.md
+!releases/v1.7.1.md
+!releases/v1.8.0.md
 
 # VitePress docs
 node_modules/
@@ -134,12 +141,6 @@ tools/fixtures/spider_continuation.json
 
 !/tools/bundle_geode.py
 !/tools/test_bundle_geode.py
-!/releases/
-/releases/*
-!/releases/v1.6.2.md
-!/releases/README.md
-!/releases/CHECKLIST.md
-/releases
 docs/dev/live-assist-1.7.0-plan.md
 docs/dev/live-ball-ap04-status.md
 docs/dev/live-baseline-ap01-status.md
@@ -165,15 +166,6 @@ docs/dev/live-regression-ap07-status.md
 docs/dev/live-modes-ap08-status.md
 docs/dev/live-hybrid-ap09-status.md
 
-!/releases/v1.7.0.md
-
-!/releases/
-/releases/*
-!/releases/README.md
-!/releases/CHECKLIST.md
-!/releases/v1.6.2.md
-!/releases/v1.7.0.md
-/releases
 docs/dev/ui-1.7.1-plan.md
 docs/dev/mobile-ui-plan.md
 
@@ -261,3 +253,7 @@ tools/fixtures/real_corpus/**/clear.gdr2
 tools/fixtures/real_corpus/derived/
 /tools/fixtures/real_assist
 /docs/research
+/docs/nova-ai
+docs/design/independent-mic-clicks-engine.md
+docs/design/mic-clicks-gui-specification.md
+/releases
