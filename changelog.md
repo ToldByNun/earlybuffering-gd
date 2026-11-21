@@ -44,6 +44,7 @@ Release notes: [v1.8.0](releases/v1.8.0.md).
 - Wave trail isolation: `EbLiveWaveTrailGuard` pins the real P1/P2 HardStreak; ghost clear/mute/reset/stopStroke refuse it; `addPoint` is never gated; ghost `releaseButton` is flags-only; `copyAttributes` seeds keep exclusive private ghost trails and restore the live pointer — live stroke stays consistent under assist.
 - Wave trail/lag hot path: drop `HardStreak::updateStroke` hook; `isShadowTrail` is O(1); stop replaying full trail point arrays on every seed; skip `switchedToMode` when the ghost is already in the live vehicle.
 - iOS: skip `$modify(CCKeyboardDispatcher)` — bindings leave ctor/dtor addresses empty and break the clang build; keyboard source tagging remains on win/mac/android.
+- iOS: RealAssist `openPreparedLevel` no longer references `DS_Dictionary::loadRootSubDictFromFile` (missing from Geode.ios.dylib link).
 
 ## v1.7.1
 

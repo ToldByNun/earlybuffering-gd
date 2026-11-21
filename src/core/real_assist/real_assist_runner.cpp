@@ -545,6 +545,15 @@ bool EbRealAssistRunner::openPreparedLevel(std::string& report) {
         report = "no prepared case";
         return false;
     }
+#if defined(GEODE_IS_IOS)
+    // DS_Dictionary::loadRootSubDictFromFile is not linked in the iOS Geode binary —
+    // referencing it fails the dylib link. RealAssist level-open is desktop/CI tooling.
+    m_lastError = "RealAssist openPreparedLevel is not supported on iOS";
+    report = summaryBlock(false);
+    std::string err;
+    (void)writeLastRun(report, err);
+    return false;
+#else
     std::filesystem::path levelPath;
     std::filesystem::path replayPath;
     std::string err;
@@ -586,6 +595,7 @@ bool EbRealAssistRunner::openPreparedLevel(std::string& report) {
     EbAssistLog::info(fmt::format("RealAssist opened level for {}/{}", m_case.corpusId,
                                   m_case.variant));
     return true;
+#endif
 }
 
 bool EbRealAssistRunner::wantOpenLevel() {
