@@ -78,27 +78,61 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
         return simulator.spendPlanTick(tickBudgetLeft, tickIndex);
     };
 
+    // Nova 2.6.3 "Wave slope retry": first-step crush while the live wave is on a
+    // slope is re-run once with the player's slope state forced back onto the ghost
+    // ("no slope -> crushed …; with your slope -> lived/died").
+    bool const waveOnSlope =
+        real->m_isDart && (real->m_isOnSlope || real->m_wasOnSlope || real->m_isCollidingWithSlope);
+    bool waveSlopeRetried = false;
+    auto reseedslope = [&]() {
+        simulator.copyPlayerState(simulator.m_shadow, real);
+        simulator.m_dead = false;
+        simulator.m_jumped = false;
+        simulator.m_unknown = false;
+        simulator.m_deathObject = nullptr;
+        // Force slope contact bits in case copy order / portal scrub dropped them.
+        shadowPlayer->m_isOnSlope = real->m_isOnSlope || real->m_wasOnSlope;
+        shadowPlayer->m_wasOnSlope = real->m_wasOnSlope || real->m_isOnSlope;
+        shadowPlayer->m_isCollidingWithSlope =
+            real->m_isCollidingWithSlope || shadowPlayer->m_isOnSlope;
+        shadowPlayer->m_slopeAngle = real->m_slopeAngle;
+        shadowPlayer->m_slopeAngleRadians = real->m_slopeAngleRadians;
+        shadowPlayer->m_currentSlope = real->m_currentSlope;
+        shadowPlayer->m_currentSlope2 = real->m_currentSlope2;
+        shadowPlayer->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !down;
+        acted = false;
+        tapReleased = false;
+    };
+
     if (delay > 0) {
-        if (simulator.markPlanWallIfExceeded())
-            return finish(r);
-        simulator.m_orbOverlapTick = false;
-        simulator.m_simAbsTick = simulator.m_simTickBase;
-        simulator.stepPreCollide(layer, shadowPlayer, deltaTime);
-        if (simulator.m_dead) {
-            r.ticksRan = 1;
-            r.died = true;
-            r.deathTick = 0;
-            r.deathX = shadowPlayer->getPositionX();
-            r.deathObject = simulator.m_deathObject;
-            r.diedBeforeAction = true;
-            return finish(r);
-        }
-        if (simulator.m_unknown) {
-            r.ticksRan = 1;
-            r.unknown = true;
-            r.unknownTrunc = true;
-            r.unknownTick = 0;
-            return finish(r);
+        for (int slopePass = 0; slopePass < 2; ++slopePass) {
+            if (simulator.markPlanWallIfExceeded())
+                return finish(r);
+            simulator.m_orbOverlapTick = false;
+            simulator.m_simAbsTick = simulator.m_simTickBase;
+            simulator.stepPreCollide(layer, shadowPlayer, deltaTime);
+            if (simulator.m_dead && waveOnSlope && !waveSlopeRetried) {
+                waveSlopeRetried = true;
+                reseedslope();
+                continue; // Nova: re-run pre-collide with your slope
+            }
+            if (simulator.m_dead) {
+                r.ticksRan = 1;
+                r.died = true;
+                r.deathTick = 0;
+                r.deathX = shadowPlayer->getPositionX();
+                r.deathObject = simulator.m_deathObject;
+                r.diedBeforeAction = true;
+                return finish(r);
+            }
+            if (simulator.m_unknown) {
+                r.ticksRan = 1;
+                r.unknown = true;
+                r.unknownTrunc = true;
+                r.unknownTick = 0;
+                return finish(r);
+            }
+            break;
         }
     }
 
@@ -230,6 +264,13 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             }
         }
         if (simulator.m_dead) {
+            // Nova: deathTick <= 1 on a slope → one forced-slope re-run from tick 0.
+            if (waveOnSlope && !waveSlopeRetried && tick <= 1) {
+                waveSlopeRetried = true;
+                reseedslope();
+                tick = -1; // for-loop ++ → restart at tick 0
+                continue;
+            }
             r.died = true;
             r.deathTick = tick;
             r.deathX = shadowPlayer->getPositionX();

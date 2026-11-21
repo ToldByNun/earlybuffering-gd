@@ -39,7 +39,7 @@ class EbStageConfig {
 public:
     enum class GameModeKind { Cube = 0, Ship, Ball, Ufo, Wave, Robot, Spider, Swing, Count };
 
-    enum class AssistMode { Live = 0, Hybrid };
+    enum class AssistMode { Live = 0, Hybrid, AI };
 
     // Live V2 sim backend (WU8). V1 effective engine is always ShadowPlayer.
     enum class AssistEngineKind { ShadowPlayer = 0, Trajectory };
@@ -61,8 +61,8 @@ public:
     static void beginApplying();
     static void endApplying();
 
-    // Setting groups mirror mod.json / tabs: Main → Assist → Learn → Bake →
-    // Modes → Visual → UI → Keys → Dev.
+    // Setting groups mirror mod.json / tabs: Main → Assist → Learn → AI →
+    // Modes → Flight → Visual → UI → Dev.
 
     // --- General / UI ---
     static bool isEnabled();
@@ -77,8 +77,12 @@ public:
     static bool blocksProgressSaves(bool assistTouchedRun);
     static bool showOverlay();
     static bool showTrajectory();
-    static bool showStraightfly(); // acquired Straight Flight target line
-    static bool showWavePattern(); // locked Wave zigzag + upcoming click edges
+    static bool showStraightfly(); // acquired Straight Flight target line (viz only)
+    static bool showWavePattern(); // locked Wave zigzag + upcoming click edges (viz only)
+    static bool showAi();          // neural grid + ranked delay markers (viz only)
+    // Persisted Flight assists (AP07). Dev session overrides still OR in via controller.
+    static bool shipLineEnable();
+    static bool wavePatternEnable();
     // 0 = continuous; else snap Ship/Wave locked travel onto this degree step.
     // Setting key remains wave-angle-snap (serialized).
     static int flightAngleSnapDegrees();
@@ -335,6 +339,9 @@ private:
     static bool s_cachedShowTrajectory;
     static bool s_cachedShowStraightfly;
     static bool s_cachedShowWavePattern;
+    static bool s_cachedShowAi;
+    static bool s_cachedShipLineEnable;
+    static bool s_cachedWavePatternEnable;
     static int s_cachedWaveAngleSnapDegrees;
     static float s_cachedShipRoomOfError;
     static bool s_cachedShowBakePath;

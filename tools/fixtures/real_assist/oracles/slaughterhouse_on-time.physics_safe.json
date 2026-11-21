@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "kind": "PhysicsSafeSet",
+  "claims": "ground-truth",
+  "corpusId": "slaughterhouse",
+  "status": "ready",
+  "family": "on-time",
+  "safeDelays": [0, 1, 2],
+  "band": [
+    { "delay": 0, "survived": true, "tailComplete": true, "unknown": false, "budgetHit": false },
+    { "delay": 1, "survived": true, "tailComplete": true, "unknown": false, "budgetHit": false },
+    { "delay": 2, "survived": true, "tailComplete": true, "unknown": false, "budgetHit": false },
+    { "delay": 3, "survived": false, "tailComplete": false, "unknown": false, "budgetHit": false }
+  ]
+}

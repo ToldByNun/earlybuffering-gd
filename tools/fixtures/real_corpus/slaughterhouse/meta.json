@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "id": "slaughterhouse",
+  "levelFile": "level.gmd",
+  "clearFile": "clear.gdr2",
+  "tags": [
+    "wave",
+    "cube",
+    "fast"
+  ],
+  "source": {
+    "level": "Slaughterhouse  2.gmd",
+    "clear": "slaughterhouse.gdr2",
+    "syncedAt": "2026-11-19T23:18:35Z"
+  },
+  "level": {
+    "name": "Slaughterhouse  2",
+    "id": 0,
+    "sha256": "3abd8a55229bbc830a4dc2d6a2933f33fabeec2a6aaef9128e7366ba8fa37bea",
+    "bytes": 1679628
+  },
+  "clear": {
+    "sha256": "02767513994633c7296f124070acd4caafc9bb0a4aa4207e2912fd7cf64b44fa",
+    "bytes": 458,
+    "author": "Audesign",
+    "bot": "MEGA",
+    "botVersion": 300,
+    "gameVersion": 22081,
+    "tps": 240.0,
+    "eventCount": 334,
+    "p1Events": 334,
+    "p2Events": 0,
+    "dual": false,
+    "platformer": false,
+    "lastFrame": 15697,
+    "deathCount": 0,
+    "durationHeader": 0.0
+  },
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  }
+}

@@ -5,10 +5,25 @@
 #include <Geode/modify/PlayerObject.hpp>
 #include <fmt/format.h>
 
+class EbGhostStreakVisuals {
+public:
+    static void mute(PlayerObject* player);
+
+private:
+    EbGhostStreakVisuals() = delete;
+};
+
 class $modify(EbPlayerObject, PlayerObject) {
 public:
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayerObject::pushButton", geode::prelude::Priority::First);
+        (void)self.setHookPriority("PlayerObject::releaseButton", geode::prelude::Priority::First);
+        (void)self.setHookPriorityPre("PlayerObject::createFadeOutDartStreak",
+                                      geode::prelude::Priority::Stub);
+        (void)self.setHookPriorityPre("PlayerObject::fadeOutStreak2",
+                                      geode::prelude::Priority::Stub);
+        (void)self.setHookPriorityPre("PlayerObject::activateStreak",
+                                      geode::prelude::Priority::Stub);
         (void)self.setHookPriority("PlayerObject::update", geode::prelude::Priority::First);
         // Swallow before death-FX / hitbox-on-death menus that hook this.
         (void)self.setHookPriorityPre("PlayerObject::playerDestroyed",
@@ -18,6 +33,12 @@ public:
     }
 
     bool pushButton(PlayerButton button);
+    // Must match PlayerObject::releaseButton (bool). Wave flips every release —
+    // a void hook was ABI-wrong and corrupted the live trail on direction change.
+    bool releaseButton(PlayerButton button);
+    void createFadeOutDartStreak();
+    void fadeOutStreak2(float duration);
+    void activateStreak();
 
     void update(float deltaTime);
 

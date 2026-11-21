@@ -276,6 +276,8 @@ private:
 
     friend class EbAssistLifecycle;
 
+    friend class EbNeuralAutoplay;
+
     EbAssistController() = default;
 
     int activeLimit(PlayerObject* player) const;
@@ -416,6 +418,7 @@ private:
 
     friend class EbBufferedInput;
     friend class EbAssistController;
+    friend class EbNeuralAutoplay;
 
     inline static constexpr int JUMP_BUTTON = 1;
 

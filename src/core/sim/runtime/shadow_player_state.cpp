@@ -1,28 +1,29 @@
 #include "shadow_player_state.hpp"
 #include "../shadow_simulator.hpp"
+#include "live_wave_trail_guard.hpp"
 #include "shadow_ghost_lifecycle.hpp"
 
 void EbShadowPlayerState::copyWaveTrail(EbShadowSimulator& simulator, PlayerObject* destination,
-                                      PlayerObject* source) {
+                                        PlayerObject* source) {
+    (void)simulator;
     auto* delay = destination->m_waveTrail;
     auto* state = source->m_waveTrail;
     if (!delay || !state)
         return;
-    // Avoid HardStreak::reset / CCDrawNode::clear on ghost streaks (LevelInit AV).
+    // Never write into the live HardStreak — destination must be a private ghost trail.
+    if (delay == state || EbLiveWaveTrailGuard::refuseMutation(delay))
+        return;
+    // Scalars only. Replaying the full live point array through HardStreak::addPoint
+    // every seed was a major hitch and risked stroking into the live batch.
     EbShadowGhostLifecycle::clearWaveTrailGeometry(destination);
     delay->m_currentPoint = state->m_currentPoint;
     delay->m_waveSize = state->m_waveSize;
     delay->m_pulseSize = state->m_pulseSize;
     delay->m_isSolid = state->m_isSolid;
     delay->m_isFlipped = state->m_isFlipped;
-    delay->m_drawStreak = state->m_drawStreak;
-    if (!state->m_pointArray)
-        return;
-    for (unsigned index = 0; index < state->m_pointArray->count(); ++index) {
-        if (auto* node = static_cast<PointNode*>(state->m_pointArray->objectAtIndex(index))) {
-            delay->addPoint(node->m_point);
-        }
-    }
+    delay->m_drawStreak = false;
+    delay->setVisible(false);
+    delay->setOpacity(0);
 }
 
 void EbShadowPlayerState::clearCollisionLogs(PlayerObject* state) {
@@ -40,7 +41,65 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
     if (!destination || !source)
         return;
 
+    // Live HardStreak isolation for copyAttributes:
+    // - Never leave destination aliased onto the live trail.
+    // - Never swap source->m_waveTrail (that made the live player point at scratch
+    //   mid-seed). Instead give destination a private streak, call copyAttributes,
+    //   then force-restore private pointers. reset/stopStroke hooks refuse the
+    //   protected live trail if copyAttributes tries to wipe it through an alias.
+    auto& simulator = EbShadowSimulator::get();
+    auto* const liveWave = source->m_waveTrail;
+    EbLiveWaveTrailGuard::protectPlayer(source);
+
+    auto* ownWaveTrail = destination->m_waveTrail;
+    auto* ownRegularTrail = destination->m_regularTrail;
+    auto* ownShipStreak = destination->m_shipStreak;
+    if (ownWaveTrail &&
+        (ownWaveTrail == liveWave || EbLiveWaveTrailGuard::isProtected(ownWaveTrail)))
+        ownWaveTrail = nullptr;
+    if (ownRegularTrail && ownRegularTrail == source->m_regularTrail)
+        ownRegularTrail = nullptr;
+    if (ownShipStreak && ownShipStreak == source->m_shipStreak)
+        ownShipStreak = nullptr;
+
+    if (!ownWaveTrail) {
+        ownWaveTrail = HardStreak::create();
+        if (ownWaveTrail) {
+            ownWaveTrail->m_drawStreak = false;
+            ownWaveTrail->setVisible(false);
+            ownWaveTrail->setOpacity(0);
+            if (auto* parent = destination->getParent())
+                parent->addChild(ownWaveTrail);
+            else if (simulator.m_ghostRoot)
+                simulator.m_ghostRoot->addChild(ownWaveTrail);
+        }
+    }
+    destination->m_waveTrail = ownWaveTrail;
+    destination->m_regularTrail = ownRegularTrail;
+    destination->m_shipStreak = ownShipStreak;
+
     destination->copyAttributes(source);
+
+    // Force exclusive ownership — copyAttributes may have copied live pointers.
+    if (!ownWaveTrail || ownWaveTrail == liveWave ||
+        EbLiveWaveTrailGuard::isProtected(ownWaveTrail)) {
+        ownWaveTrail = HardStreak::create();
+        if (ownWaveTrail) {
+            ownWaveTrail->m_drawStreak = false;
+            ownWaveTrail->setVisible(false);
+            ownWaveTrail->setOpacity(0);
+            if (auto* parent = destination->getParent())
+                parent->addChild(ownWaveTrail);
+            else if (simulator.m_ghostRoot)
+                simulator.m_ghostRoot->addChild(ownWaveTrail);
+        }
+    }
+    destination->m_waveTrail = ownWaveTrail;
+    destination->m_regularTrail = ownRegularTrail;
+    destination->m_shipStreak = ownShipStreak;
+    // Live player must still own the same HardStreak after the seed.
+    if (liveWave && source->m_waveTrail != liveWave)
+        source->m_waveTrail = liveWave;
     destination->setPosition(source->getPosition());
     destination->setRotation(source->getRotation());
     destination->setScaleX(source->getScaleX());
@@ -228,14 +287,10 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
 
     EbShadowSimulator::clearCollisionLogs(destination);
 
-    if (source->m_isDart) {
-        // local helper via instance method — static caller uses get()
-        EbShadowSimulator::get().copyWaveTrail(destination, source);
-    }
-
     // Ghost is created as icon cube (create 1,1). Mode flags alone leave a
     // cube-sized collide rect → false deaths on tight wave. Rebuild body, then
-    // re-apply pose/holds switchedToMode may clobber.
+    // re-apply pose/holds switchedToMode may clobber. Trail copy runs AFTER
+    // switchedToMode so we don't write into a trail that mode-switch replaces.
     {
         GameObjectType portal = GameObjectType::CubePortal;
         if (source->m_isDart)
@@ -262,7 +317,68 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
         bool const jumpHeld = source->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
 
         destination->setContentSize(source->getContentSize());
-        destination->switchedToMode(portal);
+        destination->m_playEffects = false;
+
+        // switchedToMode is expensive and spawns visible streak nodes. Only call
+        // when the ghost's vehicle actually differs from the live player.
+        bool const alreadySameMode =
+            (portal == GameObjectType::WavePortal && destination->m_isDart) ||
+            (portal == GameObjectType::ShipPortal && destination->m_isShip) ||
+            (portal == GameObjectType::BallPortal && destination->m_isBall) ||
+            (portal == GameObjectType::UfoPortal && destination->m_isBird) ||
+            (portal == GameObjectType::RobotPortal && destination->m_isRobot) ||
+            (portal == GameObjectType::SpiderPortal && destination->m_isSpider) ||
+            (portal == GameObjectType::SwingPortal && destination->m_isSwing) ||
+            (portal == GameObjectType::CubePortal && !destination->m_isDart &&
+             !destination->m_isShip && !destination->m_isBall && !destination->m_isBird &&
+             !destination->m_isRobot && !destination->m_isSpider && !destination->m_isSwing);
+
+        auto muteStreak = [](cocos2d::CCNode* node) {
+            if (!node)
+                return;
+            if (auto* hard = geode::prelude::typeinfo_cast<HardStreak*>(node)) {
+                if (EbLiveWaveTrailGuard::refuseMutation(hard))
+                    return;
+                hard->setVisible(false);
+                hard->m_drawStreak = false;
+                hard->setOpacity(0);
+                if (hard->m_pointArray)
+                    hard->m_pointArray->removeAllObjects();
+                return;
+            }
+            node->setVisible(false);
+            if (auto* motion = geode::prelude::typeinfo_cast<cocos2d::CCMotionStreak*>(node))
+                motion->setOpacity(0);
+        };
+
+        if (!alreadySameMode) {
+            // switchedToMode may destroy the previous HardStreak. Keep whatever it
+            // installs — never restore the pre-switch pointer (dangling → quit AV).
+            destination->switchedToMode(portal);
+            ownWaveTrail = destination->m_waveTrail;
+            ownRegularTrail = destination->m_regularTrail;
+            ownShipStreak = destination->m_shipStreak;
+            if (!ownWaveTrail || EbLiveWaveTrailGuard::isProtected(ownWaveTrail)) {
+                ownWaveTrail = HardStreak::create();
+                if (ownWaveTrail) {
+                    if (auto* parent = destination->getParent())
+                        parent->addChild(ownWaveTrail);
+                    else if (EbShadowSimulator::get().m_ghostRoot)
+                        EbShadowSimulator::get().m_ghostRoot->addChild(ownWaveTrail);
+                    destination->m_waveTrail = ownWaveTrail;
+                }
+            }
+            muteStreak(destination->m_waveTrail);
+            muteStreak(destination->m_regularTrail);
+            muteStreak(destination->m_shipStreak);
+        } else {
+            destination->m_waveTrail = ownWaveTrail;
+            destination->m_regularTrail = ownRegularTrail;
+            destination->m_shipStreak = ownShipStreak;
+            muteStreak(destination->m_waveTrail);
+            muteStreak(destination->m_regularTrail);
+            muteStreak(destination->m_shipStreak);
+        }
         destination->updatePlayerScale();
         destination->updatePlayerArt();
 
@@ -275,18 +391,14 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
         destination->m_yVelocity = yVel;
         destination->m_isDead = false;
 
+        // Flags only — never releaseButton/pushButton here. Wave releaseButton
+        // spawns fade-out dart streaks that paint the live trail on release plans.
         int const jumpIdx = static_cast<int>(PlayerButton::Jump);
-        if (jumpHeld) {
-            destination->m_holdingButtons[jumpIdx] = true;
-        } else {
-            destination->releaseButton(PlayerButton::Jump);
-            destination->m_holdingButtons[jumpIdx] = false;
-        }
+        destination->m_holdingButtons[jumpIdx] = jumpHeld;
     }
 
-    // switchedToMode and releaseButton rebuild the ghost after the initial
-    // state copy. Restore contact/input state afterwards so a grounded ball
-    // can actually flip on the first simulated tick.
+    // switchedToMode rebuilds the ghost after the initial state copy. Restore
+    // contact/input state afterwards so a grounded ball can flip on tick 0.
     destination->m_isOnGround = source->m_isOnGround;
     destination->m_isOnGround2 = source->m_isOnGround2;
     destination->m_isOnGround3 = source->m_isOnGround3;
@@ -305,11 +417,18 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
     destination->m_hasEverHitRing = source->m_hasEverHitRing;
     destination->m_holdingButtons = source->m_holdingButtons;
 
+    // Mode switch may have wiped trail points — refresh collision copy, never draw.
+    if (source->m_isDart && destination->m_waveTrail &&
+        destination->m_waveTrail != source->m_waveTrail)
+        EbShadowSimulator::get().copyWaveTrail(destination, source);
+
+    destination->m_playEffects = false;
     EbShadowSimulator::hideGhost(destination);
     EbShadowSimulator::clearCollisionLogs(destination);
 }
 
-size_t EbShadowPlayerState::diagCaptureTransformCount(EbShadowSimulator& simulator, PlayLayer* layer) {
+size_t EbShadowPlayerState::diagCaptureTransformCount(EbShadowSimulator& simulator,
+                                                      PlayLayer* layer) {
     if (!layer)
         return 0;
     simulator.beginCapture(layer);
@@ -343,10 +462,11 @@ int EbShadowPlayerState::captureSnapshot(EbShadowSimulator& simulator, PlayerObj
 }
 
 int EbShadowPlayerState::captureParitySnapshot(EbShadowSimulator& simulator, PlayerObject* real,
-                                             int which) {
+                                               int which) {
     if (!real || !simulator.m_snapshots[0])
         return -1;
-    int const slot = (which & 1) ? EbShadowSimulator::PARITY_SLOT_B : EbShadowSimulator::PARITY_SLOT_A;
+    int const slot =
+        (which & 1) ? EbShadowSimulator::PARITY_SLOT_B : EbShadowSimulator::PARITY_SLOT_A;
     if (!simulator.m_snapshots[slot])
         return -1;
     simulator.copyPlayerState(simulator.m_snapshots[slot], real);

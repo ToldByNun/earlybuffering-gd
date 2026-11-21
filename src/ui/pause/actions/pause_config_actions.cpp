@@ -9,6 +9,7 @@
 #include "../../desktop_menu/desktop_menu_cloud_overlay.hpp"
 #include "../../overlays/status_overlay.hpp"
 #include "../../settings/filtering/in_level_settings_filter_keeper.hpp"
+#include "../../visualizers/ai_visualizer.hpp"
 #include "../../visualizers/bake_path_visualizer.hpp"
 #include "../../visualizers/straightfly_visualizer.hpp"
 #include "../../visualizers/trajectory_visualizer.hpp"
@@ -154,6 +155,15 @@ void EbPauseConfigActions::afterConfigApplied(std::string const& successMsg) {
             }
         } else {
             EbWavePatternVisualizer::get().clear();
+        }
+        bool const showAi = EbStageConfig::showAi();
+        EbAiVisualizer::get().setEnabled(showAi);
+        if (showAi) {
+            if (auto* pl = PlayLayer::get()) {
+                EbAiVisualizer::get().attach(pl);
+            }
+        } else {
+            EbAiVisualizer::get().clear();
         }
         bool const bakePath = EbStageConfig::showBakePath();
         EbBakePathVisualizer::get().setEnabled(bakePath);

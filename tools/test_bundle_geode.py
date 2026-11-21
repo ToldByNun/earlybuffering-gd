@@ -13,7 +13,7 @@ from geode_package_check import expected_binary
 
 class BundleTests(unittest.TestCase):
     def packages(self, root):
-        manifest = {"id": "audesign.earlybuffer", "version": "v1.7.1"}
+        manifest = {"id": "audesign.earlybuffer", "version": "v1.8.0"}
         inputs = []
         for platform in PLATFORMS:
             package = root / platform / "audesign.earlybuffer.geode"
@@ -63,7 +63,7 @@ class BundleTests(unittest.TestCase):
             root = Path(directory)
             manifest, inputs = self.packages(root)
             with self.assertRaises(ValueError):
-                self.merge(inputs, root / "versioned-v1.7.1.geode", manifest)
+                self.merge(inputs, root / "versioned-v1.8.0.geode", manifest)
             manifest["version"] = "v1.6.3"
             with self.assertRaises(ValueError):
                 self.merge(inputs, root / "out" / "audesign.earlybuffer.geode", manifest)

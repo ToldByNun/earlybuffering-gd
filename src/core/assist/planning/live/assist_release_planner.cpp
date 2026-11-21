@@ -14,6 +14,7 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
+#include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
@@ -117,10 +118,13 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
+    int const aiOpportunity =
+        EbNeuralLearning::get().prepare(playLayer, player, false, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, learnedContext);
     controller.fillShipLineOptions(learnedContext, playLayer, player);
     controller.fillWavePatternOptions(learnedContext, playLayer, player);
-    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
-                           learnedContext.wavePattern.enabled;
+    bool mustDelaySearch = learnedOpportunity > 0 || aiOpportunity > 0 ||
+                           learnedContext.shipLine.enabled || learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -215,7 +219,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
                                                             spamDenseRel);
     opts.hybridDelay = EbHybridLearning::get().prepare(
         playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
-    if (opts.hybridDelay > 0)
+    int const aiHint = EbNeuralLearning::get().prepare(
+        playLayer, player, false, player1, effectTick, limit, controller.m_simDt, firstDt, opts);
+    if (opts.hybridDelay > 0 || aiHint > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
     opts.wavePattern = learnedContext.wavePattern;
@@ -232,9 +238,93 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     auto const callsBefore = phaseMeter.physicsTotalCount();
     auto const t0 = std::chrono::steady_clock::now();
     EbSimPlan plan{};
-    bool hybridWon = false;
+    bool scorerWon = false;
+    auto armFromVerify = [&](int delayValue, bool aiPath, float confidence) {
+        plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        plan.fixedFireTick = true;
+        if (delayValue <= 0) {
+            plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassNoThreat;
+            plan.nowIsSafe = true;
+            plan.delay = 0;
+        } else {
+            plan.action = PlanAction::Delay;
+            plan.reason = AssistReason::DelayThreat;
+            plan.delay = plan.jumpTick = delayValue;
+            plan.viableDelays = std::vector<int>{delayValue};
+            plan.dMin = plan.dMax = delayValue;
+            plan.guardOriginalDelay = delayValue;
+            plan.threatCleared = true;
+            plan.nowIsSafe = false;
+        }
+        if (aiPath) {
+            plan.aiTried = true;
+            plan.aiHint = delayValue;
+            plan.aiConfidence = confidence;
+            EbNeuralLearning::get().noteArmed(delayValue, confidence);
+        } else {
+            plan.hybridTried = true;
+            plan.hybridHint = opts.hybridDelay;
+        }
+        scorerWon = true;
+    };
+    auto& neural = EbNeuralLearning::get();
+    if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
+        !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
+        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
+        auto const order = neural.rankedVerifyDelays(limit);
+        int pickDelay = -1;
+        float pickConf = 0.0f;
+        int pickPass = -1;
+        float pickPassConf = 0.0f;
+        for (int delayValue : order) {
+            if (delayValue < 0 || delayValue > limit)
+                continue;
+            int const remUs = frameScope.remaining(frameLimitUs);
+            if (remUs < EbNeuralLearning::minRemUsForAiFirst()) {
+                opts.budgetUs = std::min(opts.budgetUs, remUs);
+                break;
+            }
+            EbPlanOptions vopts = opts;
+            vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
+            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.maxBranches = 0;
+            vopts.smartDepth = 1;
+            auto const vr = EbShadowSimulator::get().verifyDelay(
+                playLayer, player, false, delayValue, limit, controller.m_simDt, firstDt, vopts);
+            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            if (vr.budgetHit || vr.unknown)
+                continue;
+            if (!vr.ok) {
+                neural.noteVerifyOutcome(delayValue, false);
+                continue;
+            }
+            float const confidence = neural.confidenceForDelay(delayValue);
+            neural.noteVerifyOutcome(delayValue, true);
+            if (delayValue <= 0) {
+                if (pickPass < 0) {
+                    pickPass = 0;
+                    pickPassConf = confidence;
+                }
+            } else if (pickDelay < 0) {
+                pickDelay = delayValue;
+                pickConf = confidence;
+            }
+        }
+        if (pickDelay >= 0) {
+            armFromVerify(pickDelay, true, pickConf);
+            EbAssistLog::info(fmt::format("AI-FIRST release delay d={} ({:.0f}% sure)", pickDelay,
+                                          pickConf * 100.0f));
+        } else if (pickPass >= 0) {
+            armFromVerify(0, true, pickPassConf);
+            EbAssistLog::info(fmt::format("AI-FIRST release pass d=0 ({:.0f}% sure)",
+                                          pickPassConf * 100.0f));
+        }
+    }
     auto& hybrid = EbHybridLearning::get();
-    if (hybrid.preferHybridFirst && !opts.shipLine.enabled && !opts.wavePattern.enabled &&
+    // Hybrid-first stays Hybrid-only (AI may read tables for bootstrap, not this arm path).
+    if (!scorerWon && EbHybridLearning::enabled() && hybrid.preferHybridFirst &&
+        !opts.shipLine.enabled && !opts.wavePattern.enabled &&
         !playLayer->m_gameState.m_isDualMode) {
         auto const order = hybrid.rankedVerifyDelays(limit);
         for (int delayValue : order) {
@@ -260,32 +350,13 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
                 continue;
             }
             hybrid.noteVerifyOutcome(delayValue, true);
-            plan.hybridTried = true;
-            plan.hybridHint = opts.hybridDelay;
-            plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            plan.fixedFireTick = true;
-            if (delayValue <= 0) {
-                plan.action = PlanAction::Pass;
-                plan.reason = AssistReason::PassNoThreat;
-                plan.nowIsSafe = true;
-                plan.delay = 0;
-            } else {
-                plan.action = PlanAction::Delay;
-                plan.reason = AssistReason::DelayThreat;
-                plan.delay = plan.jumpTick = delayValue;
-                plan.viableDelays = std::vector<int>{delayValue};
-                plan.dMin = plan.dMax = delayValue;
-                plan.guardOriginalDelay = delayValue;
-                plan.threatCleared = true;
-                plan.nowIsSafe = false;
-            }
-            hybridWon = true;
+            armFromVerify(delayValue, false, 0.0f);
             EbAssistLog::info(fmt::format("HYBRID-FIRST release {} d={}",
                                           delayValue <= 0 ? "pass" : "delay", delayValue));
             break;
         }
     }
-    if (!hybridWon) {
+    if (!scorerWon) {
         plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
                                              firstDt, opts);
     }
@@ -317,7 +388,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         plan.toggleUnknown = true;
     }
 
+    if (!plan.aiTried)
+        plan.aiHint = aiHint;
     EbHybridLearning::get().decision(player1, plan);
+    EbNeuralLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {

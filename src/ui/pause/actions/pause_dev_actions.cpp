@@ -1,6 +1,8 @@
 #include "pause_dev_actions.hpp"
 #include "../../../core/assist/assist_controller.hpp"
 #include "../../../core/platform/save_drop_paths.hpp"
+#include "../../../core/real_assist/gold_reproduce_gate.hpp"
+#include "../../../core/real_assist/real_assist_runner.hpp"
 #include "../../../debug/assist_log.hpp"
 #include "../../../dev/capture/dev_trace_store.hpp"
 #include "../../../dev/dev_config.hpp"
@@ -309,4 +311,36 @@ void EbPauseDevActions::devCompareSessions() {
                     EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
     EbAssistLog::info(fmt::format("Dev Lab: {}", result.summaryLine));
     EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
+}
+
+void EbPauseDevActions::devReproduceGold() {
+    std::string report;
+    bool const ok = EbGoldReproduceGate::runDevAction(report);
+    auto const message =
+        ok ? fmt::format("Import gate OK.\n\n{}\n\n"
+                         "PlayLayer clear still required for reproduce=pass.\n"
+                         "Summary: saveDir/real_assist/last_run.txt",
+                         report)
+           : fmt::format("Import gate failed.\n\n{}\n\n"
+                         "Sync with:\n"
+                         "python tools/sync_real_corpus.py --install-save",
+                         report);
+    EbDesktopAlert::info("EarlyBuffer Real Assist", message.c_str());
+}
+
+void EbPauseDevActions::devRunRealAssist() {
+    std::string report;
+    bool const ok = EbRealAssistRunner::get().runDevAction(report);
+    auto const message =
+        ok ? fmt::format("Real Assist OK.\n\n{}\n\n"
+                         "AUTO=modes opens once and plans offline (bake-speed).\n"
+                         "Otherwise prep-only unless EB_REAL_ASSIST_OPEN_LEVEL=1.\n"
+                         "Details: saveDir/real_assist/last_run.txt + mode_compare.json",
+                         report)
+           : fmt::format("Real Assist runner failed.\n\n{}\n\n"
+                         "Sync + shift:\n"
+                         "python tools/sync_real_corpus.py --install-save\n"
+                         "python tools/shift_replay.py --install-save",
+                         report);
+    EbDesktopAlert::info("EarlyBuffer Real Assist", message.c_str());
 }

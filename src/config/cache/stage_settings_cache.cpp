@@ -41,6 +41,12 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "show-straightfly", false);
     EbStageConfigImplementation::s_cachedShowWavePattern =
         EbStageConfigImplementation::readBool(mod, "show-wave-pattern", false);
+    EbStageConfigImplementation::s_cachedShowAi =
+        EbStageConfigImplementation::readBool(mod, "show-ai", false);
+    EbStageConfigImplementation::s_cachedShipLineEnable =
+        EbStageConfigImplementation::readBool(mod, "ship-line-enable", false);
+    EbStageConfigImplementation::s_cachedWavePatternEnable =
+        EbStageConfigImplementation::readBool(mod, "wave-pattern-enable", false);
     EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees =
         std::clamp(EbStageConfigImplementation::readInt(mod, "wave-angle-snap", 0), 0, 45);
     EbStageConfigImplementation::s_cachedShipRoomOfError = std::clamp(
@@ -140,11 +146,14 @@ void EbStageSettingsCache::refreshCache() {
     try {
         auto const storedMode = mod->getSettingValue<std::string>("assist-mode");
         std::string const modeStr = EbAssistModeMigration::canonical(storedMode);
-        EbStageConfigImplementation::s_cachedAssistMode = modeStr == "Hybrid"
-                                                              ? EbStageConfig::AssistMode::Hybrid
-                                                              : EbStageConfig::AssistMode::Live;
+        if (modeStr == "Hybrid")
+            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Hybrid;
+        else if (modeStr == "AI")
+            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::AI;
+        else
+            EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Live;
         if (storedMode != modeStr)
-            mod->setSettingValue<std::string>("assist-mode", "Live");
+            mod->setSettingValue<std::string>("assist-mode", modeStr);
     } catch (...) {
         EbStageConfigImplementation::s_cachedAssistMode = EbStageConfig::AssistMode::Live;
     }

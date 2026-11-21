@@ -13,6 +13,8 @@
 #include "../../diagnostics/divergence_tracker.hpp"
 #include "../../learning/hybrid_learning.hpp"
 #include "../../learning/level_profile.hpp"
+#include "../../learning/neural_autoplay.hpp"
+#include "../../learning/neural_learning.hpp"
 #include "../../sim/planning/simulation_plan.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -37,7 +39,8 @@ void EbAssistOutcomes::noteRealJump(EbAssistController& controller, PlayerObject
 void EbAssistOutcomes::recordDecision(EbAssistController& controller, PlayLayer* playLayer,
                                     PlayerObject* player, bool down, EbSimPlan const& plan,
                                     int effectTick, int appliedDelay, int limit) {
-    if (!playLayer || !player || EbStageConfig::assistMode() == AssistMode::Hybrid)
+    if (!playLayer || !player || EbStageConfig::assistMode() == AssistMode::Hybrid ||
+        EbStageConfig::assistMode() == AssistMode::AI)
         return;
 
     EbDecisionEntry e;
@@ -192,6 +195,8 @@ void EbAssistOutcomes::onRealDeath(EbAssistController& controller, PlayLayer* pl
     if (EbShadowSimulator::get().isOwnedGhost(player))
         return;
     EbHybridLearning::get().death(player == playLayer->m_player1, controller.m_attemptTick);
+    EbNeuralLearning::get().death(player == playLayer->m_player1, controller.m_attemptTick);
+    EbNeuralAutoplay::get().onDeath(playLayer);
     (void)object;
 
     EbLagProbe::Scope const deathScope("eb.onRealDeath");

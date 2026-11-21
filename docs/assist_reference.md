@@ -12,8 +12,17 @@ Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
 | Hybrid | Player-driven tabular RL over Live: learns delay preferences per situation, then Hybrid-first `verifyDelay` before ordinary Live search. |
+| AI | Neural Candidate Scorer (1.8.0): ranks delays → verify → arm; per-level `.neural` + packaged prior. Opt-in **Autoplay** synthesizes Jump for RL self-play; **Train Session** batch-IL/RL from the attempt buffer. |
 
 Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were removed from the 1.7.x ship line (historical bake-verify notes below remain for older captures / Dev tooling).
+
+## AI Autoplay + session train (v1.8.0)
+
+With **Assist Mode = AI**, the AI tab exposes **Autoplay**: scorer + `verifyDelay` gated Jump presses (not CPS spam), **Time Warp** for attempt throughput, Explore % for cold-start, and auto **Train Session** on death when Auto-Tune is on. Manual **Train Session** still batch-trains from the session buffer (your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.
+
+**Trajectory pair features:** each AI `prepare` runs a short `runOne(d=0)` vs `runBaseline` (idle/coast) and packs idle/action death flags, survive norms, endX delta, `actionHelps` (−1 helpless … +1 chance), `bothDead`, and `idleSafer` into continuous geometry slots. Same comparison Live LongForesight already uses — the scorer can learn not to prefer clicks that die as soon as (or sooner than) doing nothing.
+
+**Search / learning heads:** online verify order uses `rankedDelaysByConfidence` (candidate delay written per forward). The 49-way rank head is trained with a constant delay-slot of 0 so train≈infer. Failed `verifyDelay` calls `learnRankReject` + confidence→0. Evidence weights: teacherSuggested ≪ simulationVerified ≪ survivedObserved. Session TD skips identical `s'=s` non-terminals. Autoplay arms `tick+chosenDelay` rather than discarding the verified delay.
 
 ## Hybrid RL (v1.7.1)
 
@@ -163,7 +172,7 @@ Classifier: Move/Rotate/Scale/Spawn/Toggle/ToggleOrb/Follow (901/1346/2067/1268/
 
 Pause: optional status lines (`show-pause-bake` / Pause Status Lines) + top-right **EB** (`show-pause-hub`). No side button stacks.
 
-**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.7.1**). Tab IA: **Main → Assist → Learn → Modes → Visual → UI → Keys | Dev**. Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
+**Desktop (Windows):** **EB** opens the EarlyBuffer ImGui shell (sidebar + panels). Version label reads `mod->getVersion()` (currently **v1.7.1**). Tab IA: **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev** (hotkeys live on feature tabs). Modes uses an icon top-bar; **Accent Color** under UI drives theme + wave fill; **Lag Warning** is an ImGui card (NoInputs) once per level.
 
 **Classic Geode popup** (mobile / Geode → Mods → EarlyBuffer → Settings): text-only category strip under search; tapping a label filters rows. Same key→tab map as the desktop shell.
 
@@ -275,6 +284,7 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | show-overlay | bool | false | | | Main |
 | lag-warning-toast | bool | true | | | UI → Notifications — once-per-level lag card; independent of overlay / sim-budget |
 | show-trajectory | bool | false | | | Visual — HOLD/coast ghosts; **v2** also LongForesight horizon + yellow prediction windows + dark-green best path |
+| show-ai | bool | false | | | Visual / AI — neural perception grid + ranked delay markers + train pulse (viz only) |
 | show-bake-path | bool | false | | | Visual — green BakeMap **press windows** near player (no connector line; release marks omitted) |
 | show-pause-bake | bool | false | | | Main — Pause Status Lines (top-left) |
 | show-pause-hub | bool | true | | | Main — EB button |

@@ -33,7 +33,7 @@ You still click. EarlyBuffer only holds a slightly early jump and fires it on th
 <br/>
 
 <strong>Not on the Geode Index.</strong> Install from <a href="https://github.com/ToldByNun/earlybuffering-gd/releases">GitHub Releases</a> only.<br/>
-<strong>Last 2.2081 line</strong> — v1.7.1 does not support newer Geometry Dash builds.
+<strong>Last 2.2081 line</strong> — v1.8.0 does not support newer Geometry Dash builds.
 
 </div>
 
@@ -93,7 +93,7 @@ Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_refer
 
 On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
 
-**Main → Assist → Learn → Modes → Visual → UI → Keys | Dev**
+**Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**
 
 - Accent Color drives the purple theme + sidebar wave
 - Modes icon bar (Cube → Swing) with per-mode cards
@@ -123,7 +123,7 @@ See [Cloud Configs](docs/cloud_configs.md).
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.7.1** |
+| Version | **1.8.0** |
 | Target | GD **2.2081** / Geode **5.11.1+** |
 | Platforms | Windows · macOS · iOS · Android |
 | License | [MIT](LICENSE) |

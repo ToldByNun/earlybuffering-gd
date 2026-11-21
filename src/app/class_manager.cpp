@@ -6,12 +6,16 @@
 
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_controller.hpp"
+#include "../core/learning/ai_config.hpp"
+#include "../core/learning/neural_autoplay.hpp"
 #include "../core/assist/contracts/assist_contracts140.hpp"
 #include "../core/bake/bake_map.hpp"
 #include "../core/platform/save_drop_paths.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/trigger_world/trigger_classify.hpp"
 #include "../core/trigger_world/trigger_world_store.hpp"
+#include "../core/real_assist/gold_reproduce_gate.hpp"
+#include "../core/real_assist/real_assist_runner.hpp"
 #include "../debug/assist_log.hpp"
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
@@ -67,8 +71,12 @@ void EbClassManager::initialize() {
 
     EbAssistLog::info(fmt::format("Class registry: {} classes / {} managed services",
                                   EbClassRegistry::all().size(), EbClassRegistry::serviceCount()));
+    service<EbAiConfig>().load();
+    EbNeuralAutoplay::get().syncFromConfig();
     runStartupChecks();
     EbModuleBindings::registerSettings();
+    // APR2 runner owns EB_REAL_ASSIST_AUTO (waits for MenuLayer; includes import stamp).
+    EbRealAssistRunner::maybeQueueAutoFromEnv();
     m_initialized = true;
 }
 
@@ -83,6 +91,8 @@ void EbClassManager::refreshSettings() {
         return;
     EbStageConfig::refreshCache();
     EbDevConfig::refreshCache();
+    service<EbAiConfig>().load();
+    EbNeuralAutoplay::get().syncFromConfig();
     this->syncDiagnostics();
     EbAssistController::get().updateOverlay();
 }

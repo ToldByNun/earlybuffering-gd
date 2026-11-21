@@ -2,6 +2,7 @@
 #include "../../../config/stage_config.hpp"
 #include "../../../ui/overlays/dev_overlay.hpp"
 #include "../../../ui/overlays/status_overlay.hpp"
+#include "../../../ui/visualizers/ai_visualizer.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
@@ -13,6 +14,7 @@
 #include "../../diagnostics/divergence_tracker.hpp"
 #include "../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../learning/level_profile.hpp"
+#include "../../learning/neural_learning.hpp"
 #include "../../sim/planning/search/adaptive/adaptive_plan_search.hpp"
 #include "../../sim/sim_trust.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -50,8 +52,19 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         auto mode = EbStageConfig::assistMode();
         auto const* modeName = EbStageConfig::assistModeName(mode);
         std::string learnBit;
-        // Learning only applies to Live / Hybrid fallback — not bake windows.
-        if (EbStageConfig::autoTune()) {
+        if (mode == AssistMode::AI) {
+            auto& neural = EbNeuralLearning::get();
+            if (neural.lastArmedDelay >= 0) {
+                learnBit = fmt::format("ai d={} {:.0f}% v{}/{}", neural.lastArmedDelay,
+                                       neural.lastArmedConfidence * 100.0f, neural.verifyHits,
+                                       neural.verifies);
+            } else if (EbStageConfig::autoTune()) {
+                learnBit = fmt::format("ai train v{}/{} u{}", neural.verifyHits, neural.verifies,
+                                       neural.updates);
+            } else {
+                learnBit = neural.hasUsableWeights() ? "ai frozen" : "ai no-prior";
+            }
+        } else if (EbStageConfig::autoTune()) {
             auto spot =
                 EbLevelProfile::get().overlaySpot(controller.m_lastMode, controller.m_lastPlayerX);
             learnBit =
@@ -63,9 +76,11 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         std::string trajBit = EbTrajectoryVisualizer::get().statusHint();
         std::string straightflyBit = EbStraightflyVisualizer::get().statusHint();
         std::string wavePatternBit = EbWavePatternVisualizer::get().statusHint();
+        std::string aiVizBit = EbAiVisualizer::get().statusHint();
         int const smartDepth = EbStageConfig::smartDepth();
         std::string smartBit;
-        if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid)) {
+        if (smartDepth > 1 && (mode == AssistMode::Live || mode == AssistMode::Hybrid ||
+                               mode == AssistMode::AI)) {
             smartBit = fmt::format("smart {}j/{}c", smartDepth, EbStageConfig::smartCombos());
         }
         int const cpsLim = EbStageConfig::cpsLimit();
@@ -88,6 +103,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             controller.m_overlayText += " | " + straightflyBit;
         if (!wavePatternBit.empty())
             controller.m_overlayText += " | " + wavePatternBit;
+        if (!aiVizBit.empty())
+            controller.m_overlayText += " | " + aiVizBit;
         if (controller.shipLineAssistActive()) {
             std::string shipLineBit;
             if (controller.m_buffer.state == BufferState::Buffered &&

@@ -1,7 +1,10 @@
 #include "desktop_menu_dev_panel.hpp"
 #include "../../core/assist/assist_controller.hpp"
 #include "../../core/assist/flight/wave_pattern_recognizer.hpp"
+#include "../../core/learning/ai_config.hpp"
 #include "../../core/learning/hybrid_learning.hpp"
+#include "../../core/learning/neural_session.hpp"
+#include "../../core/platform/ui_capabilities.hpp"
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -17,6 +20,7 @@
 #include "widgets/eb_button.hpp"
 #include "widgets/eb_checkbox.hpp"
 #include "widgets/eb_dropdown.hpp"
+#include "widgets/eb_keybind.hpp"
 #include "widgets/eb_section_card.hpp"
 #include "widgets/eb_slider.hpp"
 #include <Geode/Geode.hpp>
@@ -145,6 +149,16 @@ public:
         EbCheckbox::drawSetting("dev-eval-on-death", "Eval On Death");
         EbCheckbox::drawSetting("dev-overlay", "Dev Overlay");
         EbSlider::drawIntSetting("dev-record-count", "Keep last N attempts", 1, 50);
+
+        auto& aiCfg = EbAiConfig::get();
+        if (EbCheckbox::draw("dev-persist-ai-sessions", "Persist AI Sessions",
+                             &aiCfg.persistSessions, true,
+                             "Save every AI IL/RL attempt buffer to saveDir/ai/sessions/*.ebns "
+                             "(same as AI → Persist Sessions). Train later from disk.")) {
+            aiCfg.markCustom();
+            aiCfg.save();
+        }
+        ImGui::TextDisabled("AI session files saved: %d", EbNeuralSession::get().filesSaved());
 
         EbSectionCard::end();
     }
@@ -292,6 +306,37 @@ public:
         EbSectionCard::end();
     }
 
+    static void drawRealAssist() {
+        if (!EbSectionCard::begin("dev-real-assist", "Real Assist")) {
+            EbSectionCard::end();
+            return;
+        }
+
+        mutedText(
+            "APR0 gold gate: import-stamp synced clears. Oracle work needs reproduce=pass "
+            "from an unmodified PlayLayer clear (assist off).");
+        gap();
+        if (EbButton::draw("##dev-reproduce-gold", "Reproduce Gold Clears", true,
+                           "Import-stamps saveDir/real_corpus (or EB_REAL_CORPUS_DIR). Writes "
+                           "reproduce.json + real_assist/last_run.txt.",
+                           true)) {
+            fireAction("dev-reproduce-gold-action");
+        }
+        gap();
+        mutedText("Case / mode / protocol: settings real-assist-* or env "
+                  "EB_REAL_ASSIST_CASE/MODE/PROTOCOL. AUTO=modes = all 4 corpora (or CASE=id).");
+        gap();
+        if (EbButton::draw("##dev-run-real-assist", "Run Real Assist Case", true,
+                           "Prep only (menu stays): mode/protocol + import shifted gdr2. Set "
+                           "EB_REAL_ASSIST_OPEN_LEVEL=1 to enter the level. Writes "
+                           "real_assist/last_run.txt + session JSON.",
+                           true)) {
+            fireAction("dev-run-real-assist-action");
+        }
+
+        EbSectionCard::end();
+    }
+
     static void drawDanger() {
         if (!EbSectionCard::begin("dev-danger", "Danger")) {
             EbSectionCard::end();
@@ -363,21 +408,21 @@ public:
         if (EbSectionCard::begin("dev-flight-measurement", "Flight Measurement")) {
             bool shipLineEnabled = EbAssistController::get().shipLineEnabled();
             if (EbCheckbox::draw(
-                    "ship-line-enable", "Ship line assistance (session)", &shipLineEnabled, true,
-                    "Stabilizes an acquired Ship line by delaying real inputs (line first, ordinary "
-                    "safe as fallback). Requires press + release assist. Solo Ship only. Visualize "
-                    "Straightfly also arms this while Tracking. Modes → Ship may stay off. Delay "
-                    "window ≥20 ticks. Session-only — not saved."))
+                    "ship-line-enable-session", "Ship line assistance (session)", &shipLineEnabled,
+                    true,
+                    "Session override for Straightfly Assist (Flight tab setting also arms). "
+                    "Stabilizes an acquired Ship line by delaying real inputs. Requires press + "
+                    "release assist. Solo Ship only. Viz alone never corrects. Modes → Ship may "
+                    "stay off. Delay window ≥20 ticks. Not saved."))
                 EbAssistController::get().setShipLineEnabled(shipLineEnabled);
             bool wavePatternEnabled = EbAssistController::get().wavePatternEnabled();
             if (EbCheckbox::draw(
-                    "wave-pattern-enable", "Wave pattern assistance (session)", &wavePatternEnabled,
-                    true,
-                    "Stabilizes a locked Wave hold/release motif by delaying early edges to the "
-                    "expected phase (late edges pass to ordinary Wave rescue). Never invents "
-                    "missing clicks. Requires press + release assist. Solo Wave only. Visualize "
-                    "Wave Pattern also arms this while Tracking. Delay window ≥20 ticks. "
-                    "Session-only — not saved."))
+                    "wave-pattern-enable-session", "Wave pattern assistance (session)",
+                    &wavePatternEnabled, true,
+                    "Session override for Wave Pattern Assist (Flight tab setting also arms). "
+                    "Stabilizes a locked Wave motif by delaying early edges. Never invents "
+                    "missing clicks. Viz alone never corrects. Delay window ≥20 ticks. Not "
+                    "saved."))
                 EbAssistController::get().setWavePatternEnabled(wavePatternEnabled);
             static bool waveManual = false;
             static float waveHoldMs = 100.f;
@@ -435,11 +480,16 @@ public:
                 }
             }
             ImGui::TextWrapped(
-                "Ship intent locks a straight-flight line. Wave pattern (AP07/08) locks "
-                "hold/release spam. AP09 combines both with ordinary assist: direction change "
-                "wins, then collision rescue, then Ship/Wave preference, else ordinary.");
+                "Ship intent locks a straight-flight line. Wave pattern locks hold/release spam. "
+                "Persisted enables live on the Flight tab; this block is session overrides + "
+                "diagnostics.");
         }
         EbSectionCard::end();
+        if (EbUiCapabilities::keybindUI()) {
+            if (EbSectionCard::begin("dev-hotkeys", "Hotkeys"))
+                EbKeybind::drawSetting("hotkey-debug", "Debug Logging");
+            EbSectionCard::end();
+        }
         drawStatus();
         gap();
         drawSetup();
@@ -453,6 +503,8 @@ public:
         drawSave();
         gap();
         drawCompare();
+        gap();
+        drawRealAssist();
         gap();
         drawDanger();
     }

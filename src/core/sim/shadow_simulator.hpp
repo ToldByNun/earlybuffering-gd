@@ -97,27 +97,59 @@ public:
     void clearDeathHitboxSuppress() {
         m_suppressDeathHitboxes = false;
     }
+    // Call on every ghost-death swallow: clear false P1/P2 death flags and hide
+    // debug draw immediately so MH cannot flash hitboxes for one frame.
+    void scrubGhostDeathHitboxContamination(PlayLayer* layer) {
+        m_suppressDeathHitboxes = true;
+        clearContaminatedRealDeathFlags(layer);
+        hideDeathHitboxesIfAlive(layer);
+    }
     // While simulating, keep real icons looking alive unless they were already dead.
+    // Outside sim (stale ghost collide): still clear — ghosts must never mark reals dead.
     void clearContaminatedRealDeathFlags(PlayLayer* layer) {
-        if (!layer || !m_simulating)
+        if (!layer)
             return;
-        if (layer->m_player1 && !m_savedP1Dead)
+        if (m_simulating) {
+            if (layer->m_player1 && !m_savedP1Dead)
+                layer->m_player1->m_isDead = false;
+            if (layer->m_player2 && !m_savedP2Dead)
+                layer->m_player2->m_isDead = false;
+            return;
+        }
+        if (layer->m_player1)
             layer->m_player1->m_isDead = false;
-        if (layer->m_player2 && !m_savedP2Dead)
+        if (layer->m_player2)
             layer->m_player2->m_isDead = false;
+    }
+    void hideDeathHitboxesIfAlive(PlayLayer* layer) {
+        if (!layer || !m_suppressDeathHitboxes)
+            return;
+        if (layer->m_player1 && layer->m_player1->m_isDead)
+            return;
+        // Respect explicit practice debug-draw; only undo false death latches.
+        if (layer->m_isDebugDrawEnabled && layer->m_isPracticeMode)
+            return;
+        if (layer->m_debugDrawNode)
+            layer->m_debugDrawNode->setVisible(false);
     }
     PlayerObject* shadow() const {
         return m_shadow;
     }
+    // Hot path helper — ghost-owned HardStreaks only (never the live stroke).
     bool isShadowTrail(HardStreak* trail) const {
         if (!trail)
             return false;
-        if (m_shadow && trail == m_shadow->m_waveTrail)
+        if (m_shadow && m_shadow->m_waveTrail == trail)
             return true;
-        if (!(m_evalActive && trail == m_evalActive->m_waveTrail)) {
-            return false;
+        for (auto* slot : m_snapshots) {
+            if (slot && slot->m_waveTrail == trail)
+                return true;
         }
-        return true;
+        for (auto* entry : m_evalGhosts) {
+            if (entry && entry->m_waveTrail == trail)
+                return true;
+        }
+        return false;
     }
 
     void markDead(PlayerObject* player, GameObject* object = nullptr);
@@ -208,6 +240,27 @@ public:
     VerifyDelayResult verifyDelay(PlayLayer* layer, PlayerObject* real, bool down, int delay,
                                   int limit, float deltaTime, float firstDt,
                                   EbPlanOptions const& options = {});
+
+    // Cheap action-now (d=0) vs idle/coast pair for neural features / foresight hints.
+    // Caps horizon to [24,48]; returns valid=false when ghost missing or budget dies early.
+    class ActionVsIdleResult {
+    public:
+        bool valid = false;
+        bool unknown = false;
+        bool actionDied = false;
+        bool idleDied = false;
+        int actionDeathTick = -1;
+        int idleDeathTick = -1;
+        float actionDeathX = 0.f;
+        float idleDeathX = 0.f;
+        float actionEndX = 0.f;
+        float idleEndX = 0.f;
+        int horizon = 0;
+
+    private:
+    };
+    ActionVsIdleResult sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool down,
+                                          int limit, float deltaTime, float firstDt);
 
     // --- Dev Lab eval (Commit 9): clock-bound stepSchedule, own ghosts ---
     class TrajSample {
@@ -585,6 +638,9 @@ private:
     // Layer that owns the ghost children. resetLevel runs during PlayLayer::init
     // (setupHasCompleted) before onLevelInit/attach — evacuate must no-op then.
     GJBaseGameLayer* m_hostLayer = nullptr;
+    // Hidden parent under PlayLayer (NOT objectLayer). Keeps ghosts out of MH
+    // hitbox-trail scans of gameplay objects while sims still set world positions.
+    cocos2d::CCNode* m_ghostRoot = nullptr;
     int m_nextSnapshot = 0;
     bool m_simulating = false;
     bool m_bakeOffline = false;

@@ -29,6 +29,6 @@ See [Adaptive Plan](/features/adaptive). Extra knobs (screen / verify / reserve)
 
 ## Learning / Auto Tune
 
-Learn contains Auto Tune, reset learning and config import/export. The former self-bake workflow and Bake tab have been removed.
+Learn contains Auto-Tune, Hybrid progress, reset learning and config import/export. AI Candidate Scorer controls live on the separate AI tab. The former self-bake workflow and Bake tab have been removed.
 
-Trigger World preparation controls are under Assist. In Hybrid, enable Auto-Tune to learn from repeated attempts. The Learn tab shows familiar patterns and how often a suggested timing was chosen. Reset This Level clears its saved learning.
+Trigger World preparation controls are under Assist. In Hybrid, enable Auto-Tune to learn from repeated attempts. The Learn tab shows familiar patterns and how often a suggested timing was chosen. The AI tab shows verify hits, confidence, top-k and freeze for the neural scorer. Reset This Level clears Hybrid and AI learning for the level.

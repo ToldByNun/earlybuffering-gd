@@ -100,6 +100,14 @@ void EbActionButtonSettingImplementation::fireSettingAction(std::string const& k
         EbPauseActionBridge::devCompareSessions();
         return;
     }
+    if (key == "dev-reproduce-gold-action") {
+        EbPauseActionBridge::devReproduceGold();
+        return;
+    }
+    if (key == "dev-run-real-assist-action") {
+        EbPauseActionBridge::devRunRealAssist();
+        return;
+    }
 }
 
 geode::Result<std::shared_ptr<geode::prelude::SettingV3>>

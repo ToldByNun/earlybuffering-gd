@@ -1,5 +1,6 @@
 #include "stage_config.hpp"
 #include "../core/learning/hybrid_learning.hpp"
+#include "../core/learning/neural_learning.hpp"
 #include "../core/assist/assist_clock.hpp"
 #include "../core/platform/platform_limits.hpp"
 #include "cache/stage_settings_cache.hpp"
@@ -42,6 +43,9 @@ bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
 bool EbStageConfigImplementation::s_cachedShowTrajectory = false;
 bool EbStageConfigImplementation::s_cachedShowStraightfly = false;
 bool EbStageConfigImplementation::s_cachedShowWavePattern = false;
+bool EbStageConfigImplementation::s_cachedShowAi = false;
+bool EbStageConfigImplementation::s_cachedShipLineEnable = false;
+bool EbStageConfigImplementation::s_cachedWavePatternEnable = false;
 int EbStageConfigImplementation::s_cachedWaveAngleSnapDegrees = 0;
 float EbStageConfigImplementation::s_cachedShipRoomOfError = 1.1f;
 bool EbStageConfigImplementation::s_cachedShowBakePath = false;
@@ -301,6 +305,7 @@ void EbStageConfigImplementation::loadAssistOffSlots(
 void EbStageConfig::refreshCache() {
     EbStageSettingsCache::refreshCache();
     EbHybridLearning::get().settingsChanged();
+    EbNeuralLearning::get().settingsChanged();
 }
 
 void EbStageConfigImplementation::ensureCache() {
@@ -328,6 +333,8 @@ char const* EbStageConfig::assistModeName(AssistMode mode) {
         return "Live";
     case AssistMode::Hybrid:
         return "Hybrid";
+    case AssistMode::AI:
+        return "AI";
     }
     return "Live";
 }
@@ -338,6 +345,8 @@ char const* EbStageConfig::assistModeHint(AssistMode mode) {
         return "live plan each click";
     case AssistMode::Hybrid:
         return "Checks learned timings on familiar clicks";
+    case AssistMode::AI:
+        return "Neural timing assist — learns a per-level network from your play";
     }
     return "";
 }
@@ -351,7 +360,7 @@ void EbStageConfig::setAssistMode(AssistMode mode) {
 
 void EbStageConfig::cycleAssistMode() {
     EbStageConfigImplementation::ensureCache();
-    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 2;
+    int next = (static_cast<int>(EbStageConfigImplementation::s_cachedAssistMode) + 1) % 3;
     setAssistMode(static_cast<AssistMode>(next));
 }
 
@@ -457,6 +466,18 @@ bool EbStageConfig::showStraightfly() {
 bool EbStageConfig::showWavePattern() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedShowWavePattern;
+}
+bool EbStageConfig::showAi() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShowAi;
+}
+bool EbStageConfig::shipLineEnable() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedShipLineEnable;
+}
+bool EbStageConfig::wavePatternEnable() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedWavePatternEnable;
 }
 int EbStageConfig::flightAngleSnapDegrees() {
     EbStageConfigImplementation::ensureCache();
@@ -662,6 +683,10 @@ bool EbStageConfig::selfCheck(std::string& report) {
     expect(std::string(assistPickName()) == "v1", "fixed-pick-name");
     expect(assistEngine() == AssistEngineKind::ShadowPlayer, "fixed-engine");
     expect(effectiveAssistEngine() == AssistEngineKind::ShadowPlayer, "fixed-effective-engine");
+    expect(std::string(assistModeName(AssistMode::Live)) == "Live", "mode-name-live");
+    expect(std::string(assistModeName(AssistMode::Hybrid)) == "Hybrid", "mode-name-hybrid");
+    expect(std::string(assistModeName(AssistMode::AI)) == "AI", "mode-name-ai");
+    expect(assistModeHint(AssistMode::AI)[0] != '\0', "mode-hint-ai");
 
     // Pure resolve: overwrite off → global; overwrite on → mode value.
     auto resolveBool = [](bool overwrite, bool modeValue, bool globalValue) {

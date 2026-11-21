@@ -14,7 +14,19 @@ class EbSettingsTabWatchdogState;
 
 // Categories for the Geode ModSettingsPopup chip / segment bar + desktop shell.
 // Smart folded into Main; Scope folded into Assist; UI chrome on its own tab.
-enum class SettingsCategory : int { Main = 0, Assist, Learn, Modes, Visual, UI, Keys, Dev, Count };
+// Hotkeys live on their feature tabs (no Keys tab). Flight between Modes and Visual.
+enum class SettingsCategory : int {
+    Main = 0,
+    Assist,
+    Learn,
+    AI,
+    Modes,
+    Flight,
+    Visual,
+    UI,
+    Dev,
+    Count
+};
 
 // Filters Geode settings rows by SettingsCategory.
 // Non-matching rows are reparented out of the list (Geode search style); scroll Y preserved.
@@ -25,7 +37,7 @@ public:
     static SettingsCategory categoryForKey(std::string const& key);
     static bool keepKey(std::string const& key, SettingsCategory category);
 
-    // Legacy subset: Main∪Scope∪Assist∪Visual∪Bake (drops Modes/Keys/Dev).
+    // Legacy subset: Main∪Scope∪Assist∪Visual∪UI (drops Modes/Flight/Dev).
     static bool keepKey(std::string const& key);
 
     static void apply(cocos2d::CCNode* popup, SettingsCategory category);

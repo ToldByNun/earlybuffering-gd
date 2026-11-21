@@ -1,0 +1,122 @@
+# Real corpus (APR0+)
+
+Gold level + clear pairs for the Real Assist Test Engine. Local binaries are **synced**, not hand-edited in git.
+
+## Sync
+
+```bat
+python tools/sync_real_corpus.py
+python tools/sync_real_corpus.py --install-save
+```
+
+- Source: `EB_REAL_CORPUS_SRC` or `C:\Users\mikaj\Music\earlybuffer`
+- Fixture tree: `tools/fixtures/real_corpus/<id>/`
+- `--install-save` also copies into the Geode mod save dir `…/audesign.earlybuffer/real_corpus/` for in-game runners (`EB_REAL_CORPUS_DIR` overrides)
+
+Tracked: `manifest.json`, per-id `meta.json` / `reproduce.json`, this README.  
+Ignored / local: `level.gmd`, `clear.gdr2`, `derived/` (shifts + oracles).
+
+## Layout
+
+```
+real_corpus/
+  manifest.json
+  <id>/
+    level.gmd
+    clear.gdr2
+    meta.json
+    reproduce.json
+  derived/          # APR1+ (gitignored)
+```
+
+Ids: `cataclysm`, `quantum`, `slaughterhouse`, `hoveropolis`.
+
+## Gold reproduce gate
+
+A clear is **untrusted for oracle construction** until `reproduce.json` has `"status": "pass"` from an unmodified PlayLayer run:
+
+- Assist off; practice / startpos off unless tagged
+- Same TPS / frame clock as import (`meta.clear.tps`)
+- Unmodified `clear.gdr2` must finish; die or desync → `"status": "fail"`
+
+Import sanity (offline):
+
+```bat
+python tools/test_real_corpus_import.py
+```
+
+In-game: Dev → **Reproduce Gold Clears**, or `geode run` with `EB_REAL_ASSIST_AUTO=1` (optional `EB_REAL_ASSIST_CASE=<id>`).
+
+## APR1 — Shifts + dual oracles
+
+```bat
+python tools/shift_replay.py
+python tools/test_shift_replay.py
+python tools/build_verifier_safe.py --id cataclysm --family pulse-shift-early-2
+python tools/build_physics_safe.py  --id cataclysm --family pulse-shift-early-2
+```
+
+- Derived variants land under `derived/<id>/` (gitignored) with `.gdr2` + `.sidecar.json`
+- Families: `on-time`, `pulse-shift-*-k`, `edge-only-*-k` (k=1..8), `drop-click`
+- Sidecar records shifted indices, hold lengths, and **pre_shifted_press** capture contract
+- Oracle builders **refuse** unless `reproduce=pass`; offline they only emit `pending-probe` docs
+- **PhysicsSafeSet** = acceptance ground truth; **VerifierSafeSet** = diagnostic only
+
+## APR2 — In-game runner + auto
+
+```bat
+python tools/shift_replay.py --install-save
+set EB_REAL_ASSIST_AUTO=matrix
+geode run
+```
+
+- Dev → **Run Real Assist Case** (settings `real-assist-case` / `mode` / `protocol`)
+- Env: `EB_REAL_ASSIST_AUTO`, `EB_REAL_ASSIST_CASE`, `EB_REAL_ASSIST_MODE`, `EB_REAL_ASSIST_PROTOCOL`
+- Matrix + agent loop: `tools/real_assist/run_matrix.md`
+- Outputs: `saveDir/real_assist/last_run.txt` + `session_*.json`
+
+## APR3 — Offline score + compare
+
+```bat
+python tools/score_session.py path\to\session.json --physics path\to.physics_safe.json
+python tools/compare_modes.py path\to\real_assist_dir --out compare.json
+python tools/test_real_assist_score.py
+python tools/test_real_assist_score.py --freeze
+```
+
+- **PhysicsHitRate** = acceptance; **VerifierHitRate** = diagnostic only
+- InventRate > 0 → hard fail; on-time SurviveRate floor regression → fail
+- Verifier↔Physics set disagreements → `diagnosticFailures` (investigate, not acceptance)
+
+## APR4 — Freeze goldens + gate before AP00
+
+```bat
+python tools/test_real_assist_smoke.py --freeze
+python tools/test_real_assist_smoke.py
+python tools/run_live_regression_ap07.py
+```
+
+- Smoke PhysicsSafeSet (+ VerifierSafeSet diagnostic): `cataclysm/pulse-shift-early-2`, `hoveropolis/pulse-shift-early-2`, `slaughterhouse/pulse-shift-early-2`, `quantum/on-time`
+- Baseline report: `docs/dev/real_assist_baseline.md` (Live vs Hybrid, Frozen)
+- Pulse-shift ≠ edge-only — do not alias families
+- Dual corpora graded fairly (no Hybrid/AI-first); AP00 blocked until smoke gate is green
+
+## Dense coverage (multi-click sequences × tick windows)
+
+Smoke (4 keys) is only the AP00 gate. Lab/CI density uses:
+
+- multi-click **sequences** (1, 2, 3 hintereinander)
+- several **max tick windows** (`4,8,12,24` — ticks-all style)
+- full delay bands `0..limit` per window
+
+```bat
+python tools/shift_replay.py --dense --quiet
+python tools/test_real_assist_dense.py --freeze
+python tools/test_real_assist_dense.py
+```
+
+- Default clicks: `quantile:8`; sequences: `1,2,3` (`--sequences 1,2,3`)
+- Seq length >1: early families × k in `{2,4,6}` (consecutive assists / smart-depth path)
+- Windows: `--windows 4,8,12,24` on `build_dense_safe_fixtures.py`
+- Floor: >=200 delay probes and >=100 safe points per level (synthetic until `reproduce=pass`)
+- Optional denser: `--clicks every:5` / `--clicks all`

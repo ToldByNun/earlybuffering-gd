@@ -28,6 +28,9 @@
 #include "../core/diagnostics/sim_tick_cost_meter.hpp"
 #include "../core/fixtures/real_corpus_fixtures.hpp"
 #include "../core/fixtures/tg2_bake_fixture.hpp"
+#include "../core/real_assist/dual_oracle_builder.hpp"
+#include "../core/real_assist/gold_reproduce_gate.hpp"
+#include "../core/real_assist/real_assist_runner.hpp"
 #include "../core/learning/assist_learning.hpp"
 #include "../core/learning/spot_trust_map.hpp"
 #include "../core/level/section_object_walk.hpp"
@@ -218,6 +221,15 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string realCorpusReport;
     expectReport(EbRealCorpusFixtures::selfCheck(realCorpusReport), "real-corpus-fixtures",
                  realCorpusReport);
+    std::string goldReproduceReport;
+    expectReport(EbGoldReproduceGate::selfCheck(goldReproduceReport), "gold-reproduce-gate",
+                 goldReproduceReport);
+    std::string dualOracleReport;
+    expectReport(EbDualOracleBuilder::selfCheck(dualOracleReport), "dual-oracle-builder",
+                 dualOracleReport);
+    std::string realAssistRunnerReport;
+    expectReport(EbRealAssistRunner::selfCheck(realAssistRunnerReport), "real-assist-runner",
+                 realAssistRunnerReport);
     std::string sectionWalkReport;
     expectReport(EbSectionObjectWalk::selfCheck(sectionWalkReport), "section-object-walk",
                  sectionWalkReport);

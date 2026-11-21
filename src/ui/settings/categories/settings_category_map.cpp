@@ -79,7 +79,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"assist-press", SettingsCategory::Assist},
         {"assist-release", SettingsCategory::Assist},
 
-        // Learn — per-level learning + config I/O
+        // Learn — Hybrid tabular learning + config I/O
         {"title-learning", SettingsCategory::Learn},
         {"auto-tune", SettingsCategory::Learn},
         {"title-assist-actions", SettingsCategory::Learn},
@@ -87,6 +87,9 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"export-config-action", SettingsCategory::Learn},
         {"import-config-action", SettingsCategory::Learn},
         {"browse-cloud-configs-action", SettingsCategory::Learn},
+
+        // AI — neural Candidate Scorer (desktop ImGui owns knobs; classic shows title)
+        {"title-ai", SettingsCategory::AI},
 
         // Bake — bake actions + trigger world
         {"cycle-assist-mode", SettingsCategory::Assist},
@@ -193,16 +196,23 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"swing-adaptive-verify-quantum", SettingsCategory::Modes},
         {"swing-adaptive-reserve-pct", SettingsCategory::Modes},
 
+        // Flight — assist enables + corridor knobs (viz stays on Visual)
+        {"title-flight", SettingsCategory::Flight},
+        {"ship-line-enable", SettingsCategory::Flight},
+        {"wave-pattern-enable", SettingsCategory::Flight},
+        {"wave-angle-snap", SettingsCategory::Flight},
+        {"ship-room-of-error", SettingsCategory::Flight},
+
         // Visual
         {"show-trajectory", SettingsCategory::Visual},
         {"show-straightfly", SettingsCategory::Visual},
         {"show-wave-pattern", SettingsCategory::Visual},
-        {"wave-angle-snap", SettingsCategory::Visual},
-        {"ship-room-of-error", SettingsCategory::Visual},
+        {"show-ai", SettingsCategory::Visual},
         {"save-feedback-sound", SettingsCategory::Visual},
         {"save-feedback-color", SettingsCategory::Visual},
         {"save-feedback-counter", SettingsCategory::Visual},
         {"save-icon-color", SettingsCategory::Visual},
+        {"hotkey-trajectory", SettingsCategory::Visual},
 
         // UI — chrome + accent + light diagnostics
         {"title-ui", SettingsCategory::UI},
@@ -221,18 +231,18 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"debug-logging", SettingsCategory::UI},
         {"perf-trace", SettingsCategory::UI},
         {"lag-probe", SettingsCategory::UI},
+        {"hotkey-desktop-menu", SettingsCategory::UI},
 
-        // Keys
-        {"title-keys", SettingsCategory::Keys},
-        {"hotkey-desktop-menu", SettingsCategory::Keys},
-        {"hotkey-debug", SettingsCategory::Keys},
-        {"hotkey-reset-level", SettingsCategory::Keys},
-        {"hotkey-auto-tune", SettingsCategory::Keys},
-        {"hotkey-assist-mode", SettingsCategory::Keys},
-        {"hotkey-trajectory", SettingsCategory::Keys},
+        // Learn hotkeys (Auto-Tune / reset)
+        {"hotkey-auto-tune", SettingsCategory::Learn},
+        {"hotkey-reset-level", SettingsCategory::Learn},
+
+        // Assist hotkey (cycle mode)
+        {"hotkey-assist-mode", SettingsCategory::Assist},
 
         // Dev
         {"title-dev", SettingsCategory::Dev},
+        {"hotkey-debug", SettingsCategory::Dev},
         {"title-dev-session", SettingsCategory::Dev},
         {"dev-record-enable", SettingsCategory::Dev},
         {"dev-record-count", SettingsCategory::Dev},
@@ -265,6 +275,11 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"dev-copy-report-action", SettingsCategory::Dev},
         {"dev-export-research-pack-action", SettingsCategory::Dev},
         {"dev-compare-sessions-action", SettingsCategory::Dev},
+        {"dev-reproduce-gold-action", SettingsCategory::Dev},
+        {"real-assist-case", SettingsCategory::Dev},
+        {"real-assist-mode", SettingsCategory::Dev},
+        {"real-assist-protocol", SettingsCategory::Dev},
+        {"dev-run-real-assist-action", SettingsCategory::Dev},
         {"title-dev-diag", SettingsCategory::Dev},
         {"dev-dump-diag-action", SettingsCategory::Dev},
 };

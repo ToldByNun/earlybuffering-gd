@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "corpusId": "slaughterhouse",
+  "status": "pending",
+  "clearSha256": "02767513994633c7296f124070acd4caafc9bb0a4aa4207e2912fd7cf64b44fa",
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  },
+  "import": {
+    "tps": 240.0,
+    "eventCount": 334,
+    "lastFrame": 15697,
+    "dual": false
+  },
+  "attempt": null,
+  "notes": "Untrusted for oracle until status=pass from an unmodified PlayLayer gold clear (assist off, practice/startpos off unless tagged).",
+  "updatedAt": "2026-11-19T23:18:35Z"
+}

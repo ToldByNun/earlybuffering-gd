@@ -8,6 +8,7 @@
 #include "../../../dev/capture/dev_trace_store.hpp"
 #include "../../../ui/feedback/lag_warning_toast.hpp"
 #include "../../../ui/feedback/save_feedback.hpp"
+#include "../../../ui/visualizers/ai_visualizer.hpp"
 #include "../../../ui/visualizers/bake_path_visualizer.hpp"
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
@@ -15,6 +16,9 @@
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
 #include "../../learning/hybrid_learning.hpp"
+#include "../../learning/neural_autoplay.hpp"
+#include "../../learning/neural_learning.hpp"
+#include "../../real_assist/real_assist_runner.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../sim/sim_trust.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
@@ -80,6 +84,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
             0.1f * std::abs(errorMessage) / denom + 0.9f * controller.m_dtVarEma;
     }
     ++controller.m_attemptTick;
+    EbRealAssistRunner::get().onPhysicsTick(playLayer);
     {
         double const simTps = EbAssistClock::get().simTpsFromDt(controller.m_simDt);
         if (EbAssistClock::get().noteSpeedScale(timeWarp, simTps, controller.m_attemptTick)) {
@@ -99,6 +104,7 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
         EbPerfTrace::Scope const scope("pollOutcome");
         controller.pollOutcome(playLayer);
         EbHybridLearning::get().poll(playLayer, controller.m_attemptTick);
+        EbNeuralLearning::get().poll(playLayer, controller.m_attemptTick);
     }
     {
         EbPerfTrace::Scope const scope("flushPendingRelease");
@@ -187,6 +193,10 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
             controller.tickLearning(playLayer, playerOne);
         }
     }
+    {
+        EbPerfTrace::Scope const scope("aiAutoplay");
+        EbNeuralAutoplay::get().onPhysicsTick(playLayer);
+    }
 
     {
         EbPerfTrace::Scope const scope("trajectory");
@@ -199,6 +209,10 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
     {
         EbPerfTrace::Scope const scope("wavePattern");
         EbWavePatternVisualizer::get().onPhysicsTick(playLayer, deltaTime);
+    }
+    {
+        EbPerfTrace::Scope const scope("aiViz");
+        EbAiVisualizer::get().onPhysicsTick(playLayer, deltaTime);
     }
     {
         EbPerfTrace::Scope const scope("bakePath");
@@ -306,12 +320,16 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
     bool const learningReleaseBuffered =
         !down && controller.m_buffer.state == BufferState::Buffered &&
         controller.m_buffer.player1 == player1 && controller.m_buffer.down;
-    if (!learningReleaseBuffered)
+    if (!learningReleaseBuffered) {
         EbHybridLearning::get().edge(player1, effectTick, down);
+        EbNeuralLearning::get().edge(player1, effectTick, down);
+    }
     auto finish = [&](bool passThrough) -> bool {
         if (passThrough) {
             EbHybridLearning::get().vanilla(playLayer, player, down, player1, effectTick,
                                             controller.m_simDt);
+            EbNeuralLearning::get().vanilla(playLayer, player, down, player1, effectTick,
+                                           controller.m_simDt);
             EbSelfBakeRecorder::get().noteVanillaInput(playLayer, player, player1, down, effectTick,
                                                        controller.m_simDt);
         }

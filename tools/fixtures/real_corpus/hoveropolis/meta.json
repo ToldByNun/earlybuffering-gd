@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "id": "hoveropolis",
+  "levelFile": "level.gmd",
+  "clearFile": "clear.gdr2",
+  "tags": [
+    "ship",
+    "ball",
+    "cube",
+    "tight"
+  ],
+  "source": {
+    "level": "Silent Hoveropolis.gmd",
+    "clear": "silent hoveopolis.gdr2",
+    "syncedAt": "2026-11-19T23:18:35Z"
+  },
+  "level": {
+    "name": "Silent Hoveropolis",
+    "id": 151696481,
+    "sha256": "0beebb2c4bff19032fb5876e946fb16d059534c3589a1a923d22d86e3f3470ab",
+    "bytes": 2491377
+  },
+  "clear": {
+    "sha256": "845d2b4e7567d0b1be8192dac22c2fe8f2fef0b6eceb23761ad800f616484af1",
+    "bytes": 664,
+    "author": "Audesign",
+    "bot": "MEGA",
+    "botVersion": 300,
+    "gameVersion": 22081,
+    "tps": 240.0,
+    "eventCount": 516,
+    "p1Events": 508,
+    "p2Events": 8,
+    "dual": true,
+    "platformer": false,
+    "lastFrame": 18184,
+    "deathCount": 0,
+    "durationHeader": 0.0
+  },
+  "clock": {
+    "practice": false,
+    "startPos": false,
+    "assist": false,
+    "percentStart": 0,
+    "sameTickOrder": [
+      "frame",
+      "player2",
+      "button",
+      "down"
+    ],
+    "notes": "frames\u2194ticks via bake prepareBakeTimeline / unmapTick; live measured dt",
+    "tps": 240.0
+  }
+}

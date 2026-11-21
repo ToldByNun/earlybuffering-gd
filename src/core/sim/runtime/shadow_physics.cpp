@@ -17,7 +17,10 @@ void EbShadowPhysics::markDead(EbShadowSimulator& simulator, PlayerObject* playe
     // (or latch on destroyPlayer); a dead-looking shadow would flash overlays.
     if (player && simulator.isOwnedGhost(player)) {
         player->m_isDead = false;
-        simulator.noteGhostDeathHitboxSuppress();
+        if (auto* layer = PlayLayer::get())
+            simulator.scrubGhostDeathHitboxContamination(layer);
+        else
+            simulator.noteGhostDeathHitboxSuppress();
     }
 }
 

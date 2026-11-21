@@ -10,10 +10,13 @@
 #include "../core/bake/hybrid_verify_cache.hpp"
 #include "../core/bake/self_bake_recorder.hpp"
 #include "../core/diagnostics/assist_real_metrics.hpp"
+#include "../core/real_assist/real_assist_runner.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/learning/hybrid_learning.hpp"
 #include "../core/learning/level_profile.hpp"
+#include "../core/learning/neural_autoplay.hpp"
+#include "../core/learning/neural_learning.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
 #include "../core/sim/world/shadow_world_capture.hpp"
@@ -27,6 +30,7 @@
 #include "../ui/feedback/save_feedback.hpp"
 #include "../ui/feedback/save_frame_counter.hpp"
 #include "../ui/overlays/status_overlay.hpp"
+#include "../ui/visualizers/ai_visualizer.hpp"
 #include "../ui/visualizers/bake_path_visualizer.hpp"
 #include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
@@ -36,6 +40,7 @@ void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLaye
     // Do not flush/refine here — idle drain handles the buffer after respawn.
     // Trigger world: keep store + in-flight baker; only reset abs attempt tick.
     EbHybridLearning::get().boundary(false);
+    EbNeuralLearning::get().boundary(false);
     EbSelfBakeRecorder::get().flushSegment(playLayer, "checkpoint", false);
     controller.clearBuffer();
     controller.m_pendingRelease = false;
@@ -64,17 +69,26 @@ void EbLevelLifecycle::onLevelComplete(EbAssistController& controller, PlayLayer
         EbLagProbe::Scope const state("eb.triggerBake.save");
         EbTriggerWorldStore::get().save();
     }
+    float percent = 100.f;
+    if (playLayer && playLayer->m_level)
+        percent = static_cast<float>(playLayer->m_level->m_normalPercent);
+    EbRealAssistRunner::get().onAttemptEnd(playLayer, true, percent);
 }
 
 void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* playLayer) {
     // Self-bake stays buffered — idle drain merges after we're alive again.
     EbLagProbe::Scope const episodeScope("eb.resetAttempt");
+    if (EbRealAssistRunner::get().active() && controller.attemptTick() > 0 && playLayer) {
+        float const pct = playLayer->getCurrentPercent();
+        EbRealAssistRunner::get().onAttemptEnd(playLayer, false, pct);
+    }
     {
         EbLagProbe::Scope const state("eb.flushSegment");
         EbSelfBakeRecorder::get().flushSegment(playLayer, "reset", false);
     }
     // If death already sealed the attempt, open the next; else seal as reset.
     EbHybridLearning::get().boundary(true);
+    EbNeuralLearning::get().boundary(true);
     EbDevCycleRecorder::get().onAttemptReset(0);
     controller.clearBuffer();
     controller.m_pendingRelease = false;
@@ -119,6 +133,7 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
     controller.m_inputReconciler.reset();
     // Death often skips the matching UP — stuck true blocks rawEdge / Wave+Ship lock.
     controller.m_userHolding[0] = controller.m_userHolding[1] = false;
+    EbNeuralAutoplay::get().onAttemptReset();
     controller.m_clickTimes.clear();
     controller.m_cpsLocked = false;
     controller.m_outcomePending = false;
@@ -145,6 +160,9 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
         EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
         if (EbStageConfig::showWavePattern())
             EbWavePatternVisualizer::get().attach(playLayer);
+        EbAiVisualizer::get().setEnabled(EbStageConfig::showAi());
+        if (EbStageConfig::showAi())
+            EbAiVisualizer::get().attach(playLayer);
     }
     {
         EbLagProbe::Scope const state("eb.updateOverlay");
@@ -194,6 +212,8 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbStraightflyVisualizer::get().attach(playLayer);
     EbWavePatternVisualizer::get().setEnabled(EbStageConfig::showWavePattern());
     EbWavePatternVisualizer::get().attach(playLayer);
+    EbAiVisualizer::get().setEnabled(EbStageConfig::showAi());
+    EbAiVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
     EbBakePathVisualizer::get().attach(playLayer);
     if (playLayer && playLayer->m_level) {
@@ -207,6 +227,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
         bool const dynamicLabelled = EbTriggerWorldStore::get().hasTracks();
         EbAssistRealMetrics::get().setLevelKey(EbLevelProfile::get().key(), dynamicLabelled);
     }
+    EbRealAssistRunner::get().onLevelInit(playLayer);
     controller.updateOverlay();
 }
 
@@ -229,6 +250,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbTrajectoryVisualizer::get().detach(!layerAlive);
     EbStraightflyVisualizer::get().detach(!layerAlive);
     EbWavePatternVisualizer::get().detach(!layerAlive);
+    EbAiVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);
 

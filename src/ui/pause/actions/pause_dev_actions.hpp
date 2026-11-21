@@ -14,6 +14,10 @@ public:
     static void devCopyReport();
     static void devExportResearchPack();
     static void devCompareSessions();
+    // APR0: import-stamp gold clears; PlayLayer pass still required for reproduce=pass.
+    static void devReproduceGold();
+    // APR2: Real Assist Runner (Frozen/Online) for case or matrix.
+    static void devRunRealAssist();
 
 private:
     EbPauseDevActions() = delete;

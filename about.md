@@ -1,6 +1,6 @@
 # PLEASE READ THIS
 
-Version **1.7.1** ships player-driven Hybrid RL (UCB / neighbor bleed / verify-probe feedback) on the Live + Hybrid 1.7.x line, plus the desktop ImGui settings shell (Accent Color, Modes icon bar, Learn → Advanced RL knobs), Adaptive Prediction Planner (`adaptive-plan`), and Cloud Configs. Open **Settings → Learn → Config** (or Assist/Learn actions) for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
+Version **1.8.0** continues the Live + Hybrid 1.7.x line and adds `AssistMode::AI` with a neural Candidate Scorer (verify-gated). Desktop tabs are **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**; Learn stays Hybrid tabular, AI owns the scorer UI, Flight owns Ship/Wave assists. Hotkeys live on their feature tabs (no Keys tab). Open **Settings → Learn → Config** for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
 
 EarlyBuffer was written with a lot of AI-assisted drafting.
 
@@ -19,9 +19,9 @@ If you are reviewing this for the Geode Index (or as a player who cares how mods
 EarlyBuffer is a timing assist for Geometry Dash **2.2081**.
 You jump a little soon — the mod holds that press and lands it on the first physics tick a **shadow simulation** still considers safe.
 
-You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you. It only decides *when* a press you already made is allowed to land — inside the windows and modes you set.
+You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you — except the opt-in **AI Autoplay** training loop on the AI tab. It only decides *when* a press (yours or Autoplay’s) is allowed to land — inside the windows and modes you set.
 
-> **v1.7.1** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
+> **v1.8.0** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
 
 ---
 

@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "corpusId": "slaughterhouse",
+  "variant": "pulse-shift-early-2",
+  "mode": "Hybrid",
+  "protocol": "Frozen",
+  "attempts": [
+    {
+      "index": 0,
+      "completed": true,
+      "endPercent": 100.0,
+      "arms": 2,
+      "daf": 0,
+      "nOpp": 2,
+      "budgetHitRate": 0.0,
+      "avgPlanUs": 1000.0,
+      "assistTouched": true
+    }
+  ],
+  "presses": [
+    { "plannedDelay": 2, "planUs": 950, "assisted": true },
+    { "plannedDelay": 3, "planUs": 1050, "assisted": true }
+  ],
+  "SurviveRate": 1.0
+}

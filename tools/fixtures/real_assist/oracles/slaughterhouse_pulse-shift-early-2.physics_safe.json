@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "kind": "PhysicsSafeSet",
+  "claims": "ground-truth",
+  "corpusId": "slaughterhouse",
+  "status": "ready",
+  "family": "pulse-shift-early-2",
+  "fixture": "synthetic-apr4",
+  "notes": "Synthetic freeze until reproduce=pass. pulse-shift family — not edge-only.",
+  "safeDelays": [2, 3],
+  "band": [
+    { "delay": 0, "survived": false, "tailComplete": false, "unknown": false, "budgetHit": false },
+    { "delay": 1, "survived": false, "tailComplete": false, "unknown": false, "budgetHit": false },
+    { "delay": 2, "survived": true, "tailComplete": true, "unknown": false, "budgetHit": false },
+    { "delay": 3, "survived": true, "tailComplete": true, "unknown": false, "budgetHit": false },
+    { "delay": 4, "survived": true, "tailComplete": true, "unknown": false, "budgetHit": false }
+  ]
+}

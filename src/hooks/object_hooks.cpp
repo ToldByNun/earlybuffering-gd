@@ -1,4 +1,5 @@
 #include "object_hooks.hpp"
+#include "../core/sim/runtime/live_wave_trail_guard.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "game_hook_simulation_guard.hpp"
 
@@ -86,9 +87,23 @@ auto EbRingObject::triggerActivated(float xPosition) -> void {
 }
 
 auto EbHardStreak::addPoint(cocos2d::CCPoint point) -> void {
-    // Wave collision uses the trail. The shadow must be allowed to grow its own;
-    // the real player's trail must not be touched during sim.
-    if (EbGameHookSimulationGuard::simulating() && !EbShadowSimulator::get().isShadowTrail(this))
-        return;
+    // Never gate addPoint. Live starvation from false-positive shadow checks was
+    // the straight white trail vs correct hitbox zigzag. Ghosts stay invisible
+    // via drawStreak=false + updateStroke block.
     HardStreak::addPoint(point);
+}
+
+auto EbHardStreak::updateStroke(float deltaTime) -> void {
+    // Live stroke + live fade-out duplicates must always redraw. Only block
+    // HardStreaks currently owned by shadow/snapshot/eval ghosts.
+    if (!EbLiveWaveTrailGuard::isProtected(this) &&
+        EbShadowSimulator::get().isShadowTrail(this))
+        return;
+    HardStreak::updateStroke(deltaTime);
+}
+
+auto EbHardStreak::stopStroke() -> void {
+    if (EbLiveWaveTrailGuard::refuseMutation(this))
+        return;
+    HardStreak::stopStroke();
 }

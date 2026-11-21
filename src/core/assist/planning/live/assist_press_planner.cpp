@@ -15,7 +15,9 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
+#include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
+#include "../../../real_assist/real_assist_runner.hpp"
 #include "../../../learning/spot_trust_map.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
 #include "../../../sim/shadow_simulator.hpp"
@@ -127,10 +129,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     int const learnedOpportunity =
         EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
                                         controller.m_simDt, firstDt, learnedContext);
+    int const aiOpportunity =
+        EbNeuralLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, learnedContext);
     controller.fillShipLineOptions(learnedContext, playLayer, player);
     controller.fillWavePatternOptions(learnedContext, playLayer, player);
-    bool mustDelaySearch = learnedOpportunity > 0 || learnedContext.shipLine.enabled ||
-                           learnedContext.wavePattern.enabled;
+    bool mustDelaySearch = learnedOpportunity > 0 || aiOpportunity > 0 ||
+                           learnedContext.shipLine.enabled || learnedContext.wavePattern.enabled;
     {
         EbPerfectAssistPolicy::TrustInput trustIn;
         trustIn.parityDrift = EbSimTrust::get().parityDrift();
@@ -253,7 +258,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                                                             spamDense);
     opts.hybridDelay = EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick,
                                                        limit, controller.m_simDt, firstDt, opts);
-    if (opts.hybridDelay > 0)
+    int const aiHint =
+        EbNeuralLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
+                                        controller.m_simDt, firstDt, opts);
+    if (opts.hybridDelay > 0 || aiHint > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
     opts.wavePattern = learnedContext.wavePattern;
@@ -275,11 +283,97 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     bool useSequence = opts.smartDepth > 1;
 
     EbSimPlan plan{};
-    bool hybridWon = false;
-    // Hybrid-first: verify known/learned delays (best first) before Live search.
-    // Take the first that clears current physics; otherwise fall through to Live.
+    bool scorerWon = false;
+    auto armFromVerify = [&](int delayValue, bool aiPath, float confidence) {
+        plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
+        plan.fixedFireTick = true;
+        if (delayValue <= 0) {
+            plan.action = PlanAction::Pass;
+            plan.reason = AssistReason::PassNoThreat;
+            plan.nowIsSafe = true;
+            plan.delay = 0;
+        } else {
+            plan.action = PlanAction::Delay;
+            plan.reason = AssistReason::DelayThreat;
+            plan.delay = plan.jumpTick = delayValue;
+            plan.viableDelays = std::vector<int>{delayValue};
+            plan.dMin = plan.dMax = delayValue;
+            plan.guardOriginalDelay = delayValue;
+            plan.threatCleared = true;
+            plan.nowIsSafe = false;
+        }
+        if (aiPath) {
+            plan.aiTried = true;
+            plan.aiHint = delayValue;
+            plan.aiConfidence = confidence;
+            EbNeuralLearning::get().noteArmed(delayValue, confidence);
+        } else {
+            plan.hybridTried = true;
+            plan.hybridHint = opts.hybridDelay;
+        }
+        scorerWon = true;
+    };
+    // AI-first: score → top-k → verifyDelay → arm (never argmax-arm). Hybrid stays Hybrid-only.
+    // Verify the whole top-k when budget allows. Prefer a verified delay>0 over d=0 —
+    // otherwise cold/tied ranks short-circuit on Pass and IL never sees real Delays.
+    auto& neural = EbNeuralLearning::get();
+    if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
+        !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
+        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
+        auto const order = neural.rankedVerifyDelays(limit);
+        int pickDelay = -1;
+        float pickConf = 0.0f;
+        int pickPass = -1;
+        float pickPassConf = 0.0f;
+        for (int delayValue : order) {
+            if (delayValue < 0 || delayValue > limit)
+                continue;
+            int const remUs = frameScope.remaining(frameLimitUs);
+            if (remUs < EbNeuralLearning::minRemUsForAiFirst()) {
+                opts.budgetUs = std::min(opts.budgetUs, remUs);
+                break;
+            }
+            EbPlanOptions vopts = opts;
+            vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
+            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.maxBranches = 0;
+            vopts.smartDepth = 1;
+            auto const vr = EbShadowSimulator::get().verifyDelay(
+                playLayer, player, true, delayValue, limit, controller.m_simDt, firstDt, vopts);
+            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            if (vr.budgetHit || vr.unknown)
+                continue;
+            if (!vr.ok) {
+                neural.noteVerifyOutcome(delayValue, false);
+                continue;
+            }
+            float const confidence = neural.confidenceForDelay(delayValue);
+            neural.noteVerifyOutcome(delayValue, true);
+            if (delayValue <= 0) {
+                if (pickPass < 0) {
+                    pickPass = 0;
+                    pickPassConf = confidence;
+                }
+            } else if (pickDelay < 0) {
+                pickDelay = delayValue;
+                pickConf = confidence;
+            }
+        }
+        if (pickDelay >= 0) {
+            armFromVerify(pickDelay, true, pickConf);
+            EbAssistLog::info(fmt::format("AI-FIRST delay d={} ({:.0f}% sure)", pickDelay,
+                                          pickConf * 100.0f));
+        } else if (pickPass >= 0) {
+            armFromVerify(0, true, pickPassConf);
+            EbAssistLog::info(
+                fmt::format("AI-FIRST pass d=0 ({:.0f}% sure)", pickPassConf * 100.0f));
+        }
+    }
+    // Hybrid-first: tabular UCB order → verify (does not run under AI mode; enabled() gates).
     auto& hybrid = EbHybridLearning::get();
-    if (hybrid.preferHybridFirst && !opts.shipLine.enabled && !opts.wavePattern.enabled &&
+    // Hybrid-first stays Hybrid-only (AI may read tables for bootstrap, not this arm path).
+    if (!scorerWon && EbHybridLearning::enabled() && hybrid.preferHybridFirst &&
+        !opts.shipLine.enabled && !opts.wavePattern.enabled &&
         !playLayer->m_gameState.m_isDualMode) {
         auto const order = hybrid.rankedVerifyDelays(limit);
         for (int delayValue : order) {
@@ -305,32 +399,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                 continue;
             }
             hybrid.noteVerifyOutcome(delayValue, true);
-            plan.hybridTried = true;
-            plan.hybridHint = opts.hybridDelay;
-            plan.continuous = player->m_isDart || player->m_isShip || player->m_isSwing;
-            plan.fixedFireTick = true;
-            if (delayValue <= 0) {
-                plan.action = PlanAction::Pass;
-                plan.reason = AssistReason::PassNoThreat;
-                plan.nowIsSafe = true;
-                plan.delay = 0;
-            } else {
-                plan.action = PlanAction::Delay;
-                plan.reason = AssistReason::DelayThreat;
-                plan.delay = plan.jumpTick = delayValue;
-                plan.viableDelays = std::vector<int>{delayValue};
-                plan.dMin = plan.dMax = delayValue;
-                plan.guardOriginalDelay = delayValue;
-                plan.threatCleared = true;
-                plan.nowIsSafe = false;
-            }
-            hybridWon = true;
+            armFromVerify(delayValue, false, 0.0f);
             EbAssistLog::info(fmt::format("HYBRID-FIRST {} d={}",
                                           delayValue <= 0 ? "pass" : "delay", delayValue));
             break;
         }
     }
-    if (!hybridWon) {
+    if (!scorerWon) {
         plan = useSequence ? EbShadowSimulator::get().planSequence(
                                  playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
                            : EbShadowSimulator::get().plan(playLayer, player, true, limit,
@@ -376,7 +451,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // Commit 11: do not invent Delay without a viable cand (plan already gated).
     // budgetHit after a full pick is OK — Soft Hold covers PassBudget separately.
 
+    if (!plan.aiTried)
+        plan.aiHint = aiHint;
     EbHybridLearning::get().decision(player1, plan);
+    EbNeuralLearning::get().decision(player1, plan);
     if (plan.action != PlanAction::Delay) {
         AssistReason passReason = plan.reason;
         if (passReason == AssistReason::None) {
@@ -580,6 +658,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.noteVerdict(delayReason, "press-delay");
     if (delay > 0)
         EbAssistRealMetrics::get().noteArm();
+    EbRealAssistRunner::get().notePress(delay, plan.planUs, plan.hybridTried);
     controller.recordDecision(playLayer, player, true, plan, effectTick, delay, limit);
     controller.updateOverlay();
     return false;

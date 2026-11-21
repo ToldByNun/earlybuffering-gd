@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.8.0
+
+- Add `AssistMode::AI` scaffolding (settings one-of, migration, cycle Live→Hybrid→AI). Neural candidate scorer lands in later AP slices; AI falls through to Live until then.
+- Add `EbNeuralModel` Candidate Scorer (Nova trunk `3512→128→64`, masked 49-way + sigmoid confidence, EBNN2) with unit coverage for mask + rank stability.
+- Add Nova-like `EbNeuralGrid` / `EbNeuralFeatures` / `EbNeuralReplay` / supervised prior train from PhysicsSafeSet labels (`tools/build_neural_dataset.py`).
+- Wire `EbNeuralLearning` lifecycle (open/save/prepare/verify/outcome hooks) like Hybrid; per-level `.neural`; Reset This Level clears Hybrid + AI.
+- AI-first planner path: score → top-k → `verifyDelay` → arm (press/release); overlay shows AI delay/confidence; never argmax-arm.
+- Add a desktop **AI** settings tab (separate from Learn): Candidate Scorer status, top-k / LR knobs, freeze, prior load; Learn stays Hybrid-only.
+- AP06: Hybrid bootstrap into AI verify order (read-only `.hybrid` tables) + ship `resources/ai/prior.ebnn` from supervised Real Assist bands.
+- AP07: Persist `ship-line-enable` / `wave-pattern-enable`; Flight assist no longer arms from viz toggles (Dev session override still OR’d in).
+- AP08: Desktop **Flight** tab (enables, corridor knobs, tracking status); dissolve **Keys** tab — hotkeys live on Assist / Learn / Visual / UI / Dev.
+- Visualize AI: purple perception grid (solid / hazard / orb), ranked delay markers, last armed, train pulse (`show-ai` on Visual + AI tabs).
+- AI perception / Visualize AI use GD `getObjectRect` + OBB only (OpenHack/RobTop ground truth; no sprite `contentSize` fabrication).
+- Visualize AI perf: no force-dirty of every object; spatial cull; rebuild every 8 ticks; click prepare skips viz hitbox copies.
+- AP-AUTOPLAY: AI Autoplay (RL self-play) + session capture + Train Session (IL/offline RL batch).
+- AP-AUTOPLAY-2: scorer/verify gated Autoplay (no CPS spam), Time Warp, Explore %, auto Train Session on death.
+- AI learning: shaped rewards (Delay≫Pass), real next-state, recent-edge death credit, no d=0 rank collapse, auto-train only on new samples.
+- AI-first: verify full top-k, prefer armed delay>0 over d=0 short-circuit; Live Delay distill for IL; topK default 4; session auto-train on death for human IL too.
+- AI Base Prior: Train Base Prior (cross-level saveDir/ai/prior.ebnn) + Save as Base Prior; user prior loads before packaged prior.
+- AI death hitch: no backprop/grid/disk on destroyPlayer — session push only; capped train on attempt reset.
+- AI features: idle-coast vs click-now shadow pair (`actionHelps` / `idleSafer` / survive norms) so the scorer can downrank helpless presses.
+- Visualize AI hitboxes: always refresh oriented boxes on the local window; draw AABB unless truly rotated; reject stale pooled OBBs (solids no longer float off tiles).
+- AI learning harden: search by confidence head; failed verify demotes rank; Autoplay schedules `chosenDelay`; identical-next samples skip TD; supervised rank keeps delay slot=0; evidence tiers (teacher ≪ verify ≪ survived).
+- Desktop menu: GitHub/Discord sidebar icons load dedicated PNGs (atlas UV 0..1 was drawing the sheet as checkerboard).
+- AI Mode redesign: `EbAiConfig` (typed presets + `saveDir/ai/config-v1.json`), `EbAiRoutePlanner` multi-event press/release routes with Shadow verify, Autoplay executes verified routes; desktop AI tab exposes gating/route/sim/candidate controls. Primary backend is candidate sigmoid (Nova-style); dual-head is experimental.
+- Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
+- Pause: strip leftover Import/Export Cfg / Cycle Preset / … side buttons from older installs.
+- Hitboxes-on-death: scrub ghost deaths immediately (clear real death flags + hide debug draw) so MH/OpenHack cannot flash overlays when the shadow dies mid-plan.
+- AI sessions: optional Persist Sessions (Dev + AI tabs) writes attempt IL/RL buffers to `saveDir/ai/sessions/*.ebns`; Load / Train From Disk for larger offline datasets.
+- AI route planner: full-timeline Shadow verify (Press→Release→Press from start snapshot), beam search to `maxRouteDepth`, releases verified separately; gating requires threshold ∧ minConfidence; adaptive keep = top percentile.
+- AI Autoplay: schedule Press and Release as first-class route events (not hold-ticks-only).
+- Nova 2.6.3 wave slope retry in Shadow candidate runs: first-step crush on a live slope is re-seeded once with forced slope state.
+- Wave pattern corridor: while surfing a slope, heading / duty follow `m_slopeAngle` (wider leave hysteresis) instead of duty-only drift.
+- AI planner lag: depth-1 uses light `verifyDelay`, hard wall = min(searchTimeout, cpuBudget, maxAiCpu), tighter Balanced defaults, remaining-µs caps on beam replays.
+- Wave trail: keep ghost streak pointers across `copyAttributes` (no live HardStreak alias), never draw ghost strokes (`drawStreak` off + `updateStroke` skip) so sim no longer shreds the real trail into thick teleport bars.
+- Wave trail (release): ghost seed no longer calls `releaseButton` (flags only); ghost `releaseButton`/`createFadeOutDartStreak`/`activateStreak` are effect-muted — fixes the release-only downward streak paint.
+- Pause: strip legacy Import/Export/Cycle side buttons by fuzzy label + id, recursively, and on every pause poll (not only `customSetup`).
+- Wave trail (root cause): owned-ghost HardStreaks (shadow + snapshots + eval) live in `objectLayer` and were stroking beside the live wave — `isShadowTrail` now covers all of them, `updateStroke`/`addPoint` no-op for those trails, ghost update remutes immediately, snapshot geometry cleared on park. Live trail always grows.
+- Wave trail: `PlayerObject::releaseButton` hook returned `void` instead of `bool` (ABI break on every wave flip); never null streak pointers before `copyAttributes` (AV); never `CCDrawNode::clear` / destroy streaks after `switchedToMode` (quit `~PlayerObject` AV); ghosts parent under hidden PlayLayer root outside `objectLayer`.
+- Wave trail isolation: `EbLiveWaveTrailGuard` pins the real P1/P2 HardStreak; ghost clear/mute/reset/stopStroke refuse it; `addPoint` is never gated; ghost `releaseButton` is flags-only; `copyAttributes` seeds keep exclusive private ghost trails and restore the live pointer — live stroke stays consistent under assist.
+- Wave trail/lag hot path: drop `HardStreak::updateStroke` hook; `isShadowTrail` is O(1); stop replaying full trail point arrays on every seed; skip `switchedToMode` when the ghost is already in the live vehicle.
+
 ## v1.7.1
 
 Release notes: [v1.7.1](releases/v1.7.1.md).

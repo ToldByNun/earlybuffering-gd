@@ -51,7 +51,11 @@ private:
 
 class $modify(EbHardStreak, HardStreak) {
 public:
+    // Live wave trail is never gated. Ghosts may grow points but never stroke;
+    // stopStroke refuses the protected live HardStreak (reset is inline/unhookable).
     void addPoint(cocos2d::CCPoint point);
+    void updateStroke(float deltaTime);
+    void stopStroke();
 
 private:
 };

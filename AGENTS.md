@@ -1,6 +1,6 @@
 # Project coding standards
 
-- Work on `earlybuffer-1.7.1` / ship line for GD 2.2081.
+- Work on `earlybuffer-1.8.0` / ship line for GD 2.2081.
 - Use early returns for invalid inputs and completed cases. Keep checks before the work they guard and preserve required initialization and cleanup.
 - Put C++ class declarations in `snake_case.hpp` and implementations in the matching `snake_case.cpp`.
 - Use `#ifndef FILE_NAME_HPP`, `#define FILE_NAME_HPP` and a closing `#endif` in every project header.
@@ -9,5 +9,6 @@
 - Do not declare named or anonymous namespaces, namespace aliases, or `using namespace` directives in project code. Qualify dependency types and functions explicitly.
 - Use meaningful parameter and variable names. Preserve serialized setting keys, JSON fields, IDs, and externally defined API names when renaming C++ identifiers.
 - Format C++ with `.clang-format` and run `python tools/check_cpp_style.py`.
-- Build with `geode build` and install the generated package. Run the recorded Wave regression when changing or refactoring input planning.
+- Always build yourself after C++ / settings / planner / learning changes (`geode build --config RelWithDebInfo`) and install the package when GD must show the change. Do not ask the user to build.
+- Always run the project’s existing offline / Real Assist / Wave gates when there is something to test (`python tools/test_real_assist_smoke.py`, `python tools/run_live_regression_ap07.py`, Wave regression when changing input planning). Prefer the fixtures and scripts under `tools/` — do not skip them.
 - Keep generated output and third-party dependency sources outside project refactors.

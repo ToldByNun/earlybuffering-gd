@@ -14,6 +14,10 @@ bool EbHybridLearning::enabled() {
     return EbStageConfig::assistMode() == EbStageConfig::AssistMode::Hybrid &&
            EbStageConfig::autoTuneEnabled();
 }
+bool EbHybridLearning::tablesReadable() {
+    auto const mode = EbStageConfig::assistMode();
+    return mode == EbStageConfig::AssistMode::Hybrid || mode == EbStageConfig::AssistMode::AI;
+}
 void EbHybridLearning::open(std::filesystem::path path) {
     close();
     m_path = std::move(path);
@@ -28,9 +32,15 @@ void EbHybridLearning::applyCapacityLimits() {
 void EbHybridLearning::settingsChanged() {
     boundary(false);
     applyCapacityLimits();
-    if (m_path.empty() || m_loaded || !enabled())
+    if (m_path.empty() || m_loaded)
         return;
-    m_model.load(m_path);
+    auto const mode = EbStageConfig::assistMode();
+    // Hybrid keeps Auto-Tune gate for opening tables; AI loads for bootstrap even Frozen.
+    if (mode == EbStageConfig::AssistMode::Hybrid && !EbStageConfig::autoTuneEnabled())
+        return;
+    if (mode != EbStageConfig::AssistMode::Hybrid && mode != EbStageConfig::AssistMode::AI)
+        return;
+    (void)m_model.load(m_path);
     m_loaded = true;
 }
 void EbHybridLearning::close() {
@@ -157,7 +167,8 @@ void EbHybridLearning::edge(bool player1, int tick, bool down) {
 int EbHybridLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
                               int tick, int limit, float dt, float firstDt,
                               EbPlanOptions const& options) {
-    if (!enabled() || !m_loaded || dt <= 0.f)
+    // Read proposals when tables are open (Hybrid train path or AI bootstrap).
+    if (!m_loaded || !tablesReadable() || dt <= 0.f)
         return -1;
     applyCapacityLimits();
     int slot = player1 ? 0 : 1;
@@ -246,7 +257,7 @@ int EbHybridLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
     return edge.hint;
 }
 std::vector<int> EbHybridLearning::rankedVerifyDelays(int limit) const {
-    if (!enabled() || !m_loaded)
+    if (!m_loaded || !tablesReadable())
         return {};
     // Prefer the path key from the last prepare(); fall back to coarse if needed.
     for (auto const& edge : m_edges) {

@@ -12,7 +12,10 @@ class EbSimPlan;
 class EbHybridLearning {
 public:
     static EbHybridLearning& get();
+    // Hybrid + Auto-Tune: tabular writes / hybrid-first arm path.
     static bool enabled();
+    // Hybrid or AI: .hybrid tables may be loaded for read / AI bootstrap.
+    static bool tablesReadable();
     void open(std::filesystem::path path);
     void close();
     void reset();
