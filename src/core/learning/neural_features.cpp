@@ -106,6 +106,8 @@ bool EbNeuralFeatures::selfCheck(std::string& report) {
     expect(features[EbNeuralModel::kContinuousOffset + 4] == 1.0f, "mode-onehot");
     expect(features[EbNeuralModel::kCandidateDelayFeature] == 3.0f / 48.0f, "candidate-encoded");
     expect(features[EbNeuralModel::kContinuousOffset + 28] == 1.5f, "geometry0");
+    expect(EbNeuralFeatureState::kGeomActionHelps == 8, "traj-action-helps-slot");
+    expect(EbNeuralFeatureState::kGeomIdleSafer == 10, "traj-idle-safer-slot");
 
     int gridLit = 0;
     for (int index = 0; index < EbNeuralModel::kGridDim; ++index) {

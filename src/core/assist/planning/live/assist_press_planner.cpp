@@ -314,11 +314,17 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         scorerWon = true;
     };
     // AI-first: score → top-k → verifyDelay → arm (never argmax-arm). Hybrid stays Hybrid-only.
+    // Verify the whole top-k when budget allows. Prefer a verified delay>0 over d=0 —
+    // otherwise cold/tied ranks short-circuit on Pass and IL never sees real Delays.
     auto& neural = EbNeuralLearning::get();
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
         frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
         auto const order = neural.rankedVerifyDelays(limit);
+        int pickDelay = -1;
+        float pickConf = 0.0f;
+        int pickPass = -1;
+        float pickPassConf = 0.0f;
         for (int delayValue : order) {
             if (delayValue < 0 || delayValue > limit)
                 continue;
@@ -343,11 +349,24 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             }
             float const confidence = neural.confidenceForDelay(delayValue);
             neural.noteVerifyOutcome(delayValue, true);
-            armFromVerify(delayValue, true, confidence);
-            EbAssistLog::info(fmt::format("AI-FIRST {} d={} ({:.0f}% sure)",
-                                          delayValue <= 0 ? "pass" : "delay", delayValue,
-                                          confidence * 100.0f));
-            break;
+            if (delayValue <= 0) {
+                if (pickPass < 0) {
+                    pickPass = 0;
+                    pickPassConf = confidence;
+                }
+            } else if (pickDelay < 0) {
+                pickDelay = delayValue;
+                pickConf = confidence;
+            }
+        }
+        if (pickDelay >= 0) {
+            armFromVerify(pickDelay, true, pickConf);
+            EbAssistLog::info(fmt::format("AI-FIRST delay d={} ({:.0f}% sure)", pickDelay,
+                                          pickConf * 100.0f));
+        } else if (pickPass >= 0) {
+            armFromVerify(0, true, pickPassConf);
+            EbAssistLog::info(
+                fmt::format("AI-FIRST pass d=0 ({:.0f}% sure)", pickPassConf * 100.0f));
         }
     }
     // Hybrid-first: tabular UCB order → verify (does not run under AI mode; enabled() gates).

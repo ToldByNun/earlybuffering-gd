@@ -15,6 +15,13 @@
 - AI perception / Visualize AI use GD `getObjectRect` + OBB only (OpenHack/RobTop ground truth; no sprite `contentSize` fabrication).
 - Visualize AI perf: no force-dirty of every object; spatial cull; rebuild every 8 ticks; click prepare skips viz hitbox copies.
 - AP-AUTOPLAY: AI Autoplay (RL self-play) + session capture + Train Session (IL/offline RL batch).
+- AP-AUTOPLAY-2: scorer/verify gated Autoplay (no CPS spam), Time Warp, Explore %, auto Train Session on death.
+- AI learning: shaped rewards (Delay≫Pass), real next-state, recent-edge death credit, no d=0 rank collapse, auto-train only on new samples.
+- AI-first: verify full top-k, prefer armed delay>0 over d=0 short-circuit; Live Delay distill for IL; topK default 4; session auto-train on death for human IL too.
+- AI Base Prior: Train Base Prior (cross-level saveDir/ai/prior.ebnn) + Save as Base Prior; user prior loads before packaged prior.
+- AI death hitch: no backprop/grid/disk on destroyPlayer — session push only; capped train on attempt reset.
+- AI features: idle-coast vs click-now shadow pair (`actionHelps` / `idleSafer` / survive norms) so the scorer can downrank helpless presses.
+- Visualize AI hitboxes: always refresh oriented boxes on the local window; draw AABB unless truly rotated; reject stale pooled OBBs (solids no longer float off tiles).
 - Pin package metadata and CI asserts to **v1.8.0** (Geode SDK 5.11.1 / GD 2.2081).
 
 ## v1.7.1

@@ -76,24 +76,41 @@ public:
         return m_lastTrainUpdates;
     }
 
-    // Batch IL/RL update into model. Returns weight-update count.
-    int train(EbNeuralModel& model, float learningRate, int passes = 4) {
+    // Batch IL/RL update. startIndex/endIndex are logical buffer indices [0, size).
+    // maxUpdates caps work (death/reset must stay hitch-free).
+    int train(EbNeuralModel& model, float learningRate, int passes = 4, int startIndex = 0,
+              int endIndex = -1, int maxUpdates = -1) {
         if (m_count <= 0 || passes <= 0)
+            return 0;
+        int const end = endIndex < 0 ? m_count : std::min(endIndex, m_count);
+        int const start = std::clamp(startIndex, 0, end);
+        if (start >= end)
             return 0;
         float const rate = std::clamp(learningRate, 0.0001f, 0.1f);
         int updates = 0;
         for (int pass = 0; pass < passes; ++pass) {
-            for (int index = 0; index < m_count; ++index) {
+            for (int index = start; index < end; ++index) {
+                if (maxUpdates >= 0 && updates >= maxUpdates) {
+                    m_lastTrainUpdates = updates;
+                    return updates;
+                }
                 int const slot = (m_next - m_count + index + kCapacity * 2) % kCapacity;
                 Sample const& sample = m_samples[static_cast<size_t>(slot)];
                 model.learnTd(sample.state, sample.action, sample.reward, sample.next, sample.done,
                               sample.limit, rate);
-                if (sample.reward > 0.0f)
+                // Only strong Delay successes update the rank head (avoids d=0 collapse).
+                if (sample.reward >= 0.5f && sample.action > 0)
                     model.learnRank(sample.state, sample.action, sample.limit, rate);
                 float scratch[EbNeuralModel::kFeatureDim];
                 std::memcpy(scratch, sample.state, sizeof(scratch));
                 EbNeuralModel::writeCandidateDelay(scratch, sample.action);
-                float const target = sample.reward > 0.0f ? 1.0f : (sample.done ? 0.0f : 0.5f);
+                float target = 0.5f;
+                if (sample.done)
+                    target = 0.0f;
+                else if (sample.reward >= 0.5f && sample.action > 0)
+                    target = 1.0f;
+                else if (sample.reward > 0.0f)
+                    target = 0.45f;
                 model.learnConfidence(scratch, target, rate);
                 ++updates;
             }

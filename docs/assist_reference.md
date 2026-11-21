@@ -18,7 +18,9 @@ Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were remov
 
 ## AI Autoplay + session train (v1.8.0)
 
-With **Assist Mode = AI**, the AI tab exposes **Autoplay** (Jump edges through the normal assist path; enable Auto-Tune for online weight writes) and **Train Session** (batch TD/rank/confidence from the session buffer filled by every attempt — your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.
+With **Assist Mode = AI**, the AI tab exposes **Autoplay**: scorer + `verifyDelay` gated Jump presses (not CPS spam), **Time Warp** for attempt throughput, Explore % for cold-start, and auto **Train Session** on death when Auto-Tune is on. Manual **Train Session** still batch-trains from the session buffer (your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.
+
+**Trajectory pair features:** each AI `prepare` runs a short `runOne(d=0)` vs `runBaseline` (idle/coast) and packs idle/action death flags, survive norms, endX delta, `actionHelps` (−1 helpless … +1 chance), `bothDead`, and `idleSafer` into continuous geometry slots. Same comparison Live LongForesight already uses — the scorer can learn not to prefer clicks that die as soon as (or sooner than) doing nothing.
 
 ## Hybrid RL (v1.7.1)
 

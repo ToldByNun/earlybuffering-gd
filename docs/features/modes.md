@@ -10,15 +10,17 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, Autoplay / Train Session, top-k / learning-rate knobs, freeze, prior load, and **Visualize AI**. Auto-Tune (on Learn) still gates online AI weight writes. The Bake tab and macro/bake mode selection have been removed.
 
-**Visualize AI** (`show-ai`, also on Visual): draws exact GD collision hitboxes (`getObjectRect` / OBB after dirty refresh — same ground truth as RobTop debug draw): blue solid, red hazard, green orb/pad, yellow player. Scorer grid stamps those same rects. Ranked delay dots + train pulse. Draw only — never arms.
+**Visualize AI** (`show-ai`, also on Visual): draws exact GD collision hitboxes (`getObjectRect` AABB like RobTop/OpenHack; OBB only when rotated and fresh): blue solid, red hazard, green orb/pad, yellow player. Scorer grid stamps those same rects. Ranked delay dots + train pulse. Draw only — never arms.
 
-**AP-AUTOPLAY:** AI tab → **Autoplay** synthesizes Jump presses through the normal assist path for RL self-play (enable Auto-Tune to write weights). Attempts also fill a session buffer; **Train Session** batch-trains the level `.neural` file from that buffer (IL from your play + autoplay outcomes). **Clear Session** drops the buffer only.
+**AP-AUTOPLAY / AP-AUTOPLAY-2:** AI tab → **Autoplay** probes with the Candidate Scorer + a cheap `verifyDelay`, and only presses Jump when the click looks useful (or Explore fires). Not CPS spam. **Time Warp** (default 8x) speeds attempts; enable **Auto-Tune** so deaths write weights. Autoplay deaths auto-train only when the session buffer grew. Rewards prefer real Delay assists over Pass@d0 (avoids scorer collapse), shape by X-progress, and soft-punish recent edges on death. Manual **Train Session** remains for IL after human play; **Clear Session** drops the buffer only.
+
+**Game knowledge vs Hybrid:** Features are a local hazard/solid/orb grid + continuous mode/speed state (transferable), plus a cheap shadow pair: **idle/coast vs action-now** (survive norms, endX delta, `actionHelps`, `idleSafer`). That tells the scorer whether a click is helpless or has a survival chance. Hybrid stores per-spot tables for one level. AI default saves per-level `.neural`; **Train Base Prior** writes a shared `saveDir/ai/prior.ebnn` across levels (build game knowledge first), then turn it off to fine-tune per level. Load order: user base prior → packaged `resources/ai/prior.ebnn`.
 
 **Hybrid is tabular; AI is neural.** Both reuse the same propose → `verifyDelay` contract. Live is the base planner.
 
 **Reset This Level** clears Hybrid tables (`.hybrid`) and AI weights (`.neural`) together. Auto-Tune trains AI; with Auto-Tune off, AI still infers if prior/level weights exist (Frozen).
 
-**AI-first path:** score → top-k → `verifyDelay` → arm, else Live fallthrough. Never arms from raw score. Skips when Flight-owned, dual, or remUs is too low. Hybrid-first stays Hybrid-only (no double verify stack). Quality = packaged prior + Shadow verify + on-play fine-tune — not offline AGI.
+**AI-first path:** score → top-k → `verifyDelay` on the set → arm a verified **delay>0** when any exists, else d=0 Pass, else Live fallthrough. Never arms from raw score. Live fallthrough Delays distill into the scorer (IL teacher). Skips when Flight-owned, dual, or remUs is too low. Hybrid-first stays Hybrid-only (no double verify stack). Quality = packaged prior + Shadow verify + on-play fine-tune — not offline AGI.
 
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 

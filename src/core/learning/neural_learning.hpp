@@ -53,19 +53,34 @@ public:
     bool frozen() const;
     bool loaded() const;
     bool hasUsableWeights() const;
-    // Load packaged prior into the in-memory model (keeps per-level path).
+    // Load user base prior (saveDir) or packaged prior.ebnn into memory; write to m_path.
     bool loadPrior();
+    // Persist current weights as the cross-level user base prior (saveDir/ai/prior.ebnn).
+    bool saveAsBasePrior();
+    // When true, open()/save() use the shared user base prior instead of per-level .neural.
+    void setTrainBasePrior(bool on);
+    bool trainBasePrior() const {
+        return m_trainBasePrior;
+    }
+    static std::filesystem::path userPriorPath();
+
     EbNeuralModel& model();
     EbNeuralModel const& model() const;
     EbNeuralReplay& replay();
     // Batch-train from the IL/RL session buffer (player demos + autoplay).
-    int trainSession(int passes = 4);
+    // persist=false skips disk save (use on reset/idle; manual Train Session persists).
+    int trainSession(int passes = 4, bool persist = true);
+    // Train only newly pushed samples (capped). Safe for resetAttempt.
+    int trainSessionIfGrown(int passes = 1, int maxUpdates = 48);
+    // Run deferred death train (called from attempt boundary, never destroyPlayer).
+    void flushDeferredTrain();
     // Rebuild local grid + pull last ranked delays for Visualize AI (cheap vs prepare).
     void refreshViz(PlayLayer* layer);
     EbNeuralVizSnapshot const& viz() const;
 
     bool preferAiFirst = true;
-    int topK = 2;
+    // 4 gives room for delay>0 after d=0 in the verify set (AI-first prefers delay>0).
+    int topK = 4;
     float learningRate = 0.01f;
     int observationTicks = 48;
     int edges = 0;
@@ -94,9 +109,22 @@ private:
         int planId = -1;
         bool fired = false;
         bool pending = false;
+        float startX = 0.0f;
         float features[EbNeuralModel::kFeatureDim]{};
         // Blended AI ± Hybrid verify order from last prepare (AP06).
         std::vector<int> verifyOrder;
+
+    private:
+    };
+
+    class RecentEdge {
+    public:
+        bool valid = false;
+        int tick = 0;
+        int action = 0;
+        int limit = 0;
+        float startX = 0.0f;
+        float features[EbNeuralModel::kFeatureDim]{};
 
     private:
     };
@@ -106,17 +134,34 @@ private:
     EbNeuralVizSnapshot m_viz;
     std::filesystem::path m_path;
     std::array<EdgeState, 2> m_edges{};
+    std::array<RecentEdge, 4> m_recent{};
+    int m_recentNext = 0;
+    int m_sessionTrainedThrough = 0;
     bool m_loaded = false;
     bool m_hasPriorOrWeights = false;
+    bool m_trainBasePrior = false;
+    bool m_deferTrain = false;
+    int m_savesSincePersist = 0;
 
     void clearEdges();
     bool tryLoadPrior();
+    bool tryLoadPackagedPrior();
+    void openSharedBase();
+    void softResetAttemptState();
     void fillFeatures(PlayLayer* layer, PlayerObject* player, bool down, bool player1, int limit,
                       float dt, float firstDt, float* outFeatures);
+    // Cheap idle-coast vs action-now shadow pair → geometry[3..10] + firstDeathHintNorm.
+    static void fillTrajectoryPair(PlayLayer* layer, PlayerObject* player, bool down, int limit,
+                                   float dt, float firstDt, EbNeuralFeatureState& state);
     // storeVizHitboxes: only for Visualize AI (skip on click prepare — cheaper).
     void captureGrid(PlayLayer* layer, PlayerObject* player, EbNeuralGrid& outGrid, float& originX,
                      float& originY, bool storeVizHitboxes);
     void publishVizRanks();
+    void rememberRecent(EdgeState const& edge);
+    void punishRecent(int deathTick, float endX);
+    static float progressNorm(float startX, float endX);
+    static float successReward(int plannedDelay, float progress);
+    static float deathReward(float progress);
     static std::uint8_t channelBitsForObject(GameObject* object);
 };
 

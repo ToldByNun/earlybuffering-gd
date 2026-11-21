@@ -273,6 +273,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
         frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
         auto const order = neural.rankedVerifyDelays(limit);
+        int pickDelay = -1;
+        float pickConf = 0.0f;
+        int pickPass = -1;
+        float pickPassConf = 0.0f;
         for (int delayValue : order) {
             if (delayValue < 0 || delayValue > limit)
                 continue;
@@ -297,11 +301,24 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
             }
             float const confidence = neural.confidenceForDelay(delayValue);
             neural.noteVerifyOutcome(delayValue, true);
-            armFromVerify(delayValue, true, confidence);
-            EbAssistLog::info(fmt::format("AI-FIRST release {} d={} ({:.0f}% sure)",
-                                          delayValue <= 0 ? "pass" : "delay", delayValue,
-                                          confidence * 100.0f));
-            break;
+            if (delayValue <= 0) {
+                if (pickPass < 0) {
+                    pickPass = 0;
+                    pickPassConf = confidence;
+                }
+            } else if (pickDelay < 0) {
+                pickDelay = delayValue;
+                pickConf = confidence;
+            }
+        }
+        if (pickDelay >= 0) {
+            armFromVerify(pickDelay, true, pickConf);
+            EbAssistLog::info(fmt::format("AI-FIRST release delay d={} ({:.0f}% sure)", pickDelay,
+                                          pickConf * 100.0f));
+        } else if (pickPass >= 0) {
+            armFromVerify(0, true, pickPassConf);
+            EbAssistLog::info(fmt::format("AI-FIRST release pass d=0 ({:.0f}% sure)",
+                                          pickPassConf * 100.0f));
         }
     }
     auto& hybrid = EbHybridLearning::get();

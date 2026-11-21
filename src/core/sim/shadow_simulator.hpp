@@ -209,6 +209,27 @@ public:
                                   int limit, float deltaTime, float firstDt,
                                   EbPlanOptions const& options = {});
 
+    // Cheap action-now (d=0) vs idle/coast pair for neural features / foresight hints.
+    // Caps horizon to [24,48]; returns valid=false when ghost missing or budget dies early.
+    class ActionVsIdleResult {
+    public:
+        bool valid = false;
+        bool unknown = false;
+        bool actionDied = false;
+        bool idleDied = false;
+        int actionDeathTick = -1;
+        int idleDeathTick = -1;
+        float actionDeathX = 0.f;
+        float idleDeathX = 0.f;
+        float actionEndX = 0.f;
+        float idleEndX = 0.f;
+        int horizon = 0;
+
+    private:
+    };
+    ActionVsIdleResult sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool down,
+                                          int limit, float deltaTime, float firstDt);
+
     // --- Dev Lab eval (Commit 9): clock-bound stepSchedule, own ghosts ---
     class TrajSample {
     public:

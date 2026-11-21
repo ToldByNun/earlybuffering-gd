@@ -19,6 +19,8 @@
 #include "validation/shadow_regression_checks.hpp"
 #include "world/shadow_world_capture.hpp"
 #include "world/shadow_world_dynamics.hpp"
+#include "sim_session_guard.hpp"
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -373,6 +375,46 @@ EbShadowSimulator::VerifyDelayResult EbShadowSimulator::verifyDelay(PlayLayer* l
                                                                     EbPlanOptions const& options) {
     return EbShadowDelayVerifier::verifyDelay(*this, layer, real, down, delay, limit, deltaTime,
                                               firstDt, options);
+}
+
+EbShadowSimulator::ActionVsIdleResult
+EbShadowSimulator::sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool down, int limit,
+                                      float deltaTime, float firstDt) {
+    ActionVsIdleResult out;
+    if (!layer || !real || !m_shadow || deltaTime <= 0.f)
+        return out;
+    if (firstDt <= 0.f || firstDt > deltaTime)
+        firstDt = deltaTime;
+
+    Model model = modelFor(real, limit, 1.f);
+    int const horizon = std::clamp(model.cap, 24, 48);
+    model.cap = horizon;
+    model.continuePastClear = true;
+    int tickBudget = horizon * 2 + 8;
+    out.horizon = horizon;
+
+    EbSimSessionGuard session(*this, layer);
+    auto action =
+        runOne(layer, real, down, 0, limit, deltaTime, firstDt, model, -1, nullptr, &tickBudget);
+    resetCaptureForNextRun(layer);
+    if (tickBudget <= 0) {
+        out.unknown = true;
+        return out;
+    }
+    auto idle = runBaseline(layer, real, down, deltaTime, firstDt, model, &tickBudget);
+    resetCaptureForNextRun(layer);
+
+    out.valid = true;
+    out.unknown = action.unknown || action.unknownTrunc || idle.unknown || idle.unknownTrunc;
+    out.actionDied = action.died;
+    out.idleDied = idle.died;
+    out.actionDeathTick = action.deathTick;
+    out.idleDeathTick = idle.deathTick;
+    out.actionDeathX = action.deathX;
+    out.idleDeathX = idle.deathX;
+    out.actionEndX = action.endX;
+    out.idleEndX = idle.endX;
+    return out;
 }
 
 EbSimPlan EbShadowSimulator::plan(PlayLayer* layer, PlayerObject* real, bool down, int limit,

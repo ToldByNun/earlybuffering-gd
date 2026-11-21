@@ -32,7 +32,22 @@ public:
     int candidateDelay = 0;
     int limit = 0;
     // Reserved geometry distances (Nova-style). Unset stays 0; invalid uses sentinel path later.
+    // Layout: [0]=fpsNorm [1]=firstDtFlag [2]=timeWarp
+    //         [3]=idleDied [4]=actionDied [5]=idleSurviveNorm [6]=actionSurviveNorm
+    //         [7]=endXDeltaNorm [8]=actionHelps (−1..+1) [9]=bothDead [10]=idleSafer
     float geometry[28]{};
+
+    static constexpr int kGeomFps = 0;
+    static constexpr int kGeomFirstDt = 1;
+    static constexpr int kGeomTimeWarp = 2;
+    static constexpr int kGeomIdleDied = 3;
+    static constexpr int kGeomActionDied = 4;
+    static constexpr int kGeomIdleSurvive = 5;
+    static constexpr int kGeomActionSurvive = 6;
+    static constexpr int kGeomEndXDelta = 7;
+    static constexpr int kGeomActionHelps = 8;
+    static constexpr int kGeomBothDead = 9;
+    static constexpr int kGeomIdleSafer = 10;
 
 private:
 };

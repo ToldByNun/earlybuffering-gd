@@ -6,9 +6,10 @@
 #include <string>
 
 // Ground-truth Geometry Dash collision geometry for the neural scorer.
-// Reads getObjectRect / getOrientedBox. Only calls updateOrientedBox when GD
-// already marked the rect dirty — never force-dirties the whole level (that
-// caused ~7 FPS with Visualize AI). Never invents sprite contentSize boxes.
+// Primary: getObjectRect AABB (same path RobTop/OpenHack debug draw).
+// OBB corners only when |rotation| >= 0.5° and the OBB still sits on that AABB
+// (rejects stale pooled OBBs). Always updateOrientedBox on the culled window —
+// never invents sprite contentSize boxes.
 class EbNeuralHitbox {
 public:
     bool valid = false;
@@ -31,6 +32,7 @@ private:
     static void ensureFresh(GameObject* object);
     static void fillAabbCorners(EbNeuralHitbox& box);
     static bool copyOrientedCorners(GameObject* object, EbNeuralHitbox& box);
+    static bool obbMatchesAabb(EbNeuralHitbox const& box);
 };
 
 #endif

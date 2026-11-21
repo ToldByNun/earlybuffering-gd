@@ -14,10 +14,11 @@ bool EbNeuralHitbox::finiteRect(cocos2d::CCRect const& rect) {
 void EbNeuralHitbox::ensureFresh(GameObject* object) {
     if (!object)
         return;
-    // Only recompute when GD says the cached rect/OBB is stale. Forcing dirty
-    // on every object every tick made Visualize AI drop to single-digit FPS.
-    if (object->getObjectRectDirty() || object->getOrientedRectDirty())
-        object->updateOrientedBox();
+    // Always refresh for objects we already culled to the local window.
+    // Dirty-only skips left pooled/moved objects with stale OBB corners — that
+    // drew hitboxes floating off their sprites. updateOrientedBox on ~100 nearby
+    // objects is cheap; force-dirtying the whole level is what tanked FPS before.
+    object->updateOrientedBox();
 }
 
 void EbNeuralHitbox::fillAabbCorners(EbNeuralHitbox& box) {
@@ -32,9 +33,38 @@ void EbNeuralHitbox::fillAabbCorners(EbNeuralHitbox& box) {
     box.oriented = false;
 }
 
+bool EbNeuralHitbox::obbMatchesAabb(EbNeuralHitbox const& box) {
+    float minX = box.cornerX[0];
+    float maxX = box.cornerX[0];
+    float minY = box.cornerY[0];
+    float maxY = box.cornerY[0];
+    for (int corner = 1; corner < 4; ++corner) {
+        minX = std::min(minX, box.cornerX[corner]);
+        maxX = std::max(maxX, box.cornerX[corner]);
+        minY = std::min(minY, box.cornerY[corner]);
+        maxY = std::max(maxY, box.cornerY[corner]);
+    }
+    float const aabbCx = box.aabbX + box.aabbW * 0.5f;
+    float const aabbCy = box.aabbY + box.aabbH * 0.5f;
+    float const obbCx = (minX + maxX) * 0.5f;
+    float const obbCy = (minY + maxY) * 0.5f;
+    // Pooled/stale OBB often sits far from the live AABB — reject it.
+    if (std::fabs(obbCx - aabbCx) > 24.0f || std::fabs(obbCy - aabbCy) > 24.0f)
+        return false;
+    if ((maxX - minX) < box.aabbW * 0.25f || (maxY - minY) < box.aabbH * 0.25f)
+        return false;
+    return true;
+}
+
 bool EbNeuralHitbox::copyOrientedCorners(GameObject* object, EbNeuralHitbox& box) {
     if (!object)
         return false;
+    // Unrotated objects: RobTop/MH draw the AABB. OBB equals AABB when fresh,
+    // but a stale OBB is what made solids float off their tiles.
+    float const rotation = object->getObjectRotation();
+    if (!std::isfinite(rotation) || std::fabs(rotation) < 0.5f)
+        return false;
+
     auto* obb = object->getOrientedBox();
     if (!obb)
         return false;
@@ -61,6 +91,8 @@ bool EbNeuralHitbox::copyOrientedCorners(GameObject* object, EbNeuralHitbox& box
     }
     if ((maxX - minX) <= 0.05f || (maxY - minY) <= 0.05f)
         return false;
+    if (!obbMatchesAabb(box))
+        return false;
     box.oriented = true;
     return true;
 }
@@ -70,7 +102,8 @@ EbNeuralHitbox EbNeuralHitbox::read(GameObject* object) {
     if (!object)
         return box;
     ensureFresh(object);
-    cocos2d::CCRect const& rect = object->getObjectRect();
+    // Copy by value — getObjectRect returns a ref to a reused member.
+    cocos2d::CCRect const rect = object->getObjectRect();
     if (!finiteRect(rect))
         return box;
 
@@ -81,8 +114,8 @@ EbNeuralHitbox EbNeuralHitbox::read(GameObject* object) {
     box.aabbH = rect.size.height;
     fillAabbCorners(box);
 
-    // OBB corners carry rotation; AABB alone is axis-aligned and wrong for
-    // rotated spikes/saws. Fall back to AABB corners when OBB is unavailable.
+    // OBB only when the object is actually rotated; otherwise keep AABB corners
+    // (same path OpenHack/RobTop debug draw uses for axis-aligned solids).
     (void)copyOrientedCorners(object, box);
     return box;
 }
@@ -92,7 +125,7 @@ EbNeuralHitbox EbNeuralHitbox::readPlayer(PlayerObject* player) {
     if (!player)
         return box;
     ensureFresh(player);
-    cocos2d::CCRect const& rect = player->getObjectRect();
+    cocos2d::CCRect const rect = player->getObjectRect();
     if (!finiteRect(rect))
         return box;
     box.valid = true;
@@ -101,6 +134,7 @@ EbNeuralHitbox EbNeuralHitbox::readPlayer(PlayerObject* player) {
     box.aabbW = rect.size.width;
     box.aabbH = rect.size.height;
     fillAabbCorners(box);
+    // Player collision is the AABB OpenHack draws; skip OBB so the viz matches MH.
     return box;
 }
 
@@ -123,6 +157,7 @@ bool EbNeuralHitbox::selfCheck(std::string& report) {
     expect(!sample.oriented, "aabb-not-oriented");
     expect(sample.cornerX[0] == 10.0f && sample.cornerY[0] == 20.0f, "aabb-c0");
     expect(sample.cornerX[2] == 40.0f && sample.cornerY[2] == 60.0f, "aabb-c2");
+    expect(obbMatchesAabb(sample), "obb-match-self");
     if (fails == 0) {
         report = "NeuralHitbox OK";
         return true;

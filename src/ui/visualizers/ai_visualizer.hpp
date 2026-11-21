@@ -31,8 +31,9 @@ private:
     void ensureNode(PlayLayer* layer);
     void rebuild(PlayLayer* layer);
 
-    // ~8 physics ticks ≈ 33ms @240 — viz is diagnostic, not per-frame HUD.
-    static constexpr int kRebuildEveryTicks = 8;
+    // Every other physics tick — hitboxes must track the player; 8-tick lag
+    // made boxes look "wrong" even when the rects were correct.
+    static constexpr int kRebuildEveryTicks = 2;
 
     cocos2d::CCDrawNode* m_node = nullptr;
     bool m_enabled = false;

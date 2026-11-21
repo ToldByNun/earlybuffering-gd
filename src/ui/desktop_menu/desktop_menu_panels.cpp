@@ -392,27 +392,50 @@ public:
             bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
             bool autoplayOn = autoplay.enabled();
             if (EbCheckbox::draw("ai-autoplay", "Autoplay (RL self-play)", &autoplayOn, aiOn,
-                                 "Synthesizes Jump presses through the normal AI assist path so "
-                                 "the scorer can RL-train without a human. Requires Assist Mode → "
-                                 "AI. Turn Auto-Tune on (Learn) to write weights online."))
+                                 "Scorer + verifyDelay gated Jump presses through the normal AI "
+                                 "assist path (not CPS spam). Requires Assist Mode → AI. Turn "
+                                 "Auto-Tune on (Learn) so deaths write weights.")) {
                 autoplay.setEnabled(autoplayOn);
+                autoplay.syncTimeWarp(PlayLayer::get());
+            }
+            if (autoplayOn && aiOn && !EbStageConfig::autoTuneEnabled())
+                ImGui::TextColored(ImVec4(1.f, 0.75f, 0.35f, 1.f),
+                                   "Auto-Tune is off — Autoplay will probe but not train.");
             bool restart = autoplay.restartOnDeath();
             if (EbCheckbox::draw("ai-autoplay-restart", "Restart on Death", &restart, aiOn,
-                                 "When Autoplay is on, reset the attempt shortly after death."))
+                                 "When Autoplay is on, reset the attempt shortly after death. "
+                                 "Each death also auto-runs a short Train Session pass."))
                 autoplay.setRestartOnDeath(restart);
-            ImGui::Text("Autoplay presses / restarts   %d / %d", autoplay.presses(),
-                        autoplay.restarts());
+            float warp = autoplay.timeWarp();
+            if (EbSlider::drawFloat("ai-autoplay-warp", "Time Warp", &warp, 1.f, 32.f, 0, "x",
+                                    aiOn,
+                                    "Speeds up attempts while Autoplay is on (Real Assist pattern). "
+                                    "8–16x is a good start; higher can hitch on heavy levels.")) {
+                autoplay.setTimeWarp(warp);
+                autoplay.syncTimeWarp(PlayLayer::get());
+            }
+            float explorePct = autoplay.exploreRate() * 100.f;
+            if (EbSlider::drawFloat("ai-autoplay-explore", "Explore", &explorePct, 0.f, 25.f, 0,
+                                    "%", aiOn,
+                                    "Chance to press even when verify finds no useful click "
+                                    "(cold-start exploration)."))
+                autoplay.setExploreRate(explorePct / 100.f);
+            ImGui::TextWrapped(
+                "Presses only when scorer/verify finds a useful click — not CPS spam.");
+            ImGui::Text("Probes / presses / explore   %d / %d / %d", autoplay.probes(),
+                        autoplay.presses(), autoplay.explorePresses());
+            ImGui::Text("Restarts   %d", autoplay.restarts());
+            ImGui::Text("Last probe   %s", autoplay.lastProbeReason());
             ImGui::Separator();
             ImGui::TextWrapped(
-                "Every attempt (you or Autoplay) stores scorer transitions. After a session, "
-                "Train Session batch-updates the level .neural weights from that buffer "
-                "(imitation + outcome RL).");
+                "Every attempt (you or Autoplay) stores scorer transitions. Deaths under Autoplay "
+                "auto-batch-train; Train Session still works for human IL after a session.");
             if (EbButton::draw("ai-train-session", "Train Session",
                                aiOn && EbLevelProfile::get().loaded() &&
                                    EbNeuralSession::get().size() > 0,
                                "Run several passes of TD / rank / confidence updates from the "
                                "session buffer, then save .neural.")) {
-                int const n = neural.trainSession(4);
+                int const n = neural.trainSession(4, true);
                 ImGui::Text("Trained %d updates", n);
             }
             if (EbButton::draw("ai-clear-session", "Clear Session",
@@ -435,6 +458,35 @@ public:
         }
         EbSectionCard::end();
 
+        if (EbSectionCard::begin("ai-base", "Base Prior (cross-level)")) {
+            auto& neural = EbNeuralLearning::get();
+            bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
+            bool trainBase = neural.trainBasePrior();
+            if (EbCheckbox::draw("ai-train-base", "Train Base Prior", &trainBase, aiOn,
+                                 "Write all IL/RL updates into a shared saveDir/ai/prior.ebnn "
+                                 "across levels (game knowledge). Turn off later for per-level "
+                                 ".neural fine-tune — current weights seed that level."))
+                neural.setTrainBasePrior(trainBase);
+            ImGui::TextWrapped(
+                "Workflow: Auto-Tune on → Train Base Prior on → IL on several levels → "
+                "Save as Base Prior → then disable Train Base for per-level fine-tune.");
+            if (EbButton::draw("ai-save-base", "Save as Base Prior",
+                               aiOn && neural.loaded(),
+                               "Copy current weights to saveDir/ai/prior.ebnn. New levels load "
+                               "this before the packaged resources/ai/prior.ebnn."))
+                (void)neural.saveAsBasePrior();
+            if (EbButton::draw("ai-load-prior", "Load Base / Packaged Prior",
+                               aiOn && EbLevelProfile::get().loaded(),
+                               "Load user base prior if present, else packaged prior.ebnn, and "
+                               "write into the active path (base or this level)."))
+                (void)neural.loadPrior();
+            if (neural.trainBasePrior())
+                ImGui::TextDisabled("Active path: shared base prior");
+            else
+                ImGui::TextDisabled("Active path: per-level .neural");
+        }
+        EbSectionCard::end();
+
         if (EbSectionCard::begin("ai-knobs", "Scorer Knobs")) {
             auto& neural = EbNeuralLearning::get();
             bool const aiOn = EbStageConfig::assistMode() == AssistMode::AI;
@@ -442,8 +494,8 @@ public:
                              "Rank delays with the scorer and verify top-k with Live physics "
                              "before ordinary Live search. Off = Live proposes first.");
             EbSlider::drawInt("ai-topk", "Top-K Verify", &neural.topK, 1, 8, "", aiOn,
-                              "How many highest-scoring delays to verify before falling through "
-                              "to Live. Lower is cheaper; higher explores more candidates.");
+                              "How many highest-scoring delays to verify. AI-first prefers a "
+                              "verified delay>0 over d=0 within this set. Default 4.");
             EbSlider::drawFloat("ai-lr", "Learning Rate", &neural.learningRate, 0.001f, 0.05f, 3,
                                 "", aiOn,
                                 "Step size for on-play weight updates when Auto-Tune is on and "
@@ -451,15 +503,10 @@ public:
             EbSlider::drawInt("ai-observation", "Observation", &neural.observationTicks, 24, 96,
                               " ticks", aiOn,
                               "How long after an AI-armed input to attribute survival or death.");
-            if (EbButton::draw("ai-load-prior", "Load Packaged Prior",
-                               aiOn && EbLevelProfile::get().loaded(),
-                               "Replace in-memory weights with the packaged prior.ebnn and write "
-                               "them into this level's .neural file."))
-                (void)neural.loadPrior();
             if (EbButton::draw("ai-reset-weights", "Reset AI Weights",
                                aiOn && EbLevelProfile::get().loaded(),
-                               "Clear this level's .neural weights (Hybrid tables stay). Same as "
-                               "the AI half of Reset This Level."))
+                               "Clear active weights (shared base or this level .neural). Hybrid "
+                               "tables stay."))
                 neural.reset();
         }
         EbSectionCard::end();
