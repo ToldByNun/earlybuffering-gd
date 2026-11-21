@@ -1,5 +1,9 @@
 #include "input_source_hooks.hpp"
+
+#if !defined(GEODE_IS_IOS)
+
 #include "../core/assist/input/input_source_scope.hpp"
+
 bool EbSourceKeyboardDispatcher::dispatchKeyboardMSG(cocos2d::enumKeyCodes key, bool down,
                                                      bool repeat, double timestamp) {
     EbInputReconciler::Source source;
@@ -8,3 +12,5 @@ bool EbSourceKeyboardDispatcher::dispatchKeyboardMSG(cocos2d::enumKeyCodes key, 
     EbInputSourceScope scope(source);
     return cocos2d::CCKeyboardDispatcher::dispatchKeyboardMSG(key, down, repeat, timestamp);
 }
+
+#endif
