@@ -275,9 +275,12 @@ int EbNeuralLearning::trainSessionIfGrown(int passes, int maxUpdates) {
         this->updates += trained;
         m_hasPriorOrWeights = true;
         m_sessionTrainedThrough = std::min(size, start + trained);
-        // Never disk-save on the attempt-boundary flush — that hitch felt like AI lag.
-        // Manual Train Session / saveAsBasePrior / open path still persist.
-        ++m_savesSincePersist;
+        // Persist every 16 flushes so Auto-Tune learning sticks across sessions
+        // without saving on every death (that hitch felt like AI lag).
+        if (++m_savesSincePersist >= 16) {
+            m_savesSincePersist = 0;
+            save();
+        }
     }
     return trained;
 }
@@ -286,9 +289,8 @@ void EbNeuralLearning::flushDeferredTrain() {
     if (!m_deferTrain)
         return;
     m_deferTrain = false;
-    // Attempt-boundary only — keep the flush tiny so resets never hitch like a Live plan.
-    // Disk save stays on the every-8 path inside trainSessionIfGrown (not every death).
-    trainSessionIfGrown(1, 12);
+    // Attempt-boundary only — bigger than a death hitch, small enough for reset.
+    trainSessionIfGrown(1, 32);
 }
 
 void EbNeuralLearning::boundary(bool newAttempt) {
@@ -892,29 +894,30 @@ float EbNeuralLearning::deathReward(float progress) {
 float EbNeuralLearning::evidenceLearnScale(Evidence evidence) {
     switch (evidence) {
     case Evidence::TeacherSuggested:
-        return 0.25f;
+        // Live classic Delay fallthrough is the main teacher while AI-first is cold.
+        return 0.45f;
     case Evidence::SimulationVerified:
-        return 0.85f;
+        return 0.90f;
     case Evidence::SurvivedObserved:
-        return 1.0f;
+        return 1.15f;
     case Evidence::Death:
         return 1.0f;
     }
-    return 0.25f;
+    return 0.45f;
 }
 
 float EbNeuralLearning::evidenceRewardScale(Evidence evidence) {
     switch (evidence) {
     case Evidence::TeacherSuggested:
-        return 0.35f;
+        return 0.50f;
     case Evidence::SimulationVerified:
-        return 0.70f;
+        return 0.80f;
     case Evidence::SurvivedObserved:
-        return 1.0f;
+        return 1.15f;
     case Evidence::Death:
         return 1.0f;
     }
-    return 0.35f;
+    return 0.50f;
 }
 
 float EbNeuralLearning::evidenceConfidenceTarget(Evidence evidence, int plannedDelay,

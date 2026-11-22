@@ -343,16 +343,17 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         scorerWon = true;
     };
     // AI-first: score → top-k → verifyDelay → arm (never argmax-arm). Hybrid stays Hybrid-only.
-    // Nova: AI shell leaves classic fallthrough reserve (same idea as Adaptive shell).
+    // AI shell = up to half the press wall (and AI CPU cap) — Adaptive's discrete half+
+    // reserve left Shell=1 on ~3ms frames so AI never ran (research_20261122_194245).
     // Prefer verified delay>0 over d=0 so cold ranks do not starve Delays.
     auto& neural = EbNeuralLearning::get();
-    bool const continuousIw = player->m_isDart || player->m_isShip || player->m_isSwing;
     int const classicReserveUs =
-        EbLivePlanContracts::adaptiveFallthroughReserveUs(opts.budgetUs, !continuousIw);
+        std::min(opts.budgetUs / 2, EbLivePlanContracts::kFallthroughRemUsFloor);
     int aiShellUs =
         EbLivePlanContracts::adaptiveShellBudgetUs(opts.budgetUs, classicReserveUs);
     if (aiCpuCapUs > 0)
         aiShellUs = std::min(aiShellUs, std::max(800, aiCpuCapUs));
+    aiShellUs = std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
     int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
@@ -408,6 +409,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             EbAssistLog::info(
                 fmt::format("AI-FIRST pass d=0 ({:.0f}% sure)", pickPassConf * 100.0f));
         }
+        // Keep classic fallthrough solvent after AI verifies — do not gift away the reserve.
+        if (!scorerWon)
+            opts.budgetUs = std::max(opts.budgetUs, classicReserveUs);
     }
     // Hybrid-first: tabular UCB order → verify (does not run under AI mode; enabled() gates).
     auto& hybrid = EbHybridLearning::get();

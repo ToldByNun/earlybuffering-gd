@@ -288,13 +288,13 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         scorerWon = true;
     };
     auto& neural = EbNeuralLearning::get();
-    bool const continuousIw = player->m_isDart || player->m_isShip || player->m_isSwing;
     int const classicReserveUs =
-        EbLivePlanContracts::adaptiveFallthroughReserveUs(opts.budgetUs, !continuousIw);
+        std::min(opts.budgetUs / 2, EbLivePlanContracts::kFallthroughRemUsFloor);
     int aiShellUs =
         EbLivePlanContracts::adaptiveShellBudgetUs(opts.budgetUs, classicReserveUs);
     if (aiCpuCapUs > 0)
         aiShellUs = std::min(aiShellUs, std::max(800, aiCpuCapUs));
+    aiShellUs = std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
     int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
@@ -349,6 +349,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
             EbAssistLog::info(fmt::format("AI-FIRST release pass d=0 ({:.0f}% sure)",
                                           pickPassConf * 100.0f));
         }
+        if (!scorerWon)
+            opts.budgetUs = std::max(opts.budgetUs, classicReserveUs);
     }
     auto& hybrid = EbHybridLearning::get();
     // Hybrid-first stays Hybrid-only (AI may read tables for bootstrap, not this arm path).

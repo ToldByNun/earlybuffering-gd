@@ -2,6 +2,7 @@
 
 ## v1.8.1-dev
 
+- AI-first + learning: discrete Adaptive half+ reserve left Shell=1 on ~3ms frames so AI never armed (`research_20261122_194245`). AI shell now keeps classic ≤2ms / half and always leaves ≥`minRem` for top-k verify; classic reserve restored after AI. Attempt-boundary train flush 32 + persist weights every 16 flushes; stronger Live Delay teacher / survived scales.
 - Live Stage-12 grasp: lookahead shrink now uses the **frame** soft wall (not the 8ms hitch ceiling). At 240Hz that wrongly crushed ticks 12→4 (`research_20261122_191833`). Frame assist slice floors at 3ms (Nova slow-click ~4ms).
 - AI Live assist restore (Nova InputBuffer parity): AI-first runs in an Adaptive-style **shell** that reserves classic fallthrough; never PassBudget-skip classic when AI finds nothing. Verify tick budget restored (`tickBudget/3`). Hitch ceiling still clamps `sim-budget-us=0`. Live prepare stays without dual Shadow trajectory pair.
 - AI/Live hitch: `sim-budget-us=0` → AP1 hitch ceiling on `PlanOptions` (was unlimited → 7–20ms classicRequired in `research_20261122_085548`).

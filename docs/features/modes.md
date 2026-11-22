@@ -32,7 +32,7 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **AP-NL8 plan opt:** AI route planning caches windows, early-outs empty ranges, stride-subsamples NN evals, and shows seed/expand/verify µs on the overlay — budget aborts stay PartiallyChecked, never ShadowVerified.
 
-**AI Live hitch wall (Nova-aligned):** Soft wall is the AP1 hitch ceiling (`sim-budget-us=0` → 8ms). Lookahead shrink compares remUs to the **frame** slice (floored ~3ms), not the hitch ceiling — otherwise Stage-12 collapses to d≤4 at 240Hz. AI-first spends only an Adaptive-style **shell** (classic fallthrough reserved); if AI finds nothing, classic Live still runs. Live `prepare` skips the dual Shadow idle/action probe.
+**AI Live hitch wall (Nova-aligned):** Soft wall is the AP1 hitch ceiling (`sim-budget-us=0` → 8ms). Lookahead shrink compares remUs to the **frame** slice (floored ~3ms), not the hitch ceiling — otherwise Stage-12 collapses to d≤4 at 240Hz. AI-first spends a **half-press shell** (classic ≤2ms / half reserved — not Adaptive’s discrete half+ which starved AI to Shell=1); if AI finds nothing, classic Live still runs with its reserve restored. Live `prepare` skips the dual Shadow idle/action probe. Auto-Tune learning persists `.neural` every 16 attempt-boundary flushes.
 
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 
