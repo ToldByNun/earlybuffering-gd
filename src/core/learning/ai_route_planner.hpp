@@ -4,6 +4,7 @@
 #include "ai_config.hpp"
 #include "ai_route.hpp"
 #include "route_cand_semantics.hpp"
+#include "route_expand_core.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include <cstdint>
 #include <string>
@@ -32,6 +33,13 @@ public:
         return m_lastSeedCands;
     }
     std::string diagnoseLastExpand() const;
+    // AP-NL4: shared expand around a seed (verifyDelay probe) + occupancy.
+    EbRouteExpandCore::Result expandSeedShared(PlayLayer* layer, PlayerObject* player,
+                                               EbRouteCandSemantics::Cand const& seed, int tick,
+                                               int limit, float dt);
+    // Stuck/memory sim-core probe — no neural ranking.
+    EbRouteExpandCore::Result stuckSimCore(PlayLayer* layer, PlayerObject* player, int tick,
+                                           int delayTicks, int limit, float dt);
     void invalidate(char const* why);
     bool needsReplan(int tick, float liveX) const;
 
@@ -91,6 +99,8 @@ private:
     EbAiRoute m_last;
     EbRouteCandSemantics::ExpandJob m_lastExpandJob;
     std::vector<EbRouteCandSemantics::Cand> m_lastSeedCands;
+    EbRouteExpandCore::OccupancyRing m_occupancy;
+    EbRouteExpandCore::Result m_lastExpandResult;
     std::uint32_t m_nextCandId = 1;
     std::uint32_t m_nextJobId = 1;
     int m_lastPlanTick = -1;

@@ -6,6 +6,7 @@
 - Fix quit/seed AV: ghost HardStreaks live only as ghost-root children; never `CCSprite::addChild`, never reparent opaque/dangling `m_waveTrail`; reuse only via ghost-root child list; null trail pointers on detach before ~PlayerObject.
 - AP-NL2: Live human click-timing parity — Nova Stage↔EB window map, as-made/held/pass-through, mid-tick CBF gate, µs lookahead shrink, Alive-only Delay honesty; Live DR4 metrics (`reportLiveLine`); PlanGold `nova-live-click-timing`.
 - AP-NL3: semantic Cand/ExpandJob model (`EbRouteCandSemantics`) with lifetime transitions; Nova 232/1856 research-only (DR2); Autoplay seed→expand handoff + Live diagnose; PlanGold `route-cand-semantics`; `ai_route.cpp` for style.
+- AP-NL4: shared expand + sim-core (`EbRouteExpandCore`) — press/release around seed, occupancy ring, stuck/memory probe without neural; truncated expand never ShadowVerified; PlanGold `expand-honesty`.
 - AI prior: import Nova `NVM2` `model.bin` (float16 trunk `3512→128→64` + scalar conf) into `EbNeuralModel`; rank head stays freshly initialized. `Load Base / Packaged Prior` also checks `saveDir/ai/model.bin`. Offline convert: `tools/convert_nvm2_to_ebnn.py`.
 
 ## v1.8.0

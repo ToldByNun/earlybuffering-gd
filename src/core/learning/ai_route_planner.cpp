@@ -22,6 +22,8 @@ void EbAiRoutePlanner::invalidate(char const* why) {
     m_last.reason = why ? why : "invalidated";
     m_lastSeedCands.clear();
     m_lastExpandJob = {};
+    m_lastExpandResult = {};
+    m_occupancy.clear();
     m_lastPlanTick = -1;
 }
 
@@ -29,8 +31,100 @@ std::string EbAiRoutePlanner::diagnoseLastExpand() const {
     if (m_lastExpandJob.id == 0 && m_lastSeedCands.empty())
         return "expand: none";
     std::string line = EbRouteCandSemantics::diagnoseJob(m_lastExpandJob);
-    line += fmt::format(" seeds={}", static_cast<int>(m_lastSeedCands.size()));
+    line += fmt::format(" seeds={} trunc={} stuck={} occ={} reason={}",
+                        static_cast<int>(m_lastSeedCands.size()),
+                        m_lastExpandResult.truncated ? 1 : 0,
+                        m_lastExpandResult.stuckProbeOnly ? 1 : 0, m_occupancy.claimedCount(),
+                        m_lastExpandResult.reason ? m_lastExpandResult.reason : "?");
     return line;
+}
+
+EbRouteExpandCore::Result EbAiRoutePlanner::expandSeedShared(PlayLayer* layer, PlayerObject* player,
+                                                             EbRouteCandSemantics::Cand const& seed,
+                                                             int tick, int limit, float dt) {
+    EbRouteExpandCore::Result empty;
+    empty.reason = "bad-args";
+    if (!layer || !player || dt <= 0.f)
+        return empty;
+    auto& cfg = EbAiConfig::get();
+    EbRouteExpandCore::Options opts;
+    opts.budgetUs = std::max(200, cfg.simBudgetUs);
+    opts.horizonTicks = std::max(limit, cfg.planningHorizon);
+    opts.maxSimCalls = cfg.maxSimCalls;
+    opts.generateRelease = cfg.generateRelease;
+    opts.holdChoices = {2, 4, 6, 8, 12, 16};
+    if (opts.holdChoices.size() > 4)
+        opts.holdChoices.resize(4);
+
+    auto probe = [&](EbAiRouteEvent::Kind kind, int delayTicks, int holdTicks,
+                     int /*simIndex*/) -> EbRouteExpandCore::SimOutcome {
+        (void)holdTicks;
+        EbRouteExpandCore::SimOutcome out;
+        bool const down = kind == EbAiRouteEvent::Kind::Press;
+        EbPlanOptions planOpts{};
+        planOpts.budgetUs = std::max(200, cfg.simBudgetUs / 4);
+        planOpts.tickBudget = cfg.maxSimTicks;
+        planOpts.requireAliveForDelay = cfg.strictVerify;
+        planOpts.attemptStartTick = tick;
+        auto const vr = EbShadowSimulator::get().verifyDelay(layer, player, down, delayTicks, limit,
+                                                             dt, dt, planOpts);
+        out.ok = vr.ok;
+        out.unknown = vr.unknown;
+        out.budgetHit = vr.budgetHit;
+        out.clearsThreat = vr.clearsThreat;
+        out.progress = vr.ok ? 1.f : (vr.clearsThreat ? 0.55f : 0.f);
+        if (!vr.ok && vr.clearsThreat && !vr.diedBeforeAction) {
+            out.ok = true;
+            out.progress = 0.55f;
+        }
+        return out;
+    };
+
+    auto result = EbRouteExpandCore::expandAroundSeed(m_nextJobId++, seed, tick, opts, m_occupancy,
+                                                      probe);
+    m_lastExpandResult = result;
+    m_lastExpandJob = result.job;
+    return result;
+}
+
+EbRouteExpandCore::Result EbAiRoutePlanner::stuckSimCore(PlayLayer* layer, PlayerObject* player,
+                                                         int tick, int delayTicks, int limit,
+                                                         float dt) {
+    EbRouteExpandCore::Result empty;
+    empty.reason = "bad-args";
+    empty.stuckProbeOnly = true;
+    if (!layer || !player || dt <= 0.f)
+        return empty;
+    auto& cfg = EbAiConfig::get();
+    EbRouteExpandCore::Options opts;
+    opts.budgetUs = std::max(200, std::min(cfg.simBudgetUs, 1500));
+    opts.horizonTicks = std::max(limit, 24);
+    opts.maxSimCalls = 1;
+    opts.generateRelease = false;
+
+    auto probe = [&](EbAiRouteEvent::Kind kind, int delay, int, int) -> EbRouteExpandCore::SimOutcome {
+        EbRouteExpandCore::SimOutcome out;
+        bool const down = kind == EbAiRouteEvent::Kind::Press;
+        EbPlanOptions planOpts{};
+        planOpts.budgetUs = opts.budgetUs;
+        planOpts.tickBudget = std::min(96, cfg.maxSimTicks);
+        planOpts.requireAliveForDelay = true;
+        planOpts.attemptStartTick = tick;
+        auto const vr =
+            EbShadowSimulator::get().verifyDelay(layer, player, down, delay, limit, dt, dt, planOpts);
+        out.ok = vr.ok;
+        out.unknown = vr.unknown;
+        out.budgetHit = vr.budgetHit;
+        out.clearsThreat = vr.clearsThreat;
+        out.progress = vr.ok ? 1.f : 0.f;
+        return out;
+    };
+
+    auto result =
+        EbRouteExpandCore::stuckSimCoreProbe(m_nextJobId++, tick, delayTicks, opts, m_occupancy, probe);
+    m_lastExpandResult = result;
+    m_lastExpandJob = result.job;
+    return result;
 }
 
 bool EbAiRoutePlanner::needsReplan(int tick, float liveX) const {
@@ -368,6 +462,9 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         return route;
     }
 
+    // AP-NL4: fresh occupancy for this plan — claimed ticks cannot double-arm.
+    m_occupancy.clear();
+
     GameModeKind const mode = EbStageConfig::kindOf(player);
     bool const canHold = novaCanHold(mode);
     std::vector<int> holdChoices = {2, 4, 6, 8, 10, 12, 16, 24};
@@ -389,6 +486,8 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     for (auto const& cand : scored) {
         if (timedOut() || simCalls >= cfg.maxSimCalls)
             break;
+        if (!m_occupancy.tryClaim(tick + cand.delay))
+            continue;
         EbAiRouteEvent press;
         press.kind = EbAiRouteEvent::Kind::Press;
         press.delay = cand.delay;
@@ -423,8 +522,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
             clearsThreat = vr.clearsThreat;
             ++verifyHits;
         }
-        if (!ok && cfg.pruneDeadBranches)
+        if (!ok && cfg.pruneDeadBranches) {
+            m_occupancy.release(tick + cand.delay);
             continue;
+        }
         node.events.front().verified = ok;
         node.events.front().clearsThreat = clearsThreat;
         node.ok = ok;
@@ -440,6 +541,24 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     }
 
     if (beam.empty()) {
+        // AP-NL4: stuck/memory sim-core — no neural ranking, verifyDelay only.
+        if (cfg.simulationEnabled) {
+            int const stuckDelay = delays.empty() ? 0 : delays.front();
+            auto stuck = stuckSimCore(layer, player, tick, stuckDelay, limit, dt);
+            if (EbRouteCandSemantics::canArmJob(stuck.job)) {
+                route.events = EbRouteCandSemantics::toRouteEvents(stuck.job);
+                route.valid = true;
+                route.reason = "stuck-sim-core";
+                route.routeScore = 0.f;
+                route.startX = player->getPositionX();
+                route.simCalls = stuck.simCalls;
+                m_last = route;
+                m_lastPlanTick = tick;
+                m_lastPlanX = route.startX;
+                ++plans;
+                return route;
+            }
+        }
         if (cfg.orbCandidates &&
             EbAssistControllerImplementation::nearOrbOrPadHint(layer, player, limit, dt)) {
             int delayHint = delays.empty() ? 0 : delays.front();
@@ -492,6 +611,8 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                     release.delay = parent.lastAbsDelay + hold;
                     if (release.delay > cfg.planningHorizon)
                         continue;
+                    if (!m_occupancy.tryClaim(tick + release.delay))
+                        continue;
                     release.neuralScore = parent.events.back().neuralScore * 0.9f;
                     if (!child.events.empty() && child.events.back().kind == EbAiRouteEvent::Kind::Press)
                         child.events.back().holdTicks = hold;
@@ -505,8 +626,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                         ++budgetHits;
                         break;
                     }
-                    if (!vo.ok && cfg.pruneDeadBranches)
+                    if (!vo.ok && cfg.pruneDeadBranches) {
+                        m_occupancy.release(tick + release.delay);
                         continue;
+                    }
                     child.events.back().verified = vo.ok;
                     child.events.back().clearsThreat = vo.clearsThreat;
                     child.ok = vo.ok;
@@ -526,6 +649,8 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                         break;
                     int nextDelay = parent.lastAbsDelay + gap + cand.delay;
                     if (nextDelay > cfg.planningHorizon)
+                        continue;
+                    if (!m_occupancy.tryClaim(tick + nextDelay))
                         continue;
                     EbAiBeamNode child = parent;
                     EbAiRouteEvent press;
@@ -618,7 +743,28 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         }
         job.state = EbRouteCandSemantics::LifeState::Expanding;
         EbRouteCandSemantics::finalizeExpand(job);
+        // AP-NL4 honesty: truncated/budget expand must never remain ShadowVerified.
+        m_lastExpandResult = {};
+        m_lastExpandResult.job = job;
+        m_lastExpandResult.simCalls = simCalls;
+        m_lastExpandResult.truncated = route.budgetHit;
+        if (route.budgetHit || m_lastExpandResult.truncated) {
+            job.budgetHit = true;
+            if (job.state == EbRouteCandSemantics::LifeState::ShadowVerified) {
+                job.state = EbRouteCandSemantics::LifeState::PartiallyChecked;
+                for (auto& ev : job.events) {
+                    if (ev.state == EbRouteCandSemantics::LifeState::ShadowVerified)
+                        ev.state = EbRouteCandSemantics::LifeState::PartiallyChecked;
+                }
+            }
+            m_lastExpandResult.job = job;
+            m_lastExpandResult.truncated = true;
+        }
         m_lastExpandJob = job;
+        m_lastExpandResult.reason =
+            EbRouteExpandCore::honestyOk(m_lastExpandResult)
+                ? (m_lastExpandResult.truncated ? "partial-trunc" : "ok")
+                : "dishonest";
         // Autoplay may still use prefix-valid routes; ShadowVerified is the arm gate (NL5b).
         if (route.valid && !EbRouteCandSemantics::canArmJob(job) &&
             job.state == EbRouteCandSemantics::LifeState::PartiallyChecked)
@@ -695,6 +841,8 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
 
     std::string semanticsReport;
     expect(EbRouteCandSemantics::selfCheck(semanticsReport), "route-cand-semantics");
+    std::string expandCoreReport;
+    expect(EbRouteExpandCore::selfCheck(expandCoreReport), "route-expand-core");
 
     if (fails == 0) {
         report = "AiRoutePlanner OK";
