@@ -11,6 +11,7 @@
 #include "../core/assist/contracts/live_plan_contracts.hpp"
 #include "../core/sim/runtime/shadow_isolation_contracts.hpp"
 #include "../core/assist/contracts/live_stage_parity.hpp"
+#include "../core/learning/neural_seed_strategy.hpp"
 #include "../core/learning/route_cand_semantics.hpp"
 #include "../core/learning/route_expand_core.hpp"
 #include "../core/assist/contracts/miss_assist_contracts.hpp"
@@ -260,6 +261,9 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string routeExpandCoreReport;
     expectReport(EbRouteExpandCore::selfCheck(routeExpandCoreReport), "expand-honesty",
                  routeExpandCoreReport);
+    std::string dualSeedReport;
+    expectReport(EbNeuralSeedStrategy::selfCheck(dualSeedReport), "dual-seed-strategy",
+                 dualSeedReport);
     // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
     expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&

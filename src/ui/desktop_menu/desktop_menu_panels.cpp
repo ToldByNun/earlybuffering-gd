@@ -466,13 +466,38 @@ public:
                 EbSlider::drawInt("ai-cand-step", "Sample Step", &cfg.sampleStep, 1, 8, "", true,
                                   "Fixed stride when adaptive sampling is off."))
                 dirty();
+            {
+                char const* seeds[] = {"Enhanced (product)", "NovaParity (compare)"};
+                int seedIdx = static_cast<int>(cfg.seedStrategy);
+                if (seedIdx < 0 || seedIdx > 1)
+                    seedIdx = 0;
+                if (EbComboBox::draw(
+                        "ai-seed-strategy", "Seed Strategy", seeds, 2, &seedIdx, true,
+                        "Enhanced: config threshold + top-k + Shadow. NovaParity: duty + "
+                        "subsample + hard 0.6 (research A/B only).")) {
+                    cfg.seedStrategy = static_cast<EbAiConfig::SeedStrategy>(seedIdx);
+                    dirty();
+                }
+            }
+            if (cfg.seedStrategy == EbAiConfig::SeedStrategy::NovaParity) {
+                if (EbSlider::drawInt("ai-seed-duty-period", "Seed Duty Period", &cfg.seedDutyPeriod,
+                                      1, 16, "", true,
+                                      "NovaParity only: seed when planTick % period == phase."))
+                    dirty();
+                if (EbSlider::drawInt("ai-seed-duty-phase", "Seed Duty Phase", &cfg.seedDutyPhase, 0,
+                                      std::max(0, cfg.seedDutyPeriod - 1), "", true,
+                                      "Phase offset for the NovaParity duty bit."))
+                    dirty();
+            }
             ImGui::Separator();
             if (EbCheckbox::draw("ai-gate-on", "Confidence Gating", &cfg.gatingEnabled, true,
                                  "Drop low-confidence candidates before Shadow verify."))
                 dirty();
-            if (EbSlider::drawFloat("ai-gate-thr", "Confidence Threshold", &cfg.confidenceThreshold,
-                                    0.05f, 0.95f, 2, "", cfg.gatingEnabled,
-                                    "Nova reference default is 0.60."))
+            if (EbSlider::drawFloat(
+                    "ai-gate-thr", "Confidence Threshold", &cfg.confidenceThreshold, 0.05f, 0.95f, 2,
+                    "",
+                    cfg.gatingEnabled && cfg.seedStrategy == EbAiConfig::SeedStrategy::Enhanced,
+                    "Enhanced floor only — NovaParity uses a hard 0.60 gate."))
                 dirty();
             if (EbCheckbox::draw("ai-gate-adapt", "Adaptive Threshold", &cfg.adaptiveThreshold,
                                  cfg.gatingEnabled,

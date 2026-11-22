@@ -29,6 +29,12 @@ public:
         GreedyBeam = 0,
         DepthFirst = 1,
     };
+    // AP-NL5 / DR1: dual neural seed strategies. Enhanced is the product default;
+    // NovaParity is compare/research only (hard 0.6 + duty + subsample).
+    enum class SeedStrategy : std::uint8_t {
+        Enhanced = 0,
+        NovaParity = 1,
+    };
     enum class Preset : std::uint8_t {
         NovaReference = 0,
         Balanced = 1,
@@ -66,9 +72,13 @@ public:
     int hidden2 = 64;
     DelayEncoding delayEncoding = DelayEncoding::LinearMax;
     float scoreCalibration = 1.0f;
-    float confidenceThreshold = 0.6f; // Nova-confirmed default reference
+    float confidenceThreshold = 0.6f; // Enhanced floor; NovaParity ignores (hard 0.6)
     int neuralEvalBudget = 32;
     bool freezeWeights = false;
+    SeedStrategy seedStrategy = SeedStrategy::Enhanced;
+    // NovaParity duty: seed only when planTick % period == phase (period>=1).
+    int seedDutyPeriod = 1;
+    int seedDutyPhase = 0;
 
     // --- Candidates ---
     int maxCandidates = 8;

@@ -32,6 +32,8 @@ void EbAiConfig::clampAll() {
     scoreCalibration = std::clamp(scoreCalibration, 0.25f, 4.0f);
     confidenceThreshold = std::clamp(confidenceThreshold, 0.05f, 0.95f);
     neuralEvalBudget = std::clamp(neuralEvalBudget, 4, 128);
+    seedDutyPeriod = std::clamp(seedDutyPeriod, 1, 32);
+    seedDutyPhase = std::clamp(seedDutyPhase, 0, 31);
     maxCandidates = std::clamp(maxCandidates, 1, 32);
     candidateWindow = std::clamp(candidateWindow, 8, 96);
     minDelay = std::clamp(minDelay, 0, 48);
@@ -102,6 +104,9 @@ void EbAiConfig::applyPreset(Preset value) {
         confidenceThreshold = 0.6f;
         gatingEnabled = true;
         adaptiveThreshold = false;
+        seedStrategy = SeedStrategy::NovaParity;
+        seedDutyPeriod = 2;
+        seedDutyPhase = 0;
         maxCandidates = 12;
         sampleStep = 1;
         maxRouteDepth = 6;
@@ -175,6 +180,9 @@ void EbAiConfig::resetCategory(char const* category) {
         confidenceThreshold = fresh.confidenceThreshold;
         neuralEvalBudget = fresh.neuralEvalBudget;
         freezeWeights = fresh.freezeWeights;
+        seedStrategy = fresh.seedStrategy;
+        seedDutyPeriod = fresh.seedDutyPeriod;
+        seedDutyPhase = fresh.seedDutyPhase;
     } else if (name == "candidates") {
         maxCandidates = fresh.maxCandidates;
         candidateWindow = fresh.candidateWindow;
@@ -285,6 +293,9 @@ static matjson::Value dumpConfig(EbAiConfig const& c) {
     o["confidenceThreshold"] = c.confidenceThreshold;
     o["neuralEvalBudget"] = c.neuralEvalBudget;
     o["freezeWeights"] = c.freezeWeights;
+    o["seedStrategy"] = static_cast<int>(c.seedStrategy);
+    o["seedDutyPeriod"] = c.seedDutyPeriod;
+    o["seedDutyPhase"] = c.seedDutyPhase;
     o["maxCandidates"] = c.maxCandidates;
     o["candidateWindow"] = c.candidateWindow;
     o["minDelay"] = c.minDelay;
@@ -414,6 +425,8 @@ void EbAiConfig::load() {
     loadField(root, "confidenceThreshold", confidenceThreshold);
     loadField(root, "neuralEvalBudget", neuralEvalBudget);
     loadField(root, "freezeWeights", freezeWeights);
+    loadField(root, "seedDutyPeriod", seedDutyPeriod);
+    loadField(root, "seedDutyPhase", seedDutyPhase);
     loadField(root, "maxCandidates", maxCandidates);
     loadField(root, "candidateWindow", candidateWindow);
     loadField(root, "minDelay", minDelay);
@@ -502,16 +515,19 @@ void EbAiConfig::load() {
     int policyInt = static_cast<int>(policy);
     int encInt = static_cast<int>(delayEncoding);
     int algoInt = static_cast<int>(searchAlgo);
+    int seedInt = static_cast<int>(seedStrategy);
     loadField(root, "preset", presetInt);
     loadField(root, "backend", backendInt);
     loadField(root, "policy", policyInt);
     loadField(root, "delayEncoding", encInt);
     loadField(root, "searchAlgo", algoInt);
+    loadField(root, "seedStrategy", seedInt);
     preset = static_cast<Preset>(std::clamp(presetInt, 0, 5));
     backend = static_cast<Backend>(std::clamp(backendInt, 0, 1));
     policy = static_cast<Policy>(std::clamp(policyInt, 0, 3));
     delayEncoding = static_cast<DelayEncoding>(std::clamp(encInt, 0, 1));
     searchAlgo = static_cast<SearchAlgo>(std::clamp(algoInt, 0, 1));
+    seedStrategy = static_cast<SeedStrategy>(std::clamp(seedInt, 0, 1));
     clampAll();
 }
 
@@ -549,10 +565,13 @@ bool EbAiConfig::selfCheck(std::string& report) {
     expect(cfg.confidenceThreshold >= 0.59f && cfg.confidenceThreshold <= 0.61f, "nova-thresh");
     expect(cfg.delayEncoding == DelayEncoding::Log1p, "nova-log1p");
     expect(cfg.maxRouteDepth >= 4, "nova-depth");
+    expect(cfg.seedStrategy == SeedStrategy::NovaParity, "nova-seed-parity");
+    expect(cfg.seedDutyPeriod >= 2, "nova-seed-duty");
     cfg.applyPreset(Preset::Performance);
     expect(cfg.maxRouteDepth <= 2, "perf-shallow");
     cfg.resetAll();
     expect(cfg.preset == Preset::Balanced, "reset-balanced");
+    expect(cfg.seedStrategy == SeedStrategy::Enhanced, "default-seed-enhanced");
     if (fails == 0) {
         report = "AiConfig OK";
         return true;

@@ -3,6 +3,7 @@
 
 #include "ai_config.hpp"
 #include "ai_route.hpp"
+#include "neural_seed_strategy.hpp"
 #include "route_cand_semantics.hpp"
 #include "route_expand_core.hpp"
 #include "../sim/planning/simulation_plan.hpp"
@@ -49,6 +50,8 @@ public:
     int budgetHits = 0;
     int verifyHits = 0;
     int verifyTries = 0;
+    // AP-NL5: dual-seed diagnostics (never conflate with survival).
+    EbNeuralSeedStrategy::Counters seedCounters;
 
     // Convert route events → absolute-tick press/release timeline for Shadow replay.
     static std::vector<EbInputEvent> timelineFromEvents(std::vector<EbAiRouteEvent> const& events,
@@ -101,6 +104,7 @@ private:
     std::vector<EbRouteCandSemantics::Cand> m_lastSeedCands;
     EbRouteExpandCore::OccupancyRing m_occupancy;
     EbRouteExpandCore::Result m_lastExpandResult;
+    EbNeuralSeedStrategy::Kind m_lastSeedKind = EbNeuralSeedStrategy::Kind::Enhanced;
     std::uint32_t m_nextCandId = 1;
     std::uint32_t m_nextJobId = 1;
     int m_lastPlanTick = -1;

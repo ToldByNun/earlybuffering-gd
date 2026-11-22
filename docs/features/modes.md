@@ -22,6 +22,8 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **AI-first path:** confidence-ranked top-k → `verifyDelay` → arm a verified **delay>0** when any exists, else d=0 Pass, else Live fallthrough. Never arms from raw score. Failed verifies demote both confidence and rank. Live fallthrough Delays are weak teacher labels (not survived truth). Survived observation is the strongest evidence; identical-next buffer samples stay supervised-only (no fake TD). Autoplay schedules the verified delay instead of pressing immediately. Skips when Flight-owned, dual, or remUs is too low. Hybrid-first stays Hybrid-only (no double verify stack).
 
+**AP-NL5 seed strategies (Autoplay/AI):** **Enhanced** (default) uses the configured confidence threshold + top-k, then Shadow verify — 0.6 is never implied. **NovaParity** is an explicit compare mode (duty bit + window subsample + hard 0.6). Live click-timing is separate and unchanged. Rollback is not ported.
+
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 
 Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existing AI settings stay AI. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.

@@ -31,11 +31,14 @@ std::string EbAiRoutePlanner::diagnoseLastExpand() const {
     if (m_lastExpandJob.id == 0 && m_lastSeedCands.empty())
         return "expand: none";
     std::string line = EbRouteCandSemantics::diagnoseJob(m_lastExpandJob);
-    line += fmt::format(" seeds={} trunc={} stuck={} occ={} reason={}",
-                        static_cast<int>(m_lastSeedCands.size()),
-                        m_lastExpandResult.truncated ? 1 : 0,
-                        m_lastExpandResult.stuckProbeOnly ? 1 : 0, m_occupancy.claimedCount(),
-                        m_lastExpandResult.reason ? m_lastExpandResult.reason : "?");
+    line += fmt::format(
+        " seeds={} trunc={} stuck={} occ={} reason={} seed={} eval={} np={} en={} arms={}",
+        static_cast<int>(m_lastSeedCands.size()), m_lastExpandResult.truncated ? 1 : 0,
+        m_lastExpandResult.stuckProbeOnly ? 1 : 0, m_occupancy.claimedCount(),
+        m_lastExpandResult.reason ? m_lastExpandResult.reason : "?",
+        EbNeuralSeedStrategy::kindName(m_lastSeedKind), seedCounters.seedsEvaluated,
+        seedCounters.novaParityAccepts, seedCounters.enhancedProposes,
+        seedCounters.postVerifyArms);
     return line;
 }
 
@@ -347,7 +350,11 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         return route;
     }
     auto& neural = EbNeuralLearning::get();
-    if (!EbNeuralLearning::active() || !neural.loaded()) {
+    auto const seedKind = EbNeuralSeedStrategy::kindFromConfig(cfg);
+    m_lastSeedKind = seedKind;
+    // AP-NL5 model-ready gate — else non-neural fallthrough (Adaptive/classic).
+    if (!EbNeuralSeedStrategy::modelReady(EbNeuralLearning::active(), neural.loaded())) {
+        ++seedCounters.modelNotReady;
         route.reason = "no-model";
         m_last = route;
         return route;
@@ -368,38 +375,65 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         return std::clamp(std::min(cfg.simBudgetUs, rem), 200, cfg.simBudgetUs);
     };
 
+    // NovaParity duty bit — skip neural seed this tick (compare cadence).
+    if (seedKind == EbNeuralSeedStrategy::Kind::NovaParity &&
+        !EbNeuralSeedStrategy::dutyAllows(tick, cfg.seedDutyPeriod, cfg.seedDutyPhase)) {
+        ++seedCounters.dutySkipped;
+        route.reason = "seed-duty";
+        m_last = route;
+        return route;
+    }
+
     EbPlanOptions prep{};
     (void)neural.prepare(layer, player, true, player1, tick, limit, dt, dt, prep);
 
-    auto delays = enumerateDelays(cfg, limit);
-    std::vector<EbAiScoredCandidate> scored;
-    scored.reserve(delays.size());
+    auto enhancedDelays = enumerateDelays(cfg, limit);
+    int const hi = std::min(cfg.maxDelay, std::min(limit, cfg.candidateWindow));
+    int const lo = std::max(0, cfg.minDelay);
+    auto delays = EbNeuralSeedStrategy::delaysForStrategy(seedKind, lo, hi, enhancedDelays);
 
+    std::vector<EbNeuralSeedStrategy::Proposal> evaluated;
+    evaluated.reserve(delays.size());
+    int const evalCap = std::min(cfg.neuralEvalBudget, cfg.maxCandidates);
     for (int delay : delays) {
         if (timedOut()) {
             route.budgetHit = true;
             break;
         }
-        if (static_cast<int>(scored.size()) >= cfg.maxCandidates)
+        if (static_cast<int>(evaluated.size()) >= evalCap)
             break;
         if (!cfg.generatePress)
             break;
         float const n = neural.confidenceForDelay(delay);
         ++route.neuralEvals;
-        if (passesGate(n, cfg)) {
-            EbAiScoredCandidate c;
-            c.delay = delay;
-            c.press = true;
-            c.neural = n;
-            scored.push_back(c);
-        }
+        EbNeuralSeedStrategy::Proposal p;
+        p.delay = delay;
+        p.neural = n;
+        p.press = true;
+        evaluated.push_back(p);
     }
 
-    std::sort(scored.begin(), scored.end(),
-              [](EbAiScoredCandidate const& a, EbAiScoredCandidate const& b) {
-                  return a.neural > b.neural;
-              });
-    if (cfg.gatingEnabled && cfg.adaptiveThreshold && !scored.empty()) {
+    auto proposals =
+        EbNeuralSeedStrategy::selectProposals(seedKind, evaluated, cfg, seedCounters);
+    if (cfg.debugLogging && seedKind == EbNeuralSeedStrategy::Kind::NovaParity &&
+        !proposals.empty()) {
+        geode::log::info("[AP-NL5] NovaParity seed delay={} {}", proposals.front().delay,
+                         EbNeuralSeedStrategy::percentSureLabel(proposals.front().neural));
+    }
+
+    std::vector<EbAiScoredCandidate> scored;
+    scored.reserve(proposals.size());
+    for (auto const& p : proposals) {
+        EbAiScoredCandidate c;
+        c.delay = p.delay;
+        c.press = p.press;
+        c.neural = p.neural;
+        scored.push_back(c);
+    }
+
+    // Enhanced-only soft filters — NovaParity must not bypass the hard 0.6 gate.
+    if (seedKind == EbNeuralSeedStrategy::Kind::Enhanced && cfg.gatingEnabled &&
+        cfg.adaptiveThreshold && !scored.empty()) {
         std::vector<float> scores;
         scores.reserve(scored.size());
         for (auto const& c : scored)
@@ -409,7 +443,6 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         scored.erase(std::remove_if(scored.begin(), scored.end(),
                                     [&](EbAiScoredCandidate const& c) { return c.neural < floor; }),
                      scored.end());
-        // Always keep at least minRetained of the original top scores.
         if (static_cast<int>(scored.size()) < cfg.minRetained) {
             scored.clear();
             for (int delay : delays) {
@@ -429,9 +462,8 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                 scored.resize(static_cast<size_t>(cfg.minRetained));
         }
     }
-    if (static_cast<int>(scored.size()) > cfg.maxRetained)
-        scored.resize(static_cast<size_t>(cfg.maxRetained));
-    if (scored.empty() && cfg.lowConfidenceFallback) {
+    if (seedKind == EbNeuralSeedStrategy::Kind::Enhanced && scored.empty() &&
+        cfg.lowConfidenceFallback) {
         for (int delay : delays) {
             if (static_cast<int>(scored.size()) >= cfg.fallbackCandidateCount)
                 break;
@@ -535,6 +567,8 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                      cfg.weightSafety * (clearsThreat ? 0.5f : 0.0f);
         if (!ok)
             node.score -= cfg.deathPenalty;
+        if (ok)
+            ++seedCounters.postVerifyArms;
         beam.push_back(std::move(node));
         if (static_cast<int>(beam.size()) >= cfg.beamWidth)
             break;
@@ -843,6 +877,8 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
     expect(EbRouteCandSemantics::selfCheck(semanticsReport), "route-cand-semantics");
     std::string expandCoreReport;
     expect(EbRouteExpandCore::selfCheck(expandCoreReport), "route-expand-core");
+    std::string seedStrategyReport;
+    expect(EbNeuralSeedStrategy::selfCheck(seedStrategyReport), "dual-seed-strategy");
 
     if (fails == 0) {
         report = "AiRoutePlanner OK";
