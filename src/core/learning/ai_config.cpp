@@ -85,6 +85,10 @@ void EbAiConfig::clampAll() {
     probeEveryTicks = std::clamp(probeEveryTicks, 4, 60);
     gapTicks = std::clamp(gapTicks, 4, 120);
     maxExecDriftPx = std::clamp(maxExecDriftPx, 2.0f, 80.0f);
+    maxRouteQueue = std::clamp(maxRouteQueue, 0, 8);
+    earlyPlanTicks = std::clamp(earlyPlanTicks, 0, 64);
+    maxAutoplayCps = std::clamp(maxAutoplayCps, 1, 60);
+    memoryHoldTicks = std::clamp(memoryHoldTicks, 4, 240);
     maxAiCpuUsPerTick = std::clamp(maxAiCpuUsPerTick, 500, 12000);
     diagnosticSampleEvery = std::clamp(diagnosticSampleEvery, 1, 240);
     if (!experimentalBackends && backend == Backend::DualHeadLegacy)
@@ -258,6 +262,11 @@ void EbAiConfig::resetCategory(char const* category) {
         gapTicks = fresh.gapTicks;
         replanOnDivergence = fresh.replanOnDivergence;
         maxExecDriftPx = fresh.maxExecDriftPx;
+        maxRouteQueue = fresh.maxRouteQueue;
+        earlyPlanTicks = fresh.earlyPlanTicks;
+        maxAutoplayCps = fresh.maxAutoplayCps;
+        memoryReuseRoute = fresh.memoryReuseRoute;
+        memoryHoldTicks = fresh.memoryHoldTicks;
     } else if (name == "perf") {
         maxAiCpuUsPerTick = fresh.maxAiCpuUsPerTick;
         backgroundTrain = fresh.backgroundTrain;
@@ -365,6 +374,11 @@ static matjson::Value dumpConfig(EbAiConfig const& c) {
     o["gapTicks"] = c.gapTicks;
     o["replanOnDivergence"] = c.replanOnDivergence;
     o["maxExecDriftPx"] = c.maxExecDriftPx;
+    o["maxRouteQueue"] = c.maxRouteQueue;
+    o["earlyPlanTicks"] = c.earlyPlanTicks;
+    o["maxAutoplayCps"] = c.maxAutoplayCps;
+    o["memoryReuseRoute"] = c.memoryReuseRoute;
+    o["memoryHoldTicks"] = c.memoryHoldTicks;
     o["maxAiCpuUsPerTick"] = c.maxAiCpuUsPerTick;
     o["backgroundTrain"] = c.backgroundTrain;
     o["diagnosticSampleEvery"] = c.diagnosticSampleEvery;
@@ -495,6 +509,11 @@ void EbAiConfig::load() {
     loadField(root, "gapTicks", gapTicks);
     loadField(root, "replanOnDivergence", replanOnDivergence);
     loadField(root, "maxExecDriftPx", maxExecDriftPx);
+    loadField(root, "maxRouteQueue", maxRouteQueue);
+    loadField(root, "earlyPlanTicks", earlyPlanTicks);
+    loadField(root, "maxAutoplayCps", maxAutoplayCps);
+    loadField(root, "memoryReuseRoute", memoryReuseRoute);
+    loadField(root, "memoryHoldTicks", memoryHoldTicks);
     loadField(root, "maxAiCpuUsPerTick", maxAiCpuUsPerTick);
     loadField(root, "backgroundTrain", backgroundTrain);
     loadField(root, "diagnosticSampleEvery", diagnosticSampleEvery);

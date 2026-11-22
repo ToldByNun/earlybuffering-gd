@@ -162,6 +162,12 @@ public:
     int gapTicks = 28;
     bool replanOnDivergence = true;
     float maxExecDriftPx = 20.0f;
+    // AP-NL6: Autoplay-only knobs (never soft-lock Live windows/budgets).
+    int maxRouteQueue = 2;     // early-plan queue depth (0 = active route only)
+    int earlyPlanTicks = 8;    // enqueue next plan when remaining route delay ≤ this
+    int maxAutoplayCps = 12;   // soft CPS cap over 240 physics ticks
+    bool memoryReuseRoute = true;
+    int memoryHoldTicks = 48;  // reuse last SV route if replan fails within window
 
     // --- Performance ---
     int maxAiCpuUsPerTick = 2000;

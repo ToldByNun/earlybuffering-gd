@@ -30,6 +30,9 @@ public:
     EbRouteCandSemantics::ExpandJob const& lastExpandJob() const {
         return m_lastExpandJob;
     }
+    EbRouteExpandCore::Result const& lastExpandResult() const {
+        return m_lastExpandResult;
+    }
     std::vector<EbRouteCandSemantics::Cand> const& lastSeedCands() const {
         return m_lastSeedCands;
     }

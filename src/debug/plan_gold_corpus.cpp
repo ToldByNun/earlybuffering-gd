@@ -11,6 +11,7 @@
 #include "../core/assist/contracts/live_plan_contracts.hpp"
 #include "../core/sim/runtime/shadow_isolation_contracts.hpp"
 #include "../core/assist/contracts/live_stage_parity.hpp"
+#include "../core/learning/autoplay_metrics.hpp"
 #include "../core/learning/neural_seed_strategy.hpp"
 #include "../core/learning/route_cand_semantics.hpp"
 #include "../core/learning/route_expand_core.hpp"
@@ -268,6 +269,9 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string shadowVerifiedReport;
     expectReport(EbShadowVerifiedContract::selfCheck(shadowVerifiedReport),
                  "shadow-verified-full-route", shadowVerifiedReport);
+    std::string autoplayMetricsReport;
+    expectReport(EbAutoplayMetrics::selfCheck(autoplayMetricsReport), "autoplay-metrics",
+                 autoplayMetricsReport);
     // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
     expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&

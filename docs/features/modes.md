@@ -26,6 +26,8 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **AP-NL5b ShadowVerified:** Autoplay executes a route only when every planned event was Shadow-simulated (horizon covers last event + settle, no unknown/budget). Partial or truncated routes stay `PartiallyChecked` and do not arm as safe; Explore presses stay labeled unverified.
 
+**AP-NL6 Autoplay queue / metrics:** Autoplay can early-plan into a short route queue, optionally reuse the last ShadowVerified route, and soft-cap its own CPS — none of that changes Live windows. Success is scored with Autoplay DR4 metrics (route fidelity, verify completeness, progress); seed stats stay diagnostic only.
+
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 
 Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existing AI settings stay AI. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.

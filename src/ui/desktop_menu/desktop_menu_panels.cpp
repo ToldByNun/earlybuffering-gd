@@ -595,10 +595,48 @@ public:
                 autoplay.setExploreRate(cfg.exploreRate);
                 dirty();
             }
+            if (EbSlider::drawInt("ai-autoplay-queue", "Route Queue", &cfg.maxRouteQueue, 0, 8, "",
+                                  aiOn && autoplayOn,
+                                  "Early-plan depth (Autoplay only — does not touch Live).")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (cfg.maxRouteQueue > 0 &&
+                EbSlider::drawInt("ai-autoplay-early", "Early Plan Ticks", &cfg.earlyPlanTicks, 0, 64,
+                                  "", aiOn && autoplayOn,
+                                  "Enqueue next SV route when remaining delay ≤ this.")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (EbSlider::drawInt("ai-autoplay-cps", "Max Autoplay CPS", &cfg.maxAutoplayCps, 1, 60,
+                                  "", aiOn && autoplayOn,
+                                  "Soft press cap per 240 physics ticks (Autoplay only).")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (EbCheckbox::draw("ai-autoplay-memory", "Memory Reuse Route", &cfg.memoryReuseRoute,
+                                 aiOn && autoplayOn,
+                                 "Reuse last ShadowVerified route briefly if replan fails.")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (cfg.memoryReuseRoute &&
+                EbSlider::drawInt("ai-autoplay-mem-hold", "Memory Hold", &cfg.memoryHoldTicks, 4, 240,
+                                  " t", aiOn && autoplayOn,
+                                  "How long a remembered SV route stays valid.")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
             ImGui::Text("Probes / presses / explore   %d / %d / %d", autoplay.probes(),
                         autoplay.presses(), autoplay.explorePresses());
-            ImGui::Text("Route events / last probe   %d / %s", autoplay.routeEvents(),
-                        autoplay.lastProbeReason());
+            ImGui::Text("Route events / queue / last   %d / %d / %s", autoplay.routeEvents(),
+                        autoplay.queuedRoutes(), autoplay.lastProbeReason());
+            {
+                auto const& m = autoplay.metrics();
+                ImGui::TextDisabled("DR4 fidelity %.0f%%  verify %.0f%%  stuck %d  cpsThrottle %d",
+                                    m.routeFidelityRate() * 100.f, m.verifyCompletenessRate() * 100.f,
+                                    m.stuckRecoveries(), m.cpsThrottles());
+            }
             ImGui::Separator();
             if (EbCheckbox::draw("ai-persist-sessions", "Persist Sessions to Disk",
                                  &cfg.persistSessions, aiOn,
