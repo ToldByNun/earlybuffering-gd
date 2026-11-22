@@ -275,11 +275,9 @@ int EbNeuralLearning::trainSessionIfGrown(int passes, int maxUpdates) {
         this->updates += trained;
         m_hasPriorOrWeights = true;
         m_sessionTrainedThrough = std::min(size, start + trained);
-        // Disk save is hitchy — only every few deferred flushes (or manual Train Session).
-        if (++m_savesSincePersist >= 8) {
-            m_savesSincePersist = 0;
-            save();
-        }
+        // Never disk-save on the attempt-boundary flush — that hitch felt like AI lag.
+        // Manual Train Session / saveAsBasePrior / open path still persist.
+        ++m_savesSincePersist;
     }
     return trained;
 }
@@ -288,7 +286,9 @@ void EbNeuralLearning::flushDeferredTrain() {
     if (!m_deferTrain)
         return;
     m_deferTrain = false;
-    trainSessionIfGrown(1, 48);
+    // Attempt-boundary only — keep the flush tiny so resets never hitch like a Live plan.
+    // Disk save stays on the every-8 path inside trainSessionIfGrown (not every death).
+    trainSessionIfGrown(1, 12);
 }
 
 void EbNeuralLearning::boundary(bool newAttempt) {
@@ -582,7 +582,8 @@ void EbNeuralLearning::fillTrajectoryPair(PlayLayer* layer, PlayerObject* player
 }
 
 void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
-                                    int limit, float dt, float firstDt, float* outFeatures) {
+                                    int limit, float dt, float firstDt, float* outFeatures,
+                                    bool withTrajectoryPair) {
     if (!outFeatures || !layer || !player)
         return;
     auto clampGeom = [](float value) {
@@ -628,7 +629,9 @@ void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool
     state.geometry[EbNeuralFeatureState::kGeomFirstDt] = firstDt < dt * 0.99f ? 1.0f : 0.0f;
     state.geometry[EbNeuralFeatureState::kGeomTimeWarp] =
         clampGeom(layer->m_gameState.m_timeWarp);
-    fillTrajectoryPair(layer, player, down, limit, dt, firstDt, state);
+    // Live click path: skip dual Shadow idle/action (unbudgeted hitch). Autoplay may enable.
+    if (withTrajectoryPair)
+        fillTrajectoryPair(layer, player, down, limit, dt, firstDt, state);
 
     EbNeuralFeatures::build(outFeatures, grid, state);
 
@@ -655,7 +658,7 @@ void EbNeuralLearning::edge(bool player1, int tick, bool down) {
 
 int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
                               int tick, int limit, float dt, float firstDt,
-                              EbPlanOptions const& options) {
+                              EbPlanOptions const& options, bool withTrajectoryPair) {
     (void)options;
     if (!active() || !m_loaded || !layer || !player || dt <= 0.0f)
         return -1;
@@ -666,7 +669,14 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
         return -1;
 
     auto& edge = m_edges[player1 ? 0 : 1];
-    fillFeatures(layer, player, down, player1, limit, dt, firstDt, edge.features);
+    // Same press already prepared (opportunity + plan) — reuse features, no second grid walk.
+    if (edge.valid && edge.tick == tick && edge.down == down && edge.player1 == player1 &&
+        edge.limit == EbNeuralModel::clampLimit(limit) && !edge.verifyOrder.empty()) {
+        ++inferences;
+        return edge.hint;
+    }
+    fillFeatures(layer, player, down, player1, limit, dt, firstDt, edge.features,
+                 withTrajectoryPair);
     edge.valid = true;
     edge.down = down;
     edge.player1 = player1;

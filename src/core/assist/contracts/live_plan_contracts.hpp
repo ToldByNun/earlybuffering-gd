@@ -62,6 +62,11 @@ public:
     // budgetUs<=0 (unlimited / hitch-clamp input) unchanged.
     static int intendedLiveSoftWallFloorUs(int budgetUs);
 
+    // Live press/release soft wall actually applied to PlanOptions:
+    // soft-floor → AP1 hitch clamp (0→kHitchCeilingUs) → optional AI CPU cap.
+    // aiCpuCapUs<=0 skips the AI cap. Never returns ≤0 (Shadow treats 0 as unlimited).
+    static int resolveLivePressBudgetUs(int configuredSimBudgetUs, int aiCpuCapUs = 0);
+
     // Assist Pack AP-L7: lag notification gate — feel hitch (planUs ≥ hitch
     // ceiling) or budgetHit; independent of configured sim-budget-us.
     static bool lagWarningShouldNotify(bool enabled, int planUs, bool budgetHit);

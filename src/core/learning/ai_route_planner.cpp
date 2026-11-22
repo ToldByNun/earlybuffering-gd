@@ -7,6 +7,7 @@
 #include "../assist/contracts/hook_orchestration.hpp"
 #include "neural_learning.hpp"
 #include "neural_model.hpp"
+#include "route_plan_opt.hpp"
 #include "shadow_verified_contract.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
@@ -26,6 +27,8 @@ void EbAiRoutePlanner::invalidate(char const* why) {
     m_lastExpandJob = {};
     m_lastExpandResult = {};
     m_occupancy.clear();
+    m_windowCache.clear();
+    m_lastTiming.clear();
     m_lastPlanTick = -1;
 }
 
@@ -41,6 +44,9 @@ std::string EbAiRoutePlanner::diagnoseLastExpand() const {
         EbNeuralSeedStrategy::kindName(m_lastSeedKind), seedCounters.seedsEvaluated,
         seedCounters.novaParityAccepts, seedCounters.enhancedProposes,
         seedCounters.postVerifyArms);
+    auto const timing = timingOverlayBit();
+    if (!timing.empty())
+        line += " " + timing;
     return line;
 }
 
@@ -369,12 +375,14 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         return route;
     }
 
+    m_lastTiming.clear();
     auto const t0 = std::chrono::steady_clock::now();
-    auto elapsedUs = [&]() {
+    auto nowUs = [&]() {
         return static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
                                     std::chrono::steady_clock::now() - t0)
                                     .count());
     };
+    auto elapsedUs = [&]() { return nowUs(); };
     // Nova-style hard wall: searchTimeout ∧ cpuBudget ∧ maxAiCpu (frame slice).
     int const hardWallUs =
         std::min({cfg.searchTimeoutUs, cfg.cpuBudgetUsPerTick, cfg.maxAiCpuUsPerTick});
@@ -383,34 +391,69 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         int const rem = hardWallUs - elapsedUs();
         return std::clamp(std::min(cfg.simBudgetUs, rem), 200, cfg.simBudgetUs);
     };
+    auto finishTiming = [&]() {
+        m_lastTiming.totalUs = nowUs();
+        m_lastTiming.budgetHit = route.budgetHit;
+    };
 
     // NovaParity duty bit — skip neural seed this tick (compare cadence).
     if (seedKind == EbNeuralSeedStrategy::Kind::NovaParity &&
         !EbNeuralSeedStrategy::dutyAllows(tick, cfg.seedDutyPeriod, cfg.seedDutyPhase)) {
         ++seedCounters.dutySkipped;
         route.reason = "seed-duty";
+        finishTiming();
         m_last = route;
         return route;
     }
 
+    // AP-NL8: cached window bounds + hi < lo early-out (no FPS cliff on empty windows).
+    if (!EbRoutePlanOpt::windowCacheHit(m_windowCache, cfg.minDelay, cfg.maxDelay,
+                                        cfg.candidateWindow, limit)) {
+        m_windowCache =
+            EbRoutePlanOpt::computeWindow(cfg.minDelay, cfg.maxDelay, cfg.candidateWindow, limit);
+    }
+    if (EbRoutePlanOpt::windowEmpty(m_windowCache)) {
+        route.reason = "window-empty";
+        finishTiming();
+        m_last = route;
+        return route;
+    }
+    int const lo = m_windowCache.lo;
+    int const hi = m_windowCache.hi;
+
     EbPlanOptions prep{};
-    (void)neural.prepare(layer, player, true, player1, tick, limit, dt, dt, prep);
+    // Autoplay/route may use idle/action geometry; Live click path keeps this off.
+    (void)neural.prepare(layer, player, true, player1, tick, limit, dt, dt, prep, true);
 
-    auto enhancedDelays = enumerateDelays(cfg, limit);
-    int const hi = std::min(cfg.maxDelay, std::min(limit, cfg.candidateWindow));
-    int const lo = std::max(0, cfg.minDelay);
-    auto delays = EbNeuralSeedStrategy::delaysForStrategy(seedKind, lo, hi, enhancedDelays);
+    int const tSeed0 = nowUs();
+    m_scratchEnhanced = enumerateDelays(cfg, limit);
+    // Filter enhanced table into window [lo,hi].
+    EbRoutePlanOpt::reuseIntScratch(m_scratchDelays, m_scratchEnhanced.size());
+    for (int d : m_scratchEnhanced) {
+        if (d < lo || d > hi)
+            continue;
+        m_scratchDelays.push_back(d);
+    }
+    auto delays =
+        EbNeuralSeedStrategy::delaysForStrategy(seedKind, lo, hi, m_scratchDelays);
+    if (delays.empty()) {
+        route.reason = "window-empty";
+        m_lastTiming.seedUs = nowUs() - tSeed0;
+        finishTiming();
+        m_last = route;
+        return route;
+    }
 
-    std::vector<EbNeuralSeedStrategy::Proposal> evaluated;
-    evaluated.reserve(delays.size());
+    // AP-NL8: stride-subsample NN evals to neuralEvalBudget (cover full window, not prefix).
     int const evalCap = std::min(cfg.neuralEvalBudget, cfg.maxCandidates);
+    delays = EbRoutePlanOpt::subsampleDelays(delays, evalCap);
+
+    EbRoutePlanOpt::reuseScratch(m_scratchProposals, delays.size());
     for (int delay : delays) {
         if (timedOut()) {
             route.budgetHit = true;
             break;
         }
-        if (static_cast<int>(evaluated.size()) >= evalCap)
-            break;
         if (!cfg.generatePress)
             break;
         float const n = neural.confidenceForDelay(delay);
@@ -419,26 +462,27 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         p.delay = delay;
         p.neural = n;
         p.press = true;
-        evaluated.push_back(p);
+        m_scratchProposals.push_back(p);
     }
 
     auto proposals =
-        EbNeuralSeedStrategy::selectProposals(seedKind, evaluated, cfg, seedCounters);
+        EbNeuralSeedStrategy::selectProposals(seedKind, m_scratchProposals, cfg, seedCounters);
+    m_lastTiming.seedUs = std::max(0, nowUs() - tSeed0);
     if (cfg.debugLogging && seedKind == EbNeuralSeedStrategy::Kind::NovaParity &&
         !proposals.empty()) {
         geode::log::info("[AP-NL5] NovaParity seed delay={} {}", proposals.front().delay,
                          EbNeuralSeedStrategy::percentSureLabel(proposals.front().neural));
     }
 
-    std::vector<EbAiScoredCandidate> scored;
-    scored.reserve(proposals.size());
+    EbRoutePlanOpt::reuseScratch(m_scratchScored, proposals.size());
     for (auto const& p : proposals) {
         EbAiScoredCandidate c;
         c.delay = p.delay;
         c.press = p.press;
         c.neural = p.neural;
-        scored.push_back(c);
+        m_scratchScored.push_back(c);
     }
+    auto& scored = m_scratchScored;
 
     // Enhanced-only soft filters — NovaParity must not bypass the hard 0.6 gate.
     if (seedKind == EbNeuralSeedStrategy::Kind::Enhanced && cfg.gatingEnabled &&
@@ -499,6 +543,7 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     int const startSlot = EbShadowSimulator::get().captureSnapshot(player);
     if (startSlot < 0 && cfg.simulationEnabled) {
         route.reason = "no-snapshot";
+        finishTiming();
         m_last = route;
         return route;
     }
@@ -522,11 +567,19 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     }
 
     // Depth-1 seeds: light verifyDelay (Nova single-click path), not full replay.
+    int const tExp0 = nowUs();
+    int verifyUsAcc = 0;
+    auto noteVerifyUs = [&](int startedAt) {
+        verifyUsAcc += std::max(0, nowUs() - startedAt);
+    };
     std::vector<EbAiBeamNode> beam;
     int simCalls = 0;
     for (auto const& cand : scored) {
-        if (timedOut() || simCalls >= cfg.maxSimCalls)
+        if (timedOut() || simCalls >= cfg.maxSimCalls) {
+            if (timedOut())
+                route.budgetHit = true;
             break;
+        }
         if (!m_occupancy.tryClaim(tick + cand.delay))
             continue;
         EbAiRouteEvent press;
@@ -543,8 +596,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         opts.tickBudget = cfg.maxSimTicks;
         opts.requireAliveForDelay = cfg.strictVerify;
         opts.attemptStartTick = tick;
+        int const tVer0 = nowUs();
         auto const vr = EbShadowSimulator::get().verifyDelay(layer, player, true, cand.delay, limit,
                                                             dt, dt, opts);
+        noteVerifyUs(tVer0);
         ++simCalls;
         ++verifyTries;
         ++m_last.simCalls;
@@ -592,13 +647,23 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                 stuck.job, EbShadowVerifiedContract::kDefaultSettleTicks);
             m_lastExpandJob = stuck.job;
             m_lastExpandResult = stuck;
-            if (EbShadowVerifiedContract::mayArmAutoplay(stuck.job, false)) {
+            // AP-NL8: budget/trunc stuck must never ShadowVerified.
+            if (EbRoutePlanOpt::budgetForbidsShadowVerified(stuck.job.budgetHit, stuck.truncated,
+                                                            stuck.job.unknown)) {
+                route.budgetHit = route.budgetHit || stuck.job.budgetHit || stuck.truncated;
+            }
+            if (EbShadowVerifiedContract::mayArmAutoplay(stuck.job, false) &&
+                !EbRoutePlanOpt::budgetForbidsShadowVerified(stuck.job.budgetHit, stuck.truncated,
+                                                             stuck.job.unknown)) {
                 route.events = EbRouteCandSemantics::toRouteEvents(stuck.job);
                 route.valid = true;
                 route.reason = "shadow-verified";
                 route.routeScore = 0.f;
                 route.startX = player->getPositionX();
                 route.simCalls = stuck.simCalls;
+                m_lastTiming.verifyUs = verifyUsAcc;
+                m_lastTiming.expandUs = std::max(0, nowUs() - tExp0 - verifyUsAcc);
+                finishTiming();
                 m_last = route;
                 m_lastPlanTick = tick;
                 m_lastPlanX = route.startX;
@@ -623,6 +688,9 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                 route.reason = "orb-hint-unverified";
                 route.routeScore = conf;
                 route.startX = player->getPositionX();
+                m_lastTiming.verifyUs = verifyUsAcc;
+                m_lastTiming.expandUs = std::max(0, nowUs() - tExp0 - verifyUsAcc);
+                finishTiming();
                 m_last = route;
                 m_lastPlanTick = tick;
                 m_lastPlanX = route.startX;
@@ -630,7 +698,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                 return route;
             }
         }
-        route.reason = "no-beam";
+        route.reason = route.budgetHit ? "budget" : "no-beam";
+        m_lastTiming.verifyUs = verifyUsAcc;
+        m_lastTiming.expandUs = std::max(0, nowUs() - tExp0 - verifyUsAcc);
+        finishTiming();
         m_last = route;
         return route;
     }
@@ -644,8 +715,11 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                   [](EbAiBeamNode const& a, EbAiBeamNode const& b) { return a.score > b.score; });
         int branches = 0;
         for (auto const& parent : beam) {
-            if (timedOut() || simCalls >= cfg.maxSimCalls || branches >= cfg.maxBranches)
+            if (timedOut() || simCalls >= cfg.maxSimCalls || branches >= cfg.maxBranches) {
+                if (timedOut())
+                    route.budgetHit = true;
                 break;
+            }
             // Always keep the parent as a complete route candidate.
             nextBeam.push_back(parent);
 
@@ -665,8 +739,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                     if (!child.events.empty() && child.events.back().kind == EbAiRouteEvent::Kind::Press)
                         child.events.back().holdTicks = hold;
                     child.events.push_back(release);
+                    int const tVer0 = nowUs();
                     EbAiVerifyOutcome vo = verifyTimeline(layer, startSlot, tick, child.events, dt,
                                                          cfg, remainingSimUs());
+                    noteVerifyUs(tVer0);
                     ++simCalls;
                     ++branches;
                     if (vo.budgetHit) {
@@ -707,8 +783,10 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                     press.neuralScore = cand.neural;
                     press.holdTicks = holdChoices.empty() ? 4 : holdChoices.front();
                     child.events.push_back(press);
+                    int const tVer0 = nowUs();
                     EbAiVerifyOutcome vo = verifyTimeline(layer, startSlot, tick, child.events, dt,
                                                          cfg, remainingSimUs());
+                    noteVerifyUs(tVer0);
                     ++simCalls;
                     ++branches;
                     if (vo.budgetHit) {
@@ -820,10 +898,14 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         auto const verifiedEvents = EbRouteCandSemantics::toRouteEvents(job);
         bool const binderOk =
             EbShadowVerifiedContract::sequencesMatch(verifiedEvents, route.events);
-        bool const svOk = EbShadowVerifiedContract::mayArmAutoplay(job, false) && binderOk;
+        // AP-NL8: budget/trunc forbids ShadowVerified even if labels raced.
+        bool const budgetForbid = EbRoutePlanOpt::budgetForbidsShadowVerified(
+            route.budgetHit || job.budgetHit, m_lastExpandResult.truncated, job.unknown);
+        bool const svOk =
+            !budgetForbid && EbShadowVerifiedContract::mayArmAutoplay(job, false) && binderOk;
         route.valid = svOk && static_cast<int>(route.events.size()) >= cfg.minVerifiedPrefix;
         if (!route.valid) {
-            if (route.budgetHit)
+            if (route.budgetHit || budgetForbid)
                 route.reason = "budget";
             else if (job.state == EbRouteCandSemantics::LifeState::PartiallyChecked)
                 route.reason = "partial-verify";
@@ -844,6 +926,9 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         }
     }
 
+    m_lastTiming.verifyUs = verifyUsAcc;
+    m_lastTiming.expandUs = std::max(0, nowUs() - tExp0 - verifyUsAcc);
+    finishTiming();
     m_last = route;
     m_lastPlanTick = tick;
     m_lastPlanX = route.startX;
@@ -922,6 +1007,8 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
     expect(EbShadowVerifiedContract::selfCheck(shadowVerifiedReport), "shadow-verified-full-route");
     std::string hookOrchReport;
     expect(EbHookOrchestration::selfCheck(hookOrchReport), "hook-order");
+    std::string planOptReport;
+    expect(EbRoutePlanOpt::selfCheck(planOptReport), "route-plan-opt");
 
     // AP-NL7: plan() refuses outside PrePhysicsAssist / on re-entry.
     {

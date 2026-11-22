@@ -37,6 +37,8 @@ Assist Pack AP-NL6 (Autoplay queue + metrics): PlanGold `autoplay-metrics` — `
 
 Assist Pack AP-NL7 (hook orchestration): PlanGold `hook-order` — `EbHookOrchestration` PrePhysicsAssist→RealUpdate order; single inject + single planning flags (no recursive re-entry); Autoplay platformer hard-off. See `docs/nova-ai/20-hook-orchestration.md`.
 
+Assist Pack AP-NL8 (plan opt): PlanGold `route-plan-opt` — window cache + hi<lo early-out, NN stride subsample, scratch reuse, seed/expand/verify µs overlay; budget/trunc never ShadowVerified. See `docs/nova-ai/21-route-plan-opt.md`.
+
 **v1.7.1** keeps the v1.5.1 / v1.6.x planner contracts (AP0–AP1 / AP3a–AP3b / AP4 hitch / remUs / Wave IW / orbs-under-IW) plus Assist Pack AP-L1–L7 soft-wall honesty, desktop ImGui shell, Hybrid RL unit coverage (`tools/test_hybrid_model.cpp`), and deflate-only ship packages.
 
 ## Adaptive smoke

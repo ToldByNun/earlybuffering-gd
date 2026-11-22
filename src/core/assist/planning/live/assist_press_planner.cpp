@@ -15,6 +15,7 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
+#include "../../../learning/ai_config.hpp"
 #include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../real_assist/real_assist_runner.hpp"
@@ -62,8 +63,18 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         EbAssistRealMetrics::get().noteOpportunity(trusted);
     }
 
+    // Nova InputBuffer: soft wall clamps hitch; when short on time it shrinks lookahead
+    // and still buffers — never starves classic fallthrough for an AI shell alone.
+    int const pressBudgetUs =
+        EbLivePlanContracts::resolveLivePressBudgetUs(EbStageConfig::simBudgetUs());
+    int aiCpuCapUs = 0;
+    if (EbNeuralLearning::active()) {
+        auto const& ai = EbAiConfig::get();
+        aiCpuCapUs = std::min({ai.maxAiCpuUsPerTick, ai.cpuBudgetUsPerTick, ai.searchTimeoutUs});
+    }
+
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(pressBudgetUs);
     auto passFrameBudget = [&]() {
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
         controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
@@ -72,11 +83,12 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     if (frameScope.remaining(frameLimitUs) <= 0)
         return passFrameBudget();
 
-    // AP-NL2: Nova-style lookahead shrink when the shared frame wall is half-spent.
+    // AP-NL2: Nova-style lookahead shrink when the shared *frame* wall is half-spent.
+    // Must use frameLimitUs (not hitch ceiling) — research_20261122_191833: Stage-12
+    // shrunk to d≤4 because rem~1.5ms was compared against fullBudget=8000.
     {
-        int const softWall = EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
         int const remUs = frameScope.remaining(frameLimitUs);
-        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, softWall);
+        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, frameLimitUs);
         if (shrunk < limit)
             limit = shrunk;
         if (limit <= 0)
@@ -240,7 +252,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     EbPlanOptions opts;
     // Hybrid fallthrough: remainder after bake verify (not a second full envelope).
     // Exhausted remainder (usLeft==0) must NOT map to PlanOptions unlimited.
-    opts.budgetUs = EbStageConfig::simBudgetUs();
+    // AP1 + AI: never hand Shadow budgetUs<=0 (unlimited) — research_20261122_085548
+    // showed 7–20ms classicRequired spikes with sim-budget-us=0 in AI mode.
+    opts.budgetUs = pressBudgetUs;
     opts.tickBudget = EbStageConfig::tickBudgetPerPress();
     opts.capMul = EbStageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     // Soft warn: shorten look-ahead slightly (no hard Pass).
@@ -256,8 +270,6 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     opts.adaptiveScreenTicks = EbStageConfig::adaptiveScreenTicksFor(kind);
     opts.adaptiveVerifyQuantum = EbStageConfig::adaptiveVerifyQuantumFor(kind);
     opts.adaptiveReservePct = EbStageConfig::adaptiveReservePctFor(kind);
-    // Preserve explicitly configured small budgets for classic and Adaptive.
-    opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
 
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
@@ -331,12 +343,21 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         scorerWon = true;
     };
     // AI-first: score → top-k → verifyDelay → arm (never argmax-arm). Hybrid stays Hybrid-only.
-    // Verify the whole top-k when budget allows. Prefer a verified delay>0 over d=0 —
-    // otherwise cold/tied ranks short-circuit on Pass and IL never sees real Delays.
+    // Nova: AI shell leaves classic fallthrough reserve (same idea as Adaptive shell).
+    // Prefer verified delay>0 over d=0 so cold ranks do not starve Delays.
     auto& neural = EbNeuralLearning::get();
+    bool const continuousIw = player->m_isDart || player->m_isShip || player->m_isSwing;
+    int const classicReserveUs =
+        EbLivePlanContracts::adaptiveFallthroughReserveUs(opts.budgetUs, !continuousIw);
+    int aiShellUs =
+        EbLivePlanContracts::adaptiveShellBudgetUs(opts.budgetUs, classicReserveUs);
+    if (aiCpuCapUs > 0)
+        aiShellUs = std::min(aiShellUs, std::max(800, aiCpuCapUs));
+    int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
-        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
+        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst() &&
+        aiSpendLeft >= EbNeuralLearning::minRemUsForAiFirst()) {
         auto const order = neural.rankedVerifyDelays(limit);
         int pickDelay = -1;
         float pickConf = 0.0f;
@@ -346,18 +367,20 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             if (delayValue < 0 || delayValue > limit)
                 continue;
             int const remUs = frameScope.remaining(frameLimitUs);
-            if (remUs < EbNeuralLearning::minRemUsForAiFirst()) {
-                opts.budgetUs = std::min(opts.budgetUs, remUs);
+            if (remUs < EbNeuralLearning::minRemUsForAiFirst() ||
+                aiSpendLeft < EbNeuralLearning::minRemUsForAiFirst())
                 break;
-            }
             EbPlanOptions vopts = opts;
+            // Enough ticks to actually prove Alive — /8 was starving Delay verifies.
             vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
-            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.budgetUs = std::min({opts.budgetUs, remUs, aiSpendLeft});
             vopts.maxBranches = 0;
             vopts.smartDepth = 1;
             auto const vr = EbShadowSimulator::get().verifyDelay(
                 playLayer, player, true, delayValue, limit, controller.m_simDt, firstDt, vopts);
-            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            int const spent = std::max(1, vr.usSpent);
+            aiSpendLeft = std::max(0, aiSpendLeft - spent);
+            opts.budgetUs = std::max(0, opts.budgetUs - spent);
             if (vr.budgetHit || vr.unknown)
                 continue;
             if (!vr.ok) {
@@ -423,6 +446,14 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         }
     }
     if (!scorerWon) {
+        // Nova: out-of-time still plans with shrunk lookahead — classic fallthrough always runs.
+        int const remAfterAi = frameScope.remaining(frameLimitUs);
+        if (opts.budgetUs > 0)
+            opts.budgetUs = std::min(opts.budgetUs, std::max(1, remAfterAi));
+        else if (remAfterAi > 0)
+            opts.budgetUs = remAfterAi;
+        else
+            opts.budgetUs = 1; // tiny classic slice beats inventing PassBudget
         plan = useSequence ? EbShadowSimulator::get().planSequence(
                                  playLayer, player, true, limit, controller.m_simDt, firstDt, opts)
                            : EbShadowSimulator::get().plan(playLayer, player, true, limit,

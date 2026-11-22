@@ -1,4 +1,5 @@
 #include "neural_seed_strategy.hpp"
+#include "route_plan_opt.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
@@ -30,34 +31,21 @@ bool EbNeuralSeedStrategy::dutyAllows(int planTick, int dutyPeriod, int dutyPhas
 }
 
 int EbNeuralSeedStrategy::novaSubsampleStep(int lo, int hi) {
-    if (hi < lo)
-        std::swap(lo, hi);
-    int const span = hi - lo;
-    int step = span / 60;
-    if (step < 1)
-        step = 1;
-    return step;
+    // AP-NL8: hi < lo is empty — do not swap (early-out).
+    return EbRoutePlanOpt::subsampleStep(lo, hi);
 }
 
 std::vector<int> EbNeuralSeedStrategy::delaysForStrategy(Kind kind, int lo, int hi,
                                                          std::vector<int> const& enhancedDelays) {
+    // AP-NL8: hi ≤ lo-1 (hi < lo) ⇒ empty window early-out.
+    if (hi < lo)
+        return {};
     if (kind == Kind::Enhanced)
         return enhancedDelays;
-    // NovaParity: linear subsample over [lo, hi].
-    if (hi < lo)
-        std::swap(lo, hi);
+    // NovaParity: linear subsample over [lo, hi] (shared with plan opt).
     if (lo < 0)
         lo = 0;
-    int const step = novaSubsampleStep(lo, hi);
-    std::vector<int> out;
-    for (int d = lo; d <= hi; d += step)
-        out.push_back(d);
-    if (out.empty())
-        out.push_back(lo);
-    // Always include hi if not hit by the stride (Nova window edge).
-    if (!out.empty() && out.back() != hi && hi >= lo)
-        out.push_back(hi);
-    return out;
+    return EbRoutePlanOpt::linearSubsample(lo, hi);
 }
 
 bool EbNeuralSeedStrategy::passesStrategyGate(Kind kind, float neural, EbAiConfig const& cfg) {
@@ -136,8 +124,10 @@ bool EbNeuralSeedStrategy::selfCheck(std::string& report) {
 
     auto npDelays = delaysForStrategy(Kind::NovaParity, 0, 60, {});
     expect(!npDelays.empty() && npDelays.front() == 0 && npDelays.back() == 60, "np-delays");
+    expect(delaysForStrategy(Kind::NovaParity, 10, 5, {}).empty(), "np-hi-lo-empty");
     std::vector<int> enh = {1, 4, 8};
     expect(delaysForStrategy(Kind::Enhanced, 0, 60, enh) == enh, "enh-delays");
+    expect(delaysForStrategy(Kind::Enhanced, 8, 2, enh).empty(), "enh-hi-lo-empty");
 
     auto& cfg = EbAiConfig::get();
     bool const savedGate = cfg.gatingEnabled;

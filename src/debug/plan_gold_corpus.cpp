@@ -16,6 +16,7 @@
 #include "../core/learning/neural_seed_strategy.hpp"
 #include "../core/learning/route_cand_semantics.hpp"
 #include "../core/learning/route_expand_core.hpp"
+#include "../core/learning/route_plan_opt.hpp"
 #include "../core/learning/shadow_verified_contract.hpp"
 #include "../core/assist/contracts/miss_assist_contracts.hpp"
 #include "../core/assist/input/buffer_event_machine.hpp"
@@ -275,6 +276,9 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                  autoplayMetricsReport);
     std::string hookOrchReport;
     expectReport(EbHookOrchestration::selfCheck(hookOrchReport), "hook-order", hookOrchReport);
+    std::string routePlanOptReport;
+    expectReport(EbRoutePlanOpt::selfCheck(routePlanOptReport), "route-plan-opt",
+                 routePlanOptReport);
     // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
     expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&
@@ -369,6 +373,11 @@ bool EbPlanGoldCorpus::run(std::string& report) {
                    EbLivePlanContracts::currentClassicBudgetUs(0) &&
                EbLivePlanContracts::currentAdaptiveBudgetUs(0) == 0,
            "live-hitch-ceiling");
+    expect(EbLivePlanContracts::resolveLivePressBudgetUs(0) ==
+                   EbLivePlanContracts::kHitchCeilingUs &&
+               EbLivePlanContracts::resolveLivePressBudgetUs(0, 1200) == 1200 &&
+               EbLivePlanContracts::resolveLivePressBudgetUs(5000, 1200) == 1200,
+           "live-press-budget-resolve");
     expect(EbLivePlanContracts::kMidRunWallPollTicks == EbShadowSimulator::kMidRunWallPollTicks &&
                EbLivePlanContracts::shouldPollMidRunWall(0) &&
                EbLivePlanContracts::midRunWallExceeded(8000, 8000),

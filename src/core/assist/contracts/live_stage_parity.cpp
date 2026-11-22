@@ -200,6 +200,10 @@ bool EbLiveStageParity::selfCheck(std::string& report) {
     expect(shrinkLimitUnderBudget(16, 1000, 4000) == 8, "shrink-quarter");
     expect(shrinkLimitUnderBudget(16, 0, 4000) == 0, "shrink-zero-rem");
     expect(shrinkLimitUnderBudget(16, 1000, 0) == 16, "shrink-unlimited");
+    // research_20261122_191833: rem vs actual frame wall keeps Stage-12; rem vs hitch
+    // ceiling (8000) wrongly crushed the window to 4.
+    expect(shrinkLimitUnderBudget(12, 1566, 1666) == 12, "shrink-frame-wall-keep");
+    expect(shrinkLimitUnderBudget(12, 1566, 8000) == 4, "shrink-hitch-ceiling-crush");
 
     if (fails == 0) {
         report = "LiveStageParity selfCheck OK";

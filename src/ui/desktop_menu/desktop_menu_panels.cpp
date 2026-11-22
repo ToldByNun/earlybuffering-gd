@@ -394,6 +394,11 @@ public:
                 ImGui::Text("Inferences / updates   %d / %d", neural.inferences, neural.updates);
                 ImGui::Text("Route plans / invalid   %d / %d", planner.plans, planner.invalidations);
                 ImGui::Text("Route verify   %d / %d", planner.verifyHits, planner.verifyTries);
+                {
+                    auto const timing = planner.timingOverlayBit();
+                    if (!timing.empty())
+                        ImGui::TextDisabled("%s", timing.c_str());
+                }
                 ImGui::Text("Session samples / attempts   %d / %d", EbNeuralSession::get().size(),
                             EbNeuralSession::get().attemptCount());
             }

@@ -14,6 +14,7 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
+#include "../../../learning/ai_config.hpp"
 #include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
@@ -63,8 +64,16 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         return true;
     }
 
+    int const pressBudgetUs =
+        EbLivePlanContracts::resolveLivePressBudgetUs(EbStageConfig::simBudgetUs());
+    int aiCpuCapUs = 0;
+    if (EbNeuralLearning::active()) {
+        auto const& ai = EbAiConfig::get();
+        aiCpuCapUs = std::min({ai.maxAiCpuUsPerTick, ai.cpuBudgetUsPerTick, ai.searchTimeoutUs});
+    }
+
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(pressBudgetUs);
     auto passFrameBudget = [&]() {
         EbDevCycleRecorder::get().noteGatePass(AssistReason::PassBudget, "frame-budget-exhausted");
         controller.noteVerdict(AssistReason::PassBudget, "frame-budget-exhausted");
@@ -74,9 +83,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         return passFrameBudget();
 
     {
-        int const softWall = EbLivePlanContracts::intendedLiveBudgetUs(EbStageConfig::simBudgetUs());
         int const remUs = frameScope.remaining(frameLimitUs);
-        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, softWall);
+        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, frameLimitUs);
         if (shrunk < limit)
             limit = shrunk;
         if (limit <= 0)
@@ -205,15 +213,13 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     }
 
     EbPlanOptions opts;
-    opts.budgetUs = EbStageConfig::simBudgetUs();
+    opts.budgetUs = pressBudgetUs;
     opts.tickBudget = EbStageConfig::tickBudgetPerPress();
     opts.capMul = EbStageConfig::autoTune() ? profile.capMul(kind) : 1.f;
     if (EbDivergenceTracker::get().shouldWarn()) {
         opts.capMul *= 0.85f;
     }
     opts.maxBranches = 4;
-    // Preserve the same explicit budget policy as press planning.
-    opts.budgetUs = EbLivePlanContracts::intendedLiveSoftWallFloorUs(opts.budgetUs);
 
     opts.attemptStartTick = effectTick;
     opts.legacyPick = EbStageConfig::assistPickLegacy();
@@ -282,9 +288,18 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         scorerWon = true;
     };
     auto& neural = EbNeuralLearning::get();
+    bool const continuousIw = player->m_isDart || player->m_isShip || player->m_isSwing;
+    int const classicReserveUs =
+        EbLivePlanContracts::adaptiveFallthroughReserveUs(opts.budgetUs, !continuousIw);
+    int aiShellUs =
+        EbLivePlanContracts::adaptiveShellBudgetUs(opts.budgetUs, classicReserveUs);
+    if (aiCpuCapUs > 0)
+        aiShellUs = std::min(aiShellUs, std::max(800, aiCpuCapUs));
+    int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
-        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst()) {
+        frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst() &&
+        aiSpendLeft >= EbNeuralLearning::minRemUsForAiFirst()) {
         auto const order = neural.rankedVerifyDelays(limit);
         int pickDelay = -1;
         float pickConf = 0.0f;
@@ -294,18 +309,19 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
             if (delayValue < 0 || delayValue > limit)
                 continue;
             int const remUs = frameScope.remaining(frameLimitUs);
-            if (remUs < EbNeuralLearning::minRemUsForAiFirst()) {
-                opts.budgetUs = std::min(opts.budgetUs, remUs);
+            if (remUs < EbNeuralLearning::minRemUsForAiFirst() ||
+                aiSpendLeft < EbNeuralLearning::minRemUsForAiFirst())
                 break;
-            }
             EbPlanOptions vopts = opts;
             vopts.tickBudget = std::max(200, EbStageConfig::tickBudgetPerPress() / 3);
-            vopts.budgetUs = std::min(opts.budgetUs, remUs);
+            vopts.budgetUs = std::min({opts.budgetUs, remUs, aiSpendLeft});
             vopts.maxBranches = 0;
             vopts.smartDepth = 1;
             auto const vr = EbShadowSimulator::get().verifyDelay(
                 playLayer, player, false, delayValue, limit, controller.m_simDt, firstDt, vopts);
-            opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
+            int const spent = std::max(1, vr.usSpent);
+            aiSpendLeft = std::max(0, aiSpendLeft - spent);
+            opts.budgetUs = std::max(0, opts.budgetUs - spent);
             if (vr.budgetHit || vr.unknown)
                 continue;
             if (!vr.ok) {
@@ -370,6 +386,14 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         }
     }
     if (!scorerWon) {
+        // Nova: keep classic fallthrough even when the AI shell spent its slice.
+        int const remAfterAi = frameScope.remaining(frameLimitUs);
+        if (opts.budgetUs > 0)
+            opts.budgetUs = std::min(opts.budgetUs, std::max(1, remAfterAi));
+        else if (remAfterAi > 0)
+            opts.budgetUs = remAfterAi;
+        else
+            opts.budgetUs = 1;
         plan = EbShadowSimulator::get().plan(playLayer, player, false, limit, controller.m_simDt,
                                              firstDt, opts);
     }

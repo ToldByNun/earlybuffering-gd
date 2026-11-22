@@ -23,6 +23,7 @@
 #include "world/shadow_world_dynamics.hpp"
 #include "sim_session_guard.hpp"
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -409,8 +410,17 @@ EbShadowSimulator::sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool
     if (firstDt <= 0.f || firstDt > deltaTime)
         firstDt = deltaTime;
 
+    // Hard us wall — feature probe must never look like a Live plan hitch.
+    constexpr int kPairBudgetUs = 300;
+    auto const wall0 = std::chrono::steady_clock::now();
+    auto timedOut = [&]() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+                   std::chrono::steady_clock::now() - wall0)
+                   .count() >= kPairBudgetUs;
+    };
+
     Model model = modelFor(real, limit, 1.f);
-    int const horizon = std::clamp(model.cap, 24, 48);
+    int const horizon = std::clamp(model.cap, 16, 32);
     model.cap = horizon;
     model.continuePastClear = true;
     int tickBudget = horizon * 2 + 8;
@@ -418,14 +428,18 @@ EbShadowSimulator::sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool
 
     EbSimSessionGuard session(*this, layer);
     auto action =
-        runOne(layer, real, down, 0, limit, deltaTime, firstDt, model, -1, nullptr, &tickBudget);
+        runOne(layer, real, down, 0, false, deltaTime, firstDt, model, -1, nullptr, &tickBudget);
     resetCaptureForNextRun(layer);
-    if (tickBudget <= 0) {
+    if (tickBudget <= 0 || timedOut()) {
         out.unknown = true;
         return out;
     }
     auto idle = runBaseline(layer, real, down, deltaTime, firstDt, model, &tickBudget);
     resetCaptureForNextRun(layer);
+    if (timedOut()) {
+        out.unknown = true;
+        return out;
+    }
 
     out.valid = true;
     out.unknown = action.unknown || action.unknownTrunc || idle.unknown || idle.unknownTrunc;

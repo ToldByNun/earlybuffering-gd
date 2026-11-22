@@ -87,6 +87,16 @@ int EbLivePlanContracts::intendedLiveSoftWallFloorUs(int budgetUs) {
     return budgetUs;
 }
 
+int EbLivePlanContracts::resolveLivePressBudgetUs(int configuredSimBudgetUs, int aiCpuCapUs) {
+    // Soft-floor may leave 0 (= "unlimited" in AP-L5 tests). AP1 still clamps that
+    // to the hitch ceiling before PlanOptions — Shadow treats budgetUs<=0 as no wall.
+    int budget = intendedLiveSoftWallFloorUs(configuredSimBudgetUs);
+    budget = intendedLiveBudgetUs(budget);
+    if (aiCpuCapUs > 0)
+        budget = std::min(budget, std::max(800, aiCpuCapUs));
+    return std::max(1, budget);
+}
+
 bool EbLivePlanContracts::lagWarningShouldNotify(bool enabled, int planUs, bool budgetHit) {
     if (!enabled)
         return false;
@@ -509,6 +519,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(intendedLiveSoftWallFloorUs(0) == 0, "ap-l5-soft-wall-unlimited");
     expect(intendedLiveSoftWallFloorUs(2500) == 2500, "ap-p05-respect-small-budget");
     expect(intendedLiveSoftWallFloorUs(8170) == 8170, "ap-l5-soft-wall-keep");
+    expect(resolveLivePressBudgetUs(0) == kHitchCeilingUs, "press-budget-zero-hitch");
+    expect(resolveLivePressBudgetUs(5000) == 5000, "press-budget-keep");
+    expect(resolveLivePressBudgetUs(0, 1200) == 1200, "press-budget-ai-cap");
+    expect(resolveLivePressBudgetUs(5000, 1200) == 1200, "press-budget-ai-cap-over");
+    expect(resolveLivePressBudgetUs(0, 100) == 800, "press-budget-ai-floor");
     expect(lagWarningShouldNotify(true, 9000, false), "ap-l7-note-hitch");
     expect(lagWarningShouldNotify(true, 1000, true), "ap-l7-note-budget-hit");
     expect(!lagWarningShouldNotify(false, 9000, true), "ap-l7-note-off");

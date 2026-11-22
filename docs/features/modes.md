@@ -30,6 +30,10 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **AP-NL7 hook order:** Assist plans and Autoplay run in PrePhysicsAssist (before `PlayerObject::update`); injects use a single flag so they cannot re-enter Live planning. Platformer stays hard-off for Autoplay.
 
+**AP-NL8 plan opt:** AI route planning caches windows, early-outs empty ranges, stride-subsamples NN evals, and shows seed/expand/verify µs on the overlay — budget aborts stay PartiallyChecked, never ShadowVerified.
+
+**AI Live hitch wall (Nova-aligned):** Soft wall is the AP1 hitch ceiling (`sim-budget-us=0` → 8ms). Lookahead shrink compares remUs to the **frame** slice (floored ~3ms), not the hitch ceiling — otherwise Stage-12 collapses to d≤4 at 240Hz. AI-first spends only an Adaptive-style **shell** (classic fallthrough reserved); if AI finds nothing, classic Live still runs. Live `prepare` skips the dual Shadow idle/action probe.
+
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 
 Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existing AI settings stay AI. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.

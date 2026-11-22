@@ -2,6 +2,9 @@
 
 ## v1.8.1-dev
 
+- Live Stage-12 grasp: lookahead shrink now uses the **frame** soft wall (not the 8ms hitch ceiling). At 240Hz that wrongly crushed ticks 12→4 (`research_20261122_191833`). Frame assist slice floors at 3ms (Nova slow-click ~4ms).
+- AI Live assist restore (Nova InputBuffer parity): AI-first runs in an Adaptive-style **shell** that reserves classic fallthrough; never PassBudget-skip classic when AI finds nothing. Verify tick budget restored (`tickBudget/3`). Hitch ceiling still clamps `sim-budget-us=0`. Live prepare stays without dual Shadow trajectory pair.
+- AI/Live hitch: `sim-budget-us=0` → AP1 hitch ceiling on `PlanOptions` (was unlimited → 7–20ms classicRequired in `research_20261122_085548`).
 - AP-NL1: shared Live/Autoplay shadow isolation contracts — sim-ghost player/trail markers, exclusive HardStreak after seed, ghost-root never under `objectLayer`, `isShadowTrail` honors markers; PlanGold `nova-shadow-isolation`.
 - Fix quit/seed AV: ghost HardStreaks live only as ghost-root children; never `CCSprite::addChild`, never reparent opaque/dangling `m_waveTrail`; reuse only via ghost-root child list; null trail pointers on detach before ~PlayerObject.
 - AP-NL2: Live human click-timing parity — Nova Stage↔EB window map, as-made/held/pass-through, mid-tick CBF gate, µs lookahead shrink, Alive-only Delay honesty; Live DR4 metrics (`reportLiveLine`); PlanGold `nova-live-click-timing`.
@@ -11,6 +14,7 @@
 - AP-NL5b: strict full-route ShadowVerified (DR3) — `EbShadowVerifiedContract` (settle, classify, binder); Autoplay arms only from SV (Explore labeled unverified); planner commits verified prefix only; PlanGold `shadow-verified-full-route`.
 - AP-NL6: Autoplay route queue + DR4 metrics — early-plan FIFO, memory reuse, Autoplay-only CPS; `EbAutoplayMetrics` (fidelity / verify completeness / progress; seed diag separate); PlanGold `autoplay-metrics`; Live untouched.
 - AP-NL7: hook orchestration parity — `EbHookOrchestration` PrePhysicsAssist→RealUpdate; single inject + plan re-entry guards; Autoplay uses inject flag; platformer hard-off; PlanGold `hook-order`.
+- AP-NL8: plan optimization — window cache + hi<lo early-out, NN subsample, scratch reuse; seed/expand/verify µs overlay; budget abort stays PartiallyChecked; PlanGold `route-plan-opt`.
 - AI prior: import Nova `NVM2` `model.bin` (float16 trunk `3512→128→64` + scalar conf) into `EbNeuralModel`; rank head stays freshly initialized. `Load Base / Packaged Prior` also checks `saveDir/ai/model.bin`. Offline convert: `tools/convert_nvm2_to_ebnn.py`.
 
 ## v1.8.0

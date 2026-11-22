@@ -13,6 +13,7 @@
 #include "../../diagnostics/assist_sim_estimate.hpp"
 #include "../../diagnostics/divergence_tracker.hpp"
 #include "../../diagnostics/sim_tick_cost_meter.hpp"
+#include "../../learning/ai_route_planner.hpp"
 #include "../../learning/level_profile.hpp"
 #include "../../learning/neural_learning.hpp"
 #include "../../sim/planning/search/adaptive/adaptive_plan_search.hpp"
@@ -54,6 +55,7 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
         std::string learnBit;
         if (mode == AssistMode::AI) {
             auto& neural = EbNeuralLearning::get();
+            auto const planUs = EbAiRoutePlanner::get().timingOverlayBit();
             if (neural.lastArmedDelay >= 0) {
                 learnBit = fmt::format("ai d={} {:.0f}% v{}/{}", neural.lastArmedDelay,
                                        neural.lastArmedConfidence * 100.0f, neural.verifyHits,
@@ -64,6 +66,9 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
             } else {
                 learnBit = neural.hasUsableWeights() ? "ai frozen" : "ai no-prior";
             }
+            // AP-NL8: seed/expand/verify µs on the AI overlay line.
+            if (!planUs.empty())
+                learnBit += " " + planUs;
         } else if (EbStageConfig::autoTune()) {
             auto spot =
                 EbLevelProfile::get().overlaySpot(controller.m_lastMode, controller.m_lastPlayerX);

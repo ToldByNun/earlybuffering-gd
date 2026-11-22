@@ -147,7 +147,8 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
     }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(
+        EbLivePlanContracts::resolveLivePressBudgetUs(EbStageConfig::simBudgetUs()));
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
     // Skipped for CPS / mode-change force-fire.
     if (allowRecheck && !controller.m_buffer.fixedFireTick && player && remaining > 0 &&
@@ -198,7 +199,8 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
             EbSimPlan re;
             int const remainingFrameUs = frameScope.remaining(frameLimitUs);
             if (remainingFrameUs > 0) {
-                opts.budgetUs = frameLimitUs == 0 ? 0 : remainingFrameUs;
+                // Never pass budgetUs<=0 (Shadow = unlimited) on buffer recheck.
+                opts.budgetUs = std::max(1, remainingFrameUs);
                 re = EbShadowSimulator::get().plan(playLayer, player, controller.m_buffer.down,
                                                    remaining, controller.m_simDt,
                                                    controller.m_simDt, opts);
