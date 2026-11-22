@@ -11,6 +11,7 @@
 #include "../../sim/shadow_simulator.hpp"
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
+#include "../contracts/hook_orchestration.hpp"
 #include "../contracts/live_plan_contracts.hpp"
 #include "../contracts/live_stage_parity.hpp"
 #include "../contracts/subtick_timing.hpp"
@@ -54,6 +55,10 @@ void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLay
         ++controller.m_savesLevel;
     }
     // Timeline already seeded in recordDecision with the planned fire tick.
+    // AP-NL7: single inject flag — refuse recursive inject/plan re-entry.
+    EbHookOrchestration::InjectGuard inj;
+    if (!inj)
+        return;
     controller.m_injecting = true;
     layer->handleButton(down, EbAssistControllerImplementation::JUMP_BUTTON,
                         controller.m_buffer.player1);
@@ -115,6 +120,9 @@ void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller,
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
     controller.m_pendingReleaseDevPressId = 0;
+    EbHookOrchestration::InjectGuard inj;
+    if (!inj)
+        return;
     controller.m_injecting = true;
     playLayer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, playerOne);
     controller.m_injecting = false;

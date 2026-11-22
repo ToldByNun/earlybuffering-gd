@@ -3,6 +3,7 @@
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../assist/assist_controller.hpp"
+#include "../assist/contracts/hook_orchestration.hpp"
 #include "../sim/shadow_simulator.hpp"
 #include "ai_config.hpp"
 #include "ai_route_planner.hpp"
@@ -162,15 +163,24 @@ void EbNeuralAutoplay::finishRouteSegment(float liveX, int tick, bool death) {
 void EbNeuralAutoplay::press(PlayLayer* layer, bool explore) {
     if (!layer)
         return;
-    int const tick = EbAssistController::get().attemptTick();
+    auto& controller = EbAssistController::get();
+    int const tick = controller.attemptTick();
     if (!explore && !cpsAllowsPress(tick)) {
         m_metrics.noteCpsThrottle();
         m_lastProbeReason = "cps-throttle";
         m_scheduledPressTick = tick + std::max(1, 240 / std::max(1, m_maxAutoplayCps));
         return;
     }
+    // AP-NL7: single inject flag — Autoplay must not re-enter Live planning.
+    EbHookOrchestration::InjectGuard inj;
+    if (!inj) {
+        m_lastProbeReason = "inject-reentry";
+        return;
+    }
     int const jump = EbAssistControllerImplementation::JUMP_BUTTON;
+    controller.m_injecting = true;
     layer->handleButton(true, jump, true);
+    controller.m_injecting = false;
     m_holding = true;
     m_holdUntilTick = -1;
     m_plannedHoldTicks = -1;
@@ -199,8 +209,15 @@ void EbNeuralAutoplay::release(PlayLayer* layer) {
         return;
     auto& controller = EbAssistController::get();
     int const tick = controller.attemptTick();
+    EbHookOrchestration::InjectGuard inj;
+    if (!inj) {
+        m_lastProbeReason = "inject-reentry";
+        return;
+    }
     int const jump = EbAssistControllerImplementation::JUMP_BUTTON;
+    controller.m_injecting = true;
     layer->handleButton(false, jump, true);
+    controller.m_injecting = false;
     m_holding = false;
     m_holdUntilTick = -1;
     m_scheduledReleaseTick = -1;
@@ -478,8 +495,21 @@ void EbNeuralAutoplay::onPhysicsTick(PlayLayer* layer) {
     if (!layer->m_player1 || layer->m_player1->m_isDead)
         return;
 
+    // AP-NL7: platformer hard-off — never schedule or emit Autoplay inputs.
+    if (EbHookOrchestration::platformerHardOff(layer->m_player1)) {
+        m_lastProbeReason = "platformer-off";
+        clearSchedule();
+        clearRoute();
+        m_routeQueue.clear();
+        return;
+    }
+    // Autoplay only in PrePhysicsAssist (before PlayerObject::update).
+    if (EbHookOrchestration::phase() != EbHookOrchestration::Phase::PrePhysicsAssist)
+        return;
+
     // Early-plan while a verified route is still running (Autoplay queue only).
-    if (!m_activeRoute.events.empty() && m_holding)
+    if (!m_activeRoute.events.empty() && m_holding && !EbHookOrchestration::planning() &&
+        !EbHookOrchestration::injecting())
         (void)tryEarlyPlan(layer);
 
     // Explicit Release from the route scheduler (preferred over holdUntilTick alone).
@@ -521,6 +551,9 @@ void EbNeuralAutoplay::onPhysicsTick(PlayLayer* layer) {
         return;
 
     m_nextProbeTick = tick + m_probeEveryTicks;
+    // AP-NL7: no new plan while inject/plan already in flight.
+    if (EbHookOrchestration::injecting() || EbHookOrchestration::planning())
+        return;
     bool explore = false;
     if (!armFromRoute(layer, explore))
         return;

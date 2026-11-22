@@ -12,6 +12,7 @@
 #include "assist_clock.hpp"
 #include "contracts/assist_timing_rules.hpp"
 #include "contracts/assist_verdict.hpp"
+#include "contracts/hook_orchestration.hpp"
 #include "flight/flight_assist_combine.hpp"
 #include "flight/flight_mode_policy.hpp"
 #include "flight/ship_line_policy.hpp"
@@ -631,10 +632,13 @@ void EbAssistController::setShipLineEnabled(bool enabled) {
         clearBuffer();
         auto* layer = PlayLayer::get();
         if (layer && m_inputReconciler.state(slot).dispatched != m_userHolding[slot]) {
-            m_injecting = true;
-            layer->handleButton(m_userHolding[slot], EbAssistControllerImplementation::JUMP_BUTTON,
-                                slot == 0);
-            m_injecting = false;
+            EbHookOrchestration::InjectGuard inj;
+            if (inj) {
+                m_injecting = true;
+                layer->handleButton(m_userHolding[slot],
+                                    EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
+                m_injecting = false;
+            }
         }
     }
     m_shipLineEnabled = enabled;
@@ -666,10 +670,13 @@ void EbAssistController::setWavePatternEnabled(bool enabled) {
         clearBuffer();
         auto* layer = PlayLayer::get();
         if (layer && m_inputReconciler.state(slot).dispatched != m_userHolding[slot]) {
-            m_injecting = true;
-            layer->handleButton(m_userHolding[slot], EbAssistControllerImplementation::JUMP_BUTTON,
-                                slot == 0);
-            m_injecting = false;
+            EbHookOrchestration::InjectGuard inj;
+            if (inj) {
+                m_injecting = true;
+                layer->handleButton(m_userHolding[slot],
+                                    EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
+                m_injecting = false;
+            }
         }
     }
     m_wavePatternEnabled = enabled;
@@ -844,9 +851,12 @@ bool EbAssistController::yieldShipLine(PlayLayer* layer, PlayerObject* player, b
         bool const delayedDown = m_buffer.down;
         clearBuffer();
         if (!delayedDown && down) {
-            m_injecting = true;
-            layer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
-            m_injecting = false;
+            EbHookOrchestration::InjectGuard inj;
+            if (inj) {
+                m_injecting = true;
+                layer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
+                m_injecting = false;
+            }
         } else if (delayedDown && !down) {
             return true;
         }
@@ -872,9 +882,12 @@ bool EbAssistController::yieldWavePattern(PlayLayer* layer, PlayerObject* player
         bool const delayedDown = m_buffer.down;
         clearBuffer();
         if (!delayedDown && down) {
-            m_injecting = true;
-            layer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
-            m_injecting = false;
+            EbHookOrchestration::InjectGuard inj;
+            if (inj) {
+                m_injecting = true;
+                layer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, slot == 0);
+                m_injecting = false;
+            }
         } else if (delayedDown && !down) {
             return true;
         }

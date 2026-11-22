@@ -4,6 +4,7 @@
 #include "../assist/assist_controller.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include "../sim/shadow_simulator.hpp"
+#include "../assist/contracts/hook_orchestration.hpp"
 #include "neural_learning.hpp"
 #include "neural_model.hpp"
 #include "shadow_verified_contract.hpp"
@@ -339,6 +340,13 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     EbAiRoute route;
     route.planTick = tick;
     route.reason = "fail";
+    // AP-NL7: single planning flag — refuse recursive plan() re-entry.
+    EbHookOrchestration::PlanningGuard planGuard;
+    if (!planGuard) {
+        route.reason = "plan-reentry";
+        m_last = route;
+        return route;
+    }
     auto& cfg = EbAiConfig::get();
     if (!layer || !player || dt <= 0.f) {
         route.reason = "bad-args";
@@ -912,6 +920,21 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
     expect(EbNeuralSeedStrategy::selfCheck(seedStrategyReport), "dual-seed-strategy");
     std::string shadowVerifiedReport;
     expect(EbShadowVerifiedContract::selfCheck(shadowVerifiedReport), "shadow-verified-full-route");
+    std::string hookOrchReport;
+    expect(EbHookOrchestration::selfCheck(hookOrchReport), "hook-order");
+
+    // AP-NL7: plan() refuses outside PrePhysicsAssist / on re-entry.
+    {
+        EbAiRoute refused = planner.plan(nullptr, nullptr, true, 0, 1, 1.f / 240.f);
+        expect(std::string(refused.reason ? refused.reason : "") == "plan-reentry",
+               "plan-refuse-idle");
+    }
+    {
+        EbHookOrchestration::PrePhysicsGuard pre;
+        expect(static_cast<bool>(pre), "plan-pre-enter");
+        EbAiRoute badArgs = planner.plan(nullptr, nullptr, true, 0, 1, 1.f / 240.f);
+        expect(std::string(badArgs.reason ? badArgs.reason : "") == "bad-args", "plan-in-pre");
+    }
 
     if (fails == 0) {
         report = "AiRoutePlanner OK";

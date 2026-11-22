@@ -23,6 +23,7 @@
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
+#include "../contracts/hook_orchestration.hpp"
 #include "../input/click_intent_guard.hpp"
 
 void EbAssistLifecycle::syncButtonState(EbAssistController& controller, PlayLayer* playLayer) {
@@ -41,6 +42,9 @@ void EbAssistLifecycle::syncButtonState(EbAssistController& controller, PlayLaye
         auto it = player->m_holdingButtons.find(static_cast<int>(PlayerButton::Jump));
         bool const gdDown = it != player->m_holdingButtons.end() && it->second;
         if (gdDown && !controller.m_userHolding[index]) {
+            EbHookOrchestration::InjectGuard inj;
+            if (!inj)
+                continue;
             controller.m_injecting = true;
             player->releaseButton(PlayerButton::Jump);
             controller.m_injecting = false;
@@ -93,12 +97,15 @@ void EbAssistLifecycle::resetLevelProfile(EbAssistController& controller) {
 void EbAssistLifecycle::beginRealUpdate(EbAssistController& controller) {
     // True only while PlayerObject::update runs for real P1
     // (see GameLayerHooks). CBF / mid-step clicks set midStep=true.
+    // AP-NL7: RealUpdate phase after PrePhysicsAssist.
+    (void)EbHookOrchestration::enterRealUpdate();
     controller.m_inRealUpdate = true;
     controller.m_subDtSeen = 0.f;
 }
 
 void EbAssistLifecycle::endRealUpdate(EbAssistController& controller) {
     controller.m_inRealUpdate = false;
+    EbHookOrchestration::leaveRealUpdate();
 }
 
 void EbAssistLifecycle::onSubStep(EbAssistController& controller, PlayerObject* player,

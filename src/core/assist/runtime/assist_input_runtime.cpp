@@ -26,6 +26,7 @@
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
+#include "../contracts/hook_orchestration.hpp"
 #include "../flight/flight_mode_policy.hpp"
 #include "../input/click_intent_guard.hpp"
 #include "../input/input_source_scope.hpp"
@@ -46,6 +47,8 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
 
     private:
     } tickEndGuard;
+    // AP-NL7: PrePhysicsAssist phase — plan / Autoplay / buffer fire before PO::update.
+    EbHookOrchestration::PrePhysicsGuard const prePhysics;
 
     float timeWarp = 1.f;
     // Hook dt is GD step units (0.25 @ 240 TPS every tick — not a hitch).

@@ -10,6 +10,7 @@
 - AP-NL5: dual neural seed strategies (DR1) — `EbAiConfig::seedStrategy` Enhanced (default: config threshold + top-k + Shadow) vs NovaParity (duty + subsample + hard 0.6); `EbNeuralSeedStrategy` + PlanGold `dual-seed-strategy`; Live untouched.
 - AP-NL5b: strict full-route ShadowVerified (DR3) — `EbShadowVerifiedContract` (settle, classify, binder); Autoplay arms only from SV (Explore labeled unverified); planner commits verified prefix only; PlanGold `shadow-verified-full-route`.
 - AP-NL6: Autoplay route queue + DR4 metrics — early-plan FIFO, memory reuse, Autoplay-only CPS; `EbAutoplayMetrics` (fidelity / verify completeness / progress; seed diag separate); PlanGold `autoplay-metrics`; Live untouched.
+- AP-NL7: hook orchestration parity — `EbHookOrchestration` PrePhysicsAssist→RealUpdate; single inject + plan re-entry guards; Autoplay uses inject flag; platformer hard-off; PlanGold `hook-order`.
 - AI prior: import Nova `NVM2` `model.bin` (float16 trunk `3512→128→64` + scalar conf) into `EbNeuralModel`; rank head stays freshly initialized. `Load Base / Packaged Prior` also checks `saveDir/ai/model.bin`. Offline convert: `tools/convert_nvm2_to_ebnn.py`.
 
 ## v1.8.0
