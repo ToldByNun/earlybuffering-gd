@@ -31,6 +31,8 @@ Assist Pack AP-NL4 (shared expand + sim-core): PlanGold `expand-honesty` — `Eb
 
 Assist Pack AP-NL5 (dual seed strategies): PlanGold `dual-seed-strategy` — `EbNeuralSeedStrategy` NovaParity (duty + subsample + hard 0.6) vs Enhanced (config threshold + top-k; 0.6 never implied); model-ready gate; counters. Live fixtures untouched. See `docs/nova-ai/17-dual-seed-strategies.md`.
 
+Assist Pack AP-NL5b (strict ShadowVerified): PlanGold `shadow-verified-full-route` — full-route DR3 (all events simulated, horizon+settle, no unknown/budget); Autoplay arms only from ShadowVerified (Explore labeled unverified); binder sequence match; unsimulated tail never SV. See `docs/nova-ai/18-shadow-verified-contract.md`.
+
 **v1.7.1** keeps the v1.5.1 / v1.6.x planner contracts (AP0–AP1 / AP3a–AP3b / AP4 hitch / remUs / Wave IW / orbs-under-IW) plus Assist Pack AP-L1–L7 soft-wall honesty, desktop ImGui shell, Hybrid RL unit coverage (`tools/test_hybrid_model.cpp`), and deflate-only ship packages.
 
 ## Adaptive smoke

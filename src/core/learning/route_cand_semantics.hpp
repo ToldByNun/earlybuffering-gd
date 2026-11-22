@@ -76,7 +76,7 @@ public:
     // event, and neither unknown nor budgetHit. Else PartiallyChecked / Rejected.
     static LifeState finalizeExpand(ExpandJob& job);
 
-    // DR3 preview (NL5b hardens): arm only from ShadowVerified.
+    // DR3 / AP-NL5b: arm only from ShadowVerified (see EbShadowVerifiedContract).
     static bool canArm(Cand const& cand);
     static bool canArmJob(ExpandJob const& job);
 

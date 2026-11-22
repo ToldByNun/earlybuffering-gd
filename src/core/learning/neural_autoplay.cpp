@@ -7,6 +7,7 @@
 #include "ai_config.hpp"
 #include "ai_route_planner.hpp"
 #include "neural_learning.hpp"
+#include "shadow_verified_contract.hpp"
 #include <Geode/Geode.hpp>
 #include <cstdlib>
 
@@ -197,13 +198,20 @@ bool EbNeuralAutoplay::armFromRoute(PlayLayer* layer, bool& exploreOut) {
         planner.invalidate("divergence");
 
     EbAiRoute route = planner.plan(layer, player, true, tick, limit, dt);
-    if (!route.valid || route.events.empty()) {
+    auto const& job = planner.lastExpandJob();
+    // AP-NL5b / DR3: arm only from ShadowVerified; Explore stays labeled unverified.
+    bool const shadowOk = route.valid && !route.events.empty() &&
+                          EbShadowVerifiedContract::mayArmAutoplay(job, false) &&
+                          EbShadowVerifiedContract::sequencesMatch(
+                              EbRouteCandSemantics::toRouteEvents(job), route.events);
+    if (!shadowOk) {
         if (m_exploreRate > 0.f) {
             float const roll = static_cast<float>(std::rand() % 10000) / 10000.f;
             if (roll < m_exploreRate) {
                 exploreOut = true;
+                m_scheduledExplore = true;
                 m_plannedHoldTicks = holdTicksForPlayer(layer);
-                m_lastProbeReason = "explore";
+                m_lastProbeReason = "explore-unverified";
                 m_activeRoute.clear();
                 m_routeIndex = 0;
                 m_scheduledPressTick = tick;
@@ -211,17 +219,19 @@ bool EbNeuralAutoplay::armFromRoute(PlayLayer* layer, bool& exploreOut) {
                 return true;
             }
         }
-        m_lastProbeReason = route.reason ? route.reason : "no-route";
+        m_lastProbeReason = route.reason ? route.reason : "no-shadow-verified";
         return false;
     }
 
     m_activeRoute = route;
     m_routeIndex = 0;
+    m_scheduledExplore = false;
     if (!scheduleNextRouteEvent(layer)) {
         clearRoute();
         m_lastProbeReason = "no-event";
         return false;
     }
+    m_lastProbeReason = "shadow-verified";
     return true;
 }
 

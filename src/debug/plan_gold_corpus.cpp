@@ -14,6 +14,7 @@
 #include "../core/learning/neural_seed_strategy.hpp"
 #include "../core/learning/route_cand_semantics.hpp"
 #include "../core/learning/route_expand_core.hpp"
+#include "../core/learning/shadow_verified_contract.hpp"
 #include "../core/assist/contracts/miss_assist_contracts.hpp"
 #include "../core/assist/input/buffer_event_machine.hpp"
 #include "../core/assist/input/click_intent_guard.hpp"
@@ -264,6 +265,9 @@ bool EbPlanGoldCorpus::run(std::string& report) {
     std::string dualSeedReport;
     expectReport(EbNeuralSeedStrategy::selfCheck(dualSeedReport), "dual-seed-strategy",
                  dualSeedReport);
+    std::string shadowVerifiedReport;
+    expectReport(EbShadowVerifiedContract::selfCheck(shadowVerifiedReport),
+                 "shadow-verified-full-route", shadowVerifiedReport);
     // Assist Pack AP1: frozen A4 fair-depth (research_20261113_001322).
     expect(EbLivePlanContracts::depthTruncatedAlive(false, false, 43, 54) &&
                EbLivePlanContracts::hopelessBlockedByDepthTruncation(true, false) &&

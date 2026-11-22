@@ -24,6 +24,8 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 
 **AP-NL5 seed strategies (Autoplay/AI):** **Enhanced** (default) uses the configured confidence threshold + top-k, then Shadow verify — 0.6 is never implied. **NovaParity** is an explicit compare mode (duty bit + window subsample + hard 0.6). Live click-timing is separate and unchanged. Rollback is not ported.
 
+**AP-NL5b ShadowVerified:** Autoplay executes a route only when every planned event was Shadow-simulated (horizon covers last event + settle, no unknown/budget). Partial or truncated routes stay `PartiallyChecked` and do not arm as safe; Explore presses stay labeled unverified.
+
 **AP06 bootstrap:** In AI mode, existing `.hybrid` tables load read-only. Mature Hybrid proposals are merged ahead of neural ranks for verify order; while Auto-Tune trains, those proposals soft-distill into the scorer. Empty Hybrid tables are fine — AI runs on prior/weights alone.
 
 Existing Live settings remain Live. Existing Hybrid settings stay Hybrid. Existing AI settings stay AI. Replay, BruteForce, Route and unknown imported mode values become Live. Legacy bake files remain on disk. Neither mode consumes them as timing templates.

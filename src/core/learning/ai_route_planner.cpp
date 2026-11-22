@@ -6,6 +6,7 @@
 #include "../sim/shadow_simulator.hpp"
 #include "neural_learning.hpp"
 #include "neural_model.hpp"
+#include "shadow_verified_contract.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <chrono>
@@ -579,10 +580,14 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
         if (cfg.simulationEnabled) {
             int const stuckDelay = delays.empty() ? 0 : delays.front();
             auto stuck = stuckSimCore(layer, player, tick, stuckDelay, limit, dt);
-            if (EbRouteCandSemantics::canArmJob(stuck.job)) {
+            EbShadowVerifiedContract::finalizeStrict(
+                stuck.job, EbShadowVerifiedContract::kDefaultSettleTicks);
+            m_lastExpandJob = stuck.job;
+            m_lastExpandResult = stuck;
+            if (EbShadowVerifiedContract::mayArmAutoplay(stuck.job, false)) {
                 route.events = EbRouteCandSemantics::toRouteEvents(stuck.job);
                 route.valid = true;
-                route.reason = "stuck-sim-core";
+                route.reason = "shadow-verified";
                 route.routeScore = 0.f;
                 route.startX = player->getPositionX();
                 route.simCalls = stuck.simCalls;
@@ -598,6 +603,7 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
             int delayHint = delays.empty() ? 0 : delays.front();
             float conf = neural.confidenceForDelay(delayHint);
             if (conf >= cfg.orbHintConfidence) {
+                // AP-NL5b: orb hint is not ShadowVerified — never arm as verified route.
                 EbAiRouteEvent ev;
                 ev.kind = EbAiRouteEvent::Kind::Press;
                 ev.delay = delayHint;
@@ -605,8 +611,8 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
                 ev.holdTicks = 4;
                 ev.verified = false;
                 route.events.push_back(ev);
-                route.valid = true;
-                route.reason = "orb-hint";
+                route.valid = false;
+                route.reason = "orb-hint-unverified";
                 route.routeScore = conf;
                 route.startX = player->getPositionX();
                 m_last = route;
@@ -730,25 +736,28 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
     std::sort(beam.begin(), beam.end(),
               [](EbAiBeamNode const& a, EbAiBeamNode const& b) { return a.score > b.score; });
     auto const& best = beam.front();
-    route.events = best.events;
-    if (static_cast<int>(route.events.size()) > cfg.maxCommittedEvents)
-        route.events.resize(static_cast<size_t>(cfg.maxCommittedEvents));
-
-    int verifiedPrefix = 0;
-    for (auto const& ev : route.events) {
+    // AP-NL5b: commit only the contiguous verified prefix — never schedule an unsimulated tail.
+    route.events.clear();
+    for (auto const& ev : best.events) {
         if (!ev.verified)
             break;
-        ++verifiedPrefix;
+        route.events.push_back(ev);
+        if (static_cast<int>(route.events.size()) >= cfg.maxCommittedEvents)
+            break;
     }
-    route.valid = !route.events.empty() && verifiedPrefix >= cfg.minVerifiedPrefix;
     route.routeScore = best.score;
     route.startX = player->getPositionX();
     route.simCalls = simCalls;
-    route.reason = route.valid ? "ok" : "prefix-short";
     if (route.budgetHit)
         route.reason = "budget";
+    else if (route.events.empty())
+        route.reason = "prefix-short";
+    else if (static_cast<int>(route.events.size()) < cfg.minVerifiedPrefix)
+        route.reason = "prefix-short";
+    else
+        route.reason = "ok";
 
-    // AP-NL3: record expand job lifecycle from the committed event sequence.
+    // AP-NL3/NL5b: expand job lifecycle + strict ShadowVerified finalize.
     {
         EbRouteCandSemantics::Cand seed =
             m_lastSeedCands.empty()
@@ -776,13 +785,12 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
             job.events.push_back(event);
         }
         job.state = EbRouteCandSemantics::LifeState::Expanding;
-        EbRouteCandSemantics::finalizeExpand(job);
-        // AP-NL4 honesty: truncated/budget expand must never remain ShadowVerified.
+        EbShadowVerifiedContract::finalizeStrict(job, EbShadowVerifiedContract::kDefaultSettleTicks);
         m_lastExpandResult = {};
         m_lastExpandResult.job = job;
         m_lastExpandResult.simCalls = simCalls;
         m_lastExpandResult.truncated = route.budgetHit;
-        if (route.budgetHit || m_lastExpandResult.truncated) {
+        if (route.budgetHit) {
             job.budgetHit = true;
             if (job.state == EbRouteCandSemantics::LifeState::ShadowVerified) {
                 job.state = EbRouteCandSemantics::LifeState::PartiallyChecked;
@@ -799,10 +807,33 @@ EbAiRoute EbAiRoutePlanner::plan(PlayLayer* layer, PlayerObject* player, bool pl
             EbRouteExpandCore::honestyOk(m_lastExpandResult)
                 ? (m_lastExpandResult.truncated ? "partial-trunc" : "ok")
                 : "dishonest";
-        // Autoplay may still use prefix-valid routes; ShadowVerified is the arm gate (NL5b).
-        if (route.valid && !EbRouteCandSemantics::canArmJob(job) &&
-            job.state == EbRouteCandSemantics::LifeState::PartiallyChecked)
-            route.reason = route.budgetHit ? "budget" : "partial-verify";
+
+        // DR3: route.valid only when ShadowVerified (armable). Binder sequence must match job.
+        auto const verifiedEvents = EbRouteCandSemantics::toRouteEvents(job);
+        bool const binderOk =
+            EbShadowVerifiedContract::sequencesMatch(verifiedEvents, route.events);
+        bool const svOk = EbShadowVerifiedContract::mayArmAutoplay(job, false) && binderOk;
+        route.valid = svOk && static_cast<int>(route.events.size()) >= cfg.minVerifiedPrefix;
+        if (!route.valid) {
+            if (route.budgetHit)
+                route.reason = "budget";
+            else if (job.state == EbRouteCandSemantics::LifeState::PartiallyChecked)
+                route.reason = "partial-verify";
+            else if (job.state == EbRouteCandSemantics::LifeState::Rejected)
+                route.reason = "rejected";
+            else if (!binderOk)
+                route.reason = "binder-mismatch";
+            else if (route.events.empty() ||
+                     static_cast<int>(route.events.size()) < cfg.minVerifiedPrefix)
+                route.reason = "prefix-short";
+            else
+                route.reason = "not-shadow-verified";
+        } else {
+            route.reason = "shadow-verified";
+            // Mark committed events verified for the Autoplay binder.
+            for (auto& ev : route.events)
+                ev.verified = true;
+        }
     }
 
     m_last = route;
@@ -879,6 +910,8 @@ bool EbAiRoutePlanner::selfCheck(std::string& report) {
     expect(EbRouteExpandCore::selfCheck(expandCoreReport), "route-expand-core");
     std::string seedStrategyReport;
     expect(EbNeuralSeedStrategy::selfCheck(seedStrategyReport), "dual-seed-strategy");
+    std::string shadowVerifiedReport;
+    expect(EbShadowVerifiedContract::selfCheck(shadowVerifiedReport), "shadow-verified-full-route");
 
     if (fails == 0) {
         report = "AiRoutePlanner OK";
