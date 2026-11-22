@@ -1,6 +1,7 @@
 #include "status_overlay.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../core/platform/platform_limits.hpp"
+#include "../stream/hide_from_stream.hpp"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -111,13 +112,19 @@ void EbStatusOverlay::attach(PlayLayer* playLayer) {
 
     EbStatusOverlayImplementation::s_lastText = "EarlyBuffer";
     EbStatusOverlayImplementation::s_lastVisible = EbStageConfig::showOverlay();
-    s_label->setVisible(EbStatusOverlayImplementation::s_lastVisible);
+    bool const showInGame =
+        EbStatusOverlayImplementation::s_lastVisible && !EbHideFromStream::settingEnabled();
+    s_label->setVisible(showInGame);
+    EbHideFromStream::setStatusText("EarlyBuffer");
+    EbHideFromStream::setStatusVisible(EbStatusOverlayImplementation::s_lastVisible);
 
     playLayer->addChild(s_label, 1000);
     s_label->retain();
 }
 
 void EbStatusOverlay::detach(bool layerDying) {
+    EbHideFromStream::setStatusText({});
+    EbHideFromStream::setStatusVisible(false);
     if (!s_label) {
         EbStatusOverlayImplementation::s_lastText.clear();
         return;
@@ -140,12 +147,22 @@ void EbStatusOverlay::update(std::string const& text) {
     if (!s_label)
         return;
     bool const vis = EbStageConfig::showOverlay();
+    bool const hideInGame = EbHideFromStream::settingEnabled();
     if (vis != EbStatusOverlayImplementation::s_lastVisible) {
         EbStatusOverlayImplementation::s_lastVisible = vis;
-        s_label->setVisible(vis);
+        s_label->setVisible(vis && !hideInGame);
+    } else if (hideInGame && s_label->isVisible()) {
+        s_label->setVisible(false);
     }
-    if (!vis || text == EbStatusOverlayImplementation::s_lastText)
+    EbHideFromStream::setStatusVisible(vis);
+    if (!vis) {
+        EbHideFromStream::setStatusText({});
         return;
+    }
+    if (text == EbStatusOverlayImplementation::s_lastText) {
+        EbHideFromStream::setStatusText(EbStatusOverlayImplementation::s_lastText);
+        return;
+    }
     EbStatusOverlayImplementation::s_lastText = text;
     auto const winSize = geode::prelude::CCDirector::sharedDirector()->getWinSize();
     auto& limits = EbPlatformLimits::get();
@@ -153,14 +170,19 @@ void EbStatusOverlay::update(std::string const& text) {
     auto const wrapped =
         EbStatusOverlayImplementation::wrapLines(text, maxWidth, s_label->getScale());
     s_label->setString(wrapped.c_str());
+    EbHideFromStream::setStatusText(wrapped);
 }
 
 void EbStatusOverlay::setVisible(bool visible) {
     if (!s_label)
         return;
     bool const vis = visible && EbStageConfig::showOverlay();
+    bool const hideInGame = EbHideFromStream::settingEnabled();
     if (vis != EbStatusOverlayImplementation::s_lastVisible) {
         EbStatusOverlayImplementation::s_lastVisible = vis;
-        s_label->setVisible(vis);
+        s_label->setVisible(vis && !hideInGame);
+    } else if (hideInGame && s_label->isVisible()) {
+        s_label->setVisible(false);
     }
+    EbHideFromStream::setStatusVisible(vis);
 }

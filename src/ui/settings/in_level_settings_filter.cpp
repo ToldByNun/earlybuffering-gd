@@ -124,6 +124,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("show-pause-hub") == SettingsCategory::UI, "cat-hub-ui");
     expect(categoryForKey("desktop-classic-settings") == SettingsCategory::UI, "cat-classic-ui");
     expect(categoryForKey("show-overlay") == SettingsCategory::UI, "cat-overlay-ui");
+    expect(categoryForKey("hide-from-stream") == SettingsCategory::UI, "cat-hide-stream-ui");
     expect(categoryForKey("lag-warning-toast") == SettingsCategory::UI, "cat-lag-toast-ui");
     expect(categoryForKey("title-ui") == SettingsCategory::UI, "cat-title-ui");
     expect(categoryForKey("title-scope") == SettingsCategory::Assist, "cat-title-scope-assist");

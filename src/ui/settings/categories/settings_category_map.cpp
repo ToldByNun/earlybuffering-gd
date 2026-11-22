@@ -225,6 +225,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"sidebar-material", SettingsCategory::UI},
         {"desktop-accent-color", SettingsCategory::UI},
         {"show-overlay", SettingsCategory::UI},
+        {"hide-from-stream", SettingsCategory::UI},
         {"lag-warning-toast", SettingsCategory::UI},
         {"show-pause-hub", SettingsCategory::UI},
         {"desktop-classic-settings", SettingsCategory::UI},

@@ -1371,6 +1371,12 @@
 			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
 			"default": false
 		},
+		"hide-from-stream": {
+			"type": "bool",
+			"name": "Hide From Stream",
+			"description": "Windows: draw the desktop menu, lag toast, and in-level overlay on a layered window excluded from capture (OBS Game Capture / Win10 2004+). You still see the UI; the stream sees only the game. Off = normal in-game ImGui.",
+			"default": false
+		},
 		"lag-warning-toast": {
 			"type": "bool",
 			"name": "Lag Warning",

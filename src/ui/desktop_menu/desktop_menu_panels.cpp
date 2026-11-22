@@ -906,6 +906,9 @@ public:
             EbDropdown::drawSetting("desktop-ui-scale", "UI Scale", scales, 4);
 
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
+#if defined(EB_UI_WINDOWS)
+            EbCheckbox::drawSetting("hide-from-stream", "Hide From Stream");
+#endif
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
             if (EbUiCapabilities::desktopLayout()) {
                 EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");

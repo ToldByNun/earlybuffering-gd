@@ -36,11 +36,12 @@ Smart prediction knobs and Adaptive Plan toggles that used to sit under a separa
 
 ## Overlay / Pause UI
 
-Desktop chrome (Accent Color, overlay / pause toggles, Lag Warning) lives under the **UI** tab. Pause EB still opens the ImGui shell on Windows (version label = package version, currently **1.7.1**).
+Desktop chrome (Accent Color, overlay / pause toggles, Lag Warning, Hide From Stream) lives under the **UI** tab. Pause EB still opens the ImGui shell on Windows (version label = package version, currently **1.7.1**).
 
 | Setting | Effect |
 |---|---|
 | In-Level Overlay | Tiny status while playing |
+| Hide From Stream | Windows: EB chrome on a capture-excluded layered window (OBS sees game only) |
 | Pause EB Button | Top-right EB opens settings |
 | Pause Status Lines | Extra pause text |
 | Accent Color | Desktop menu theme + wave fill (UI tab) |
