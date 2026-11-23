@@ -54,7 +54,10 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         return true;
     }
 
-    bool const liveMode = EbStageConfig::assistMode() == EbStageConfig::AssistMode::Live;
+    // AI supplies learned hints, but ordinary input rescue must retain its full
+    // proof budget instead of replaying an AI verification ladder first.
+    bool const liveMode = EbStageConfig::assistMode() == EbStageConfig::AssistMode::Live ||
+                          EbStageConfig::assistMode() == EbStageConfig::AssistMode::AI;
     int limit = controller.activeLimit(player);
     if (EbLiveStageParity::stageOffEquivalent(EbStageConfig::isEnabled(), limit)) {
         EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::PassThrough,
@@ -285,9 +288,6 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
             EbNeuralLearning::get().noteArmed(delayValue, confidence);
         } else {
             plan.hybridTried = true;
-            if (opts.strictLiveRescue)
-                controller.m_liveHorizon.observe(static_cast<int>(kind), player1, false,
-                                                 plan.budgetHit, plan.planUs, opts.budgetUs);
             plan.hybridHint = opts.hybridDelay;
         }
         scorerWon = true;
@@ -299,8 +299,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     aiShellUs =
         std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
     int aiSpendLeft = aiShellUs;
-    if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
-        !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
+    if (!opts.strictLiveRescue && EbNeuralLearning::active() && neural.preferAiFirst &&
+        !opts.shipLine.enabled && !opts.wavePattern.enabled &&
+        !playLayer->m_gameState.m_isDualMode &&
         frameScope.remaining(frameLimitUs) >= EbNeuralLearning::minRemUsForAiFirst() &&
         aiSpendLeft >= EbNeuralLearning::minRemUsForAiFirst()) {
         auto const order = neural.rankedVerifyDelays(limit);
@@ -405,6 +406,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    if (opts.strictLiveRescue)
+        controller.m_liveHorizon.observe(static_cast<int>(kind), player1, false, plan.budgetHit,
+                                         plan.planUs, opts.budgetUs);
     plan.hybridHint = opts.hybridDelay;
     plan.renderFrame = static_cast<long long>(frameScope.frame());
     plan.frameBudgetUs = frameLimitUs;

@@ -2,11 +2,16 @@
 
 EbLiveRescuePolicy::Observation EbLiveRescuePolicy::classify(bool died, bool unknown,
                                                              bool diedBeforeAction, int ticksRan,
-                                                             int horizon) {
+                                                             int horizon, bool completedBallFlip) {
     if (unknown || ticksRan <= 0 || horizon <= 0)
         return Observation::Incomplete;
     if (died || diedBeforeAction)
         return Observation::Dead;
+    // A completed Ball action has its own physical endpoint: opposite gravity,
+    // an airborne phase and eight consecutive collision-checked contact ticks.
+    // Waiting for the next required click would reject every rhythmic corridor.
+    if (completedBallFlip)
+        return Observation::Safe;
     if (ticksRan < horizon)
         return Observation::Incomplete;
     return Observation::Safe;

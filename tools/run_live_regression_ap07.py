@@ -22,6 +22,7 @@ class LiveRegressionGate:
             ],
             "flight_measurement": ["src/core/assist/flight/flight_measurement.cpp"],
             "input_reconciler": ["src/core/assist/input/input_reconciler.cpp"],
+            "completed_trigger_collection": ["src/core/trigger_world/completed_trigger_collection.cpp"],
             "settings_popup_policy": ["src/ui/settings/settings_popup_policy.cpp"],
             "live_rescue_policy": ["src/core/assist/contracts/live_rescue_policy.cpp",
                                    "src/core/assist/contracts/live_rescue_search.cpp",

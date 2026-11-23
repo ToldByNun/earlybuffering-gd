@@ -11,12 +11,16 @@ This is the mental model for Live presses. Full contract: [Assist reference](/as
 - `reason` = AssistReason / verdict
 - optional `candNotes` for Dev capture
 
-## Normal Live rescue
+## Normal Live / AI rescue
 
 `strictLiveRescue` bypasses Adaptive and the legacy scoring path. It preserves a
 fully checked d0, otherwise schedules coarse delay probes followed by local
 refinement, with exhaustive untested-tick fallback if no coarse survivor exists.
-All accepted probes reach one common absolute target, fixed before d0. Results
+Accepted probes reach the common absolute target fixed before d0, or complete a
+Ball flip through `EbBallLandingTracker` (gravity reversal, airborne phase and
+eight stable collision-checked contact ticks). Collision/unknown flags take
+precedence over a completion flag. This stops a later required Ball click from
+making all current delays appear hopeless. Results
 are cached only within this search; unknown/truncated probes are never safe.
 
 `EbLiveHorizonController` adapts automatic horizons between searches (0.85 on

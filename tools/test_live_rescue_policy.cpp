@@ -40,6 +40,21 @@ int LiveRescueRegression::run() {
            "boundary collision is rejected");
     expect(EbLiveRescuePolicy::classify(false, true, false, 96, 96) == shallow,
            "full-length unknown is not proof");
+    // research_20261123_234922: all delays die at the next obstacle around
+    // tick 78 although the user makes the next flip around tick 50. A physically
+    // completed flip must not demand survival without that future input.
+    expect(EbLiveRescuePolicy::classify(false, false, false, 32, 104, true) == safe,
+           "completed ball flip is a decision boundary");
+    expect(EbLiveRescuePolicy::classify(false, false, false, 32, 104, false) == shallow,
+           "short uncompleted flight remains incomplete");
+    expect(EbLiveRescuePolicy::classify(true, false, false, 32, 104, true) == dead,
+           "landing never overrides collision");
+    expect(EbLiveRescuePolicy::classify(false, true, false, 32, 104, true) == shallow,
+           "landing never overrides unknown state");
+    std::array const ballRescue{dead,
+                                EbLiveRescuePolicy::classify(false, false, false, 32, 104, true)};
+    expect(EbLiveRescuePolicy::choose(ballRescue) == 1,
+           "delay rescues lethal flight with completed flip");
     // Budget truncation, early landing, and a short adaptive seed are all just
     // partial observations; none changes the shared target horizon.
     for (int horizon = 1; horizon <= 320; ++horizon) {

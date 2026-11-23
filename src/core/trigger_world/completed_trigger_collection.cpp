@@ -1,0 +1,30 @@
+#include "completed_trigger_collection.hpp"
+
+bool EbCompletedTriggerCollection::matches(void const* layer, void const* objects,
+                                           std::size_t count, std::size_t children,
+                                           std::size_t sections, bool skipDynamic) const {
+    return m_complete && layer && objects && layer == m_layer && objects == m_objects &&
+           count == m_count && children == m_children && sections == m_sections &&
+           skipDynamic == m_skipDynamic;
+}
+
+void EbCompletedTriggerCollection::remember(void const* layer, void const* objects,
+                                            std::size_t count, std::size_t children,
+                                            std::size_t sections, bool skipDynamic, bool complete) {
+    clear();
+    if (!complete || !layer || !objects || count == 0)
+        return;
+    m_layer = layer;
+    m_objects = objects;
+    m_count = count;
+    m_children = children;
+    m_sections = sections;
+    m_skipDynamic = skipDynamic;
+    m_complete = true;
+}
+
+void EbCompletedTriggerCollection::clear() {
+    m_complete = false;
+    m_layer = nullptr;
+    m_objects = nullptr;
+}

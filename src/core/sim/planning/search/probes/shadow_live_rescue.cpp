@@ -19,11 +19,13 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     context.cands.resize(static_cast<std::size_t>(context.limit) + 1);
     context.candReady.assign(context.cands.size(), 0);
     // Every alternative starts from the same captured world, executes one input
-    // edge, and runs to the same absolute horizon. No hypothetical next click,
+    // edge, and runs to the same horizon or completed Ball action. No hypothetical next click,
     // release, early landing success, or shortened seed can prove a rescue.
     context.model.continuePastClear = true;
     context.model.stopAtCubeLanding = false;
-    context.model.stopAtBallLanding = false;
+    // Ball decisions end after a proved flip and stable landing. The next
+    // obstacle requires a fresh user input and is a separate assist decision.
+    context.model.stopAtBallLanding = context.down && context.real->m_isBall;
     context.model.probeOrbContinuation = false;
     context.model.probeSpiderContinuation = false;
     context.model.tapRelease = false;
@@ -40,7 +42,8 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     auto classify = [&](EbShadowSimulator::RunResult const& result) {
         return EbLiveRescuePolicy::classify(
             result.died, result.unknown || result.unknownTrunc || result.toggleUnknown,
-            result.diedBeforeAction, result.ticksRan, horizon);
+            result.diedBeforeAction, result.ticksRan, horizon,
+            context.model.stopAtBallLanding && result.landedAfterAction);
     };
     auto probe = [&](int delay, bool sharePrefix = true) {
         EbSimulationCandidate candidate;

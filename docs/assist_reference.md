@@ -12,24 +12,27 @@ Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
 | Hybrid | Player-driven tabular RL over Live: learns delay preferences per situation, then Hybrid-first `verifyDelay` before ordinary Live search. |
-| AI | Neural Candidate Scorer (1.8.0): ranks delays → verify → arm; per-level `.neural` + packaged prior. Opt-in **Autoplay** synthesizes Jump for RL self-play; **Train Session** batch-IL/RL from the attempt buffer. |
+| AI | Neural learning (1.8.0): ordinary inputs use the shared Live rescue proof; per-level `.neural` + packaged prior. Opt-in **Autoplay** synthesizes Jump for RL self-play; **Train Session** batch-IL/RL from the attempt buffer. |
 
 Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were removed from the 1.7.x ship line (historical bake-verify notes below remain for older captures / Dev tooling).
 
 ## Live rescue selection (1.8.0)
 
-Normal **Live** now uses `liveRescue` for presses and eligible releases:
+Normal **Live and AI** now use `liveRescue` for presses and eligible releases:
 
 - Evaluate the original input first. If it survives the full observation, pass it unchanged.
 - Only a known baseline death starts the delay search. Probe a coarse grid first,
   then refine a proved survivor's bracket. If coarse probes find no survivor, inspect
   every untested tick once while the shared budget permits; a coarse miss never
   permanently excludes a narrow window. Every selected delay must survive the same
-  absolute observation horizon from the same captured world.
-- Short adaptive screens, early landings, hypothetical follow-up clicks/releases, and
+  absolute observation horizon from the same captured world. Ball presses can instead
+  complete at a proved flip: opposite gravity, airborne travel and eight consecutive
+  collision-checked grounded ticks. A later obstacle requiring another click belongs
+  to the next decision, rather than making this completed action hopeless.
+- Short adaptive screens, unproved landings, hypothetical follow-up clicks/releases, and
   end-X scores cannot establish a rescue. Unknown or budget-truncated runs are unproved.
 - Keep the verified input tick fixed. Smart-depth reranking and learned delay offsets
-  do not change ordinary Live timing. Adaptive settings still apply to Hybrid/AI.
+  do not change ordinary Live timing. Adaptive settings still apply to Hybrid.
 - Both linked dual players must survive a delayed edge. Optional jitter probes must
   also reach the same horizon. Budget exhaustion passes the player's input through.
 

@@ -107,6 +107,8 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/test_settings_popup_policy.hpp
 !/tools/test_settings_popup_policy.cpp
 !/tools/test_settings_popup_policy.hpp
+!/tools/test_completed_trigger_collection.cpp
+!/tools/test_completed_trigger_collection.hpp
 !/tools/test_live_rescue_policy.cpp
 !/tools/test_live_rescue_policy.hpp
 !/tools/test_recorded_misses_ap01.py

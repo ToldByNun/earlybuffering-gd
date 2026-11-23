@@ -1,6 +1,8 @@
 #ifndef TRIGGER_WORLD_BAKER_HPP
 #define TRIGGER_WORLD_BAKER_HPP
 
+#include "completed_trigger_collection.hpp"
+
 #include "trigger_world_store.hpp"
 #include <cstddef>
 #include <string>
@@ -114,6 +116,9 @@ private:
     bool cancelled() const {
         return this->m_cancel;
     }
+    bool hasFreshEmptyCollection(PlayLayer* layer) const;
+    void rememberEmptyCollection();
+    EbCompletedTriggerCollection m_completedEmpty;
     void clearJob();
     void finishCancel();
     void finishOk();
