@@ -16,6 +16,46 @@ Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081
 
 Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were removed from the 1.7.x ship line (historical bake-verify notes below remain for older captures / Dev tooling).
 
+## Live rescue selection (1.8.0)
+
+Normal **Live** now uses `liveRescue` for presses and eligible releases:
+
+- Evaluate the original input first. If it survives the full observation, pass it unchanged.
+- Only a known baseline death starts the delay search. Probe a coarse grid first,
+  then refine a proved survivor's bracket. If coarse probes find no survivor, inspect
+  every untested tick once while the shared budget permits; a coarse miss never
+  permanently excludes a narrow window. Every selected delay must survive the same
+  absolute observation horizon from the same captured world.
+- Short adaptive screens, early landings, hypothetical follow-up clicks/releases, and
+  end-X scores cannot establish a rescue. Unknown or budget-truncated runs are unproved.
+- Keep the verified input tick fixed. Smart-depth reranking and learned delay offsets
+  do not change ordinary Live timing. Adaptive settings still apply to Hybrid/AI.
+- Both linked dual players must survive a delayed edge. Optional jitter probes must
+  also reach the same horizon. Budget exhaustion passes the player's input through.
+
+Straightfly and Wave Pattern remain explicit tracking features with separate policies.
+The proof assumes the input remains in its new state until another real input arrives;
+it cannot predict a later user release or guarantee survival beyond its finite horizon.
+Simulation trust/parity guards and the configured assist window remain in force.
+
+Automatic horizons adapt between presses using Nova's multiplicative rule: timeout
+reduces the scale by 0.85 (floor 0.5); a completed check using less than half its
+budget grows it by 1.03 (ceiling 1). State is separate for mode, player and input
+edge and resets on level entry. Explicit look-ahead/mode caps stay fixed. The scale
+is frozen before the original input is evaluated and never reduces Max Assist Ticks.
+A shorter observation proves survival only to that shorter horizon.
+
+The ShadowPlayer path shares idle prefixes across increasing probes and restarts
+from the original capture for backwards refinement. World/orb/toggle state is
+restored at each fork. Linked dual, Trajectory, and initial Wave slope retry use
+independent probes. Jitter checks always use independent perturbed runs. The
+existing Assist Verify A/B option compares shared probes with independent runs;
+Dev traces record `liveObservationTicks` and `sharedIdleTicksSaved`.
+
+Offline broad-window scheduling fixture: 11 probes versus 26 for linear scanning;
+49 idle physics steps versus 160 independent idle steps for the same scheduled
+probes. These counts do not measure FPS or real game wall time.
+
 ## AI Autoplay + session train (v1.8.0)
 
 With **Assist Mode = AI**, the AI tab exposes **Autoplay**: scorer + `verifyDelay` gated Jump presses (not CPS spam), **Time Warp** for attempt throughput, Explore % for cold-start, and auto **Train Session** on death when Auto-Tune is on. Manual **Train Session** still batch-trains from the session buffer (your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.

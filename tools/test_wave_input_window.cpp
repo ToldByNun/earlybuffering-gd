@@ -1,5 +1,7 @@
 #include "test_wave_input_window.hpp"
 #include "../src/core/assist/contracts/live_plan_contracts.hpp"
+#include "../src/core/assist/contracts/live_rescue_policy.hpp"
+#include "../src/core/assist/contracts/live_rescue_search.hpp"
 #include "../src/core/assist/contracts/miss_assist_contracts.hpp"
 #include <algorithm>
 #include <array>
@@ -12,16 +14,15 @@ static constexpr int kPostCapProveTicks = 8;
 // Replaying the recorded collision outcomes tests the live acceptance rule,
 // independently of Geode's rendering and the current level instance.
 int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon) {
-    for (int delay = 0; delay <= 12; ++delay) {
+    EbLiveRescueSearch search(12);
+    for (int delay = search.nextDelay(); delay >= 0; delay = search.nextDelay()) {
         int const deathTick = input.deathTicks[delay];
         bool const diedInWindow = deathTick < horizon;
         int const ticksRan = std::min(deathTick + 1, horizon);
-        if (EbMissAssistContracts::survivesObservation(diedInWindow, false, ticksRan, horizon,
-                                                     false)) {
-            return delay;
-        }
+        search.record(delay,
+                      EbLiveRescuePolicy::classify(diedInWindow, false, false, ticksRan, horizon));
     }
-    return -1;
+    return search.selectedDelay();
 }
 
 int WaveInputWindowRegressionTests::run() {
@@ -117,8 +118,8 @@ int WaveInputWindowRegressionTests::run() {
             return 0;
         return earliestLater > 0 ? earliestLater : -1;
     };
-    auto const proxPass = [](bool isWave, bool pressDown, bool d0Died, bool nearHazard,
-                             bool noOrb, bool foresightOrb) {
+    auto const proxPass = [](bool isWave, bool pressDown, bool d0Died, bool nearHazard, bool noOrb,
+                             bool foresightOrb) {
         return pressDown && isWave && !d0Died && nearHazard && noOrb && !foresightOrb;
     };
     auto const futilePass = [](bool isWave, bool pressDown, bool anySave, bool idleEscape,

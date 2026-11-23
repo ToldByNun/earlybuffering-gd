@@ -11,7 +11,31 @@ This is the mental model for Live presses. Full contract: [Assist reference](/as
 - `reason` = AssistReason / verdict
 - optional `candNotes` for Dev capture
 
-## Classic Live (simplified)
+## Normal Live rescue
+
+`strictLiveRescue` bypasses Adaptive and the legacy scoring path. It preserves a
+fully checked d0, otherwise schedules coarse delay probes followed by local
+refinement, with exhaustive untested-tick fallback if no coarse survivor exists.
+All accepted probes reach one common absolute target, fixed before d0. Results
+are cached only within this search; unknown/truncated probes are never safe.
+
+`EbLiveHorizonController` adapts automatic horizons between searches (0.85 on
+budget exhaustion, 1.03 recovery under half budget, 0.5..1 range). It preserves
+the full Max Assist window and explicit mode/look-ahead caps. State is isolated
+by player, mode and edge, and resets on level entry.
+
+The ShadowPlayer path reuses an idle-prefix cursor and a reusable fork snapshot.
+Backwards refinement reseeds the cursor; dual, Trajectory and initial Wave-slope
+cases retain independent simulation. Optional jitter uses independent probes.
+The opt-in `assist-verify-ab` compares shared candidates against independent GD
+runs and keeps the independent result for those diagnostic runs.
+
+Traces include `liveObservationTicks` and `sharedIdleTicksSaved`; the existing
+`physicsCalls`, `planUs` and phase timing fields support real before/after
+measurements. The offline broad-window test measures scheduling counts only,
+not actual game frame times.
+
+## Legacy / Hybrid candidate path (simplified)
 
 ```
 prepare (inputWindow? budgets? orb scan?)

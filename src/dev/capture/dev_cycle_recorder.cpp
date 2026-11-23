@@ -218,6 +218,8 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->adaptiveSeedCount = plan.adaptiveSeedCount;
     width->hybridHint = plan.hybridHint;
     width->hybridTried = plan.hybridTried;
+    width->liveObservationTicks = plan.liveObservationTicks;
+    width->sharedIdleTicksSaved = plan.sharedIdleTicksSaved;
     width->reusedCandidateCount = plan.reusedCandidateCount;
     width->reusedCandidateTicks = plan.reusedCandidateTicks;
     width->budgetHit = plan.budgetHit;

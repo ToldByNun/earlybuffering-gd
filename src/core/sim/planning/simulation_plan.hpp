@@ -68,6 +68,9 @@ public:
     // Live Delay-arm: only Class::Alive ghosts (soft Landing/Recoverable/LateCrash
     // stay not-false-lethal for bake verify when this is false).
     bool requireAliveForDelay = false;
+    // Normal Live: preserve safe input; only replace a known death with a full-horizon survivor.
+    bool strictLiveRescue = false;
+    float liveHorizonScale = 1.f;
     // Hybrid verify-fail: reuse threat zone from verifyDelay (skip buildThreatZone).
     // Invalid / unset → plan builds zone from d0 as usual. Never stale across presses.
     EbThreatZone seedThreatZone{};
@@ -153,6 +156,8 @@ public:
     int fallthroughSetupUs = 0;
     int classicSearchUs = 0;
     int adaptiveSeedCount = 0;
+    int liveObservationTicks = 0;
+    int sharedIdleTicksSaved = 0;
     int reusedCandidateCount = 0;
     int reusedCandidateTicks = 0;
     bool activatedRing = false;

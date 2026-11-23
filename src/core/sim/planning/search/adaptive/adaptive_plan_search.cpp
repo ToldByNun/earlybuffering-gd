@@ -89,7 +89,7 @@ static int countSurvivors(std::vector<EbAdaptiveCandidateSlot> const& slots, int
 EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer,
                                     PlayerObject* real, bool down, int limit, float deltaTime,
                                     float firstDt, EbPlanOptions const& options) {
-    if (!options.adaptivePlan) {
+    if (!options.adaptivePlan || options.strictLiveRescue) {
         noteStats({});
         return EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime, firstDt,
                                        options);

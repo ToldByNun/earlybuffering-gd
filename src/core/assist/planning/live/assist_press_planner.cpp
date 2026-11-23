@@ -15,10 +15,10 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
-#include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
-#include "../../../real_assist/real_assist_runner.hpp"
+#include "../../../learning/neural_learning.hpp"
 #include "../../../learning/spot_trust_map.hpp"
+#include "../../../real_assist/real_assist_runner.hpp"
 #include "../../../sim/planning/simulation_plan.hpp"
 #include "../../../sim/shadow_simulator.hpp"
 #include "../../../sim/sim_trust.hpp"
@@ -43,9 +43,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                                      PlayerObject* player, bool player1, int effectTick,
                                      float firstDt, EbDevClockContract::Stamp const& clockIn) {
     EbDevClockContract::Stamp clock = clockIn;
+    bool const liveMode = EbStageConfig::assistMode() == EbStageConfig::AssistMode::Live;
     int limit = controller.activeLimit(player);
-    bool const stageOff =
-        EbLiveStageParity::stageOffEquivalent(EbStageConfig::isEnabled(), limit);
+    bool const stageOff = EbLiveStageParity::stageOffEquivalent(EbStageConfig::isEnabled(), limit);
     if (stageOff) {
         // Nova Stage-Off equivalent — raw input, no buffering.
         EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::PassThrough,
@@ -82,7 +82,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // shrunk to d≤4 because rem~1.5ms was compared against fullBudget=8000.
     {
         int const remUs = frameScope.remaining(frameLimitUs);
-        int const shrunk = EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, frameLimitUs);
+        int const shrunk =
+            liveMode ? limit
+                     : EbLiveStageParity::shrinkLimitUnderBudget(limit, remUs, frameLimitUs);
         if (shrunk < limit)
             limit = shrunk;
         if (limit <= 0)
@@ -202,7 +204,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
 
     // Dense / rhythmic spam (esp. wave corridors): Pass unless orb/pad or bake nearby.
     // Trusted opportunity must still Delay-search — never spam-Pass over AssistCov.
-    if (!player->m_isBird && !mustDelaySearch &&
+    if (!liveMode && !player->m_isBird && !mustDelaySearch &&
         EbClickIntentGuard::get().shouldPassThrough(slot, effectTick, kind, nearOrb, false)) {
         EbAssistLog::debug(fmt::format("intent: spam Pass (mode={}, tick={})",
                                        EbStageConfig::kindName(kind), effectTick));
@@ -220,7 +222,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
 
     // Low trust at this spot → pass through (unless explore roll or orb ahead).
     // Commit 11: trusted opportunity MustDelaySearch overrides learned low-trust Pass.
-    if (!mustDelaySearch && EbStageConfig::autoTune() && profile.loaded() && !nearOrb) {
+    if (!liveMode && !mustDelaySearch && EbStageConfig::autoTune() && profile.loaded() &&
+        !nearOrb) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             if (spot->n >= EbLevelProfile::TRUST_PASS_MIN_N &&
                 spot->trust < EbLevelProfile::TRUST_PASS_THRESHOLD &&
@@ -281,13 +284,16 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                                                             spamDense);
     opts.hybridDelay = EbHybridLearning::get().prepare(playLayer, player, true, player1, effectTick,
                                                        limit, controller.m_simDt, firstDt, opts);
-    int const aiHint =
-        EbNeuralLearning::get().prepare(playLayer, player, true, player1, effectTick, limit,
-                                        controller.m_simDt, firstDt, opts);
+    int const aiHint = EbNeuralLearning::get().prepare(playLayer, player, true, player1, effectTick,
+                                                       limit, controller.m_simDt, firstDt, opts);
     if (opts.hybridDelay > 0 || aiHint > 0)
         opts.mustDelaySearch = true;
     opts.shipLine = learnedContext.shipLine;
     opts.wavePattern = learnedContext.wavePattern;
+    opts.strictLiveRescue = liveMode && !opts.shipLine.enabled && !opts.wavePattern.enabled;
+    if (opts.strictLiveRescue)
+        opts.liveHorizonScale =
+            controller.m_liveHorizon.scale(static_cast<int>(kind), player1, true);
     if (opts.shipLine.enabled || opts.wavePattern.enabled)
         opts.smartDepth = 1;
     int const remainingFrameUs = frameScope.remaining(frameLimitUs);
@@ -303,7 +309,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // planSequence only when Smart Depth > 1 (New depth-1 exit-predict removed).
     if (!opts.shipLine.enabled && !opts.wavePattern.enabled && opts.hybridDelay >= 0)
         opts.smartDepth = std::max(opts.smartDepth, EbHybridLearning::get().lineupDepth);
-    bool useSequence = opts.smartDepth > 1;
+    bool useSequence = opts.smartDepth > 1 && !opts.strictLiveRescue;
 
     EbSimPlan plan{};
     bool scorerWon = false;
@@ -332,6 +338,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             EbNeuralLearning::get().noteArmed(delayValue, confidence);
         } else {
             plan.hybridTried = true;
+            if (opts.strictLiveRescue)
+                controller.m_liveHorizon.observe(static_cast<int>(kind), player1, true,
+                                                 plan.budgetHit, plan.planUs, opts.budgetUs);
             plan.hybridHint = opts.hybridDelay;
         }
         scorerWon = true;
@@ -344,7 +353,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     auto& neural = EbNeuralLearning::get();
     int const classicReserveUs = EbLivePlanContracts::novaAiClassicReserveUs(opts.budgetUs);
     int aiShellUs = EbLivePlanContracts::novaAiShellBudgetUs(opts.budgetUs);
-    aiShellUs = std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
+    aiShellUs =
+        std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
     int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
         !opts.wavePattern.enabled && !playLayer->m_gameState.m_isDualMode &&
@@ -393,8 +403,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         }
         if (pickDelay >= 0) {
             armFromVerify(pickDelay, true, pickConf);
-            EbAssistLog::info(fmt::format("AI-FIRST delay d={} ({:.0f}% sure)", pickDelay,
-                                          pickConf * 100.0f));
+            EbAssistLog::info(
+                fmt::format("AI-FIRST delay d={} ({:.0f}% sure)", pickDelay, pickConf * 100.0f));
         } else if (pickPass >= 0) {
             armFromVerify(0, true, pickPassConf);
             EbAssistLog::info(
@@ -505,10 +515,10 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         }
         // AP-NL2: Pass with buffering on ≡ Nova "in as made" (click as made).
         EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::AsMade, false);
-        EbAssistLog::debug(fmt::format("live-decision {} reason={}",
-                                       EbLiveStageParity::decisionLabel(
-                                           EbLiveStageParity::DecisionKind::AsMade),
-                                       EbAssistVerdict::name(passReason)));
+        EbAssistLog::debug(
+            fmt::format("live-decision {} reason={}",
+                        EbLiveStageParity::decisionLabel(EbLiveStageParity::DecisionKind::AsMade),
+                        EbAssistVerdict::name(passReason)));
         EbDevCycleRecorder::get().notePassThrough(passReason, "press-plan");
         controller.noteVerdict(passReason, "press-plan");
         controller.recordDecision(playLayer, player, true, plan, effectTick, 0, limit);
@@ -523,7 +533,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     int const plannedDelay = plan.delay;
     bool learningFloored = false;
     bool learningNudged = false;
-    if (EbStageConfig::autoTune() && profile.loaded()) {
+    if (!opts.strictLiveRescue && EbStageConfig::autoTune() && profile.loaded()) {
         if (auto const* spot = profile.trySpot(kind, x)) {
             int off = profile.preferredDelayOffset(kind, x);
             bool const bakePrefer =
@@ -580,7 +590,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // and budget-incomplete probes keep the planned delay.
     bool const flightCorr = plan.shipLineCorrection || plan.wavePatternCorrection;
     delay = flightCorr ? EbFlightAssistCombine::guardFlightDelay(delay, plannedDelay,
-                                                                plan.viableDelays, plan.budgetHit)
+                                                                 plan.viableDelays, plan.budgetHit)
                        : EbSelectedTickGuard::keepVerifiedLearningDelay(delay, plannedDelay,
                                                                         plan.viableDelays);
 
@@ -633,8 +643,7 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     controller.m_buffer.down = true;
     controller.m_buffer.firePhase = plan.firePhase;
     controller.m_buffer.shipLineOwned = opts.shipLine.enabled && plan.shipLineCorrection;
-    controller.m_buffer.wavePatternOwned =
-        opts.wavePattern.enabled && plan.wavePatternCorrection;
+    controller.m_buffer.wavePatternOwned = opts.wavePattern.enabled && plan.wavePatternCorrection;
     controller.m_buffer.fixedFireTick = plan.fixedFireTick;
     controller.m_buffer.planId = plan.planId;
     controller.m_buffer.player1 = player1;
@@ -709,8 +718,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         EbAssistRealMetrics::get().noteArm();
     // AP-NL2: Held(+N) + window legality (DR4 rescue / window metrics).
     {
-        bool const legal = EbLiveStageParity::windowLegal(
-            delay, limit, effectTick, controller.m_buffer.fireTick);
+        bool const legal =
+            EbLiveStageParity::windowLegal(delay, limit, effectTick, controller.m_buffer.fireTick);
         bool const verified = EbLiveStageParity::delayArmVerified(
             true, plan.budgetHit, plan.unknown || plan.toggleUnknown, false);
         EbAssistRealMetrics::get().noteLiveDecision(EbLiveStageParity::DecisionKind::Held, legal);
@@ -719,10 +728,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
                 "live-decision held legal={} verified={} delay={} fire={} limit={}", legal ? 1 : 0,
                 verified ? 1 : 0, delay, controller.m_buffer.fireTick, limit));
         } else {
-            EbAssistLog::debug(fmt::format("live-decision {} +{}",
-                                           EbLiveStageParity::decisionLabel(
-                                               EbLiveStageParity::DecisionKind::Held),
-                                           delay));
+            EbAssistLog::debug(fmt::format(
+                "live-decision {} +{}",
+                EbLiveStageParity::decisionLabel(EbLiveStageParity::DecisionKind::Held), delay));
         }
     }
     EbRealAssistRunner::get().notePress(delay, plan.planUs, plan.hybridTried);

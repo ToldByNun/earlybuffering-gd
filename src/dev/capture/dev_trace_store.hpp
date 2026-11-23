@@ -112,6 +112,8 @@ public:
     int adaptiveSeedCount = 0;
     int hybridHint = -1;
     bool hybridTried = false;
+    int liveObservationTicks = 0;
+    int sharedIdleTicksSaved = 0;
     int reusedCandidateCount = 0;
     int reusedCandidateTicks = 0;
     bool budgetHit = false;

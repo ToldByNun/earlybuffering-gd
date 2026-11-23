@@ -1,6 +1,7 @@
 #include "settings_import_ui_sync.hpp"
 #include "filtering/settings_filter_keeper_node.hpp"
 #include "filtering/settings_filter_walk.hpp"
+#include "settings_tabs_hook.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -12,7 +13,7 @@
 #include <vector>
 
 auto EbSettingsImportUiSync::syncNodesFromStore(geode::prelude::CCNode* root,
-                                              std::string const& ourId) -> void {
+                                                std::string const& ourId) -> void {
     if (!root)
         return;
     std::vector<geode::prelude::SettingNodeV3*> settings;
@@ -40,9 +41,8 @@ auto EbSettingsImportUiSync::syncNodesFromStore(geode::prelude::CCNode* root,
     }
 }
 
-auto EbSettingsImportUiSync::findOurSettingsPopup(geode::prelude::CCNode* scene,
-                                                std::string const& ourId)
-    -> geode::prelude::CCNode* {
+auto EbSettingsImportUiSync::findOurSettingsPopup(
+    geode::prelude::CCNode* scene, std::string const& ourId) -> geode::prelude::CCNode* {
     if (!scene)
         return nullptr;
     if (auto* keeper = EbSettingsFilterKeeperNode::findOpen()) {
@@ -51,7 +51,7 @@ auto EbSettingsImportUiSync::findOurSettingsPopup(geode::prelude::CCNode* scene,
     }
     for (auto* child : geode::prelude::CCArrayExt<geode::prelude::CCNode*>(scene->getChildren())) {
         auto* alert = geode::prelude::typeinfo_cast<FLAlertLayer*>(child);
-        if (!alert)
+        if (!alert || !EbSettingsPopupAttach::nodeTreeHasOurSetting(alert))
             continue;
         std::vector<geode::prelude::SettingNodeV3*> settings;
         geode::prelude::ScrollLayer* list = nullptr;

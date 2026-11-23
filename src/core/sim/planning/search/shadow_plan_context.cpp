@@ -127,6 +127,18 @@ EbShadowSimulator::RunResult EbShadowPlanContext::runEngine(PlayerObject* who, i
                             z, &tickBudget);
 }
 
+EbShadowSimulator::RunResult EbShadowPlanContext::runRestoredProbe(PlayerObject* who, int delay) {
+    if (tickBudget <= 0 || wallExceeded()) {
+        plan.budgetHit = true;
+        EbShadowSimulator::RunResult incomplete;
+        incomplete.unknown = true;
+        return incomplete;
+    }
+    auto result = runEngine(who, delay, -1, nullptr);
+    simulator.resetCaptureForNextRun(layer);
+    return result;
+}
+
 void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
                                         EbDevRejectLedger::EarlyExit early) {
     guardSelectedTick();

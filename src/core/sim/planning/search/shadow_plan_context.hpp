@@ -12,12 +12,13 @@
 // Per-call state shared by search phases. Capture cleanup remains scoped to run().
 class EbShadowPlanContext {
 public:
-    EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real, bool down,
-                      int limit, float deltaTime, float firstDt, EbPlanOptions const& options,
-                      EbSimPlan& plan);
+    EbShadowPlanContext(EbShadowSimulator& simulator, PlayLayer* layer, PlayerObject* real,
+                        bool down, int limit, float deltaTime, float firstDt,
+                        EbPlanOptions const& options, EbSimPlan& plan);
 
 private:
     friend class EbShadowPlanInputWindow;
+    friend class EbShadowLiveRescue;
     friend class EbShadowPlanThreatProbe;
     friend class EbShadowPlanForesight;
     friend class EbShadowPlanCandidateSearch;
@@ -31,7 +32,8 @@ private:
     int wallRemUs() const;
     bool linkedDual() const;
     EbShadowSimulator::RunResult runEngine(PlayerObject* who, int delay, int releaseAfter,
-                                         EbThreatZone const* zonePointer);
+                                           EbThreatZone const* zonePointer);
+    EbShadowSimulator::RunResult runRestoredProbe(PlayerObject* who, int delay);
     void publishLedger(int chosenDelay, bool doPassFlag, EbDevRejectLedger::EarlyExit early);
     EbSimulationCandidate evalDelay(int delayValue, int releaseAfter,
                                     bool probeOrbContinuation = false);

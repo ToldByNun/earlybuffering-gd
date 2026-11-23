@@ -1,6 +1,7 @@
 #include "in_level_settings_filter_keeper.hpp"
 #include "../in_level_settings_filter.hpp"
 #include "../settings_import_ui_sync.hpp"
+#include "../settings_tabs_hook.hpp"
 #include "../watchdog/settings_tab_watchdog.hpp"
 #include "settings_filter_keeper_node.hpp"
 #include <Geode/Geode.hpp>
@@ -13,7 +14,7 @@
 #include <string>
 
 void EbInLevelSettingsFilterKeeper::attach(geode::prelude::CCNode* popup) {
-    if (!popup)
+    if (!EbSettingsPopupAttach::nodeTreeHasOurSetting(popup))
         return;
     if (popup->getChildByID("earlybuffer-inlevel-settings-filter"_spr))
         return;

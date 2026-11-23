@@ -10,13 +10,13 @@
 #include "../core/bake/hybrid_verify_cache.hpp"
 #include "../core/bake/self_bake_recorder.hpp"
 #include "../core/diagnostics/assist_real_metrics.hpp"
-#include "../core/real_assist/real_assist_runner.hpp"
 #include "../core/diagnostics/divergence_tracker.hpp"
 #include "../core/diagnostics/ghost_parity_probe.hpp"
 #include "../core/learning/hybrid_learning.hpp"
 #include "../core/learning/level_profile.hpp"
 #include "../core/learning/neural_autoplay.hpp"
 #include "../core/learning/neural_learning.hpp"
+#include "../core/real_assist/real_assist_runner.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
 #include "../core/sim/world/shadow_world_capture.hpp"
@@ -203,6 +203,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     // Attach once before resetAttempt. resetAttempt re-attaches only if missing;
     // a second unconditional attach here caused detach→HardStreak::reset AVs.
     EbShadowSimulator::get().attach(playLayer);
+    controller.m_liveHorizon.reset();
     controller.resetAttempt(playLayer);
     EbStatusOverlay::attach(playLayer);
     EbLagWarningToast::get().attach(playLayer);

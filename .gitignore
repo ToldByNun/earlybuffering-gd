@@ -53,6 +53,10 @@ build-*/
 # Local History for Visual Studio Code
 .history/
 
+# Cursor / local agent scratch
+.cursor/
+agent-tools/
+
 # clangd
 .cache/
 
@@ -99,6 +103,12 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/
 /tools/*
 !/tools/fixtures/
+!/tools/test_settings_popup_policy.cpp
+!/tools/test_settings_popup_policy.hpp
+!/tools/test_settings_popup_policy.cpp
+!/tools/test_settings_popup_policy.hpp
+!/tools/test_live_rescue_policy.cpp
+!/tools/test_live_rescue_policy.hpp
 !/tools/test_recorded_misses_ap01.py
 /tools/fixtures/*
 !/tools/fixtures/recorded_misses_ap01.json
