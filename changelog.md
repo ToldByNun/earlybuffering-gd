@@ -2,6 +2,7 @@
 
 ## v1.8.1-dev
 
+- AI Live Budgets/Shell Nova-aligned: frame assist floor **4ms** (Nova slow-click); AI shell spends almost the whole frame wall with a thin classic leftover (400–800µs). Live AI no longer clamped by Autoplay `cpuBudgetUsPerTick` (~1.2ms).
 - Desktop **Hide From Stream** (UI tab, Windows): click-through layered HWND + `WDA_EXCLUDEFROMCAPTURE`. ImGui records to an FBO with `glBlendFuncSeparate` (no squared alpha / washed text), then the real SwapBuffers runs on FB0 so Game Capture sees the game — not only the UI.
 - AI-first + learning: discrete Adaptive half+ reserve left Shell=1 on ~3ms frames so AI never armed (`research_20261122_194245`). AI shell now keeps classic ≤2ms / half and always leaves ≥`minRem` for top-k verify; classic reserve restored after AI. Attempt-boundary train flush 32 + persist weights every 16 flushes; stronger Live Delay teacher / survived scales.
 - Live Stage-12 grasp: lookahead shrink now uses the **frame** soft wall (not the 8ms hitch ceiling). At 240Hz that wrongly crushed ticks 12→4 (`research_20261122_191833`). Frame assist slice floors at 3ms (Nova slow-click ~4ms).

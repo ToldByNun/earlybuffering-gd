@@ -15,7 +15,6 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
-#include "../../../learning/ai_config.hpp"
 #include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../real_assist/real_assist_runner.hpp"
@@ -67,11 +66,6 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
     // and still buffers — never starves classic fallthrough for an AI shell alone.
     int const pressBudgetUs =
         EbLivePlanContracts::resolveLivePressBudgetUs(EbStageConfig::simBudgetUs());
-    int aiCpuCapUs = 0;
-    if (EbNeuralLearning::active()) {
-        auto const& ai = EbAiConfig::get();
-        aiCpuCapUs = std::min({ai.maxAiCpuUsPerTick, ai.cpuBudgetUsPerTick, ai.searchTimeoutUs});
-    }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
     int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(pressBudgetUs);
@@ -343,16 +337,13 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         scorerWon = true;
     };
     // AI-first: score → top-k → verifyDelay → arm (never argmax-arm). Hybrid stays Hybrid-only.
-    // AI shell = up to half the press wall (and AI CPU cap) — Adaptive's discrete half+
-    // reserve left Shell=1 on ~3ms frames so AI never ran (research_20261122_194245).
+    // Nova InputBuffer: one planner spends almost the whole ~4ms frame wall; shrink
+    // lookahead under pressure; thin classic leftover if AI finds nothing. Do not
+    // clamp Live shell by Autoplay cpuBudgetUsPerTick (~1.2ms) — that starved vs Nova.
     // Prefer verified delay>0 over d=0 so cold ranks do not starve Delays.
     auto& neural = EbNeuralLearning::get();
-    int const classicReserveUs =
-        std::min(opts.budgetUs / 2, EbLivePlanContracts::kFallthroughRemUsFloor);
-    int aiShellUs =
-        EbLivePlanContracts::adaptiveShellBudgetUs(opts.budgetUs, classicReserveUs);
-    if (aiCpuCapUs > 0)
-        aiShellUs = std::min(aiShellUs, std::max(800, aiCpuCapUs));
+    int const classicReserveUs = EbLivePlanContracts::novaAiClassicReserveUs(opts.budgetUs);
+    int aiShellUs = EbLivePlanContracts::novaAiShellBudgetUs(opts.budgetUs);
     aiShellUs = std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
     int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&

@@ -127,6 +127,18 @@ int EbLivePlanContracts::adaptiveFallthroughReserveUs(int fullBudgetUs, bool dis
     return std::max(kFallthroughRemUsFloor, std::max(prepareFloor * 2, half));
 }
 
+int EbLivePlanContracts::novaAiClassicReserveUs(int fullBudgetUs) {
+    if (fullBudgetUs <= 0)
+        return 0;
+    // Thin leftover (~1/8, 400–800µs) — Nova keeps buffering on one wall instead
+    // of parking half the frame for classic (research: AI shell starved at 1.2ms).
+    return std::clamp(fullBudgetUs / 8, 400, 800);
+}
+
+int EbLivePlanContracts::novaAiShellBudgetUs(int fullBudgetUs) {
+    return adaptiveShellBudgetUs(fullBudgetUs, novaAiClassicReserveUs(fullBudgetUs));
+}
+
 bool EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(bool isBall) {
     return !isBall;
 }
@@ -532,6 +544,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(adaptiveShellBudgetUs(8170, kFallthroughRemUsFloor) == 6170, "ap-l5-shell-wall");
     expect(adaptiveShellBudgetUs(1500, kFallthroughRemUsFloor) == 1, "ap-l5-shell-tiny");
     expect(adaptiveShellBudgetUs(0, kFallthroughRemUsFloor) == 0, "ap-l5-shell-unlimited");
+    expect(novaAiClassicReserveUs(4000) == 500, "nova-ai-reserve-4ms");
+    expect(novaAiClassicReserveUs(8000) == 800, "nova-ai-reserve-cap");
+    expect(novaAiClassicReserveUs(2000) == 400, "nova-ai-reserve-floor");
+    expect(novaAiShellBudgetUs(4000) == 3500, "nova-ai-shell-4ms");
+    expect(novaAiShellBudgetUs(0) == 0, "nova-ai-shell-unlimited");
     expect(adaptiveFallthroughReserveUs(8170, false) == kFallthroughRemUsFloor,
            "ap-l5-ft-reserve-cont");
     expect(adaptiveFallthroughReserveUs(8170, true) == 4085, "ap-l5-ft-reserve-discrete");

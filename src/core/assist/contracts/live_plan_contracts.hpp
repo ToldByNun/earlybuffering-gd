@@ -78,6 +78,10 @@ public:
     // Continuous: kFallthroughRemUsFloor. Discrete IW (ball/cube): ≥ half budget
     // (Hoveropolis classic ball IW median ~3.8ms @ simUs=8170).
     static int adaptiveFallthroughReserveUs(int fullBudgetUs, bool discreteInputWindow);
+    // Nova InputBuffer Live AI: one planner spends almost the whole frame wall;
+    // classic keeps a thin leftover if AI finds nothing. Not Adaptive half/2ms.
+    static int novaAiClassicReserveUs(int fullBudgetUs);
+    static int novaAiShellBudgetUs(int fullBudgetUs);
     // Observation-cleared Alive seeds skip on ball — sticky PassD0Safe vs classic
     // stopAtBallLanding Delay ranking (Hoveropolis research_20261113_192707).
     static bool adaptiveFallthroughSeedsObservationCleared(bool isBall);

@@ -14,7 +14,6 @@
 #include "../../../diagnostics/sim_tick_cost_meter.hpp"
 #include "../../../learning/assist_learning.hpp"
 #include "../../../learning/hybrid_learning.hpp"
-#include "../../../learning/ai_config.hpp"
 #include "../../../learning/neural_learning.hpp"
 #include "../../../learning/level_profile.hpp"
 #include "../../../learning/spot_trust_map.hpp"
@@ -66,11 +65,6 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
 
     int const pressBudgetUs =
         EbLivePlanContracts::resolveLivePressBudgetUs(EbStageConfig::simBudgetUs());
-    int aiCpuCapUs = 0;
-    if (EbNeuralLearning::active()) {
-        auto const& ai = EbAiConfig::get();
-        aiCpuCapUs = std::min({ai.maxAiCpuUsPerTick, ai.cpuBudgetUsPerTick, ai.searchTimeoutUs});
-    }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
     int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(pressBudgetUs);
@@ -288,12 +282,9 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
         scorerWon = true;
     };
     auto& neural = EbNeuralLearning::get();
-    int const classicReserveUs =
-        std::min(opts.budgetUs / 2, EbLivePlanContracts::kFallthroughRemUsFloor);
-    int aiShellUs =
-        EbLivePlanContracts::adaptiveShellBudgetUs(opts.budgetUs, classicReserveUs);
-    if (aiCpuCapUs > 0)
-        aiShellUs = std::min(aiShellUs, std::max(800, aiCpuCapUs));
+    // Nova-aligned Live AI shell (see press planner) — not Autoplay cpuBudget cap.
+    int const classicReserveUs = EbLivePlanContracts::novaAiClassicReserveUs(opts.budgetUs);
+    int aiShellUs = EbLivePlanContracts::novaAiShellBudgetUs(opts.budgetUs);
     aiShellUs = std::max(aiShellUs, std::min(opts.budgetUs, EbNeuralLearning::minRemUsForAiFirst()));
     int aiSpendLeft = aiShellUs;
     if (EbNeuralLearning::active() && neural.preferAiFirst && !opts.shipLine.enabled &&
