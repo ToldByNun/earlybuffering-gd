@@ -356,7 +356,8 @@ public:
                                   shadowPlayer->m_isUpsideDown == initialGravity &&
                                   EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
             if (cubeLanding.observe(cubeJump,
-                                    shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2)) {
+                                    shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2,
+                                    model.landingAirTicks, model.landingContactTicks)) {
                 r.landedAfterAction = true;
                 return finish(r);
             }

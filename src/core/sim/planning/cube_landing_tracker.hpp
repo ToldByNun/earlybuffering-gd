@@ -3,7 +3,8 @@
 
 class EbCubeLandingTracker {
 public:
-    bool observe(bool validJump, bool grounded);
+    bool observe(bool validJump, bool grounded, int minimumAirTicks = 6,
+                 int stableContactTicks = 4);
 
 private:
     int m_airTicks = 0;

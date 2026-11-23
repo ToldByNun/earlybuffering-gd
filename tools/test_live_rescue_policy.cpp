@@ -122,6 +122,42 @@ int LiveRescueRegression::run() {
                 ++failures;
         }
     }
+    // Nova's safe-band choice: prefer a physically checked interior over a
+    // fragile first saving tick, while keeping isolated saves if no band exists.
+    for (int mask = 0; mask < (1 << 10); ++mask) {
+        EbLiveRescueSearch bandSearch(10, true);
+        std::vector<int> seen(11, 0);
+        for (int delay = bandSearch.nextDelay(); delay >= 0; delay = bandSearch.nextDelay()) {
+            expect(++seen[delay] == 1, "safe-band probes are memoized");
+            bool const survives = delay > 0 && (mask & (1 << (delay - 1)));
+            bandSearch.record(delay, survives ? safe : dead);
+        }
+        int const selected = bandSearch.selectedDelay();
+        expect(mask == 0 ? selected == -1 : selected > 0 && (mask & (1 << (selected - 1))),
+               "safe-band selection never invents a survivor");
+        auto const band = bandSearch.safeBand();
+        for (std::size_t i = 1; i < band.size(); ++i)
+            expect(band[i] == band[i - 1] + 1, "safe band cannot bridge holes");
+    }
+    EbLiveRescueSearch centered(8, true);
+    for (int delay = centered.nextDelay(); delay >= 0; delay = centered.nextDelay())
+        centered.record(delay, delay >= 2 && delay <= 6 ? safe : dead);
+    expect(centered.selectedDelay() == 4, "choose tested interior of broad saving band");
+    EbLiveRescueSearch sturdier(8, true);
+    for (int delay = sturdier.nextDelay(); delay >= 0; delay = sturdier.nextDelay())
+        sturdier.record(delay, delay == 1 || (delay >= 3 && delay <= 5) ? safe : dead);
+    expect(sturdier.selectedDelay() == 4, "prefer sturdy band over isolated earlier save");
+    EbLiveRescueSearch underPressure(8, true);
+    underPressure.record(0, dead);
+    underPressure.record(1, safe);
+    underPressure.reserveFallback();
+    expect(underPressure.nextDelay() == -1 && underPressure.selectedDelay() == 1,
+           "budget pressure keeps proved save without band expansion");
+    EbLiveRescueSearch truncatedBand(8, true);
+    truncatedBand.record(0, dead);
+    truncatedBand.record(1, safe);
+    truncatedBand.record(2, shallow);
+    expect(truncatedBand.selectedDelay() == 1, "unknown neighbor never moves the chosen tick");
     EbLiveRescueSearch interrupted(32);
     interrupted.record(0, EbLiveRescuePolicy::Observation::Dead);
     interrupted.record(1, EbLiveRescuePolicy::Observation::Dead);

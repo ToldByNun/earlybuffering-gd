@@ -33,6 +33,20 @@ int CubeLandingRegression::run() {
             }
         }
     }
+    // Match Nova's 240-TPS grounding boundary without accepting a residual
+    // starting contact, short hop, interrupted landing or invalidated jump.
+    for (int airborne = 0; airborne <= 18; ++airborne) {
+        for (int contact = 0; contact <= 8; ++contact) {
+            EbCubeLandingTracker tracker;
+            for (int tick = 0; tick < airborne; ++tick)
+                failures += tracker.observe(true, false, 15, 5);
+            bool landed = false;
+            for (int tick = 0; tick < contact; ++tick)
+                landed = tracker.observe(true, true, 15, 5);
+            failures += landed != (airborne >= 15 && contact >= 5);
+            ++cases;
+        }
+    }
     std::cout << cases << " landing sequences, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

@@ -1,6 +1,7 @@
 #include "cube_landing_tracker.hpp"
 
-bool EbCubeLandingTracker::observe(bool validJump, bool grounded) {
+bool EbCubeLandingTracker::observe(bool validJump, bool grounded, int minimumAirTicks,
+                                   int stableContactTicks) {
     if (!validJump) {
         m_airTicks = 0;
         m_groundTicks = 0;
@@ -11,10 +12,10 @@ bool EbCubeLandingTracker::observe(bool validJump, bool grounded) {
         m_groundTicks = 0;
         return false;
     }
-    if (m_airTicks < 6) {
+    if (m_airTicks < minimumAirTicks) {
         m_airTicks = 0;
         m_groundTicks = 0;
         return false;
     }
-    return ++m_groundTicks >= 4;
+    return ++m_groundTicks >= stableContactTicks;
 }

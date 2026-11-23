@@ -259,8 +259,7 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
                 shadowPlayer->m_isGoingLeft == real->m_isGoingLeft) {
                 auto const position = shadowPlayer->m_position;
                 EbShipLinePolicy::observe(model.shipLine, r.shipLine, position.x, position.y,
-                                          position.x - flightBefore.x,
-                                          position.y - flightBefore.y);
+                                          position.x - flightBefore.x, position.y - flightBefore.y);
             }
         }
         if (simulator.m_dead) {
@@ -294,8 +293,8 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
                               !shadowPlayer->m_isDashing &&
                               shadowPlayer->m_isUpsideDown == real->m_isUpsideDown &&
                               EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
-        if (cubeLanding.observe(cubeJump,
-                                shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2)) {
+        if (cubeLanding.observe(cubeJump, shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2,
+                                model.landingAirTicks, model.landingContactTicks)) {
             r.landedAfterAction = true;
             return finish(r);
         }

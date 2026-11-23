@@ -27,8 +27,14 @@ Normal **Live and AI** now use `liveRescue` for presses and eligible releases:
   permanently excludes a narrow window. Every selected delay must survive the same
   absolute observation horizon from the same captured world. Ball presses can instead
   complete at a proved flip: opposite gravity, airborne travel and eight consecutive
-  collision-checked grounded ticks. A later obstacle requiring another click belongs
+  collision-checked grounded ticks. Cube jumps can complete after 15 airborne and
+  five stable grounded ticks at 240 TPS (scaled with the simulation clock), with
+  no orb activation, dash, mode/gravity change or unknown toggle. A later obstacle requiring another click belongs
   to the next decision, rather than making this completed action hopeless.
+- After finding a safe boundary, inspect at most four additional ticks while the
+  shared budget permits. Choose the interior of the widest contiguous proved-safe
+  band; unknowns and failures split bands. Keep an isolated save if no sturdier
+  choice was proved. This never expands the configured assist window.
 - Short adaptive screens, unproved landings, hypothetical follow-up clicks/releases, and
   end-X scores cannot establish a rescue. Unknown or budget-truncated runs are unproved.
 - Keep the verified input tick fixed. Smart-depth reranking and learned delay offsets

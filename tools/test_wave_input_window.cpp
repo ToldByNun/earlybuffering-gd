@@ -14,7 +14,7 @@ static constexpr int kPostCapProveTicks = 8;
 // Replaying the recorded collision outcomes tests the live acceptance rule,
 // independently of Geode's rendering and the current level instance.
 int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon) {
-    EbLiveRescueSearch search(12);
+    EbLiveRescueSearch search(12, true);
     for (int delay = search.nextDelay(); delay >= 0; delay = search.nextDelay()) {
         int const deathTick = input.deathTicks[delay];
         bool const diedInWindow = deathTick < horizon;
@@ -36,11 +36,11 @@ int WaveInputWindowRegressionTests::run() {
     int const horizon = limit + cap + kPostCapProveTicks;
 
     // With the floor, short-horizon “survivors” that die before tick 32/40 are
-    // Pass (earliest-safe policy), not phase Delays. Retargeted expectedDelay.
+    // Pass (safe-band policy), not phase Delays. Retargeted expectedDelay.
     RecordedInput const inputs[] = {
         {88, {23, 23, 24, 25, 27, 28, 30, 31, 33, 35, 37, 39, 41}, -1},
         {114, {14, 14, 16, 18, 26, 29, 31, 35, 37, 38, 39, 40, 42}, -1},
-        {125, {5, 6, 7, 9, 11, 66, 67, 68, 69, 70, 71, 72, 73}, 5},
+        {125, {5, 6, 7, 9, 11, 66, 67, 68, 69, 70, 71, 72, 73}, 7},
         {134, {1, 1, 2, 3, 4, 6, 7, 9, 11, 12, 14, 16, 19}, -1},
         {151, {62, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 10, 10}, 0},
     };
@@ -88,14 +88,14 @@ int WaveInputWindowRegressionTests::run() {
         }
     }
 
-    // Dual assert: old short horizon still picked earliest-safe on 88/114 —
+    // Dual assert: old short horizon still found a safe band on 88/114 —
     // documents the AP3a policy change (floor rejects those phase Delays).
     int const legacyHorizon = limit + look;
-    if (chooseRecordedDelay(inputs[0], legacyHorizon) != 2) {
+    if (chooseRecordedDelay(inputs[0], legacyHorizon) != 4) {
         std::cerr << "legacy short-horizon policy drift on press 88\n";
         ++failures;
     }
-    if (chooseRecordedDelay(inputs[1], legacyHorizon) != 4) {
+    if (chooseRecordedDelay(inputs[1], legacyHorizon) != 6) {
         std::cerr << "legacy short-horizon policy drift on press 114\n";
         ++failures;
     }

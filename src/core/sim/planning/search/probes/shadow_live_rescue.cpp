@@ -19,10 +19,17 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     context.cands.resize(static_cast<std::size_t>(context.limit) + 1);
     context.candReady.assign(context.cands.size(), 0);
     // Every alternative starts from the same captured world, executes one input
-    // edge, and runs to the same horizon or completed Ball action. No hypothetical next click,
-    // release, early landing success, or shortened seed can prove a rescue.
+    // edge, and runs to the same horizon or completed grounded action. No
+    // hypothetical next click, release or shortened seed can prove a rescue.
     context.model.continuePastClear = true;
-    context.model.stopAtCubeLanding = false;
+    context.model.stopAtCubeLanding =
+        context.down && EbStageConfig::kindOf(context.real) == GameModeKind::Cube;
+    // Nova runner 0x18031F680: 15 airborne ticks, then >4 ticks after
+    // first contact at 240 TPS. Scale physical durations with the sim clock.
+    float const tickScale = 1.f / (240.f * context.deltaTime);
+    context.model.landingAirTicks = std::max(1, static_cast<int>(std::lround(15.f * tickScale)));
+    context.model.landingContactTicks =
+        std::max(2, static_cast<int>(std::lround(4.f * tickScale)) + 1);
     // Ball decisions end after a proved flip and stable landing. The next
     // obstacle requires a fresh user input and is a separate assist decision.
     context.model.stopAtBallLanding = context.down && context.real->m_isBall;
@@ -36,14 +43,15 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
             EbLiveHorizonController::scaledCap(context.model.cap, context.options.liveHorizonScale);
     int const horizon = context.limit + std::max(1, context.model.cap);
     plan.liveObservationTicks = horizon;
-    EbLiveRescueSearch search(context.limit);
+    EbLiveRescueSearch search(context.limit, true);
     EbIdlePrefixShare::Cursor prefix(context);
     bool const dual = context.linkedDual();
     auto classify = [&](EbShadowSimulator::RunResult const& result) {
         return EbLiveRescuePolicy::classify(
             result.died, result.unknown || result.unknownTrunc || result.toggleUnknown,
             result.diedBeforeAction, result.ticksRan, horizon,
-            context.model.stopAtBallLanding && result.landedAfterAction);
+            (context.model.stopAtBallLanding || context.model.stopAtCubeLanding) &&
+                result.landedAfterAction);
     };
     auto probe = [&](int delay, bool sharePrefix = true) {
         EbSimulationCandidate candidate;
@@ -161,8 +169,9 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
         plan.delay = plan.jumpTick = selected;
         plan.activatedRing = winner.activatedRing;
         plan.threatCleared = true;
-        plan.viableDelays = {selected};
-        plan.dMin = plan.dMax = selected;
+        plan.viableDelays = search.safeBand();
+        plan.dMin = plan.viableDelays.front();
+        plan.dMax = plan.viableDelays.back();
     } else if (incompleteSeen && plan.reason == AssistReason::PassHopeless) {
         plan.reason = AssistReason::PassUnknown;
         plan.unknown = true;

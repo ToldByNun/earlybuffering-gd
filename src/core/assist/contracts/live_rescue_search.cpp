@@ -1,8 +1,9 @@
 #include "live_rescue_search.hpp"
 #include <algorithm>
 
-EbLiveRescueSearch::EbLiveRescueSearch(int limit)
-    : m_limit(std::max(0, limit)), m_stride(std::clamp((m_limit + 7) / 8, 1, 4)),
+EbLiveRescueSearch::EbLiveRescueSearch(int limit, bool preferInterior)
+    : m_preferInterior(preferInterior), m_limit(std::max(0, limit)),
+      m_stride(std::clamp((m_limit + 7) / 8, 1, 4)),
       m_tested(static_cast<std::size_t>(m_limit) + 1, false),
       m_observations(m_tested.size(), EbLiveRescuePolicy::Observation::Incomplete) {}
 
@@ -17,6 +18,16 @@ int EbLiveRescueSearch::nextDelay() const {
         for (int delay = std::max(1, m_safe - m_stride + 1); delay < m_safe; ++delay) {
             if (!m_tested[static_cast<std::size_t>(delay)])
                 return delay;
+        }
+        // Nova searches a verified safe band rather than committing its first
+        // boundary tick. Bound the extra work and keep an existing proof when
+        // the shared wall is under pressure. Never infer safety across gaps.
+        if (m_preferInterior && !m_fallback) {
+            int const end = std::min(m_limit, m_safe + 4);
+            for (int delay = m_safe + 1; delay <= end; ++delay) {
+                if (!m_tested[static_cast<std::size_t>(delay)])
+                    return delay;
+            }
         }
         return -1;
     }
@@ -48,7 +59,30 @@ void EbLiveRescueSearch::record(int delay, EbLiveRescuePolicy::Observation obser
 }
 
 int EbLiveRescueSearch::selectedDelay() const {
-    return EbLiveRescuePolicy::choose(m_observations);
+    int const first = EbLiveRescuePolicy::choose(m_observations);
+    if (!m_preferInterior || first <= 0)
+        return first;
+    auto const band = safeBand();
+    if (band.empty())
+        return first;
+    return band[(band.size() - 1) / 2];
+}
+
+std::vector<int> EbLiveRescueSearch::safeBand() const {
+    std::vector<int> best;
+    std::vector<int> current;
+    for (int delay = 1; delay <= m_limit; ++delay) {
+        if (m_tested[static_cast<std::size_t>(delay)] &&
+            m_observations[static_cast<std::size_t>(delay)] ==
+                EbLiveRescuePolicy::Observation::Safe) {
+            current.push_back(delay);
+            if (current.size() > best.size())
+                best = current;
+        } else {
+            current.clear();
+        }
+    }
+    return best;
 }
 
 void EbLiveRescueSearch::reserveFallback() {

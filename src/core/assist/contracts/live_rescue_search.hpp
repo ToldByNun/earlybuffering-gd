@@ -5,13 +5,15 @@
 
 class EbLiveRescueSearch {
 public:
-    explicit EbLiveRescueSearch(int limit);
+    explicit EbLiveRescueSearch(int limit, bool preferInterior = false);
+    std::vector<int> safeBand() const;
     int nextDelay() const;
     void record(int delay, EbLiveRescuePolicy::Observation observation);
     int selectedDelay() const;
     void reserveFallback();
 
 private:
+    bool m_preferInterior;
     int m_limit;
     int m_stride;
     int m_safe = -1;

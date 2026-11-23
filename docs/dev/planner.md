@@ -18,10 +18,15 @@ fully checked d0, otherwise schedules coarse delay probes followed by local
 refinement, with exhaustive untested-tick fallback if no coarse survivor exists.
 Accepted probes reach the common absolute target fixed before d0, or complete a
 Ball flip through `EbBallLandingTracker` (gravity reversal, airborne phase and
-eight stable collision-checked contact ticks). Collision/unknown flags take
+eight stable collision-checked contact ticks), or a valid Cube jump with 15
+airborne/five contact ticks at 240 TPS. The Cube thresholds scale with sim dt;
+both independent and shared-prefix runners use them. Collision/unknown flags take
 precedence over a completion flag. This stops a later required Ball click from
 making all current delays appear hopeless. Results
 are cached only within this search; unknown/truncated probes are never safe.
+The production search additionally checks at most four ticks beyond its first
+safe boundary and selects an interior tick of the widest contiguous verified
+band. Budget pressure disables that expansion. See [Nova comparison](nova_assist_comparison.md).
 
 `EbLiveHorizonController` adapts automatic horizons between searches (0.85 on
 budget exhaustion, 1.03 recovery under half budget, 0.5..1 range). It preserves
