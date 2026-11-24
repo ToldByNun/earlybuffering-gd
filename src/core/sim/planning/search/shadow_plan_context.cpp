@@ -212,9 +212,10 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
                 note.detail += " conditional-spider-chain=true";
         }
 
-        note.detail += fmt::format(" ticks={} died={} deathTick={} unknown={} ballLanding={}",
-                                   run.ticksRan, run.died, run.deathTick,
-                                   run.unknown || run.unknownTrunc, run.landedAfterAction);
+        note.detail += fmt::format(
+            " ticks={} died={} deathTick={} unknown={} ballLanding={} jumped={} orb={} rings={}",
+            run.ticksRan, run.died, run.deathTick, run.unknown || run.unknownTrunc,
+            run.landedAfterAction, run.jumped, run.activatedRing, run.ringCount);
     }
     plan.candNotes = std::move(ledger.notes);
     plan.candNotesTruncated = ledger.truncated;

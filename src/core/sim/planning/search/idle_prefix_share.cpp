@@ -350,11 +350,13 @@ public:
                 return finish(r);
             }
 
-            bool const cubeJump = model.stopAtCubeLanding && acted && simulator.m_jumped &&
-                                  !simulator.m_activatedRing && !simulator.m_toggleUnknownHit &&
-                                  !shadowPlayer->m_isDashing &&
-                                  shadowPlayer->m_isUpsideDown == initialGravity &&
-                                  EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
+            bool const cubeJump =
+                model.stopAtCubeLanding && acted &&
+                EbCubeLandingTracker::validAction(
+                    simulator.m_jumped, simulator.m_activatedRing, model.allowOrbLanding,
+                    shadowPlayer->m_isUpsideDown == initialGravity, shadowPlayer->m_isDashing,
+                    simulator.m_toggleUnknownHit,
+                    EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube);
             if (cubeLanding.observe(cubeJump,
                                     shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2,
                                     model.landingAirTicks, model.landingContactTicks)) {

@@ -47,6 +47,28 @@ int CubeLandingRegression::run() {
             ++cases;
         }
     }
+    // Research 20261124_000327 contains Cube orb/gravity sequences with all
+    // alternatives rejected at a later obstacle. Ground completion was disabled
+    // solely by the ring flag, even for fully modeled, collision-checked flights.
+    failures += !EbCubeLandingTracker::validAction(false, true, true, false, false, false, true);
+    failures += !EbCubeLandingTracker::validAction(true, true, true, true, false, false, true);
+    failures += EbCubeLandingTracker::validAction(false, false, true, false, false, false, true);
+    failures += EbCubeLandingTracker::validAction(true, true, false, false, false, false, true);
+    failures += EbCubeLandingTracker::validAction(true, false, true, false, false, false, true);
+    failures += EbCubeLandingTracker::validAction(true, true, true, false, true, false, true);
+    failures += EbCubeLandingTracker::validAction(true, true, true, false, false, true, true);
+    failures += EbCubeLandingTracker::validAction(true, true, true, false, false, false, false);
+    EbCubeLandingTracker orbLanding;
+    bool const orbAction =
+        EbCubeLandingTracker::validAction(false, true, true, false, false, false, true);
+    // Orb contact alone is not success: require the whole airborne/contact proof.
+    for (int tick = 0; tick < 10; ++tick)
+        failures += orbLanding.observe(orbAction, true, 15, 5);
+    for (int tick = 0; tick < 15; ++tick)
+        failures += orbLanding.observe(orbAction, false, 15, 5);
+    for (int tick = 0; tick < 4; ++tick)
+        failures += orbLanding.observe(orbAction, true, 15, 5);
+    failures += !orbLanding.observe(orbAction, true, 15, 5);
     std::cout << cases << " landing sequences, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

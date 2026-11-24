@@ -446,6 +446,7 @@ public:
         bool continuous = false;
         bool tapRelease = false;
         bool stopAtCubeLanding = false;
+        bool allowOrbLanding = false;
         int landingAirTicks = 6;
         int landingContactTicks = 4;
         bool stopAtBallLanding = false;

@@ -24,6 +24,9 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     context.model.continuePastClear = true;
     context.model.stopAtCubeLanding =
         context.down && EbStageConfig::kindOf(context.real) == GameModeKind::Cube;
+    // An actually activated orb can complete a Cube flight too, including
+    // modeled gravity flips. A future orb opportunity is not an activation.
+    context.model.allowOrbLanding = context.model.stopAtCubeLanding;
     // Nova runner 0x18031F680: 15 airborne ticks, then >4 ticks after
     // first contact at 240 TPS. Scale physical durations with the sim clock.
     float const tickScale = 1.f / (240.f * context.deltaTime);

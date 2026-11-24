@@ -288,11 +288,13 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
             tick >= delay + releaseAfter && simulator.m_jumped)
             r.followupJumped = true;
 
-        bool const cubeJump = model.stopAtCubeLanding && acted && simulator.m_jumped &&
-                              !simulator.m_activatedRing && !simulator.m_toggleUnknownHit &&
-                              !shadowPlayer->m_isDashing &&
-                              shadowPlayer->m_isUpsideDown == real->m_isUpsideDown &&
-                              EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
+        bool const cubeJump =
+            model.stopAtCubeLanding && acted &&
+            EbCubeLandingTracker::validAction(
+                simulator.m_jumped, simulator.m_activatedRing, model.allowOrbLanding,
+                shadowPlayer->m_isUpsideDown == real->m_isUpsideDown, shadowPlayer->m_isDashing,
+                simulator.m_toggleUnknownHit,
+                EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube);
         if (cubeLanding.observe(cubeJump, shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2,
                                 model.landingAirTicks, model.landingContactTicks)) {
             r.landedAfterAction = true;

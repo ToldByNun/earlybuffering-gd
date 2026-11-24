@@ -29,7 +29,9 @@ Normal **Live and AI** now use `liveRescue` for presses and eligible releases:
   complete at a proved flip: opposite gravity, airborne travel and eight consecutive
   collision-checked grounded ticks. Cube jumps can complete after 15 airborne and
   five stable grounded ticks at 240 TPS (scaled with the simulation clock), with
-  no orb activation, dash, mode/gravity change or unknown toggle. A later obstacle requiring another click belongs
+  no dash, mode change or unknown toggle. Actually modeled orb activation can
+  complete the same airborne/landing proof even with a gravity flip; ordinary
+  jumps still require unchanged gravity. A later obstacle requiring another click belongs
   to the next decision, rather than making this completed action hopeless.
 - After finding a safe boundary, inspect at most four additional ticks while the
   shared budget permits. Choose the interior of the widest contiguous proved-safe
