@@ -73,6 +73,7 @@ bool EbStageConfigImplementation::s_cachedRobustJitter = false;
 bool EbStageConfigImplementation::s_cachedAdaptivePlan = true;
 bool EbStageConfigImplementation::s_cachedAssistProbePastHorizon = true;
 bool EbStageConfigImplementation::s_cachedAssistMicroWindow = true;
+bool EbStageConfigImplementation::s_cachedCpuMultithread = true;
 int EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = 24;
 int EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum = 16;
 int EbStageConfigImplementation::s_cachedAdaptiveReservePct = 15;
@@ -632,6 +633,10 @@ bool EbStageConfig::assistProbePastHorizon() {
 bool EbStageConfig::assistMicroWindow() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAssistMicroWindow;
+}
+bool EbStageConfig::cpuMultithread() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedCpuMultithread;
 }
 int EbStageConfig::adaptiveScreenTicks() {
     EbStageConfigImplementation::ensureCache();

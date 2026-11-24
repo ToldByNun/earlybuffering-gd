@@ -46,6 +46,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"adaptive-screen-ticks", SettingsCategory::Main},
         {"adaptive-verify-quantum", SettingsCategory::Main},
         {"adaptive-reserve-pct", SettingsCategory::Main},
+        {"cpu-multithread", SettingsCategory::Main},
 
         // Assist — where it runs + core algorithm
         {"title-scope", SettingsCategory::Assist},

@@ -73,6 +73,7 @@ public:
         if (EbSectionCard::begin("main-adaptive", "Adaptive Prediction")) {
             // Defaults / fallback when a mode's Adaptive Overwrite is off.
             EbCheckbox::drawSetting("adaptive-plan", "Adaptive Plan");
+            EbCheckbox::drawSetting("cpu-multithread", "CPU Multithread");
             EbCheckbox::drawSetting("assist-probe-past-horizon", "Probe Past Horizon");
             EbCheckbox::drawSetting("assist-micro-window", "Micro-Window Assist");
             EbSlider::drawIntSetting("adaptive-screen-ticks", "Screen Ticks", 8, 64);

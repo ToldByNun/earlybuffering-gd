@@ -93,6 +93,8 @@ void EbStageSettingsCache::refreshCache() {
         EbStageConfigImplementation::readBool(mod, "assist-probe-past-horizon", true);
     EbStageConfigImplementation::s_cachedAssistMicroWindow =
         EbStageConfigImplementation::readBool(mod, "assist-micro-window", true);
+    EbStageConfigImplementation::s_cachedCpuMultithread =
+        EbStageConfigImplementation::readBool(mod, "cpu-multithread", true);
     EbStageConfigImplementation::s_cachedAdaptiveScreenTicks =
         EbStageConfigImplementation::clampInt(
             EbStageConfigImplementation::readInt(mod, "adaptive-screen-ticks", 24), 8, 64);

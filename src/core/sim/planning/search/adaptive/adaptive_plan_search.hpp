@@ -31,10 +31,12 @@ private:
         bool used = false;
         bool earlyPass = false;
         bool gated = false;
+        bool cpuMt = false;
         int screened = 0;
         int survivors = 0;
         int verifyGrants = 0;
         int gatedDelay = -1; // ≥0 when Delay armed; 0 may also be PassD0Safe
+        int cpuWorkers = 0;
 
     private:
     };

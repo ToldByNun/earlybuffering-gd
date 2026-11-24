@@ -258,16 +258,17 @@ void EbDevTraceStore::setModVersion(std::string modVersion) {
 std::string EbDevTraceStore::makeSettingsFingerprint() {
     return fmt::format(
         "stage={} mode={} pick={} eng={} ticks={}/{} unit={} safe={} orbs={} "
-        "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={} ground={} "
+        "simUs={} tickBud={} cpuMt={} twBake={} twSkipDyn={} autoTune={} selfBake={} ground={} "
         "chain={}/{}/{}/{}/{}/{}/{}/{}",
         EbStageConfig::stageLabel(EbStageConfig::fromSettings()),
         EbStageConfig::assistModeName(EbStageConfig::assistMode()), EbStageConfig::assistPickName(),
         EbStageConfig::assistEngineName(), EbStageConfig::ticksAll(), EbStageConfig::ticksWave(),
         EbStageConfig::windowUnitFrames() ? "Frames" : "Ticks", EbStageConfig::safeMode() ? 1 : 0,
         EbStageConfig::assistOrbs() ? 1 : 0, EbStageConfig::simBudgetUs(),
-        EbStageConfig::tickBudgetPerPress(), EbStageConfig::triggerBake() ? 1 : 0,
-        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTuneEnabled() ? 1 : 0,
-        EbStageConfig::selfBake() ? 1 : 0, static_cast<int>(EbAssistPolicySettings::ground()),
+        EbStageConfig::tickBudgetPerPress(), EbStageConfig::cpuMultithread() ? 1 : 0,
+        EbStageConfig::triggerBake() ? 1 : 0, EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0,
+        EbStageConfig::autoTuneEnabled() ? 1 : 0, EbStageConfig::selfBake() ? 1 : 0,
+        static_cast<int>(EbAssistPolicySettings::ground()),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Cube)),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ship)),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ball)),

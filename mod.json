@@ -180,6 +180,12 @@
 			"description": "AP3c: when Max Assist is tiny (≤8 ticks / ~2 frames), still prefer a later Alive delay with any endX lead over sticky Pass-now. On = helps 1–2 frame cube windows. Off = previous large-lead-only / PassD0Safe behavior for small windows.",
 			"default": true
 		},
+		"cpu-multithread": {
+			"type": "bool",
+			"name": "CPU Multithread",
+			"description": "Screen Adaptive delay candidates on multiple CPU cores with a lightweight GD-physics clone (no ShadowPlayer / Cocos overhead). Any survivor is verified once on the main thread against real ShadowPlayers before arming. Off = serial Shadow screen only. Default on; falls back to Shadow screen when the fast path finds nothing or hits unknowns.",
+			"default": true
+		},
 		"title-scope": {
 			"type": "title",
 			"name": "Where Assist Runs",

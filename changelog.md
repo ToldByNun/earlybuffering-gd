@@ -2,6 +2,7 @@
 
 ## v1.8.1-dev
 
+- **CPU Multithread** (Main → Adaptive, default on): Adaptive Phase A/B screens delay candidates on multiple CPU cores with a lightweight GD-physics clone (frozen hitboxes, no ShadowPlayer/Cocos). Survivors are still verified once on the main thread against real ShadowPlayers before arming; empty/unknown screens fall back to serial Shadow. Overlay shows `mtN` worker count.
 - AI Live Budgets/Shell Nova-aligned: frame assist floor **4ms** (Nova slow-click); AI shell spends almost the whole frame wall with a thin classic leftover (400–800µs). Live AI no longer clamped by Autoplay `cpuBudgetUsPerTick` (~1.2ms).
 - Desktop **Hide From Stream** (UI tab, Windows): click-through layered HWND + `WDA_EXCLUDEFROMCAPTURE`. ImGui records to an FBO with `glBlendFuncSeparate` (no squared alpha / washed text), then the real SwapBuffers runs on FB0 so Game Capture sees the game — not only the UI.
 - AI-first + learning: discrete Adaptive half+ reserve left Shell=1 on ~3ms frames so AI never armed (`research_20261122_194245`). AI shell now keeps classic ≤2ms / half and always leaves ≥`minRem` for top-k verify; classic reserve restored after AI. Attempt-boundary train flush 32 + persist weights every 16 flushes; stronger Live Delay teacher / survived scales.

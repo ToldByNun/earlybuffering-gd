@@ -262,6 +262,7 @@ void EbModuleBindings::registerSettings() {
     watchBool("adaptive-plan");
     watchBool("assist-probe-past-horizon");
     watchBool("assist-micro-window");
+    watchBool("cpu-multithread");
     watchInt("adaptive-screen-ticks");
     watchInt("adaptive-verify-quantum");
     watchInt("adaptive-reserve-pct");
