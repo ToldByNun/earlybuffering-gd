@@ -247,7 +247,8 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                                   envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen))
                        : EbStageConfig::adaptiveScreenTicksFor(real));
             if (EbCpuPhysicsAdaptive::tryScreen(layer, real, down, limit, deltaTime, useFirstDt,
-                                                screenQuantum, -1, slots, cpuOutcome)) {
+                                                screenQuantum, -1, simulator.m_simTickBase, slots,
+                                                cpuOutcome)) {
                 cpuScreened = true;
                 screened = cpuOutcome.screened;
                 survivors = cpuOutcome.survivors;

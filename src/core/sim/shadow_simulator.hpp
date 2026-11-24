@@ -514,6 +514,7 @@ private:
     friend class EbShadowReplayRunner;
     friend class EbShadowFreezeEvaluator;
     friend class EbShadowRegressionChecks;
+    friend class EbCpuPhysicsWorkers;
 
     class SavedObject {
     public:

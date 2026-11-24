@@ -31,7 +31,8 @@ public:
     // False → caller must use the normal Shadow screen path.
     static bool tryScreen(PlayLayer* layer, PlayerObject* real, bool down, int limit,
                           float deltaTime, float firstDt, int quantumTicks, int releaseAfter,
-                          std::vector<EbAdaptiveCandidateSlot>& slots, ScreenOutcome& outcome);
+                          int baseAbsTick, std::vector<EbAdaptiveCandidateSlot>& slots,
+                          ScreenOutcome& outcome);
 
     static bool selfCheck(std::string& report);
 

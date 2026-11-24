@@ -1,88 +1,77 @@
 #include "cpu_physics_world.hpp"
-#include "../../../config/stage_config.hpp"
 #include "../../level/section_object_walk.hpp"
 #include "../../learning/neural_hitbox.hpp"
+#include "../../trigger_world/trigger_world_store.hpp"
 #include "../foresight/travel_foresight.hpp"
 #include "../sim_collision_policy.hpp"
+#include "cpu_physics_seed.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <cmath>
 #include <fmt/format.h>
 
-static std::uint8_t boostClass(GameObjectType type) {
-    switch (type) {
-    case GameObjectType::YellowJumpPad:
-    case GameObjectType::YellowJumpRing:
-        return 0;
-    case GameObjectType::PinkJumpPad:
-    case GameObjectType::PinkJumpRing:
-        return 1;
-    case GameObjectType::RedJumpPad:
-    case GameObjectType::RedJumpRing:
-        return 2;
-    case GameObjectType::GravityPad:
-    case GameObjectType::GravityRing:
-    case GameObjectType::GreenRing:
-        return 3;
-    default:
-        return 4;
-    }
-}
+static void fillTwSamples(EbCpuPhysicsBody& body, int uniqueId, int baseAbsTick, int horizon,
+                          float simDt, float baseX, float baseY, float baseW, float baseH) {
+    body.twSamples = 0;
+    if (uniqueId == 0 || horizon <= 0)
+        return;
+    auto& store = EbTriggerWorldStore::get();
+    if (!store.loaded() || !store.findTrack(uniqueId))
+        return;
 
-static std::uint8_t bodyKind(GameObjectType type) {
-    if (EbTravelForesight::isPadLike(type))
-        return 2;
-    if (EbTravelForesight::isOrbLike(type))
-        return 3;
-    switch (type) {
-    case GameObjectType::Hazard:
-    case GameObjectType::AnimatedHazard:
-        return 1;
-    default:
-        return 0;
+    int const steps = std::clamp(horizon, 1, EbCpuPhysicsBody::kMaxTwSamples);
+    int filled = 0;
+    for (int index = 0; index < steps; ++index) {
+        int const tickOff =
+            steps == 1 ? 0 : (index * std::max(1, horizon - 1)) / std::max(1, steps - 1);
+        EbTriggerPose pose;
+        bool const ok = store.samplePose(uniqueId, baseAbsTick + tickOff, simDt, pose);
+        body.twTick[filled] = static_cast<std::int16_t>(tickOff);
+        if (ok && pose.active) {
+            float const sx = std::max(0.05f, std::fabs(pose.scaleX));
+            float const sy = std::max(0.05f, std::fabs(pose.scaleY));
+            float const w = baseW * sx;
+            float const h = baseH * sy;
+            body.twX[filled] = pose.x - w * 0.5f;
+            body.twY[filled] = pose.y - h * 0.5f;
+            body.twW[filled] = w;
+            body.twH[filled] = h;
+        } else if (filled == 0) {
+            body.twX[filled] = baseX;
+            body.twY[filled] = baseY;
+            body.twW[filled] = baseW;
+            body.twH[filled] = baseH;
+        } else {
+            body.twX[filled] = body.twX[filled - 1];
+            body.twY[filled] = body.twY[filled - 1];
+            body.twW[filled] = body.twW[filled - 1];
+            body.twH[filled] = body.twH[filled - 1];
+        }
+        ++filled;
     }
+    body.twSamples = filled;
 }
 
 EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObject* real,
-                                                    float aheadX, float yReach, float behindX) {
+                                                    Options const& options) {
     EbCpuPhysicsWorld world;
     if (!layer || !real)
         return world;
 
-    auto const playerBox = EbNeuralHitbox::readPlayer(real);
-    if (!playerBox.valid)
+    world.seed = EbCpuPhysicsSeedIo::capture(real);
+    if (!world.seed.valid)
         return world;
 
-    world.player.x = playerBox.aabbX;
-    world.player.y = playerBox.aabbY;
-    world.player.w = playerBox.aabbW;
-    world.player.h = playerBox.aabbH;
-    world.player.yVel = static_cast<float>(real->m_yVelocity);
-    world.player.gravity =
-        std::isfinite(real->m_gravity) && real->m_gravity > 0.01f ? real->m_gravity : 0.958972f;
-    world.player.gravityMod =
-        std::isfinite(real->m_gravityMod) ? real->m_gravityMod : 1.f;
-    world.player.playerSpeed =
-        std::isfinite(real->m_playerSpeed) && real->m_playerSpeed > 0.05f ? real->m_playerSpeed
-                                                                         : 1.f;
-    world.player.vehicleSize =
-        std::isfinite(real->m_vehicleSize) && real->m_vehicleSize > 0.05f ? real->m_vehicleSize
-                                                                         : 1.f;
-    world.player.upsideDown = real->m_isUpsideDown;
-    world.player.grounded = real->m_isOnGround || real->m_isOnGround2;
-    world.player.holdingJump =
-        real->m_holdingButtons[static_cast<int>(PlayerButton::Jump)];
-    world.player.mode = static_cast<int>(EbStageConfig::kindOf(real));
-    world.player.continuous = real->m_isShip || real->m_isDart || real->m_isSwing || real->m_isBird;
-    world.player.tapRelease = real->m_isRobot || (!world.player.continuous && !real->m_isBall &&
-                                                  !real->m_isSpider);
+    world.horizonTicks = std::max(1, options.horizonTicks);
+    world.simDt = options.simDt > 0.f ? options.simDt : (1.f / 240.f);
+    world.baseAbsTick = std::max(0, options.baseAbsTick);
 
     float const px = real->getPositionX();
     float const py = real->getPositionY();
-    float const x0 = px - std::max(0.f, behindX);
-    float const x1 = px + std::max(40.f, aheadX);
-    float const y0 = py - std::max(40.f, yReach);
-    float const y1 = py + std::max(40.f, yReach);
+    float const x0 = px - std::max(0.f, options.behindX);
+    float const x1 = px + std::max(40.f, options.aheadX);
+    float const y0 = py - std::max(40.f, options.yReach);
+    float const y1 = py + std::max(40.f, options.yReach);
 
     world.bodies.reserve(256);
     world.floorY = py - 240.f;
@@ -94,19 +83,15 @@ EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObje
         auto const type = object->m_objectType;
         auto const action =
             EbSimCollisionPolicy::classifyObjectType(static_cast<int>(type), object->m_objectID);
-        if (action == SimObjectAction::Skip || action == SimObjectAction::UnknownOnOverlap)
+        if (action == SimObjectAction::Skip)
             return;
-        // Mode portals mid-screen are not modeled — Adaptive falls back to Shadow.
+        // Hard unknowns (dual/solo) — skip so we don't invent outcomes; Adaptive
+        // still Shadow-verifies survivors.
+        if (action == SimObjectAction::UnknownOnOverlap)
+            return;
         switch (type) {
-        case GameObjectType::ShipPortal:
-        case GameObjectType::CubePortal:
-        case GameObjectType::BallPortal:
-        case GameObjectType::UfoPortal:
-        case GameObjectType::WavePortal:
-        case GameObjectType::RobotPortal:
-        case GameObjectType::SpiderPortal:
-        case GameObjectType::SwingPortal:
         case GameObjectType::TeleportPortal:
+        case GameObjectType::TeleportOrb:
         case GameObjectType::DualPortal:
         case GameObjectType::SoloPortal:
             return;
@@ -123,15 +108,31 @@ EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObje
             return;
 
         EbCpuPhysicsBody body;
+        body.object = object;
         body.x = box.aabbX;
         body.y = box.aabbY;
         body.w = box.aabbW;
         body.h = box.aabbH;
-        body.kind = bodyKind(type);
-        body.boost = boostClass(type);
+        body.uniqueId = object->m_uniqueID;
+        body.objectType = static_cast<int>(type);
+        body.isHazard = type == GameObjectType::Hazard || type == GameObjectType::AnimatedHazard;
+        body.isRing = EbTravelForesight::isOrbLike(type);
+        body.isPad = EbTravelForesight::isPadLike(type);
+        body.savedIsActivated = object->m_isActivated;
+        if (auto* enhanced = geode::prelude::typeinfo_cast<EnhancedGameObject*>(object)) {
+            body.savedActivated = enhanced->m_activated;
+            body.savedPoweredOn = enhanced->m_poweredOn;
+            body.savedP1 = enhanced->m_activatedByPlayer1;
+            body.savedP2 = enhanced->m_activatedByPlayer2;
+        }
+        if (auto* ring = geode::prelude::typeinfo_cast<RingObject*>(object))
+            body.savedClaimTouch = ring->m_claimTouch;
+
+        fillTwSamples(body, body.uniqueId, world.baseAbsTick, world.horizonTicks, world.simDt,
+                      body.x, body.y, body.w, body.h);
         world.bodies.push_back(body);
 
-        if (body.kind == 0) {
+        if (!body.isHazard && !body.isRing && !body.isPad) {
             world.floorY = std::min(world.floorY, body.y - 4.f);
             world.ceilY = std::max(world.ceilY, body.y + body.h + 4.f);
         }
@@ -143,29 +144,16 @@ EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObje
 
 bool EbCpuPhysicsWorldCapture::selfCheck(std::string& report) {
     report.clear();
-    int fails = 0;
-    auto expect = [&](bool ok, char const* label) {
-        if (ok)
-            return;
-        ++fails;
-        if (!report.empty())
-            report += ", ";
-        report += label;
-    };
-
-    expect(bodyKind(GameObjectType::Hazard) == 1, "hazard-kind");
-    expect(bodyKind(GameObjectType::Solid) == 0, "solid-kind");
-    expect(bodyKind(GameObjectType::YellowJumpPad) == 2, "pad-kind");
-    expect(bodyKind(GameObjectType::YellowJumpRing) == 3, "orb-kind");
-    expect(boostClass(GameObjectType::RedJumpRing) == 2, "red-boost");
-
     EbCpuPhysicsWorld empty;
-    expect(!empty.valid, "empty-invalid");
-
-    if (fails == 0) {
-        report = "CpuPhysicsWorld selfCheck OK";
-        return true;
+    if (empty.valid) {
+        report = "CpuPhysicsWorld selfCheck fails: empty-valid";
+        return false;
     }
-    report = fmt::format("CpuPhysicsWorld selfCheck {} fails: {}", fails, report);
-    return false;
+    std::string seedReport;
+    if (!EbCpuPhysicsSeedIo::selfCheck(seedReport)) {
+        report = seedReport;
+        return false;
+    }
+    report = "CpuPhysicsWorld selfCheck OK";
+    return true;
 }

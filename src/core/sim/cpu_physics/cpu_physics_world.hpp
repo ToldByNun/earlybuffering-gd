@@ -9,10 +9,21 @@ class PlayerObject;
 
 class EbCpuPhysicsWorldCapture {
 public:
-    // Freeze player kinematics + nearby Include solids/hazards/pads/orbs (main thread).
-    // aheadX / yReach bound the capture window; empty → invalid world.
-    static EbCpuPhysicsWorld capture(PlayLayer* layer, PlayerObject* real, float aheadX,
-                                     float yReach, float behindX = 40.f);
+    class Options {
+    public:
+        float aheadX = 120.f;
+        float yReach = 120.f;
+        float behindX = 40.f;
+        int horizonTicks = 48;
+        int baseAbsTick = 0;
+        float simDt = 1.f / 240.f;
+
+    private:
+    };
+
+    // Freeze seed + nearby GameObject bodies (with TW AABB keyframes). Main thread.
+    static EbCpuPhysicsWorld capture(PlayLayer* layer, PlayerObject* real,
+                                     Options const& options);
 
     static bool selfCheck(std::string& report);
 

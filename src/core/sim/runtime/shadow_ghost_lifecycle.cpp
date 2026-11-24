@@ -1,4 +1,5 @@
 #include "shadow_ghost_lifecycle.hpp"
+#include "../cpu_physics/cpu_physics_workers.hpp"
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 #include "../world/shadow_world_capture.hpp"
@@ -94,6 +95,7 @@ void EbShadowGhostLifecycle::attach(EbShadowSimulator& simulator, PlayLayer* lay
 }
 
 void EbShadowGhostLifecycle::detach(EbShadowSimulator& simulator, bool layerDying) {
+    EbCpuPhysicsWorkers::clear();
     // Never leave the sim flag set — quit can interrupt a traj rebuild mid-capture.
     simulator.m_simulating = false;
     simulator.m_bakeOffline = false;
@@ -204,6 +206,12 @@ bool EbShadowGhostLifecycle::isOwnedGhost(EbShadowSimulator const& simulator, Pl
     }
     for (auto* entry : simulator.m_evalGhosts) {
         if (player == entry)
+            return true;
+    }
+    if (player == EbCpuPhysicsWorkers::templateGhost())
+        return true;
+    for (auto* worker : EbCpuPhysicsWorkers::ghosts()) {
+        if (player == worker)
             return true;
     }
     return false;

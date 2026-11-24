@@ -5,11 +5,16 @@
 #include <string>
 #include <vector>
 
-// Parallel delay screening over a frozen world (hardware_concurrency workers).
+class PlayLayer;
+class PlayerObject;
+
+// Parallel delay screening: real PlayerObject::update + GD collide on worker ghosts.
 class EbCpuPhysicsPool {
 public:
     class ScreenRequest {
     public:
+        PlayLayer* layer = nullptr;
+        PlayerObject* real = nullptr;
         EbCpuPhysicsWorld const* world = nullptr;
         bool down = true;
         int limit = 0;

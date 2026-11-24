@@ -1,27 +1,42 @@
 #include "cpu_physics_adaptive.hpp"
 #include "../foresight/travel_foresight.hpp"
 #include "cpu_physics_pool.hpp"
-#include "cpu_physics_sim.hpp"
+#include "cpu_physics_workers.hpp"
 #include "cpu_physics_world.hpp"
+#include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
 
 bool EbCpuPhysicsAdaptive::tryScreen(PlayLayer* layer, PlayerObject* real, bool down, int limit,
                                      float deltaTime, float firstDt, int quantumTicks,
-                                     int releaseAfter, std::vector<EbAdaptiveCandidateSlot>& slots,
+                                     int releaseAfter, int baseAbsTick,
+                                     std::vector<EbAdaptiveCandidateSlot>& slots,
                                      ScreenOutcome& outcome) {
     outcome = {};
     if (!layer || !real || limit < 0 || quantumTicks <= 0)
+        return false;
+    if (!EbCpuPhysicsWorkers::ensure(layer))
         return false;
 
     auto const t0 = std::chrono::steady_clock::now();
     float const ahead = EbTravelForesight::aheadX(real, limit, deltaTime, 8);
     float const yReach = EbTravelForesight::yReachForPlayer(real) + 40.f;
-    auto world = EbCpuPhysicsWorldCapture::capture(layer, real, ahead, yReach);
+
+    EbCpuPhysicsWorldCapture::Options captureOpts;
+    captureOpts.aheadX = ahead;
+    captureOpts.yReach = yReach;
+    captureOpts.behindX = 40.f;
+    captureOpts.horizonTicks = std::max(quantumTicks, limit + quantumTicks);
+    captureOpts.baseAbsTick = std::max(0, baseAbsTick);
+    captureOpts.simDt = deltaTime;
+
+    auto world = EbCpuPhysicsWorldCapture::capture(layer, real, captureOpts);
     if (!world.valid)
         return false;
 
     EbCpuPhysicsPool::ScreenRequest req;
+    req.layer = layer;
+    req.real = real;
     req.world = &world;
     req.down = down;
     req.limit = limit;
@@ -59,7 +74,6 @@ bool EbCpuPhysicsAdaptive::tryScreen(PlayLayer* layer, PlayerObject* real, bool 
         mapped.diedBeforeAction = raw.diedBeforeAction;
         mapped.ticksBeforeNeutral = raw.ticksRan;
 
-        // No Shadow checkpoint — Phase C rebuilds on the main-thread ghost.
         slot.applyQuantumResult(mapped, -1, raw.ticksRan, -1, delay == 0 || raw.ticksRan > delay,
                                 false, down, false);
         slot.screened = true;
@@ -74,7 +88,6 @@ bool EbCpuPhysicsAdaptive::tryScreen(PlayLayer* layer, PlayerObject* real, bool 
     outcome.screened = screened;
     outcome.survivors = survivors;
 
-    // Zero survivors → fall back so we never PassHopeless from POD alone.
     if (survivors <= 0) {
         outcome.fellBack = true;
         return false;
@@ -86,10 +99,6 @@ bool EbCpuPhysicsAdaptive::selfCheck(std::string& report) {
     report.clear();
     std::string nested;
     if (!EbCpuPhysicsWorldCapture::selfCheck(nested)) {
-        report = nested;
-        return false;
-    }
-    if (!EbCpuPhysicsSim::selfCheck(nested)) {
         report = nested;
         return false;
     }
