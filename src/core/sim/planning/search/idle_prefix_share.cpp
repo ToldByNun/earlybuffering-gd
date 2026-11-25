@@ -69,7 +69,7 @@ public:
         std::vector<EbShadowSimulator::SavedObject> saved;
         std::vector<LiveObjectFlags> live;
         std::vector<TransformPose> transforms;
-        gd::map<std::pair<int, int>, int> activatedIDs;
+        std::map<std::pair<int, int>, int> activatedIDs;
         ToggleMidState toggle;
         int simAbsTick = -1;
         bool activatedRing = false;

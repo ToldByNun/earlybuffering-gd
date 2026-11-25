@@ -400,6 +400,9 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
             } else if (pickDelay < 0) {
                 pickDelay = delayValue;
                 pickConf = confidence;
+                // The first verified positive delay wins. Further full Shadow
+                // verifies cannot change this choice and only stall the click.
+                break;
             }
         }
         if (pickDelay >= 0) {

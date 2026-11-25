@@ -257,7 +257,8 @@ void EbCpuPhysicsSeedIo::reseedFrom(PlayerObject* destination, PlayerObject* tem
     destination->m_isCurrentSlopeTop = templateGhost->m_isCurrentSlopeTop;
     destination->m_maybeUpsideDownSlope = templateGhost->m_maybeUpsideDownSlope;
     destination->m_maybeSlopeForce = templateGhost->m_maybeSlopeForce;
-    destination->m_maybeGoingCorrectSlopeDirection = templateGhost->m_maybeGoingCorrectSlopeDirection;
+    destination->m_maybeGoingCorrectSlopeDirection =
+        templateGhost->m_maybeGoingCorrectSlopeDirection;
 
     destination->m_wasJumpBuffered = templateGhost->m_wasJumpBuffered;
     destination->m_wasRobotJump = templateGhost->m_wasRobotJump;
@@ -271,8 +272,8 @@ void EbCpuPhysicsSeedIo::reseedFrom(PlayerObject* destination, PlayerObject* tem
     destination->m_touchedPad = templateGhost->m_touchedPad;
     destination->m_padRingRelated = templateGhost->m_padRingRelated;
     destination->m_ringJumpRelated = templateGhost->m_ringJumpRelated;
-    destination->m_ringRelatedSet = templateGhost->m_ringRelatedSet;
-    destination->m_jumpPadRelated = templateGhost->m_jumpPadRelated;
+    destination->m_usedRings = templateGhost->m_usedRings;
+    destination->m_touchedForceIds = templateGhost->m_touchedForceIds;
     destination->m_blackOrbRelated = templateGhost->m_blackOrbRelated;
     destination->m_hasEverJumped = templateGhost->m_hasEverJumped;
     destination->m_hasEverHitRing = templateGhost->m_hasEverHitRing;
@@ -281,10 +282,7 @@ void EbCpuPhysicsSeedIo::reseedFrom(PlayerObject* destination, PlayerObject* tem
     destination->m_touchedRings = templateGhost->m_touchedRings;
 
     destination->m_stateOnGround = templateGhost->m_stateOnGround;
-    destination->m_stateUnk = templateGhost->m_stateUnk;
-    destination->m_stateNoStickX = templateGhost->m_stateNoStickX;
-    destination->m_stateNoStickY = templateGhost->m_stateNoStickY;
-    destination->m_stateUnk2 = templateGhost->m_stateUnk2;
+    destination->m_unusedFloatA80 = templateGhost->m_unusedFloatA80;
     destination->m_stateBoostX = templateGhost->m_stateBoostX;
     destination->m_stateBoostY = templateGhost->m_stateBoostY;
     destination->m_maybeStateForce2 = templateGhost->m_maybeStateForce2;

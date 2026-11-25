@@ -1,11 +1,12 @@
-#include "../../app/class_manager.hpp"
 #include "save_feedback.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
 #include "../../debug/perf_trace.hpp"
 #include "save_frame_counter.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 
 EbSaveFeedback& EbSaveFeedback::get() {
     return EbClassManager::get().service<EbSaveFeedback>();
@@ -48,14 +49,14 @@ std::filesystem::path EbSaveFeedback::cuePathFor(std::string const& file) {
     if (!mod)
         return {};
 
-    auto const id = mod->getID();
+    std::string const id = mod->getID();
     // Geode packs resources/cues/*.mp3 as resources/<mod-id>/<file>
     std::filesystem::path candidates[] = {
-        mod->getResourcesDir() / file,
-        mod->getResourcesDir() / id / file,
-        mod->getResourcesDir() / "cues" / file,
-        mod->getPackagePath().parent_path() / "resources" / id / file,
-        mod->getPackagePath().parent_path() / "resources" / "cues" / file,
+        mod->getResourcesDir().toStdPath().unwrap() / file,
+        mod->getResourcesDir().toStdPath().unwrap() / id / file,
+        mod->getResourcesDir().toStdPath().unwrap() / "cues" / file,
+        mod->getPackagePath().toStdPath().unwrap().parent_path() / "resources" / id / file,
+        mod->getPackagePath().toStdPath().unwrap().parent_path() / "resources" / "cues" / file,
     };
     for (auto const& p : candidates) {
         std::error_code ec;
@@ -96,8 +97,8 @@ void EbSaveFeedback::playSound(int delayTicks) {
     // Last resort: spr-style relative name even if we couldn't stat the file yet
     // (unzipped path can lag one frame after install).
     eng->playEffect(sprName);
-    EbAssistLog::debug(fmt::format("save cue +{} via spr '{}' (resourcesDir={})", delayTicks, sprName,
-                                 mod->getResourcesDir()));
+    EbAssistLog::debug(fmt::format("save cue +{} via spr '{}' (resourcesDir={})", delayTicks,
+                                   sprName, mod->getResourcesDir().toStdPath().unwrap()));
 }
 
 void EbSaveFeedback::flashIcon(PlayerObject* player) {

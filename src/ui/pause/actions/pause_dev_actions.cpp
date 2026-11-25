@@ -11,27 +11,29 @@
 #include "../../../dev/reporting/dev_report.hpp"
 #include "../../../dev/reporting/dev_research_pack.hpp"
 #include "../../../dev/reporting/dev_session_compare.hpp"
-#include <algorithm>
+#include "../../desktop_menu/desktop_menu_alert.hpp"
 #include "../pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/ui/GeodeUI.hpp>
 #include <Geode/utils/file.hpp>
 #include <Geode/utils/general.hpp>
+#include <algorithm>
+#include <asp/fs/std.hpp>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <system_error>
-#include "../../desktop_menu/desktop_menu_alert.hpp"
 
 void EbPauseDevActions::stubDevAction(char const* name) {
     EbAssistLog::info(fmt::format("Dev Lab: '{}' is a stub (session/eval/trace not wired yet)",
-                                name ? name : "?"));
+                                  name ? name : "?"));
 }
 
 void EbPauseDevActions::devStartRecord() {
     if (!EbDevConfig::recordEnable()) {
         EbAssistLog::info("Dev Lab: enable Dev Record Enable before Start Recording");
-        EbDesktopAlert::info("EarlyBuffer Dev", "Turn on Dev Record Enable first, then Start Recording.");
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             "Turn on Dev Record Enable first, then Start Recording.");
         return;
     }
     if (!EbDevSession::get().start()) {
@@ -62,13 +64,15 @@ void EbPauseDevActions::devEvalLast() {
     std::string err;
     if (!EbDevReport::evalLastAttempt(err)) {
         EbAssistLog::info(fmt::format("Dev Lab: Eval Last failed: {}", err));
-        EbDesktopAlert::info("EarlyBuffer Dev", err.empty() ? "Eval Last Attempt failed." : err.c_str());
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             err.empty() ? "Eval Last Attempt failed." : err.c_str());
         return;
     }
     EbAssistController::get().updateOverlay();
     auto const& r = EbDevReport::last();
     EbAssistLog::info(fmt::format("Dev Lab: Eval Last → {}", r.overlayLine));
-    EbDesktopAlert::info("EarlyBuffer Dev", r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str());
+    EbDesktopAlert::info("EarlyBuffer Dev",
+                         r.overlayLine.empty() ? "Eval complete." : r.overlayLine.c_str());
 }
 
 void EbPauseDevActions::devEvalSession() {
@@ -114,8 +118,7 @@ void EbPauseDevActions::devClearTraces() {
         "This cannot be undone.",
         []() {
             int const count = EbDevSession::get().clearTraces();
-            auto const message =
-                fmt::format("Cleared {} session file(s) under devtraces/.", count);
+            auto const message = fmt::format("Cleared {} session file(s) under devtraces/.", count);
             EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
         },
         {}, "Clear", "Cancel");
@@ -173,30 +176,30 @@ void EbPauseDevActions::devExportResearchPack() {
     std::string err;
     if (!EbDevResearchPack::exportPack(pack, err)) {
         EbAssistLog::info(fmt::format("Dev Lab: research pack failed: {}", err));
-        EbDesktopAlert::info(
-            "EarlyBuffer Dev",
-            fmt::format("{}\n\nPack failed: {}", evalNote,
-                        err.empty() ? "export failed" : err)
-                .c_str());
+        EbDesktopAlert::info("EarlyBuffer Dev", fmt::format("{}\n\nPack failed: {}", evalNote,
+                                                            err.empty() ? "export failed" : err)
+                                                    .c_str());
         return;
     }
 
     bool const clipOk = geode::utils::clipboard::write(pack.dir.string());
-    auto const message = fmt::format(
-        "{}\n\n"
-        "Research pack ready — paste this folder path:\n{}\n\n"
-        "session={}  report={}  config={}  files={}\n"
-        "{}",
-        evalNote, pack.dir.string(), pack.hasSession ? "yes" : "no",
-        pack.hasReport ? "yes" : "no", pack.hasConfig ? "yes" : "no", pack.files.size(),
-        clipOk ? "Folder path copied to clipboard." : "Clipboard copy failed — copy the path above.");
+    auto const message =
+        fmt::format("{}\n\n"
+                    "Research pack ready — paste this folder path:\n{}\n\n"
+                    "session={}  report={}  config={}  files={}\n"
+                    "{}",
+                    evalNote, pack.dir.string(), pack.hasSession ? "yes" : "no",
+                    pack.hasReport ? "yes" : "no", pack.hasConfig ? "yes" : "no", pack.files.size(),
+                    clipOk ? "Folder path copied to clipboard."
+                           : "Clipboard copy failed — copy the path above.");
     EbAssistLog::info(fmt::format("Dev Lab: research pack → {} ({})", pack.dir.string(), evalNote));
     EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
 
 void EbPauseDevActions::devCopyReport() {
     if (!EbDevReport::hasLast()) {
-        EbDesktopAlert::info("EarlyBuffer Dev", "No Dev report yet. Run Eval Last / Eval Session first.");
+        EbDesktopAlert::info("EarlyBuffer Dev",
+                             "No Dev report yet. Run Eval Last / Eval Session first.");
         return;
     }
     auto const& r = EbDevReport::last();
@@ -213,11 +216,13 @@ void EbPauseDevActions::devCopyReport() {
     if (!drops.ensureDirs(dirErr)) {
         fileErr = dirErr.empty() ? "could not create save folder" : dirErr;
     } else {
-        auto const written = geode::utils::file::writeString(path, text);
+        auto const written =
+            geode::utils::file::writeString(asp::fs::Path::fromStdPath(path), text);
         if (written.isOk()) {
             fileOk = true;
             if (!r.jsonLine.empty()) {
-                (void)geode::utils::file::writeString(jsonPath, r.jsonLine + "\n");
+                (void)geode::utils::file::writeString(asp::fs::Path::fromStdPath(jsonPath),
+                                                      r.jsonLine + "\n");
             }
         } else {
             fileErr = written.unwrapErr();
@@ -236,8 +241,8 @@ void EbPauseDevActions::devCopyReport() {
     }
     bool const clipOk = geode::utils::clipboard::write(clipPayload);
 
-    EbAssistLog::info(fmt::format("Dev Lab: copy report clip={} file={} → {}", clipOk ? "ok" : "fail",
-                                fileOk ? path.string() : fileErr, text));
+    EbAssistLog::info(fmt::format("Dev Lab: copy report clip={} file={} → {}",
+                                  clipOk ? "ok" : "fail", fileOk ? path.string() : fileErr, text));
 
     std::string msg;
     if (clipOk && fileOk) {
@@ -286,8 +291,7 @@ void EbPauseDevActions::devCompareSessions() {
     opts.lastN = std::clamp(opts.lastN, 2, EbDevSessionCompare::kMaxLastN);
 
     if (opts.sameLevelOnly) {
-        if (EbDevTraceStore::get().isOpen() &&
-            !EbDevTraceStore::get().session().levelKey.empty()) {
+        if (EbDevTraceStore::get().isOpen() && !EbDevTraceStore::get().session().levelKey.empty()) {
             opts.levelKeyFilter = EbDevTraceStore::get().session().levelKey;
         }
     }
@@ -302,13 +306,12 @@ void EbPauseDevActions::devCompareSessions() {
     }
 
     bool const clipOk = EbPauseActionBridgeDetail::tryCopyPathToClipboard(result.outPath);
-    auto const message =
-        fmt::format("{}\n\n"
-                    "{}\n"
-                    "{}\n\n"
-                    "Newest vs median of older sessions.",
-                    result.summaryLine, result.outPath.string(),
-                    EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
+    auto const message = fmt::format("{}\n\n"
+                                     "{}\n"
+                                     "{}\n\n"
+                                     "Newest vs median of older sessions.",
+                                     result.summaryLine, result.outPath.string(),
+                                     EbPauseActionBridgeDetail::pathClipboardNote(clipOk));
     EbAssistLog::info(fmt::format("Dev Lab: {}", result.summaryLine));
     EbDesktopAlert::info("EarlyBuffer Dev", message.c_str());
 }
@@ -316,15 +319,14 @@ void EbPauseDevActions::devCompareSessions() {
 void EbPauseDevActions::devReproduceGold() {
     std::string report;
     bool const ok = EbGoldReproduceGate::runDevAction(report);
-    auto const message =
-        ok ? fmt::format("Import gate OK.\n\n{}\n\n"
-                         "PlayLayer clear still required for reproduce=pass.\n"
-                         "Summary: saveDir/real_assist/last_run.txt",
-                         report)
-           : fmt::format("Import gate failed.\n\n{}\n\n"
-                         "Sync with:\n"
-                         "python tools/sync_real_corpus.py --install-save",
-                         report);
+    auto const message = ok ? fmt::format("Import gate OK.\n\n{}\n\n"
+                                          "PlayLayer clear still required for reproduce=pass.\n"
+                                          "Summary: saveDir/real_assist/last_run.txt",
+                                          report)
+                            : fmt::format("Import gate failed.\n\n{}\n\n"
+                                          "Sync with:\n"
+                                          "python tools/sync_real_corpus.py --install-save",
+                                          report);
     EbDesktopAlert::info("EarlyBuffer Real Assist", message.c_str());
 }
 

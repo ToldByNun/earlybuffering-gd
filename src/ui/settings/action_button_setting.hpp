@@ -5,7 +5,6 @@
 #include <string>
 
 class ButtonSprite;
-class CCMenuItemSpriteExtra;
 
 // Geode custom setting: same row chrome as bool (label + i), button on the right.
 class EbActionButtonSettingV3 : public geode::SettingV3 {
@@ -39,7 +38,7 @@ public:
     }
 
     static EbActionButtonSettingNodeV3* create(std::shared_ptr<EbActionButtonSettingV3> setting,
-                                             float width);
+                                               float width);
 
 protected:
     bool init(std::shared_ptr<EbActionButtonSettingV3> setting, float width);
@@ -52,7 +51,7 @@ protected:
 
 private:
     ButtonSprite* m_buttonSprite = nullptr;
-    CCMenuItemSpriteExtra* m_button = nullptr;
+    geode::Button* m_button = nullptr;
     std::string m_shownLabel;
 };
 
@@ -63,7 +62,6 @@ private:
 #include "../pause/pause_action_bridge.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/ButtonSprite.hpp>
-#include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/loader/Mod.hpp>
 #include <algorithm>
 #include <fmt/format.h>
@@ -76,7 +74,7 @@ public:
     static void fireSettingAction(std::string const& key);
     static void registerActionButtonSettingType();
     static void fitActionButtonSprite(ButtonSprite* sprite);
-    static void layoutActionButton(geode::prelude::CCMenu* menu, CCMenuItemSpriteExtra* button,
+    static void layoutActionButton(geode::prelude::CCNode* menu, geode::Button* button,
                                    ButtonSprite* sprite);
 
 private:

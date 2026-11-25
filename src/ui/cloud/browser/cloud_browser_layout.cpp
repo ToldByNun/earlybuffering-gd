@@ -48,8 +48,8 @@ bool EbCloudBrowserLayout::init(EbCloudConfigPopup& owner) {
 
     auto* refreshSpr = ButtonSprite::create("Refresh", "bigFont.fnt", "GJ_button_05.png", 0.8f);
     refreshSpr->setScale(tight ? 0.30f : 0.34f);
-    owner.m_refreshBtn = CCMenuItemSpriteExtra::create(refreshSpr, (&owner),
-                                                       menu_selector(EbCloudConfigPopup::onRefresh));
+    owner.m_refreshBtn = CCMenuItemSpriteExtra::create(
+        refreshSpr, (&owner), menu_selector(EbCloudConfigPopup::onRefresh));
     owner.m_refreshBtn->setID("cloud-refresh-btn"_spr);
     topMenu->addChildAtPosition(owner.m_refreshBtn, geode::Anchor::Center);
 
@@ -69,7 +69,7 @@ bool EbCloudBrowserLayout::init(EbCloudConfigPopup& owner) {
     owner.m_search->setID("cloud-search"_spr);
     owner.m_search->setMaxCharCount(64);
     owner.m_search->setCommonFilter(geode::prelude::CommonFilter::Any);
-    owner.m_search->setTextAlign(geode::prelude::TextInputAlign::Left);
+    owner.m_search->setAlignment(geode::Label::Alignment::Left);
     owner.m_search->setCallback([&owner](std::string const& text) {
         owner.m_searchQuery = text;
         owner.rebuildList();
@@ -243,15 +243,15 @@ bool EbCloudBrowserLayout::init(EbCloudConfigPopup& owner) {
 
     auto* installSpr = ButtonSprite::create("Install", "bigFont.fnt", "GJ_button_01.png", 0.8f);
     installSpr->setScale(0.44f);
-    owner.m_installBtn = CCMenuItemSpriteExtra::create(installSpr, (&owner),
-                                                       menu_selector(EbCloudConfigPopup::onInstall));
+    owner.m_installBtn = CCMenuItemSpriteExtra::create(
+        installSpr, (&owner), menu_selector(EbCloudConfigPopup::onInstall));
     owner.m_installBtn->setID("cloud-install-btn"_spr);
     bottom->addChild(owner.m_installBtn);
 
     auto* shareSpr = ButtonSprite::create("Share…", "bigFont.fnt", "GJ_button_05.png", 0.8f);
     shareSpr->setScale(0.44f);
-    auto* shareBtn =
-        CCMenuItemSpriteExtra::create(shareSpr, (&owner), menu_selector(EbCloudConfigPopup::onShare));
+    auto* shareBtn = CCMenuItemSpriteExtra::create(shareSpr, (&owner),
+                                                   menu_selector(EbCloudConfigPopup::onShare));
     shareBtn->setID("cloud-share-btn"_spr);
     bottom->addChild(shareBtn);
     bottom->updateLayout();

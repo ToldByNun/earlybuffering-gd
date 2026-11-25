@@ -10,6 +10,7 @@
 #include "validation/dev_trace_validation.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <cstdio>
 #include <fmt/format.h>
@@ -191,7 +192,7 @@ bool EbDevTraceStore::hasOpenAttempt() const {
 std::filesystem::path EbDevTraceStore::tracesDir() const {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
-        return mod->getSaveDir() / "devtraces";
+        return mod->getSaveDir().toStdPath().unwrap() / "devtraces";
     }
     return std::filesystem::path("devtraces");
 }
@@ -415,15 +416,15 @@ bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) 
 
 bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
     auto const directory = this->tracesDir();
-    (void)geode::utils::file::createDirectoryAll(directory);
+    (void)geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(directory));
     auto const path = this->sessionPath();
     auto tmpPath = path;
     tmpPath += ".tmp";
 
-    auto width = geode::utils::file::writeToJson(tmpPath, root);
+    auto width = geode::utils::file::writeToJson(asp::fs::Path::fromStdPath(tmpPath), root);
     if (width.isErr()) {
         // Fallback: direct write if temp failed (e.g. path quirks).
-        auto delay = geode::utils::file::writeToJson(path, root);
+        auto delay = geode::utils::file::writeToJson(asp::fs::Path::fromStdPath(path), root);
         return delay.isOk();
     }
 

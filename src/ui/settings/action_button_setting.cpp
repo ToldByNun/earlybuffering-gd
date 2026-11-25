@@ -178,14 +178,17 @@ void EbActionButtonSettingImplementation::fitActionButtonSprite(ButtonSprite* sp
 
 // Mirror BoolSettingNodeV3: shrink button-menu, place control at geode::Anchor::Right with
 // half-width offset so the visual right edge sits flush (default center anchor).
-// Do NOT touch the button's contentSize/anchorPoint — that desyncs the ButtonSprite.
-void EbActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCMenu* menu,
-                                                             CCMenuItemSpriteExtra* button,
+// Keep the Button hit area and centered sprite in sync when the label changes.
+void EbActionButtonSettingImplementation::layoutActionButton(geode::prelude::CCNode* menu,
+                                                             geode::Button* button,
                                                              ButtonSprite* sprite) {
     if (!menu || !button || !sprite)
         return;
     EbActionButtonSettingImplementation::fitActionButtonSprite(sprite);
     float const btnW = sprite->getContentSize().width * sprite->getScale();
+    float const btnH = sprite->getContentSize().height * sprite->getScale();
+    button->setContentSize({btnW, btnH});
+    sprite->setPosition({btnW * 0.5f, btnH * 0.5f});
     // Same flush as checkboxes (menu already at row Right, ccp(-10,0)).
     menu->setContentWidth(std::max(btnW + 4.f, 24.f));
     geode::prelude::CCPoint const offset = ccp(-btnW * 0.5f, 0.f);
@@ -214,8 +217,9 @@ bool EbActionButtonSettingNodeV3::init(std::shared_ptr<EbActionButtonSettingV3> 
     this->m_shownLabel = initial;
     this->m_buttonSprite =
         ButtonSprite::create(initial.c_str(), "bigFont.fnt", "GJ_button_01.png", 0.8f);
-    this->m_button = CCMenuItemSpriteExtra::create(
-        this->m_buttonSprite, this, menu_selector(EbActionButtonSettingNodeV3::onButton));
+    EbActionButtonSettingImplementation::fitActionButtonSprite(this->m_buttonSprite);
+    this->m_button = geode::Button::createWithNode(
+        this->m_buttonSprite, [this](geode::Button* sender) { this->onButton(sender); });
     EbActionButtonSettingImplementation::layoutActionButton(menu, this->m_button,
                                                             this->m_buttonSprite);
 

@@ -1,8 +1,9 @@
-#include "../../app/class_manager.hpp"
 #include "save_drop_paths.hpp"
+#include "../../app/class_manager.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <cctype>
 #include <system_error>
 
@@ -13,7 +14,7 @@ EbSaveDropPaths& EbSaveDropPaths::get() {
 std::filesystem::path EbSaveDropPaths::rootDir() const {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
-        return mod->getSaveDir();
+        return mod->getSaveDir().toStdPath().unwrap();
     }
     return std::filesystem::path("earlybuffer-save");
 }
@@ -42,30 +43,31 @@ bool EbSaveDropPaths::ensureDirs(std::string& err) const {
     auto const cloudPacks = cloud / "packs";
     auto const cloudOutbox = cloud / "outbox";
 
-    auto rootRes = geode::utils::file::createDirectoryAll(root);
+    auto rootRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(root));
     if (rootRes.isErr()) {
         err = fmt::format("cannot create save dir {}: {}", root.string(), rootRes.unwrapErr());
         return false;
     }
-    auto replayRes = geode::utils::file::createDirectoryAll(replay);
+    auto replayRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(replay));
     if (replayRes.isErr()) {
         err = fmt::format("cannot create replay drop dir {}: {}", replay.string(),
                           replayRes.unwrapErr());
         return false;
     }
-    auto cloudRes = geode::utils::file::createDirectoryAll(cloud);
+    auto cloudRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(cloud));
     if (cloudRes.isErr()) {
         err = fmt::format("cannot create cloud-configs dir {}: {}", cloud.string(),
                           cloudRes.unwrapErr());
         return false;
     }
-    auto packsRes = geode::utils::file::createDirectoryAll(cloudPacks);
+    auto packsRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(cloudPacks));
     if (packsRes.isErr()) {
         err = fmt::format("cannot create cloud packs dir {}: {}", cloudPacks.string(),
                           packsRes.unwrapErr());
         return false;
     }
-    auto outboxRes = geode::utils::file::createDirectoryAll(cloudOutbox);
+    auto outboxRes =
+        geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(cloudOutbox));
     if (outboxRes.isErr()) {
         err = fmt::format("cannot create cloud outbox dir {}: {}", cloudOutbox.string(),
                           outboxRes.unwrapErr());

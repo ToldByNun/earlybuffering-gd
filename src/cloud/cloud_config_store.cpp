@@ -1,8 +1,9 @@
-#include "../app/class_manager.hpp"
 #include "cloud_config_store.hpp"
+#include "../app/class_manager.hpp"
 #include "../core/platform/save_drop_paths.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
+#include <asp/fs/std.hpp>
 #include <cctype>
 #include <chrono>
 #include <fstream>
@@ -49,18 +50,18 @@ bool EbCloudConfigStore::ensureDirs(std::string& err) const {
     auto const packs = this->packsDir();
     auto const outbox = this->outboxDir();
 
-    auto rootRes = geode::utils::file::createDirectoryAll(root);
+    auto rootRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(root));
     if (rootRes.isErr()) {
         err = fmt::format("cannot create cloud-configs dir {}: {}", root.string(),
                           rootRes.unwrapErr());
         return false;
     }
-    auto packsRes = geode::utils::file::createDirectoryAll(packs);
+    auto packsRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(packs));
     if (packsRes.isErr()) {
         err = fmt::format("cannot create packs dir {}: {}", packs.string(), packsRes.unwrapErr());
         return false;
     }
-    auto outboxRes = geode::utils::file::createDirectoryAll(outbox);
+    auto outboxRes = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(outbox));
     if (outboxRes.isErr()) {
         err =
             fmt::format("cannot create outbox dir {}: {}", outbox.string(), outboxRes.unwrapErr());
@@ -98,7 +99,7 @@ bool EbCloudConfigStore::isValidPackId(std::string const& id) {
 }
 
 bool EbCloudConfigStore::readTextFile(std::filesystem::path const& path, std::string& out,
-                                    size_t maxBytes, std::string& err) {
+                                      size_t maxBytes, std::string& err) {
     out.clear();
     err.clear();
     if (path.empty()) {
@@ -144,7 +145,7 @@ bool EbCloudConfigStore::readTextFile(std::filesystem::path const& path, std::st
 }
 
 bool EbCloudConfigStore::writeTextFile(std::filesystem::path const& path, std::string const& body,
-                                     std::string& err) {
+                                       std::string& err) {
     err.clear();
     if (path.empty()) {
         err = "write path empty";
@@ -156,7 +157,7 @@ bool EbCloudConfigStore::writeTextFile(std::filesystem::path const& path, std::s
     }
     auto const parent = path.parent_path();
     if (!parent.empty()) {
-        auto mk = geode::utils::file::createDirectoryAll(parent);
+        auto mk = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(parent));
         if (mk.isErr()) {
             err = fmt::format("cannot create parent {}: {}", parent.string(), mk.unwrapErr());
             return false;
@@ -211,7 +212,7 @@ bool EbCloudConfigStore::readPack(std::string const& id, std::string& out, std::
 }
 
 bool EbCloudConfigStore::writePack(std::string const& id, std::string const& body,
-                                 std::string& err) const {
+                                   std::string& err) const {
     if (!isValidPackId(id)) {
         err = "invalid pack id";
         return false;
@@ -415,7 +416,7 @@ std::string EbCloudConfigStore::sanitizeStem(std::string const& stem) {
 }
 
 bool EbCloudConfigStore::writeOutbox(std::string const& stem, std::string const& body,
-                                   std::filesystem::path& outPath, std::string& err) const {
+                                     std::filesystem::path& outPath, std::string& err) const {
     outPath.clear();
     if (body.empty()) {
         err = "outbox body empty";

@@ -58,7 +58,7 @@ bool EbCloudConfigSharePopup::init(ClosedCallback onClosed) {
     auto makeInput = [&](float width, char const* placeholder, size_t maxChars) {
         auto* input = geode::prelude::TextInput::create(width, placeholder, "bigFont.fnt");
         input->setCommonFilter(geode::prelude::CommonFilter::Any);
-        input->setTextAlign(geode::prelude::TextInputAlign::Left);
+        input->setAlignment(geode::Label::Alignment::Left);
         input->setMaxCharCount(maxChars);
         return input;
     };
@@ -121,8 +121,8 @@ bool EbCloudConfigSharePopup::init(ClosedCallback onClosed) {
 
     auto* okSpr = ButtonSprite::create("Share", "bigFont.fnt", "GJ_button_01.png", 0.8f);
     okSpr->setScale(0.44f);
-    menu->addChild(CCMenuItemSpriteExtra::create(okSpr, this,
-                                                 menu_selector(EbCloudConfigSharePopup::onConfirm)));
+    menu->addChild(CCMenuItemSpriteExtra::create(
+        okSpr, this, menu_selector(EbCloudConfigSharePopup::onConfirm)));
     menu->updateLayout();
 
     return true;

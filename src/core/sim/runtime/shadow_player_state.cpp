@@ -248,8 +248,8 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
     destination->m_touchedPad = source->m_touchedPad;
     destination->m_padRingRelated = source->m_padRingRelated;
     destination->m_ringJumpRelated = source->m_ringJumpRelated;
-    destination->m_ringRelatedSet = source->m_ringRelatedSet;
-    destination->m_jumpPadRelated = source->m_jumpPadRelated;
+    destination->m_usedRings = source->m_usedRings;
+    destination->m_touchedForceIds = source->m_touchedForceIds;
     destination->m_blackOrbRelated = source->m_blackOrbRelated;
     destination->m_hasEverJumped = source->m_hasEverJumped;
     destination->m_hasEverHitRing = source->m_hasEverHitRing;
@@ -258,10 +258,7 @@ void EbShadowPlayerState::copyPlayerState(PlayerObject* destination, PlayerObjec
     destination->m_touchedRings = source->m_touchedRings;
 
     destination->m_stateOnGround = source->m_stateOnGround;
-    destination->m_stateUnk = source->m_stateUnk;
-    destination->m_stateNoStickX = source->m_stateNoStickX;
-    destination->m_stateNoStickY = source->m_stateNoStickY;
-    destination->m_stateUnk2 = source->m_stateUnk2;
+    destination->m_unusedFloatA80 = source->m_unusedFloatA80;
     destination->m_stateBoostX = source->m_stateBoostX;
     destination->m_stateBoostY = source->m_stateBoostY;
     destination->m_maybeStateForce2 = source->m_maybeStateForce2;

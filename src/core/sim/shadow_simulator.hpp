@@ -18,6 +18,7 @@ class EbSimulationCandidate;
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -151,8 +152,8 @@ public:
     void beginSession(PlayLayer* layer);
     void endSession(PlayLayer* layer);
     // Persistent scratch for collisionCheckObjects filtering — never a stack
-    // gd::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
-    gd::vector<GameObject*>& collisionFilterScratch();
+    // std::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
+    std::vector<GameObject*>& collisionFilterScratch();
     void noteJump();
     void noteActivated(GameObject* object);
     // Overlap with UnknownOnOverlap object. Pass obj to flag toggle-target hits.
@@ -671,7 +672,7 @@ private:
     double m_triggerOriginTps = 0.0;
 
     PlayLayer* m_transformCaptureLayer = nullptr;
-    gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
+    std::map<std::pair<int, int>, int> m_savedActivatedIDs;
     // Absolute attempt tick for the current sim step (−1 = do not apply bake).
     int m_simAbsTick = -1;
     // Absolute tick corresponding to t=0 inside runOne / baseline / orb scan.
@@ -687,7 +688,7 @@ private:
     std::vector<DynamicFollowJob> m_dynamicFollowJobs;
     std::unordered_set<int> m_liveDynamicAppliedIds;
     // Reused by GameLayerHooks::collisionCheckObjects (sim + live ghost strip).
-    gd::vector<GameObject*> m_collisionFilterBuf;
+    std::vector<GameObject*> m_collisionFilterBuf;
 
     void captureToggleUnknownTargets(PlayLayer* layer);
 

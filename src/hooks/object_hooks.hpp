@@ -22,7 +22,7 @@ private:
 
 class $modify(EbEffectGameObject, EffectGameObject) {
 public:
-    void triggerObject(GJBaseGameLayer* layer, int uniqueID, gd::vector<int> const* remapKeys);
+    void triggerObject(GJBaseGameLayer* layer, int uniqueID, std::vector<int> const* remapKeys);
 
 private:
 };

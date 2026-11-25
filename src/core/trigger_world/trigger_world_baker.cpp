@@ -64,10 +64,11 @@ void EbTriggerWorldBaker::rememberEmptyCollection() {
         return;
     auto* objects = EbSectionObjectWalk::objectArray(layer);
     auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    // Collection walks objectLayer children; m_objects is a different array
-    // and can legitimately have a different count on start-position levels.
+    // Collect walks objectArray(), not the scene's visible children. Comparing
+    // their counts rejects a finished scan and rebuilds the whole level forever.
     bool const complete =
-        !m_collectIncomplete && objects && children && children->count() == m_childCount;
+        objects && EbCompletedTriggerCollection::isComplete(m_childCount, m_childIndex,
+                                                            objects->count(), m_collectIncomplete);
     m_completedEmpty.remember(layer, objects, objects ? objects->count() : 0,
                               children ? children->count() : 0, layer->m_sections.size(),
                               EbStageConfig::triggerBakeSkipDynamic(), complete);

@@ -10,16 +10,16 @@
 #include <chrono>
 #include <ctime>
 
-bool EbCloudConfigPublishImplementation::httpGetJson(std::string const& url, std::string const& token,
-                                                   matjson::Value& out, int& code,
-                                                   std::string& err) {
+bool EbCloudConfigPublishImplementation::httpGetJson(std::string const& url,
+                                                     std::string const& token, matjson::Value& out,
+                                                     int& code, std::string& err) {
     out = matjson::Value();
     code = 0;
     err.clear();
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudPublish/1");
-    req.timeout(std::chrono::seconds(EbCloudConfigPublishImplementation::kTimeoutSec));
+    req.timeout(asp::time::Duration::fromSecs(EbCloudConfigPublishImplementation::kTimeoutSec));
     req.followRedirects(false);
     req.certVerification(true);
     req.header("Accept", "application/vnd.github+json");
@@ -57,16 +57,18 @@ bool EbCloudConfigPublishImplementation::httpGetJson(std::string const& url, std
     return true;
 }
 
-bool EbCloudConfigPublishImplementation::httpPutJson(std::string const& url, std::string const& token,
-                                                   matjson::Value const& body, matjson::Value& out,
-                                                   int& code, std::string& err) {
+bool EbCloudConfigPublishImplementation::httpPutJson(std::string const& url,
+                                                     std::string const& token,
+                                                     matjson::Value const& body,
+                                                     matjson::Value& out, int& code,
+                                                     std::string& err) {
     out = matjson::Value();
     code = 0;
     err.clear();
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudPublish/1");
-    req.timeout(std::chrono::seconds(EbCloudConfigPublishImplementation::kTimeoutSec));
+    req.timeout(asp::time::Duration::fromSecs(EbCloudConfigPublishImplementation::kTimeoutSec));
     req.followRedirects(false);
     req.certVerification(true);
     req.header("Accept", "application/vnd.github+json");
@@ -103,7 +105,7 @@ std::string EbCloudConfigPublishImplementation::b64Encode(std::string const& raw
 }
 
 bool EbCloudConfigPublishImplementation::b64Decode(std::string const& b64, std::string& out,
-                                                 std::string& err) {
+                                                   std::string& err) {
     auto decoded =
         geode::utils::base64::decodeString(b64, geode::utils::base64::Base64Variant::Normal);
     if (decoded.isErr()) {
@@ -116,7 +118,7 @@ bool EbCloudConfigPublishImplementation::b64Decode(std::string const& b64, std::
 
 matjson::Value
 EbCloudConfigPublishImplementation::packEntryObject(EbCloudConfigPublish::PackMeta const& meta,
-                                                  std::string const& sha256, size_t size) {
+                                                    std::string const& sha256, size_t size) {
     matjson::Value tags = matjson::Value::array();
     for (auto const& t : meta.tags)
         tags.push(t);
@@ -190,7 +192,7 @@ bool EbCloudConfigPublish::isConfigured() {
 }
 
 EbCloudConfigPublish::Result EbCloudConfigPublish::publishPack(PackMeta const& metaIn,
-                                                           std::string const& bundleJson) {
+                                                               std::string const& bundleJson) {
     Result result{};
     result.attempted = true;
     result.repo = readRepoSetting();
@@ -258,7 +260,7 @@ EbCloudConfigPublish::Result EbCloudConfigPublish::publishPack(PackMeta const& m
 
         matjson::Value putRes;
         if (!EbCloudConfigPublishImplementation::httpPutJson(packUrl, token, putBody, putRes, code,
-                                                           err)) {
+                                                             err)) {
             result.error = std::string("pack PUT: ") + err;
             return result;
         }
@@ -356,7 +358,7 @@ EbCloudConfigPublish::Result EbCloudConfigPublish::publishPack(PackMeta const& m
 
         matjson::Value putRes;
         if (!EbCloudConfigPublishImplementation::httpPutJson(indexUrl, token, putBody, putRes, code,
-                                                           err)) {
+                                                             err)) {
             result.error = std::string("index PUT: ") + err;
             return result;
         }

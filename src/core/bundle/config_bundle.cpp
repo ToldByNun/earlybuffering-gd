@@ -577,7 +577,13 @@ auto EbConfigBundleApplyHelpers::applyOneSetting(geode::prelude::Mod* mod,
                 ++skipped;
                 return false;
             }
-            mod->setSettingValue<std::vector<geode::Keybind>>(entry.key, binds);
+            auto setting = geode::cast::typeinfo_pointer_cast<geode::KeybindSettingV3>(
+                mod->getSetting(entry.key));
+            if (!setting) {
+                ++skipped;
+                return false;
+            }
+            setting->setValue(std::move(binds));
             ++applied;
             return true;
         }

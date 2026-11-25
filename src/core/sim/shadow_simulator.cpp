@@ -18,10 +18,10 @@
 #include "runtime/shadow_physics.hpp"
 #include "runtime/shadow_player_state.hpp"
 #include "runtime/shadow_section_safety.hpp"
+#include "sim_session_guard.hpp"
 #include "validation/shadow_regression_checks.hpp"
 #include "world/shadow_world_capture.hpp"
 #include "world/shadow_world_dynamics.hpp"
-#include "sim_session_guard.hpp"
 #include <algorithm>
 #include <chrono>
 #include <string>
@@ -144,7 +144,7 @@ bool EbShadowSimulator::spendPlanTick(int* tickBudgetLeft, int tickIndex) {
     return markPlanWallIfExceeded();
 }
 
-gd::vector<GameObject*>& EbShadowSimulator::collisionFilterScratch() {
+std::vector<GameObject*>& EbShadowSimulator::collisionFilterScratch() {
     return this->m_collisionFilterBuf;
 }
 

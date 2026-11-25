@@ -4,6 +4,8 @@
 
 class EbCompletedTriggerCollection {
 public:
+    static bool isComplete(std::size_t expectedCount, std::size_t collectedCount,
+                           std::size_t currentCount, bool incomplete);
     bool matches(void const* layer, void const* objects, std::size_t count, std::size_t children,
                  std::size_t sections, bool skipDynamic) const;
     void remember(void const* layer, void const* objects, std::size_t count, std::size_t children,

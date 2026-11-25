@@ -3,12 +3,14 @@
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <filesystem>
 #include <fmt/format.h>
 #include <vector>
 
 geode::Result<> EbTriggerWorldCodec::writeFile(EbTriggerWorldStore const& owner) {
-    (void)geode::utils::file::createDirectoryAll(EbTriggerWorldStore::triggersDir());
+    (void)geode::utils::file::createDirectoryAll(
+        asp::fs::Path::fromStdPath(EbTriggerWorldStore::triggersDir()));
 
     matjson::Value root = matjson::Value::object();
     root["version"] = EbTriggerWorldStore::kFileVersion;
@@ -42,13 +44,13 @@ geode::Result<> EbTriggerWorldCodec::writeFile(EbTriggerWorldStore const& owner)
     }
     root["tracks"] = tracksArr;
 
-    return geode::utils::file::writeToJson(EbTriggerWorldStore::triggerPath(owner.m_data.levelKey),
-                                           root);
+    return geode::utils::file::writeToJson(
+        asp::fs::Path::fromStdPath(EbTriggerWorldStore::triggerPath(owner.m_data.levelKey)), root);
 }
 
 geode::Result<> EbTriggerWorldCodec::readFile(EbTriggerWorldStore& owner) {
-    auto result =
-        geode::utils::file::readJson(EbTriggerWorldStore::triggerPath(owner.m_data.levelKey));
+    auto result = geode::utils::file::readJson(
+        asp::fs::Path::fromStdPath(EbTriggerWorldStore::triggerPath(owner.m_data.levelKey)));
     if (result.isErr())
         return geode::Err(result.unwrapErr());
 

@@ -3,6 +3,7 @@
 #include "../transport/cloud_config_sha256.hpp"
 #include "cloud_config_index.hpp"
 #include <Geode/Geode.hpp>
+#include <asp/fs/std.hpp>
 #include <fstream>
 
 // Packaged resources may omit nested JSON; keep an identical offline fallback compiled in.
@@ -11,7 +12,7 @@
 std::filesystem::path EbCloudConfigSeed::rootDir() {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
-        return mod->getResourcesDir() / "cloud-seed";
+        return mod->getResourcesDir().toStdPath().unwrap() / "cloud-seed";
     }
     return {};
 }
@@ -44,9 +45,10 @@ bool EbCloudConfigSeed::readIndex(std::string& out, std::string& err) {
     }
     // Flat resource name fallback (some Geode packages flatten resources/).
     if (auto* mod = geode::prelude::Mod::get()) {
-        auto const flat = mod->getResourcesDir() / "cloud-seed-index.json";
+        auto const flat = mod->getResourcesDir().toStdPath().unwrap() / "cloud-seed-index.json";
         std::string flatErr;
-        if (EbCloudConfigStore::readTextFile(flat, out, EbCloudConfigStore::kMaxIndexBytes, flatErr)) {
+        if (EbCloudConfigStore::readTextFile(flat, out, EbCloudConfigStore::kMaxIndexBytes,
+                                             flatErr)) {
             err.clear();
             return true;
         }
@@ -65,9 +67,11 @@ bool EbCloudConfigSeed::readPack(std::string const& id, std::string& out, std::s
         return true;
     }
     if (auto* mod = geode::prelude::Mod::get()) {
-        auto const flat = mod->getResourcesDir() / (std::string("cloud-seed-") + id + ".json");
+        auto const flat = mod->getResourcesDir().toStdPath().unwrap() /
+                          (std::string("cloud-seed-") + id + ".json");
         std::string flatErr;
-        if (EbCloudConfigStore::readTextFile(flat, out, EbCloudConfigStore::kMaxPackBytes, flatErr)) {
+        if (EbCloudConfigStore::readTextFile(flat, out, EbCloudConfigStore::kMaxPackBytes,
+                                             flatErr)) {
             err.clear();
             return true;
         }

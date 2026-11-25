@@ -1,9 +1,10 @@
-#include "../app/class_manager.hpp"
 #include "perf_trace.hpp"
+#include "../app/class_manager.hpp"
 #include "../config/stage_config.hpp"
 #include "assist_log.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <fmt/format.h>
 #include <fstream>
 
@@ -49,7 +50,7 @@ void EbPerfTrace::setEnabled(bool on) {
 std::string EbPerfTrace::logPath() {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
-        return (mod->getSaveDir() / "earlybuffer-perf.log").string();
+        return (mod->getSaveDir().toStdPath().unwrap() / "earlybuffer-perf.log").string();
     }
     return {};
 }

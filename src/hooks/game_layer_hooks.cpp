@@ -150,7 +150,7 @@ auto EbGJBaseGameLayer::createParticle(int objectType, char const* plistName, in
     return nullptr;
 }
 
-auto EbGJBaseGameLayer::claimParticle(gd::string key, int zLayer)
+auto EbGJBaseGameLayer::claimParticle(std::string key, int zLayer)
     -> cocos2d::CCParticleSystemQuad* {
     if (!(EbGameHookSimulationGuard::simulating())) {
         return GJBaseGameLayer::claimParticle(key, zLayer);
@@ -158,7 +158,7 @@ auto EbGJBaseGameLayer::claimParticle(gd::string key, int zLayer)
     return nullptr;
 }
 
-auto EbGJBaseGameLayer::createCustomParticle(gd::string const& key,
+auto EbGJBaseGameLayer::createCustomParticle(std::string const& key,
                                              cocos2d::ParticleStruct const& particleStruct,
                                              int minimum, bool dontAdd)
     -> cocos2d::CCParticleSystemQuad* {
@@ -168,7 +168,7 @@ auto EbGJBaseGameLayer::createCustomParticle(gd::string const& key,
     return nullptr;
 }
 
-auto EbGJBaseGameLayer::claimCustomParticle(gd::string const& key,
+auto EbGJBaseGameLayer::claimCustomParticle(std::string const& key,
                                             cocos2d::ParticleStruct const& particleStruct,
                                             int zLayer, int zOrder, int uiObject, bool dontAdd)
     -> cocos2d::CCParticleSystemQuad* {
@@ -186,7 +186,7 @@ auto EbGJBaseGameLayer::spawnParticleTrigger(int particleID, cocos2d::CCPoint po
     GJBaseGameLayer::spawnParticleTrigger(particleID, position, rotation, scale);
 }
 
-auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec,
+auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, std::vector<GameObject*>* vec,
                                               int objectsCount, float deltaTime) -> void {
     auto& sim = EbShadowSimulator::get();
     if (!vec || objectsCount <= 0) {
@@ -195,8 +195,8 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, gd::vector<G
     }
 
     // Sim must only collide the shadow — never the real player mid-plan.
-    // Use persistent scratch (not a stack gd::vector): on iOS ARM64 a temporary
-    // gd::vector ABI/lifetime mismatch into playerTouchedRing was a SIGBUS source.
+    // Use persistent scratch (not a stack std::vector): on iOS ARM64 a temporary
+    // std::vector ABI/lifetime mismatch into playerTouchedRing was a SIGBUS source.
     if (sim.isSimulating()) {
         if (!sim.isShadow(player))
             return;

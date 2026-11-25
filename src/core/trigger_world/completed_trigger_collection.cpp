@@ -1,5 +1,11 @@
 #include "completed_trigger_collection.hpp"
 
+bool EbCompletedTriggerCollection::isComplete(std::size_t expectedCount, std::size_t collectedCount,
+                                              std::size_t currentCount, bool incomplete) {
+    return !incomplete && expectedCount > 0 && collectedCount == expectedCount &&
+           currentCount == expectedCount;
+}
+
 bool EbCompletedTriggerCollection::matches(void const* layer, void const* objects,
                                            std::size_t count, std::size_t children,
                                            std::size_t sections, bool skipDynamic) const {

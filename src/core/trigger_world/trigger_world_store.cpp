@@ -9,6 +9,7 @@
 #include "validation/trigger_world_checks.hpp"
 #include <Geode/utils/file.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <cmath>
 #include <filesystem>
 #include <fmt/format.h>
@@ -20,7 +21,7 @@ EbTriggerWorldStore& EbTriggerWorldStore::get() {
 }
 
 std::filesystem::path EbTriggerWorldStore::triggersDir() {
-    return geode::prelude::Mod::get()->getSaveDir() / "triggers";
+    return geode::prelude::Mod::get()->getSaveDir().toStdPath().unwrap() / "triggers";
 }
 
 std::filesystem::path EbTriggerWorldStore::triggerPath(std::string const& key) {

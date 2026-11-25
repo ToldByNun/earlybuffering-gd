@@ -16,6 +16,7 @@
 #include <Geode/binding/PlayLayer.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -213,8 +214,7 @@ bool EbRealAssistRunner::resolvePaths(CaseSpec const& spec, std::filesystem::pat
             if (ec || !entry.is_regular_file())
                 continue;
             auto name = entry.path().filename().string();
-            bool const isGdr2 =
-                name.size() >= 5 && name.compare(name.size() - 5, 5, ".gdr2") == 0;
+            bool const isGdr2 = name.size() >= 5 && name.compare(name.size() - 5, 5, ".gdr2") == 0;
             if ((name == spec.variant + ".gdr2") ||
                 (name.rfind(spec.variant + "__", 0) == 0 && isGdr2)) {
                 candidates.push_back(entry.path());
@@ -304,9 +304,8 @@ bool EbRealAssistRunner::importReplayFile(std::filesystem::path const& path, std
         return false;
     }
     EbBakeMap::get().setPendingReplay(loaded.unwrap());
-    auto const drop =
-        EbSaveDropPaths::get().replayDropDir() /
-        fmt::format("real_assist_{}_{}.gdr2", m_case.corpusId, m_case.variant);
+    auto const drop = EbSaveDropPaths::get().replayDropDir() /
+                      fmt::format("real_assist_{}_{}.gdr2", m_case.corpusId, m_case.variant);
     std::error_code ec;
     std::filesystem::create_directories(EbSaveDropPaths::get().replayDropDir(), ec);
     std::filesystem::copy_file(path, drop, std::filesystem::copy_options::overwrite_existing, ec);
@@ -318,12 +317,13 @@ bool EbRealAssistRunner::importReplayFile(std::filesystem::path const& path, std
 bool EbRealAssistRunner::writeLastRun(std::string const& text, std::string& err) const {
     err.clear();
     auto const dir = EbSaveDropPaths::get().rootDir() / "real_assist";
-    auto created = geode::utils::file::createDirectoryAll(dir);
+    auto created = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(dir));
     if (created.isErr()) {
         err = created.unwrapErr();
         return false;
     }
-    auto written = geode::utils::file::writeString(dir / "last_run.txt", text);
+    auto written =
+        geode::utils::file::writeString(asp::fs::Path::fromStdPath(dir / "last_run.txt"), text);
     if (written.isErr()) {
         err = written.unwrapErr();
         return false;
@@ -364,20 +364,20 @@ bool EbRealAssistRunner::writeSession(std::string& err) const {
             ++completes;
     }
     root["attempts"] = attempts;
-    float surviveRate =
-        m_attempts.empty() ? 0.f : static_cast<float>(completes) / static_cast<float>(m_attempts.size());
+    float surviveRate = m_attempts.empty()
+                            ? 0.f
+                            : static_cast<float>(completes) / static_cast<float>(m_attempts.size());
     root["SurviveRate"] = surviveRate;
     root["PhysicsHitRate"] = -1.0;
     root["InventRate"] = -1.0;
     root["DAF_exposed"] =
-        m_attempts.empty()
-            ? 0.f
-            : static_cast<float>(EbAssistRealMetrics::get().daf() - m_baselineDaf) /
-                  std::max(1, EbAssistRealMetrics::get().arms() - m_baselineArms);
+        m_attempts.empty() ? 0.f
+                           : static_cast<float>(EbAssistRealMetrics::get().daf() - m_baselineDaf) /
+                                 std::max(1, EbAssistRealMetrics::get().arms() - m_baselineArms);
     root["metrics"] = EbAssistRealMetrics::get().reportLine("real-assist");
 
     auto const dir = EbSaveDropPaths::get().rootDir() / "real_assist";
-    auto created = geode::utils::file::createDirectoryAll(dir);
+    auto created = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(dir));
     if (created.isErr()) {
         err = created.unwrapErr();
         return false;
@@ -397,10 +397,11 @@ bool EbRealAssistRunner::writeSession(std::string& err) const {
     }
     root["presses"] = presses;
 
-    auto const path =
-        dir / fmt::format("session_{}_{}_{}_{}.json", m_case.corpusId, m_case.variant,
-                          EbStageConfig::assistModeName(m_case.mode), protocolName(m_case.protocol));
-    auto written = geode::utils::file::writeString(path, root.dump(2) + "\n");
+    auto const path = dir / fmt::format("session_{}_{}_{}_{}.json", m_case.corpusId, m_case.variant,
+                                        EbStageConfig::assistModeName(m_case.mode),
+                                        protocolName(m_case.protocol));
+    auto written =
+        geode::utils::file::writeString(asp::fs::Path::fromStdPath(path), root.dump(2) + "\n");
     if (written.isErr()) {
         err = written.unwrapErr();
         return false;
@@ -414,9 +415,9 @@ std::string EbRealAssistRunner::summaryBlock(bool prepOk) const {
         if (row.completed)
             ++completes;
     }
-    float survive =
-        m_attempts.empty() ? 0.f
-                           : static_cast<float>(completes) / static_cast<float>(m_attempts.size());
+    float survive = m_attempts.empty()
+                        ? 0.f
+                        : static_cast<float>(completes) / static_cast<float>(m_attempts.size());
     auto const& metrics = EbAssistRealMetrics::get();
     int const arms = std::max(0, metrics.arms() - m_baselineArms);
     int const daf = std::max(0, metrics.daf() - m_baselineDaf);
@@ -440,26 +441,26 @@ std::string EbRealAssistRunner::summaryBlock(bool prepOk) const {
         notes = "notes=prep-only-set-EB_REAL_ASSIST_OPEN_LEVEL=1-to-enter-level";
     else if (!repro)
         notes = "notes=reproduce-pending-blocks-oracle-and-PASS";
-    return fmt::format(
-        "=== REAL ASSIST RUNNER {} ===\n"
-        "case={}/{}\n"
-        "mode={}\n"
-        "protocol={}\n"
-        "reproduce={}\n"
-        "prep={}\n"
-        "attempts={}\n"
-        "SurviveRate={:.3f}\n"
-        "PhysicsHitRate=n/a\n"
-        "InventRate=n/a\n"
-        "DAF_exposed={:.3f}\n"
-        "arms={}\n"
-        "levelOpened={}\n"
-        "shipLine={} wavePattern={}\n"
-        "{}\n",
-        verdict, m_case.corpusId, m_case.variant, EbStageConfig::assistModeName(m_case.mode),
-        protocolName(m_case.protocol), repro ? "pass" : "pending", prepOk ? "ok" : "fail",
-        m_attempts.size(), survive, dafExposed, arms, m_levelOpened, m_case.shipLine,
-        m_case.wavePattern, notes);
+    return fmt::format("=== REAL ASSIST RUNNER {} ===\n"
+                       "case={}/{}\n"
+                       "mode={}\n"
+                       "protocol={}\n"
+                       "reproduce={}\n"
+                       "prep={}\n"
+                       "attempts={}\n"
+                       "SurviveRate={:.3f}\n"
+                       "PhysicsHitRate=n/a\n"
+                       "InventRate=n/a\n"
+                       "DAF_exposed={:.3f}\n"
+                       "arms={}\n"
+                       "levelOpened={}\n"
+                       "shipLine={} wavePattern={}\n"
+                       "{}\n",
+                       verdict, m_case.corpusId, m_case.variant,
+                       EbStageConfig::assistModeName(m_case.mode), protocolName(m_case.protocol),
+                       repro ? "pass" : "pending", prepOk ? "ok" : "fail", m_attempts.size(),
+                       survive, dafExposed, arms, m_levelOpened, m_case.shipLine,
+                       m_case.wavePattern, notes);
 }
 
 bool EbRealAssistRunner::prepare(CaseSpec const& spec, std::string& report, bool quiet) {
@@ -580,7 +581,7 @@ bool EbRealAssistRunner::openPreparedLevel(std::string& report) {
         return false;
     }
     level->m_levelType = GJLevelType::Editor;
-    auto* scene = PlayLayer::scene(level, false, false);
+    auto* scene = PlayLayer::scene(level, false);
     if (!scene) {
         m_lastError = "PlayLayer::scene failed";
         report = summaryBlock(false);
@@ -592,8 +593,8 @@ bool EbRealAssistRunner::openPreparedLevel(std::string& report) {
     m_levelOpened = true;
     report = summaryBlock(true);
     (void)writeLastRun(report, err);
-    EbAssistLog::info(fmt::format("RealAssist opened level for {}/{}", m_case.corpusId,
-                                  m_case.variant));
+    EbAssistLog::info(
+        fmt::format("RealAssist opened level for {}/{}", m_case.corpusId, m_case.variant));
     return true;
 #endif
 }
@@ -730,7 +731,7 @@ EbSimPlan EbRealAssistRunner::planAtPlayer(PlayLayer* layer, PlayerObject* playe
             vopts.maxBranches = 0;
             vopts.smartDepth = 1;
             auto const vr = EbShadowSimulator::get().verifyDelay(layer, player, true, delayValue,
-                                                                limit, deltaTime, firstDt, vopts);
+                                                                 limit, deltaTime, firstDt, vopts);
             opts.budgetUs = std::max(0, opts.budgetUs - std::max(1, vr.usSpent));
             if (vr.budgetHit || vr.unknown)
                 continue;
@@ -805,8 +806,7 @@ bool EbRealAssistRunner::writeLegSession(CaseSpec const& spec, std::vector<Press
     for (auto const& press : presses)
         planUsSum += static_cast<double>(press.planUs);
     attempt.avgPlanUs =
-        presses.empty() ? 0.f
-                        : static_cast<float>(planUsSum / static_cast<double>(presses.size()));
+        presses.empty() ? 0.f : static_cast<float>(planUsSum / static_cast<double>(presses.size()));
     m_attempts.push_back(attempt);
     return writeSession(err);
 }
@@ -844,20 +844,18 @@ void EbRealAssistRunner::recordPlansAtLivePress(PlayLayer* layer, int frame, int
         livePlan = planAtPlayer(layer, player, frame, false);
     m_livePresses.push_back(makeRow(livePlan, liveSpec.mode, frame, eventIndex));
 
-    int const liveDelay =
-        livePlan.action == PlanAction::Delay ? std::max(0, livePlan.delay) : 0;
+    int const liveDelay = livePlan.action == PlanAction::Delay ? std::max(0, livePlan.delay) : 0;
 
     CaseSpec warmSpec = base;
     warmSpec.mode = EbStageConfig::AssistMode::Hybrid;
     warmSpec.protocol = Protocol::Online;
     if (applyProtocol(warmSpec, err)) {
         // Cheap warm: prepare key + seed verify only (no second Live search).
-        (void)EbHybridLearning::get().prepare(layer, player, true, true, frame,
-                                              EbStageConfig::paramsFor(player).ticks,
-                                              EbAssistController::get().simDt() > 0.f
-                                                  ? EbAssistController::get().simDt()
-                                                  : (1.f / 240.f),
-                                              1.f / 240.f, EbPlanOptions{});
+        (void)EbHybridLearning::get().prepare(
+            layer, player, true, true, frame, EbStageConfig::paramsFor(player).ticks,
+            EbAssistController::get().simDt() > 0.f ? EbAssistController::get().simDt()
+                                                    : (1.f / 240.f),
+            1.f / 240.f, EbPlanOptions{});
         EbHybridLearning::get().noteVerifyOutcome(liveDelay, true);
         PressRow warmRow = makeRow(livePlan, warmSpec.mode, frame, eventIndex);
         warmRow.hybridTried = false;
@@ -919,23 +917,23 @@ void EbRealAssistRunner::finishModesCompare(std::string const& reason) {
                 ++delayMismatch;
         }
 
-        report = fmt::format(
-            "=== REAL ASSIST MODES OK ===\n"
-            "case={}/{}\n"
-            "queue={}/{}\n"
-            "presses={}\n"
-            "timeWarp={:.0f}\n"
-            "delayMismatch={}/{}\n"
-            "reason={}\n"
-            "wrote session_* + mode_compare_*.json\n",
-            base.corpusId, base.variant, s_modesQueueIndex + 1, s_modesQueue.size(), compared,
-            m_modesTimeWarp, delayMismatch, compared, reason);
+        report =
+            fmt::format("=== REAL ASSIST MODES OK ===\n"
+                        "case={}/{}\n"
+                        "queue={}/{}\n"
+                        "presses={}\n"
+                        "timeWarp={:.0f}\n"
+                        "delayMismatch={}/{}\n"
+                        "reason={}\n"
+                        "wrote session_* + mode_compare_*.json\n",
+                        base.corpusId, base.variant, s_modesQueueIndex + 1, s_modesQueue.size(),
+                        compared, m_modesTimeWarp, delayMismatch, compared, reason);
         (void)writeLastRun(report, err);
         EbAssistLog::info(report);
         geode::log::info("{}", report);
-        s_modesQueueResults.push_back(fmt::format(
-            "PASS {}/{} presses={} delayMismatch={}/{} reason={}", base.corpusId, base.variant,
-            compared, delayMismatch, compared, reason));
+        s_modesQueueResults.push_back(
+            fmt::format("PASS {}/{} presses={} delayMismatch={}/{} reason={}", base.corpusId,
+                        base.variant, compared, delayMismatch, compared, reason));
     }
 
     setAssistMasterEnabled(m_prevAssistEnabled);
@@ -1015,8 +1013,7 @@ void EbRealAssistRunner::onPhysicsTick(PlayLayer* layer) {
     double const scale = 240.0 / m_playbackTps;
     while (m_playbackIndex < m_playbackEvents.size()) {
         auto const& event = m_playbackEvents[m_playbackIndex];
-        int const target =
-            static_cast<int>(std::llround(static_cast<double>(event.frame) * scale));
+        int const target = static_cast<int>(std::llround(static_cast<double>(event.frame) * scale));
         if (target > tick)
             break;
 
@@ -1026,8 +1023,7 @@ void EbRealAssistRunner::onPhysicsTick(PlayLayer* layer) {
             size_t const n = m_livePresses.size();
             if (n == 1 || n % 4 == 0 || static_cast<int>(n) >= m_maxPresses) {
                 geode::log::info("RealAssist modes press {}/{} frame={} L/H={}/{}", n, m_maxPresses,
-                                 event.frame,
-                                 n ? m_livePresses.back().plannedDelay : -1,
+                                 event.frame, n ? m_livePresses.back().plannedDelay : -1,
                                  n && !m_hybridPresses.empty() ? m_hybridPresses.back().plannedDelay
                                                                : -1);
             }
@@ -1148,7 +1144,7 @@ float EbRealAssistRunner::envFloatOr(char const* name, float fallback) {
 bool EbRealAssistRunner::writeModeCompare(std::string& err) const {
     err.clear();
     auto const dir = EbSaveDropPaths::get().rootDir() / "real_assist";
-    auto created = geode::utils::file::createDirectoryAll(dir);
+    auto created = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(dir));
     if (created.isErr()) {
         err = created.unwrapErr();
         return false;
@@ -1156,7 +1152,7 @@ bool EbRealAssistRunner::writeModeCompare(std::string& err) const {
     auto readSession = [&](char const* mode, char const* protocol) -> matjson::Value {
         auto path = dir / fmt::format("session_{}_{}_{}_{}.json", m_case.corpusId, m_case.variant,
                                       mode, protocol);
-        auto parsed = geode::utils::file::readJson(path);
+        auto parsed = geode::utils::file::readJson(asp::fs::Path::fromStdPath(path));
         if (parsed.isErr())
             return matjson::Value::object();
         return parsed.unwrap();
@@ -1253,29 +1249,29 @@ bool EbRealAssistRunner::writeModeCompare(std::string& err) const {
     auto const dump = root.dump(2) + "\n";
     auto const perCase =
         dir / fmt::format("mode_compare_{}_{}.json", m_case.corpusId, m_case.variant);
-    auto writtenCase = geode::utils::file::writeString(perCase, dump);
+    auto writtenCase = geode::utils::file::writeString(asp::fs::Path::fromStdPath(perCase), dump);
     if (writtenCase.isErr()) {
         err = writtenCase.unwrapErr();
         return false;
     }
-    auto writtenLatest = geode::utils::file::writeString(dir / "mode_compare.json", dump);
+    auto writtenLatest = geode::utils::file::writeString(
+        asp::fs::Path::fromStdPath(dir / "mode_compare.json"), dump);
     if (writtenLatest.isErr()) {
         err = writtenLatest.unwrapErr();
         return false;
     }
-    geode::log::info(
-        "RealAssist mode_compare {}/{}: delayMismatch={}/{} planUsΔ={:.1f} "
-        "hybridTried L/H={}/{} onlyH={}",
-        m_case.corpusId, m_case.variant, delayMismatch, compared,
-        avgPlan(hybrid) - avgPlan(live), hybridTried(live), hybridTried(hybrid),
-        hybridTriedOnlyHybrid);
+    geode::log::info("RealAssist mode_compare {}/{}: delayMismatch={}/{} planUsΔ={:.1f} "
+                     "hybridTried L/H={}/{} onlyH={}",
+                     m_case.corpusId, m_case.variant, delayMismatch, compared,
+                     avgPlan(hybrid) - avgPlan(live), hybridTried(live), hybridTried(hybrid),
+                     hybridTriedOnlyHybrid);
     return true;
 }
 
 bool EbRealAssistRunner::writeModesQueueSummary(std::string& err) const {
     err.clear();
     auto const dir = EbSaveDropPaths::get().rootDir() / "real_assist";
-    auto created = geode::utils::file::createDirectoryAll(dir);
+    auto created = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(dir));
     if (created.isErr()) {
         err = created.unwrapErr();
         return false;
@@ -1298,23 +1294,22 @@ bool EbRealAssistRunner::writeModesQueueSummary(std::string& err) const {
         item["corpusId"] = spec.corpusId;
         item["variant"] = spec.variant;
         auto path = dir / fmt::format("mode_compare_{}_{}.json", spec.corpusId, spec.variant);
-        auto parsed = geode::utils::file::readJson(path);
+        auto parsed = geode::utils::file::readJson(asp::fs::Path::fromStdPath(path));
         if (parsed.isOk())
             item["compare"] = parsed.unwrap();
         cases.push(item);
     }
     root["cases"] = cases;
-    auto written =
-        geode::utils::file::writeString(dir / "mode_compare_all.json", root.dump(2) + "\n");
+    auto written = geode::utils::file::writeString(
+        asp::fs::Path::fromStdPath(dir / "mode_compare_all.json"), root.dump(2) + "\n");
     if (written.isErr()) {
         err = written.unwrapErr();
         return false;
     }
-    std::string summary = fmt::format(
-        "=== REAL ASSIST MODES QUEUE DONE ===\n"
-        "cases={}\n"
-        "fails={}\n",
-        s_modesQueue.size(), fails);
+    std::string summary = fmt::format("=== REAL ASSIST MODES QUEUE DONE ===\n"
+                                      "cases={}\n"
+                                      "fails={}\n",
+                                      s_modesQueue.size(), fails);
     for (auto const& line : s_modesQueueResults)
         summary += line + "\n";
     summary += "wrote mode_compare_all.json\n";
@@ -1418,8 +1413,8 @@ bool EbRealAssistRunner::runDevAction(std::string& report) {
 
     bool const wantMatrix =
         autoVal == "matrix" || caseEnv.empty() || caseEnv == "matrix" || caseEnv == "all";
-    if (wantMatrix && (autoVal == "matrix" || caseEnv == "matrix" || caseEnv == "all" ||
-                       caseEnv.empty())) {
+    if (wantMatrix &&
+        (autoVal == "matrix" || caseEnv == "matrix" || caseEnv == "all" || caseEnv.empty())) {
         auto rows = smokeMatrix();
         int fails = 0;
         std::string lines = "=== REAL ASSIST MATRIX (prep) ===\n";

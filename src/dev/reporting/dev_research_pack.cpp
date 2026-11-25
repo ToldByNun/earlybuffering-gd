@@ -8,6 +8,7 @@
 #include "dev_report.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <fstream>
 #include <system_error>
@@ -30,7 +31,8 @@ public:
 
     static bool writeText(std::filesystem::path const& path, std::string const& body,
                           std::string& errMsg) {
-        auto const written = geode::utils::file::writeString(path, body);
+        auto const written =
+            geode::utils::file::writeString(asp::fs::Path::fromStdPath(path), body);
         if (written.isOk())
             return true;
         errMsg = written.unwrapErr();
@@ -147,14 +149,15 @@ bool EbDevResearchPack::exportPack(Result& out, std::string& errMsg) {
     }
 
     auto const root = researchRoot();
-    auto mkdir = geode::utils::file::createDirectoryAll(root);
+    auto mkdir = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(root));
     if (mkdir.isErr()) {
         errMsg = fmt::format("cannot create research dir: {}", mkdir.unwrapErr());
         return false;
     }
 
-    auto const packDir = root / fmt::format("research_{}", EbDevResearchPackImplementation::stampNow());
-    mkdir = geode::utils::file::createDirectoryAll(packDir);
+    auto const packDir =
+        root / fmt::format("research_{}", EbDevResearchPackImplementation::stampNow());
+    mkdir = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(packDir));
     if (mkdir.isErr()) {
         errMsg = fmt::format("cannot create pack dir: {}", mkdir.unwrapErr());
         return false;
@@ -228,8 +231,9 @@ bool EbDevResearchPack::exportPack(Result& out, std::string& errMsg) {
 
     if (EbDevReport::hasLast()) {
         auto const& report = EbDevReport::last();
-        std::string const overlay =
-            report.overlayLine.empty() ? EbDevReport::formatOverlayLine(report) : report.overlayLine;
+        std::string const overlay = report.overlayLine.empty()
+                                        ? EbDevReport::formatOverlayLine(report)
+                                        : report.overlayLine;
         if (!EbDevResearchPackImplementation::writeText(packDir / "report.txt", overlay + "\n",
                                                         errMsg)) {
             errMsg = fmt::format("report.txt write failed: {}", errMsg);
@@ -254,16 +258,15 @@ bool EbDevResearchPack::exportPack(Result& out, std::string& errMsg) {
     }
 
     {
-        std::string readme =
-            "EarlyBuffer Dev Lab research pack\n"
-            "\n"
-            "session.json              — Dev Lab decision traces (if available)\n"
-            "report.txt / report.json  — last eval overlay + structured report\n"
-            "settings_fingerprint.txt  — compact assist/dev settings summary\n"
-            "config.json               — portable settings (keybinds omitted)\n"
-            "MANIFEST.json             — pack index\n"
-            "\n"
-            "For bake bugs also run Dump Diag (separate diag/full_* folder).\n";
+        std::string readme = "EarlyBuffer Dev Lab research pack\n"
+                             "\n"
+                             "session.json              — Dev Lab decision traces (if available)\n"
+                             "report.txt / report.json  — last eval overlay + structured report\n"
+                             "settings_fingerprint.txt  — compact assist/dev settings summary\n"
+                             "config.json               — portable settings (keybinds omitted)\n"
+                             "MANIFEST.json             — pack index\n"
+                             "\n"
+                             "For bake bugs also run Dump Diag (separate diag/full_* folder).\n";
         if (!EbDevResearchPackImplementation::writeText(packDir / "README.txt", readme, errMsg)) {
             errMsg = fmt::format("README write failed: {}", errMsg);
             return false;

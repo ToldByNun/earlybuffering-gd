@@ -5,7 +5,8 @@
 #include <cctype>
 #include <chrono>
 
-bool EbCloudConfigSubmitImplementation::parseHttpsHost(std::string const& url, std::string& hostOut) {
+bool EbCloudConfigSubmitImplementation::parseHttpsHost(std::string const& url,
+                                                       std::string& hostOut) {
     hostOut.clear();
     if (url.size() < 8 || url.compare(0, 8, "https://") != 0)
         return false;
@@ -59,7 +60,7 @@ bool EbCloudConfigSubmit::isAllowedSubmitUrl(std::string const& url) {
 }
 
 EbCloudConfigSubmit::Result EbCloudConfigSubmit::submit(EbCloudConfigPublish::PackMeta const& meta,
-                                                    std::string const& bundleJson) {
+                                                        std::string const& bundleJson) {
     Result result{};
     result.attempted = true;
     result.urlUsed = effectiveSubmitUrl();
@@ -106,7 +107,7 @@ EbCloudConfigSubmit::Result EbCloudConfigSubmit::submit(EbCloudConfigPublish::Pa
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudSubmit/1");
-    req.timeout(std::chrono::seconds(30));
+    req.timeout(asp::time::Duration::fromSecs(30));
     req.followRedirects(false);
     req.certVerification(true);
     req.header("Accept", "application/json");

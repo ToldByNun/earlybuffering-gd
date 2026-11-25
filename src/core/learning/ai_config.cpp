@@ -1,6 +1,7 @@
 #include "ai_config.hpp"
 #include "../../app/class_manager.hpp"
 #include <Geode/Geode.hpp>
+#include <asp/fs/std.hpp>
 #include <cmath>
 #include <fstream>
 #include <matjson.hpp>
@@ -414,7 +415,7 @@ void EbAiConfig::load() {
     auto* mod = geode::Mod::get();
     if (!mod)
         return;
-    auto path = mod->getSaveDir() / "ai" / "config-v1.json";
+    auto path = mod->getSaveDir().toStdPath().unwrap() / "ai" / "config-v1.json";
     std::error_code ec;
     if (!std::filesystem::exists(path, ec)) {
         applyPreset(Preset::Balanced);
@@ -554,7 +555,7 @@ void EbAiConfig::save() const {
     auto* mod = geode::Mod::get();
     if (!mod)
         return;
-    auto dir = mod->getSaveDir() / "ai";
+    auto dir = mod->getSaveDir().toStdPath().unwrap() / "ai";
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
     auto path = dir / "config-v1.json";

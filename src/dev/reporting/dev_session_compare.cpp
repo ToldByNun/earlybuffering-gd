@@ -3,6 +3,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -193,8 +194,8 @@ public:
         return out;
     }
 
-    static EbDevSessionCompare::Verdict
-    verdictForDelta(float newest, float baseline, bool higherIsBetter) {
+    static EbDevSessionCompare::Verdict verdictForDelta(float newest, float baseline,
+                                                        bool higherIsBetter) {
         float const scale = std::max(std::fabs(baseline), 1.f);
         float const eps = std::max(kFlatEpsAbs, kFlatEpsRel * scale);
         float const delta = newest - baseline;
@@ -206,7 +207,7 @@ public:
     }
 
     static float baselineMedian(std::vector<EbDevSessionCompare::SessionMetrics> const& older,
-                                float EbDevSessionCompare::SessionMetrics::*field) {
+                                float EbDevSessionCompare::SessionMetrics::* field) {
         std::vector<float> values;
         values.reserve(older.size());
         for (auto const& s : older) {
@@ -299,7 +300,7 @@ bool EbDevSessionCompare::metricsFromFile(std::filesystem::path const& path, Ses
                                           std::string& errMsg) {
     errMsg.clear();
     out = {};
-    auto const body = geode::utils::file::readString(path);
+    auto const body = geode::utils::file::readString(asp::fs::Path::fromStdPath(path));
     if (!body.isOk()) {
         errMsg = body.unwrapErr();
         if (errMsg.empty())
@@ -329,8 +330,8 @@ std::string EbDevSessionCompare::formatSummary(Result const& r) {
         drivers = r.driverMetric.empty() ? "-" : r.driverMetric;
     return fmt::format("COMPARE {} | verdict={} | level={} | sessions={} | drivers={}",
                        r.outPath.filename().string(), verdictId(r.verdict),
-                       r.levelKey.empty() ? "-" : r.levelKey,
-                       static_cast<int>(r.sessions.size()), drivers);
+                       r.levelKey.empty() ? "-" : r.levelKey, static_cast<int>(r.sessions.size()),
+                       drivers);
 }
 
 bool EbDevSessionCompare::run(Options const& opts, Result& out, std::string& errMsg) {
@@ -401,12 +402,12 @@ bool EbDevSessionCompare::run(Options const& opts, Result& out, std::string& err
          base(older, &SessionMetrics::deathAfterFireRate), false);
     push(out.deltas, "medianTicksToDeath", newest.medianTicksToDeath,
          base(older, &SessionMetrics::medianTicksToDeath), false);
-    push(out.deltas, "hopelessRate", newest.hopelessRate, base(older, &SessionMetrics::hopelessRate),
-         false);
+    push(out.deltas, "hopelessRate", newest.hopelessRate,
+         base(older, &SessionMetrics::hopelessRate), false);
     push(out.deltas, "budgetHitRate", newest.budgetHitRate,
          base(older, &SessionMetrics::budgetHitRate), false);
-    push(out.deltas, "gatePassRate", newest.gatePassRate, base(older, &SessionMetrics::gatePassRate),
-         true);
+    push(out.deltas, "gatePassRate", newest.gatePassRate,
+         base(older, &SessionMetrics::gatePassRate), true);
     push(out.deltas, "meanChosenEndX", newest.meanChosenEndX,
          base(older, &SessionMetrics::meanChosenEndX), true);
     push(out.deltas, "simNetHarmShare", newest.simNetHarmShare,
@@ -490,8 +491,10 @@ bool EbDevSessionCompare::run(Options const& opts, Result& out, std::string& err
 
     std::error_code ec;
     std::filesystem::create_directories(tracesDir, ec);
-    out.outPath = tracesDir / fmt::format("compare_{}.json", EbDevSessionCompareImplementation::stampNow());
-    auto const written = geode::utils::file::writeString(out.outPath, root.dump(2));
+    out.outPath =
+        tracesDir / fmt::format("compare_{}.json", EbDevSessionCompareImplementation::stampNow());
+    auto const written =
+        geode::utils::file::writeString(asp::fs::Path::fromStdPath(out.outPath), root.dump(2));
     if (!written.isOk()) {
         errMsg = written.unwrapErr();
         if (errMsg.empty())

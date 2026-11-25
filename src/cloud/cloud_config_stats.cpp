@@ -1,5 +1,5 @@
-#include "../app/class_manager.hpp"
 #include "cloud_config_stats.hpp"
+#include "../app/class_manager.hpp"
 #include "cloud_config_store.hpp"
 #include "stats/cloud_stats_storage.hpp"
 #include "stats/cloud_stats_tracking.hpp"
@@ -19,7 +19,8 @@
 #pragma optimize("", off)
 #endif
 
-bool EbCloudConfigStatsImplementation::parseHttpsHost(std::string const& url, std::string& hostOut) {
+bool EbCloudConfigStatsImplementation::parseHttpsHost(std::string const& url,
+                                                      std::string& hostOut) {
     hostOut.clear();
     if (url.size() < 8 || url.compare(0, 8, "https://") != 0)
         return false;
@@ -194,7 +195,8 @@ EbCloudConfigStats::PackStats EbCloudConfigStats::statsFor(std::string const& pa
     return {};
 }
 
-std::unordered_map<std::string, EbCloudConfigStats::PackStats> const& EbCloudConfigStats::all() const {
+std::unordered_map<std::string, EbCloudConfigStats::PackStats> const&
+EbCloudConfigStats::all() const {
     static std::unordered_map<std::string, PackStats> empty;
     if (!(!m_impl)) {
         return m_impl->packs;
@@ -316,8 +318,8 @@ EbCloudConfigStatsImplementation::packStatsFromJson(matjson::Value const& root) 
 
 EbCloudConfigStats::TrackResult
 EbCloudConfigStatsImplementation::postTrackSync(std::string const& url, std::string const& clientId,
-                                              std::string const& op, std::string const& packId,
-                                              int stars) {
+                                                std::string const& op, std::string const& packId,
+                                                int stars) {
     EbCloudConfigStats::TrackResult result{};
     result.attempted = true;
 
@@ -330,7 +332,7 @@ EbCloudConfigStatsImplementation::postTrackSync(std::string const& url, std::str
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudStats/1");
-    req.timeout(std::chrono::seconds(20));
+    req.timeout(asp::time::Duration::fromSecs(20));
     req.followRedirects(false);
     req.certVerification(true);
     req.header("Accept", "application/json");

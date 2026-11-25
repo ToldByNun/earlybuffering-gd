@@ -342,6 +342,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
             } else if (pickDelay < 0) {
                 pickDelay = delayValue;
                 pickConf = confidence;
+                // Match press: stop once the ranked winner is fully verified.
+                break;
             }
         }
         if (pickDelay >= 0) {
