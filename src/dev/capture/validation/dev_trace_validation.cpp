@@ -12,7 +12,7 @@
 #include <vector>
 
 bool EbDevTraceValidation::validatePressChain(std::vector<EbDevDecisionEvent> const& events,
-                                            int64_t pressId, std::string& err) {
+                                              int64_t pressId, std::string& err) {
     err.clear();
     if (pressId <= 0) {
         err = "pressId<=0";
@@ -191,8 +191,9 @@ bool EbDevTraceValidation::validatePressChain(std::vector<EbDevDecisionEvent> co
     return true;
 }
 
-EbDevDecisionEvent EbDevTraceValidation::makeEv(DevEventKind kind, int64_t eventId, int64_t attemptId,
-                                            int64_t pressId, int64_t parent, int64_t planId) {
+EbDevDecisionEvent EbDevTraceValidation::makeEv(DevEventKind kind, int64_t eventId,
+                                                int64_t attemptId, int64_t pressId, int64_t parent,
+                                                int64_t planId) {
     EbDevDecisionEvent e;
     e.kind = kind;
     e.eventId = eventId;
@@ -220,7 +221,8 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
            "kind-press");
     expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::Outcome), "outcome") == 0,
            "kind-outcome");
-    expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::ModeTransition), "modeTransition") == 0,
+    expect(std::strcmp(EbDevTraceStore::kindId(DevEventKind::ModeTransition), "modeTransition") ==
+               0,
            "kind-mode-transition");
     DevEventKind offset = DevEventKind::PressObserved;
     expect(EbDevTraceStore::parseKind("delayArm", offset) && offset == DevEventKind::DelayArm,
@@ -256,12 +258,17 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
 
     // Gate cycle: press → gatePass → outcome
     std::vector<EbDevDecisionEvent> gate;
-    gate.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 1, 1, 7, 0, 0));
+    gate.push_back(
+        EbDevTraceStoreImplementation::makeEv(DevEventKind::PressObserved, 1, 1, 7, 0, 0));
     gate.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::GatePass, 2, 1, 7, 1, 0));
     gate.push_back(EbDevTraceStoreImplementation::makeEv(DevEventKind::Outcome, 3, 1, 7, 2, 0));
     expect(EbDevTraceStore::validatePressChain(gate, 7, err), "chain-gate");
 
     // JSON roundtrip preserves IDs
+    good[1].hasPlanCost = true;
+    good[1].inputPrepareUs = 123;
+    good[1].witnessCaptureUs = 456;
+    good[1].cpuWorkers = 3;
     EbDevSessionFile sess;
     sess.traceSchema = EbDevTraceStore::kTraceSchema;
     sess.modVersion = "v1.3.2-test";
@@ -326,6 +333,10 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
     expect(back.attempts[0].eval.samples.size() == 1, "json-eval-samples");
     expect(back.attempts[0].eval.samples[0].delay == 2, "json-eval-sample-delay");
     expect(back.attempts[0].events[1].plannedFirePhase == 0.5f, "json-planned-phase");
+    expect(back.attempts[0].events[1].inputPrepareUs == 123 &&
+               back.attempts[0].events[1].witnessCaptureUs == 456 &&
+               back.attempts[0].events[1].cpuWorkers == 3,
+           "json-input-cost-and-actual-workers");
     expect(back.attempts[0].events[3].actualFirePhase == 0.5f, "json-actual-phase");
     expect(back.attempts[0].eval.samples[0].firePhase == 0.5f, "json-eval-phase");
 
@@ -386,7 +397,8 @@ bool EbDevTraceValidation::selfCheck(std::string& report) {
         std::string diskBody((std::istreambuf_iterator<char>(in)),
                              std::istreambuf_iterator<char>());
         EbDevSessionFile diskSess;
-        expect(EbDevTraceStore::sessionFromJsonString(diskBody, diskSess, jerr), "store-disk-parse");
+        expect(EbDevTraceStore::sessionFromJsonString(diskBody, diskSess, jerr),
+               "store-disk-parse");
         expect(diskSess.attempts.size() == 1, "store-disk-attempt");
         if (!diskSess.attempts.empty()) {
             expect(EbDevTraceStore::validatePressChain(diskSess.attempts[0].events, pid, err),

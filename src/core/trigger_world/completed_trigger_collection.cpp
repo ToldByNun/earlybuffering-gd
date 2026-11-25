@@ -9,9 +9,12 @@ bool EbCompletedTriggerCollection::isComplete(std::size_t expectedCount, std::si
 bool EbCompletedTriggerCollection::matches(void const* layer, void const* objects,
                                            std::size_t count, std::size_t children,
                                            std::size_t sections, bool skipDynamic) const {
+    (void)children;
+    (void)sections;
+    // Render batches and collision sections change during play. Only the owning
+    // source defines whether the collected level object set has changed.
     return m_complete && layer && objects && layer == m_layer && objects == m_objects &&
-           count == m_count && children == m_children && sections == m_sections &&
-           skipDynamic == m_skipDynamic;
+           count == m_count && skipDynamic == m_skipDynamic;
 }
 
 void EbCompletedTriggerCollection::remember(void const* layer, void const* objects,

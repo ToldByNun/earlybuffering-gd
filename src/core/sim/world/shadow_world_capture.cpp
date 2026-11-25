@@ -9,6 +9,7 @@
 #include "../orbs/orb_stack_resolver.hpp"
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
+#include "../sim_collision_policy.hpp"
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
@@ -62,13 +63,20 @@ void EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator& simulator, Play
         return;
     simulator.m_captureObjects.clear();
     simulator.m_captureEffects.clear();
-    simulator.m_captureObjects.reserve(source->count());
+    simulator.m_captureObjects.reserve(std::min<std::size_t>(source->count(), 4096));
+    std::unordered_set<int> effectIds;
     auto consider = [&](GameObject* object) {
         if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
             return;
-        if (!simulator.m_captureObjects.emplace(object->m_uniqueID, object).second)
-            return;
-        if (auto* effect = geode::prelude::typeinfo_cast<EffectGameObject*>(object))
+        // Decoration never participates in collision prediction. Retaining every
+        // sprite here needlessly pins huge levels until the next detach.
+        if (EbSimCollisionPolicy::classifyObjectType(static_cast<int>(object->m_objectType),
+                                                     object->m_objectID) != SimObjectAction::Skip)
+            simulator.m_captureObjects.emplace(object->m_uniqueID, object);
+        if (auto* effect = geode::prelude::typeinfo_cast<EffectGameObject*>(object);
+            effect && effect->m_targetGroupID > 0 &&
+            EbTriggerClassify::classify(effect) != TriggerKind::Ignore &&
+            effectIds.insert(effect->m_uniqueID).second)
             simulator.m_captureEffects.emplace_back(effect);
     };
     // Preserve the original object-layer order for bounded dynamic jobs.
@@ -118,9 +126,9 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
 
     EbLagProbe::Scope const scope("eb.trigger.capture");
 
-    refreshObjectIndex(simulator, layer);
     if (!store.loaded() || !store.hasTracks())
         return;
+    refreshObjectIndex(simulator, layer);
     int const captureTick =
         (simulator.m_poseRemapDt > 0.f
              ? store.remapLiveTick(simulator.m_simTickBase, simulator.m_poseRemapDt)

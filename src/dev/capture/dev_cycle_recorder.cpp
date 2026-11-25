@@ -165,10 +165,17 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     }
     // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
     bool const freezeOnRecord = true;
+    auto const witnessStarted = std::chrono::steady_clock::now();
     width->witness = EbDevLiveWitness::capture(layer, player, player2, plan,
                                                width->hasClockStamp ? width->clockStamp : clock,
                                                effectTick, freezeOnRecord);
     width->hasWitness = width->witness.valid;
+    width->witnessCaptureUs =
+        static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock::now() - witnessStarted)
+                             .count());
+    width->inputPrepareUs = plan.inputPrepareUs;
+    width->cpuWorkers = plan.cpuWorkers;
 
     // Commit 8: suppress claims early when the witness alone is notReproducible.
     if (width->hasWitness) {
@@ -785,7 +792,9 @@ bool EbDevCycleRecorder::flushQuit() {
         this->m_cycles.clear();
         this->m_activePressId = 0;
         this->resetModeTimeline();
-        (void)store.sealAttempt("quit", count);
+        // sealAttempt already persists the session; do not serialize and write
+        // the entire recording a second time while leaving a large level.
+        return store.sealAttempt("quit", count);
     }
     return store.flush();
 }

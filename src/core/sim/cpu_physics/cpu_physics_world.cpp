@@ -1,6 +1,6 @@
 #include "cpu_physics_world.hpp"
-#include "../../level/section_object_walk.hpp"
 #include "../../learning/neural_hitbox.hpp"
+#include "../../level/section_object_walk.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../foresight/travel_foresight.hpp"
 #include "../sim_collision_policy.hpp"
@@ -68,10 +68,7 @@ EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObje
 
     float const px = real->getPositionX();
     float const py = real->getPositionY();
-    float const x0 = px - std::max(0.f, options.behindX);
-    float const x1 = px + std::max(40.f, options.aheadX);
-    float const y0 = py - std::max(40.f, options.yReach);
-    float const y1 = py + std::max(40.f, options.yReach);
+    world.window = EbSimulationWindow(px, options.aheadX, options.behindX);
 
     world.bodies.reserve(256);
     world.floorY = py - 240.f;
@@ -99,12 +96,15 @@ EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObje
             break;
         }
 
+        auto& store = EbTriggerWorldStore::get();
+        bool const tracked = store.loaded() && store.findTrack(object->m_uniqueID);
+        auto const bounds = object->getObjectRect();
+        // Cull static objects before refreshing expensive oriented hitboxes.
+        // Track-driven movers must also be checked at their future positions.
+        if (!tracked && !world.window.overlaps(bounds.origin.x, bounds.size.width))
+            return;
         auto const box = EbNeuralHitbox::read(object);
         if (!box.valid || box.aabbW <= 0.f || box.aabbH <= 0.f)
-            return;
-        float const cx = box.aabbX + box.aabbW * 0.5f;
-        float const cy = box.aabbY + box.aabbH * 0.5f;
-        if (cx < x0 || cx > x1 || cy < y0 || cy > y1)
             return;
 
         EbCpuPhysicsBody body;
@@ -130,6 +130,14 @@ EbCpuPhysicsWorld EbCpuPhysicsWorldCapture::capture(PlayLayer* layer, PlayerObje
 
         fillTwSamples(body, body.uniqueId, world.baseAbsTick, world.horizonTicks, world.simDt,
                       body.x, body.y, body.w, body.h);
+        float sweptMin = body.x;
+        float sweptMax = body.x + body.w;
+        for (int sample = 0; sample < body.twSamples; ++sample) {
+            sweptMin = std::min(sweptMin, body.twX[sample]);
+            sweptMax = std::max(sweptMax, body.twX[sample] + body.twW[sample]);
+        }
+        if (!world.window.overlaps(sweptMin, sweptMax - sweptMin))
+            return;
         world.bodies.push_back(body);
 
         if (!body.isHazard && !body.isRing && !body.isPad) {

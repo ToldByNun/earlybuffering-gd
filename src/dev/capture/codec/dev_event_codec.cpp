@@ -121,6 +121,9 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["shipLineCorrection"] = e.shipLineCorrection;
         otherIndex["wavePatternCorrection"] = e.wavePatternCorrection;
         otherIndex["planUs"] = e.planUs;
+        otherIndex["inputPrepareUs"] = e.inputPrepareUs;
+        otherIndex["witnessCaptureUs"] = e.witnessCaptureUs;
+        otherIndex["cpuWorkers"] = e.cpuWorkers;
         otherIndex["renderFrame"] = e.renderFrame;
         otherIndex["frameBudgetUs"] = e.frameBudgetUs;
         otherIndex["frameSpentBeforeUs"] = e.frameSpentBeforeUs;
@@ -457,6 +460,14 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.wavePatternCorrection = j.contains("wavePatternCorrection") &&
                                   j["wavePatternCorrection"].asBool().unwrapOr(false);
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
+        e.inputPrepareUs = j.contains("inputPrepareUs")
+                               ? static_cast<int>(j["inputPrepareUs"].asInt().unwrapOr(0))
+                               : 0;
+        e.witnessCaptureUs = j.contains("witnessCaptureUs")
+                                 ? static_cast<int>(j["witnessCaptureUs"].asInt().unwrapOr(0))
+                                 : 0;
+        e.cpuWorkers =
+            j.contains("cpuWorkers") ? static_cast<int>(j["cpuWorkers"].asInt().unwrapOr(0)) : 0;
         e.worldCaptureUs = j.contains("worldCaptureUs")
                                ? static_cast<int>(j["worldCaptureUs"].asInt().unwrapOr(0))
                                : 0;

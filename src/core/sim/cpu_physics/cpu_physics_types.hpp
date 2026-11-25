@@ -1,6 +1,7 @@
 #ifndef CPU_PHYSICS_TYPES_HPP
 #define CPU_PHYSICS_TYPES_HPP
 
+#include "../world/simulation_window.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -101,6 +102,7 @@ private:
 
 class EbCpuPhysicsWorld {
 public:
+    EbSimulationWindow window;
     EbCpuPhysicsSeed seed;
     std::vector<EbCpuPhysicsBody> bodies;
     float floorY = 0.f;

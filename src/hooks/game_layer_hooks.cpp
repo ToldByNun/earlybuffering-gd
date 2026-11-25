@@ -4,9 +4,11 @@
 #include "../core/sim/orbs/toggle_orb_sim.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_collision_policy.hpp"
+#include "../core/sim/world/simulation_window.hpp"
 #include "../core/trigger_world/trigger_classify.hpp"
 #include "game_hook_simulation_guard.hpp"
 #include <Geode/Geode.hpp>
+#include <algorithm>
 #include <fmt/format.h>
 #include <typeinfo>
 
@@ -198,7 +200,7 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, std::vector<
     // Use persistent scratch (not a stack std::vector): on iOS ARM64 a temporary
     // std::vector ABI/lifetime mismatch into playerTouchedRing was a SIGBUS source.
     if (sim.isSimulating()) {
-        if (!sim.isShadow(player))
+        if (!player || !sim.isShadow(player))
             return;
         auto& extra = sim.collisionFilterScratch();
         extra.clear();
@@ -209,6 +211,12 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, std::vector<
         // result is identical even when their collision policy differs.
         std::type_info const* lastType = nullptr;
         bool playerType = false;
+        float const currentX = player->getPositionX();
+        float const lastX = player->m_lastPosition.x;
+        EbSimulationWindow const window(
+            currentX, EbSimulationWindow::kMinimumReach + std::max(0.f, lastX - currentX),
+            EbSimulationWindow::kMinimumReach + std::max(0.f, currentX - lastX));
+        auto const playerBounds = player->getObjectRect();
         for (int index = 0; index < objectsCount; index++) {
             GameObject* object = vec->at(index);
             if (!object)
@@ -223,12 +231,19 @@ auto EbGJBaseGameLayer::collisionCheckObjects(PlayerObject* player, std::vector<
             if (playerType) {
                 continue;
             }
+            // Apply the local strip to the actual Shadow hot path too, before
+            // trigger-policy work. Include swept travel, large boxes and all Y.
+            if (!window.overlaps(object->getPositionX(), 0.f)) {
+                auto const bounds = object->getObjectRect();
+                if (!window.overlaps(bounds.origin.x, bounds.size.width))
+                    continue;
+            }
             switch (EbSimCollisionPolicy::classify(object)) {
             case SimObjectAction::Include:
                 extra.push_back(object);
                 break;
             case SimObjectAction::UnknownOnOverlap:
-                if (player && object->getObjectRect().intersectsRect(player->getObjectRect())) {
+                if (object->getObjectRect().intersectsRect(playerBounds)) {
                     sim.noteUnknown(object);
                     EbSimCollisionPolicy::noteLimitedSimOnce();
                 }

@@ -20,12 +20,10 @@ bool EbCpuPhysicsAdaptive::tryScreen(PlayLayer* layer, PlayerObject* real, bool 
 
     auto const t0 = std::chrono::steady_clock::now();
     float const ahead = EbTravelForesight::aheadX(real, limit, deltaTime, 8);
-    float const yReach = EbTravelForesight::yReachForPlayer(real) + 40.f;
 
     EbCpuPhysicsWorldCapture::Options captureOpts;
     captureOpts.aheadX = ahead;
-    captureOpts.yReach = yReach;
-    captureOpts.behindX = 40.f;
+    captureOpts.behindX = EbSimulationWindow::kMinimumReach;
     captureOpts.horizonTicks = std::max(quantumTicks, limit + quantumTicks);
     captureOpts.baseAbsTick = std::max(0, baseAbsTick);
     captureOpts.simDt = deltaTime;
@@ -46,9 +44,9 @@ bool EbCpuPhysicsAdaptive::tryScreen(PlayLayer* layer, PlayerObject* real, bool 
     req.releaseAfter = releaseAfter;
 
     auto batch = EbCpuPhysicsPool::screenDelays(req);
-    outcome.us = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                      std::chrono::steady_clock::now() - t0)
-                                      .count());
+    outcome.us = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
+            .count());
     if (!batch.ok || static_cast<int>(batch.byDelay.size()) != limit + 1)
         return false;
 

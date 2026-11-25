@@ -8,11 +8,22 @@
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
 #include "game_hook_simulation_guard.hpp"
+#include <chrono>
 
 auto EbPlayLayer::init(GJGameLevel* level, bool useReplay) -> bool {
+    auto const start = std::chrono::steady_clock::now();
     if (!PlayLayer::init(level, useReplay))
         return false;
+    auto const vanillaDone = std::chrono::steady_clock::now();
     EbClassManager::get().onLevelInit(this);
+    auto const finished = std::chrono::steady_clock::now();
+    auto const vanillaUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(vanillaDone - start).count();
+    auto const assistUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(finished - vanillaDone).count();
+    if (assistUs >= 5000 || vanillaUs >= 50000)
+        EbAssistLog::info(
+            fmt::format("TRANSITION enter vanilla={}us earlybuffer={}us", vanillaUs, assistUs));
     return true;
 }
 
@@ -33,8 +44,18 @@ auto EbPlayLayer::resetLevel() -> void {
 }
 
 auto EbPlayLayer::onQuit() -> void {
+    auto const start = std::chrono::steady_clock::now();
     EbClassManager::get().onLevelQuit(this);
+    auto const assistDone = std::chrono::steady_clock::now();
     PlayLayer::onQuit();
+    auto const finished = std::chrono::steady_clock::now();
+    auto const assistUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(assistDone - start).count();
+    auto const vanillaUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(finished - assistDone).count();
+    if (assistUs >= 5000 || vanillaUs >= 50000)
+        EbAssistLog::info(
+            fmt::format("TRANSITION quit vanilla={}us earlybuffer={}us", vanillaUs, assistUs));
 }
 
 auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> void {

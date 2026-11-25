@@ -165,6 +165,10 @@ EbCpuPhysicsRunResult EbCpuPhysicsGdSim::run(PlayerObject* ghost, PlayerObject* 
         GameObject* deathObject = nullptr;
 
         auto const playerBox = ghost->getObjectRect();
+        if (!world.window.contains(playerBox.origin.x, playerBox.size.width)) {
+            out.unknown = true;
+            break;
+        }
         float const px = playerBox.origin.x;
         float const py = playerBox.origin.y;
         float const pw = playerBox.size.width;
@@ -205,8 +209,11 @@ EbCpuPhysicsRunResult EbCpuPhysicsGdSim::run(PlayerObject* ghost, PlayerObject* 
 
         if (!died) {
             float const y = ghost->getPositionY();
-            if (y < world.floorY - 120.f || y > world.ceilY + 120.f)
-                died = true;
+            if (y < world.floorY - 120.f || y > world.ceilY + 120.f) {
+                // This capture bound is not a real GD death boundary.
+                out.unknown = true;
+                break;
+            }
         }
 
         if (died) {

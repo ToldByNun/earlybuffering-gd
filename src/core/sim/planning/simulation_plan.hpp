@@ -137,6 +137,8 @@ public:
     bool budgetHit = false;
     // Wall µs spent in plan()/planSequence (filled by Live press/release planners).
     int planUs = 0;
+    int inputPrepareUs = 0;
+    int cpuWorkers = 0; // actual native screening workers, zero on the Shadow path
     long long renderFrame = 0;
     int frameBudgetUs = 0;
     int frameSpentBeforeUs = 0;

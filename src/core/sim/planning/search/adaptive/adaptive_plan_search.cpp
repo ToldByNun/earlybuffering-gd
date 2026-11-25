@@ -7,6 +7,7 @@
 #include "../../../../assist/contracts/selected_tick_guard.hpp"
 #include "../../../../assist/planning/assist_horizon.hpp"
 #include "../../../../trigger_world/trigger_world_store.hpp"
+#include "../../../cpu_physics/cpu_physics_adaptive.hpp"
 #include "../../../prefix_sim.hpp"
 #include "../../../sim_session_guard.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -18,7 +19,6 @@
 #include "adaptive_parity_policy.hpp"
 #include "adaptive_prediction_scheduler.hpp"
 #include "adaptive_resume_runner.hpp"
-#include "../../../cpu_physics/cpu_physics_adaptive.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
@@ -266,10 +266,11 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                         plan.threatZone = threatZone;
                     }
                 }
-                plan.hybridTried = options.hybridDelay == 0 && !slots.empty() &&
-                                   slots[0].ticksSimulated > 0;
+                plan.hybridTried =
+                    options.hybridDelay == 0 && !slots.empty() && slots[0].ticksSimulated > 0;
                 stats.cpuMt = true;
                 stats.cpuWorkers = cpuOutcome.workers;
+                plan.cpuWorkers = cpuOutcome.parallel ? cpuOutcome.workers : 1;
             }
         }
 
@@ -651,6 +652,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
                                                    firstDt, classicOpts);
         classicPlan.adaptiveWorkUs = plan.adaptiveWorkUs;
+        classicPlan.cpuWorkers = plan.cpuWorkers;
         classicPlan.fallthroughSetupUs = static_cast<int>(
             std::chrono::duration_cast<std::chrono::microseconds>(classicStart - fallthroughStart)
                 .count());

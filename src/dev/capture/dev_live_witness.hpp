@@ -9,6 +9,7 @@
 
 class PlayLayer;
 class PlayerObject;
+class GameObject;
 class EbSimPlan;
 
 // Observation quality per category (Vertrag B).
@@ -104,12 +105,13 @@ inline bool operator==(EbDevContactSnap const& a, EbDevContactSnap const& b) {
            a.collidingWithRight == b.collidingWithRight &&
            a.lastCollisionBottom == b.lastCollisionBottom &&
            a.lastCollisionTop == b.lastCollisionTop && a.lastCollisionLeft == b.lastCollisionLeft &&
-           a.lastCollisionRight == b.lastCollisionRight &&
-           a.collidedTopMinY == b.collidedTopMinY && a.collidedBottomMaxY == b.collidedBottomMaxY &&
+           a.lastCollisionRight == b.lastCollisionRight && a.collidedTopMinY == b.collidedTopMinY &&
+           a.collidedBottomMaxY == b.collidedBottomMaxY &&
            a.collidedLeftMaxX == b.collidedLeftMaxX && a.collidedRightMinX == b.collidedRightMinX &&
            a.snapDistance == b.snapDistance && a.groundYVelocity == b.groundYVelocity &&
            a.groundObjectMaterial == b.groundObjectMaterial &&
-           a.collidedObjectId == b.collidedObjectId && a.lastGroundObjectId == b.lastGroundObjectId &&
+           a.collidedObjectId == b.collidedObjectId &&
+           a.lastGroundObjectId == b.lastGroundObjectId &&
            a.objectSnappedToId == b.objectSnappedToId && a.isOnIce == b.isOnIce &&
            a.isSliding == b.isSliding;
 }
@@ -248,8 +250,8 @@ public:
 
     // Capture from live play. player required for a useful witness.
     static EbDevLiveWitness capture(PlayLayer* layer, PlayerObject* player, PlayerObject* player2,
-                                  EbSimPlan const& plan, EbDevClockContract::Stamp const& clock,
-                                  int effectTick, bool freezeWorld);
+                                    EbSimPlan const& plan, EbDevClockContract::Stamp const& clock,
+                                    int effectTick, bool freezeWorld);
 
     // worldDeps from SimPlan flags + dual mode (not post-death heuristics).
     // dualMode tags Dual even when P2 is missing → honest Absent, not silent.
@@ -264,9 +266,12 @@ private:
     static void fillContactSnap(EbDevContactSnap& snap, PlayerObject* source);
     static void setCategory(EbDevLiveWitness& w, DevWitnessCategory candidate,
                             DevWitnessStatus status, uint64_t digest = 0);
-    static uint64_t hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player, float radiusX);
-    static void captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer, PlayerObject* player,
-                                   float radiusX);
+    static std::vector<GameObject*> captureNeighborhood(PlayLayer* layer, PlayerObject* player,
+                                                        float radiusX);
+    static uint64_t hashHazardNeighborhood(std::vector<GameObject*> const& objects,
+                                           PlayerObject* player, float radiusX);
+    static void captureHazardSnaps(EbDevLiveWitness& w, std::vector<GameObject*> const& objects,
+                                   PlayerObject* player, float radiusX);
     static void captureHitboxSnap(EbDevLiveWitness& w, PlayLayer* layer, PlayerObject* player);
 };
 

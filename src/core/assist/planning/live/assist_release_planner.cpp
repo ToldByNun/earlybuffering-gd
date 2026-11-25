@@ -39,6 +39,7 @@
 bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLayer* playLayer,
                                          PlayerObject* player, bool player1, int effectTick,
                                          float firstDt, EbDevClockContract::Stamp const& clockIn) {
+    auto const inputStarted = std::chrono::steady_clock::now();
     EbDevClockContract::Stamp clock = clockIn;
 
     // Same rules as purple bake viz: wave/ship/swing/robot, else dash/holdAssist only.
@@ -408,6 +409,8 @@ bool EbAssistReleasePlanner::planRelease(EbAssistController& controller, PlayLay
     plan.planUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
+    plan.inputPrepareUs = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(t0 - inputStarted).count());
     if (opts.strictLiveRescue)
         controller.m_liveHorizon.observe(static_cast<int>(kind), player1, false, plan.budgetHit,
                                          plan.planUs, opts.budgetUs);

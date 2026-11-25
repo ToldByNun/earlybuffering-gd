@@ -42,6 +42,7 @@
 bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* playLayer,
                                      PlayerObject* player, bool player1, int effectTick,
                                      float firstDt, EbDevClockContract::Stamp const& clockIn) {
+    auto const inputStarted = std::chrono::steady_clock::now();
     EbDevClockContract::Stamp clock = clockIn;
     // AI supplies learned hints, but ordinary input rescue must retain its full
     // proof budget instead of replaying an AI verification ladder first.
@@ -472,6 +473,8 @@ bool EbAssistPressPlanner::planPress(EbAssistController& controller, PlayLayer* 
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0)
             .count());
     plan.planUs = planUs;
+    plan.inputPrepareUs = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::microseconds>(t0 - inputStarted).count());
     if (opts.strictLiveRescue)
         controller.m_liveHorizon.observe(static_cast<int>(kind), player1, true, plan.budgetHit,
                                          planUs, opts.budgetUs);

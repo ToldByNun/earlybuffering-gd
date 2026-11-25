@@ -24,16 +24,10 @@ EbLiveFrameBudgetScope::~EbLiveFrameBudgetScope() {
 }
 
 int EbLiveFrameBudgetScope::frameLimit(int configuredUs) {
-    if (configuredUs == 0)
-        return 0;
-    double interval = cocos2d::CCDirector::sharedDirector()->getAnimationInterval();
-    if (!std::isfinite(interval) || interval <= 0.)
-        interval = 1. / 240.;
-    // ~40% of the display frame, capped at Nova's slow-click bar (~4ms). Floor
-    // matches that bar so 240Hz does not starve Stage-12 (pack 191833: 1666µs).
-    int const fromInterval = static_cast<int>(std::clamp(interval * 400000., 1., 4000.));
-    int const floorUs = std::min(configuredUs, 4000);
-    return std::min(configuredUs, std::max(fromInterval, floorUs));
+    // A fixed 4ms floor consumed essentially a whole 240Hz frame before drawing.
+    return EbFramePlanBudget::limitForInterval(
+        configuredUs, cocos2d::CCDirector::sharedDirector()->getAnimationInterval(),
+        cocos2d::CCDirector::sharedDirector()->getActualDeltaTime());
 }
 
 int EbLiveFrameBudgetScope::remaining(int limitUs) const {

@@ -91,6 +91,9 @@ public:
     bool shipLineCorrection = false;
     bool wavePatternCorrection = false;
     int planUs = 0;
+    int inputPrepareUs = 0;
+    int witnessCaptureUs = 0;
+    int cpuWorkers = 0;
     long long renderFrame = 0;
     int frameBudgetUs = 0;
     int frameSpentBeforeUs = 0;
