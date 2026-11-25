@@ -16,6 +16,20 @@ int LiveRescueRegression::run() {
         ++failures;
         std::cerr << name << '\n';
     };
+    for (int delay = 0; delay <= 12; ++delay) {
+        int const horizon = EbLiveRescuePolicy::observationHorizon(true, delay, 12, 32);
+        expect(horizon - delay == 32, "wave observes equal post-edge duration");
+        expect(EbLiveRescuePolicy::classify(false, false, false, horizon - 1, horizon) ==
+                   EbLiveRescuePolicy::Observation::Incomplete,
+               "wave truncated post-edge observation remains incomplete");
+        expect(EbLiveRescuePolicy::classify(true, false, false, horizon, horizon) ==
+                   EbLiveRescuePolicy::Observation::Dead,
+               "wave boundary death remains lethal");
+    }
+    expect(EbLiveRescuePolicy::observationHorizon(false, 0, 12, 32) == 44,
+           "other modes retain common horizon");
+    expect(EbLiveRescuePolicy::observationHorizon(true, -2, 12, 0) == 1,
+           "invalid horizon inputs are bounded");
     // Captured outcome pattern: immediate input collides at tick 8, later input
     // is still alive at 24 but collides at 40. A 96-tick observation cannot call
     // the 24-tick screen safe, even after the original obstacle has been cleared.

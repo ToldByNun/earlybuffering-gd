@@ -1,5 +1,6 @@
 #include "shadow_candidate_runner.hpp"
 #include "../../../config/stage_config.hpp"
+#include "../../assist/contracts/live_rescue_policy.hpp"
 #include "../planning/ball_landing_tracker.hpp"
 #include "../planning/cube_landing_tracker.hpp"
 #include "../planning/orb_continuation.hpp"
@@ -46,7 +47,8 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
     simulator.m_orbContacts.clear();
     EbBallLandingTracker ballLanding;
     ballLanding.reset(shadowPlayer->m_isUpsideDown);
-    int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
+    int const maxTicks = EbLiveRescuePolicy::observationHorizon(model.actionRelativeHorizon, delay,
+                                                                limit, model.cap);
 
     auto finish = [&](EbShadowSimulator::RunResult output) {
         simulator.m_collectOrbContacts = false;
@@ -104,7 +106,10 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
         tapReleased = false;
     };
 
-    if (delay > 0) {
+    // Wave starts with the normal update/collision pair, including delayed
+    // edges. A collision-only pass at the captured position can invent a crush
+    // before the first movement; the shared Wave prefix does not run it either.
+    if (delay > 0 && !real->m_isDart) {
         for (int slopePass = 0; slopePass < 2; ++slopePass) {
             if (simulator.markPlanWallIfExceeded())
                 return finish(r);
@@ -264,9 +269,11 @@ EbShadowCandidateRunner::runOne(EbShadowSimulator& simulator, PlayLayer* layer, 
         }
         if (simulator.m_dead) {
             // Nova: deathTick <= 1 on a slope → one forced-slope re-run from tick 0.
-            if (waveOnSlope && !waveSlopeRetried && tick <= 1) {
+            if (waveOnSlope && !waveSlopeRetried && tick <= 1 && !simulator.m_deathObject) {
                 waveSlopeRetried = true;
+                simulator.resetCaptureForNextRun(layer);
                 reseedslope();
+                r = EbShadowSimulator::RunResult{};
                 tick = -1; // for-loop ++ → restart at tick 0
                 continue;
             }

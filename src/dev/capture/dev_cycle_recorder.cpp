@@ -792,11 +792,11 @@ bool EbDevCycleRecorder::flushQuit() {
         this->m_cycles.clear();
         this->m_activePressId = 0;
         this->resetModeTimeline();
-        // sealAttempt already persists the session; do not serialize and write
-        // the entire recording a second time while leaving a large level.
-        return store.sealAttempt("quit", count);
+        // Keep the sealed trace, serialize and persist its owned snapshot off
+        // the scene-transition thread.
+        return store.sealAttempt("quit", count, true);
     }
-    return store.flush();
+    return store.flush(true);
 }
 
 bool EbDevCycleRecorder::selfCheck(std::string& report) {

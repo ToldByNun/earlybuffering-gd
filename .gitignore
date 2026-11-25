@@ -111,6 +111,8 @@ docs/dev/assist_verbesserungsplan.md
 !/tools/test_completed_trigger_collection.hpp
 !/tools/test_live_rescue_policy.cpp
 !/tools/test_live_rescue_policy.hpp
+!/tools/test_wave_ghost_input.py
+!/tools/test_transition_work.py
 !/tools/test_recorded_misses_ap01.py
 /tools/fixtures/*
 !/tools/fixtures/recorded_misses_ap01.json
@@ -272,3 +274,6 @@ docs/design/mic-clicks-gui-specification.md
 /docs/nova-features
 docs/design/advanced-systems-architecture.md
 docs/design/advanced-systems-roadmap.md
+/docs/security/nova-auth-evidence
+/docs/security/nova-offline-evidence
+/docs/security

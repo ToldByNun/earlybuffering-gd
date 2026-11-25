@@ -80,7 +80,7 @@ class LiveRegressionGate:
             results.append(dict(name=name, passed=ran.returncode == 0,
                                 output=ran.stdout + ran.stderr, buildExit=built.returncode))
             print(name, "PASS" if results[-1]["passed"] else "FAIL", flush=True)
-        for name in ("test_shadow_collision_window.py", "test_shadow_section_cleanup.py", "test_owned_object_walk.py",
+        for name in ("test_transition_work.py", "test_wave_ghost_input.py", "test_shadow_collision_window.py", "test_shadow_section_cleanup.py", "test_owned_object_walk.py",
                      "test_recorded_misses_ap01.py", "test_policy_registration_ap06.py",
                      "test_real_assist_score.py", "test_real_assist_smoke.py",
                      "test_real_assist_dense.py", "build_neural_dataset.py",

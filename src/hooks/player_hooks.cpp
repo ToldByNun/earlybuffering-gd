@@ -33,12 +33,12 @@ auto EbPlayerObject::pushButton(PlayerButton button) -> bool {
 
 auto EbPlayerObject::releaseButton(PlayerButton button) -> bool {
     if (EbShadowSimulator::get().isOwnedGhost(this)) {
-        // Flags only — never call vanilla releaseButton on ghosts. Wave release
-        // spawns fade-out HardStreaks into the layer; if the ghost was aliased
-        // that path can touch the live stroke.
-        this->m_holdingButtons[static_cast<int>(button)] = false;
+        // Keep GD's release bookkeeping, just as for pushButton. The dedicated
+        // ghost VFX hooks below suppress fade-out streak creation separately.
         EbGhostStreakVisuals::mute(this);
-        return true;
+        bool const ok = PlayerObject::releaseButton(button);
+        EbGhostStreakVisuals::mute(this);
+        return ok;
     }
     return PlayerObject::releaseButton(button);
 }

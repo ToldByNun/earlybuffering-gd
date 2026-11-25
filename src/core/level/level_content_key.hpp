@@ -4,11 +4,22 @@
 class GJGameLevel;
 class EbLevelContentKey {
 public:
+    class SetupScope {
+    public:
+        explicit SetupScope(GJGameLevel* level);
+        ~SetupScope();
+        SetupScope(SetupScope const&) = delete;
+        SetupScope& operator=(SetupScope const&) = delete;
+
+    private:
+    };
     static std::string makeKey(GJGameLevel* level);
     static std::string contentRev(GJGameLevel* level);
     static std::string fullKey(GJGameLevel* level);
 
 private:
+    static GJGameLevel* s_setupLevel;
+    static std::string s_setupKey;
 };
 
 #include <Geode/Geode.hpp>

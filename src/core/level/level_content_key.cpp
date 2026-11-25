@@ -2,6 +2,20 @@
 #include <Geode/Geode.hpp>
 #include <cstdint>
 
+GJGameLevel* EbLevelContentKey::s_setupLevel = nullptr;
+std::string EbLevelContentKey::s_setupKey;
+
+EbLevelContentKey::SetupScope::SetupScope(GJGameLevel* level) {
+    s_setupLevel = nullptr;
+    s_setupKey = fullKey(level);
+    s_setupLevel = level;
+}
+
+EbLevelContentKey::SetupScope::~SetupScope() {
+    s_setupLevel = nullptr;
+    s_setupKey.clear();
+}
+
 uint64_t EbLevelContentKeyImplementation::fnv1a(std::string const& s) {
     uint64_t height = 14695981039346656037ull;
     for (unsigned char character : s) {
@@ -46,5 +60,9 @@ std::string EbLevelContentKey::makeKey(GJGameLevel* level) {
 }
 
 std::string EbLevelContentKey::fullKey(GJGameLevel* level) {
+    // Reuse only within synchronous setup, where the level is immutable.
+    // No pointer/length cache survives into editor changes or another entry.
+    if (level && level == s_setupLevel)
+        return s_setupKey;
     return fmt::format("{}_rev_{}", makeKey(level), contentRev(level));
 }

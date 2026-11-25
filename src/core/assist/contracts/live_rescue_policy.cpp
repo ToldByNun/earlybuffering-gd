@@ -1,4 +1,10 @@
 #include "live_rescue_policy.hpp"
+#include <algorithm>
+
+int EbLiveRescuePolicy::observationHorizon(bool actionRelative, int delay, int limit, int cap) {
+    int const start = actionRelative ? std::max(0, delay) : std::max({0, delay, limit});
+    return start + std::max(1, cap);
+}
 
 EbLiveRescuePolicy::Observation EbLiveRescuePolicy::classify(bool died, bool unknown,
                                                              bool diedBeforeAction, int ticksRan,

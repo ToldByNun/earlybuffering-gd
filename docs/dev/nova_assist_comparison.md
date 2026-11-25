@@ -1,5 +1,38 @@
 # Nova assist comparison (2026-11-23)
 
+## Wave recheck (2026-11-25, installed Nova binary)
+
+The currently open `C:/Users/mikaj/Pictures/alquerez.nova.dll` has different
+function addresses from the earlier database. The older addresses below must
+not be used against this binary. Read-only evidence was saved under
+`build/nova_wave_20261125/` (generated, outside authored sources).
+
+* Input routine `0x1802847F0` calls GD push/release for simulated edges, through
+  wrappers `0x18060B350` / `0x18060B920`. EarlyBuffer's ghost release previously
+  only changed the held map. It now executes native release with the existing
+  ghost-only streak VFX guards, preserving GD bookkeeping and return value.
+* Runner `0x18033A6D0` clears contact dictionaries via `0x18021BB80`, then applies
+  the edge before movement and collision. That cleanup only removes entries
+  from four dictionaries. EarlyBuffer now preserves the Wave's last contact
+  IDs and omits its extra collision-only prepass for delayed Wave candidates.
+  Independent and shared-prefix Wave candidates both start with movement.
+* The runner uses `a8 + a9` as its loop bound, with the input edge at `a8`:
+  delay plus post-edge lookahead. Strict Wave rescue now uses that timing in
+  both runners and classification. Other modes keep their common horizon.
+  The selected configured/adaptive cap still determines lookahead; this does
+  not assert identical Nova settings or CPU adaptation.
+* Retry caller containing `0x180220F4C` excludes deaths with an identified
+  object before attempting the early Wave slope retry. EarlyBuffer now keeps
+  real hazard deaths, restores the captured world before retrying and clears
+  the first attempt's result. Its existing slope-state fallback remains.
+
+The new production-body test checks native release delegation, both return
+values, suppressed ghost fade-out effects, unchanged live effects and retained
+Wave contact IDs. Recorded Wave outcomes additionally exercise the post-edge
+horizon. Build and offline checks do not establish gameplay parity: Nova's
+first-step crush veto, continuation search and full timing-band algorithm still
+differ. No live FPS or 1:1 gameplay result is claimed.
+
 Target: EarlyBuffer 1.8.0 / GD 2.2081. Read-only analysis of the user's
 `alquerez.nova.dll.i64`, attached through ida-mcp. Addresses below identify
 functions in that database; decompiler variable names are not source names.

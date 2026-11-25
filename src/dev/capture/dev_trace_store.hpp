@@ -9,6 +9,7 @@
 #include "dev_live_witness.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <future>
 #include <string>
 #include <vector>
 
@@ -271,10 +272,10 @@ public:
 
     // Seal current attempt, bump recordingsDone when it counts, rolling-trim, flush.
     // Never auto-stops the session — keeps only the last recordingsTarget counted attempts.
-    bool sealAttempt(std::string endReason, bool countTowardTarget);
+    bool sealAttempt(std::string endReason, bool countTowardTarget, bool background = false);
     // Attach offline eval grid to an attempt and flush (AP3).
     bool sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval);
-    bool flush();
+    bool flush(bool background = false);
     void closeSession();
 
     // Drop oldest counted sealed attempts until recordingsDone <= recordingsTarget.
@@ -297,11 +298,12 @@ private:
     EbDevTraceStore() = default;
 
     int64_t nextEventId();
-    bool writeAtomic(matjson::Value const& root) const;
+    static bool writeAtomic(std::filesystem::path const& path, matjson::Value const& root);
 
     void sampleResources();
 
     EbDevSessionFile m_session{};
+    std::future<bool> m_pendingFlush;
     bool m_open = false;
     int64_t m_nextPressId = 1;
     int64_t m_nextEventId = 1;

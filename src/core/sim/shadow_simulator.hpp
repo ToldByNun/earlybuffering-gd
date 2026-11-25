@@ -458,6 +458,7 @@ public:
         // Live Delay-worthy: after zone clear keep sim until death / cap
         // (skip the short +24 early cut used for soft bake scoring).
         bool continuePastClear = false;
+        bool actionRelativeHorizon = false;
 
     private:
     };

@@ -16,6 +16,7 @@
 #include "../core/learning/level_profile.hpp"
 #include "../core/learning/neural_autoplay.hpp"
 #include "../core/learning/neural_learning.hpp"
+#include "../core/level/level_content_key.hpp"
 #include "../core/real_assist/real_assist_runner.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
@@ -35,6 +36,19 @@
 #include "../ui/visualizers/straightfly_visualizer.hpp"
 #include "../ui/visualizers/trajectory_visualizer.hpp"
 #include "../ui/visualizers/wave_pattern_visualizer.hpp"
+
+EbTransitionPhases::EbTransitionPhases(char const* transition)
+    : m_transition(transition), m_started(std::chrono::steady_clock::now()) {}
+
+void EbTransitionPhases::mark(char const* phase) {
+    auto const now = std::chrono::steady_clock::now();
+    auto const elapsed =
+        std::chrono::duration_cast<std::chrono::microseconds>(now - m_started).count();
+    m_started = now;
+    if (elapsed >= 1000)
+        EbAssistLog::info(
+            fmt::format("TRANSITION {} phase={} us={}", m_transition, phase, elapsed));
+}
 
 void EbLevelLifecycle::onCheckpointLoad(EbAssistController& controller, PlayLayer* playLayer) {
     // Do not flush/refine here — idle drain handles the buffer after respawn.
@@ -182,6 +196,9 @@ void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* p
 }
 
 void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* playLayer) {
+    EbTransitionPhases phases("enter");
+    EbLevelContentKey::SetupScope const keyScope(playLayer ? playLayer->m_level : nullptr);
+    phases.mark("content-key");
     controller.m_flightIntent[0].reset();
     controller.m_flightIntent[1].reset();
     controller.m_wavePattern[0].reset();
@@ -203,8 +220,10 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     // Attach once before resetAttempt. resetAttempt re-attaches only if missing;
     // a second unconditional attach here caused detach→HardStreak::reset AVs.
     EbShadowSimulator::get().attach(playLayer);
+    phases.mark("ghost-create");
     controller.m_liveHorizon.reset();
     controller.resetAttempt(playLayer);
+    phases.mark("attempt-reset-index");
     EbStatusOverlay::attach(playLayer);
     EbLagWarningToast::get().attach(playLayer);
     EbTrajectoryVisualizer::get().setEnabled(EbStageConfig::showTrajectory());
@@ -217,31 +236,39 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
     EbAiVisualizer::get().attach(playLayer);
     EbBakePathVisualizer::get().setEnabled(EbStageConfig::showBakePath());
     EbBakePathVisualizer::get().attach(playLayer);
+    phases.mark("overlays");
     if (playLayer && playLayer->m_level) {
         EbLevelProfile::get().loadForLevel(playLayer->m_level);
+        phases.mark("profile-load");
         EbAssistPolicySettings::refresh();
         EbBakeMap::get().loadForLevel(playLayer->m_level);
         EbTriggerWorldBaker::get().loadOrBuild(playLayer);
+        phases.mark("bake-load");
         // Build structural lookup tables during setup, ahead of user clicks.
         EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator::get(), playLayer);
+        phases.mark("object-index");
         // Movers / TW tracks → dynamic-labelled TrustRate floor (G7b).
         bool const dynamicLabelled = EbTriggerWorldStore::get().hasTracks();
         EbAssistRealMetrics::get().setLevelKey(EbLevelProfile::get().key(), dynamicLabelled);
     }
     EbRealAssistRunner::get().onLevelInit(playLayer);
     controller.updateOverlay();
+    phases.mark("finish");
 }
 
 void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* playLayer) {
+    EbTransitionPhases phases("quit");
     // Tear down UI/sim WHILE PlayLayer is still alive. Leaving nodes in
     // objectLayer for setNextScene → ~GameObject / CCObject::release AVs.
     // Dev traces must flush BEFORE ghost evacuate / detach (partial OK).
     EbDevCycleRecorder::get().flushQuit();
+    phases.mark("trace-snapshot");
     EbShadowSimulator::get().abortEval();
     EbTriggerWorldBaker::get().cancel();
     EbSelfBakeRecorder::get().cancelRefine();
     EbSelfBakeRecorder::get().flushMergeOnly(playLayer, "quit");
     EbSelfBakeRecorder::get().onLevelQuit();
+    phases.mark("bake-flush");
     EbSaveFeedback::get().reset();
     EbClickIntentGuard::get().reset();
     // Prefer live detach (removeFromParent) while PlayLayer exists.
@@ -254,16 +281,20 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbAiVisualizer::get().detach(!layerAlive);
     EbBakePathVisualizer::get().detach(!layerAlive);
     EbStatusOverlay::detach(!layerAlive);
+    phases.mark("overlays");
 
     if (playLayer) {
         EbShadowSimulator::get().evacuateGhosts(playLayer);
     }
+    phases.mark("ghost-evacuate");
     // removeFromParentAndCleanup now — never leave ghosts for setNextScene.
     EbShadowSimulator::get().detach(false);
+    phases.mark("ghost-destroy");
 
     // Persist then clear. Skip PerfTrace sync flush here — large logs were
     // hitching quits; pending lines flush on next enable / natural batch.
     EbLevelProfile::get().save();
+    phases.mark("profile-save");
     EbBakeMap::get().save();
     {
         EbLagProbe::Scope const state("eb.triggerBake.save");
@@ -272,6 +303,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbLevelProfile::get().clear();
     EbAssistPolicySettings::refresh();
     EbTriggerWorldStore::get().clear();
+    phases.mark("bake-save-clear");
     EbSimTrust::get().onLevelQuit();
     EbGhostParityProbe::get().onLevelQuit();
     controller.m_dafWatch = false;

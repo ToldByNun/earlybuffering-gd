@@ -17,7 +17,8 @@ private:
     private:
     };
 
-    static int chooseRecordedDelay(RecordedInput const& input, int horizon);
+    static int chooseRecordedDelay(RecordedInput const& input, int horizon,
+                                   bool actionRelative = false);
     WaveInputWindowRegressionTests() = delete;
 };
 

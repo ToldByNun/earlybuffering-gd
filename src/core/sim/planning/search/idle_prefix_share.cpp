@@ -2,6 +2,7 @@
 #include "../../../../config/stage_config.hpp"
 #include "../../../../debug/assist_log.hpp"
 #include "../../../assist/contracts/live_plan_contracts.hpp"
+#include "../../../assist/contracts/live_rescue_policy.hpp"
 #include "../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../orbs/toggle_orb_sim.hpp"
 #include "../../prefix_sim.hpp"
@@ -278,7 +279,8 @@ public:
         bool const initialGravity = shadowPlayer->m_isUpsideDown;
         EbBallLandingTracker ballLanding;
         ballLanding.reset(shadowPlayer->m_isUpsideDown);
-        int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
+        int const maxTicks = EbLiveRescuePolicy::observationHorizon(model.actionRelativeHorizon,
+                                                                    delay, limit, model.cap);
 
         auto finish = [&](EbShadowSimulator::RunResult output) {
             output.activatedRing = simulator.m_activatedRing;

@@ -19,9 +19,13 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     context.cands.resize(static_cast<std::size_t>(context.limit) + 1);
     context.candReady.assign(context.cands.size(), 0);
     // Every alternative starts from the same captured world, executes one input
-    // edge, and runs to the same horizon or completed grounded action. No
+    // edge, and runs through its observation horizon or completed action. No
     // hypothetical next click, release or shortened seed can prove a rescue.
     context.model.continuePastClear = true;
+    // Nova's Wave runner observes delay + lookahead: the same amount of
+    // post-edge physics for every candidate, rather than holding an earlier
+    // edge longer merely because Max Assist permits a later one.
+    context.model.actionRelativeHorizon = context.real->m_isDart;
     context.model.stopAtCubeLanding =
         context.down && EbStageConfig::kindOf(context.real) == GameModeKind::Cube;
     // An actually activated orb can complete a Cube flight too, including
@@ -44,15 +48,18 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     if (EbStageConfig::lookAheadCap() == 0 && EbStageConfig::paramsFor(context.real).cap == 0)
         context.model.cap =
             EbLiveHorizonController::scaledCap(context.model.cap, context.options.liveHorizonScale);
-    int const horizon = context.limit + std::max(1, context.model.cap);
+    int const horizon = EbLiveRescuePolicy::observationHorizon(context.model.actionRelativeHorizon,
+                                                               0, context.limit, context.model.cap);
     plan.liveObservationTicks = horizon;
     EbLiveRescueSearch search(context.limit, true);
     EbIdlePrefixShare::Cursor prefix(context);
     bool const dual = context.linkedDual();
-    auto classify = [&](EbShadowSimulator::RunResult const& result) {
+    auto classify = [&](EbShadowSimulator::RunResult const& result, int delay) {
+        int const candidateHorizon = EbLiveRescuePolicy::observationHorizon(
+            context.model.actionRelativeHorizon, delay, context.limit, context.model.cap);
         return EbLiveRescuePolicy::classify(
             result.died, result.unknown || result.unknownTrunc || result.toggleUnknown,
-            result.diedBeforeAction, result.ticksRan, horizon,
+            result.diedBeforeAction, result.ticksRan, candidateHorizon,
             (context.model.stopAtBallLanding || context.model.stopAtCubeLanding) &&
                 result.landedAfterAction);
     };
@@ -70,18 +77,18 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
             // The independent result remains authoritative for that diagnostic run.
             prefix.invalidate();
             auto independent = context.evalDelay(delay, -1);
-            if (classify(candidate.raw) != classify(independent.raw) ||
+            if (classify(candidate.raw, delay) != classify(independent.raw, delay) ||
                 candidate.raw.deathTick != independent.raw.deathTick ||
                 std::abs(candidate.raw.endX - independent.raw.endX) > 0.01f)
                 geode::log::warn("[EarlyBuffer] live prefix A/B mismatch at delay {}", delay);
             candidate = independent;
         }
-        auto state = classify(candidate.raw);
+        auto state = classify(candidate.raw, delay);
         if (dual && state == EbLiveRescuePolicy::Observation::Safe) {
             auto* other = context.real == context.layer->m_player1 ? context.layer->m_player2
                                                                    : context.layer->m_player1;
             auto partner = context.runRestoredProbe(other, delay);
-            state = classify(partner);
+            state = classify(partner, delay);
             if (delay == 0 && state != EbLiveRescuePolicy::Observation::Safe)
                 candidate.raw = partner;
         }
@@ -94,11 +101,14 @@ void EbShadowLiveRescue::evaluate(EbShadowPlanContext& context) {
     };
     auto finish = [&]() {
         prefix.invalidate();
+        plan.liveObservationTicks = EbLiveRescuePolicy::observationHorizon(
+            context.model.actionRelativeHorizon, plan.action == PlanAction::Delay ? plan.delay : 0,
+            context.limit, context.model.cap);
         if (EbStageConfig::debugLogging())
-            EbAssistLog::debug(
-                fmt::format("LIVE-RESCUE id={} horizon={} scale={:.2f} candidates={} idleSaved={}",
-                            plan.planId, horizon, context.options.liveHorizonScale,
-                            plan.candidatesTried, plan.sharedIdleTicksSaved));
+            EbAssistLog::debug(fmt::format(
+                "LIVE-RESCUE id={} horizon={} scale={:.2f} candidates={} idleSaved={}", plan.planId,
+                plan.liveObservationTicks, context.options.liveHorizonScale, plan.candidatesTried,
+                plan.sharedIdleTicksSaved));
         // This path already proved the exact chosen edge and input model. Do
         // not reinterpret it with the legacy short/landing proof contract.
         plan.guardOriginalDelay = plan.delay;

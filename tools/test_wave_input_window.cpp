@@ -13,14 +13,18 @@ static constexpr int kPostCapProveTicks = 8;
 // Death ticks recorded in session-1794130733171, delays 0..12.
 // Replaying the recorded collision outcomes tests the live acceptance rule,
 // independently of Geode's rendering and the current level instance.
-int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon) {
+int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon,
+                                                        bool actionRelative) {
     EbLiveRescueSearch search(12, true);
     for (int delay = search.nextDelay(); delay >= 0; delay = search.nextDelay()) {
         int const deathTick = input.deathTicks[delay];
-        bool const diedInWindow = deathTick < horizon;
-        int const ticksRan = std::min(deathTick + 1, horizon);
-        search.record(delay,
-                      EbLiveRescuePolicy::classify(diedInWindow, false, false, ticksRan, horizon));
+        int const candidateHorizon =
+            actionRelative ? EbLiveRescuePolicy::observationHorizon(true, delay, 12, horizon)
+                           : horizon;
+        bool const diedInWindow = deathTick < candidateHorizon;
+        int const ticksRan = std::min(deathTick + 1, candidateHorizon);
+        search.record(delay, EbLiveRescuePolicy::classify(diedInWindow, false, false, ticksRan,
+                                                          candidateHorizon));
     }
     return search.selectedDelay();
 }
@@ -81,7 +85,8 @@ int WaveInputWindowRegressionTests::run() {
 
     for (auto const& input : inputs) {
         int const chosen = chooseRecordedDelay(input, horizon);
-        if (chosen != input.expectedDelay || chooseRecordedDelay(input, 96) != -1) {
+        if (chosen != input.expectedDelay || chooseRecordedDelay(input, 96) != -1 ||
+            chooseRecordedDelay(input, 32, true) != input.expectedDelay) {
             std::cerr << "Wave input " << input.pressId << " chose " << chosen
                       << " (horizon=" << horizon << ")\n";
             ++failures;

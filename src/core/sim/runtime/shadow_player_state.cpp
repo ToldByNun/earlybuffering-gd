@@ -33,6 +33,10 @@ void EbShadowPlayerState::clearCollisionLogs(PlayerObject* state) {
     state->m_collisionLogBottom->removeAllObjects();
     state->m_collisionLogLeft->removeAllObjects();
     state->m_collisionLogRight->removeAllObjects();
+    // Nova's runner clears the four dictionaries, preserving the preceding
+    // contact IDs. Wave sliding needs that contact history across sim ticks.
+    if (state->m_isDart)
+        return;
     state->m_lastCollisionTop = -1;
     state->m_lastCollisionBottom = -1;
     state->m_lastCollisionLeft = -1;
@@ -450,14 +454,15 @@ size_t EbShadowPlayerState::diagCaptureTransformCount(EbShadowSimulator& simulat
 }
 
 int EbShadowPlayerState::captureStartSnapshot(EbShadowSimulator& simulator, PlayerObject* real) {
-    if (!real || !simulator.m_snapshots[EbShadowSimulator::START_SNAPSHOT_SLOT])
+    if (!real ||
+        !EbShadowGhostLifecycle::ensureSnapshot(simulator, EbShadowSimulator::START_SNAPSHOT_SLOT))
         return -1;
     simulator.copyPlayerState(simulator.m_snapshots[EbShadowSimulator::START_SNAPSHOT_SLOT], real);
     return EbShadowSimulator::START_SNAPSHOT_SLOT;
 }
 
 int EbShadowPlayerState::captureSnapshot(EbShadowSimulator& simulator, PlayerObject* real) {
-    if (!real || !simulator.m_snapshots[0])
+    if (!real)
         return -1;
     // Never clobber attempt-start (bake) or parity anchors (14–15).
     if (simulator.m_nextSnapshot <= EbShadowSimulator::START_SNAPSHOT_SLOT ||
@@ -469,17 +474,19 @@ int EbShadowPlayerState::captureSnapshot(EbShadowSimulator& simulator, PlayerObj
     if (simulator.m_nextSnapshot >= EbShadowSimulator::SNAPSHOT_RING_END) {
         simulator.m_nextSnapshot = EbShadowSimulator::SNAPSHOT_RING_BEGIN;
     }
+    if (!EbShadowGhostLifecycle::ensureSnapshot(simulator, slot))
+        return -1;
     simulator.copyPlayerState(simulator.m_snapshots[slot], real);
     return slot;
 }
 
 int EbShadowPlayerState::captureParitySnapshot(EbShadowSimulator& simulator, PlayerObject* real,
                                                int which) {
-    if (!real || !simulator.m_snapshots[0])
+    if (!real)
         return -1;
     int const slot =
         (which & 1) ? EbShadowSimulator::PARITY_SLOT_B : EbShadowSimulator::PARITY_SLOT_A;
-    if (!simulator.m_snapshots[slot])
+    if (!EbShadowGhostLifecycle::ensureSnapshot(simulator, slot))
         return -1;
     simulator.copyPlayerState(simulator.m_snapshots[slot], real);
     return slot;

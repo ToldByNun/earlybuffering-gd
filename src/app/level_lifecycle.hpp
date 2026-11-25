@@ -1,5 +1,16 @@
 #ifndef LEVEL_LIFECYCLE_HPP
 #define LEVEL_LIFECYCLE_HPP
+#include <chrono>
+
+class EbTransitionPhases {
+public:
+    explicit EbTransitionPhases(char const* transition);
+    void mark(char const* phase);
+
+private:
+    char const* m_transition;
+    std::chrono::steady_clock::time_point m_started;
+};
 
 class EbAssistController;
 class PlayLayer;

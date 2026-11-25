@@ -379,7 +379,7 @@ void EbDevTraceStore::trimRollingWindow() {
     this->m_session.recordingsDone = kept;
 }
 
-bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget) {
+bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget, bool background) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed)
         return false;
@@ -391,7 +391,7 @@ bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget)
         this->trimRollingWindow();
     }
     this->sampleResources();
-    return this->flush();
+    return this->flush(background);
 }
 
 bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) {
@@ -414,10 +414,9 @@ bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) 
     return false;
 }
 
-bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
-    auto const directory = this->tracesDir();
+bool EbDevTraceStore::writeAtomic(std::filesystem::path const& path, matjson::Value const& root) {
+    auto const directory = path.parent_path();
     (void)geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(directory));
-    auto const path = this->sessionPath();
     auto tmpPath = path;
     tmpPath += ".tmp";
 
@@ -447,12 +446,27 @@ bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
     return !ec || std::filesystem::exists(path);
 }
 
-bool EbDevTraceStore::flush() {
-    if (!(!this->m_open)) {
-        return this->writeAtomic(
-            EbDevTraceStoreImplementation::sessionToJsonValue(this->m_session));
-    }
-    return false;
+bool EbDevTraceStore::flush(bool background) {
+    if (!m_open)
+        return false;
+    // Serialize writes: a later flush must never race an older quit snapshot
+    // into the same .tmp file or overwrite newer events with older data.
+    if (m_pendingFlush.valid() && !m_pendingFlush.get())
+        geode::log::warn("[EarlyBuffer] background trace save failed");
+    auto const path = sessionPath();
+    if (!background)
+        return writeAtomic(path, EbDevTraceStoreImplementation::sessionToJsonValue(m_session));
+    // Own the session copy and path; the worker never touches game objects,
+    // service state or the next level. JSON construction and disk IO are the
+    // expensive part of quitting a recorded object-heavy level.
+    m_pendingFlush = std::async(std::launch::async, [session = m_session, path]() {
+        try {
+            return writeAtomic(path, EbDevTraceStoreImplementation::sessionToJsonValue(session));
+        } catch (...) {
+            return false;
+        }
+    });
+    return true;
 }
 
 void EbDevTraceStore::closeSession() {
