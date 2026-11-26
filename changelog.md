@@ -1,7 +1,12 @@
 # Changelog
 
-## v1.8.1-dev
+## v1.8.1
 
+Release notes: [v1.8.1](releases/v1.8.1.md).
+
+- Port package metadata and runtime to **Geode 6.0.0** / **GD 2.2091**.
+- Trigger World: skip huge disk caches; Nova-style Moving Objects timeline + ≤0.5s motion guess on large levels; empty-complete sentinel; deferred enter loads; optional `.ebtw` binary; Interaction Journal (`earlybuffer-interactions.log`).
+- Apple: replace unbound `belongsToGroup` with `getGroup`; scale bake without `TransformTriggerGameObject` typeinfo.
 - **CPU Multithread** (Main → Adaptive, default on): Adaptive Phase A/B screens delay candidates on multiple CPU cores with a lightweight GD-physics clone (frozen hitboxes, no ShadowPlayer/Cocos). Survivors are still verified once on the main thread against real ShadowPlayers before arming; empty/unknown screens fall back to serial Shadow. Overlay shows `mtN` worker count.
 - CPU Multithread is no longer a simplified kinematics clone: worker ghosts run real `PlayerObject::update` + `collidedWithObjectInternal` against a frozen object/TW snapshot (per-object locks). Shadow Phase C verify still gates arming.
 - AI Live Budgets/Shell Nova-aligned: frame assist floor **4ms** (Nova slow-click); AI shell spends almost the whole frame wall with a thin classic leftover (400–800µs). Live AI no longer clamped by Autoplay `cpuBudgetUsPerTick` (~1.2ms).

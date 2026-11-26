@@ -1,10 +1,10 @@
-# Phone install (Android / iOS)
+﻿# Phone install (Android / iOS)
 
 Same mod idea as PC. The important part is: **the `.geode` must include the phone binary**.
 
 ## Android
 
-1. Install Geode for GD **2.2081** on the phone.
+1. Install Geode for GD **2.2091** on the phone.
 2. Install a package that contains  
    `audesign.earlybuffer.android64.so`  
    (modern 64-bit phones).
@@ -22,7 +22,7 @@ Also prefer **v1.6.0+** packages (deflate-only). Older **v1.5.1** zstd zips can 
 
 ## iOS
 
-1. Geode + GD **2.2081** on device.
+1. Geode + GD **2.2091** on device.
 2. Package must include `audesign.earlybuffer.ios.dylib` (signed as required by your Geode / sideload path).
 3. Restart.
 

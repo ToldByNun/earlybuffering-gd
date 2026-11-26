@@ -9,7 +9,7 @@ Start here. Pick the closest match.
 | Stutters, hitches, crashes | [Lag & crashes](/troubleshoot/lag) |
 | Progress / leaderboard worries | [Safe Mode](/features/safe-mode) |
 | Cannot find mod on Geode Index | Expected — [banned](/install/geode-index). Use [GitHub Releases](/install/github-releases) |
-| Mod does not load | Wrong GD version? Need 2.2081. Reinstall Geode + `.geode` from Releases |
+| Mod does not load | Wrong GD version? Need **2.2091** + Geode **6.0.0+**. Reinstall Geode + `.geode` from Releases |
 | Settings vanished after Cloud pack | Pack overwrote assist settings — re-import your export or reset |
 
 ## Fast reset profile

@@ -4,7 +4,7 @@
 
 Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.x** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.8.1** on Geometry Dash **2.2091** (Geode **6.0.0+**). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) and Interaction Journal under UI / diagnostics. See repository README.
 
 ## Modes (honest)
 
@@ -67,7 +67,7 @@ Offline broad-window scheduling fixture: 11 probes versus 26 for linear scanning
 49 idle physics steps versus 160 independent idle steps for the same scheduled
 probes. These counts do not measure FPS or real game wall time.
 
-## AI Autoplay + session train (v1.8.0)
+## AI Autoplay + session train (v1.8.x)
 
 With **Assist Mode = AI**, the AI tab exposes **Autoplay**: scorer + `verifyDelay` gated Jump presses (not CPS spam), **Time Warp** for attempt throughput, Explore % for cold-start, and auto **Train Session** on death when Auto-Tune is on. Manual **Train Session** still batch-trains from the session buffer (your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.
 

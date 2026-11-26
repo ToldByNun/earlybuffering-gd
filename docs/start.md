@@ -4,7 +4,7 @@ Do this once. Then play.
 
 ## 1. Game + Geode
 
-- Geometry Dash **2.2081** (this mod line does **not** work on newer GD yet)
+- Geometry Dash **2.2091** (this mod line targets **2.2091** / Geode **6.0.0+**)
 - [Geode](https://geode-sdk.org/) installed for that version
 
 ## 2. Install EarlyBuffer

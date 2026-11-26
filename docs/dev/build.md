@@ -2,8 +2,8 @@
 
 ## Requirements
 
-- GD **2.2081**
-- Geode SDK / CLI **5.11.1+**
+- GD **2.2091**
+- Geode SDK / CLI **6.0.0+**
 - `GEODE_SDK` set
 - CMake 3.21+, C++23 (MSVC on Windows)
 

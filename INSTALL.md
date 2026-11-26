@@ -1,11 +1,11 @@
-# Build & install
+﻿# Build & install
 
-Release **v1.7.1** targets GD **2.2081**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use. Adaptive Plan lives under Assist / Main settings (`adaptive-plan`).
+Release **v1.8.1** targets GD **2.2091** / Geode **6.0.0+**. Build with `geode build`, install the package and restart GD. Open **EarlyBuffer Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions. Online browsing requires HTTPS access to the endpoints in [Cloud Configs](docs/cloud_configs.md). Cached and bundled packs support offline use. Adaptive Plan lives under Assist / Main settings (`adaptive-plan`).
 
 ## Requirements
 
-- Geometry Dash **2.2081** (this mod line does **not** support other GD versions)
-- [Geode](https://geode-sdk.org/) **5.11.1+** (SDK + CLI)
+- Geometry Dash **2.2091** (this mod line does **not** support other GD versions)
+- [Geode](https://geode-sdk.org/) **6.0.0+** (SDK + CLI)
 - CMake 3.21+ and a **C++23** toolchain (MSVC on Windows)
 
 Set `GEODE_SDK` to your Geode SDK checkout.
@@ -39,7 +39,7 @@ Local day-to-day development is primarily **Windows**. Official multi-platform b
 
 ## Android (local maintainer path)
 
-Target Geometry Dash **2.2081** + Geode on device. Modern phones need **Android64** (`arm64-v8a`). Older 32-bit devices need **Android32** as well.
+Target Geometry Dash **2.2091** + Geode on device. Modern phones need **Android64** (`arm64-v8a`). Older 32-bit devices need **Android32** as well.
 
 ### Prerequisites
 
@@ -160,7 +160,7 @@ Some launchers or forks use a different root — if unsure, use the **Geode mods
 |------|------------|
 | Windows-only `.geode` on phone | Will show the Unknown / missing `android64.so` error — rebuild Android64 or merge |
 | 32-bit phone | Also build/merge `android32` (`audesign.earlybuffer.android32.so`) |
-| Wrong GD version | This line is **2.2081 only** |
+| Wrong GD version | This line is **2.2091 only** |
 | Package check fails after merge | Do not install; re-merge / re-build the missing platform |
 | NDK / Ninja missing | Configure fails before any `.so` is produced — fix env, do not ship the Windows zip as a workaround |
 
@@ -173,7 +173,7 @@ Some launchers or forks use a different root — if unsure, use the **Geode mods
 
 ## Android device smoke checklist
 
-Use a **merged** or android64-checked `.geode` only. Tick each item on a 64-bit phone (GD **2.2081** + Geode):
+Use a **merged** or android64-checked `.geode` only. Tick each item on a 64-bit phone (GD **2.2091** + Geode):
 
 1. **Package gate (PC)** — `python tools/geode_package_check.py <ship.geode> --require android64` exits 0. For dual ships also `--require win`.
 2. **Load** — copy into Geode mods folder; enable EarlyBuffer; **no** `Unable to find platform binary under the name 'audesign.earlybuffer.android64.so'`.
@@ -188,7 +188,7 @@ If step 2 fails, you installed a Windows-only package — re-merge. If step 3 fa
 
 ## iOS (local / CI)
 
-Target Geometry Dash **2.2081** + Geode on device. Binary name inside the `.geode`:
+Target Geometry Dash **2.2091** + Geode on device. Binary name inside the `.geode`:
 
 **`audesign.earlybuffer.ios.dylib`**
 
@@ -255,7 +255,7 @@ iOS uses the same **mobile I/O** path as Android (`SaveDropPaths` under the Geod
 
 ### iOS device smoke checklist
 
-Use a package that passes `--require ios` (and any other platforms you ship). Tick on device (GD **2.2081** + Geode):
+Use a package that passes `--require ios` (and any other platforms you ship). Tick on device (GD **2.2091** + Geode):
 
 1. **Package gate (Mac/PC)** — `python tools/geode_package_check.py <ship.geode> --require ios` exits 0 (binary present **and** code-signed).
 2. **Load** — install into Geode mods; enable EarlyBuffer; **no** `Unable to load the DYLIB` / `missing code signature` / missing `audesign.earlybuffer.ios.dylib`.

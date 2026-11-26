@@ -8,15 +8,15 @@
 
 <img src="media/desktop-ui.gif" alt="EarlyBuffer desktop settings UI" width="920" />
 
-Timing assist for Geometry Dash **2.2081** — not an autoplayer.<br/>
+Timing assist for Geometry Dash **2.2091** — not an autoplayer.<br/>
 You still click. EarlyBuffer only holds a slightly early jump and fires it on the first physics tick a shadow sim still calls safe.
 
 <br/>
 
 <a href="https://github.com/ToldByNun/earlybuffering-gd/releases"><img src="https://img.shields.io/github/v/release/ToldByNun/earlybuffering-gd?label=release&color=7B61FF" alt="Release" /></a>
 <a href="https://ToldByNun.github.io/earlybuffering-gd/"><img src="https://img.shields.io/badge/docs-players%20%2B%20devs-111827?labelColor=7B61FF" alt="Docs" /></a>
-<img src="https://img.shields.io/badge/GD-2.2081-111827" alt="GD 2.2081" />
-<img src="https://img.shields.io/badge/Geode-5.11.1%2B-111827" alt="Geode" />
+<img src="https://img.shields.io/badge/GD-2.2091-111827" alt="GD 2.2091" />
+<img src="https://img.shields.io/badge/Geode-6.0.0%2B-111827" alt="Geode" />
 <img src="https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20iOS%20%7C%20Android-111827" alt="Platforms" />
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-111827" alt="MIT" /></a>
 
@@ -33,7 +33,7 @@ You still click. EarlyBuffer only holds a slightly early jump and fires it on th
 <br/>
 
 <strong>Not on the Geode Index.</strong> Install from <a href="https://github.com/ToldByNun/earlybuffering-gd/releases">GitHub Releases</a> only.<br/>
-<strong>Last 2.2081 line</strong> — v1.8.0 does not support newer Geometry Dash builds.
+<strong>Current line</strong> — v1.8.1 targets GD <strong>2.2091</strong> / Geode <strong>6.0.0+</strong>.
 
 </div>
 
@@ -41,7 +41,7 @@ You still click. EarlyBuffer only holds a slightly early jump and fires it on th
 
 ## Install in 3 steps
 
-1. Install [Geode](https://geode-sdk.org/) for **GD 2.2081**.
+1. Install [Geode](https://geode-sdk.org/) for **GD 2.2091**.
 2. Download the multi-platform `.geode` from [Releases](https://github.com/ToldByNun/earlybuffering-gd/releases).
 3. Put it in your Geode mods folder and restart GD.
 
@@ -74,32 +74,34 @@ It does **not** invent clicks. It does **not** rewind late clicks. Assist, not b
 |---|---|
 | **Live** | Plans each click with a shadow sim. Optional Adaptive Prediction Planner. |
 | **Hybrid** | Player-driven tabular RL on top of Live verify — learns timings from your attempts. |
+| **AI** | Neural candidate scorer ranks delays to verify; Shadow physics still decides what may arm. |
 
 Also built in:
 
 - **Safe Mode** — when assist is on (or has touched a run), progress / bests are not saved as legit clears
 - **Scope gates** — platformer hard-off; practice / startpos / percent window; assist-off ranges
 - **Orbs / Wave / CPS budgets** — algorithm limits you can tune
-- **Learning** — Hybrid Auto-Tune per level (UCB explore, neighbor bleed, verify-first probes)
-- **Trigger World Bake** — cache static movers so the shadow sim can collide them
-- **Cloud Configs** — browse / rate / install / share community settings packs (classic Geode popup in v1.6.x)
-- **Lag Warning** — once-per-level ImGui card when a Live click feels hitchy (UI → Notifications)
+- **Learning** — Hybrid Auto-Tune per level; optional AI Autoplay / Train Session
+- **Trigger World / Moving Objects** — small levels can bake static movers; large levels use Nova-style live mover timelines (no multi‑100MB hitch)
+- **Cloud Configs** — browse / rate / install / share community settings packs
+- **Lag Warning** / **Interaction Journal** — hitch toast + always-on `earlybuffer-interactions.log`
 
 Full planner & settings contract: [`docs/assist_reference.md`](docs/assist_reference.md) · player docs: [site](https://ToldByNun.github.io/earlybuffering-gd/)
 
 ---
 
-## Desktop settings (v1.7.1)
+## Desktop settings (v1.8.1)
 
 On desktop, EarlyBuffer ships an ImGui settings shell (sidebar + tabs):
 
 **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**
 
-- Accent Color drives the purple theme + sidebar wave
+- Accent Color drives the theme + sidebar wave
 - Modes icon bar (Cube → Swing) with per-mode cards
-- Learn → Advanced exposes Hybrid RL knobs (UCB / neighbor / eligibility)
+- Learn → Advanced exposes Hybrid RL knobs; AI tab owns scorer / Autoplay / prior
+- Flight tab for Ship / Wave corridor assists
+- UI → Hide From Stream (Windows) + Lag Warning / Interaction Journal
 - Assist Off Ranges as an editable list
-- Styled in-shell confirm / info modals
 
 Open Geode → EarlyBuffer → Settings, or pause → **EB**.
 
@@ -123,8 +125,8 @@ See [Cloud Configs](docs/cloud_configs.md).
 | | |
 |---|---|
 | Mod ID | `audesign.earlybuffer` |
-| Version | **1.8.0** |
-| Target | GD **2.2081** / Geode **5.11.1+** |
+| Version | **1.8.1** |
+| Target | GD **2.2091** / Geode **6.0.0+** |
 | Platforms | Windows · macOS · iOS · Android |
 | License | [MIT](LICENSE) |
 | Docs | [ToldByNun.github.io/earlybuffering-gd](https://ToldByNun.github.io/earlybuffering-gd/) |

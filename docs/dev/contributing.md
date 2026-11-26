@@ -6,7 +6,7 @@ Also see repo `CONTRIBUTING.md` and `AGENTS.md`.
 
 - Human-directed product; AI drafting is fine if reviewed
 - Small, testable PRs
-- **v1.7.x** targets GD **2.2081** only — do not casually mix newer GD bindings
+- **v1.8.1** targets GD **2.2091** / Geode **6.0.0** — do not casually mix other GD bindings
 
 ## PR checklist
 

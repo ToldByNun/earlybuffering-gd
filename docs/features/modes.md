@@ -6,7 +6,7 @@ Choose Live, Hybrid, or AI under Main → Assist Mode. Ctrl+Shift+M cycles betwe
 |---|---|
 | Live | Plans each physical press/release from the current game state |
 | Hybrid | Tabular learning: with Auto-Tune enabled, learns timings across attempts and tests familiar timings in the Live input window. See Learn for this level’s progress. |
-| AI | Neural candidate scorer (1.8.0): ranks delays to verify; Shadow physics still decides what may arm. Per-level `.neural` weights; packaged `resources/ai/prior.ebnn`. When a level already has Hybrid tables, AI blends those mature delays into its verify order (bootstrap — AI does not require Hybrid). |
+| AI | Neural candidate scorer (1.8.x): ranks delays to verify; Shadow physics still decides what may arm. Per-level `.neural` weights; packaged `resources/ai/prior.ebnn`. When a level already has Hybrid tables, AI blends those mature delays into its verify order (bootstrap — AI does not require Hybrid). |
 
 **Learn** is Hybrid-only progress (familiar patterns, advanced tabular knobs, config I/O, Reset This Level). **AI** is its own tab for Candidate Scorer status, Autoplay / Train Session, top-k / learning-rate knobs, freeze, prior load, and **Visualize AI**. Auto-Tune (on Learn) still gates online AI weight writes. The Bake tab and macro/bake mode selection have been removed.
 

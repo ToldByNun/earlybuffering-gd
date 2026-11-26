@@ -1,6 +1,6 @@
 # PLEASE READ THIS
 
-Version **1.8.0** continues the Live + Hybrid 1.7.x line and adds `AssistMode::AI` with a neural Candidate Scorer (verify-gated). Desktop tabs are **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**; Learn stays Hybrid tabular, AI owns the scorer UI, Flight owns Ship/Wave assists. Hotkeys live on their feature tabs (no Keys tab). Open **Settings → Learn → Config** for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
+Version **1.8.1** targets **GD 2.2091** / **Geode 6.0.0+**. It continues Live + Hybrid + `AssistMode::AI` (neural Candidate Scorer, verify-gated), adds CPU Multithread Adaptive screening, Nova-style Moving Objects on large trigger levels, and Interaction Journal for hitch reports. Desktop tabs are **Main → Assist → Learn → AI → Modes → Flight → Visual → UI | Dev**; Learn stays Hybrid tabular, AI owns the scorer UI, Flight owns Ship/Wave assists. Hotkeys live on their feature tabs (no Keys tab). Open **Settings → Learn → Config** for Cloud Configs. See [Cloud Configs](docs/cloud_configs.md) and [`docs/assist_reference.md`](docs/assist_reference.md).
 
 EarlyBuffer was written with a lot of AI-assisted drafting.
 
@@ -16,12 +16,12 @@ If you are reviewing this for the Geode Index (or as a player who cares how mods
 
 **Click early. Still live.**
 
-EarlyBuffer is a timing assist for Geometry Dash **2.2081**.
+EarlyBuffer is a timing assist for Geometry Dash **2.2091**.
 You jump a little soon — the mod holds that press and lands it on the first physics tick a **shadow simulation** still considers safe.
 
 You still play the level. EarlyBuffer does not invent clicks, farm clears, or drive the icon for you — except the opt-in **AI Autoplay** training loop on the AI tab. It only decides *when* a press (yours or Autoplay’s) is allowed to land — inside the windows and modes you set.
 
-> **v1.8.0** is the current EarlyBuffer package line for **GD 2.2081** (Windows + Android + iOS + macOS in the merged package). Newer game builds need a separate port.
+> **v1.8.1** is the current EarlyBuffer package line for **GD 2.2091** / **Geode 6.0.0+** (Windows + Android + iOS + macOS in the merged package).
 
 ---
 
@@ -75,9 +75,9 @@ Contracts G1–G3, Pass-reason list, Hold-Until-Safe, Hybrid / mobile: [`docs/as
 - **Platformer** hard off
 - **Auto-Tune** / **Self-Bake** off — no per-level learning or practice recording until you turn them on
 - No Preset packs — set Window sliders on Main; **Enabled** off kills assist
-- Optional Trigger World Bake so movers aren’t invisible to the shadow
+- Optional Trigger World Bake on smaller levels; large levels use Moving Objects timelines instead of multi‑100MB caches
 - Save Feedback: sound / flash / world `+N` and `8+` when a delay actually fired
-- Lag Probe & Perf Trace if you’re hunting hitches
+- Lag Probe, Perf Trace, and Interaction Journal if you’re hunting hitches
 - **Android + iOS** share the same save-dir I/O and tighter planner ceilings (`INSTALL.md`)
 
 Every important setting has plain-language info text in the mod (what it does, what higher / lower means).

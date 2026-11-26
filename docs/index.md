@@ -3,7 +3,7 @@ layout: home
 hero:
   name: EarlyBuffer
   text: Click early. Still live.
-  tagline: Timing assist for Geometry Dash 2.2081 — not an autoplayer. Install from GitHub (not the Geode Index). Docs for players and developers.
+  tagline: Timing assist for Geometry Dash 2.2091 — not an autoplayer. Install from GitHub (not the Geode Index). Docs for players and developers.
   actions:
     - theme: brand
       text: Quick start
