@@ -3,6 +3,7 @@
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
 #include "../../level/section_object_walk.hpp"
+#include "../../trigger_world/moving_object_tracker.hpp"
 #include "../../trigger_world/trigger_classify.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
@@ -127,25 +128,59 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
     refreshTimeOrigin(simulator, layer);
 
     EbLagProbe::Scope const scope("eb.trigger.capture");
-
-    if (!store.loaded() || !store.hasTracks())
-        return;
     refreshObjectIndex(simulator, layer);
-    int const captureTick =
-        (simulator.m_poseRemapDt > 0.f
-             ? store.remapLiveTick(simulator.m_simTickBase, simulator.m_poseRemapDt)
-             : store.remapLiveTick(simulator.m_simTickBase)) +
-        simulator.m_triggerWorldTimeOffset;
-    simulator.m_savedTransforms.reserve(std::min(store.trackCount(), static_cast<size_t>(4096)));
-    for (auto const& track : store.data().tracks) {
-        if (!track.ready || track.keys.empty() || !EbTriggerClassify::isStatic(track.kind))
-            continue;
-        auto const found = simulator.m_captureObjects.find(track.uniqueId);
+
+    if (store.loaded() && store.hasTracks()) {
+        int const captureTick =
+            (simulator.m_poseRemapDt > 0.f
+                 ? store.remapLiveTick(simulator.m_simTickBase, simulator.m_poseRemapDt)
+                 : store.remapLiveTick(simulator.m_simTickBase)) +
+            simulator.m_triggerWorldTimeOffset;
+        simulator.m_savedTransforms.reserve(
+            std::min(store.trackCount(), static_cast<size_t>(4096)));
+        for (auto const& track : store.data().tracks) {
+            if (!track.ready || track.keys.empty() || !EbTriggerClassify::isStatic(track.kind))
+                continue;
+            auto const found = simulator.m_captureObjects.find(track.uniqueId);
+            if (found == simulator.m_captureObjects.end())
+                continue;
+            auto* object = found->second.data();
+            EbShadowSimulator::SavedTransform st;
+            st.uniqueId = track.uniqueId;
+            st.obj = object;
+            st.sectioned = object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0;
+            st.x = object->getPositionX();
+            st.y = object->getPositionY();
+            st.rotation = object->getRotation();
+            st.scaleX = object->getScaleX();
+            st.scaleY = object->getScaleY();
+            st.nodeVisible = object->isVisible();
+            st.track = &track;
+            st.hasTrackReference =
+                EbTriggerWorldStore::sampleTrackAtStoreTick(track, captureTick, st.trackReference);
+            simulator.m_savedTransforms.push_back(st);
+        }
+        return;
+    }
+
+    // Nova movers path: baseline nearby recorded movers (no TW disk bake).
+    if (!store.prefersMovers() && EbMovingObjectTracker::get().trackCount() == 0)
+        return;
+    float gx = 0.f;
+    if (layer->m_player1)
+        gx = layer->m_player1->getPositionX();
+    std::vector<int> nearIds;
+    EbMovingObjectTracker::get().collectNearIds(gx, EbMovingObjectTracker::kRecordMarginX, nearIds);
+    simulator.m_savedTransforms.reserve(nearIds.size());
+    for (int uniqueId : nearIds) {
+        auto const found = simulator.m_captureObjects.find(uniqueId);
         if (found == simulator.m_captureObjects.end())
             continue;
         auto* object = found->second.data();
+        if (!object)
+            continue;
         EbShadowSimulator::SavedTransform st;
-        st.uniqueId = track.uniqueId;
+        st.uniqueId = uniqueId;
         st.obj = object;
         st.sectioned = object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0;
         st.x = object->getPositionX();
@@ -154,9 +189,6 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
         st.scaleX = object->getScaleX();
         st.scaleY = object->getScaleY();
         st.nodeVisible = object->isVisible();
-        st.track = &track;
-        st.hasTrackReference =
-            EbTriggerWorldStore::sampleTrackAtStoreTick(track, captureTick, st.trackReference);
         simulator.m_savedTransforms.push_back(st);
     }
 }

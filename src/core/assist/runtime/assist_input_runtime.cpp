@@ -23,6 +23,7 @@
 #include "../../real_assist/real_assist_runner.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../sim/sim_trust.hpp"
+#include "../../trigger_world/moving_object_tracker.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
@@ -108,6 +109,13 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
     {
         EbPerfTrace::Scope const scope("deferredEnterLoads");
         EbLevelLifecycle::drainDeferredEnterLoads(playLayer);
+    }
+    {
+        EbPerfTrace::Scope const scope("movingObjects");
+        if (playLayer->m_player1) {
+            EbMovingObjectTracker::get().onPhysicsTick(playLayer, playLayer->m_player1,
+                                                       controller.m_attemptTick);
+        }
     }
 
     {

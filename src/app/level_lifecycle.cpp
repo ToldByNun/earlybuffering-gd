@@ -21,6 +21,7 @@
 #include "../core/sim/shadow_simulator.hpp"
 #include "../core/sim/sim_trust.hpp"
 #include "../core/sim/world/shadow_world_capture.hpp"
+#include "../core/trigger_world/moving_object_tracker.hpp"
 #include "../core/trigger_world/trigger_world_baker.hpp"
 #include "../core/trigger_world/trigger_world_store.hpp"
 #include "../debug/assist_log.hpp"
@@ -99,6 +100,7 @@ void EbLevelLifecycle::onLevelComplete(EbAssistController& controller, PlayLayer
 void EbLevelLifecycle::resetAttempt(EbAssistController& controller, PlayLayer* playLayer) {
     EbInteractionJournal::get().note("attempt.reset",
                                      fmt::format("tickWas={}", controller.m_attemptTick));
+    EbMovingObjectTracker::get().onAttemptReset();
     // Self-bake stays buffered — idle drain merges after we're alive again.
     EbLagProbe::Scope const episodeScope("eb.resetAttempt");
     if (EbRealAssistRunner::get().active() && controller.attemptTick() > 0 && playLayer) {
@@ -215,6 +217,7 @@ void EbLevelLifecycle::onLevelInit(EbAssistController& controller, PlayLayer* pl
                         playLayer->m_objects ? playLayer->m_objects->count() : 0);
     }
     EbInteractionJournal::Scope const enterScope("level.enter", std::move(enterDetail));
+    EbMovingObjectTracker::get().onLevelEnter();
     EbLevelContentKey::SetupScope const keyScope(playLayer ? playLayer->m_level : nullptr);
     phases.mark("content-key");
     controller.m_flightIntent[0].reset();
@@ -414,6 +417,7 @@ void EbLevelLifecycle::onLevelQuit(EbAssistController& controller, PlayLayer* pl
     EbLevelProfile::get().clear();
     EbAssistPolicySettings::refresh();
     EbTriggerWorldStore::get().clear();
+    EbMovingObjectTracker::get().onLevelQuit();
     phases.mark("bake-save-clear");
     EbSimTrust::get().onLevelQuit();
     EbGhostParityProbe::get().onLevelQuit();

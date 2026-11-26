@@ -218,10 +218,35 @@ void EbTriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
         EbTriggerWorldStore::get().loadForLevel(layer->m_level);
     }
 
+    if (EbTriggerWorldStore::get().prefersMovers()) {
+        this->m_status = "trigger-world: movers (skip huge bake)";
+        EbAssistLog::info("TRIGGER-WORLD: movers-only — Nova-style timeline, no full bake");
+        EbInteractionJournal::get().note("tw.moversOnly", "skipHuge");
+        return;
+    }
+
     if (EbTriggerWorldStore::get().resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic())) {
         this->m_status = EbTriggerWorldStore::get().statusLine();
         EbAssistLog::debug(fmt::format("TRIGGER-WORLD: cache hit ({})", this->m_status));
         EbInteractionJournal::get().note("tw.cacheHit", this->m_status);
+        return;
+    }
+
+    // Oversized object layers: full trigger bake = multi‑minute / multi‑100MB.
+    // Record live movers instead (Nova Moving Objects).
+    size_t children = 0;
+    if (layer->m_objectLayer) {
+        if (auto* ch = layer->m_objectLayer->getChildren())
+            children = static_cast<size_t>(ch->count());
+    }
+    static constexpr size_t kMoverOnlyChildren = 6000;
+    if (children >= kMoverOnlyChildren) {
+        EbTriggerWorldStore::get().setPrefersMovers(true);
+        this->m_status = fmt::format("trigger-world: movers ({} objects)", children);
+        EbAssistLog::info(fmt::format(
+            "TRIGGER-WORLD: {} objects — movers-only (no full bake)", children));
+        EbInteractionJournal::get().note("tw.moversOnly",
+                                         fmt::format("children={}", children));
         return;
     }
 
@@ -235,6 +260,8 @@ void EbTriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
     if (this->m_running)
         return;
     auto& store = EbTriggerWorldStore::get();
+    if (store.prefersMovers())
+        return;
     if (!store.loaded() ||
         store.resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic()))
         return;
@@ -251,6 +278,8 @@ void EbTriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
     if (this->m_running)
         return;
     auto& store = EbTriggerWorldStore::get();
+    if (store.prefersMovers())
+        return;
     if (!store.loaded() ||
         store.resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic()))
         return;
