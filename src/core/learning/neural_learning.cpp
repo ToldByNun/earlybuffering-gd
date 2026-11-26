@@ -16,8 +16,13 @@
 #include "neural_session.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <vector>
 
 EbNeuralLearning& EbNeuralLearning::get() {
     static EbNeuralLearning instance;
@@ -48,7 +53,7 @@ std::filesystem::path EbNeuralLearning::userPriorPath() {
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return {};
-    return mod->getSaveDir() / "ai" / "prior.ebnn";
+    return mod->getSaveDir().toStdPath().unwrap() / "ai" / "prior.ebnn";
 }
 
 void EbNeuralLearning::open(std::filesystem::path path) {
@@ -80,7 +85,7 @@ void EbNeuralLearning::openSharedBase() {
         save();
     m_path = base;
     if (!m_loaded) {
-        m_hasPriorOrWeights = m_model.load(m_path);
+        m_hasPriorOrWeights = m_model.loadAny(m_path);
         if (!m_hasPriorOrWeights)
             m_hasPriorOrWeights = tryLoadPackagedPrior();
         if (!m_hasPriorOrWeights)
@@ -109,7 +114,8 @@ void EbNeuralLearning::setTrainBasePrior(bool on) {
     // Leave base mode: seed this level's .neural from the shared weights.
     auto& profile = EbLevelProfile::get();
     if (profile.loaded() && !profile.key().empty()) {
-        m_path = geode::prelude::Mod::get()->getSaveDir() / "levels" / (profile.key() + ".neural");
+        m_path = geode::prelude::Mod::get()->getSaveDir().toStdPath().unwrap() / "levels" /
+                 (profile.key() + ".neural");
         save();
         EbAssistLog::info("AI: per-level fine-tune — seeded from base prior");
     }
@@ -127,7 +133,7 @@ void EbNeuralLearning::settingsChanged() {
     EbNeuralAutoplay::get().syncFromConfig();
     if (m_path.empty() || m_loaded || !active())
         return;
-    m_hasPriorOrWeights = m_model.load(m_path);
+    m_hasPriorOrWeights = m_model.loadAny(m_path);
     if (!m_hasPriorOrWeights)
         m_hasPriorOrWeights = tryLoadPrior();
     if (!m_hasPriorOrWeights)
@@ -139,22 +145,31 @@ bool EbNeuralLearning::tryLoadPackagedPrior() {
     auto* mod = geode::prelude::Mod::get();
     if (!mod)
         return false;
-    auto const root = mod->getResourcesDir();
+    auto const root = mod->getResourcesDir().toStdPath().unwrap();
     std::filesystem::path const candidates[] = {root / "prior.ebnn", root / "ai" / "prior.ebnn",
                                                 root / "resources" / "ai" / "prior.ebnn"};
     for (auto const& prior : candidates) {
         if (!std::filesystem::exists(prior))
             continue;
-        if (m_model.load(prior))
+        if (m_model.loadAny(prior))
             return true;
     }
     return false;
 }
 
 bool EbNeuralLearning::tryLoadPrior() {
-    auto const user = userPriorPath();
-    if (!user.empty() && std::filesystem::exists(user) && m_model.load(user))
-        return true;
+    auto* mod = geode::prelude::Mod::get();
+    if (mod) {
+        auto const aiDir = mod->getSaveDir().toStdPath().unwrap() / "ai";
+        std::filesystem::path const userCandidates[] = {aiDir / "prior.ebnn", aiDir / "model.bin",
+                                                        aiDir / "nova.nvm2"};
+        for (auto const& prior : userCandidates) {
+            if (!std::filesystem::exists(prior))
+                continue;
+            if (m_model.loadAny(prior))
+                return true;
+        }
+    }
     return tryLoadPackagedPrior();
 }
 
@@ -255,15 +270,15 @@ int EbNeuralLearning::trainSessionIfGrown(int passes, int maxUpdates) {
         return 0;
     int const start = m_sessionTrainedThrough;
     // passes=1 in the deferred path so return count == samples consumed.
-    int const trained =
-        EbNeuralSession::get().train(m_model, learningRate, std::max(1, passes), start, size,
-                                     maxUpdates);
+    int const trained = EbNeuralSession::get().train(m_model, learningRate, std::max(1, passes),
+                                                     start, size, maxUpdates);
     if (trained > 0) {
         this->updates += trained;
         m_hasPriorOrWeights = true;
         m_sessionTrainedThrough = std::min(size, start + trained);
-        // Disk save is hitchy — only every few deferred flushes (or manual Train Session).
-        if (++m_savesSincePersist >= 8) {
+        // Persist every 16 flushes so Auto-Tune learning sticks across sessions
+        // without saving on every death (that hitch felt like AI lag).
+        if (++m_savesSincePersist >= 16) {
             m_savesSincePersist = 0;
             save();
         }
@@ -275,7 +290,8 @@ void EbNeuralLearning::flushDeferredTrain() {
     if (!m_deferTrain)
         return;
     m_deferTrain = false;
-    trainSessionIfGrown(1, 48);
+    // Attempt-boundary only — bigger than a death hitch, small enough for reset.
+    trainSessionIfGrown(1, 32);
 }
 
 void EbNeuralLearning::boundary(bool newAttempt) {
@@ -506,11 +522,10 @@ void EbNeuralLearning::fillTrajectoryPair(PlayLayer* layer, PlayerObject* player
     };
     float const idleSurvive = surviveNorm(pair.idleDied, pair.idleDeathTick);
     float const actionSurvive = surviveNorm(pair.actionDied, pair.actionDeathTick);
-    float const endXDelta =
-        std::clamp((pair.actionEndX - pair.idleEndX) / 120.0f, -3.0f, 3.0f);
+    float const endXDelta = std::clamp((pair.actionEndX - pair.idleEndX) / 120.0f, -3.0f, 3.0f);
 
-    bool const continuous = player->m_isDart || player->m_isShip || player->m_isSwing ||
-                            player->m_isBird;
+    bool const continuous =
+        player->m_isDart || player->m_isShip || player->m_isSwing || player->m_isBird;
     bool const idleSafer = EbShadowSimulator::classifyIdleSafer(
         continuous, down, pair.idleDied, pair.idleDeathTick, pair.idleDeathX, pair.actionDied,
         pair.actionDeathTick, pair.actionDeathX);
@@ -569,7 +584,8 @@ void EbNeuralLearning::fillTrajectoryPair(PlayLayer* layer, PlayerObject* player
 }
 
 void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
-                                    int limit, float dt, float firstDt, float* outFeatures) {
+                                    int limit, float dt, float firstDt, float* outFeatures,
+                                    bool withTrajectoryPair) {
     if (!outFeatures || !layer || !player)
         return;
     auto clampGeom = [](float value) {
@@ -613,9 +629,10 @@ void EbNeuralLearning::fillFeatures(PlayLayer* layer, PlayerObject* player, bool
     if (dt > 0.0f)
         state.geometry[EbNeuralFeatureState::kGeomFps] = clampGeom((1.0f / dt) / 240.0f);
     state.geometry[EbNeuralFeatureState::kGeomFirstDt] = firstDt < dt * 0.99f ? 1.0f : 0.0f;
-    state.geometry[EbNeuralFeatureState::kGeomTimeWarp] =
-        clampGeom(layer->m_gameState.m_timeWarp);
-    fillTrajectoryPair(layer, player, down, limit, dt, firstDt, state);
+    state.geometry[EbNeuralFeatureState::kGeomTimeWarp] = clampGeom(layer->m_gameState.m_timeWarp);
+    // Live click path: skip dual Shadow idle/action (unbudgeted hitch). Autoplay may enable.
+    if (withTrajectoryPair)
+        fillTrajectoryPair(layer, player, down, limit, dt, firstDt, state);
 
     EbNeuralFeatures::build(outFeatures, grid, state);
 
@@ -642,7 +659,7 @@ void EbNeuralLearning::edge(bool player1, int tick, bool down) {
 
 int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down, bool player1,
                               int tick, int limit, float dt, float firstDt,
-                              EbPlanOptions const& options) {
+                              EbPlanOptions const& options, bool withTrajectoryPair) {
     (void)options;
     if (!active() || !m_loaded || !layer || !player || dt <= 0.0f)
         return -1;
@@ -653,7 +670,14 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
         return -1;
 
     auto& edge = m_edges[player1 ? 0 : 1];
-    fillFeatures(layer, player, down, player1, limit, dt, firstDt, edge.features);
+    // Same press already prepared (opportunity + plan) — reuse features, no second grid walk.
+    if (edge.valid && edge.tick == tick && edge.down == down && edge.player1 == player1 &&
+        edge.limit == EbNeuralModel::clampLimit(limit) && !edge.verifyOrder.empty()) {
+        ++inferences;
+        return edge.hint;
+    }
+    fillFeatures(layer, player, down, player1, limit, dt, firstDt, edge.features,
+                 withTrajectoryPair);
     edge.valid = true;
     edge.down = down;
     edge.player1 = player1;
@@ -689,9 +713,9 @@ int EbNeuralLearning::prepare(PlayLayer* layer, PlayerObject* player, bool down,
             float scratch[EbNeuralModel::kFeatureDim];
             std::memcpy(scratch, edge.features, sizeof(scratch));
             EbNeuralModel::writeCandidateDelay(scratch, delay);
-            m_model.learnConfidence(scratch,
-                                    evidenceConfidenceTarget(Evidence::TeacherSuggested, delay, 0.5f),
-                                    learningRate * scale);
+            m_model.learnConfidence(
+                scratch, evidenceConfidenceTarget(Evidence::TeacherSuggested, delay, 0.5f),
+                learningRate * scale);
         }
         m_hasPriorOrWeights = true;
     }
@@ -726,8 +750,7 @@ float EbNeuralLearning::confidenceForDelay(int delay) const {
             continue;
         float scratch[EbNeuralModel::kFeatureDim];
         std::memcpy(scratch, edge.features, sizeof(scratch));
-        bool const nova =
-            EbAiConfig::get().delayEncoding == EbAiConfig::DelayEncoding::Log1p;
+        bool const nova = EbAiConfig::get().delayEncoding == EbAiConfig::DelayEncoding::Log1p;
         EbNeuralModel::writeCandidateForPolicy(scratch, delay, edge.down, nova);
         return m_model.confidence(scratch);
     }
@@ -758,16 +781,14 @@ void EbNeuralLearning::noteVerifyOutcome(int delay, bool verifiedSafe) {
             continue;
         float scratch[EbNeuralModel::kFeatureDim];
         std::memcpy(scratch, edge.features, sizeof(scratch));
-        bool const nova =
-            EbAiConfig::get().delayEncoding == EbAiConfig::DelayEncoding::Log1p;
+        bool const nova = EbAiConfig::get().delayEncoding == EbAiConfig::DelayEncoding::Log1p;
         EbNeuralModel::writeCandidateForPolicy(scratch, delay, edge.down, nova);
         if (verifiedSafe) {
             m_model.learnConfidence(scratch, 1.0f, learningRate * scale);
             m_model.learnRank(edge.features, delay, edge.limit, learningRate * scale);
             // Supervised-only buffer sample (identical next → session skips TD).
             // Keep reward ≥ 0.5 so session train still updates the rank head.
-            float const reward =
-                0.85f * evidenceRewardScale(Evidence::SimulationVerified);
+            float const reward = 0.85f * evidenceRewardScale(Evidence::SimulationVerified);
             EbNeuralSession::get().push(edge.features, delay, edge.limit, reward, edge.features,
                                         false);
         } else {
@@ -821,10 +842,9 @@ void EbNeuralLearning::decision(bool player1, EbSimPlan const& plan) {
         float scratch[EbNeuralModel::kFeatureDim];
         std::memcpy(scratch, edge.features, sizeof(scratch));
         EbNeuralModel::writeCandidateDelay(scratch, plan.delay);
-        m_model.learnConfidence(
-            scratch, evidenceConfidenceTarget(evidence, plan.delay, 0.5f), learningRate * scale);
-        float const reward =
-            successReward(plan.delay, 0.5f) * evidenceRewardScale(evidence);
+        m_model.learnConfidence(scratch, evidenceConfidenceTarget(evidence, plan.delay, 0.5f),
+                                learningRate * scale);
+        float const reward = successReward(plan.delay, 0.5f) * evidenceRewardScale(evidence);
         EbNeuralSession::get().push(edge.features, plan.delay, edge.limit, reward, edge.features,
                                     false);
         ++updates;
@@ -869,29 +889,30 @@ float EbNeuralLearning::deathReward(float progress) {
 float EbNeuralLearning::evidenceLearnScale(Evidence evidence) {
     switch (evidence) {
     case Evidence::TeacherSuggested:
-        return 0.25f;
+        // Live classic Delay fallthrough is the main teacher while AI-first is cold.
+        return 0.45f;
     case Evidence::SimulationVerified:
-        return 0.85f;
+        return 0.90f;
     case Evidence::SurvivedObserved:
-        return 1.0f;
+        return 1.15f;
     case Evidence::Death:
         return 1.0f;
     }
-    return 0.25f;
+    return 0.45f;
 }
 
 float EbNeuralLearning::evidenceRewardScale(Evidence evidence) {
     switch (evidence) {
     case Evidence::TeacherSuggested:
-        return 0.35f;
+        return 0.50f;
     case Evidence::SimulationVerified:
-        return 0.70f;
+        return 0.80f;
     case Evidence::SurvivedObserved:
-        return 1.0f;
+        return 1.15f;
     case Evidence::Death:
         return 1.0f;
     }
-    return 0.35f;
+    return 0.50f;
 }
 
 float EbNeuralLearning::evidenceConfidenceTarget(Evidence evidence, int plannedDelay,
@@ -912,7 +933,8 @@ float EbNeuralLearning::evidenceConfidenceTarget(Evidence evidence, int plannedD
 void EbNeuralLearning::rememberRecent(EdgeState const& edge) {
     if (!edge.valid || edge.plannedDelay < 0)
         return;
-    RecentEdge& slot = m_recent[static_cast<size_t>(m_recentNext % static_cast<int>(m_recent.size()))];
+    RecentEdge& slot =
+        m_recent[static_cast<size_t>(m_recentNext % static_cast<int>(m_recent.size()))];
     m_recentNext = (m_recentNext + 1) % static_cast<int>(m_recent.size());
     slot.valid = true;
     slot.tick = edge.tick;
@@ -978,9 +1000,9 @@ void EbNeuralLearning::poll(PlayLayer* layer, int tick) {
             float scratch[EbNeuralModel::kFeatureDim];
             std::memcpy(scratch, edge.features, sizeof(scratch));
             EbNeuralModel::writeCandidateDelay(scratch, edge.plannedDelay);
-            m_model.learnConfidence(
-                scratch, evidenceConfidenceTarget(evidence, edge.plannedDelay, progress),
-                learningRate * scale);
+            m_model.learnConfidence(scratch,
+                                    evidenceConfidenceTarget(evidence, edge.plannedDelay, progress),
+                                    learningRate * scale);
             // Replay TD with done=true so bootstrap is not s'=s.
             m_replay.push(edge.features, edge.plannedDelay, reward, next, true);
             ++updates;
@@ -1058,6 +1080,46 @@ bool EbNeuralLearning::selfCheck(std::string& report) {
     model.learnConfidence(features, 1.0f, 0.05f);
     expect(model.confidence(features) == before, "frozen-blocks-learn");
     model.setFrozen(false);
+
+    // Synthetic NVM2 (zero trunk) round-trips through importNvm2.
+    {
+        auto const nvm2Path = std::filesystem::temp_directory_path() / "eb-neural-nvm2-smoke.bin";
+        std::ofstream out(nvm2Path, std::ios::binary | std::ios::trunc);
+        std::uint32_t const magic = 0x324D564Eu;
+        std::uint16_t const version = 2;
+        std::uint16_t const feat = static_cast<std::uint16_t>(EbNeuralModel::kFeatureDim);
+        std::uint16_t const h1 = static_cast<std::uint16_t>(EbNeuralModel::kHidden1);
+        std::uint16_t const h2 = static_cast<std::uint16_t>(EbNeuralModel::kHidden2);
+        unsigned char const grid[2] = {static_cast<unsigned char>(EbNeuralModel::kGridCols),
+                                       static_cast<unsigned char>(EbNeuralModel::kGridRows)};
+        char const pad[6]{};
+        unsigned char const nameLen = 4;
+        char const name[4] = {'t', 'e', 's', 't'};
+        out.write(reinterpret_cast<char const*>(&magic), sizeof(magic));
+        out.write(reinterpret_cast<char const*>(&version), sizeof(version));
+        out.write(reinterpret_cast<char const*>(&feat), sizeof(feat));
+        out.write(reinterpret_cast<char const*>(&h1), sizeof(h1));
+        out.write(reinterpret_cast<char const*>(&h2), sizeof(h2));
+        out.write(reinterpret_cast<char const*>(grid), sizeof(grid));
+        out.write(pad, sizeof(pad));
+        out.write(reinterpret_cast<char const*>(&nameLen), 1);
+        out.write(name, sizeof(name));
+        int const trunkFloats = EbNeuralModel::kHidden1 * EbNeuralModel::kFeatureDim +
+                                EbNeuralModel::kHidden1 +
+                                EbNeuralModel::kHidden2 * EbNeuralModel::kHidden1 +
+                                EbNeuralModel::kHidden2 + EbNeuralModel::kHidden2 + 1;
+        std::vector<std::uint16_t> zeros(static_cast<size_t>(trunkFloats), 0);
+        out.write(reinterpret_cast<char const*>(zeros.data()),
+                  static_cast<std::streamsize>(zeros.size() * sizeof(std::uint16_t)));
+        out.close();
+        EbNeuralModel imported;
+        expect(imported.importNvm2(nvm2Path), "nvm2-import");
+        float const conf = imported.confidence(features);
+        expect(std::isfinite(conf) && conf > 0.45f && conf < 0.55f, "nvm2-zero-conf");
+        expect(imported.loadAny(nvm2Path), "nvm2-loadAny");
+        std::error_code removeError;
+        std::filesystem::remove(nvm2Path, removeError);
+    }
 
     if (fails == 0) {
         report = "NeuralLearning OK";

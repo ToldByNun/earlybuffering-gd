@@ -1,6 +1,7 @@
 #include "ai_config.hpp"
 #include "../../app/class_manager.hpp"
 #include <Geode/Geode.hpp>
+#include <asp/fs/std.hpp>
 #include <cmath>
 #include <fstream>
 #include <matjson.hpp>
@@ -32,6 +33,8 @@ void EbAiConfig::clampAll() {
     scoreCalibration = std::clamp(scoreCalibration, 0.25f, 4.0f);
     confidenceThreshold = std::clamp(confidenceThreshold, 0.05f, 0.95f);
     neuralEvalBudget = std::clamp(neuralEvalBudget, 4, 128);
+    seedDutyPeriod = std::clamp(seedDutyPeriod, 1, 32);
+    seedDutyPhase = std::clamp(seedDutyPhase, 0, 31);
     maxCandidates = std::clamp(maxCandidates, 1, 32);
     candidateWindow = std::clamp(candidateWindow, 8, 96);
     minDelay = std::clamp(minDelay, 0, 48);
@@ -83,6 +86,10 @@ void EbAiConfig::clampAll() {
     probeEveryTicks = std::clamp(probeEveryTicks, 4, 60);
     gapTicks = std::clamp(gapTicks, 4, 120);
     maxExecDriftPx = std::clamp(maxExecDriftPx, 2.0f, 80.0f);
+    maxRouteQueue = std::clamp(maxRouteQueue, 0, 8);
+    earlyPlanTicks = std::clamp(earlyPlanTicks, 0, 64);
+    maxAutoplayCps = std::clamp(maxAutoplayCps, 1, 60);
+    memoryHoldTicks = std::clamp(memoryHoldTicks, 4, 240);
     maxAiCpuUsPerTick = std::clamp(maxAiCpuUsPerTick, 500, 12000);
     diagnosticSampleEvery = std::clamp(diagnosticSampleEvery, 1, 240);
     if (!experimentalBackends && backend == Backend::DualHeadLegacy)
@@ -102,6 +109,9 @@ void EbAiConfig::applyPreset(Preset value) {
         confidenceThreshold = 0.6f;
         gatingEnabled = true;
         adaptiveThreshold = false;
+        seedStrategy = SeedStrategy::NovaParity;
+        seedDutyPeriod = 2;
+        seedDutyPhase = 0;
         maxCandidates = 12;
         sampleStep = 1;
         maxRouteDepth = 6;
@@ -175,6 +185,9 @@ void EbAiConfig::resetCategory(char const* category) {
         confidenceThreshold = fresh.confidenceThreshold;
         neuralEvalBudget = fresh.neuralEvalBudget;
         freezeWeights = fresh.freezeWeights;
+        seedStrategy = fresh.seedStrategy;
+        seedDutyPeriod = fresh.seedDutyPeriod;
+        seedDutyPhase = fresh.seedDutyPhase;
     } else if (name == "candidates") {
         maxCandidates = fresh.maxCandidates;
         candidateWindow = fresh.candidateWindow;
@@ -250,6 +263,11 @@ void EbAiConfig::resetCategory(char const* category) {
         gapTicks = fresh.gapTicks;
         replanOnDivergence = fresh.replanOnDivergence;
         maxExecDriftPx = fresh.maxExecDriftPx;
+        maxRouteQueue = fresh.maxRouteQueue;
+        earlyPlanTicks = fresh.earlyPlanTicks;
+        maxAutoplayCps = fresh.maxAutoplayCps;
+        memoryReuseRoute = fresh.memoryReuseRoute;
+        memoryHoldTicks = fresh.memoryHoldTicks;
     } else if (name == "perf") {
         maxAiCpuUsPerTick = fresh.maxAiCpuUsPerTick;
         backgroundTrain = fresh.backgroundTrain;
@@ -285,6 +303,9 @@ static matjson::Value dumpConfig(EbAiConfig const& c) {
     o["confidenceThreshold"] = c.confidenceThreshold;
     o["neuralEvalBudget"] = c.neuralEvalBudget;
     o["freezeWeights"] = c.freezeWeights;
+    o["seedStrategy"] = static_cast<int>(c.seedStrategy);
+    o["seedDutyPeriod"] = c.seedDutyPeriod;
+    o["seedDutyPhase"] = c.seedDutyPhase;
     o["maxCandidates"] = c.maxCandidates;
     o["candidateWindow"] = c.candidateWindow;
     o["minDelay"] = c.minDelay;
@@ -354,6 +375,11 @@ static matjson::Value dumpConfig(EbAiConfig const& c) {
     o["gapTicks"] = c.gapTicks;
     o["replanOnDivergence"] = c.replanOnDivergence;
     o["maxExecDriftPx"] = c.maxExecDriftPx;
+    o["maxRouteQueue"] = c.maxRouteQueue;
+    o["earlyPlanTicks"] = c.earlyPlanTicks;
+    o["maxAutoplayCps"] = c.maxAutoplayCps;
+    o["memoryReuseRoute"] = c.memoryReuseRoute;
+    o["memoryHoldTicks"] = c.memoryHoldTicks;
     o["maxAiCpuUsPerTick"] = c.maxAiCpuUsPerTick;
     o["backgroundTrain"] = c.backgroundTrain;
     o["diagnosticSampleEvery"] = c.diagnosticSampleEvery;
@@ -389,7 +415,7 @@ void EbAiConfig::load() {
     auto* mod = geode::Mod::get();
     if (!mod)
         return;
-    auto path = mod->getSaveDir() / "ai" / "config-v1.json";
+    auto path = mod->getSaveDir().toStdPath().unwrap() / "ai" / "config-v1.json";
     std::error_code ec;
     if (!std::filesystem::exists(path, ec)) {
         applyPreset(Preset::Balanced);
@@ -414,6 +440,8 @@ void EbAiConfig::load() {
     loadField(root, "confidenceThreshold", confidenceThreshold);
     loadField(root, "neuralEvalBudget", neuralEvalBudget);
     loadField(root, "freezeWeights", freezeWeights);
+    loadField(root, "seedDutyPeriod", seedDutyPeriod);
+    loadField(root, "seedDutyPhase", seedDutyPhase);
     loadField(root, "maxCandidates", maxCandidates);
     loadField(root, "candidateWindow", candidateWindow);
     loadField(root, "minDelay", minDelay);
@@ -482,6 +510,11 @@ void EbAiConfig::load() {
     loadField(root, "gapTicks", gapTicks);
     loadField(root, "replanOnDivergence", replanOnDivergence);
     loadField(root, "maxExecDriftPx", maxExecDriftPx);
+    loadField(root, "maxRouteQueue", maxRouteQueue);
+    loadField(root, "earlyPlanTicks", earlyPlanTicks);
+    loadField(root, "maxAutoplayCps", maxAutoplayCps);
+    loadField(root, "memoryReuseRoute", memoryReuseRoute);
+    loadField(root, "memoryHoldTicks", memoryHoldTicks);
     loadField(root, "maxAiCpuUsPerTick", maxAiCpuUsPerTick);
     loadField(root, "backgroundTrain", backgroundTrain);
     loadField(root, "diagnosticSampleEvery", diagnosticSampleEvery);
@@ -502,16 +535,19 @@ void EbAiConfig::load() {
     int policyInt = static_cast<int>(policy);
     int encInt = static_cast<int>(delayEncoding);
     int algoInt = static_cast<int>(searchAlgo);
+    int seedInt = static_cast<int>(seedStrategy);
     loadField(root, "preset", presetInt);
     loadField(root, "backend", backendInt);
     loadField(root, "policy", policyInt);
     loadField(root, "delayEncoding", encInt);
     loadField(root, "searchAlgo", algoInt);
+    loadField(root, "seedStrategy", seedInt);
     preset = static_cast<Preset>(std::clamp(presetInt, 0, 5));
     backend = static_cast<Backend>(std::clamp(backendInt, 0, 1));
     policy = static_cast<Policy>(std::clamp(policyInt, 0, 3));
     delayEncoding = static_cast<DelayEncoding>(std::clamp(encInt, 0, 1));
     searchAlgo = static_cast<SearchAlgo>(std::clamp(algoInt, 0, 1));
+    seedStrategy = static_cast<SeedStrategy>(std::clamp(seedInt, 0, 1));
     clampAll();
 }
 
@@ -519,7 +555,7 @@ void EbAiConfig::save() const {
     auto* mod = geode::Mod::get();
     if (!mod)
         return;
-    auto dir = mod->getSaveDir() / "ai";
+    auto dir = mod->getSaveDir().toStdPath().unwrap() / "ai";
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
     auto path = dir / "config-v1.json";
@@ -549,10 +585,13 @@ bool EbAiConfig::selfCheck(std::string& report) {
     expect(cfg.confidenceThreshold >= 0.59f && cfg.confidenceThreshold <= 0.61f, "nova-thresh");
     expect(cfg.delayEncoding == DelayEncoding::Log1p, "nova-log1p");
     expect(cfg.maxRouteDepth >= 4, "nova-depth");
+    expect(cfg.seedStrategy == SeedStrategy::NovaParity, "nova-seed-parity");
+    expect(cfg.seedDutyPeriod >= 2, "nova-seed-duty");
     cfg.applyPreset(Preset::Performance);
     expect(cfg.maxRouteDepth <= 2, "perf-shallow");
     cfg.resetAll();
     expect(cfg.preset == Preset::Balanced, "reset-balanced");
+    expect(cfg.seedStrategy == SeedStrategy::Enhanced, "default-seed-enhanced");
     if (fails == 0) {
         report = "AiConfig OK";
         return true;

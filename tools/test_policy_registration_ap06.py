@@ -28,7 +28,7 @@ class PolicyRegistrationCheck:
         assert '{"show-ai", SettingsCategory::Visual}' in categories
         assert "show-ai" in settings
         entries = re.findall(r'\{"[^"]+", EbConfigBundleKeys::Kind::', bundle)
-        assert len(entries) == 200, len(entries)
+        assert len(entries) == 202, len(entries)
         print("AP06 registration: 11 policy keys, all modes and bundle entries verified")
 
 

@@ -35,8 +35,10 @@ public:
     void boundary(bool newAttempt);
     void edge(bool player1, int tick, bool down);
     // Builds features; returns top ranked delay hint or -1.
+    // withTrajectoryPair defaults off — Live click must stay µs-cheap (no dual Shadow).
     int prepare(PlayLayer* layer, PlayerObject* player, bool down, bool player1, int tick,
-                int limit, float dt, float firstDt, EbPlanOptions const& options);
+                int limit, float dt, float firstDt, EbPlanOptions const& options,
+                bool withTrajectoryPair = false);
     std::vector<int> rankedVerifyDelays(int limit) const;
     // Sigmoid confidence for a candidate delay using the last prepare features.
     float confidenceForDelay(int delay) const;
@@ -149,8 +151,10 @@ private:
     bool tryLoadPackagedPrior();
     void openSharedBase();
     void softResetAttemptState();
+    // withTrajectoryPair: dual Shadow idle/action probe — Live click path must pass false
+    // (research_20261122_* hitches). Autoplay/route may enable under its own µs wall.
     void fillFeatures(PlayLayer* layer, PlayerObject* player, bool down, bool player1, int limit,
-                      float dt, float firstDt, float* outFeatures);
+                      float dt, float firstDt, float* outFeatures, bool withTrajectoryPair = false);
     // Cheap idle-coast vs action-now shadow pair → geometry[3..10] + firstDeathHintNorm.
     static void fillTrajectoryPair(PlayLayer* layer, PlayerObject* player, bool down, int limit,
                                    float dt, float firstDt, EbNeuralFeatureState& state);

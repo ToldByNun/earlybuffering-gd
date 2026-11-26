@@ -61,21 +61,21 @@ public:
     cocos2d::CCParticleSystemQuad* createParticle(int objectType, char const* plistName, int tag,
                                                   cocos2d::tCCPositionType positionType);
 
-    cocos2d::CCParticleSystemQuad* claimParticle(gd::string key, int zLayer);
+    cocos2d::CCParticleSystemQuad* claimParticle(std::string key, int zLayer);
 
     cocos2d::CCParticleSystemQuad*
-    createCustomParticle(gd::string const& key, cocos2d::ParticleStruct const& particleStruct,
+    createCustomParticle(std::string const& key, cocos2d::ParticleStruct const& particleStruct,
                          int minimum, bool dontAdd);
 
     cocos2d::CCParticleSystemQuad*
-    claimCustomParticle(gd::string const& key, cocos2d::ParticleStruct const& particleStruct,
+    claimCustomParticle(std::string const& key, cocos2d::ParticleStruct const& particleStruct,
                         int zLayer, int zOrder, int uiObject, bool dontAdd);
 
     void spawnParticleTrigger(int particleID, cocos2d::CCPoint position, float rotation,
                               float scale);
 
-    void collisionCheckObjects(PlayerObject* player, gd::vector<GameObject*>* vec, int objectsCount,
-                               float deltaTime);
+    void collisionCheckObjects(PlayerObject* player, std::vector<GameObject*>* vec,
+                               int objectsCount, float deltaTime);
 
 private:
 };

@@ -4,6 +4,7 @@
 #include "categories/settings_category_map.hpp"
 #include "filtering/settings_filter_keeper_node.hpp"
 #include "filtering/settings_filter_walk.hpp"
+#include "settings_tabs_hook.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -62,7 +63,7 @@ float EbInLevelSettingsFilter::preservedContentY(float posBefore, float heightBe
 }
 
 void EbInLevelSettingsFilter::apply(geode::prelude::CCNode* popup, SettingsCategory category) {
-    if (!popup)
+    if (!EbSettingsPopupAttach::nodeTreeHasOurSetting(popup))
         return;
     std::vector<geode::prelude::SettingNodeV3*> settings;
     geode::prelude::ScrollLayer* list = nullptr;
@@ -77,10 +78,10 @@ void EbInLevelSettingsFilter::apply(geode::prelude::CCNode* popup, SettingsCateg
     for (auto* sett : settings) {
         if (!sett)
             continue;
-        bool keep = false;
-        if (auto setting = sett->getSetting()) {
-            keep = keepKey(setting->getKey(), category);
-        }
+        auto setting = sett->getSetting();
+        if (!setting || setting->getModID() != geode::prelude::Mod::get()->getID())
+            continue;
+        bool const keep = keepKey(setting->getKey(), category);
         if (!keep)
             sett->removeFromParent();
         else
@@ -124,6 +125,7 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("show-pause-hub") == SettingsCategory::UI, "cat-hub-ui");
     expect(categoryForKey("desktop-classic-settings") == SettingsCategory::UI, "cat-classic-ui");
     expect(categoryForKey("show-overlay") == SettingsCategory::UI, "cat-overlay-ui");
+    expect(categoryForKey("hide-from-stream") == SettingsCategory::UI, "cat-hide-stream-ui");
     expect(categoryForKey("lag-warning-toast") == SettingsCategory::UI, "cat-lag-toast-ui");
     expect(categoryForKey("title-ui") == SettingsCategory::UI, "cat-title-ui");
     expect(categoryForKey("title-scope") == SettingsCategory::Assist, "cat-title-scope-assist");
@@ -142,8 +144,10 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("ship-line-enable") == SettingsCategory::Flight, "cat-ship-line-flight");
     expect(categoryForKey("wave-pattern-enable") == SettingsCategory::Flight,
            "cat-wave-pattern-enable-flight");
-    expect(categoryForKey("show-straightfly") == SettingsCategory::Visual, "cat-straightfly-visual");
-    expect(categoryForKey("show-wave-pattern") == SettingsCategory::Visual, "cat-wave-pattern-visual");
+    expect(categoryForKey("show-straightfly") == SettingsCategory::Visual,
+           "cat-straightfly-visual");
+    expect(categoryForKey("show-wave-pattern") == SettingsCategory::Visual,
+           "cat-wave-pattern-visual");
     expect(categoryForKey("show-ai") == SettingsCategory::Visual, "cat-show-ai-visual");
     expect(categoryForKey("wave-angle-snap") == SettingsCategory::Flight, "cat-flight-angle-snap");
     expect(categoryForKey("ship-room-of-error") == SettingsCategory::Flight, "cat-ship-room");
@@ -151,10 +155,13 @@ bool EbInLevelSettingsFilter::selfCheck(std::string& report) {
     expect(categoryForKey("cube-latency") == SettingsCategory::Modes, "cat-cube-modes");
     expect(categoryForKey("hotkey-debug") == SettingsCategory::Dev, "cat-hotkey-debug-dev");
     expect(categoryForKey("hotkey-desktop-menu") == SettingsCategory::UI, "cat-hotkey-menu-ui");
-    expect(categoryForKey("hotkey-assist-mode") == SettingsCategory::Assist, "cat-hotkey-mode-assist");
+    expect(categoryForKey("hotkey-assist-mode") == SettingsCategory::Assist,
+           "cat-hotkey-mode-assist");
     expect(categoryForKey("hotkey-auto-tune") == SettingsCategory::Learn, "cat-hotkey-tune-learn");
-    expect(categoryForKey("hotkey-reset-level") == SettingsCategory::Learn, "cat-hotkey-reset-learn");
-    expect(categoryForKey("hotkey-trajectory") == SettingsCategory::Visual, "cat-hotkey-traj-visual");
+    expect(categoryForKey("hotkey-reset-level") == SettingsCategory::Learn,
+           "cat-hotkey-reset-learn");
+    expect(categoryForKey("hotkey-trajectory") == SettingsCategory::Visual,
+           "cat-hotkey-traj-visual");
     expect(categoryForKey("preset") == SettingsCategory::Count, "cat-preset-gone");
     expect(categoryForKey("stage-index") == SettingsCategory::Count, "cat-stage-gone");
     expect(categoryForKey("hotkey-cycle") == SettingsCategory::Count, "cat-cycle-hotkey-gone");

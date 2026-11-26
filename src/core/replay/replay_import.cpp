@@ -1,5 +1,6 @@
 #include "replay_import.hpp"
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <cstring>
 #include <fstream>
 #include <gdr/gdr.hpp>
@@ -22,8 +23,9 @@ bool EbReplayImportImplementation::isMhrJsonName(std::filesystem::path const& pa
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char character) {
         return static_cast<char>(std::tolower(character));
     });
-    return name.ends_with(".mhr.json") || (EbReplayImportImplementation::lowerExt(path) == ".json" &&
-                                           name.find("mhr") != std::string::npos);
+    return name.ends_with(".mhr.json") ||
+           (EbReplayImportImplementation::lowerExt(path) == ".json" &&
+            name.find("mhr") != std::string::npos);
 }
 
 template <class T> T readLE(std::ifstream& f) {
@@ -141,7 +143,7 @@ geode::Result<EbImportedReplay> EbReplayImport::loadGdr(std::filesystem::path co
 }
 
 geode::Result<EbImportedReplay> EbReplayImport::loadMhrJson(std::filesystem::path const& path) {
-    auto jsonRes = geode::utils::file::readJson(path);
+    auto jsonRes = geode::utils::file::readJson(asp::fs::Path::fromStdPath(path));
     if (jsonRes.isErr())
         return geode::Err(jsonRes.unwrapErr());
     auto root = jsonRes.unwrap();
@@ -241,9 +243,10 @@ geode::Result<EbImportedReplay> EbReplayImport::loadMhrBin(std::filesystem::path
         f.seekg(24, std::ios::cur);
         if (!f)
             break;
-        out.events.push_back(EbReplayEvent{static_cast<int>(frame), 1,
-                                         p1B != 0, // p1==0 means player1 in zcb3; p1B==0 → !player2
-                                         downB == 1});
+        out.events.push_back(
+            EbReplayEvent{static_cast<int>(frame), 1,
+                          p1B != 0, // p1==0 means player1 in zcb3; p1B==0 → !player2
+                          downB == 1});
         // Fix: zcb3 says p1 = (read == 0); so player2 = !p1 = (p1B != 0). Correct above.
     }
 

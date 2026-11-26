@@ -46,6 +46,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"adaptive-screen-ticks", SettingsCategory::Main},
         {"adaptive-verify-quantum", SettingsCategory::Main},
         {"adaptive-reserve-pct", SettingsCategory::Main},
+        {"cpu-multithread", SettingsCategory::Main},
 
         // Assist — where it runs + core algorithm
         {"title-scope", SettingsCategory::Assist},
@@ -225,6 +226,7 @@ EbSettingsCategoryMap::Entry const EbSettingsCategoryMap::kEntries[EbSettingsCat
         {"sidebar-material", SettingsCategory::UI},
         {"desktop-accent-color", SettingsCategory::UI},
         {"show-overlay", SettingsCategory::UI},
+        {"hide-from-stream", SettingsCategory::UI},
         {"lag-warning-toast", SettingsCategory::UI},
         {"show-pause-hub", SettingsCategory::UI},
         {"desktop-classic-settings", SettingsCategory::UI},

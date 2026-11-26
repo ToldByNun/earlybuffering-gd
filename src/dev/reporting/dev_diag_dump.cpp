@@ -10,6 +10,7 @@
 #include "diagnostics/dev_state_diagnostics.hpp"
 #include <Geode/Geode.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <fstream>
 #include <limits>
@@ -32,7 +33,7 @@ std::string EbDevDiagDumpImplementation::stampNow() {
 }
 
 bool EbDevDiagDumpImplementation::writeTextFile(std::filesystem::path const& path,
-                                              std::string const& body) {
+                                                std::string const& body) {
     std::error_code ec;
     auto const parent = path.parent_path();
     if (!parent.empty()) {
@@ -90,7 +91,7 @@ std::filesystem::path EbDevDiagDump::makeStampDir(char const* prefix, std::strin
         errMsg = "No Mod instance";
         return {};
     }
-    auto const root = mod->getSaveDir() / "diag";
+    auto const root = mod->getSaveDir().toStdPath().unwrap() / "diag";
     auto const directory = root / fmt::format("{}_{}", prefix ? prefix : "diag",
                                               EbDevDiagDumpImplementation::stampNow());
     std::error_code ec;
@@ -103,7 +104,7 @@ std::filesystem::path EbDevDiagDump::makeStampDir(char const* prefix, std::strin
 }
 
 bool EbDevDiagDump::writeFile(std::filesystem::path const& dir, char const* name,
-                            std::string const& body, std::string& errMsg) {
+                              std::string const& body, std::string& errMsg) {
     auto const path = dir / name;
     if (!EbDevDiagDumpImplementation::writeTextFile(path, body)) {
         errMsg = fmt::format("write failed: {}", path.string());
@@ -215,7 +216,7 @@ std::string EbDevDiagDump::buildSettings() {
 }
 
 void EbDevDiagDumpImplementation::dumpVehicleFlags(std::ostringstream& o, char const* prefix,
-                                                 PlayerObject* player) {
+                                                   PlayerObject* player) {
     return EbDevGhostDiagnostics::dumpVehicleFlags(o, prefix, player);
 }
 
@@ -228,12 +229,12 @@ bool EbDevDiagDumpImplementation::isHazardType(GameObject* object) {
 }
 
 void EbDevDiagDumpImplementation::dumpRectLine(std::ostringstream& o, char const* name,
-                                             PlayerObject* player) {
+                                               PlayerObject* player) {
     return EbDevGhostDiagnostics::dumpRectLine(o, name, player);
 }
 
 int EbDevDiagDumpImplementation::countHazardOverlaps(PlayLayer* layer, PlayerObject* player,
-                                                   std::ostringstream& detail, int maxDetail) {
+                                                     std::ostringstream& detail, int maxDetail) {
     return EbDevGhostDiagnostics::countHazardOverlaps(layer, player, detail, maxDetail);
 }
 
@@ -254,11 +255,11 @@ std::string EbDevDiagDump::buildTriggerWorld() {
 }
 
 bool EbDevDiagDump::prepareBakeEvents(PlayLayer*& outLayer, int& outSlot, float& outDt,
-                                    double& outSrcTps, double& outBakeTps,
-                                    std::vector<EbReplayEvent>& outEv, std::string& outErr,
-                                    int* outSubsteps, BakePrepStats* outStats) {
+                                      double& outSrcTps, double& outBakeTps,
+                                      std::vector<EbReplayEvent>& outEv, std::string& outErr,
+                                      int* outSubsteps, BakePrepStats* outStats) {
     return EbDevBakeDiagnostics::prepareBakeEvents(outLayer, outSlot, outDt, outSrcTps, outBakeTps,
-                                                 outEv, outErr, outSubsteps, outStats);
+                                                   outEv, outErr, outSubsteps, outStats);
 }
 
 std::string EbDevDiagDump::buildReplayRemap() {

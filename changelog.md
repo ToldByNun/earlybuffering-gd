@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.8.1
+
+Release notes: [v1.8.1](releases/v1.8.1.md).
+
+- Port package metadata and runtime to **Geode 6.0.0** / **GD 2.2091**.
+- Trigger World: skip huge disk caches; Nova-style Moving Objects timeline + ≤0.5s motion guess on large levels; empty-complete sentinel; deferred enter loads; optional `.ebtw` binary; Interaction Journal (`earlybuffer-interactions.log`).
+- Apple: replace unbound `belongsToGroup` with `getGroup`; scale bake without `TransformTriggerGameObject` typeinfo.
+- **CPU Multithread** (Main → Adaptive, default on): Adaptive Phase A/B screens delay candidates on multiple CPU cores with a lightweight GD-physics clone (frozen hitboxes, no ShadowPlayer/Cocos). Survivors are still verified once on the main thread against real ShadowPlayers before arming; empty/unknown screens fall back to serial Shadow. Overlay shows `mtN` worker count.
+- CPU Multithread is no longer a simplified kinematics clone: worker ghosts run real `PlayerObject::update` + `collidedWithObjectInternal` against a frozen object/TW snapshot (per-object locks). Shadow Phase C verify still gates arming.
+- AI Live Budgets/Shell Nova-aligned: frame assist floor **4ms** (Nova slow-click); AI shell spends almost the whole frame wall with a thin classic leftover (400–800µs). Live AI no longer clamped by Autoplay `cpuBudgetUsPerTick` (~1.2ms).
+- Desktop **Hide From Stream** (UI tab, Windows): click-through layered HWND + `WDA_EXCLUDEFROMCAPTURE`. ImGui records to an FBO with `glBlendFuncSeparate` (no squared alpha / washed text), then the real SwapBuffers runs on FB0 so Game Capture sees the game — not only the UI.
+- AI-first + learning: discrete Adaptive half+ reserve left Shell=1 on ~3ms frames so AI never armed (`research_20261122_194245`). AI shell now keeps classic ≤2ms / half and always leaves ≥`minRem` for top-k verify; classic reserve restored after AI. Attempt-boundary train flush 32 + persist weights every 16 flushes; stronger Live Delay teacher / survived scales.
+- Live Stage-12 grasp: lookahead shrink now uses the **frame** soft wall (not the 8ms hitch ceiling). At 240Hz that wrongly crushed ticks 12→4 (`research_20261122_191833`). Frame assist slice floors at 3ms (Nova slow-click ~4ms).
+- AI Live assist restore (Nova InputBuffer parity): AI-first runs in an Adaptive-style **shell** that reserves classic fallthrough; never PassBudget-skip classic when AI finds nothing. Verify tick budget restored (`tickBudget/3`). Hitch ceiling still clamps `sim-budget-us=0`. Live prepare stays without dual Shadow trajectory pair.
+- AI/Live hitch: `sim-budget-us=0` → AP1 hitch ceiling on `PlanOptions` (was unlimited → 7–20ms classicRequired in `research_20261122_085548`).
+- AP-NL1: shared Live/Autoplay shadow isolation contracts — sim-ghost player/trail markers, exclusive HardStreak after seed, ghost-root never under `objectLayer`, `isShadowTrail` honors markers; PlanGold `nova-shadow-isolation`.
+- Fix quit/seed AV: ghost HardStreaks live only as ghost-root children; never `CCSprite::addChild`, never reparent opaque/dangling `m_waveTrail`; reuse only via ghost-root child list; null trail pointers on detach before ~PlayerObject.
+- AP-NL2: Live human click-timing parity — Nova Stage↔EB window map, as-made/held/pass-through, mid-tick CBF gate, µs lookahead shrink, Alive-only Delay honesty; Live DR4 metrics (`reportLiveLine`); PlanGold `nova-live-click-timing`.
+- AP-NL3: semantic Cand/ExpandJob model (`EbRouteCandSemantics`) with lifetime transitions; Nova 232/1856 research-only (DR2); Autoplay seed→expand handoff + Live diagnose; PlanGold `route-cand-semantics`; `ai_route.cpp` for style.
+- AP-NL4: shared expand + sim-core (`EbRouteExpandCore`) — press/release around seed, occupancy ring, stuck/memory probe without neural; truncated expand never ShadowVerified; PlanGold `expand-honesty`.
+- AP-NL5: dual neural seed strategies (DR1) — `EbAiConfig::seedStrategy` Enhanced (default: config threshold + top-k + Shadow) vs NovaParity (duty + subsample + hard 0.6); `EbNeuralSeedStrategy` + PlanGold `dual-seed-strategy`; Live untouched.
+- AP-NL5b: strict full-route ShadowVerified (DR3) — `EbShadowVerifiedContract` (settle, classify, binder); Autoplay arms only from SV (Explore labeled unverified); planner commits verified prefix only; PlanGold `shadow-verified-full-route`.
+- AP-NL6: Autoplay route queue + DR4 metrics — early-plan FIFO, memory reuse, Autoplay-only CPS; `EbAutoplayMetrics` (fidelity / verify completeness / progress; seed diag separate); PlanGold `autoplay-metrics`; Live untouched.
+- AP-NL7: hook orchestration parity — `EbHookOrchestration` PrePhysicsAssist→RealUpdate; single inject + plan re-entry guards; Autoplay uses inject flag; platformer hard-off; PlanGold `hook-order`.
+- AP-NL8: plan optimization — window cache + hi<lo early-out, NN subsample, scratch reuse; seed/expand/verify µs overlay; budget abort stays PartiallyChecked; PlanGold `route-plan-opt`.
+- AI prior: import Nova `NVM2` `model.bin` (float16 trunk `3512→128→64` + scalar conf) into `EbNeuralModel`; rank head stays freshly initialized. `Load Base / Packaged Prior` also checks `saveDir/ai/model.bin`. Offline convert: `tools/convert_nvm2_to_ebnn.py`.
+
 ## v1.8.0
 
 Release notes: [v1.8.0](releases/v1.8.0.md).

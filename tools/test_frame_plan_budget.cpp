@@ -11,6 +11,17 @@ int EbFramePlanBudgetTests::run() {
         }
     };
     EbFramePlanBudget budget;
+    expect(EbFramePlanBudget::limitForInterval(4000, 1. / 60.) == 4000, "60Hz ceiling");
+    expect(EbFramePlanBudget::limitForInterval(4000, 1. / 240.) == 1666, "240Hz share");
+    expect(EbFramePlanBudget::limitForInterval(4000, 1. / 360.) == 1111, "360Hz share");
+    expect(EbFramePlanBudget::limitForInterval(4000, 1. / 1000.) == 400, "1000Hz share");
+    expect(EbFramePlanBudget::limitForInterval(500, 1. / 240.) == 500, "explicit smaller cap");
+    expect(EbFramePlanBudget::limitForInterval(0, 1. / 240.) == 0, "disabled cap");
+    expect(EbFramePlanBudget::limitForInterval(4000, 0.) == 1666, "invalid interval fallback");
+    expect(EbFramePlanBudget::limitForInterval(4000, 1. / 60., 1. / 360.) == 1111,
+           "FPS bypass still respects observed frame duration");
+    expect(EbFramePlanBudget::limitForInterval(4000, 1. / 360., .1) == 1111,
+           "a hitch must not raise the requested budget");
     budget.begin(10, 1000);
     expect(budget.remaining(1000, 1100, 100) == 800, "small explicit budget and exit reserve");
     budget.end(1400);

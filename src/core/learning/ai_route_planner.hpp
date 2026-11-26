@@ -3,6 +3,10 @@
 
 #include "ai_config.hpp"
 #include "ai_route.hpp"
+#include "neural_seed_strategy.hpp"
+#include "route_cand_semantics.hpp"
+#include "route_expand_core.hpp"
+#include "route_plan_opt.hpp"
 #include "../sim/planning/simulation_plan.hpp"
 #include <cstdint>
 #include <string>
@@ -23,6 +27,31 @@ public:
     EbAiRoute const& lastRoute() const {
         return m_last;
     }
+    // AP-NL3: last expand job / seed cands (Autoplay write; Live read-only diagnose).
+    EbRouteCandSemantics::ExpandJob const& lastExpandJob() const {
+        return m_lastExpandJob;
+    }
+    EbRouteExpandCore::Result const& lastExpandResult() const {
+        return m_lastExpandResult;
+    }
+    std::vector<EbRouteCandSemantics::Cand> const& lastSeedCands() const {
+        return m_lastSeedCands;
+    }
+    std::string diagnoseLastExpand() const;
+    // AP-NL8: last plan seed/expand/verify µs (overlay).
+    EbRoutePlanOpt::Timing const& lastTiming() const {
+        return m_lastTiming;
+    }
+    std::string timingOverlayBit() const {
+        return EbRoutePlanOpt::timingOverlayBit(m_lastTiming);
+    }
+    // AP-NL4: shared expand around a seed (verifyDelay probe) + occupancy.
+    EbRouteExpandCore::Result expandSeedShared(PlayLayer* layer, PlayerObject* player,
+                                               EbRouteCandSemantics::Cand const& seed, int tick,
+                                               int limit, float dt);
+    // Stuck/memory sim-core probe — no neural ranking.
+    EbRouteExpandCore::Result stuckSimCore(PlayLayer* layer, PlayerObject* player, int tick,
+                                           int delayTicks, int limit, float dt);
     void invalidate(char const* why);
     bool needsReplan(int tick, float liveX) const;
 
@@ -32,6 +61,8 @@ public:
     int budgetHits = 0;
     int verifyHits = 0;
     int verifyTries = 0;
+    // AP-NL5: dual-seed diagnostics (never conflate with survival).
+    EbNeuralSeedStrategy::Counters seedCounters;
 
     // Convert route events → absolute-tick press/release timeline for Shadow replay.
     static std::vector<EbInputEvent> timelineFromEvents(std::vector<EbAiRouteEvent> const& events,
@@ -80,6 +111,20 @@ private:
     };
 
     EbAiRoute m_last;
+    EbRouteCandSemantics::ExpandJob m_lastExpandJob;
+    std::vector<EbRouteCandSemantics::Cand> m_lastSeedCands;
+    EbRouteExpandCore::OccupancyRing m_occupancy;
+    EbRouteExpandCore::Result m_lastExpandResult;
+    EbNeuralSeedStrategy::Kind m_lastSeedKind = EbNeuralSeedStrategy::Kind::Enhanced;
+    EbRoutePlanOpt::Timing m_lastTiming;
+    EbRoutePlanOpt::WindowBounds m_windowCache;
+    // AP-NL8: reusable scratch (avoid per-plan alloc churn).
+    std::vector<int> m_scratchDelays;
+    std::vector<int> m_scratchEnhanced;
+    std::vector<EbNeuralSeedStrategy::Proposal> m_scratchProposals;
+    std::vector<EbAiScoredCandidate> m_scratchScored;
+    std::uint32_t m_nextCandId = 1;
+    std::uint32_t m_nextJobId = 1;
     int m_lastPlanTick = -1;
     float m_lastPlanX = 0.f;
 

@@ -1,5 +1,12 @@
 # Lag & crashes
 
+## Hitch on enter / leave / FPS drop
+
+1. Leave **Interaction Journal** on (default) → play → attach `earlybuffer-interactions.log`  
+2. Look for `tw.skipHuge` / `tw.moversOnly` / long `defer.triggerWorld` lines  
+3. Turn **Lag Probe** on → check `earlybuffer-lagprobe.log`  
+4. Bisect: Adaptive / CPU Multithread off, Trigger World off, Overlay off  
+
 ## Hitch on click / death / restart
 
 1. Turn **Lag Probe** on (Main) → play → check `earlybuffer-lagprobe.log`  
@@ -9,7 +16,7 @@
 
 ## Crash
 
-1. Note GD version, Geode version, platform, EarlyBuffer version  
+1. Note GD version (**2.2091**), Geode version (**6.0.0+**), platform, EarlyBuffer version  
 2. Grab Geode crashlog if any  
 3. Open a [GitHub Issue](https://github.com/ToldByNun/earlybuffering-gd/issues) with steps  
 

@@ -37,6 +37,7 @@ std::array<EbModeParams, EbStageConfig::MODE_COUNT> EbStageConfigImplementation:
 bool EbStageConfigImplementation::s_cachedDebug = true;
 bool EbStageConfigImplementation::s_cachedPerfTrace = true;
 bool EbStageConfigImplementation::s_cachedLagProbe = true;
+bool EbStageConfigImplementation::s_cachedInteractionJournal = true;
 bool EbStageConfigImplementation::s_cachedSafeMode = false;
 bool EbStageConfigImplementation::s_cachedShowOverlay = true;
 bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
@@ -73,6 +74,7 @@ bool EbStageConfigImplementation::s_cachedRobustJitter = false;
 bool EbStageConfigImplementation::s_cachedAdaptivePlan = true;
 bool EbStageConfigImplementation::s_cachedAssistProbePastHorizon = true;
 bool EbStageConfigImplementation::s_cachedAssistMicroWindow = true;
+bool EbStageConfigImplementation::s_cachedCpuMultithread = true;
 int EbStageConfigImplementation::s_cachedAdaptiveScreenTicks = 24;
 int EbStageConfigImplementation::s_cachedAdaptiveVerifyQuantum = 16;
 int EbStageConfigImplementation::s_cachedAdaptiveReservePct = 15;
@@ -405,6 +407,10 @@ bool EbStageConfig::lagProbe() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedLagProbe;
 }
+bool EbStageConfig::interactionJournal() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedInteractionJournal;
+}
 bool EbStageConfig::safeMode() {
     // Critical for progress gates: always re-read so pause toggles apply mid-run.
     if (auto* mod = geode::prelude::Mod::get()) {
@@ -632,6 +638,10 @@ bool EbStageConfig::assistProbePastHorizon() {
 bool EbStageConfig::assistMicroWindow() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedAssistMicroWindow;
+}
+bool EbStageConfig::cpuMultithread() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedCpuMultithread;
 }
 int EbStageConfig::adaptiveScreenTicks() {
     EbStageConfigImplementation::ensureCache();

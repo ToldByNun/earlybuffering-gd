@@ -15,14 +15,14 @@ Pick **one** path:
 
 ## Checklist before you start
 
-- [ ] GD **2.2081**
-- [ ] Geode **5.11.1+** (loader only — Index is not used for this mod)
+- [ ] GD **2.2091**
+- [ ] Geode **6.0.0+** (loader only — Index is not used for this mod)
 - [ ] You know your platform (Windows / macOS / Android / iOS)
 - [ ] Dependency **geode.node-ids** ≥ v1.23.3 (install that from the Index if needed)
 - [ ] For phone: the `.geode` must include the phone binary (not Windows-only)
 
 ::: warning Wrong game version
-EarlyBuffer **1.7.x** is built for **2.2081 only**. Newer Geometry Dash builds need a future port.
+EarlyBuffer **1.8.1** is built for **GD 2.2091** / **Geode 6.0.0+**. Other Geometry Dash builds need a separate port.
 :::
 
 ## After install

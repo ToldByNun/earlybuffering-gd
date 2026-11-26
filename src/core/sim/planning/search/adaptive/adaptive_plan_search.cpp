@@ -7,6 +7,7 @@
 #include "../../../../assist/contracts/selected_tick_guard.hpp"
 #include "../../../../assist/planning/assist_horizon.hpp"
 #include "../../../../trigger_world/trigger_world_store.hpp"
+#include "../../../cpu_physics/cpu_physics_adaptive.hpp"
 #include "../../../prefix_sim.hpp"
 #include "../../../sim_session_guard.hpp"
 #include "../../shadow_survival_rules.hpp"
@@ -32,20 +33,23 @@ void EbAdaptivePlanSearch::noteStats(ShellStats const& stats) {
 std::string EbAdaptivePlanSearch::overlayBit() {
     if (!s_lastStats.used)
         return {};
+    std::string const mt =
+        s_lastStats.cpuMt ? fmt::format(" mt{}", s_lastStats.cpuWorkers) : std::string{};
     if (s_lastStats.earlyPass) {
-        return fmt::format("adap screen={} surv={} ver={} pass", s_lastStats.screened,
-                           s_lastStats.survivors, s_lastStats.verifyGrants);
+        return fmt::format("adap screen={} surv={} ver={}{} pass", s_lastStats.screened,
+                           s_lastStats.survivors, s_lastStats.verifyGrants, mt);
     }
     if (s_lastStats.gated && s_lastStats.gatedDelay > 0) {
-        return fmt::format("adap screen={} surv={} ver={} d{}", s_lastStats.screened,
-                           s_lastStats.survivors, s_lastStats.verifyGrants, s_lastStats.gatedDelay);
+        return fmt::format("adap screen={} surv={} ver={}{} d{}", s_lastStats.screened,
+                           s_lastStats.survivors, s_lastStats.verifyGrants, mt,
+                           s_lastStats.gatedDelay);
     }
     if (s_lastStats.gated) {
-        return fmt::format("adap screen={} surv={} ver={} gate", s_lastStats.screened,
-                           s_lastStats.survivors, s_lastStats.verifyGrants);
+        return fmt::format("adap screen={} surv={} ver={}{} gate", s_lastStats.screened,
+                           s_lastStats.survivors, s_lastStats.verifyGrants, mt);
     }
-    return fmt::format("adap screen={} surv={} ver={}", s_lastStats.screened, s_lastStats.survivors,
-                       s_lastStats.verifyGrants);
+    return fmt::format("adap screen={} surv={} ver={}{}", s_lastStats.screened,
+                       s_lastStats.survivors, s_lastStats.verifyGrants, mt);
 }
 
 static bool hopelessScreen(std::vector<EbAdaptiveCandidateSlot> const& slots, int limit,
@@ -89,7 +93,7 @@ static int countSurvivors(std::vector<EbAdaptiveCandidateSlot> const& slots, int
 EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer,
                                     PlayerObject* real, bool down, int limit, float deltaTime,
                                     float firstDt, EbPlanOptions const& options) {
-    if (!options.adaptivePlan) {
+    if (!options.adaptivePlan || options.strictLiveRescue) {
         noteStats({});
         return EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime, firstDt,
                                        options);
@@ -233,6 +237,43 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                                  .count());
 
         // Soft wall runs from plan start (same as classic) — screen + verify.
+        bool cpuScreened = false;
+        EbCpuPhysicsAdaptive::ScreenOutcome cpuOutcome{};
+        if (EbStageConfig::cpuMultithread() && !layer->m_gameState.m_isDualMode &&
+            !options.strictLiveRescue) {
+            int const screenQuantum = std::max(
+                8, envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen) > 0
+                       ? std::min(EbStageConfig::adaptiveScreenTicksFor(real),
+                                  envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen))
+                       : EbStageConfig::adaptiveScreenTicksFor(real));
+            if (EbCpuPhysicsAdaptive::tryScreen(layer, real, down, limit, deltaTime, useFirstDt,
+                                                screenQuantum, -1, simulator.m_simTickBase, slots,
+                                                cpuOutcome)) {
+                cpuScreened = true;
+                screened = cpuOutcome.screened;
+                survivors = cpuOutcome.survivors;
+                plan.candidatesTried += screened;
+                // Charge Screen phase for the parallel work so Verify keeps its share.
+                int const charge =
+                    std::min(envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen),
+                             screenQuantum * std::max(1, survivors));
+                envelope.spend(EbAdaptiveBudgetController::Phase::Screen, charge);
+                sharedTicks = std::max(0, sharedTicks - charge);
+                if (!slots.empty() && slots[0].terminalDied && slots[0].deathTick >= 0) {
+                    plan.firstDeathTick = slots[0].deathTick;
+                    if (!threatZone.valid) {
+                        threatZone = simulator.buildThreatZone(layer, slots[0].deathX, nullptr);
+                        plan.threatZone = threatZone;
+                    }
+                }
+                plan.hybridTried =
+                    options.hybridDelay == 0 && !slots.empty() && slots[0].ticksSimulated > 0;
+                stats.cpuMt = true;
+                stats.cpuWorkers = cpuOutcome.workers;
+                plan.cpuWorkers = cpuOutcome.parallel ? cpuOutcome.workers : 1;
+            }
+        }
+
         auto runScreenDelay = [&](int delay) {
             if (delay < 0 || delay > limit)
                 return;
@@ -302,50 +343,52 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
                 ++survivors;
         };
 
-        // Phase A — baseline d0
-        runScreenDelay(0);
-        plan.hybridTried = options.hybridDelay == 0 && slots[0].ticksSimulated > 0;
-        if (slots[0].terminalDied && slots[0].deathTick >= 0 && plan.firstDeathTick < 0) {
-            plan.firstDeathTick = slots[0].deathTick;
-            plan.firstDeathObject = slots[0].lastRaw.deathObject;
-        }
-
-        // Phase B — screen remaining Max Assist delays
-        for (int delay = 1; delay <= limit; ++delay) {
-            if (plan.budgetHit)
-                break;
-            if (EbLivePlanContracts::repeatedDeathCutAllowed(
-                    real->m_isBird, EbPrefixSim::sameCrashShouldStop(sameCrashStreak)))
-                break;
-            if (envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen) <= 0) {
-                // Screen empty with Living survivors is not a hard miss — AP2 will
-                // verify with the remaining Verify/Reserve pool (and any steal).
-                if (survivors <= 0)
-                    plan.budgetHit = true;
-                break;
+        if (!cpuScreened) {
+            // Phase A — baseline d0 (serial Shadow)
+            runScreenDelay(0);
+            plan.hybridTried = options.hybridDelay == 0 && slots[0].ticksSimulated > 0;
+            if (slots[0].terminalDied && slots[0].deathTick >= 0 && plan.firstDeathTick < 0) {
+                plan.firstDeathTick = slots[0].deathTick;
+                plan.firstDeathObject = slots[0].lastRaw.deathObject;
             }
-            runScreenDelay(delay);
-            // On expensive continuous corridors, many short living screens say
-            // little about the first collision. Price the remaining band after
-            // two real probes and leave at least half the shell for verification.
-            // Classic receives only the unused shared budget and still proves
-            // both the original edge and any proposed correction.
-            if (delay == 1 && inputWindow && continuousControl &&
-                !layer->m_gameState.m_isDualMode && limit > 2 && adaptiveWallUs > 0 &&
-                survivors == 2 && !slots[0].terminalAliveCap && !slots[1].terminalAliveCap) {
-                auto const elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
-                                           std::chrono::steady_clock::now() - wall0)
-                                           .count();
-                if (elapsedUs * (limit + 1LL) >= adaptiveWallUs) {
-                    fallClassic = true;
+
+            // Phase B — screen remaining Max Assist delays
+            for (int delay = 1; delay <= limit; ++delay) {
+                if (plan.budgetHit)
+                    break;
+                if (EbLivePlanContracts::repeatedDeathCutAllowed(
+                        real->m_isBird, EbPrefixSim::sameCrashShouldStop(sameCrashStreak)))
+                    break;
+                if (envelope.phaseLeft(EbAdaptiveBudgetController::Phase::Screen) <= 0) {
+                    // Screen empty with Living survivors is not a hard miss — AP2 will
+                    // verify with the remaining Verify/Reserve pool (and any steal).
+                    if (survivors <= 0)
+                        plan.budgetHit = true;
                     break;
                 }
-            }
-            // Assist Pack AP2: d0 already dead + later Alive → stop screening more
-            // doomed delays; steal leftover Screen into Verify for the save.
-            if (slots[0].terminalDied && survivors > 0) {
-                envelope.stealScreenToVerify();
-                break;
+                runScreenDelay(delay);
+                // On expensive continuous corridors, many short living screens say
+                // little about the first collision. Price the remaining band after
+                // two real probes and leave at least half the shell for verification.
+                // Classic receives only the unused shared budget and still proves
+                // both the original edge and any proposed correction.
+                if (delay == 1 && inputWindow && continuousControl &&
+                    !layer->m_gameState.m_isDualMode && limit > 2 && adaptiveWallUs > 0 &&
+                    survivors == 2 && !slots[0].terminalAliveCap && !slots[1].terminalAliveCap) {
+                    auto const elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                               std::chrono::steady_clock::now() - wall0)
+                                               .count();
+                    if (elapsedUs * (limit + 1LL) >= adaptiveWallUs) {
+                        fallClassic = true;
+                        break;
+                    }
+                }
+                // Assist Pack AP2: d0 already dead + later Alive → stop screening more
+                // doomed delays; steal leftover Screen into Verify for the save.
+                if (slots[0].terminalDied && survivors > 0) {
+                    envelope.stealScreenToVerify();
+                    break;
+                }
             }
         }
 
@@ -609,6 +652,7 @@ EbSimPlan EbAdaptivePlanSearch::run(EbShadowSimulator& simulator, PlayLayer* lay
         auto classicPlan = EbShadowPlanSearch::run(simulator, layer, real, down, limit, deltaTime,
                                                    firstDt, classicOpts);
         classicPlan.adaptiveWorkUs = plan.adaptiveWorkUs;
+        classicPlan.cpuWorkers = plan.cpuWorkers;
         classicPlan.fallthroughSetupUs = static_cast<int>(
             std::chrono::duration_cast<std::chrono::microseconds>(classicStart - fallthroughStart)
                 .count());
@@ -808,6 +852,8 @@ bool EbAdaptivePlanSearch::selfCheck(std::string& report) {
     expect(EbAdaptiveDecisionGate::selfCheck(gateReport), "decision-gate");
     std::string budgetReport;
     expect(EbAdaptiveBudgetController::selfCheck(budgetReport), "budget");
+    std::string cpuReport;
+    expect(EbCpuPhysicsAdaptive::selfCheck(cpuReport), "cpu-physics");
 
     // 1.5.1 AP1 hitch policy (wired at fallthrough / press planner).
     expect(EbLivePlanContracts::intendedLiveBudgetUs(0) == EbLivePlanContracts::kHitchCeilingUs,

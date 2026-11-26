@@ -2,10 +2,12 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 EbNeuralModel::EbNeuralModel() {
     reset();
@@ -520,6 +522,128 @@ bool EbNeuralModel::save(std::filesystem::path const& path) {
     std::filesystem::rename(temporary, path, error);
     m_dirty = bool(error);
     return !error;
+}
+
+static constexpr std::uint32_t kNvm2Magic = 0x324D564Eu; // 'NVM2' LE
+static constexpr int kNvm2TrunkFloats =
+    EbNeuralModel::kHidden1 * EbNeuralModel::kFeatureDim + EbNeuralModel::kHidden1 +
+    EbNeuralModel::kHidden2 * EbNeuralModel::kHidden1 + EbNeuralModel::kHidden2 +
+    EbNeuralModel::kHidden2 + 1;
+
+static float halfToFloat(std::uint16_t bits) {
+    std::uint32_t const sign = static_cast<std::uint32_t>(bits & 0x8000u) << 16;
+    unsigned const exponent = (bits >> 10) & 0x1Fu;
+    unsigned mantissa = bits & 0x3FFu;
+    std::uint32_t out = sign;
+    if (exponent == 31u) {
+        out |= 0x7F800000u | (mantissa << 13);
+    } else if (exponent != 0u) {
+        out |= ((exponent + 112u) << 23) | (mantissa << 13);
+    } else if (mantissa != 0u) {
+        // Match Nova sub_180121FF0 denormal expand.
+        int biased = 0x38800000;
+        int sample = 0;
+        do {
+            sample = static_cast<int>(mantissa);
+            mantissa <<= 1;
+            biased -= 0x800000;
+        } while ((sample & 0x200) == 0);
+        out |= static_cast<std::uint32_t>(biased + ((sample << 14) & 0x7FC000));
+    }
+    float value = 0.0f;
+    std::memcpy(&value, &out, sizeof(value));
+    return value;
+}
+
+static bool readExact(std::ifstream& input, void* dst, std::size_t bytes) {
+    input.read(reinterpret_cast<char*>(dst), static_cast<std::streamsize>(bytes));
+    return static_cast<bool>(input) && static_cast<std::size_t>(input.gcount()) == bytes;
+}
+
+bool EbNeuralModel::loadAny(std::filesystem::path const& path) {
+    if (load(path))
+        return true;
+    return importNvm2(path);
+}
+
+bool EbNeuralModel::importNvm2(std::filesystem::path const& path) {
+    std::error_code error;
+    auto const size = std::filesystem::file_size(path, error);
+    if (error || size < 22 || size > kMaxFileBytes)
+        return false;
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return false;
+
+    std::uint32_t magic = 0;
+    std::uint16_t version = 0;
+    std::uint16_t featureDim = 0;
+    std::uint16_t hidden1 = 0;
+    std::uint16_t hidden2 = 0;
+    if (!readExact(input, &magic, sizeof(magic)) || magic != kNvm2Magic)
+        return false;
+    if (!readExact(input, &version, sizeof(version)) || version != 2)
+        return false;
+    if (!readExact(input, &featureDim, sizeof(featureDim)) || featureDim != kFeatureDim)
+        return false;
+    if (!readExact(input, &hidden1, sizeof(hidden1)) || hidden1 != kHidden1)
+        return false;
+    if (!readExact(input, &hidden2, sizeof(hidden2)) || hidden2 != kHidden2)
+        return false;
+
+    unsigned char gridW = 0;
+    unsigned char gridH = 0;
+    if (!readExact(input, &gridW, 1) || gridW != kGridCols)
+        return false;
+    if (!readExact(input, &gridH, 1) || gridH != kGridRows)
+        return false;
+    // +14..+19 reserved / writer padding (unread by Nova parser).
+    char pad[6]{};
+    if (!readExact(input, pad, sizeof(pad)))
+        return false;
+
+    unsigned char nameLen = 0;
+    if (!readExact(input, &nameLen, 1))
+        return false;
+    if (static_cast<std::uint64_t>(21) + nameLen > size)
+        return false;
+    if (nameLen > 0) {
+        std::vector<char> name(static_cast<size_t>(nameLen));
+        if (!readExact(input, name.data(), name.size()))
+            return false;
+    }
+
+    std::uint64_t const payloadBytes = static_cast<std::uint64_t>(kNvm2TrunkFloats) * 2ull;
+    if (static_cast<std::uint64_t>(21) + nameLen + payloadBytes != size)
+        return false;
+
+    std::vector<std::uint16_t> packed(static_cast<size_t>(kNvm2TrunkFloats));
+    if (!readExact(input, packed.data(), packed.size() * sizeof(std::uint16_t)))
+        return false;
+
+    // Rank head stays from a fresh init; overwrite Nova trunk + confidence.
+    reset();
+    LayerViews online = views(m_online);
+    size_t cursor = 0;
+    auto take = [&](float* dst, int count) {
+        for (int index = 0; index < count; ++index) {
+            float const value = halfToFloat(packed[cursor++]);
+            if (!std::isfinite(value))
+                return false;
+            dst[index] = value;
+        }
+        return true;
+    };
+    if (!take(online.w1, kW1) || !take(online.b1, kB1) || !take(online.w2, kW2) ||
+        !take(online.b2, kB2) || !take(online.wConf, kWConf) || !take(online.bConf, kBConf))
+        return false;
+    if (cursor != packed.size())
+        return false;
+
+    hardCopyTarget();
+    m_frozen = false;
+    m_dirty = true;
+    return true;
 }
 
 bool EbNeuralModel::load(std::filesystem::path const& path) {

@@ -4,7 +4,7 @@
 
 Open **Settings → Learn → Config → Cloud Configs** (desktop menu) or classic Assist actions below Import Config — both use the Geode Cloud Configs popup in **v1.6.x** (desktop ImGui overlay deferred). Installation applies a pack through ConfigBundle, refreshes the settings cache and rebuilds the settings UI. Keybinds and developer settings are skipped. Imported packs may change assist settings. See [Cloud Configs](cloud_configs.md).
 
-Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081** (Geode). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) under UI → Notifications. **Last 2.2081 release line** — see repository README.
+Planner / settings contract for **EarlyBuffer v1.8.1** on Geometry Dash **2.2091** (Geode **6.0.0+**). Physics unit = tick (measured TPS, often ~240/s). Threat zones use world X. Desktop shell adds Accent Color (`desktop-accent-color`) under UI; Lag Warning (`lag-warning-toast`) and Interaction Journal under UI / diagnostics. See repository README.
 
 ## Modes (honest)
 
@@ -12,11 +12,62 @@ Planner / settings contract for **EarlyBuffer v1.7.1** on Geometry Dash **2.2081
 |------|------|
 | Live | Input forgiveness: shadow-plan each click; Delay buffers, Pass = vanilla. |
 | Hybrid | Player-driven tabular RL over Live: learns delay preferences per situation, then Hybrid-first `verifyDelay` before ordinary Live search. |
-| AI | Neural Candidate Scorer (1.8.0): ranks delays → verify → arm; per-level `.neural` + packaged prior. Opt-in **Autoplay** synthesizes Jump for RL self-play; **Train Session** batch-IL/RL from the attempt buffer. |
+| AI | Neural learning (1.8.0): ordinary inputs use the shared Live rescue proof; per-level `.neural` + packaged prior. Opt-in **Autoplay** synthesizes Jump for RL self-play; **Train Session** batch-IL/RL from the attempt buffer. |
 
 Live/Hybrid never block hopeless clicks. Replay/BruteForce bake modes were removed from the 1.7.x ship line (historical bake-verify notes below remain for older captures / Dev tooling).
 
-## AI Autoplay + session train (v1.8.0)
+## Live rescue selection (1.8.0)
+
+Normal **Live and AI** now use `liveRescue` for presses and eligible releases:
+
+- Evaluate the original input first. If it survives the full observation, pass it unchanged.
+- Only a known baseline death starts the delay search. Probe a coarse grid first,
+  then refine a proved survivor's bracket. If coarse probes find no survivor, inspect
+  every untested tick once while the shared budget permits; a coarse miss never
+  permanently excludes a narrow window. Every selected delay must survive the same
+  absolute observation horizon from the same captured world. Ball presses can instead
+  complete at a proved flip: opposite gravity, airborne travel and eight consecutive
+  collision-checked grounded ticks. Cube jumps can complete after 15 airborne and
+  five stable grounded ticks at 240 TPS (scaled with the simulation clock), with
+  no dash, mode change or unknown toggle. Actually modeled orb activation can
+  complete the same airborne/landing proof even with a gravity flip; ordinary
+  jumps still require unchanged gravity. A later obstacle requiring another click belongs
+  to the next decision, rather than making this completed action hopeless.
+- After finding a safe boundary, inspect at most four additional ticks while the
+  shared budget permits. Choose the interior of the widest contiguous proved-safe
+  band; unknowns and failures split bands. Keep an isolated save if no sturdier
+  choice was proved. This never expands the configured assist window.
+- Short adaptive screens, unproved landings, hypothetical follow-up clicks/releases, and
+  end-X scores cannot establish a rescue. Unknown or budget-truncated runs are unproved.
+- Keep the verified input tick fixed. Smart-depth reranking and learned delay offsets
+  do not change ordinary Live timing. Adaptive settings still apply to Hybrid.
+- Both linked dual players must survive a delayed edge. Optional jitter probes must
+  also reach the same horizon. Budget exhaustion passes the player's input through.
+
+Straightfly and Wave Pattern remain explicit tracking features with separate policies.
+The proof assumes the input remains in its new state until another real input arrives;
+it cannot predict a later user release or guarantee survival beyond its finite horizon.
+Simulation trust/parity guards and the configured assist window remain in force.
+
+Automatic horizons adapt between presses using Nova's multiplicative rule: timeout
+reduces the scale by 0.85 (floor 0.5); a completed check using less than half its
+budget grows it by 1.03 (ceiling 1). State is separate for mode, player and input
+edge and resets on level entry. Explicit look-ahead/mode caps stay fixed. The scale
+is frozen before the original input is evaluated and never reduces Max Assist Ticks.
+A shorter observation proves survival only to that shorter horizon.
+
+The ShadowPlayer path shares idle prefixes across increasing probes and restarts
+from the original capture for backwards refinement. World/orb/toggle state is
+restored at each fork. Linked dual, Trajectory, and initial Wave slope retry use
+independent probes. Jitter checks always use independent perturbed runs. The
+existing Assist Verify A/B option compares shared probes with independent runs;
+Dev traces record `liveObservationTicks` and `sharedIdleTicksSaved`.
+
+Offline broad-window scheduling fixture: 11 probes versus 26 for linear scanning;
+49 idle physics steps versus 160 independent idle steps for the same scheduled
+probes. These counts do not measure FPS or real game wall time.
+
+## AI Autoplay + session train (v1.8.x)
 
 With **Assist Mode = AI**, the AI tab exposes **Autoplay**: scorer + `verifyDelay` gated Jump presses (not CPS spam), **Time Warp** for attempt throughput, Explore % for cold-start, and auto **Train Session** on death when Auto-Tune is on. Manual **Train Session** still batch-trains from the session buffer (your play or Autoplay). **Clear Session** drops the buffer only. Session clears on level open/close/reset.
 
@@ -72,7 +123,7 @@ Before using a window, `BakeVerifier` runs one `ShadowSimulator::verifyDelay` (d
 
 **Assist Pack AP-L5 (Adaptive + classic soft-wall honesty):** Adaptive and classic fallthrough share one press `wall0` / `sim-budget-us` deadline (`reusePlanWall`) — no remUs floor stacked past the press. Adaptive soft-aborts earlier via shell reserve (discrete IW ~half budget; continuous `kFallthroughRemUsFloor`). Classic Live soft-wall floor matches Adaptive (`kLiveSoftWallFloorUs` = 4000). Fallthrough merges Adaptive `candidatesTried`. Ball: no observation-cleared Alive seeds; Adaptive `stopAtBallLanding`. PlanGold `assist-pack-ap-l5-adaptive-fallthrough`.
 
-**Adaptive planner (AP4–AP6 + AP10 honesty + Assist Pack AP1 fair depth):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`; Modes may overwrite Adaptive knobs). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic) — uncapped fallthrough after that wall is spent is still expensive when ticks remain. `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0). **AP10:** a short screen-quantum Alive seed must **not** beat a known later death (esp. d0 `deathTick`); seed / gate / IW require `ticksRan` covering that death clock (capped by look-ahead). **Assist Pack AP1:** truncated Alive is `pass-budget` / `budget-not-reached`, never opaque `not-viable` / `pass-hopeless`; IW re-sims shallow ready seeds when budget remains; `surviveBin` ranks only at comparable depth. **Assist Pack AP2:** leftover Screen steals into Verify once Living survivors exist (or d0-dead + later Alive mid-screen); `adaptiveStolenScreenTicks` on `planFinished`; no Max-Assist / tick-budget raise. **Assist Pack AP4:** dying d0 + any later Living → `pass-budget` (not `pass-hopeless`); uniform lethal grids stay hopeless. **Assist Pack AP3:** sticky `PassD0Safe` yields only on later survive/endX lead (not bare under-horizon); otherwise verify or `pass-budget` fallthrough. **Assist Pack AP5:** continuous/ship IW ranks survivors by endX−λ (not earliest-safe); Wave saves prefer score peak; landed ball Eval-aligned; classic may Delay on clear endX lead over sticky d0. **Assist Pack AP7:** discrete IW observation floor is `model.cap` (not `limit+cap`); classic IW uses the same `96−limit` discrete clamp as Adaptive so Alive@~96 can arm Delay. **Assist Pack AP3c:** `assist-probe-past-horizon` / `assist-micro-window` (independent; both off ≈ prior feel) — probe extends prove before sticky PassD0Safe; micro prefers later endX on ≤8-tick windows. (AP6 harm-guard discarded — starved Delay feel.) Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) on the **same** press soft wall (`reusePlanWall`) with leftover work ticks + shell-reserved headroom and honesty-cleared Alive seeds (ball: no observation-cleared seeds — AP-L5). Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-seed-before-d0-death-rejected`, `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
+**Adaptive planner (AP4–AP6 + AP10 honesty + Assist Pack AP1 fair depth):** `ShadowSimulator::plan` → `EbAdaptivePlanSearch` when `adaptive-plan` is on (Live press already fills Adaptive `PlanOptions`; Modes may overwrite Adaptive knobs). Phase A/B screen → Phase C verify (`EbAdaptivePredictionScheduler`) → Phase D `EbAdaptiveDecisionGate`. When `cpu-multithread` is on (default), Phase A/B may screen on worker threads with real GD `PlayerObject::update` + collide against a frozen snapshot; Phase C Shadow verify remains mandatory before arming. Soft wall (`budgetUs`) runs from plan start; Live `sim-budget-us=0` clamps to the 8ms hitch ceiling (AP1, same as classic) — uncapped fallthrough after that wall is spent is still expensive when ticks remain. `PassD0Safe` needs horizon/cap/zone — screen-Alive alone is not safe. Delay needs Autonomous Alive + hazard progress (horizon / zone / past dying d0). **AP10:** a short screen-quantum Alive seed must **not** beat a known later death (esp. d0 `deathTick`); seed / gate / IW require `ticksRan` covering that death clock (capped by look-ahead). **Assist Pack AP1:** truncated Alive is `pass-budget` / `budget-not-reached`, never opaque `not-viable` / `pass-hopeless`; IW re-sims shallow ready seeds when budget remains; `surviveBin` ranks only at comparable depth. **Assist Pack AP2:** leftover Screen steals into Verify once Living survivors exist (or d0-dead + later Alive mid-screen); `adaptiveStolenScreenTicks` on `planFinished`; no Max-Assist / tick-budget raise. **Assist Pack AP4:** dying d0 + any later Living → `pass-budget` (not `pass-hopeless`); uniform lethal grids stay hopeless. **Assist Pack AP3:** sticky `PassD0Safe` yields only on later survive/endX lead (not bare under-horizon); otherwise verify or `pass-budget` fallthrough. **Assist Pack AP5:** continuous/ship IW ranks survivors by endX−λ (not earliest-safe); Wave saves prefer score peak; landed ball Eval-aligned; classic may Delay on clear endX lead over sticky d0. **Assist Pack AP7:** discrete IW observation floor is `model.cap` (not `limit+cap`); classic IW uses the same `96−limit` discrete clamp as Adaptive so Alive@~96 can arm Delay. **Assist Pack AP3c:** `assist-probe-past-horizon` / `assist-micro-window` (independent; both off ≈ prior feel) — probe extends prove before sticky PassD0Safe; micro prefers later endX on ≤8-tick windows. (AP6 harm-guard discarded — starved Delay feel.) Larger `deathTick` / `surviveTicks` alone never wins; Recoverability never arms. Adaptive Delay / proven `PassD0Safe` stick; other Adaptive Pass (incl. Hopeless / Budget) falls through to classic (`EbAdaptiveParityPolicy`) on the **same** press soft wall (`reusePlanWall`) with leftover work ticks + shell-reserved headroom and honesty-cleared Alive seeds (ball: no observation-cleared seeds — AP-L5). Overlay: `adap … ver=K dN|pass|gate`. PlanGold: `adaptive-seed-before-d0-death-rejected`, `adaptive-decision-gate`, `adaptive-parity-policy`, `adaptive-plan-search`, `adaptive-budget-controller`, `live-hitch-ceiling`. Offline: `tools/test_adaptive_parity_smoke.cpp`.
 
 **Hybrid verify→Live hitch:** when verify ran and rejected the window, Live must not re-enable assist via `nearBake` spam override or prefer-band from that window (that path hitch-stuttered around moderate CPS, e.g. ~5). Live is also capped to ≤½ press tick/wall on that fallthrough; exit-predict skips if wall remainder &lt; 600µs. Still never soft-trust `budgetHit` bake; orb foresight / HUS unchanged.
 
@@ -317,6 +368,7 @@ Geode / desktop setting titles follow tabs: **Main** (Window + Smart) → **Assi
 | robust-k | int | 0 | 0 | 3 | Smart — 0=auto (mode/speed/dt var → 1–3) |
 | robust-jitter | bool | false | | | Smart — re-sim top cand at firstDt ±3% |
 | adaptive-plan | bool | true | | | Main Adaptive — prefer Adaptive Prediction Planner on Live; Modes `*-adaptive-overwrite` may override per gamemode. Never raises Max Assist or look-ahead |
+| cpu-multithread | bool | true | | | Main Adaptive — parallel screen on worker ghosts using real `PlayerObject::update` + `collidedWithObjectInternal` against a frozen object/TW snapshot (not a simplified kinematics model). Survivors must still pass Phase C Shadow verify before arming; zero survivors / dual / rescue → serial Shadow screen |
 | *-adaptive-overwrite | bool | false | | | Modes — when on, that mode uses its Adaptive Plan / screen / verify / reserve instead of Main |
 | *-adaptive-plan / screen-ticks / verify-quantum / reserve-pct | bool/int | Main defaults | same as Main | | Modes — Adaptive knobs when overwrite is on |
 | adaptive-screen-ticks | int | 24 | 8 | 64 | Adaptive — Phase A/B screen quantum per delay (subdivides tick-budget only) |

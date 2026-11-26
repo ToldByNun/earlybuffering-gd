@@ -1,6 +1,7 @@
 #include "assist_input_runtime.hpp"
 #include "../../../config/stage_config.hpp"
 #include "../../../debug/assist_log.hpp"
+#include "../../../debug/interaction_journal.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
 #include "../../../dev/capture/dev_clock_contract.hpp"
@@ -13,6 +14,7 @@
 #include "../../../ui/visualizers/straightfly_visualizer.hpp"
 #include "../../../ui/visualizers/trajectory_visualizer.hpp"
 #include "../../../ui/visualizers/wave_pattern_visualizer.hpp"
+#include "../../../app/level_lifecycle.hpp"
 #include "../../bake/self_bake_recorder.hpp"
 #include "../../diagnostics/ghost_parity_probe.hpp"
 #include "../../learning/hybrid_learning.hpp"
@@ -21,11 +23,13 @@
 #include "../../real_assist/real_assist_runner.hpp"
 #include "../../sim/shadow_simulator.hpp"
 #include "../../sim/sim_trust.hpp"
+#include "../../trigger_world/moving_object_tracker.hpp"
 #include "../../trigger_world/trigger_world_baker.hpp"
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
 #include "../assist_scope_gate.hpp"
 #include "../contracts/assist_verdict.hpp"
+#include "../contracts/hook_orchestration.hpp"
 #include "../flight/flight_mode_policy.hpp"
 #include "../input/click_intent_guard.hpp"
 #include "../input/input_source_scope.hpp"
@@ -46,6 +50,8 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
 
     private:
     } tickEndGuard;
+    // AP-NL7: PrePhysicsAssist phase — plan / Autoplay / buffer fire before PO::update.
+    EbHookOrchestration::PrePhysicsGuard const prePhysics;
 
     float timeWarp = 1.f;
     // Hook dt is GD step units (0.25 @ 240 TPS every tick — not a hitch).
@@ -99,6 +105,18 @@ void EbAssistInputRuntime::onPhysicsTick(EbAssistController& controller, PlayLay
     }
     if (!playLayer)
         return;
+
+    {
+        EbPerfTrace::Scope const scope("deferredEnterLoads");
+        EbLevelLifecycle::drainDeferredEnterLoads(playLayer);
+    }
+    {
+        EbPerfTrace::Scope const scope("movingObjects");
+        if (playLayer->m_player1) {
+            EbMovingObjectTracker::get().onPhysicsTick(playLayer, playLayer->m_player1,
+                                                       controller.m_attemptTick);
+        }
+    }
 
     {
         EbPerfTrace::Scope const scope("pollOutcome");
@@ -294,6 +312,10 @@ bool EbAssistInputRuntime::onHandleButton(EbAssistController& controller, GJBase
         int const slot = player1 ? 0 : 1;
         controller.m_flightIntent[slot].rawEdge(down);
         controller.m_wavePattern[slot].rawEdge(down);
+        EbInteractionJournal::get().note(
+            down ? "click.down" : "click.up",
+            fmt::format("p{} tick={} x={:.1f}", player1 ? 1 : 2, controller.m_attemptTick,
+                        player->getPositionX()));
     }
     controller.m_userHolding[player1 ? 0 : 1] = down;
 

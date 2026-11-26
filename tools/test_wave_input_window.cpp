@@ -1,5 +1,7 @@
 #include "test_wave_input_window.hpp"
 #include "../src/core/assist/contracts/live_plan_contracts.hpp"
+#include "../src/core/assist/contracts/live_rescue_policy.hpp"
+#include "../src/core/assist/contracts/live_rescue_search.hpp"
 #include "../src/core/assist/contracts/miss_assist_contracts.hpp"
 #include <algorithm>
 #include <array>
@@ -11,17 +13,20 @@ static constexpr int kPostCapProveTicks = 8;
 // Death ticks recorded in session-1794130733171, delays 0..12.
 // Replaying the recorded collision outcomes tests the live acceptance rule,
 // independently of Geode's rendering and the current level instance.
-int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon) {
-    for (int delay = 0; delay <= 12; ++delay) {
+int WaveInputWindowRegressionTests::chooseRecordedDelay(RecordedInput const& input, int horizon,
+                                                        bool actionRelative) {
+    EbLiveRescueSearch search(12, true);
+    for (int delay = search.nextDelay(); delay >= 0; delay = search.nextDelay()) {
         int const deathTick = input.deathTicks[delay];
-        bool const diedInWindow = deathTick < horizon;
-        int const ticksRan = std::min(deathTick + 1, horizon);
-        if (EbMissAssistContracts::survivesObservation(diedInWindow, false, ticksRan, horizon,
-                                                     false)) {
-            return delay;
-        }
+        int const candidateHorizon =
+            actionRelative ? EbLiveRescuePolicy::observationHorizon(true, delay, 12, horizon)
+                           : horizon;
+        bool const diedInWindow = deathTick < candidateHorizon;
+        int const ticksRan = std::min(deathTick + 1, candidateHorizon);
+        search.record(delay, EbLiveRescuePolicy::classify(diedInWindow, false, false, ticksRan,
+                                                          candidateHorizon));
     }
-    return -1;
+    return search.selectedDelay();
 }
 
 int WaveInputWindowRegressionTests::run() {
@@ -35,11 +40,11 @@ int WaveInputWindowRegressionTests::run() {
     int const horizon = limit + cap + kPostCapProveTicks;
 
     // With the floor, short-horizon “survivors” that die before tick 32/40 are
-    // Pass (earliest-safe policy), not phase Delays. Retargeted expectedDelay.
+    // Pass (safe-band policy), not phase Delays. Retargeted expectedDelay.
     RecordedInput const inputs[] = {
         {88, {23, 23, 24, 25, 27, 28, 30, 31, 33, 35, 37, 39, 41}, -1},
         {114, {14, 14, 16, 18, 26, 29, 31, 35, 37, 38, 39, 40, 42}, -1},
-        {125, {5, 6, 7, 9, 11, 66, 67, 68, 69, 70, 71, 72, 73}, 5},
+        {125, {5, 6, 7, 9, 11, 66, 67, 68, 69, 70, 71, 72, 73}, 7},
         {134, {1, 1, 2, 3, 4, 6, 7, 9, 11, 12, 14, 16, 19}, -1},
         {151, {62, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 10, 10}, 0},
     };
@@ -80,21 +85,22 @@ int WaveInputWindowRegressionTests::run() {
 
     for (auto const& input : inputs) {
         int const chosen = chooseRecordedDelay(input, horizon);
-        if (chosen != input.expectedDelay || chooseRecordedDelay(input, 96) != -1) {
+        if (chosen != input.expectedDelay || chooseRecordedDelay(input, 96) != -1 ||
+            chooseRecordedDelay(input, 32, true) != input.expectedDelay) {
             std::cerr << "Wave input " << input.pressId << " chose " << chosen
                       << " (horizon=" << horizon << ")\n";
             ++failures;
         }
     }
 
-    // Dual assert: old short horizon still picked earliest-safe on 88/114 —
+    // Dual assert: old short horizon still found a safe band on 88/114 —
     // documents the AP3a policy change (floor rejects those phase Delays).
     int const legacyHorizon = limit + look;
-    if (chooseRecordedDelay(inputs[0], legacyHorizon) != 2) {
+    if (chooseRecordedDelay(inputs[0], legacyHorizon) != 4) {
         std::cerr << "legacy short-horizon policy drift on press 88\n";
         ++failures;
     }
-    if (chooseRecordedDelay(inputs[1], legacyHorizon) != 4) {
+    if (chooseRecordedDelay(inputs[1], legacyHorizon) != 6) {
         std::cerr << "legacy short-horizon policy drift on press 114\n";
         ++failures;
     }
@@ -117,8 +123,8 @@ int WaveInputWindowRegressionTests::run() {
             return 0;
         return earliestLater > 0 ? earliestLater : -1;
     };
-    auto const proxPass = [](bool isWave, bool pressDown, bool d0Died, bool nearHazard,
-                             bool noOrb, bool foresightOrb) {
+    auto const proxPass = [](bool isWave, bool pressDown, bool d0Died, bool nearHazard, bool noOrb,
+                             bool foresightOrb) {
         return pressDown && isWave && !d0Died && nearHazard && noOrb && !foresightOrb;
     };
     auto const futilePass = [](bool isWave, bool pressDown, bool anySave, bool idleEscape,

@@ -16,7 +16,7 @@ public:
     static int activationTick(PlayLayer* layer, EffectGameObject* effect, double tps);
     static bool isFollowLikeStatic(EffectGameObject* effect, TriggerKind kind);
     static cocos2d::CCPoint
-    groupCenter(int groupId, std::vector<GameObject*> const& objects,
+    groupCenter(int groupId, std::vector<GameObject*> const& members,
                 std::unordered_map<int, EbTriggerWorldBaker::LivePose> const& live);
     static EbTriggerTrack* ensureTrack(EbTriggerWorldBaker& owner, GameObject* object,
                                      TriggerKind kind);

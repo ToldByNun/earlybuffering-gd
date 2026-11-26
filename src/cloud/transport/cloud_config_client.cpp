@@ -11,13 +11,13 @@
 
 EbCloudConfigClient::FetchResult
 EbCloudConfigClientImplementation::cloudConfigFetchSync(std::string const& url, size_t limit,
-                                                      int timeoutSec) {
+                                                        int timeoutSec) {
     EbCloudConfigClient::FetchResult result{};
     result.urlUsed = url;
 
     geode::utils::web::WebRequest req;
     req.userAgent("EarlyBuffer-CloudConfig/1");
-    req.timeout(std::chrono::seconds(timeoutSec));
+    req.timeout(asp::time::Duration::fromSecs(timeoutSec));
     req.followRedirects(false);
     req.certVerification(true);
     // Avoid stale CDN / HTTP caches of index.json after catalog edits.
@@ -85,7 +85,7 @@ bool EbCloudConfigClient::isBusy() const {
 }
 
 void EbCloudConfigClient::getText(std::string const& url, size_t maxBytes, int timeoutSec,
-                                std::string const& customCatalogUrl, Callback callback) {
+                                  std::string const& customCatalogUrl, Callback callback) {
     FetchResult early{};
     early.urlUsed = url;
 

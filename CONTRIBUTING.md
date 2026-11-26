@@ -4,7 +4,7 @@ For v1.7.1 desktop menu / Hybrid RL / Adaptive / Live IW / Cloud Config / Assist
 
 Thanks for helping with **EarlyBuffer**. Please read the [README](README.md) development / authorship notes: direction and review are human-led; AI may assist drafting. Prefer small, testable PRs.
 
-**Scope note:** **v1.6.x** targets **GD 2.2081** only (last line for that game build). Work for newer GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
+**Scope note:** **v1.8.1** targets **GD 2.2091** / **Geode 6.0.0**. Work for other GD versions belongs in a dedicated port / major bump — do not mix incompatible bindings into this branch casually.
 
 ## Setup
 

@@ -223,7 +223,11 @@ bool EbDesktopMenuBind::setKeybind(char const* key, std::vector<geode::Keybind> 
     if (EbDesktopMenuBindHelpers::keybindsEqual(current, value)) {
         return false;
     }
-    mod->setSettingValue<std::vector<geode::Keybind>>(key, value);
+    auto setting =
+        geode::cast::typeinfo_pointer_cast<geode::KeybindSettingV3>(mod->getSetting(key));
+    if (!setting)
+        return false;
+    setting->setValue(value);
     EbDesktopMenuBindHelpers::afterWrite();
     return true;
 }

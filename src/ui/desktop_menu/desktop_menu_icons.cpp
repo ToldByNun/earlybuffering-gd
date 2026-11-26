@@ -1,4 +1,5 @@
 #include "desktop_menu_icons.hpp"
+#include <asp/fs/std.hpp>
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -7,9 +8,9 @@
 #include "desktop_menu_tooltip.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/web.hpp>
-#include <imgui.h>
 #include <algorithm>
 #include <filesystem>
+#include <imgui.h>
 #include <string>
 
 class EbDesktopMenuIconsState {
@@ -78,7 +79,8 @@ public:
     }
 
     // Dedicated texture from the PNG file — avoids Geode atlas UV / point-vs-pixel bugs.
-    static cocos2d::CCTexture2D* textureFromPngFile(char const* fileName, float* outW, float* outH) {
+    static cocos2d::CCTexture2D* textureFromPngFile(char const* fileName, float* outW,
+                                                    float* outH) {
         if (!fileName) {
             return nullptr;
         }
@@ -87,15 +89,16 @@ public:
             return nullptr;
         }
 
-        auto const root = mod->getResourcesDir();
-        auto const id = mod->getID();
+        auto const root = mod->getResourcesDir().toStdPath().unwrap();
+        std::string const id = mod->getID();
         std::filesystem::path const candidates[] = {
             root / fileName,
             root / "ui" / fileName,
             root / id / fileName,
             root / id / "ui" / fileName,
-            mod->getPackagePath().parent_path() / "resources" / "ui" / fileName,
-            mod->getPackagePath().parent_path() / "resources" / id / fileName,
+            mod->getPackagePath().toStdPath().unwrap().parent_path() / "resources" / "ui" /
+                fileName,
+            mod->getPackagePath().toStdPath().unwrap().parent_path() / "resources" / id / fileName,
         };
 
         std::filesystem::path found;
@@ -156,9 +159,9 @@ public:
         }
         EbDesktopMenuTooltip::show(tooltip);
         bool const hovered = enabled && ImGui::IsItemHovered();
-        float const heat =
-            enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(), hovered || active, 0.05f)
-                    : 0.0f;
+        float const heat = enabled ? EbDesktopMenuMotion::smoothToward(ImGui::GetItemID(),
+                                                                       hovered || active, 0.05f)
+                                   : 0.0f;
 
         ImVec2 const min = ImGui::GetItemRectMin();
         ImVec2 const max = ImGui::GetItemRectMax();
@@ -172,8 +175,7 @@ public:
             hot.w = enabled ? 1.0f : 0.45f;
         }
         ImVec4 tint = EbDesktopMenuMotion::lerp4(idle, hot, heat);
-        ImU32 const shadow =
-            EbDesktopMenuTheme::toU32(ImVec4(0.0f, 0.0f, 0.0f, 0.28f * tint.w));
+        ImU32 const shadow = EbDesktopMenuTheme::toU32(ImVec4(0.0f, 0.0f, 0.0f, 0.28f * tint.w));
         drawList->AddImage(texId, ImVec2(min.x + 1.0f, min.y + 1.0f),
                            ImVec2(max.x + 1.0f, max.y + 1.0f), ImVec2(0.0f, 0.0f),
                            ImVec2(1.0f, 1.0f), shadow);
@@ -191,8 +193,7 @@ public:
         }
 
         float const size = EbDesktopMenuIconsState::kIconSize;
-        bool const pressed =
-            tintedIconButton(id, texture, size, tooltip, true, false);
+        bool const pressed = tintedIconButton(id, texture, size, tooltip, true, false);
         if (pressed) {
             geode::utils::web::openLinkInBrowser(url);
         }
@@ -233,11 +234,11 @@ public:
             EbDesktopMenuTheme::drawAccentGlow(drawList, imgMin, imgMax, 6.0f, 0.45f * select);
         }
 
-        float const alpha = EbDesktopMenuMotion::lerp4(
-                                ImVec4(1.0f, 1.0f, 1.0f, EbDesktopMenuIconsState::kModeIdleAlpha),
-                                ImVec4(1.0f, 1.0f, 1.0f, EbDesktopMenuIconsState::kModeActiveAlpha),
-                                select)
-                                .w;
+        float const alpha =
+            EbDesktopMenuMotion::lerp4(
+                ImVec4(1.0f, 1.0f, 1.0f, EbDesktopMenuIconsState::kModeIdleAlpha),
+                ImVec4(1.0f, 1.0f, 1.0f, EbDesktopMenuIconsState::kModeActiveAlpha), select)
+                .w;
         float const hoverBoost = (!selected) ? (0.12f * heat) : 0.0f;
         ImVec4 tint(1.0f, 1.0f, 1.0f, std::min(1.0f, alpha + hoverBoost));
         // Full UV — dedicated file textures are not atlas-packed.
@@ -327,8 +328,8 @@ bool EbDesktopMenuIcons::drawGamemodeBar(int* selected) {
     float const slot = EbDesktopMenuIconsState::kModeSlotSize;
     float const gap = EbDesktopMenuIconsState::kModeGap;
     float const rowPad = EbDesktopMenuIconsState::kModeRowPadY;
-    float const total = static_cast<float>(kGamemodeCount) * slot +
-                        static_cast<float>(kGamemodeCount - 1) * gap;
+    float const total =
+        static_cast<float>(kGamemodeCount) * slot + static_cast<float>(kGamemodeCount - 1) * gap;
     float const avail = ImGui::GetContentRegionAvail().x;
     float const originX = ImGui::GetCursorScreenPos().x;
     float const originY = ImGui::GetCursorScreenPos().y;

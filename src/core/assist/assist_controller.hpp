@@ -7,6 +7,7 @@
 #include "../diagnostics/decision_log.hpp"
 #include "../sim/shadow_simulator.hpp"
 #include "contracts/frame_plan_budget.hpp"
+#include "contracts/live_horizon_controller.hpp"
 #include "flight/flight_intent.hpp"
 #include "flight/flight_measurement.hpp"
 #include "flight/flight_mode_policy.hpp"
@@ -338,6 +339,7 @@ private:
     bool m_flightCorrectionObserved[2]{};
     EbInputReconciler m_inputReconciler;
     EbFramePlanBudget m_framePlanBudget;
+    EbLiveHorizonController m_liveHorizon;
     EbBufferedInput m_buffer{};
     EbDecisionLog m_log{};
     bool m_injecting = false;

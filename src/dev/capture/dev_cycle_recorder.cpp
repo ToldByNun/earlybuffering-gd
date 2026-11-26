@@ -165,10 +165,17 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     }
     // Commit 12: freeze-world ON while recording (honest counterfactual corpus).
     bool const freezeOnRecord = true;
+    auto const witnessStarted = std::chrono::steady_clock::now();
     width->witness = EbDevLiveWitness::capture(layer, player, player2, plan,
                                                width->hasClockStamp ? width->clockStamp : clock,
                                                effectTick, freezeOnRecord);
     width->hasWitness = width->witness.valid;
+    width->witnessCaptureUs =
+        static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock::now() - witnessStarted)
+                             .count());
+    width->inputPrepareUs = plan.inputPrepareUs;
+    width->cpuWorkers = plan.cpuWorkers;
 
     // Commit 8: suppress claims early when the witness alone is notReproducible.
     if (width->hasWitness) {
@@ -218,6 +225,8 @@ void EbDevCycleRecorder::notePlanFinished(EbSimPlan const& plan, int effectTick,
     width->adaptiveSeedCount = plan.adaptiveSeedCount;
     width->hybridHint = plan.hybridHint;
     width->hybridTried = plan.hybridTried;
+    width->liveObservationTicks = plan.liveObservationTicks;
+    width->sharedIdleTicksSaved = plan.sharedIdleTicksSaved;
     width->reusedCandidateCount = plan.reusedCandidateCount;
     width->reusedCandidateTicks = plan.reusedCandidateTicks;
     width->budgetHit = plan.budgetHit;
@@ -783,9 +792,11 @@ bool EbDevCycleRecorder::flushQuit() {
         this->m_cycles.clear();
         this->m_activePressId = 0;
         this->resetModeTimeline();
-        (void)store.sealAttempt("quit", count);
+        // Keep the sealed trace, serialize and persist its owned snapshot off
+        // the scene-transition thread.
+        return store.sealAttempt("quit", count, true);
     }
-    return store.flush();
+    return store.flush(true);
 }
 
 bool EbDevCycleRecorder::selfCheck(std::string& report) {

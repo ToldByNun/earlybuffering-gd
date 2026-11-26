@@ -73,6 +73,7 @@ public:
         if (EbSectionCard::begin("main-adaptive", "Adaptive Prediction")) {
             // Defaults / fallback when a mode's Adaptive Overwrite is off.
             EbCheckbox::drawSetting("adaptive-plan", "Adaptive Plan");
+            EbCheckbox::drawSetting("cpu-multithread", "CPU Multithread");
             EbCheckbox::drawSetting("assist-probe-past-horizon", "Probe Past Horizon");
             EbCheckbox::drawSetting("assist-micro-window", "Micro-Window Assist");
             EbSlider::drawIntSetting("adaptive-screen-ticks", "Screen Ticks", 8, 64);
@@ -394,6 +395,11 @@ public:
                 ImGui::Text("Inferences / updates   %d / %d", neural.inferences, neural.updates);
                 ImGui::Text("Route plans / invalid   %d / %d", planner.plans, planner.invalidations);
                 ImGui::Text("Route verify   %d / %d", planner.verifyHits, planner.verifyTries);
+                {
+                    auto const timing = planner.timingOverlayBit();
+                    if (!timing.empty())
+                        ImGui::TextDisabled("%s", timing.c_str());
+                }
                 ImGui::Text("Session samples / attempts   %d / %d", EbNeuralSession::get().size(),
                             EbNeuralSession::get().attemptCount());
             }
@@ -466,13 +472,38 @@ public:
                 EbSlider::drawInt("ai-cand-step", "Sample Step", &cfg.sampleStep, 1, 8, "", true,
                                   "Fixed stride when adaptive sampling is off."))
                 dirty();
+            {
+                char const* seeds[] = {"Enhanced (product)", "NovaParity (compare)"};
+                int seedIdx = static_cast<int>(cfg.seedStrategy);
+                if (seedIdx < 0 || seedIdx > 1)
+                    seedIdx = 0;
+                if (EbComboBox::draw(
+                        "ai-seed-strategy", "Seed Strategy", seeds, 2, &seedIdx, true,
+                        "Enhanced: config threshold + top-k + Shadow. NovaParity: duty + "
+                        "subsample + hard 0.6 (research A/B only).")) {
+                    cfg.seedStrategy = static_cast<EbAiConfig::SeedStrategy>(seedIdx);
+                    dirty();
+                }
+            }
+            if (cfg.seedStrategy == EbAiConfig::SeedStrategy::NovaParity) {
+                if (EbSlider::drawInt("ai-seed-duty-period", "Seed Duty Period", &cfg.seedDutyPeriod,
+                                      1, 16, "", true,
+                                      "NovaParity only: seed when planTick % period == phase."))
+                    dirty();
+                if (EbSlider::drawInt("ai-seed-duty-phase", "Seed Duty Phase", &cfg.seedDutyPhase, 0,
+                                      std::max(0, cfg.seedDutyPeriod - 1), "", true,
+                                      "Phase offset for the NovaParity duty bit."))
+                    dirty();
+            }
             ImGui::Separator();
             if (EbCheckbox::draw("ai-gate-on", "Confidence Gating", &cfg.gatingEnabled, true,
                                  "Drop low-confidence candidates before Shadow verify."))
                 dirty();
-            if (EbSlider::drawFloat("ai-gate-thr", "Confidence Threshold", &cfg.confidenceThreshold,
-                                    0.05f, 0.95f, 2, "", cfg.gatingEnabled,
-                                    "Nova reference default is 0.60."))
+            if (EbSlider::drawFloat(
+                    "ai-gate-thr", "Confidence Threshold", &cfg.confidenceThreshold, 0.05f, 0.95f, 2,
+                    "",
+                    cfg.gatingEnabled && cfg.seedStrategy == EbAiConfig::SeedStrategy::Enhanced,
+                    "Enhanced floor only — NovaParity uses a hard 0.60 gate."))
                 dirty();
             if (EbCheckbox::draw("ai-gate-adapt", "Adaptive Threshold", &cfg.adaptiveThreshold,
                                  cfg.gatingEnabled,
@@ -570,10 +601,48 @@ public:
                 autoplay.setExploreRate(cfg.exploreRate);
                 dirty();
             }
+            if (EbSlider::drawInt("ai-autoplay-queue", "Route Queue", &cfg.maxRouteQueue, 0, 8, "",
+                                  aiOn && autoplayOn,
+                                  "Early-plan depth (Autoplay only — does not touch Live).")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (cfg.maxRouteQueue > 0 &&
+                EbSlider::drawInt("ai-autoplay-early", "Early Plan Ticks", &cfg.earlyPlanTicks, 0, 64,
+                                  "", aiOn && autoplayOn,
+                                  "Enqueue next SV route when remaining delay ≤ this.")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (EbSlider::drawInt("ai-autoplay-cps", "Max Autoplay CPS", &cfg.maxAutoplayCps, 1, 60,
+                                  "", aiOn && autoplayOn,
+                                  "Soft press cap per 240 physics ticks (Autoplay only).")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (EbCheckbox::draw("ai-autoplay-memory", "Memory Reuse Route", &cfg.memoryReuseRoute,
+                                 aiOn && autoplayOn,
+                                 "Reuse last ShadowVerified route briefly if replan fails.")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
+            if (cfg.memoryReuseRoute &&
+                EbSlider::drawInt("ai-autoplay-mem-hold", "Memory Hold", &cfg.memoryHoldTicks, 4, 240,
+                                  " t", aiOn && autoplayOn,
+                                  "How long a remembered SV route stays valid.")) {
+                autoplay.syncFromConfig();
+                dirty();
+            }
             ImGui::Text("Probes / presses / explore   %d / %d / %d", autoplay.probes(),
                         autoplay.presses(), autoplay.explorePresses());
-            ImGui::Text("Route events / last probe   %d / %s", autoplay.routeEvents(),
-                        autoplay.lastProbeReason());
+            ImGui::Text("Route events / queue / last   %d / %d / %s", autoplay.routeEvents(),
+                        autoplay.queuedRoutes(), autoplay.lastProbeReason());
+            {
+                auto const& m = autoplay.metrics();
+                ImGui::TextDisabled("DR4 fidelity %.0f%%  verify %.0f%%  stuck %d  cpsThrottle %d",
+                                    m.routeFidelityRate() * 100.f, m.verifyCompletenessRate() * 100.f,
+                                    m.stuckRecoveries(), m.cpsThrottles());
+            }
             ImGui::Separator();
             if (EbCheckbox::draw("ai-persist-sessions", "Persist Sessions to Disk",
                                  &cfg.persistSessions, aiOn,
@@ -629,7 +698,7 @@ public:
                 (void)neural.saveAsBasePrior();
             if (EbButton::draw("ai-load-prior", "Load Base / Packaged Prior",
                                aiOn && EbLevelProfile::get().loaded(),
-                               "Load user base prior or packaged prior.ebnn."))
+                               "Load saveDir/ai prior.ebnn or model.bin (NVM2), else packaged prior."))
                 (void)neural.loadPrior();
             if (EbButton::draw("ai-reset-weights", "Reset AI Weights",
                                aiOn && EbLevelProfile::get().loaded(),
@@ -838,6 +907,9 @@ public:
             EbDropdown::drawSetting("desktop-ui-scale", "UI Scale", scales, 4);
 
             EbCheckbox::drawSetting("show-overlay", "In-Level Overlay");
+#if defined(EB_UI_WINDOWS)
+            EbCheckbox::drawSetting("hide-from-stream", "Hide From Stream");
+#endif
             EbCheckbox::drawSetting("show-pause-hub", "Pause EB Button");
             if (EbUiCapabilities::desktopLayout()) {
                 EbCheckbox::drawSetting("desktop-classic-settings", "Classic Settings Menu");

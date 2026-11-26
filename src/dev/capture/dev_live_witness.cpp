@@ -1,6 +1,7 @@
 #include "dev_live_witness.hpp"
 #include "../../core/level/section_object_walk.hpp"
 #include "../../core/sim/shadow_simulator.hpp"
+#include "../../core/sim/world/simulation_window.hpp"
 #include "../../core/trigger_world/trigger_world_baker.hpp"
 #include "../../core/trigger_world/trigger_world_store.hpp"
 #include "../dev_config.hpp"
@@ -323,29 +324,55 @@ bool EbDevLiveWitnessImplementation::hazardLikeObject(GameObject* object) {
     }
 }
 
-uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject* player,
-                                                  float radiusX) {
-    if (!layer || !player || !layer->m_objectLayer || radiusX <= 0.f)
-        return 0;
-    auto* children = layer->m_objectLayer->getChildren();
-    if (!children)
+std::vector<GameObject*>
+EbDevLiveWitness::captureNeighborhood(PlayLayer* layer, PlayerObject* player, float radiusX) {
+    std::vector<GameObject*> result;
+    if (!layer || !player || radiusX <= 0.f)
+        return result;
+    EbSimulationWindow const window(player->getPositionX(), radiusX, radiusX);
+    auto& store = EbTriggerWorldStore::get();
+    result.reserve(128);
+    EbSectionObjectWalk::forEachOwnedObject(layer, [&](GameObject* object) {
+        if (!object || object->m_uniqueID == 0)
+            return;
+        auto const* track = store.loaded() ? store.findTrack(object->m_uniqueID) : nullptr;
+        bool const tracked = track && track->ready && !track->keys.empty();
+        if (!EbDevLiveWitnessImplementation::hazardLikeObject(object) && !tracked)
+            return;
+        auto const bounds = object->getObjectRect();
+        bool relevant = window.overlaps(bounds.origin.x, bounds.size.width);
+        if (!relevant && tracked) {
+            for (auto const& key : track->keys) {
+                float const width = bounds.size.width * std::max(1.f, std::fabs(key.scaleX));
+                if (window.overlaps(key.x - width * 0.5f, width)) {
+                    relevant = true;
+                    break;
+                }
+            }
+        }
+        if (relevant)
+            result.push_back(object);
+    });
+    return result;
+}
+
+uint64_t EbDevLiveWitness::hashHazardNeighborhood(std::vector<GameObject*> const& objects,
+                                                  PlayerObject* player, float radiusX) {
+    if (!player || radiusX <= 0.f)
         return 0;
 
     float const playerX = player->getPositionX();
-    float const playerY = player->getPositionY();
-    float const yReach = player->m_isShip || player->m_isDart || player->m_isSwing ? 120.f : 80.f;
+    EbSimulationWindow const window(playerX, radiusX, radiusX);
 
     uint64_t height = 14695981039346656037ull;
     int count = 0;
-    for (unsigned index = 0; index < children->count(); ++index) {
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+    for (auto* object : objects) {
         if (!EbDevLiveWitnessImplementation::hazardLikeObject(object))
             continue;
         float const objectX = object->getPositionX();
         float const objectY = object->getPositionY();
-        if (objectX < playerX - 20.f || objectX > playerX + radiusX)
-            continue;
-        if (std::fabs(objectY - playerY) > yReach)
+        auto const bounds = object->getObjectRect();
+        if (!window.overlaps(bounds.origin.x, bounds.size.width))
             continue;
 
         float half = object->getContentSize().width * std::fabs(object->getScaleX()) * 0.5f;
@@ -367,16 +394,17 @@ uint64_t EbDevLiveWitness::hashHazardNeighborhood(PlayLayer* layer, PlayerObject
     return height;
 }
 
-void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
+void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w,
+                                          std::vector<GameObject*> const& objects,
                                           PlayerObject* player, float radiusX) {
     w.hazards.clear();
     w.hasHazards = false;
-    if (!layer || !player || radiusX <= 0.f)
+    if (!player || radiusX <= 0.f)
         return;
 
     float const playerX = player->getPositionX();
     float const playerY = player->getPositionY();
-    float const yReach = player->m_isShip || player->m_isDart || player->m_isSwing ? 120.f : 80.f;
+    EbSimulationWindow const window(playerX, radiusX, radiusX);
 
     std::vector<EbDevHazardSnap> found;
     auto consider = [&](GameObject* object) {
@@ -384,11 +412,9 @@ void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
             return;
         float const objectX = object->getPositionX();
         float const objectY = object->getPositionY();
-        if (objectX < playerX - 20.f || objectX > playerX + radiusX)
-            return;
-        if (std::fabs(objectY - playerY) > yReach)
-            return;
         auto const rect = object->getObjectRect();
+        if (!window.overlaps(rect.origin.x, rect.size.width))
+            return;
         EbDevHazardSnap snap;
         snap.uniqueId = object->m_uniqueID;
         snap.objectType = static_cast<int>(object->m_objectType);
@@ -404,12 +430,8 @@ void EbDevLiveWitness::captureHazardSnaps(EbDevLiveWitness& w, PlayLayer* layer,
         found.push_back(snap);
     };
 
-    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
-        for (unsigned index = 0; index < children->count(); ++index) {
-            consider(EbSectionObjectWalk::asGameObject(children->objectAtIndex(index)));
-        }
-    }
-    EbSectionObjectWalk::forEachOwnedObject(layer, consider);
+    for (auto* object : objects)
+        consider(object);
 
     std::sort(found.begin(), found.end(), [](EbDevHazardSnap const& a, EbDevHazardSnap const& b) {
         if (a.dist2 != b.dist2)
@@ -595,52 +617,26 @@ EbDevLiveWitness EbDevLiveWitness::capture(PlayLayer* layer, PlayerObject* playe
     w.threatZoneStartX = plan.threatZone.startX;
     w.threatZoneEndX = plan.threatZone.endX;
     if (player && layer) {
-        float const radius = 160.f;
-        w.hazardDigest = hashHazardNeighborhood(layer, player, radius);
+        float const radius = EbSimulationWindow::kMinimumReach;
+        auto const neighborhood = captureNeighborhood(layer, player, radius);
+        w.hazardDigest = hashHazardNeighborhood(neighborhood, player, radius);
         w.hasHazardDigest = true;
         if (EbDevConfig::recordHazards()) {
-            captureHazardSnaps(w, layer, player, radius);
+            captureHazardSnaps(w, neighborhood, player, radius);
             captureHitboxSnap(w, layer, player);
         }
 
         if (freezeWorld) {
-            auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-            if (children) {
-                float const playerX = player->getPositionX();
-                float const playerY = player->getPositionY();
-                float const yReach =
-                    player->m_isShip || player->m_isDart || player->m_isSwing ? 120.f : 80.f;
-                auto& tw = EbTriggerWorldStore::get();
-                for (unsigned index = 0; index < children->count(); ++index) {
-                    auto* object =
-                        geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-                    if (!object || object->m_uniqueID == 0)
-                        continue;
-                    float const objectX = object->getPositionX();
-                    float const objectY = object->getPositionY();
-                    if (objectX < playerX - 20.f || objectX > playerX + radius)
-                        continue;
-                    if (std::fabs(objectY - playerY) > yReach)
-                        continue;
-
-                    bool want = EbDevLiveWitnessImplementation::hazardLikeObject(object);
-                    if (!want && tw.loaded()) {
-                        auto const* track = tw.findTrack(object->m_uniqueID);
-                        want = track && track->ready && !track->keys.empty();
-                    }
-                    if (!want)
-                        continue;
-
-                    EbDevObjectPose pose;
-                    pose.uniqueId = object->m_uniqueID;
-                    pose.x = objectX;
-                    pose.y = objectY;
-                    pose.rotation = object->getRotation();
-                    pose.scaleX = object->getScaleX();
-                    pose.scaleY = object->getScaleY();
-                    pose.active = object->isVisible();
-                    w.moverPoses.push_back(pose);
-                }
+            for (auto* object : neighborhood) {
+                EbDevObjectPose pose;
+                pose.uniqueId = object->m_uniqueID;
+                pose.x = object->getPositionX();
+                pose.y = object->getPositionY();
+                pose.rotation = object->getRotation();
+                pose.scaleX = object->getScaleX();
+                pose.scaleY = object->getScaleY();
+                pose.active = object->isVisible();
+                w.moverPoses.push_back(pose);
             }
             // Vacuous empty set still Restored: freeze path held, nothing to write.
             setCategory(w, DevWitnessCategory::Movers, DevWitnessStatus::Restored, w.hazardDigest);

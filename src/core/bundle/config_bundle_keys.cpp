@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[200] = {
+EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[202] = {
     {"orb-chain-verify", EbConfigBundleKeys::Kind::String},
     {"ball-ground-check", EbConfigBundleKeys::Kind::String},
     {"cube-orb-chain-verify", EbConfigBundleKeys::Kind::String},
@@ -18,6 +18,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[200] = {
     {"enabled", EbConfigBundleKeys::Kind::Bool},
     {"safe-mode", EbConfigBundleKeys::Kind::Bool},
     {"show-overlay", EbConfigBundleKeys::Kind::Bool},
+    {"hide-from-stream", EbConfigBundleKeys::Kind::Bool},
     {"lag-warning-toast", EbConfigBundleKeys::Kind::Bool},
     {"debug-logging", EbConfigBundleKeys::Kind::Bool},
     {"perf-trace", EbConfigBundleKeys::Kind::Bool},
@@ -85,6 +86,7 @@ EbConfigBundleKeys::Entry const EbConfigBundleKeysTable::kEntries[200] = {
     {"adaptive-reserve-pct", EbConfigBundleKeys::Kind::Int},
     {"assist-probe-past-horizon", EbConfigBundleKeys::Kind::Bool},
     {"assist-micro-window", EbConfigBundleKeys::Kind::Bool},
+    {"cpu-multithread", EbConfigBundleKeys::Kind::Bool},
     {"auto-tune", EbConfigBundleKeys::Kind::Bool},
     {"trigger-bake", EbConfigBundleKeys::Kind::Bool},
     {"trigger-bake-skip-dynamic", EbConfigBundleKeys::Kind::Bool},
@@ -239,7 +241,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     };
 
-    expect(EbConfigBundleKeysTable::kEntryCount == 200, "count-200");
+    expect(EbConfigBundleKeysTable::kEntryCount == 202, "count-202");
     expect(EbConfigBundleKeys::count() == EbConfigBundleKeysTable::kEntryCount, "count-api");
     expect(static_cast<int>(EbConfigBundleKeys::end() - EbConfigBundleKeys::begin()) ==
                EbConfigBundleKeysTable::kEntryCount,
@@ -282,7 +284,7 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
         }
     }
     expect(static_cast<int>(seen.size()) == EbConfigBundleKeysTable::kEntryCount, "unique-count");
-    expect(kindBool == 75, "kind-bool-75");
+    expect(kindBool == 77, "kind-bool-77");
     expect(kindInt == 71, "kind-int-71");
     expect(kindFloat == 22, "kind-float-22");
     expect(kindString == 24, "kind-string-24");
@@ -306,6 +308,8 @@ bool EbConfigBundleKeys::selfCheck(std::string& report) {
     expect(menuHotkey && menuHotkey->kind == Kind::Keybind, "find-desktop-menu-hotkey");
     auto const* classic = EbConfigBundleKeys::find("desktop-classic-settings");
     expect(classic && classic->kind == Kind::Bool, "find-classic-settings");
+    auto const* cpuMt = EbConfigBundleKeys::find("cpu-multithread");
+    expect(cpuMt && cpuMt->kind == Kind::Bool, "find-cpu-multithread");
     auto const* offFrom = EbConfigBundleKeys::find("assist-off-1-from");
     expect(offFrom && offFrom->kind == Kind::Float, "find-float");
     auto const* offRanges = EbConfigBundleKeys::find("assist-off-ranges");

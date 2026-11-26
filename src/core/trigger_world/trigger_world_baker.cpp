@@ -1,11 +1,13 @@
-#include "../../app/class_manager.hpp"
 #include "trigger_world_baker.hpp"
+#include "../../app/class_manager.hpp"
 #include "../../config/stage_config.hpp"
 #include "../../debug/assist_log.hpp"
+#include "../../debug/interaction_journal.hpp"
 #include "../../debug/lag_probe.hpp"
 #include "../../debug/perf_trace.hpp"
 #include "../assist/assist_controller.hpp"
 #include "../learning/level_profile.hpp"
+#include "../level/section_object_walk.hpp"
 #include "baking/trigger_bake_job.hpp"
 #include "baking/trigger_effect_baker.hpp"
 #include "trigger_classify.hpp"
@@ -42,9 +44,35 @@ bool EbTriggerWorldBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerKi
 }
 
 cocos2d::CCPoint EbTriggerWorldBaker::groupCenter(int groupId,
-                                                std::vector<GameObject*> const& objects,
-                                                std::unordered_map<int, LivePose> const& live) {
+                                                  std::vector<GameObject*> const& objects,
+                                                  std::unordered_map<int, LivePose> const& live) {
     return EbTriggerEffectBaker::groupCenter(groupId, objects, live);
+}
+
+bool EbTriggerWorldBaker::hasFreshEmptyCollection(PlayLayer* layer) const {
+    if (!layer)
+        return false;
+    auto* objects = EbSectionObjectWalk::objectArray(layer);
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    return m_completedEmpty.matches(layer, objects, objects ? objects->count() : 0,
+                                    children ? children->count() : 0, layer->m_sections.size(),
+                                    EbStageConfig::triggerBakeSkipDynamic());
+}
+
+void EbTriggerWorldBaker::rememberEmptyCollection() {
+    auto* layer = m_layer;
+    if (!layer)
+        return;
+    auto* objects = EbSectionObjectWalk::objectArray(layer);
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    // Collect walks objectArray(), not the scene's visible children. Comparing
+    // their counts rejects a finished scan and rebuilds the whole level forever.
+    bool const complete =
+        objects && EbCompletedTriggerCollection::isComplete(m_childCount, m_childIndex,
+                                                            objects->count(), m_collectIncomplete);
+    m_completedEmpty.remember(layer, objects, objects ? objects->count() : 0,
+                              children ? children->count() : 0, layer->m_sections.size(),
+                              EbStageConfig::triggerBakeSkipDynamic(), complete);
 }
 
 void EbTriggerWorldBaker::clearJob() {
@@ -63,6 +91,11 @@ void EbTriggerWorldBaker::clearJob() {
     this->m_seenIds.clear();
     this->m_live.clear();
     this->m_tracks.clear();
+    this->m_groupIndex.clear();
+    this->m_activationTicks.clear();
+    this->m_activationFillIndex = 0;
+    this->m_activationTicksReady = false;
+    this->m_lastPublishQuarter = -1;
     this->m_bakedEffects = 0;
     this->m_bakedStartTimed = 0;
     this->m_skippedFollow = 0;
@@ -116,25 +149,32 @@ void EbTriggerWorldBaker::finishOk() {
         store.discardCacheFile();
         this->m_status = "trigger-world: empty (collect incomplete — will retry)";
         EbAssistLog::info("TRIGGER-WORLD: 0 tracks after incomplete collect — not caching; "
-                        "kickIfStaleEmpty will retry");
+                          "kickIfStaleEmpty will retry");
         this->clearJob();
         return;
     }
     if (tracks == 0) {
-        store.clearDirty();
-        store.discardCacheFile();
+        rememberEmptyCollection();
+        // Persist empty-complete by level key — pointer-based cache alone breaks
+        // after resetLevel replaces m_objects and kickIfStaleEmpty rebuilds forever
+        // (Quantum Processing: 21378 collect → 0 tracks → FPS death).
+        store.markEmptyComplete(this->m_lastChildCount, EbStageConfig::triggerBakeSkipDynamic());
         this->m_status =
-            fmt::format("trigger-world: empty (baked={} startTimed={} skip follow={} dyn={} "
-                        "touch={} effects={} children={})",
+            fmt::format("trigger-world: empty-complete (baked={} startTimed={} skip follow={} "
+                        "dyn={} touch={} effects={} children={})",
                         this->m_lastBakedEffects, this->m_lastBakedStartTimed,
                         this->m_lastSkippedFollow, this->m_lastSkippedDynamic,
                         this->m_lastSkippedTouch, this->m_lastEffectCount, this->m_lastChildCount);
         EbAssistLog::info(fmt::format(
-            "TRIGGER-WORLD: EMPTY after full collect — baked={} startTimed={} "
+            "TRIGGER-WORLD: EMPTY-COMPLETE after full collect — baked={} startTimed={} "
             "skip follow={} dynamic={} touch={} children={} effects={} sectionExtras={}",
             this->m_lastBakedEffects, this->m_lastBakedStartTimed, this->m_lastSkippedFollow,
             this->m_lastSkippedDynamic, this->m_lastSkippedTouch, this->m_lastChildCount,
             this->m_lastEffectCount, this->m_lastSectionExtras));
+        EbInteractionJournal::get().note(
+            "tw.emptyComplete",
+            fmt::format("children={} effects={} baked={}", this->m_lastChildCount,
+                        this->m_lastEffectCount, this->m_lastBakedEffects));
         this->clearJob();
         return;
     }
@@ -161,6 +201,7 @@ std::string EbTriggerWorldBaker::statusLine() const {
 }
 
 void EbTriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
+    m_completedEmpty.clear();
     this->cancel();
     if (!layer || !layer->m_level) {
         EbTriggerWorldStore::get().clear();
@@ -177,12 +218,39 @@ void EbTriggerWorldBaker::loadOrBuild(PlayLayer* layer) {
         EbTriggerWorldStore::get().loadForLevel(layer->m_level);
     }
 
-    if (EbTriggerWorldStore::get().hasTracks()) {
-        this->m_status = EbTriggerWorldStore::get().statusLine();
-        EbAssistLog::debug(fmt::format("TRIGGER-WORLD: cache hit ({})", this->m_status));
+    if (EbTriggerWorldStore::get().prefersMovers()) {
+        this->m_status = "trigger-world: movers (skip huge bake)";
+        EbAssistLog::info("TRIGGER-WORLD: movers-only — Nova-style timeline, no full bake");
+        EbInteractionJournal::get().note("tw.moversOnly", "skipHuge");
         return;
     }
 
+    if (EbTriggerWorldStore::get().resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic())) {
+        this->m_status = EbTriggerWorldStore::get().statusLine();
+        EbAssistLog::debug(fmt::format("TRIGGER-WORLD: cache hit ({})", this->m_status));
+        EbInteractionJournal::get().note("tw.cacheHit", this->m_status);
+        return;
+    }
+
+    // Oversized object layers: full trigger bake = multi‑minute / multi‑100MB.
+    // Record live movers instead (Nova Moving Objects).
+    size_t children = 0;
+    if (layer->m_objectLayer) {
+        if (auto* ch = layer->m_objectLayer->getChildren())
+            children = static_cast<size_t>(ch->count());
+    }
+    static constexpr size_t kMoverOnlyChildren = 6000;
+    if (children >= kMoverOnlyChildren) {
+        EbTriggerWorldStore::get().setPrefersMovers(true);
+        this->m_status = fmt::format("trigger-world: movers ({} objects)", children);
+        EbAssistLog::info(fmt::format(
+            "TRIGGER-WORLD: {} objects — movers-only (no full bake)", children));
+        EbInteractionJournal::get().note("tw.moversOnly",
+                                         fmt::format("children={}", children));
+        return;
+    }
+
+    EbInteractionJournal::get().note("tw.cacheMiss", "queue bake");
     this->start(layer);
 }
 
@@ -192,7 +260,13 @@ void EbTriggerWorldBaker::resumeIfEmpty(PlayLayer* layer) {
     if (this->m_running)
         return;
     auto& store = EbTriggerWorldStore::get();
-    if (!store.loaded() || store.hasTracks())
+    if (store.prefersMovers())
+        return;
+    if (!store.loaded() ||
+        store.resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic()))
+        return;
+    // A complete empty scan is a valid result, not evidence of a stale cache.
+    if (hasFreshEmptyCollection(layer))
         return;
     EbAssistLog::debug("TRIGGER-WORLD: resume build after empty cancel");
     this->start(layer);
@@ -204,7 +278,13 @@ void EbTriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
     if (this->m_running)
         return;
     auto& store = EbTriggerWorldStore::get();
-    if (!store.loaded() || store.hasTracks())
+    if (store.prefersMovers())
+        return;
+    if (!store.loaded() ||
+        store.resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic()))
+        return;
+    // A complete empty scan is a valid result, not evidence of a stale cache.
+    if (hasFreshEmptyCollection(layer))
         return;
     size_t children = 0;
     if (layer->m_objectLayer) {
@@ -216,6 +296,7 @@ void EbTriggerWorldBaker::kickIfStaleEmpty(PlayLayer* layer) {
         return;
     EbAssistLog::info(
         fmt::format("TRIGGER-WORLD: stale empty with {} objectLayer children — rebuild", children));
+    EbInteractionJournal::get().note("tw.kickStaleEmpty", fmt::format("children={}", children));
     this->start(layer);
 }
 
@@ -229,7 +310,8 @@ bool EbTriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::stri
         return true;
 
     this->kickIfStaleEmpty(layer);
-    if (!this->m_running && !EbTriggerWorldStore::get().hasTracks()) {
+    if (!this->m_running &&
+        !EbTriggerWorldStore::get().resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic())) {
         this->resumeIfEmpty(layer);
     }
 
@@ -254,7 +336,7 @@ bool EbTriggerWorldBaker::waitUntilReady(PlayLayer* layer, int wallMs, std::stri
     }
 
     auto& store = EbTriggerWorldStore::get();
-    if (store.hasTracks())
+    if (store.resolvedForSkipDynamic(EbStageConfig::triggerBakeSkipDynamic()))
         return true;
 
     // Loud empty: effects existed but nothing baked, or collect incomplete.
@@ -282,6 +364,7 @@ bool EbTriggerWorldBaker::start(PlayLayer* layer) {
     if (this->m_running)
         return false;
 
+    m_completedEmpty.clear();
     this->clearJob();
     this->m_cancel = false;
     this->m_running = true;
@@ -304,12 +387,12 @@ bool EbTriggerWorldBaker::start(PlayLayer* layer) {
 
     this->m_childCount = 0;
     this->m_childIndex = 0;
-    if (layer->m_objectLayer) {
-        if (auto* children = layer->m_objectLayer->getChildren()) {
-            this->m_childCount = static_cast<size_t>(children->count());
-            this->m_objects.reserve(this->m_childCount);
-            this->m_effects.reserve(256);
-        }
+    // Match the authoritative source used by Collect. Visual children can have
+    // a different count, especially when entering through a start position.
+    if (auto* objects = EbSectionObjectWalk::objectArray(layer)) {
+        this->m_childCount = static_cast<size_t>(objects->count());
+        this->m_objects.reserve(this->m_childCount);
+        this->m_effects.reserve(256);
     }
 
     // Commit 4: wait for objects if init raced ahead of objectLayer populate.
@@ -341,6 +424,46 @@ void EbTriggerWorldBaker::publishPartial() {
         data.tracks.push_back(std::move(copy));
     }
     EbTriggerWorldStore::get().setData(std::move(data));
+}
+
+void EbTriggerWorldBaker::maybePublishMilestone() {
+    // Coarse overlay updates only — full publish on Commit.
+    int const quarter = static_cast<int>(this->m_progress * 4.f);
+    if (quarter <= this->m_lastPublishQuarter || quarter <= 0)
+        return;
+    this->m_lastPublishQuarter = quarter;
+    this->publishPartial();
+}
+
+void EbTriggerWorldBaker::buildGroupIndex() {
+    this->m_groupIndex.clear();
+    if (!this->m_layer || this->m_effects.empty())
+        return;
+    std::unordered_set<int> groups;
+    groups.reserve(this->m_effects.size());
+    for (auto* effect : this->m_effects) {
+        if (!effect)
+            continue;
+        if (effect->m_targetGroupID > 0)
+            groups.insert(effect->m_targetGroupID);
+        if (effect->m_centerGroupID > 0)
+            groups.insert(effect->m_centerGroupID);
+    }
+    this->m_groupIndex.reserve(groups.size());
+    for (int groupId : groups) {
+        auto& members = this->m_groupIndex[groupId];
+        auto* liveGroup = this->m_layer->getGroup(groupId);
+        if (!liveGroup)
+            continue;
+        members.reserve(liveGroup->count());
+        for (unsigned index = 0; index < liveGroup->count(); ++index) {
+            auto* object =
+                geode::prelude::typeinfo_cast<GameObject*>(liveGroup->objectAtIndex(index));
+            if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
+                continue;
+            members.push_back(object);
+        }
+    }
 }
 
 void EbTriggerWorldBaker::considerCollectedObject(GameObject* object) {

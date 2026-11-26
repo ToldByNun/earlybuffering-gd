@@ -88,15 +88,14 @@ bool EbTriggerEffectBaker::isFollowLikeStatic(EffectGameObject* effect, TriggerK
 }
 
 cocos2d::CCPoint
-EbTriggerEffectBaker::groupCenter(int groupId, std::vector<GameObject*> const& objects,
+EbTriggerEffectBaker::groupCenter(int groupId, std::vector<GameObject*> const& members,
                                 std::unordered_map<int, EbTriggerWorldBaker::LivePose> const& live) {
+    (void)groupId;
     double sx = 0.0;
     double sy = 0.0;
     int count = 0;
-    for (auto* object : objects) {
-        if (!object || groupId <= 0)
-            continue;
-        if (!object->belongsToGroup(groupId))
+    for (auto* object : members) {
+        if (!object)
             continue;
         auto it = live.find(object->m_uniqueID);
         if (it == live.end())
@@ -144,10 +143,21 @@ std::vector<GameObject*> EbTriggerEffectBaker::objectsInGroup(EbTriggerWorldBake
     std::vector<GameObject*> out;
     if (groupId <= 0)
         return out;
-    for (auto* object : owner.m_objects) {
-        if (!object)
-            continue;
-        if (!object->belongsToGroup(groupId))
+    auto it = owner.m_groupIndex.find(groupId);
+    if (it != owner.m_groupIndex.end() && !it->second.empty())
+        return it->second;
+    // Safety fallback when the sidetable missed this id. Prefer live getGroup —
+    // GameObject::belongsToGroup is unbound on iOS (link error).
+    if (!owner.m_layer)
+        return out;
+    auto* liveGroup = owner.m_layer->getGroup(groupId);
+    if (!liveGroup)
+        return out;
+    out.reserve(liveGroup->count());
+    for (unsigned index = 0; index < liveGroup->count(); ++index) {
+        auto* object =
+            geode::prelude::typeinfo_cast<GameObject*>(liveGroup->objectAtIndex(index));
+        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
             continue;
         out.push_back(object);
     }
@@ -231,12 +241,13 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
     if (kind == TriggerKind::StaticRotate) {
         int const centerId = effect->m_centerGroupID;
         if (centerId > 0) {
-            center = EbTriggerWorldBaker::groupCenter(centerId, owner.m_objects, owner.m_live);
+            auto centerMembers = owner.objectsInGroup(centerId);
+            center = EbTriggerWorldBaker::groupCenter(centerId, centerMembers, owner.m_live);
         } else {
             for (auto* object : targets) {
                 (void)owner.ensureTrack(object, kind);
             }
-            center = EbTriggerWorldBaker::groupCenter(groupId, owner.m_objects, owner.m_live);
+            center = EbTriggerWorldBaker::groupCenter(groupId, targets, owner.m_live);
         }
     }
 
@@ -244,9 +255,11 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
     float scaleTargetY = 1.f;
     bool relativeScale = false;
     if (kind == TriggerKind::StaticScale) {
-        auto* xf = geode::prelude::typeinfo_cast<TransformTriggerGameObject*>(effect);
-        if (!xf)
+        // typeinfo_cast<TransformTriggerGameObject*> needs RTTI that Apple LTO
+        // does not link from Geode bindings — classify by object id, then static.
+        if (!EbTriggerClassify::isScaleTriggerId(effect->m_objectID))
             return;
+        auto* xf = static_cast<TransformTriggerGameObject*>(effect);
         scaleTargetX = xf->m_objectScaleX;
         scaleTargetY = xf->m_objectScaleY;
         if (xf->m_divideX && std::fabs(scaleTargetX) > 1e-6f) {
@@ -318,7 +331,6 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
     }
 
     int const endTick = startTick + std::max(0, dur);
-    int const step = 1;
 
     for (auto& tb : bakes) {
         auto* track = owner.ensureTrack(tb.obj, kind);
@@ -334,9 +346,15 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
             continue;
         }
 
-        for (int tick = startTick + step; tick < endTick; tick += step) {
+        int const intermediates =
+            std::min(EbTriggerWorldBaker::kMaxIntermediateKeys, std::max(0, dur - 1));
+        for (int sample = 1; sample <= intermediates; ++sample) {
             if (track->keys.size() >= EbTriggerWorldStore::kHardMaxKeysPerTrack)
                 break;
+            int const tick =
+                startTick + (sample * dur) / (intermediates + 1);
+            if (tick <= startTick || tick >= endTick)
+                continue;
             float const fraction = static_cast<float>(tick - startTick) / static_cast<float>(dur);
             float const u = GameToolbox::getEasedValue(
                 fraction, static_cast<int>(effect->m_easingType), effect->m_easingRate);

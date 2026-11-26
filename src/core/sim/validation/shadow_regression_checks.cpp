@@ -2,6 +2,7 @@
 #include "../mode_survival.hpp"
 #include "../planning/shadow_survival_rules.hpp"
 #include "../planning/simulation_plan.hpp"
+#include "../runtime/shadow_isolation_contracts.hpp"
 #include "../shadow_simulator.hpp"
 #include <string>
 
@@ -221,8 +222,13 @@ bool EbShadowRegressionChecks::regressionSelfCheck(std::string& report) {
     expect(!EbShadowSurvivalRules::exitSurvivedHonest(false, true), "exit-unknown-not-survive");
     expect(!EbShadowSurvivalRules::exitSurvivedHonest(true, true), "exit-died-unk");
 
+    std::string isolationReport;
+    expect(EbShadowIsolationContracts::selfCheck(isolationReport), "nova-shadow-isolation");
+    if (!isolationReport.empty() && fails != 0)
+        report += isolationReport;
+
     if (fails == 0)
-        report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty)";
+        report = "regressionSelfCheck OK (bins+zone+5 snaps+score-honesty+nova-shadow-isolation)";
     else
         report = fmt::format("regressionSelfCheck {} fails: {}", fails, report);
     return fails == 0;

@@ -1,23 +1,23 @@
 {
-	"geode": "5.11.1",
+	"geode": "6.0.0",
 	"gd": {
-		"win": "2.2081",
-		"android": "2.2081",
-		"mac": "2.2081",
-		"ios": "2.2081"
+		"win": "2.2091",
+		"android": "2.2091",
+		"mac": "2.2091",
+		"ios": "2.2091"
 	},
 	"id": "audesign.earlybuffer",
 	"name": "EarlyBuffer",
-	"version": "v1.8.0",
+	"version": "v1.8.1",
 	"developer": "Audesign",
-	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay. Timing assist for GD 2.2081, not an autoplayer. Final 2.2081 line · Safe Mode on by default.",
+	"description": "PLEASE READ THIS: Written with heavy AI-assisted drafting — but every line was hand-checked and the assist was thoroughly playtested. Not an unattended dump. · Click early — still live. Holds your jump and fires on the first shadow-sim-safe tick. Miss-assist / Pass-verdict overlay. Timing assist for GD 2.2091, not an autoplayer. Safe Mode on by default.",
 	"repository": "https://github.com/ToldByNun/earlybuffering-gd",
 	"links": {
 		"source": "https://github.com/ToldByNun/earlybuffering-gd",
 		"community": "https://discord.gg/QJuTDkmPcf"
 	},
 	"issues": {
-		"info": "Report bugs on GitHub Issues (include GD 2.2081, Geode version, platform, steps, crashlog). For chat / questions, use the Discord.",
+		"info": "Report bugs on GitHub Issues (include GD 2.2091, Geode version, platform, steps, crashlog). For chat / questions, use the Discord.",
 		"url": "https://github.com/ToldByNun/earlybuffering-gd/issues"
 	},
 	"tags": [
@@ -178,6 +178,12 @@
 			"type": "bool",
 			"name": "Micro-Window Assist",
 			"description": "AP3c: when Max Assist is tiny (≤8 ticks / ~2 frames), still prefer a later Alive delay with any endX lead over sticky Pass-now. On = helps 1–2 frame cube windows. Off = previous large-lead-only / PassD0Safe behavior for small windows.",
+			"default": true
+		},
+		"cpu-multithread": {
+			"type": "bool",
+			"name": "CPU Multithread",
+			"description": "Screen Adaptive delay candidates on multiple CPU cores with a lightweight GD-physics clone (no ShadowPlayer / Cocos overhead). Any survivor is verified once on the main thread against real ShadowPlayers before arming. Off = serial Shadow screen only. Default on; falls back to Shadow screen when the fast path finds nothing or hits unknowns.",
 			"default": true
 		},
 		"title-scope": {
@@ -1371,6 +1377,12 @@
 			"description": "Shows a small status line while playing (mode, buffer, learning hints). Off = cleaner screen. Pause EB button is separate (Pause EB Button below).",
 			"default": false
 		},
+		"hide-from-stream": {
+			"type": "bool",
+			"name": "Hide From Stream",
+			"description": "Windows: draw the desktop menu, lag toast, and in-level overlay on a layered window excluded from capture (OBS Game Capture / Win10 2004+). You still see the UI; the stream sees only the game. Off = normal in-game ImGui.",
+			"default": false
+		},
 		"lag-warning-toast": {
 			"type": "bool",
 			"name": "Lag Warning",
@@ -1405,7 +1417,13 @@
 			"type": "bool",
 			"name": "Lag Probe",
 			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
-			"default": false
+			"default": true
+		},
+		"interaction-journal": {
+			"type": "bool",
+			"name": "Interaction Journal",
+			"description": "Always-on enter/quit/death/click/TW timings to earlybuffer-interactions.log (no Dev Lab). Leave on when reporting FPS or leave lag. Off = quieter disk.",
+			"default": true
 		},
 		"hotkey-desktop-menu": {
 			"type": "keybind",

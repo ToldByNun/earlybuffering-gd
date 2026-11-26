@@ -87,6 +87,16 @@ int EbLivePlanContracts::intendedLiveSoftWallFloorUs(int budgetUs) {
     return budgetUs;
 }
 
+int EbLivePlanContracts::resolveLivePressBudgetUs(int configuredSimBudgetUs, int aiCpuCapUs) {
+    // Soft-floor may leave 0 (= "unlimited" in AP-L5 tests). AP1 still clamps that
+    // to the hitch ceiling before PlanOptions — Shadow treats budgetUs<=0 as no wall.
+    int budget = intendedLiveSoftWallFloorUs(configuredSimBudgetUs);
+    budget = intendedLiveBudgetUs(budget);
+    if (aiCpuCapUs > 0)
+        budget = std::min(budget, std::max(800, aiCpuCapUs));
+    return std::max(1, budget);
+}
+
 bool EbLivePlanContracts::lagWarningShouldNotify(bool enabled, int planUs, bool budgetHit) {
     if (!enabled)
         return false;
@@ -115,6 +125,18 @@ int EbLivePlanContracts::adaptiveFallthroughReserveUs(int fullBudgetUs, bool dis
     int const half = fullBudgetUs / 2;
     int const prepareFloor = prepareReserveUs(fullBudgetUs, false);
     return std::max(kFallthroughRemUsFloor, std::max(prepareFloor * 2, half));
+}
+
+int EbLivePlanContracts::novaAiClassicReserveUs(int fullBudgetUs) {
+    if (fullBudgetUs <= 0)
+        return 0;
+    // Thin leftover (~1/8, 400–800µs) — Nova keeps buffering on one wall instead
+    // of parking half the frame for classic (research: AI shell starved at 1.2ms).
+    return std::clamp(fullBudgetUs / 8, 400, 800);
+}
+
+int EbLivePlanContracts::novaAiShellBudgetUs(int fullBudgetUs) {
+    return adaptiveShellBudgetUs(fullBudgetUs, novaAiClassicReserveUs(fullBudgetUs));
 }
 
 bool EbLivePlanContracts::adaptiveFallthroughSeedsObservationCleared(bool isBall) {
@@ -509,6 +531,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(intendedLiveSoftWallFloorUs(0) == 0, "ap-l5-soft-wall-unlimited");
     expect(intendedLiveSoftWallFloorUs(2500) == 2500, "ap-p05-respect-small-budget");
     expect(intendedLiveSoftWallFloorUs(8170) == 8170, "ap-l5-soft-wall-keep");
+    expect(resolveLivePressBudgetUs(0) == kHitchCeilingUs, "press-budget-zero-hitch");
+    expect(resolveLivePressBudgetUs(5000) == 5000, "press-budget-keep");
+    expect(resolveLivePressBudgetUs(0, 1200) == 1200, "press-budget-ai-cap");
+    expect(resolveLivePressBudgetUs(5000, 1200) == 1200, "press-budget-ai-cap-over");
+    expect(resolveLivePressBudgetUs(0, 100) == 800, "press-budget-ai-floor");
     expect(lagWarningShouldNotify(true, 9000, false), "ap-l7-note-hitch");
     expect(lagWarningShouldNotify(true, 1000, true), "ap-l7-note-budget-hit");
     expect(!lagWarningShouldNotify(false, 9000, true), "ap-l7-note-off");
@@ -517,6 +544,11 @@ bool EbLivePlanContracts::selfCheck(std::string& report) {
     expect(adaptiveShellBudgetUs(8170, kFallthroughRemUsFloor) == 6170, "ap-l5-shell-wall");
     expect(adaptiveShellBudgetUs(1500, kFallthroughRemUsFloor) == 1, "ap-l5-shell-tiny");
     expect(adaptiveShellBudgetUs(0, kFallthroughRemUsFloor) == 0, "ap-l5-shell-unlimited");
+    expect(novaAiClassicReserveUs(4000) == 500, "nova-ai-reserve-4ms");
+    expect(novaAiClassicReserveUs(8000) == 800, "nova-ai-reserve-cap");
+    expect(novaAiClassicReserveUs(2000) == 400, "nova-ai-reserve-floor");
+    expect(novaAiShellBudgetUs(4000) == 3500, "nova-ai-shell-4ms");
+    expect(novaAiShellBudgetUs(0) == 0, "nova-ai-shell-unlimited");
     expect(adaptiveFallthroughReserveUs(8170, false) == kFallthroughRemUsFloor,
            "ap-l5-ft-reserve-cont");
     expect(adaptiveFallthroughReserveUs(8170, true) == 4085, "ap-l5-ft-reserve-discrete");

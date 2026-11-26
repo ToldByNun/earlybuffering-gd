@@ -10,6 +10,7 @@
 #include "validation/dev_trace_validation.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <cstdio>
 #include <fmt/format.h>
@@ -191,7 +192,7 @@ bool EbDevTraceStore::hasOpenAttempt() const {
 std::filesystem::path EbDevTraceStore::tracesDir() const {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
-        return mod->getSaveDir() / "devtraces";
+        return mod->getSaveDir().toStdPath().unwrap() / "devtraces";
     }
     return std::filesystem::path("devtraces");
 }
@@ -258,16 +259,17 @@ void EbDevTraceStore::setModVersion(std::string modVersion) {
 std::string EbDevTraceStore::makeSettingsFingerprint() {
     return fmt::format(
         "stage={} mode={} pick={} eng={} ticks={}/{} unit={} safe={} orbs={} "
-        "simUs={} tickBud={} twBake={} twSkipDyn={} autoTune={} selfBake={} ground={} "
+        "simUs={} tickBud={} cpuMt={} twBake={} twSkipDyn={} autoTune={} selfBake={} ground={} "
         "chain={}/{}/{}/{}/{}/{}/{}/{}",
         EbStageConfig::stageLabel(EbStageConfig::fromSettings()),
         EbStageConfig::assistModeName(EbStageConfig::assistMode()), EbStageConfig::assistPickName(),
         EbStageConfig::assistEngineName(), EbStageConfig::ticksAll(), EbStageConfig::ticksWave(),
         EbStageConfig::windowUnitFrames() ? "Frames" : "Ticks", EbStageConfig::safeMode() ? 1 : 0,
         EbStageConfig::assistOrbs() ? 1 : 0, EbStageConfig::simBudgetUs(),
-        EbStageConfig::tickBudgetPerPress(), EbStageConfig::triggerBake() ? 1 : 0,
-        EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0, EbStageConfig::autoTuneEnabled() ? 1 : 0,
-        EbStageConfig::selfBake() ? 1 : 0, static_cast<int>(EbAssistPolicySettings::ground()),
+        EbStageConfig::tickBudgetPerPress(), EbStageConfig::cpuMultithread() ? 1 : 0,
+        EbStageConfig::triggerBake() ? 1 : 0, EbStageConfig::triggerBakeSkipDynamic() ? 1 : 0,
+        EbStageConfig::autoTuneEnabled() ? 1 : 0, EbStageConfig::selfBake() ? 1 : 0,
+        static_cast<int>(EbAssistPolicySettings::ground()),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Cube)),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ship)),
         static_cast<int>(EbAssistPolicySettings::chain(EbStageConfig::GameModeKind::Ball)),
@@ -377,7 +379,7 @@ void EbDevTraceStore::trimRollingWindow() {
     this->m_session.recordingsDone = kept;
 }
 
-bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget) {
+bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget, bool background) {
     auto* attempt = this->currentAttempt();
     if (!attempt || attempt->sealed)
         return false;
@@ -389,7 +391,7 @@ bool EbDevTraceStore::sealAttempt(std::string endReason, bool countTowardTarget)
         this->trimRollingWindow();
     }
     this->sampleResources();
-    return this->flush();
+    return this->flush(background);
 }
 
 bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) {
@@ -412,17 +414,16 @@ bool EbDevTraceStore::sealOfflineEval(int64_t attemptId, EbDevAttemptEval eval) 
     return false;
 }
 
-bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
-    auto const directory = this->tracesDir();
-    (void)geode::utils::file::createDirectoryAll(directory);
-    auto const path = this->sessionPath();
+bool EbDevTraceStore::writeAtomic(std::filesystem::path const& path, matjson::Value const& root) {
+    auto const directory = path.parent_path();
+    (void)geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(directory));
     auto tmpPath = path;
     tmpPath += ".tmp";
 
-    auto width = geode::utils::file::writeToJson(tmpPath, root);
+    auto width = geode::utils::file::writeToJson(asp::fs::Path::fromStdPath(tmpPath), root);
     if (width.isErr()) {
         // Fallback: direct write if temp failed (e.g. path quirks).
-        auto delay = geode::utils::file::writeToJson(path, root);
+        auto delay = geode::utils::file::writeToJson(asp::fs::Path::fromStdPath(path), root);
         return delay.isOk();
     }
 
@@ -445,12 +446,27 @@ bool EbDevTraceStore::writeAtomic(matjson::Value const& root) const {
     return !ec || std::filesystem::exists(path);
 }
 
-bool EbDevTraceStore::flush() {
-    if (!(!this->m_open)) {
-        return this->writeAtomic(
-            EbDevTraceStoreImplementation::sessionToJsonValue(this->m_session));
-    }
-    return false;
+bool EbDevTraceStore::flush(bool background) {
+    if (!m_open)
+        return false;
+    // Serialize writes: a later flush must never race an older quit snapshot
+    // into the same .tmp file or overwrite newer events with older data.
+    if (m_pendingFlush.valid() && !m_pendingFlush.get())
+        geode::log::warn("[EarlyBuffer] background trace save failed");
+    auto const path = sessionPath();
+    if (!background)
+        return writeAtomic(path, EbDevTraceStoreImplementation::sessionToJsonValue(m_session));
+    // Own the session copy and path; the worker never touches game objects,
+    // service state or the next level. JSON construction and disk IO are the
+    // expensive part of quitting a recorded object-heavy level.
+    m_pendingFlush = std::async(std::launch::async, [session = m_session, path]() {
+        try {
+            return writeAtomic(path, EbDevTraceStoreImplementation::sessionToJsonValue(session));
+        } catch (...) {
+            return false;
+        }
+    });
+    return true;
 }
 
 void EbDevTraceStore::closeSession() {

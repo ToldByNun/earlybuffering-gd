@@ -3,6 +3,7 @@
 #include "../../debug/assist_log.hpp"
 #include "ai_config.hpp"
 #include <Geode/Geode.hpp>
+#include <asp/fs/std.hpp>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
@@ -16,7 +17,7 @@ std::filesystem::path EbNeuralSession::sessionsDir() {
     auto* mod = geode::Mod::get();
     if (!mod)
         return {};
-    return mod->getSaveDir() / "ai" / "sessions";
+    return mod->getSaveDir().toStdPath().unwrap() / "ai" / "sessions";
 }
 
 bool EbNeuralSession::saveRange(std::filesystem::path const& path, int startIndex,

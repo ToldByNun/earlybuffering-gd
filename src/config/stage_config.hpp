@@ -71,6 +71,8 @@ public:
     static bool perfTrace();
     // Death/reset/checkpoint episode timings → earlybuffer-lagprobe.log.
     static bool lagProbe();
+    // Always-on enter/quit/death/click/TW journal → earlybuffer-interactions.log.
+    static bool interactionJournal();
     static bool safeMode();
     // Live-reads safe-mode + enabled. false when Safe Mode is OFF (always allow progress).
     // When Safe Mode is ON: block if assist is enabled or this attempt was assist-touched.
@@ -197,6 +199,8 @@ public:
     static bool assistProbePastHorizon();
     // Micro: small Max Assist windows may still prefer a later Alive endX lead.
     static bool assistMicroWindow();
+    // Parallel POD GD-physics screen (Adaptive Phase A/B); Shadow verify still gates arm.
+    static bool cpuMultithread();
     // Kind-resolved Adaptive (mode overwrite → mode knobs, else Main).
     static bool adaptivePlanFor(GameModeKind kind);
     static int adaptiveScreenTicksFor(GameModeKind kind);
@@ -333,6 +337,7 @@ private:
     static bool s_cachedDebug;
     static bool s_cachedPerfTrace;
     static bool s_cachedLagProbe;
+    static bool s_cachedInteractionJournal;
     static bool s_cachedSafeMode;
     static bool s_cachedShowOverlay;
     static bool s_cachedLagWarningToast;
@@ -372,6 +377,7 @@ private:
     static int s_cachedAdaptiveReservePct;
     static bool s_cachedAssistProbePastHorizon;
     static bool s_cachedAssistMicroWindow;
+    static bool s_cachedCpuMultithread;
     static std::string s_cachedAssistVerify;
     static int s_cachedTickBudget;
     static bool s_cachedAssistOnlyPractice;

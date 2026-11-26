@@ -1,18 +1,30 @@
-#include "../app/class_manager.hpp"
 #include "play_layer_hooks.hpp"
+#include "../app/class_manager.hpp"
 #include "../config/stage_config.hpp"
 #include "../core/assist/assist_controller.hpp"
 #include "../core/bake/bake_scheduler.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../debug/assist_log.hpp"
+#include "../debug/interaction_journal.hpp"
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
 #include "game_hook_simulation_guard.hpp"
+#include <chrono>
 
-auto EbPlayLayer::init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer) -> bool {
-    if (!PlayLayer::init(level, useReplay, dontCreatePlayer))
+auto EbPlayLayer::init(GJGameLevel* level, bool useReplay) -> bool {
+    auto const start = std::chrono::steady_clock::now();
+    if (!PlayLayer::init(level, useReplay))
         return false;
+    auto const vanillaDone = std::chrono::steady_clock::now();
     EbClassManager::get().onLevelInit(this);
+    auto const finished = std::chrono::steady_clock::now();
+    auto const vanillaUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(vanillaDone - start).count();
+    auto const assistUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(finished - vanillaDone).count();
+    if (assistUs >= 5000 || vanillaUs >= 50000)
+        EbAssistLog::info(
+            fmt::format("TRANSITION enter vanilla={}us earlybuffer={}us", vanillaUs, assistUs));
     return true;
 }
 
@@ -20,9 +32,9 @@ auto EbPlayLayer::resetLevel() -> void {
     // Ghosts land in section vectors via sim checkCollisions. Vanilla
     // resetLevel → sortSectionVector then AVs on those bodies — evacuate first.
     EbPerfTrace::Scope const scope("resetLevelHook");
-    EbLagProbe::get().beginEpisode("resetLevel", fmt::format("attemptTickWas={} practice={}",
-                                                           EbAssistController::get().attemptTick(),
-                                                           this->m_isPracticeMode));
+    EbLagProbe::get().beginEpisode(
+        "resetLevel", fmt::format("attemptTickWas={} practice={}",
+                                  EbAssistController::get().attemptTick(), this->m_isPracticeMode));
     EbShadowSimulator::get().clearDeathHitboxSuppress();
     EbClassManager::get().beforeLevelReset(this);
     {
@@ -33,8 +45,18 @@ auto EbPlayLayer::resetLevel() -> void {
 }
 
 auto EbPlayLayer::onQuit() -> void {
+    auto const start = std::chrono::steady_clock::now();
     EbClassManager::get().onLevelQuit(this);
+    auto const assistDone = std::chrono::steady_clock::now();
     PlayLayer::onQuit();
+    auto const finished = std::chrono::steady_clock::now();
+    auto const assistUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(assistDone - start).count();
+    auto const vanillaUs =
+        std::chrono::duration_cast<std::chrono::microseconds>(finished - assistDone).count();
+    if (assistUs >= 5000 || vanillaUs >= 50000)
+        EbAssistLog::info(
+            fmt::format("TRANSITION quit vanilla={}us earlybuffer={}us", vanillaUs, assistUs));
 }
 
 auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> void {
@@ -90,12 +112,13 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
 
     if (object != m_anticheatSpike) {
         auto const mode = player ? EbStageConfig::kindName(EbStageConfig::kindOf(player)) : "?";
-        EbLagProbe::get().beginEpisode(
-            "death", fmt::format("x={:.1f} y={:.1f} tick={} mode={} killer={} practice={}",
-                                 player ? player->getPositionX() : 0.f,
-                                 player ? player->getPositionY() : 0.f,
-                                 EbAssistController::get().attemptTick(), mode ? mode : "?",
-                                 object ? object->m_objectID : -1, this->m_isPracticeMode));
+        auto const deathDetail =
+            fmt::format("x={:.1f} y={:.1f} tick={} mode={} killer={} practice={}",
+                        player ? player->getPositionX() : 0.f, player ? player->getPositionY() : 0.f,
+                        EbAssistController::get().attemptTick(), mode ? mode : "?",
+                        object ? object->m_objectID : -1, this->m_isPracticeMode);
+        EbInteractionJournal::get().note("death", deathDetail);
+        EbLagProbe::get().beginEpisode("death", deathDetail);
         EbAssistController::get().onRealDeath(this, player, object);
         {
             EbLagProbe::Scope const state("vanilla.destroyPlayer");
@@ -137,7 +160,8 @@ auto EbPlayLayer::spawnCircle() -> void {
 auto EbPlayLayer::levelComplete() -> void {
     // Safe Mode OFF → never force test mode (progress like vanilla).
     // Safe Mode ON → enabled or assist-touched runs count as test clears.
-    bool const block = EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun());
+    bool const block =
+        EbStageConfig::blocksProgressSaves(EbAssistController::get().assistTouchedRun());
     if (block) {
         this->m_isTestMode = true;
         EbAssistLog::debug("Safe Mode ON: levelComplete → testMode (no normal progress)");

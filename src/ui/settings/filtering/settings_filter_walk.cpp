@@ -28,7 +28,8 @@ auto EbSettingsFilterWalk::isCategoryBarScroll(geode::prelude::ScrollLayer* scro
     return false;
 }
 
-auto EbSettingsFilterWalk::scrollLooksLikeSettingsList(geode::prelude::ScrollLayer* scroll) -> bool {
+auto EbSettingsFilterWalk::scrollLooksLikeSettingsList(geode::prelude::ScrollLayer* scroll)
+    -> bool {
     if (!scroll || !scroll->m_contentLayer)
         return false;
     if (isCategoryBarScroll(scroll))
@@ -41,8 +42,8 @@ auto EbSettingsFilterWalk::scrollLooksLikeSettingsList(geode::prelude::ScrollLay
 }
 
 auto EbSettingsFilterWalk::collect(geode::prelude::CCNode* node,
-                                 std::vector<geode::prelude::SettingNodeV3*>& settings,
-                                 geode::prelude::ScrollLayer*& list) -> void {
+                                   std::vector<geode::prelude::SettingNodeV3*>& settings,
+                                   geode::prelude::ScrollLayer*& list) -> void {
     if (!node)
         return;
     // Do not descend into our chip bar — its nested ScrollLayer would steal `list`.
@@ -67,6 +68,9 @@ auto EbSettingsFilterWalk::collect(geode::prelude::CCNode* node,
     kids.reserve(static_cast<size_t>(children->count()));
     for (auto* child : geode::prelude::CCArrayExt<geode::prelude::CCNode*>(children))
         kids.push_back(child);
-    for (auto* child : kids)
+    for (auto* child : kids) {
+        if (geode::prelude::typeinfo_cast<FLAlertLayer*>(child))
+            continue;
         collect(child, settings, list);
+    }
 }

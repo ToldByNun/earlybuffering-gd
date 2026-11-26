@@ -1,5 +1,6 @@
 #include "settings_tabs_hook.hpp"
 #include "in_level_settings_filter.hpp"
+#include "settings_popup_policy.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/loader/SettingV3.hpp>
 #include <Geode/modify/FLAlertLayer.hpp>
@@ -10,43 +11,39 @@ auto EbSettingsPopupAttach::nodeTreeHasOurSetting(geode::prelude::CCNode* root) 
     auto* ourMod = geode::prelude::Mod::get();
     std::string const ourId = ourMod->getID();
 
+    bool hasOwnedSettings = false;
+    bool hasForeignSettings = false;
+    std::vector<std::string> labels;
     std::vector<geode::prelude::CCNode*> stack{root};
     while (!stack.empty()) {
         auto* node = stack.back();
         stack.pop_back();
         if (!node)
             continue;
-
-        if (auto* sett = geode::prelude::typeinfo_cast<geode::prelude::SettingNodeV3*>(node)) {
-            if (auto s = sett->getSetting()) {
-                if (s->getModID() == ourId || s->getMod() == ourMod)
-                    return true;
-            }
-            if (auto* label = sett->getNameLabel()) {
-                std::string const text = label->getString();
-                if (text.find("import-bake-replay") != std::string::npos ||
-                    text.find("bake-map-action") != std::string::npos ||
-                    text.find("show-pause-hub") != std::string::npos) {
-                    return true;
-                }
+        // Only inspect this popup, never an alert opened inside it.
+        if (node != root && geode::prelude::typeinfo_cast<FLAlertLayer*>(node))
+            continue;
+        if (auto* settingNode =
+                geode::prelude::typeinfo_cast<geode::prelude::SettingNodeV3*>(node)) {
+            if (auto setting = settingNode->getSetting()) {
+                if (setting->getModID() == ourId)
+                    hasOwnedSettings = true;
+                else
+                    hasForeignSettings = true;
             }
             continue;
         }
-
-        if (auto* lab = geode::prelude::typeinfo_cast<geode::prelude::CCLabelBMFont*>(node)) {
-            std::string const text = lab->getString();
-            if (text.find("EarlyBuffer") != std::string::npos &&
-                (text.find("Settings") != std::string::npos ||
-                 text.find("SETTINGS") != std::string::npos)) {
-                return true;
-            }
-        }
-
-        if (auto* kids = node->getChildren()) {
-            for (auto* child : geode::prelude::CCArrayExt<geode::prelude::CCNode*>(kids)) {
+        if (auto* label = geode::prelude::typeinfo_cast<geode::prelude::CCLabelBMFont*>(node))
+            labels.emplace_back(label->getString());
+        if (auto* children = node->getChildren()) {
+            for (auto* child : geode::prelude::CCArrayExt<geode::prelude::CCNode*>(children))
                 stack.push_back(child);
-            }
         }
+    }
+    for (auto const& title : labels) {
+        if (EbSettingsPopupPolicy::ownsPopup(title, ourMod->getName(), hasOwnedSettings,
+                                             hasForeignSettings))
+            return true;
     }
     return false;
 }

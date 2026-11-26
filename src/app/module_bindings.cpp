@@ -17,6 +17,7 @@
 #include "../ui/desktop_menu/desktop_menu.hpp"
 #include "../ui/desktop_menu/widgets/eb_keybind.hpp"
 #include "../ui/overlays/status_overlay.hpp"
+#include "../ui/stream/hide_from_stream.hpp"
 #include "../ui/pause/pause_action_bridge.hpp"
 #include "../ui/settings/action_button_setting.hpp"
 #include "../ui/settings/in_level_settings_filter.hpp"
@@ -117,6 +118,14 @@ void EbModuleBindings::registerSettings() {
             return;
         EbStageConfig::refreshCache();
         EbStatusOverlay::setVisible(value);
+        EbAssistController::get().updateOverlay();
+    });
+
+    geode::prelude::listenForSettingChanges<bool>("hide-from-stream", [](bool) {
+        if (EbStageConfig::isApplying())
+            return;
+        EbHideFromStream::syncFromSettings();
+        EbStatusOverlay::setVisible(EbStageConfig::showOverlay());
         EbAssistController::get().updateOverlay();
     });
 
@@ -253,6 +262,7 @@ void EbModuleBindings::registerSettings() {
     watchBool("adaptive-plan");
     watchBool("assist-probe-past-horizon");
     watchBool("assist-micro-window");
+    watchBool("cpu-multithread");
     watchInt("adaptive-screen-ticks");
     watchInt("adaptive-verify-quantum");
     watchInt("adaptive-reserve-pct");

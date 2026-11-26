@@ -3,6 +3,7 @@
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
 #include "../../assist/contracts/live_plan_contracts.hpp"
+#include "../../trigger_world/moving_object_tracker.hpp"
 #include "../../trigger_world/trigger_motion_anchor.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../shadow_simulator.hpp"
@@ -152,7 +153,9 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         return;
 
     auto& store = EbTriggerWorldStore::get();
-    if (!store.loaded() || !store.hasTracks())
+    bool const useTw = store.loaded() && store.hasTracks();
+    bool const useMovers = store.prefersMovers() || EbMovingObjectTracker::get().trackCount() > 0;
+    if (!useTw && !useMovers)
         return;
 
     // Assist Pack AP-L3: plan soft wall already spent — skip cull/sort/apply for
@@ -162,10 +165,12 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
 
     EbLagProbe::Scope const lagScope("eb.trigger.apply");
 
+    size_t const trackHint =
+        useTw ? store.trackCount() : EbMovingObjectTracker::get().trackCount();
     size_t const maxApply = EbLivePlanContracts::liveTwApplyMaxPerTick(
-        store.trackCount(), simulator.m_bakeOffline, EbShadowSimulator::kMaxApplyPerTick);
+        trackHint, simulator.m_bakeOffline, EbShadowSimulator::kMaxApplyPerTick);
     int const applyBudgetUs = EbLivePlanContracts::liveTwApplyBudgetUs(
-        store.trackCount(), simulator.m_bakeOffline, EbShadowSimulator::kApplyBudgetUs);
+        trackHint, simulator.m_bakeOffline, EbShadowSimulator::kApplyBudgetUs);
 
     float const gx = ghost ? ghost->getPositionX() : 0.f;
     float const gy = ghost ? ghost->getPositionY() : 0.f;
@@ -173,6 +178,8 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         simulator.m_triggerWorldTimeOffset +
         (simulator.m_poseRemapDt > 0.f ? store.remapLiveTick(absTick, simulator.m_poseRemapDt)
                                        : store.remapLiveTick(absTick));
+    float const simDt =
+        simulator.m_poseRemapDt > 0.f ? simulator.m_poseRemapDt : (1.f / 240.f);
 
     class EbTriggerApplyCandidate {
     public:
@@ -191,10 +198,27 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         auto* object = st.obj;
         if (!object || object->m_uniqueID != st.uniqueId)
             continue;
+        // Cheap X cull before sample/project — large TW lists stay O(near).
+        float const distNow = std::fabs(object->getPositionX() - gx);
+        float const distBase = std::fabs(st.x - gx);
+        float const distApplied =
+            st.hasAppliedPose ? std::fabs(st.appliedX - gx) : distBase;
+        float const cheapDist = std::min({distNow, distBase, distApplied});
+        if (cheapDist > kCullMarginX)
+            continue;
         EbTriggerPose pose{};
-        bool const sampled =
-            st.track ? EbTriggerWorldStore::sampleTrackAtStoreTick(*st.track, storeTick, pose)
-                     : store.samplePoseAtStoreTick(st.uniqueId, storeTick, pose);
+        bool sampled = false;
+        if (useTw) {
+            sampled =
+                st.track ? EbTriggerWorldStore::sampleTrackAtStoreTick(*st.track, storeTick, pose)
+                         : store.samplePoseAtStoreTick(st.uniqueId, storeTick, pose);
+        }
+        if (!sampled && useMovers) {
+            char const* source = nullptr;
+            sampled = EbMovingObjectTracker::get().samplePose(st.uniqueId, absTick, simDt, pose,
+                                                              source);
+            (void)source;
+        }
         if (!sampled)
             continue;
         if (st.hasTrackReference) {
@@ -207,8 +231,6 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
             live.active = st.nodeVisible;
             pose = EbTriggerMotionAnchor::project(live, st.trackReference, pose);
         }
-        float const distNow = std::fabs(object->getPositionX() - gx);
-        float const distBase = std::fabs(st.x - gx);
         // Include incoming objects even when editor/capture positions are far.
         float const dist = std::min({distNow, distBase, std::fabs(pose.x - gx)});
         if (dist > kCullMarginX)

@@ -1,6 +1,7 @@
 #include "desktop_menu.hpp"
 #include "../../core/platform/ui_capabilities.hpp"
 #include "../feedback/lag_warning_toast.hpp"
+#include "../stream/hide_from_stream.hpp"
 #include "desktop_menu_bind.hpp"
 #include "desktop_menu_cloud_overlay.hpp"
 #include "desktop_menu_fonts.hpp"
@@ -362,6 +363,24 @@ void EbDesktopMenu::install() {
             if (!ImGuiCocos::get().isVisible()) {
                 return;
             }
+#if defined(EB_UI_WINDOWS)
+            // After imgui-cocos' ccGLBlendFunc: keep A from squaring on a cleared FBO
+            // (washed-out sidebar labels / borders under Hide From Stream).
+            if (EbHideFromStream::captureSafeDrawActive()) {
+                using GlBlendFuncSeparateFn = void(APIENTRY*)(GLenum, GLenum, GLenum, GLenum);
+                static GlBlendFuncSeparateFn blendSeparate = nullptr;
+                if (!blendSeparate) {
+                    blendSeparate = reinterpret_cast<GlBlendFuncSeparateFn>(
+                        wglGetProcAddress("glBlendFuncSeparate"));
+                    if (!blendSeparate)
+                        blendSeparate = reinterpret_cast<GlBlendFuncSeparateFn>(GetProcAddress(
+                            GetModuleHandleW(L"opengl32.dll"), "glBlendFuncSeparate"));
+                }
+                if (blendSeparate)
+                    blendSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE,
+                                  GL_ONE_MINUS_SRC_ALPHA);
+            }
+#endif
             // Force capture flags while capturing so imgui-cocos also treats keys as UI.
             if ((EbKeybind::isCapturing() || EbDesktopMenuModal::isOpen() ||
                  EbDesktopCloudOverlay::isOpen()) &&
@@ -373,6 +392,21 @@ void EbDesktopMenu::install() {
             EbDesktopCloudOverlay::draw();
             EbDesktopMenuModal::draw();
             EbLagWarningToast::draw();
+            if (EbHideFromStream::settingEnabled() && EbHideFromStream::statusVisible() &&
+                !EbHideFromStream::statusText().empty()) {
+                ImGuiWindowFlags const statusFlags =
+                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                    ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing |
+                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize |
+                    ImGuiWindowFlags_NoMove;
+                ImGui::SetNextWindowPos(ImVec2(12.0f, 10.0f), ImGuiCond_Always);
+                if (ImGui::Begin("##eb-hfc-status", nullptr, statusFlags)) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.92f, 0.92f, 0.96f, 1.0f));
+                    ImGui::TextUnformatted(EbHideFromStream::statusText().c_str());
+                    ImGui::PopStyleColor();
+                }
+                ImGui::End();
+            }
             if (!EbDesktopMenuShell::shouldKeepVisible() &&
                 !EbDesktopMenuModal::shouldKeepVisible() &&
                 !EbDesktopCloudOverlay::shouldKeepVisible() && !lagNote) {
@@ -384,6 +418,7 @@ void EbDesktopMenu::install() {
     EbDesktopMenuShell::requestOpen(false);
     if (EbUiCapabilities::keybindUI())
         EbDesktopMenuInput::installKeyboard();
+    EbHideFromStream::install();
 }
 
 bool EbDesktopMenu::isOpen() {

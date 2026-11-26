@@ -121,6 +121,9 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["shipLineCorrection"] = e.shipLineCorrection;
         otherIndex["wavePatternCorrection"] = e.wavePatternCorrection;
         otherIndex["planUs"] = e.planUs;
+        otherIndex["inputPrepareUs"] = e.inputPrepareUs;
+        otherIndex["witnessCaptureUs"] = e.witnessCaptureUs;
+        otherIndex["cpuWorkers"] = e.cpuWorkers;
         otherIndex["renderFrame"] = e.renderFrame;
         otherIndex["frameBudgetUs"] = e.frameBudgetUs;
         otherIndex["frameSpentBeforeUs"] = e.frameSpentBeforeUs;
@@ -142,6 +145,8 @@ matjson::Value EbDevEventCodec::eventToJson(EbDevDecisionEvent const& e) {
         otherIndex["adaptiveSeedCount"] = e.adaptiveSeedCount;
         otherIndex["hybridHint"] = e.hybridHint;
         otherIndex["hybridTried"] = e.hybridTried;
+        otherIndex["liveObservationTicks"] = e.liveObservationTicks;
+        otherIndex["sharedIdleTicksSaved"] = e.sharedIdleTicksSaved;
         otherIndex["reusedCandidateCount"] = e.reusedCandidateCount;
         otherIndex["reusedCandidateTicks"] = e.reusedCandidateTicks;
         otherIndex["budgetHit"] = e.budgetHit;
@@ -455,6 +460,14 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
         e.wavePatternCorrection = j.contains("wavePatternCorrection") &&
                                   j["wavePatternCorrection"].asBool().unwrapOr(false);
         e.planUs = j.contains("planUs") ? static_cast<int>(j["planUs"].asInt().unwrapOr(0)) : 0;
+        e.inputPrepareUs = j.contains("inputPrepareUs")
+                               ? static_cast<int>(j["inputPrepareUs"].asInt().unwrapOr(0))
+                               : 0;
+        e.witnessCaptureUs = j.contains("witnessCaptureUs")
+                                 ? static_cast<int>(j["witnessCaptureUs"].asInt().unwrapOr(0))
+                                 : 0;
+        e.cpuWorkers =
+            j.contains("cpuWorkers") ? static_cast<int>(j["cpuWorkers"].asInt().unwrapOr(0)) : 0;
         e.worldCaptureUs = j.contains("worldCaptureUs")
                                ? static_cast<int>(j["worldCaptureUs"].asInt().unwrapOr(0))
                                : 0;
@@ -473,6 +486,14 @@ bool EbDevEventCodec::eventFromJson(matjson::Value const& j, EbDevDecisionEvent&
             e.hybridHint = static_cast<int>(j["hybridHint"].asInt().unwrapOr(-1));
         if (j.contains("hybridTried"))
             e.hybridTried = j["hybridTried"].asBool().unwrapOr(false);
+        e.liveObservationTicks =
+            j.contains("liveObservationTicks")
+                ? static_cast<int>(j["liveObservationTicks"].asInt().unwrapOr(0))
+                : 0;
+        e.sharedIdleTicksSaved =
+            j.contains("sharedIdleTicksSaved")
+                ? static_cast<int>(j["sharedIdleTicksSaved"].asInt().unwrapOr(0))
+                : 0;
         e.reusedCandidateCount =
             j.contains("reusedCandidateCount")
                 ? static_cast<int>(j["reusedCandidateCount"].asInt().unwrapOr(0))

@@ -1,4 +1,4 @@
-# Install from GitHub Releases
+﻿# Install from GitHub Releases
 
 This is the **normal** install path. EarlyBuffer is **not** on the Geode Index.
 
@@ -32,8 +32,8 @@ Exit code `0` = required binaries are inside the zip, and (with `--forbid-zstd`)
 ## iOS file import: keep the canonical filename
 
 The iOS launcher derives the binary name from the imported archive filename.
-`audesign.earlybuffer-v1.7.1.geode` makes it look for
-`audesign.earlybuffer-v1.7.1.ios.dylib`, while our binary is
+`audesign.earlybuffer-v1.8.1.geode` makes it look for
+`audesign.earlybuffer-v1.8.1.ios.dylib`, while our binary is
 `audesign.earlybuffer.ios.dylib`. The package can contain the correct signed
 binary and still fail during launcher import.
 

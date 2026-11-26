@@ -6,6 +6,7 @@
 class EbShadowGhostLifecycle {
 public:
     static void attach(EbShadowSimulator& simulator, PlayLayer* layer);
+    static PlayerObject* ensureSnapshot(EbShadowSimulator& simulator, int slot);
     static void detach(EbShadowSimulator& simulator, bool layerDying);
     static bool isOwnedGhost(EbShadowSimulator const& simulator, PlayerObject* player);
     static void parkGhosts(EbShadowSimulator& simulator);
@@ -18,6 +19,8 @@ public:
     static void clearWaveTrailGeometry(PlayerObject* player);
 
 private:
+    static PlayerObject* makeHidden(EbShadowSimulator& simulator, GJBaseGameLayer* layer,
+                                    char const* id);
     EbShadowGhostLifecycle() = delete;
 };
 

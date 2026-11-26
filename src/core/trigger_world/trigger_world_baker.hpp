@@ -1,6 +1,8 @@
 #ifndef TRIGGER_WORLD_BAKER_HPP
 #define TRIGGER_WORLD_BAKER_HPP
 
+#include "completed_trigger_collection.hpp"
+
 #include "trigger_world_store.hpp"
 #include <cstddef>
 #include <string>
@@ -19,6 +21,8 @@ public:
     static constexpr size_t kCollectPerSlice = 256;
     static constexpr size_t kEffectsPerSlice = 8;
     static constexpr int kBudgetUs = 750;
+    // Intermediate samples for long movers (endpoints always kept); sample lerps.
+    static constexpr int kMaxIntermediateKeys = 48;
 
     static EbTriggerWorldBaker& get();
 
@@ -114,6 +118,9 @@ private:
     bool cancelled() const {
         return this->m_cancel;
     }
+    bool hasFreshEmptyCollection(PlayLayer* layer) const;
+    void rememberEmptyCollection();
+    EbCompletedTriggerCollection m_completedEmpty;
     void clearJob();
     void finishCancel();
     void finishOk();
@@ -123,12 +130,14 @@ private:
     EbTriggerTrack* ensureTrack(GameObject* object, TriggerKind kind);
     std::vector<GameObject*> objectsInGroup(int groupId) const;
     void considerCollectedObject(GameObject* object);
+    void buildGroupIndex();
+    void maybePublishMilestone();
 
     static LivePose poseFromObject(GameObject* object);
     static EbTriggerPose toKey(int tick, LivePose const& live);
     static void pushKey(EbTriggerTrack& track, int tick, LivePose const& live);
     static int durationTicks(float durationSec, double tps);
-    static cocos2d::CCPoint groupCenter(int groupId, std::vector<GameObject*> const& objects,
+    static cocos2d::CCPoint groupCenter(int groupId, std::vector<GameObject*> const& members,
                                         std::unordered_map<int, LivePose> const& live);
 
     bool m_running = false;
@@ -144,16 +153,21 @@ private:
     size_t m_childCount = 0;
     size_t m_effectIndex = 0;
     bool m_effectsSorted = false;
+    size_t m_activationFillIndex = 0;
+    bool m_activationTicksReady = false;
     size_t m_secOuter = 0;
     size_t m_secInner = 0;
     size_t m_secSlot = 0;
     size_t m_sectionExtras = 0;
+    int m_lastPublishQuarter = -1;
 
     std::vector<GameObject*> m_objects;
     std::vector<EffectGameObject*> m_effects;
     std::unordered_set<int> m_seenIds;
     std::unordered_map<int, LivePose> m_live;
     std::unordered_map<int, EbTriggerTrack> m_tracks;
+    std::unordered_map<int, std::vector<GameObject*>> m_groupIndex;
+    std::unordered_map<EffectGameObject*, int> m_activationTicks;
 
     size_t m_bakedEffects = 0;
     size_t m_bakedStartTimed = 0; // non-spawn static baked at t=0

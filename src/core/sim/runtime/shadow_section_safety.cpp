@@ -1,10 +1,13 @@
 #include "shadow_section_safety.hpp"
 #include "../../../debug/lag_probe.hpp"
 #include "../../../debug/perf_trace.hpp"
+#include "../cpu_physics/cpu_physics_workers.hpp"
 #include "../orbs/toggle_orb_sim.hpp"
 #include "../shadow_simulator.hpp"
 #include "shadow_ghost_lifecycle.hpp"
 #include <cstdint>
+#include <unordered_set>
+#include <vector>
 
 bool EbShadowSectionSafety::tryRemoveFromSection(GJBaseGameLayer* layer, GameObject* object) {
     // Never call GJBaseGameLayer::removeObjectFromSection — it AVs when indices
@@ -46,28 +49,43 @@ bool EbShadowSectionSafety::tryRemoveFromSection(GJBaseGameLayer* layer, GameObj
 }
 
 void EbShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
-                                                       EbShadowSimulator* self) {
+                                                         EbShadowSimulator* self) {
     if (!layer || !self)
         return;
 
     // Only match our known ghost pointers by raw address. Section slots can hold
     // freed/poison entries (0xFFF…); typeinfo_cast on those AVs (read @ -1).
-    GameObject* ghosts[1 + EbShadowSimulator::SNAPSHOT_SLOTS + EbShadowSimulator::DEV_EVAL_SLOTS]{};
-    int ghostCount = 0;
+    std::vector<GameObject*> ghosts;
+    ghosts.reserve(1 + EbShadowSimulator::SNAPSHOT_SLOTS + EbShadowSimulator::DEV_EVAL_SLOTS + 9);
     if (self->m_shadow) {
-        ghosts[ghostCount++] = self->m_shadow;
+        ghosts.push_back(self->m_shadow);
     }
     for (auto* slot : self->m_snapshots) {
         if (!slot)
             continue;
-        ghosts[ghostCount++] = slot;
+        ghosts.push_back(slot);
     }
     for (auto* effectObject : self->m_evalGhosts) {
         if (!effectObject)
             continue;
-        ghosts[ghostCount++] = effectObject;
+        ghosts.push_back(effectObject);
     }
+    if (auto* ghost = EbCpuPhysicsWorkers::templateGhost())
+        ghosts.push_back(ghost);
+    for (auto* ghost : EbCpuPhysicsWorkers::ghosts()) {
+        if (ghost)
+            ghosts.push_back(ghost);
+    }
+    int const ghostCount = static_cast<int>(ghosts.size());
     if (ghostCount <= 0)
+        return;
+    std::unordered_set<GameObject*> unresolved;
+    for (auto* ghost : ghosts) {
+        if (ghost->m_outerSectionIndex >= 0 || ghost->m_innerSectionIndex >= 0 ||
+            ghost->m_middleSectionIndex >= 0)
+            unresolved.insert(ghost);
+    }
+    if (unresolved.empty())
         return;
 
     auto isOwnedSlot = [&](GameObject* object) -> bool {
@@ -84,8 +102,8 @@ void EbShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
         return false;
     };
 
-    auto scrubCell = [&](auto* inner, int& found) {
-        if (!inner || found >= ghostCount)
+    auto scrubCell = [&](auto* inner) {
+        if (!inner)
             return;
         for (int index = static_cast<int>(inner->size()) - 1; index >= 0; --index) {
             if (static_cast<size_t>(index) >= inner->size())
@@ -94,14 +112,11 @@ void EbShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
             if (!isOwnedSlot(object))
                 continue;
             inner->erase(inner->begin() + static_cast<std::ptrdiff_t>(index));
-            ++found;
-            if (found >= ghostCount)
-                return;
+            unresolved.erase(object);
         }
     };
 
     auto& sections = layer->m_sections;
-    int found = 0;
 
     // Fast path: only touch cells named by each ghost's section indices.
     for (int gameObject = 0; gameObject < ghostCount; ++gameObject) {
@@ -110,23 +125,21 @@ void EbShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
             continue;
         int const objectX = object->m_outerSectionIndex;
         int const ix = object->m_innerSectionIndex;
-        int const mx = object->m_middleSectionIndex;
-        if (objectX < 0 || ix < 0 || mx < 0)
+        if (objectX < 0 || ix < 0)
             continue;
         if (objectX >= static_cast<int>(sections.size()))
             continue;
         auto* mid = sections[static_cast<size_t>(objectX)];
         if (!mid || ix >= static_cast<int>(mid->size()))
             continue;
-        scrubCell((*mid)[static_cast<size_t>(ix)], found);
-        if (found >= ghostCount)
+        scrubCell((*mid)[static_cast<size_t>(ix)]);
+        if (unresolved.empty())
             return;
     }
 
-    // Slow path only if some ghosts still might linger (bad / -1 indices).
-    // Early-exit once every owned pointer was erased — never walk the whole
-    // grid "just in case" after that (was ~20ms/restart on large levels).
-    if (found >= ghostCount)
+    // Parked snapshots are not in sections. Only indexed ghosts need to be
+    // found; keep the full fallback for those whose recorded cell was stale.
+    if (unresolved.empty())
         return;
 
     size_t const outerN = sections.size();
@@ -136,8 +149,8 @@ void EbShadowSectionSafety::scrubOwnedGhostsFromSections(GJBaseGameLayer* layer,
             continue;
         size_t const midN = mid->size();
         for (size_t ix = 0; ix < midN; ++ix) {
-            scrubCell((*mid)[ix], found);
-            if (found >= ghostCount)
+            scrubCell((*mid)[ix]);
+            if (unresolved.empty())
                 return;
         }
     }
@@ -204,6 +217,9 @@ void EbShadowSectionSafety::evacuateGhosts(EbShadowSimulator& simulator, GJBaseG
     for (auto* effectObject : simulator.m_evalGhosts) {
         noteIndexed(effectObject);
     }
+    noteIndexed(EbCpuPhysicsWorkers::templateGhost());
+    for (auto* worker : EbCpuPhysicsWorkers::ghosts())
+        noteIndexed(worker);
     EbLagProbe::get().mark("evacuate.indexed", anyIndexed ? "yes" : "no");
     if (anyIndexed) {
         EbLagProbe::Scope const state("eb.evacuate.scrub");
@@ -220,6 +236,10 @@ void EbShadowSectionSafety::evacuateGhosts(EbShadowSimulator& simulator, GJBaseG
             EbShadowSimulator::tryRemoveFromSection(layer, effectObject);
         }
     }
+
+    EbShadowSimulator::tryRemoveFromSection(layer, EbCpuPhysicsWorkers::templateGhost());
+    for (auto* worker : EbCpuPhysicsWorkers::ghosts())
+        EbShadowSimulator::tryRemoveFromSection(layer, worker);
 
     auto evac = [&](PlayerObject* player) {
         if (!player)
@@ -244,6 +264,9 @@ void EbShadowSectionSafety::evacuateGhosts(EbShadowSimulator& simulator, GJBaseG
     {
         EbLagProbe::Scope const state("eb.evacuate.park");
         evac(simulator.m_shadow);
+        evac(EbCpuPhysicsWorkers::templateGhost());
+        for (auto* worker : EbCpuPhysicsWorkers::ghosts())
+            evac(worker);
         for (auto* slot : simulator.m_snapshots) {
             evac(slot);
         }

@@ -11,7 +11,9 @@
 #include "../../sim/shadow_simulator.hpp"
 #include "../assist_clock.hpp"
 #include "../assist_controller.hpp"
+#include "../contracts/hook_orchestration.hpp"
 #include "../contracts/live_plan_contracts.hpp"
+#include "../contracts/live_stage_parity.hpp"
 #include "../contracts/subtick_timing.hpp"
 #include "../planning/live/live_frame_budget_scope.hpp"
 #include <algorithm>
@@ -19,10 +21,12 @@
 float EbAssistBufferRuntime::substepPrefix(EbAssistController& controller, PlayerObject* player,
                                            float deltaTime) {
     auto* layer = PlayLayer::get();
+    // AP-NL2 / NL-R6: mid-tick CBF prefix only when firePhase∈(0,1) on fireTick.
     if (!layer || player != layer->m_player1 || !player->m_isBird || !controller.m_inRealUpdate ||
         controller.m_buffer.state != BufferState::Buffered || !controller.m_buffer.player1 ||
-        controller.m_buffer.firePhase <= 0.f ||
-        controller.m_attemptTick != controller.m_buffer.fireTick)
+        !EbLiveStageParity::midTickPrefixAllowed(controller.m_buffer.firePhase,
+                                                 controller.m_attemptTick,
+                                                 controller.m_buffer.fireTick))
         return -1.f;
     float const prefix = EbSubtickTiming::segmentPrefix(controller.m_buffer.firePhase,
                                                         controller.m_lastDt, controller.m_subDtSeen,
@@ -34,8 +38,9 @@ void EbAssistBufferRuntime::fireSubstep(EbAssistController& controller, PlayerOb
     auto* layer = PlayLayer::get();
     if (!layer || player != layer->m_player1 || player->m_isDead ||
         controller.m_buffer.state != BufferState::Buffered ||
-        controller.m_buffer.firePhase <= 0.f ||
-        controller.m_attemptTick != controller.m_buffer.fireTick)
+        !EbLiveStageParity::midTickPrefixAllowed(controller.m_buffer.firePhase,
+                                                 controller.m_attemptTick,
+                                                 controller.m_buffer.fireTick))
         return;
     controller.fireBuffered(layer, player, false);
 }
@@ -50,6 +55,10 @@ void EbAssistBufferRuntime::inject(EbAssistController& controller, GJBaseGameLay
         ++controller.m_savesLevel;
     }
     // Timeline already seeded in recordDecision with the planned fire tick.
+    // AP-NL7: single inject flag — refuse recursive inject/plan re-entry.
+    EbHookOrchestration::InjectGuard inj;
+    if (!inj)
+        return;
     controller.m_injecting = true;
     layer->handleButton(down, EbAssistControllerImplementation::JUMP_BUTTON,
                         controller.m_buffer.player1);
@@ -111,6 +120,9 @@ void EbAssistBufferRuntime::flushPendingRelease(EbAssistController& controller,
     controller.m_pendingReleaseUserUpTick = -1;
     controller.m_pendingReleaseMaxExtend = 0;
     controller.m_pendingReleaseDevPressId = 0;
+    EbHookOrchestration::InjectGuard inj;
+    if (!inj)
+        return;
     controller.m_injecting = true;
     playLayer->handleButton(false, EbAssistControllerImplementation::JUMP_BUTTON, playerOne);
     controller.m_injecting = false;
@@ -135,7 +147,8 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
     }
 
     EbLiveFrameBudgetScope frameScope(controller.m_framePlanBudget);
-    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(EbStageConfig::simBudgetUs());
+    int const frameLimitUs = EbLiveFrameBudgetScope::frameLimit(
+        EbLivePlanContracts::resolveLivePressBudgetUs(EbStageConfig::simBudgetUs()));
     // Orb/window-aware recheck: stay inside [dMin, dMax]; never slide late into death.
     // Skipped for CPS / mode-change force-fire.
     if (allowRecheck && !controller.m_buffer.fixedFireTick && player && remaining > 0 &&
@@ -186,7 +199,8 @@ void EbAssistBufferRuntime::fireBuffered(EbAssistController& controller, PlayLay
             EbSimPlan re;
             int const remainingFrameUs = frameScope.remaining(frameLimitUs);
             if (remainingFrameUs > 0) {
-                opts.budgetUs = frameLimitUs == 0 ? 0 : remainingFrameUs;
+                // Never pass budgetUs<=0 (Shadow = unlimited) on buffer recheck.
+                opts.budgetUs = std::max(1, remainingFrameUs);
                 re = EbShadowSimulator::get().plan(playLayer, player, controller.m_buffer.down,
                                                    remaining, controller.m_simDt,
                                                    controller.m_simDt, opts);

@@ -1,7 +1,8 @@
-#include "../app/class_manager.hpp"
 #include "lag_probe.hpp"
+#include "../app/class_manager.hpp"
 #include "assist_log.hpp"
 #include <Geode/Geode.hpp>
+#include <asp/fs/std.hpp>
 #include <cstring>
 #include <fmt/format.h>
 #include <fstream>
@@ -52,7 +53,8 @@ EbLagProbe::Scope& EbLagProbe::Scope::operator=(Scope&& other) noexcept {
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
                                     std::chrono::steady_clock::now() - this->m_standaloneStart)
                                     .count());
-        EbLagProbe::get().noteStandalone(this->m_name, elapsedMicroseconds / 1000.0, this->m_detail);
+        EbLagProbe::get().noteStandalone(this->m_name, elapsedMicroseconds / 1000.0,
+                                         this->m_detail);
     }
     this->m_name = other.m_name;
     this->m_detail = std::move(other.m_detail);
@@ -103,7 +105,7 @@ void EbLagProbe::setEnabled(bool on) {
 std::string EbLagProbe::logPath() {
     auto* mod = geode::prelude::Mod::get();
     if (!(!mod)) {
-        return (mod->getSaveDir() / "earlybuffer-lagprobe.log").string();
+        return (mod->getSaveDir().toStdPath().unwrap() / "earlybuffer-lagprobe.log").string();
     }
     return {};
 }

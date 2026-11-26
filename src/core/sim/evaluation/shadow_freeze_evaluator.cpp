@@ -4,11 +4,15 @@
 #include "../../../dev/capture/dev_clock_contract.hpp"
 #include "../../../dev/capture/dev_live_witness.hpp"
 #include "../../../dev/evaluation/dev_eval_restore.hpp"
+#include "../../level/section_object_walk.hpp"
 #include "../../trigger_world/trigger_world_store.hpp"
 #include "../shadow_simulator.hpp"
 #include <cmath>
+#include <unordered_map>
+#include <unordered_set>
 
-void EbShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination, EbDevPlayerBlob const& blob) {
+void EbShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination,
+                                              EbDevPlayerBlob const& blob) {
     if (!destination || !blob.present)
         return;
     destination->setPosition({blob.x, blob.y});
@@ -55,8 +59,8 @@ void EbShadowFreezeEvaluator::applyPlayerBlob(PlayerObject* destination, EbDevPl
 }
 
 void EbShadowFreezeEvaluator::applyEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer,
-                                                  EbDevLiveWitness const& witness,
-                                                  EbDevEvalRestore& restore) {
+                                                    EbDevLiveWitness const& witness,
+                                                    EbDevEvalRestore& restore) {
     if (!layer)
         return;
 
@@ -77,32 +81,40 @@ void EbShadowFreezeEvaluator::applyEvalWorldRestore(EbShadowSimulator& simulator
     if (witness.hasContact)
         EbDevEvalRestore::noteContactWritten(restore, witness.contact, false);
 
+    // Resolve only this local witness's dependencies in one owning-array walk.
+    // Scene children are render batches and may not contain the actual objects.
+    std::unordered_set<int> wanted(witness.orbIds.begin(), witness.orbIds.end());
+    for (auto const& pose : witness.moverPoses)
+        wanted.insert(pose.uniqueId);
+    std::unordered_map<int, GameObject*> objectsById;
+    if (!wanted.empty()) {
+        objectsById.reserve(wanted.size());
+        EbSectionObjectWalk::forEachOwnedObject(layer, [&](GameObject* object) {
+            if (object && wanted.contains(object->m_uniqueID))
+                objectsById.emplace(object->m_uniqueID, object);
+        });
+    }
+
     // --- Orbs: set activated ID set + mark matching objects claimed ---
     {
         bool const wantOrbs = EbDevLiveWitness::hasWorldDep(witness, DevWitnessCategory::Orbs);
         if (wantOrbs || !witness.orbIds.empty()) {
             layer->m_gameState.m_activatedObjectIDs.clear();
-            auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
             for (int uid : witness.orbIds) {
                 if (uid == 0)
                     continue;
-                std::pair<int, int> const activatedKey{uid, 0};
-                layer->m_gameState.m_activatedObjectIDs[activatedKey] = 1;
-                if (!children)
+                layer->m_gameState.m_activatedObjectIDs[{uid, 0}] = 1;
+                auto const found = objectsById.find(uid);
+                if (found == objectsById.end())
                     continue;
-                for (unsigned index = 0; index < children->count(); ++index) {
-                    auto* object = geode::prelude::typeinfo_cast<EnhancedGameObject*>(
-                        children->objectAtIndex(index));
-                    if (!object || object->m_uniqueID != uid)
-                        continue;
-                    simulator.noteActivated(object);
-                    object->m_activated = true;
-                    object->m_isActivated = true;
-                    if (auto* ring = geode::prelude::typeinfo_cast<RingObject*>(object)) {
-                        ring->m_claimTouch = true;
-                    }
-                    break;
-                }
+                auto* object = geode::prelude::typeinfo_cast<EnhancedGameObject*>(found->second);
+                if (!object)
+                    continue;
+                simulator.noteActivated(object);
+                object->m_activated = true;
+                object->m_isActivated = true;
+                if (auto* ring = geode::prelude::typeinfo_cast<RingObject*>(object))
+                    ring->m_claimTouch = true;
             }
             EbDevEvalRestore::noteOrbsWritten(restore, witness.orbIds);
         }
@@ -115,67 +127,66 @@ void EbShadowFreezeEvaluator::applyEvalWorldRestore(EbShadowSimulator& simulator
             witness.triggerApplyTick >= 0 ? witness.triggerApplyTick : witness.clock.effectTick;
         EbTriggerWorldStore::get().applyAtTick(layer, tick);
         EbDevEvalRestore::noteTriggersSpooled(restore, witness.triggerStoreKey,
-                                            witness.triggerStoreVersion, tick);
+                                              witness.triggerStoreVersion, tick);
     }
 
     // --- Movers: freeze-world poses, else digest-only ---
     if (witness.freezeWorld) {
-        auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-        if (children) {
-            for (auto const& pose : witness.moverPoses) {
-                GameObject* object = nullptr;
-                for (unsigned index = 0; index < children->count(); ++index) {
-                    auto* candidate =
-                        geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
-                    if (!candidate)
-                        continue;
-                    if (candidate->m_uniqueID != pose.uniqueId)
-                        continue;
-                    object = candidate;
+        std::vector<EbDevObjectPose> writtenPoses;
+        writtenPoses.reserve(witness.moverPoses.size());
+        for (auto const& pose : witness.moverPoses) {
+            auto const found = objectsById.find(pose.uniqueId);
+            if (found == objectsById.end())
+                continue;
+            auto* object = found->second;
+            bool already = false;
+            for (auto& st : simulator.m_savedTransforms) {
+                if (st.uniqueId == pose.uniqueId) {
+                    st.dirty = true;
+                    already = true;
                     break;
                 }
-                if (!object)
-                    continue;
-
-                bool already = false;
-                for (auto const& st : simulator.m_savedTransforms) {
-                    if (st.uniqueId == pose.uniqueId) {
-                        already = true;
-                        break;
-                    }
-                }
-                if (!already) {
-                    EbShadowSimulator::SavedTransform st;
-                    st.uniqueId = object->m_uniqueID;
-                    st.obj = object;
-                    st.x = object->getPositionX();
-                    st.y = object->getPositionY();
-                    st.rotation = object->getRotation();
-                    st.scaleX = object->getScaleX();
-                    st.scaleY = object->getScaleY();
-                    st.nodeVisible = object->isVisible();
-                    simulator.m_savedTransforms.push_back(st);
-                }
-
-                EbTriggerPose tp;
-                tp.tick = 0;
-                tp.x = pose.x;
-                tp.y = pose.y;
-                tp.rotation = pose.rotation;
-                tp.scaleX = pose.scaleX;
-                tp.scaleY = pose.scaleY;
-                tp.active = pose.active;
-                EbTriggerWorldStore::writePose(object, tp);
             }
+            if (!already) {
+                EbShadowSimulator::SavedTransform st;
+                st.uniqueId = object->m_uniqueID;
+                st.obj = object;
+                st.dirty = true;
+                st.sectioned = object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0;
+                st.x = object->getPositionX();
+                st.y = object->getPositionY();
+                st.rotation = object->getRotation();
+                st.scaleX = object->getScaleX();
+                st.scaleY = object->getScaleY();
+                st.nodeVisible = object->isVisible();
+                simulator.m_savedTransforms.push_back(st);
+            }
+
+            EbTriggerPose tp;
+            tp.tick = 0;
+            tp.x = pose.x;
+            tp.y = pose.y;
+            tp.rotation = pose.rotation;
+            tp.scaleX = pose.scaleX;
+            tp.scaleY = pose.scaleY;
+            tp.active = pose.active;
+            EbTriggerWorldStore::writePose(object, tp);
+            if (object->m_outerSectionIndex >= 0 && object->m_innerSectionIndex >= 0)
+                layer->updateObjectSection(object);
+            writtenPoses.push_back(pose);
         }
-        EbDevEvalRestore::noteMoversPosesWritten(restore, witness.moverPoses,
-                                               witness.hasHazardDigest ? witness.hazardDigest : 0);
+        if (writtenPoses.size() == witness.moverPoses.size())
+            EbDevEvalRestore::noteMoversPosesWritten(
+                restore, writtenPoses, witness.hasHazardDigest ? witness.hazardDigest : 0);
+        else
+            EbDevEvalRestore::noteMoversDigestOnly(restore, witness.hazardDigest);
     } else if (witness.hasHazardDigest) {
         EbDevEvalRestore::noteMoversDigestOnly(restore, witness.hazardDigest);
     }
 }
 
-void EbShadowFreezeEvaluator::finishEvalWorldRestore(EbShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowFreezeEvaluator::finishEvalWorldRestore(EbShadowSimulator& simulator,
+                                                     PlayLayer* layer) {
     if (!layer) {
         simulator.m_saved.clear();
         simulator.m_savedTransforms.clear();
@@ -218,7 +229,8 @@ EbShadowSimulator::EvalFromFreezeResult EbShadowFreezeEvaluator::evalDelayFromFr
         return out;
     }
 
-    if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
+    if (!witness.valid || !witness.clock.valid ||
+        !EbDevClockContract::get().clockOk(witness.clock)) {
         out.clockMismatch = true;
         return out;
     }
@@ -404,13 +416,14 @@ EbShadowSimulator::EvalFromFreezeResult EbShadowFreezeEvaluator::evalDelayFromFr
 
 EbShadowSimulator::EvalFromFreezeResult
 EbShadowFreezeEvaluator::replayActualFire(EbShadowSimulator& simulator, PlayLayer* layer,
-                                        EbDevLiveWitness const& witness, int actualFireTickAbs,
-                                        int horizonTicks, bool down, int* tickBudgetLeft) {
+                                          EbDevLiveWitness const& witness, int actualFireTickAbs,
+                                          int horizonTicks, bool down, int* tickBudgetLeft) {
     EbShadowSimulator::EvalFromFreezeResult out;
     out.evalSimPathId = DevSimPathId::ReplayActualFire;
     simulator.m_evalAbort = false;
 
-    if (!witness.valid || !witness.clock.valid || !EbDevClockContract::get().clockOk(witness.clock)) {
+    if (!witness.valid || !witness.clock.valid ||
+        !EbDevClockContract::get().clockOk(witness.clock)) {
         out.clockMismatch = true;
         return out;
     }

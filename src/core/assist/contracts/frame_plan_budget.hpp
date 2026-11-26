@@ -5,6 +5,8 @@
 
 class EbFramePlanBudget {
 public:
+    static int limitForInterval(int configuredUs, double intervalSeconds,
+                                double actualIntervalSeconds = 0.);
     void begin(std::uint64_t frame, long long nowUs);
     void end(long long nowUs);
     int remaining(int limitUs, long long nowUs, int reserveUs = 0) const;

@@ -37,7 +37,7 @@ auto EbEnhancedGameObject::powerOffObject() -> void {
 }
 
 auto EbEffectGameObject::triggerObject(GJBaseGameLayer* layer, int uniqueID,
-                                       gd::vector<int> const* remapKeys) -> void {
+                                       std::vector<int> const* remapKeys) -> void {
     if (EbGameHookSimulationGuard::simulating())
         return;
     EffectGameObject::triggerObject(layer, uniqueID, remapKeys);
@@ -96,8 +96,7 @@ auto EbHardStreak::addPoint(cocos2d::CCPoint point) -> void {
 auto EbHardStreak::updateStroke(float deltaTime) -> void {
     // Live stroke + live fade-out duplicates must always redraw. Only block
     // HardStreaks currently owned by shadow/snapshot/eval ghosts.
-    if (!EbLiveWaveTrailGuard::isProtected(this) &&
-        EbShadowSimulator::get().isShadowTrail(this))
+    if (!EbLiveWaveTrailGuard::isProtected(this) && EbShadowSimulator::get().isShadowTrail(this))
         return;
     HardStreak::updateStroke(deltaTime);
 }

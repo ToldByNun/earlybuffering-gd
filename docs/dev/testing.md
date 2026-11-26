@@ -21,6 +21,24 @@ Many modules expose `selfCheck` / regression helpers loaded or invoked from debu
 
 `src/debug/plan_gold_corpus.cpp` — synthetic planner gold cases. Extend when Pass/Delay contracts change.
 
+Assist Pack AP-NL1 (shadow isolation): PlanGold `nova-shadow-isolation` — ghost player/trail markers, live HardStreak refuseMutation, exclusive trails after seed; ghosts parent under `earlybuffer-ghost-root` (never `objectLayer`).
+
+Assist Pack AP-NL2 (Live click-timing): PlanGold `nova-live-click-timing` — Nova Stage↔EB ticks map, as-made/held/pass-through vocabulary, mid-tick CBF gate, lookahead shrink under µs wall, Alive-only Delay honesty; Live DR4 metrics via `EbAssistRealMetrics::reportLiveLine` (rescue / false-mutation / Pass honesty / window legality). See `docs/nova-ai/14-live-stage-parity.md`.
+
+Assist Pack AP-NL3 (route cand semantics): PlanGold `route-cand-semantics` — `EbRouteCandSemantics` Cand/ExpandJob lifetime (Proposed→…→ShadowVerified→Armed); Nova 232/1856 research-only (no sizeof targets); Autoplay seed handoff + Live `diagnoseLastExpand` read-only. See `docs/nova-ai/15-route-cand-semantics.md`.
+
+Assist Pack AP-NL4 (shared expand + sim-core): PlanGold `expand-honesty` — `EbRouteExpandCore` press/release expand around seed (QPC/budget), occupancy ring (no double-arm), stuck/memory sim-core without neural; truncated/unknown/budget ⇒ never ShadowVerified.
+
+Assist Pack AP-NL5 (dual seed strategies): PlanGold `dual-seed-strategy` — `EbNeuralSeedStrategy` NovaParity (duty + subsample + hard 0.6) vs Enhanced (config threshold + top-k; 0.6 never implied); model-ready gate; counters. Live fixtures untouched. See `docs/nova-ai/17-dual-seed-strategies.md`.
+
+Assist Pack AP-NL5b (strict ShadowVerified): PlanGold `shadow-verified-full-route` — full-route DR3 (all events simulated, horizon+settle, no unknown/budget); Autoplay arms only from ShadowVerified (Explore labeled unverified); binder sequence match; unsimulated tail never SV. See `docs/nova-ai/18-shadow-verified-contract.md`.
+
+Assist Pack AP-NL6 (Autoplay queue + metrics): PlanGold `autoplay-metrics` — `EbAutoplayMetrics` DR4 (fidelity / verify completeness / progress; seed diag separate); route queue + early plan + memory reuse + Autoplay-only CPS; Live untouched. See `docs/nova-ai/19-autoplay-route-queue-metrics.md`.
+
+Assist Pack AP-NL7 (hook orchestration): PlanGold `hook-order` — `EbHookOrchestration` PrePhysicsAssist→RealUpdate order; single inject + single planning flags (no recursive re-entry); Autoplay platformer hard-off. See `docs/nova-ai/20-hook-orchestration.md`.
+
+Assist Pack AP-NL8 (plan opt): PlanGold `route-plan-opt` — window cache + hi<lo early-out, NN stride subsample, scratch reuse, seed/expand/verify µs overlay; budget/trunc never ShadowVerified. See `docs/nova-ai/21-route-plan-opt.md`.
+
 **v1.7.1** keeps the v1.5.1 / v1.6.x planner contracts (AP0–AP1 / AP3a–AP3b / AP4 hitch / remUs / Wave IW / orbs-under-IW) plus Assist Pack AP-L1–L7 soft-wall honesty, desktop ImGui shell, Hybrid RL unit coverage (`tools/test_hybrid_model.cpp`), and deflate-only ship packages.
 
 ## Adaptive smoke

@@ -1,6 +1,7 @@
 #include "player_hooks.hpp"
 #include "../core/assist/assist_controller.hpp"
 #include "../core/sim/runtime/live_wave_trail_guard.hpp"
+#include "../core/sim/runtime/shadow_isolation_contracts.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "game_hook_simulation_guard.hpp"
 
@@ -9,6 +10,7 @@ void EbGhostStreakVisuals::mute(PlayerObject* player) {
         return;
     player->m_playEffects = false;
     if (player->m_waveTrail && !EbLiveWaveTrailGuard::refuseMutation(player->m_waveTrail)) {
+        EbShadowIsolationContracts::markSimGhostTrail(player->m_waveTrail);
         player->m_waveTrail->m_drawStreak = false;
         player->m_waveTrail->setVisible(false);
         player->m_waveTrail->setOpacity(0);
@@ -31,12 +33,12 @@ auto EbPlayerObject::pushButton(PlayerButton button) -> bool {
 
 auto EbPlayerObject::releaseButton(PlayerButton button) -> bool {
     if (EbShadowSimulator::get().isOwnedGhost(this)) {
-        // Flags only — never call vanilla releaseButton on ghosts. Wave release
-        // spawns fade-out HardStreaks into the layer; if the ghost was aliased
-        // that path can touch the live stroke.
-        this->m_holdingButtons[static_cast<int>(button)] = false;
+        // Keep GD's release bookkeeping, just as for pushButton. The dedicated
+        // ghost VFX hooks below suppress fade-out streak creation separately.
         EbGhostStreakVisuals::mute(this);
-        return true;
+        bool const ok = PlayerObject::releaseButton(button);
+        EbGhostStreakVisuals::mute(this);
+        return ok;
     }
     return PlayerObject::releaseButton(button);
 }

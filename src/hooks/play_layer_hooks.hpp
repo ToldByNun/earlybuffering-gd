@@ -11,14 +11,12 @@ public:
     static void onModify(auto& self) {
         // Stub runs before First — swallow ghost deaths before MH/QOL hooks that
         // call Parent then latch "hitboxes on death" (OpenHack priority 0x500000).
-        (void)self.setHookPriorityPre("PlayLayer::destroyPlayer",
-                                      geode::prelude::Priority::Stub);
+        (void)self.setHookPriorityPre("PlayLayer::destroyPlayer", geode::prelude::Priority::Stub);
         // After MH postUpdate re-shows debug draw from a false s_isDead latch.
-        (void)self.setHookPriorityPost("PlayLayer::postUpdate",
-                                       geode::prelude::Priority::Last);
+        (void)self.setHookPriorityPost("PlayLayer::postUpdate", geode::prelude::Priority::Last);
     }
 
-    bool init(GJGameLevel* level, bool useReplay, bool dontCreatePlayer);
+    bool init(GJGameLevel* level, bool useReplay);
 
     void resetLevel();
 

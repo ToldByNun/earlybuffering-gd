@@ -182,6 +182,9 @@ void EbAssistOutcomes::logPlan(EbAssistController& controller, EbSimPlan const& 
 void EbAssistOutcomes::noteVerdict(EbAssistController& controller, AssistReason reason,
                                  char const* where) {
     controller.m_lastVerdict = reason;
+    // AP-NL2: named Pass buckets for Live Pass-honesty (DR4).
+    if (EbAssistVerdict::isPass(reason))
+        EbAssistRealMetrics::get().noteLivePassHonesty(reason);
     EbAssistLog::debug(fmt::format("VERDICT {} where={} overlay={}", EbAssistVerdict::name(reason),
                                  where ? where : "?", EbAssistVerdict::overlayBit(reason)));
 }

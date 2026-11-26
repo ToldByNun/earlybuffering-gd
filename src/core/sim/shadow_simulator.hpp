@@ -18,6 +18,7 @@ class EbSimulationCandidate;
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -136,21 +137,8 @@ public:
         return m_shadow;
     }
     // Hot path helper — ghost-owned HardStreaks only (never the live stroke).
-    bool isShadowTrail(HardStreak* trail) const {
-        if (!trail)
-            return false;
-        if (m_shadow && m_shadow->m_waveTrail == trail)
-            return true;
-        for (auto* slot : m_snapshots) {
-            if (slot && slot->m_waveTrail == trail)
-                return true;
-        }
-        for (auto* entry : m_evalGhosts) {
-            if (entry && entry->m_waveTrail == trail)
-                return true;
-        }
-        return false;
-    }
+    // Also honors the AP-NL1 sim-ghost-trail marker (covers switchedToMode orphans).
+    bool isShadowTrail(HardStreak* trail) const;
 
     void markDead(PlayerObject* player, GameObject* object = nullptr);
     // Park ghosts off-level so stray collision cannot fail the real attempt.
@@ -164,8 +152,8 @@ public:
     void beginSession(PlayLayer* layer);
     void endSession(PlayLayer* layer);
     // Persistent scratch for collisionCheckObjects filtering — never a stack
-    // gd::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
-    gd::vector<GameObject*>& collisionFilterScratch();
+    // std::vector (iOS ARM64 ABI / lifetime risk into playerTouchedRing).
+    std::vector<GameObject*>& collisionFilterScratch();
     void noteJump();
     void noteActivated(GameObject* object);
     // Overlap with UnknownOnOverlap object. Pass obj to flag toggle-target hits.
@@ -459,6 +447,9 @@ public:
         bool continuous = false;
         bool tapRelease = false;
         bool stopAtCubeLanding = false;
+        bool allowOrbLanding = false;
+        int landingAirTicks = 6;
+        int landingContactTicks = 4;
         bool stopAtBallLanding = false;
         bool probeOrbContinuation = false;
         bool probeSpiderContinuation = false;
@@ -467,6 +458,7 @@ public:
         // Live Delay-worthy: after zone clear keep sim until death / cap
         // (skip the short +24 early cut used for soft bake scoring).
         bool continuePastClear = false;
+        bool actionRelativeHorizon = false;
 
     private:
     };
@@ -524,6 +516,7 @@ private:
     friend class EbShadowReplayRunner;
     friend class EbShadowFreezeEvaluator;
     friend class EbShadowRegressionChecks;
+    friend class EbCpuPhysicsWorkers;
 
     class SavedObject {
     public:
@@ -680,7 +673,7 @@ private:
     double m_triggerOriginTps = 0.0;
 
     PlayLayer* m_transformCaptureLayer = nullptr;
-    gd::map<std::pair<int, int>, int> m_savedActivatedIDs;
+    std::map<std::pair<int, int>, int> m_savedActivatedIDs;
     // Absolute attempt tick for the current sim step (−1 = do not apply bake).
     int m_simAbsTick = -1;
     // Absolute tick corresponding to t=0 inside runOne / baseline / orb scan.
@@ -696,7 +689,7 @@ private:
     std::vector<DynamicFollowJob> m_dynamicFollowJobs;
     std::unordered_set<int> m_liveDynamicAppliedIds;
     // Reused by GameLayerHooks::collisionCheckObjects (sim + live ghost strip).
-    gd::vector<GameObject*> m_collisionFilterBuf;
+    std::vector<GameObject*> m_collisionFilterBuf;
 
     void captureToggleUnknownTargets(PlayLayer* layer);
 

@@ -16,6 +16,15 @@ void EbAssistRealMetrics::resetSession() {
     this->m_parityProbes = 0;
     this->m_parityOk = 0;
     this->m_driftEvents = 0;
+    this->m_liveHeld = 0;
+    this->m_liveAsMade = 0;
+    this->m_livePassThrough = 0;
+    this->m_liveWindowLegal = 0;
+    this->m_liveWindowIllegal = 0;
+    this->m_livePassBudget = 0;
+    this->m_livePassUnknown = 0;
+    this->m_livePassUntrust = 0;
+    this->m_liveFalseMutation = 0;
     this->m_maxAbsDx = 0.f;
     this->m_maxAbsDy = 0.f;
     this->m_levelKey.clear();
@@ -51,6 +60,49 @@ void EbAssistRealMetrics::noteDeathAfterFire() {
     ++this->m_daf;
 }
 
+void EbAssistRealMetrics::noteLiveDecision(EbLiveStageParity::DecisionKind kind, bool windowOk) {
+    switch (kind) {
+    case EbLiveStageParity::DecisionKind::Held:
+        ++this->m_liveHeld;
+        if (windowOk)
+            ++this->m_liveWindowLegal;
+        else
+            ++this->m_liveWindowIllegal;
+        break;
+    case EbLiveStageParity::DecisionKind::AsMade:
+        ++this->m_liveAsMade;
+        break;
+    case EbLiveStageParity::DecisionKind::PassThrough:
+        ++this->m_livePassThrough;
+        break;
+    }
+}
+
+void EbAssistRealMetrics::noteLivePassHonesty(AssistReason reason) {
+    switch (reason) {
+    case AssistReason::PassBudget:
+        ++this->m_livePassBudget;
+        break;
+    case AssistReason::PassUnknown:
+    case AssistReason::PassToggleUnknown:
+    case AssistReason::PassHardUnknown:
+        ++this->m_livePassUnknown;
+        break;
+    case AssistReason::PassUntrust:
+    case AssistReason::PassLowTrust:
+    case AssistReason::PassParityDrift:
+    case AssistReason::PassSpotUntrusted:
+        ++this->m_livePassUntrust;
+        break;
+    default:
+        break;
+    }
+}
+
+void EbAssistRealMetrics::noteLiveFalseMutation() {
+    ++this->m_liveFalseMutation;
+}
+
 void EbAssistRealMetrics::noteParityProbe(bool drifted, float absDx, float absDy) {
     ++this->m_parityProbes;
     if (!drifted)
@@ -83,6 +135,34 @@ float EbAssistRealMetrics::dafRate() const {
 float EbAssistRealMetrics::parityOkRate() const {
     int const delay = std::max(1, this->m_parityProbes);
     return static_cast<float>(this->m_parityOk) / static_cast<float>(delay);
+}
+
+float EbAssistRealMetrics::liveRescueRate() const {
+    // Rescue = held Delay inside a legal window / trusted opportunities.
+    int const denom = std::max(1, this->m_nTrustOpp);
+    return static_cast<float>(this->m_liveWindowLegal) / static_cast<float>(denom);
+}
+
+float EbAssistRealMetrics::liveFalseMutationRate() const {
+    int const denom = std::max(1, this->m_arms);
+    return static_cast<float>(this->m_liveFalseMutation) / static_cast<float>(denom);
+}
+
+float EbAssistRealMetrics::livePassHonestyRate() const {
+    int const passes =
+        this->m_liveAsMade + this->m_livePassThrough + this->m_livePassBudget +
+        this->m_livePassUnknown + this->m_livePassUntrust;
+    int const honest =
+        this->m_livePassBudget + this->m_livePassUnknown + this->m_livePassUntrust;
+    int const denom = std::max(1, passes);
+    // Fraction of Pass outcomes that carry an honest named bucket (not silent).
+    return static_cast<float>(honest) / static_cast<float>(denom);
+}
+
+float EbAssistRealMetrics::liveWindowLegalityRate() const {
+    int const total = this->m_liveWindowLegal + this->m_liveWindowIllegal;
+    int const denom = std::max(1, total);
+    return static_cast<float>(this->m_liveWindowLegal) / static_cast<float>(denom);
 }
 
 std::string EbAssistRealMetrics::reportLine(char const* corpusLabel) const {
@@ -126,13 +206,31 @@ std::string EbAssistRealMetrics::reportLine(char const* corpusLabel) const {
                        EbAssistContracts140::isSoloCorpus(corpus) ? "solo" : "multi");
 }
 
+std::string EbAssistRealMetrics::reportLiveLine(char const* corpusLabel) const {
+    char const* corpus =
+        corpusLabel && corpusLabel[0] != '\0' ? corpusLabel : "live";
+    return fmt::format(
+        "corpus={} live held={} asMade={} passThrough={} rescue={:.4f} "
+        "falseMut={}/{}={:.4f} passHonest={:.4f} "
+        "windowLegal={}/{}={:.4f} passBudget={} passUnknown={} passUntrust={} "
+        "simEstimate=never",
+        corpus, this->m_liveHeld, this->m_liveAsMade, this->m_livePassThrough,
+        this->liveRescueRate(), this->m_liveFalseMutation, this->m_arms,
+        this->liveFalseMutationRate(), this->livePassHonestyRate(), this->m_liveWindowLegal,
+        this->m_liveWindowLegal + this->m_liveWindowIllegal, this->liveWindowLegalityRate(),
+        this->m_livePassBudget, this->m_livePassUnknown, this->m_livePassUntrust);
+}
+
 std::string EbAssistRealMetrics::overlayBit() const {
-    if (this->m_arms <= 0 && this->m_parityProbes <= 0 && this->m_nOpp <= 0) {
+    if (this->m_arms <= 0 && this->m_parityProbes <= 0 && this->m_nOpp <= 0 &&
+        this->m_liveHeld <= 0 && this->m_liveAsMade <= 0) {
         return {};
     }
-    return fmt::format("daf={}/{} cov={:.0f}% trust={:.0f}% par={}/{}", this->m_daf, this->m_arms,
-                       this->assistCov() * 100.f, this->trustRate() * 100.f, this->m_parityOk,
-                       this->m_parityProbes);
+    return fmt::format("daf={}/{} cov={:.0f}% trust={:.0f}% par={}/{} held={} win={}/{}",
+                       this->m_daf, this->m_arms, this->assistCov() * 100.f,
+                       this->trustRate() * 100.f, this->m_parityOk, this->m_parityProbes,
+                       this->m_liveHeld, this->m_liveWindowLegal,
+                       this->m_liveWindowLegal + this->m_liveWindowIllegal);
 }
 
 bool EbAssistRealMetrics::selfCheck(std::string& report) {
@@ -171,13 +269,32 @@ bool EbAssistRealMetrics::selfCheck(std::string& report) {
     m.noteDeathAfterFire();
     expect(m.daf() == 1, "daf");
 
+    m.noteLiveDecision(EbLiveStageParity::DecisionKind::Held, true);
+    m.noteLiveDecision(EbLiveStageParity::DecisionKind::Held, false);
+    m.noteLiveDecision(EbLiveStageParity::DecisionKind::AsMade, false);
+    m.noteLiveDecision(EbLiveStageParity::DecisionKind::PassThrough, false);
+    expect(m.liveHeld() == 2 && m.liveAsMade() == 1 && m.livePassThrough() == 1, "live-decisions");
+    expect(m.liveWindowLegal() == 1 && m.liveWindowIllegal() == 1, "live-window");
+    expect(std::fabs(m.liveWindowLegalityRate() - 0.5f) < 1e-4f, "live-win-rate");
+    m.noteLivePassHonesty(AssistReason::PassBudget);
+    m.noteLivePassHonesty(AssistReason::PassUnknown);
+    m.noteLivePassHonesty(AssistReason::PassUntrust);
+    expect(m.livePassBudget() == 1 && m.livePassUnknown() == 1 && m.livePassUntrust() == 1,
+           "live-pass-honesty");
+    m.noteLiveFalseMutation();
+    expect(m.liveFalseMutation() == 1, "live-false-mut");
+    expect(m.liveRescueRate() > 0.f, "live-rescue");
+
     auto const line = m.reportLine("solo");
     expect(line.find("corpus=solo") != std::string::npos, "line-corpus");
     expect(line.find("sample=solo") != std::string::npos, "line-sample");
     expect(line.find("simEstimate") == std::string::npos, "no-sim-estimate");
+    auto const liveLine = m.reportLiveLine("live-nl2");
+    expect(liveLine.find("corpus=live-nl2") != std::string::npos, "live-line-corpus");
+    expect(liveLine.find("simEstimate=never") != std::string::npos, "live-no-sim-est");
 
     m.resetSession();
-    expect(m.nOpp() == 0 && m.daf() == 0, "reset");
+    expect(m.nOpp() == 0 && m.daf() == 0 && m.liveHeld() == 0, "reset");
 
     if (fails == 0) {
         report = "AssistRealMetrics selfCheck OK";

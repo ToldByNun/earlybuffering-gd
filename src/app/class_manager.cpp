@@ -17,6 +17,7 @@
 #include "../core/real_assist/gold_reproduce_gate.hpp"
 #include "../core/real_assist/real_assist_runner.hpp"
 #include "../debug/assist_log.hpp"
+#include "../debug/interaction_journal.hpp"
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
 #include "../debug/plan_gold_corpus.hpp"
@@ -68,6 +69,11 @@ void EbClassManager::initialize() {
     if (EbStageConfig::lagProbe()) {
         EbAssistLog::info(fmt::format("LagProbe logging to {}", EbLagProbe::logPath()));
     }
+    service<EbInteractionJournal>().setEnabled(EbStageConfig::interactionJournal());
+    if (EbStageConfig::interactionJournal()) {
+        EbAssistLog::info(
+            fmt::format("InteractionJournal → {}", EbInteractionJournal::logPath()));
+    }
 
     EbAssistLog::info(fmt::format("Class registry: {} classes / {} managed services",
                                   EbClassRegistry::all().size(), EbClassRegistry::serviceCount()));
@@ -83,6 +89,7 @@ void EbClassManager::initialize() {
 void EbClassManager::syncDiagnostics() {
     service<EbPerfTrace>().setEnabled(EbStageConfig::perfTrace());
     service<EbLagProbe>().setEnabled(EbStageConfig::lagProbe());
+    service<EbInteractionJournal>().setEnabled(EbStageConfig::interactionJournal());
 }
 
 void EbClassManager::refreshSettings() {

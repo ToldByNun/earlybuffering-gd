@@ -1,6 +1,7 @@
 #include "settings_tab_watchdog.hpp"
 #include "../filtering/in_level_settings_filter_keeper.hpp"
 #include "../filtering/settings_filter_walk.hpp"
+#include "../settings_tabs_hook.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/loader/SettingV3.hpp>
@@ -12,56 +13,11 @@
 #include <vector>
 
 auto EbSettingsTabWatchdog::popupIsOurSettings(geode::prelude::CCNode* root) -> bool {
-    if (!root || !geode::prelude::Mod::get())
-        return false;
-
-    std::string const ourId = geode::prelude::Mod::get()->getID();
-    std::vector<geode::prelude::SettingNodeV3*> settings;
-    geode::prelude::ScrollLayer* list = nullptr;
-    EbSettingsFilterWalk::collect(root, settings, list);
-    for (auto* sett : settings) {
-        if (!sett)
-            continue;
-        if (auto s = sett->getSetting()) {
-            if (s->getModID() == ourId)
-                return true;
-        }
-        auto* label = sett->getNameLabel();
-        if (!label)
-            continue;
-        std::string const text = label->getString();
-        if (text.find("import-bake-replay") != std::string::npos ||
-            text.find("bake-map-action") != std::string::npos ||
-            text.find("show-pause-hub") != std::string::npos) {
-            return true;
-        }
-    }
-
-    std::vector<geode::prelude::CCNode*> stack{root};
-    while (!stack.empty()) {
-        auto* count = stack.back();
-        stack.pop_back();
-        if (!count)
-            continue;
-
-        if (auto* lab = geode::prelude::typeinfo_cast<geode::prelude::CCLabelBMFont*>(count)) {
-            std::string const text = lab->getString();
-            if (text.find("EarlyBuffer") != std::string::npos &&
-                text.find("Settings") != std::string::npos) {
-                return true;
-            }
-        }
-        auto* kids = count->getChildren();
-        if (!kids)
-            continue;
-        for (auto* candidate : geode::prelude::CCArrayExt<geode::prelude::CCNode*>(kids))
-            stack.push_back(candidate);
-    }
-    return false;
+    return EbSettingsPopupAttach::nodeTreeHasOurSetting(root);
 }
 
 auto EbSettingsTabWatchdog::collectAlerts(geode::prelude::CCNode* node,
-                                        std::vector<FLAlertLayer*>& out) -> void {
+                                          std::vector<FLAlertLayer*>& out) -> void {
     if (!node)
         return;
     if (auto* alert = geode::prelude::typeinfo_cast<FLAlertLayer*>(node)) {

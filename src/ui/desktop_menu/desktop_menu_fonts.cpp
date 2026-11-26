@@ -1,4 +1,5 @@
 #include "desktop_menu_fonts.hpp"
+#include <asp/fs/std.hpp>
 
 #if defined(EB_DESKTOP_IMGUI)
 
@@ -32,12 +33,13 @@ public:
         if (!mod || !fileName) {
             return {};
         }
-        auto const root = mod->getResourcesDir();
+        auto const root = mod->getResourcesDir().toStdPath().unwrap();
+        std::string const modId = mod->getID();
         std::filesystem::path const candidates[] = {
             root / fileName,
             root / "fonts" / fileName,
-            root / mod->getID() / fileName,
-            root / mod->getID() / "fonts" / fileName,
+            root / modId / fileName,
+            root / modId / "fonts" / fileName,
         };
         for (auto const& candidate : candidates) {
             std::error_code error;
@@ -117,8 +119,7 @@ void EbDesktopMenuFonts::load() {
     std::string const bold = semiBoldPath.empty() ? regular : semiBoldPath.string();
     EbDesktopMenuFontsState::headerFace() =
         io.Fonts->AddFontFromFileTTF(bold.c_str(), headerSize());
-    EbDesktopMenuFontsState::capsFace() =
-        io.Fonts->AddFontFromFileTTF(bold.c_str(), capsSize());
+    EbDesktopMenuFontsState::capsFace() = io.Fonts->AddFontFromFileTTF(bold.c_str(), capsSize());
 
     if (!EbDesktopMenuFontsState::headerFace()) {
         EbDesktopMenuFontsState::headerFace() = uiFace;

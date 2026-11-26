@@ -2,6 +2,7 @@
 #include "../../../../config/stage_config.hpp"
 #include "../../../../debug/assist_log.hpp"
 #include "../../../assist/contracts/live_plan_contracts.hpp"
+#include "../../../assist/contracts/live_rescue_policy.hpp"
 #include "../../../assist/contracts/miss_assist_contracts.hpp"
 #include "../../orbs/toggle_orb_sim.hpp"
 #include "../../prefix_sim.hpp"
@@ -69,7 +70,7 @@ public:
         std::vector<EbShadowSimulator::SavedObject> saved;
         std::vector<LiveObjectFlags> live;
         std::vector<TransformPose> transforms;
-        gd::map<std::pair<int, int>, int> activatedIDs;
+        std::map<std::pair<int, int>, int> activatedIDs;
         ToggleMidState toggle;
         int simAbsTick = -1;
         bool activatedRing = false;
@@ -278,7 +279,8 @@ public:
         bool const initialGravity = shadowPlayer->m_isUpsideDown;
         EbBallLandingTracker ballLanding;
         ballLanding.reset(shadowPlayer->m_isUpsideDown);
-        int const maxTicks = std::max(std::max(0, limit), delay) + std::max(1, model.cap);
+        int const maxTicks = EbLiveRescuePolicy::observationHorizon(model.actionRelativeHorizon,
+                                                                    delay, limit, model.cap);
 
         auto finish = [&](EbShadowSimulator::RunResult output) {
             output.activatedRing = simulator.m_activatedRing;
@@ -350,13 +352,16 @@ public:
                 return finish(r);
             }
 
-            bool const cubeJump = model.stopAtCubeLanding && acted && simulator.m_jumped &&
-                                  !simulator.m_activatedRing && !simulator.m_toggleUnknownHit &&
-                                  !shadowPlayer->m_isDashing &&
-                                  shadowPlayer->m_isUpsideDown == initialGravity &&
-                                  EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube;
+            bool const cubeJump =
+                model.stopAtCubeLanding && acted &&
+                EbCubeLandingTracker::validAction(
+                    simulator.m_jumped, simulator.m_activatedRing, model.allowOrbLanding,
+                    shadowPlayer->m_isUpsideDown == initialGravity, shadowPlayer->m_isDashing,
+                    simulator.m_toggleUnknownHit,
+                    EbStageConfig::kindOf(shadowPlayer) == GameModeKind::Cube);
             if (cubeLanding.observe(cubeJump,
-                                    shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2)) {
+                                    shadowPlayer->m_isOnGround || shadowPlayer->m_isOnGround2,
+                                    model.landingAirTicks, model.landingContactTicks)) {
                 r.landedAfterAction = true;
                 return finish(r);
             }
@@ -428,6 +433,117 @@ public:
 private:
     EbIdlePrefixForkState() = delete;
 };
+
+class EbIdlePrefixShare::Cursor::State {
+public:
+    EbIdlePrefixForkState::ForkPoint fork;
+
+private:
+};
+
+EbIdlePrefixShare::Cursor::Cursor(EbShadowPlanContext& context)
+    : m_context(context), m_state(std::make_unique<State>()) {}
+
+EbIdlePrefixShare::Cursor::~Cursor() {
+    invalidate();
+}
+
+bool EbIdlePrefixShare::Cursor::probe(int delay) {
+    return EbIdlePrefixShare::probeRescue(*this, delay);
+}
+
+void EbIdlePrefixShare::Cursor::invalidate() {
+    EbIdlePrefixShare::resetRescue(*this);
+}
+
+void EbIdlePrefixShare::resetRescue(Cursor& cursor) {
+    auto& context = cursor.m_context;
+    if (cursor.m_seeded)
+        context.simulator.resetCaptureForNextRun(context.layer);
+    cursor.m_seeded = false;
+    cursor.m_idleTicks = 0;
+}
+
+bool EbIdlePrefixShare::probeRescue(Cursor& cursor, int delay) {
+    auto& context = cursor.m_context;
+    auto& simulator = context.simulator;
+    if (!cursor.m_supported || delay <= 0 || delay > context.limit || context.useTrajEngine ||
+        context.linkedDual() || !context.real || !simulator.m_evalGhosts[0])
+        return false;
+    // Independent runOne has a Wave slope retry. Retain that path until a
+    // shared continuation can reproduce its retry and source-state contract.
+    if (context.real->m_isDart && (context.real->m_isOnSlope || context.real->m_wasOnSlope ||
+                                   context.real->m_isCollidingWithSlope))
+        return false;
+    if (cursor.m_seeded && delay < cursor.m_idleTicks)
+        resetRescue(cursor);
+    if (!cursor.m_seeded) {
+        simulator.resetCaptureForNextRun(context.layer);
+        simulator.copyPlayerState(simulator.m_shadow, context.real);
+        simulator.m_shadow->m_holdingButtons[static_cast<int>(PlayerButton::Jump)] = !context.down;
+        simulator.m_dead = false;
+        simulator.m_jumped = false;
+        simulator.m_unknown = false;
+        simulator.m_toggleUnknownHit = false;
+        simulator.m_activatedRing = false;
+        simulator.m_ringCount = 0;
+        simulator.m_deathObject = nullptr;
+        cursor.m_seeded = true;
+    }
+    int const previousTicks = cursor.m_idleTicks;
+    while (cursor.m_idleTicks < delay) {
+        int const tick = cursor.m_idleTicks;
+        if (simulator.spendPlanTick(&context.tickBudget, tick)) {
+            context.plan.budgetHit = true;
+            resetRescue(cursor);
+            return false;
+        }
+        simulator.m_orbOverlapTick = false;
+        simulator.m_simAbsTick = simulator.m_simTickBase + tick;
+        simulator.stepPhysics(context.layer, simulator.m_shadow,
+                              tick == 0 ? context.firstDt : context.deltaTime, context.deltaTime);
+        ++cursor.m_idleTicks;
+        if (simulator.m_dead || simulator.m_unknown || simulator.m_toggleUnknownHit) {
+            // Do not extrapolate an unverified fork. Independent fallback keeps
+            // unknowns, pre-action deaths and slope retries on their usual path.
+            resetRescue(cursor);
+            cursor.m_supported = false;
+            return false;
+        }
+    }
+    auto& fork = cursor.m_state->fork;
+    if (!EbIdlePrefixForkState::captureFork(simulator, context.layer, simulator.m_evalGhosts[0],
+                                            fork)) {
+        resetRescue(cursor);
+        cursor.m_supported = false;
+        return false;
+    }
+    auto raw = EbIdlePrefixForkState::runPressContinuation(
+        simulator, context.layer, context.down, delay, context.limit, context.deltaTime,
+        context.firstDt, context.model, -1, nullptr, &context.tickBudget);
+    ++context.plan.candidatesTried;
+    if (!EbIdlePrefixForkState::restoreFork(simulator, context.layer, simulator.m_evalGhosts[0],
+                                            fork)) {
+        resetRescue(cursor);
+        cursor.m_supported = false;
+        return false;
+    }
+    // Count actual avoided idle physics steps, independent of wall-clock noise.
+    context.plan.sharedIdleTicksSaved += std::min(previousTicks, delay);
+    EbSimulationCandidate candidate;
+    candidate.delay = delay;
+    candidate.raw = raw;
+    candidate.diedBeforeAction = raw.diedBeforeAction;
+    candidate.activatedRing = raw.activatedRing;
+    candidate.unknownTrunc = raw.unknownTrunc;
+    candidate.toggleUnknown = raw.toggleUnknown;
+    candidate.endX = raw.endX;
+    candidate.deathX = raw.deathX;
+    candidate.jumpTick = raw.jumped ? raw.jumpTick : delay;
+    context.cands[static_cast<std::size_t>(delay)] = candidate;
+    context.candReady[static_cast<std::size_t>(delay)] = raw.ticksRan > 0;
+    return true;
+}
 
 bool EbIdlePrefixShare::evaluateAscending(EbShadowPlanContext& context) {
     if (context.useTrajEngine || !context.layer || !context.real || !context.simulator.m_shadow)

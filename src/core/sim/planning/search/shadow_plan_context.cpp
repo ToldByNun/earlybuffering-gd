@@ -127,6 +127,18 @@ EbShadowSimulator::RunResult EbShadowPlanContext::runEngine(PlayerObject* who, i
                             z, &tickBudget);
 }
 
+EbShadowSimulator::RunResult EbShadowPlanContext::runRestoredProbe(PlayerObject* who, int delay) {
+    if (tickBudget <= 0 || wallExceeded()) {
+        plan.budgetHit = true;
+        EbShadowSimulator::RunResult incomplete;
+        incomplete.unknown = true;
+        return incomplete;
+    }
+    auto result = runEngine(who, delay, -1, nullptr);
+    simulator.resetCaptureForNextRun(layer);
+    return result;
+}
+
 void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
                                         EbDevRejectLedger::EarlyExit early) {
     guardSelectedTick();
@@ -200,9 +212,10 @@ void EbShadowPlanContext::publishLedger(int chosenDelay, bool doPassFlag,
                 note.detail += " conditional-spider-chain=true";
         }
 
-        note.detail += fmt::format(" ticks={} died={} deathTick={} unknown={} ballLanding={}",
-                                   run.ticksRan, run.died, run.deathTick,
-                                   run.unknown || run.unknownTrunc, run.landedAfterAction);
+        note.detail += fmt::format(
+            " ticks={} died={} deathTick={} unknown={} ballLanding={} jumped={} orb={} rings={}",
+            run.ticksRan, run.died, run.deathTick, run.unknown || run.unknownTrunc,
+            run.landedAfterAction, run.jumped, run.activatedRing, run.ringCount);
     }
     plan.candNotes = std::move(ledger.notes);
     plan.candNotesTruncated = ledger.truncated;

@@ -4,8 +4,8 @@ For people who change code or ship custom packages.
 
 ## Needs
 
-- GD **2.2081**
-- Geode SDK / CLI **5.11.1+**
+- GD **2.2091**
+- Geode SDK / CLI **6.0.0+**
 - CMake 3.21+
 - C++23 toolchain (MSVC on Windows)
 - `GEODE_SDK` set to your SDK folder

@@ -4,6 +4,7 @@
 #include "../replay/replay_import.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
+#include <asp/fs/std.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <system_error>
@@ -58,7 +59,7 @@ std::filesystem::path EbGoldReproduceGate::corpusRoot() {
 std::vector<std::string> EbGoldReproduceGate::ids() {
     auto const root = corpusRoot();
     auto const manifestPath = root / "manifest.json";
-    auto parsed = geode::utils::file::readJson(manifestPath);
+    auto parsed = geode::utils::file::readJson(asp::fs::Path::fromStdPath(manifestPath));
     if (parsed.isOk()) {
         auto rootJson = parsed.unwrap();
         if (rootJson.contains("ids") && rootJson["ids"].isArray()) {
@@ -90,13 +91,13 @@ std::filesystem::path EbGoldReproduceGate::reproducePath(std::string const& corp
 bool EbGoldReproduceGate::writeLastRunSummary(std::string const& text, std::string& err) {
     err.clear();
     auto const dir = EbSaveDropPaths::get().rootDir() / "real_assist";
-    auto created = geode::utils::file::createDirectoryAll(dir);
+    auto created = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(dir));
     if (created.isErr()) {
         err = created.unwrapErr();
         return false;
     }
     auto const path = dir / "last_run.txt";
-    auto written = geode::utils::file::writeString(path, text);
+    auto written = geode::utils::file::writeString(asp::fs::Path::fromStdPath(path), text);
     if (written.isErr()) {
         err = written.unwrapErr();
         return false;
@@ -138,13 +139,13 @@ bool EbGoldReproduceGate::importAndStamp(std::string const& corpusId, std::strin
     }
 
     matjson::Value previous = matjson::Value::object();
-    auto existing = geode::utils::file::readJson(reproducePath(corpusId));
+    auto existing =
+        geode::utils::file::readJson(asp::fs::Path::fromStdPath(reproducePath(corpusId)));
     if (existing.isOk())
         previous = existing.unwrap();
 
-    std::string status = previous.contains("status")
-                             ? previous["status"].asString().unwrapOr("pending")
-                             : "pending";
+    std::string status =
+        previous.contains("status") ? previous["status"].asString().unwrapOr("pending") : "pending";
     if (status != "pass" && status != "fail" && status != "pending")
         status = "pending";
 
@@ -182,20 +183,21 @@ bool EbGoldReproduceGate::importAndStamp(std::string const& corpusId, std::strin
 
     auto const outPath = reproducePath(corpusId);
     auto parent = outPath.parent_path();
-    auto created = geode::utils::file::createDirectoryAll(parent);
+    auto created = geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(parent));
     if (created.isErr()) {
         report = created.unwrapErr();
         return false;
     }
-    auto written = geode::utils::file::writeString(outPath, stamp.dump(2) + "\n");
+    auto written =
+        geode::utils::file::writeString(asp::fs::Path::fromStdPath(outPath), stamp.dump(2) + "\n");
     if (written.isErr()) {
         report = written.unwrapErr();
         return false;
     }
 
     // Stage clear into replay-drop for manual PlayLayer / bake follow-up.
-    auto const drop = EbSaveDropPaths::get().replayDropDir() /
-                      fmt::format("real_corpus_{}.gdr2", corpusId);
+    auto const drop =
+        EbSaveDropPaths::get().replayDropDir() / fmt::format("real_corpus_{}.gdr2", corpusId);
     {
         std::error_code copyEc;
         std::filesystem::create_directories(EbSaveDropPaths::get().replayDropDir(), copyEc);
@@ -216,11 +218,10 @@ bool EbGoldReproduceGate::runImportGate(std::string const& caseFilter, std::stri
     auto const root = corpusRoot();
     std::error_code ec;
     if (!std::filesystem::is_directory(root, ec) || ec) {
-        report = fmt::format(
-            "corpus root missing: {}\n"
-            "Run: python tools/sync_real_corpus.py --install-save\n"
-            "Or set EB_REAL_CORPUS_DIR",
-            root.string());
+        report = fmt::format("corpus root missing: {}\n"
+                             "Run: python tools/sync_real_corpus.py --install-save\n"
+                             "Or set EB_REAL_CORPUS_DIR",
+                             root.string());
         return false;
     }
 
@@ -248,14 +249,13 @@ bool EbGoldReproduceGate::runImportGate(std::string const& caseFilter, std::stri
         }
     }
 
-    lines += fmt::format(
-        "\n=== REAL ASSIST REPRODUCE (import gate) ===\n"
-        "corpus={}\n"
-        "ids={}\n"
-        "importFails={}\n"
-        "playLayer=pending (open matching level; unmodified clear must finish)\n"
-        "oracleBlockedUntil=reproduce=pass\n",
-        root.string(), selected.size(), fails);
+    lines += fmt::format("\n=== REAL ASSIST REPRODUCE (import gate) ===\n"
+                         "corpus={}\n"
+                         "ids={}\n"
+                         "importFails={}\n"
+                         "playLayer=pending (open matching level; unmodified clear must finish)\n"
+                         "oracleBlockedUntil=reproduce=pass\n",
+                         root.string(), selected.size(), fails);
 
     std::string writeErr;
     if (!writeLastRunSummary(lines, writeErr) && !writeErr.empty()) {
@@ -294,7 +294,7 @@ void EbGoldReproduceGate::maybeQueueAutoFromEnv() {
 }
 
 bool EbGoldReproduceGate::statusIsPass(std::string const& corpusId) {
-    auto parsed = geode::utils::file::readJson(reproducePath(corpusId));
+    auto parsed = geode::utils::file::readJson(asp::fs::Path::fromStdPath(reproducePath(corpusId)));
     if (parsed.isErr())
         return false;
     auto root = parsed.unwrap();

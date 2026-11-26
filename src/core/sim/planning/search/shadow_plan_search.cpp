@@ -15,6 +15,7 @@
 #include "../../sim_trust.hpp"
 #include "../shadow_survival_rules.hpp"
 #include "../simulation_plan.hpp"
+#include "probes/shadow_live_rescue.hpp"
 #include "probes/shadow_plan_input_window.hpp"
 #include "probes/shadow_plan_threat_probe.hpp"
 #include "selection/shadow_plan_result.hpp"
@@ -58,6 +59,10 @@ EbSimPlan EbShadowPlanSearch::run(EbShadowSimulator& simulator, PlayLayer* layer
     auto const prepareStart = std::chrono::steady_clock::now();
     plan.worldCaptureUs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::microseconds>(prepareStart - captureStart).count());
+    if (options.strictLiveRescue) {
+        EbShadowLiveRescue::evaluate(context);
+        return plan;
+    }
     prepare(context);
     plan.prepareUs = static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
                                           std::chrono::steady_clock::now() - prepareStart)

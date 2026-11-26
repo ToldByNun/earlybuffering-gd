@@ -62,6 +62,11 @@ public:
     // budgetUs<=0 (unlimited / hitch-clamp input) unchanged.
     static int intendedLiveSoftWallFloorUs(int budgetUs);
 
+    // Live press/release soft wall actually applied to PlanOptions:
+    // soft-floor → AP1 hitch clamp (0→kHitchCeilingUs) → optional AI CPU cap.
+    // aiCpuCapUs<=0 skips the AI cap. Never returns ≤0 (Shadow treats 0 as unlimited).
+    static int resolveLivePressBudgetUs(int configuredSimBudgetUs, int aiCpuCapUs = 0);
+
     // Assist Pack AP-L7: lag notification gate — feel hitch (planUs ≥ hitch
     // ceiling) or budgetHit; independent of configured sim-budget-us.
     static bool lagWarningShouldNotify(bool enabled, int planUs, bool budgetHit);
@@ -73,6 +78,10 @@ public:
     // Continuous: kFallthroughRemUsFloor. Discrete IW (ball/cube): ≥ half budget
     // (Hoveropolis classic ball IW median ~3.8ms @ simUs=8170).
     static int adaptiveFallthroughReserveUs(int fullBudgetUs, bool discreteInputWindow);
+    // Nova InputBuffer Live AI: one planner spends almost the whole frame wall;
+    // classic keeps a thin leftover if AI finds nothing. Not Adaptive half/2ms.
+    static int novaAiClassicReserveUs(int fullBudgetUs);
+    static int novaAiShellBudgetUs(int fullBudgetUs);
     // Observation-cleared Alive seeds skip on ball — sticky PassD0Safe vs classic
     // stopAtBallLanding Delay ranking (Hoveropolis research_20261113_192707).
     static bool adaptiveFallthroughSeedsObservationCleared(bool isBall);

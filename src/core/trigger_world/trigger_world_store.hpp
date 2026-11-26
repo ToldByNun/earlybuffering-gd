@@ -5,6 +5,8 @@
 #include "trigger_pose.hpp"
 #include <Geode/Geode.hpp>
 #include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,16 +33,25 @@ public:
     double tps = 240.0;
     int version = 1;
     std::vector<EbTriggerTrack> tracks;
+    // Full collect produced zero static tracks (not an init race). Survives
+    // resetLevel pointer changes and is persisted so kickIfStaleEmpty cannot
+    // rebuild 20k+ objects every death / enter.
+    bool emptyComplete = false;
+    size_t emptyObjectCount = 0;
+    bool emptySkipDynamic = false;
 
 private:
 };
 
 // Content-keyed cache of static trigger motion.
-// Disk: {saveDir}/triggers/{fullKey}.json
-// Built by TriggerWorldBaker on cache miss; applied by ShadowSimulator.
+// Disk: {saveDir}/triggers/{fullKey}.ebtw (legacy .json migrated on load).
+// Huge caches are refused at load — Nova-style moving-object timelines cover
+// those levels without a multi-100MB parse hitch. Cleared on quit (no retain).
 class EbTriggerWorldStore {
 public:
     static constexpr int kFileVersion = 2;
+    // Sync load larger than this freezes gameplay (218MB JSON ≈ 7s). Skip.
+    static constexpr std::uint64_t kMaxSyncLoadBytes = 4ull * 1024ull * 1024ull;
     // Soft ceiling: refuse NEW tracks/keys with AssistLog — never silent drop under soft.
     static constexpr size_t kSoftMaxTracks = 100000;
     static constexpr size_t kSoftMaxKeysPerTrack = 32768;
@@ -57,11 +68,36 @@ public:
     void loadForLevel(GJGameLevel* level);
     void save() const;
 
+    // Huge-disk / oversized level: skip full TW bake; MovingObjectTracker owns poses.
+    bool prefersMovers() const {
+        return this->m_prefersMovers;
+    }
+    void setPrefersMovers(bool on) {
+        this->m_prefersMovers = on;
+    }
+
     bool loaded() const {
         return this->m_loaded;
     }
     bool hasTracks() const {
         return !this->m_data.tracks.empty();
+    }
+    // Tracks present OR a verified complete-empty bake for this level.
+    // prefersMovers is also resolved — full TW intentionally skipped (Nova path).
+    bool resolved() const {
+        return this->hasTracks() || this->m_data.emptyComplete || this->m_prefersMovers;
+    }
+    // Like resolved(), but rebuild when skip-dynamic setting changed since bake.
+    bool resolvedForSkipDynamic(bool skipDynamic) const {
+        if (this->hasTracks() || this->m_prefersMovers)
+            return true;
+        return this->m_data.emptyComplete && this->m_data.emptySkipDynamic == skipDynamic;
+    }
+    bool emptyComplete() const {
+        return this->m_data.emptyComplete;
+    }
+    size_t emptyObjectCount() const {
+        return this->m_data.emptyObjectCount;
     }
     bool dirty() const {
         return this->m_dirty;
@@ -69,6 +105,8 @@ public:
     void markDirty() {
         this->m_dirty = true;
     }
+    // Record a finished collect that yielded no static tracks.
+    void markEmptyComplete(size_t objectCount, bool skipDynamic);
     bool softcapHit() const {
         return this->m_softcapHit;
     }
@@ -91,7 +129,7 @@ public:
     void clearDirty() {
         this->m_dirty = false;
     }
-    // Delete triggers/<key>.json if present (empty / stale cache).
+    // Delete triggers/<key>.ebtw/.json if present (empty / stale cache).
     void discardCacheFile() const;
 
     // Keep endpoints + evenly spaced samples (long movers under key soft/hard).
@@ -171,6 +209,7 @@ private:
     mutable bool m_dirty = false;
     bool m_softcapHit = false;
     mutable bool m_softcapLogged = false;
+    bool m_prefersMovers = false;
 };
 
 #endif

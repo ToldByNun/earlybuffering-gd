@@ -8,6 +8,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/utils/file.hpp>
 #include <algorithm>
+#include <asp/fs/std.hpp>
 #include <cmath>
 #include <fstream>
 
@@ -16,7 +17,7 @@ float EbLevelProfileImplementation::clamp01f(float value, float lowerBound, floa
 }
 
 std::filesystem::path EbLevelProfileImplementation::levelsDir() {
-    return geode::prelude::Mod::get()->getSaveDir() / "levels";
+    return geode::prelude::Mod::get()->getSaveDir().toStdPath().unwrap() / "levels";
 }
 
 std::filesystem::path EbLevelProfileImplementation::profilePath(std::string const& key) {
@@ -133,7 +134,7 @@ void EbLevelProfile::noteBias(GameModeKind kind, float x, float delta, char cons
     s.n += 1;
     m_dirty = true;
     EbAssistLog::debug(fmt::format("LEARN: spot {} bias {:+.1f} ({})", spotBucket(x), s.bias,
-                                 reason ? reason : ""));
+                                   reason ? reason : ""));
 }
 
 void EbLevelProfile::noteTrust(GameModeKind kind, float x, float factor, char const* reason) {
@@ -142,7 +143,7 @@ void EbLevelProfile::noteTrust(GameModeKind kind, float x, float factor, char co
     s.n += 1;
     m_dirty = true;
     EbAssistLog::debug(fmt::format("LEARN: spot {} trust {:.2f} ({})", spotBucket(x), s.trust,
-                                 reason ? reason : ""));
+                                   reason ? reason : ""));
 }
 
 void EbLevelProfile::noteTrustUp(GameModeKind kind, float x, float amount, char const* reason) {
@@ -165,8 +166,8 @@ void EbLevelProfile::notePessimism(GameModeKind kind, float x) {
     }
     recomputeCapMul(kind);
     m_dirty = true;
-    EbAssistLog::debug(fmt::format("LEARN: spot {} pessimism {} (sim said die, lived)", spotBucket(x),
-                                 s.pessimism));
+    EbAssistLog::debug(fmt::format("LEARN: spot {} pessimism {} (sim said die, lived)",
+                                   spotBucket(x), s.pessimism));
 }
 
 void EbLevelProfile::noteSaved(GameModeKind kind, float x) {
@@ -187,13 +188,14 @@ void EbLevelProfile::noteDiedAfterAssist(GameModeKind kind, float x) {
 
 void EbLevelProfile::noteEarliness(GameModeKind kind, float x, int offset, char const* reason) {
     auto& s = spot(kind, x);
-    int const clamped = std::max(-EbSpotStats::HIST_RADIUS, std::min(EbSpotStats::HIST_RADIUS, offset));
+    int const clamped =
+        std::max(-EbSpotStats::HIST_RADIUS, std::min(EbSpotStats::HIST_RADIUS, offset));
     int const bin = clamped + EbSpotStats::HIST_RADIUS;
     s.earlyHist[static_cast<size_t>(bin)] += 1.f;
     s.histN += 1;
     m_dirty = true;
     EbAssistLog::debug(fmt::format("LEARN: spot {} earliness {:+d} histN={} ({})", spotBucket(x),
-                                 clamped, s.histN, reason ? reason : ""));
+                                   clamped, s.histN, reason ? reason : ""));
 }
 
 int EbLevelProfile::preferredDelayOffset(GameModeKind kind, float x) const {
@@ -285,7 +287,7 @@ void EbLevelProfile::save() {
 
 geode::Result<> EbLevelProfile::writeFile() const {
     auto directory = EbLevelProfileImplementation::levelsDir();
-    (void)geode::utils::file::createDirectoryAll(directory);
+    (void)geode::utils::file::createDirectoryAll(asp::fs::Path::fromStdPath(directory));
 
     matjson::Value root = matjson::Value::object();
     root["key"] = m_key;
@@ -325,12 +327,12 @@ geode::Result<> EbLevelProfile::writeFile() const {
     root["modes"] = modes;
 
     auto path = EbLevelProfileImplementation::profilePath(m_key);
-    return geode::utils::file::writeToJson(path, root);
+    return geode::utils::file::writeToJson(asp::fs::Path::fromStdPath(path), root);
 }
 
 geode::Result<> EbLevelProfile::readFile() {
     auto path = EbLevelProfileImplementation::profilePath(m_key);
-    auto result = geode::utils::file::readJson(path);
+    auto result = geode::utils::file::readJson(asp::fs::Path::fromStdPath(path));
     if (result.isErr())
         return geode::Err(result.unwrapErr());
 

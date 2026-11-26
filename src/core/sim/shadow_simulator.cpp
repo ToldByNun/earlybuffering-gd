@@ -12,15 +12,18 @@
 #include "planning/shadow_sequence_planner.hpp"
 #include "planning/simulation_plan.hpp"
 #include "replay/shadow_replay_runner.hpp"
+#include "runtime/live_wave_trail_guard.hpp"
 #include "runtime/shadow_ghost_lifecycle.hpp"
+#include "runtime/shadow_isolation_contracts.hpp"
 #include "runtime/shadow_physics.hpp"
 #include "runtime/shadow_player_state.hpp"
 #include "runtime/shadow_section_safety.hpp"
+#include "sim_session_guard.hpp"
 #include "validation/shadow_regression_checks.hpp"
 #include "world/shadow_world_capture.hpp"
 #include "world/shadow_world_dynamics.hpp"
-#include "sim_session_guard.hpp"
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -42,6 +45,27 @@ void EbShadowSimulator::detach(bool layerDying) {
 
 bool EbShadowSimulator::isOwnedGhost(PlayerObject* player) const {
     return EbShadowGhostLifecycle::isOwnedGhost(*this, player);
+}
+
+bool EbShadowSimulator::isShadowTrail(HardStreak* trail) const {
+    if (!trail)
+        return false;
+    // Live stroke always wins — never mute the real HardStreak.
+    if (EbLiveWaveTrailGuard::isProtected(trail) || EbLiveWaveTrailGuard::isLivePlayerTrail(trail))
+        return false;
+    if (EbShadowIsolationContracts::isSimGhostTrail(trail))
+        return true;
+    if (m_shadow && m_shadow->m_waveTrail == trail)
+        return true;
+    for (auto* slot : m_snapshots) {
+        if (slot && slot->m_waveTrail == trail)
+            return true;
+    }
+    for (auto* entry : m_evalGhosts) {
+        if (entry && entry->m_waveTrail == trail)
+            return true;
+    }
+    return false;
 }
 
 void EbShadowSimulator::abortEval() {
@@ -120,7 +144,7 @@ bool EbShadowSimulator::spendPlanTick(int* tickBudgetLeft, int tickIndex) {
     return markPlanWallIfExceeded();
 }
 
-gd::vector<GameObject*>& EbShadowSimulator::collisionFilterScratch() {
+std::vector<GameObject*>& EbShadowSimulator::collisionFilterScratch() {
     return this->m_collisionFilterBuf;
 }
 
@@ -386,8 +410,17 @@ EbShadowSimulator::sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool
     if (firstDt <= 0.f || firstDt > deltaTime)
         firstDt = deltaTime;
 
+    // Hard us wall — feature probe must never look like a Live plan hitch.
+    constexpr int kPairBudgetUs = 300;
+    auto const wall0 = std::chrono::steady_clock::now();
+    auto timedOut = [&]() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+                   std::chrono::steady_clock::now() - wall0)
+                   .count() >= kPairBudgetUs;
+    };
+
     Model model = modelFor(real, limit, 1.f);
-    int const horizon = std::clamp(model.cap, 24, 48);
+    int const horizon = std::clamp(model.cap, 16, 32);
     model.cap = horizon;
     model.continuePastClear = true;
     int tickBudget = horizon * 2 + 8;
@@ -395,14 +428,18 @@ EbShadowSimulator::sampleActionVsIdle(PlayLayer* layer, PlayerObject* real, bool
 
     EbSimSessionGuard session(*this, layer);
     auto action =
-        runOne(layer, real, down, 0, limit, deltaTime, firstDt, model, -1, nullptr, &tickBudget);
+        runOne(layer, real, down, 0, false, deltaTime, firstDt, model, -1, nullptr, &tickBudget);
     resetCaptureForNextRun(layer);
-    if (tickBudget <= 0) {
+    if (tickBudget <= 0 || timedOut()) {
         out.unknown = true;
         return out;
     }
     auto idle = runBaseline(layer, real, down, deltaTime, firstDt, model, &tickBudget);
     resetCaptureForNextRun(layer);
+    if (timedOut()) {
+        out.unknown = true;
+        return out;
+    }
 
     out.valid = true;
     out.unknown = action.unknown || action.unknownTrunc || idle.unknown || idle.unknownTrunc;

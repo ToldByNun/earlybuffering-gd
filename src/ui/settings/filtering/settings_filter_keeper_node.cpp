@@ -32,7 +32,7 @@ auto EbSettingsFilterKeeperNode::cycle(int delta) -> void {
 }
 
 auto EbSettingsFilterKeeperNode::layoutBar(geode::prelude::ScrollLayer* list,
-                                         EbSettingsCategoryBar* bar) -> void {
+                                           EbSettingsCategoryBar* bar) -> void {
     if (!list || !bar)
         return;
     constexpr float kBarH = EbSettingsCategoryBar::kBarH;
@@ -120,6 +120,9 @@ auto EbSettingsFilterKeeperNode::absorbFromTree(geode::prelude::CCNode* popup) -
     for (auto* sett : found) {
         if (!sett)
             continue;
+        auto setting = sett->getSetting();
+        if (!setting || setting->getModID() != geode::prelude::Mod::get()->getID())
+            continue;
         bool known = false;
         for (auto const& ref : this->m_all) {
             if (ref.data() != sett)
@@ -134,7 +137,7 @@ auto EbSettingsFilterKeeperNode::absorbFromTree(geode::prelude::CCNode* popup) -
 }
 
 auto EbSettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
-                                        SettingsCategory category) -> bool {
+                                          SettingsCategory category) -> bool {
     if (!sett)
         return false;
     if (auto setting = sett->getSetting()) {
@@ -149,7 +152,8 @@ auto EbSettingsFilterKeeperNode::nodeKeep(geode::prelude::SettingNodeV3* sett,
 
     std::string const text = label->getString();
     auto match = [&](char const* key) {
-        return text.find(key) != std::string::npos && EbInLevelSettingsFilter::keepKey(key, category);
+        return text.find(key) != std::string::npos &&
+               EbInLevelSettingsFilter::keepKey(key, category);
     };
     return match("import-bake-replay") || match("cycle-assist-mode") || match("bake-map-action") ||
            match("brute-bake-action") || match("cancel-bake-action") ||
