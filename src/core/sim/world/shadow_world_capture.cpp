@@ -79,8 +79,10 @@ void EbShadowWorldCapture::refreshObjectIndex(EbShadowSimulator& simulator, Play
             effectIds.insert(effect->m_uniqueID).second)
             simulator.m_captureEffects.emplace_back(effect);
     };
-    // Preserve the original object-layer order for bounded dynamic jobs.
-    if (auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr) {
+    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
+    // Preserve object-layer order for bounded dynamic jobs; skip a second walk
+    // when source is already that same children array.
+    if (children && children != source) {
         for (unsigned index = 0; index < children->count(); ++index)
             consider(geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index)));
     }
@@ -160,7 +162,8 @@ void EbShadowWorldCapture::captureTriggerTransforms(EbShadowSimulator& simulator
 }
 
 void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simulator,
-                                                       PlayLayer* layer) {
+                                                       PlayLayer* layer,
+                                                       EbGroupMemberIndex const* sharedGroups) {
     simulator.m_toggleTargetIds.clear();
     if (!layer)
         return;
@@ -187,20 +190,25 @@ void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simula
         if (!toggleOrb && !touchToggle)
             continue;
         toggleEffects.push_back(effect);
-        groups.insert(effect->m_targetGroupID);
+        if (!sharedGroups)
+            groups.insert(effect->m_targetGroupID);
         if (toggleEffects.size() >= 256)
             break;
     }
     if (toggleEffects.empty())
         return;
 
-    EbGroupMemberIndex index;
-    index.build(layer, groups);
+    EbGroupMemberIndex localIndex;
+    EbGroupMemberIndex const* index = sharedGroups;
+    if (!index) {
+        localIndex.build(layer, groups);
+        index = &localIndex;
+    }
 
     static constexpr size_t kMaxToggleTargets = 8192;
     for (auto* effect : toggleEffects) {
         int const groupId = effect->m_targetGroupID;
-        auto const* members = index.members(groupId);
+        auto const* members = index->members(groupId);
         if (!members)
             continue;
         for (auto* object : *members) {
@@ -218,7 +226,8 @@ void EbShadowWorldCapture::captureToggleUnknownTargets(EbShadowSimulator& simula
     }
 }
 
-void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, PlayLayer* layer) {
+void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, PlayLayer* layer,
+                                                 EbGroupMemberIndex const* sharedGroups) {
     simulator.m_dynamicTargetIds.clear();
     simulator.m_dynamicFollowJobs.clear();
     simulator.m_liveDynamicAppliedIds.clear();
@@ -244,13 +253,18 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
         if (EbTriggerClassify::classify(effect) != TriggerKind::DynamicFollow)
             continue;
         followEffects.push_back(effect);
-        groups.insert(effect->m_targetGroupID);
+        if (!sharedGroups)
+            groups.insert(effect->m_targetGroupID);
     }
     if (followEffects.empty())
         return;
 
-    EbGroupMemberIndex index;
-    index.build(layer, groups);
+    EbGroupMemberIndex localIndex;
+    EbGroupMemberIndex const* index = sharedGroups;
+    if (!index) {
+        localIndex.build(layer, groups);
+        index = &localIndex;
+    }
 
     std::unordered_set<int> savedTransformIds;
     if (wantJobs) {
@@ -272,7 +286,7 @@ void EbShadowWorldCapture::captureDynamicFollows(EbShadowSimulator& simulator, P
         bool const probeable = !rotateOnly && (lockX || lockY);
 
         int const groupId = effect->m_targetGroupID;
-        auto const* members = index.members(groupId);
+        auto const* members = index->members(groupId);
         if (!members)
             continue;
 
@@ -366,15 +380,52 @@ void EbShadowWorldCapture::beginCapture(EbShadowSimulator& simulator, PlayLayer*
     EbToggleOrbSim::get().restore();
     EbOrbStackResolver::get().begin();
     simulator.captureTriggerTransforms(layer);
-    // Each of these builds a group→members sidetable for its needed groups
-    // (belongsToGroup once per solid×group, not per effect×solid scan).
-    captureDynamicFollows(simulator, layer);
-    captureToggleUnknownTargets(simulator, layer);
-    captureUnmodeledMotionTargets(simulator, layer);
+
+    // One group→members sidetable for follow + toggle + unmodeled (not three builds).
+    std::unordered_set<int> sharedGroups;
+    sharedGroups.reserve(64);
+    for (auto const& entry : simulator.m_captureEffects) {
+        auto* effect = entry.data();
+        if (!effect || effect->m_targetGroupID <= 0)
+            continue;
+        if (effect->getParent() != layer->m_objectLayer)
+            continue;
+        TriggerKind const kind = EbTriggerClassify::classify(effect);
+        if (kind == TriggerKind::DynamicFollow) {
+            sharedGroups.insert(effect->m_targetGroupID);
+            continue;
+        }
+        int const oid = effect->m_objectID;
+        bool const toggleOrb = EbTriggerClassify::isToggleOrbId(oid);
+        bool const touchToggle =
+            EbTriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered;
+        if (kind == TriggerKind::DynamicOther && (toggleOrb || touchToggle)) {
+            sharedGroups.insert(effect->m_targetGroupID);
+            continue;
+        }
+        if (toggleOrb)
+            continue;
+        if (EbTriggerClassify::isToggleTriggerId(oid) && effect->m_isTouchTriggered)
+            continue;
+        bool const touchMover =
+            effect->m_isTouchTriggered &&
+            (kind == TriggerKind::DynamicOther || kind == TriggerKind::StaticMove ||
+             kind == TriggerKind::StaticRotate || kind == TriggerKind::StaticScale);
+        bool const followLikeStatic = kind == TriggerKind::StaticMove &&
+                                      EbTriggerWorldBaker::isFollowLikeStatic(effect, kind);
+        if (touchMover || followLikeStatic)
+            sharedGroups.insert(effect->m_targetGroupID);
+    }
+    EbGroupMemberIndex sharedIndex;
+    sharedIndex.build(layer, sharedGroups);
+    captureDynamicFollows(simulator, layer, &sharedIndex);
+    captureToggleUnknownTargets(simulator, layer, &sharedIndex);
+    captureUnmodeledMotionTargets(simulator, layer, &sharedIndex);
 }
 
 void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simulator,
-                                                         PlayLayer* layer) {
+                                                         PlayLayer* layer,
+                                                         EbGroupMemberIndex const* sharedGroups) {
     if (!layer || !EbStageConfig::triggerBake())
         return;
     refreshObjectIndex(simulator, layer);
@@ -409,16 +460,21 @@ void EbShadowWorldCapture::captureUnmodeledMotionTargets(EbShadowSimulator& simu
             continue;
 
         movers.push_back(effect);
-        groups.insert(effect->m_targetGroupID);
+        if (!sharedGroups)
+            groups.insert(effect->m_targetGroupID);
     }
     if (movers.empty())
         return;
 
-    EbGroupMemberIndex index;
-    index.build(layer, groups);
+    EbGroupMemberIndex localIndex;
+    EbGroupMemberIndex const* index = sharedGroups;
+    if (!index) {
+        localIndex.build(layer, groups);
+        index = &localIndex;
+    }
 
     for (auto* effect : movers) {
-        auto const* members = index.members(effect->m_targetGroupID);
+        auto const* members = index->members(effect->m_targetGroupID);
         if (!members)
             continue;
         for (auto* object : *members) {

@@ -116,6 +116,17 @@ void EbTriggerWorldStore::clear() {
     this->m_softcapLogged = false;
 }
 
+void EbTriggerWorldStore::markEmptyComplete(size_t objectCount, bool skipDynamic) {
+    this->m_data.tracks.clear();
+    this->m_trackIndex.clear();
+    this->m_trackIndexValid = false;
+    this->m_data.emptyComplete = objectCount > 0;
+    this->m_data.emptyObjectCount = objectCount;
+    this->m_data.emptySkipDynamic = skipDynamic;
+    this->m_loaded = !this->m_data.levelKey.empty();
+    this->m_dirty = this->m_data.emptyComplete;
+}
+
 void EbTriggerWorldStore::loadForLevel(GJGameLevel* level) {
     this->m_data = {};
     this->m_loaded = false;
@@ -131,15 +142,27 @@ void EbTriggerWorldStore::loadForLevel(GJGameLevel* level) {
 
     auto result = this->readFile();
     if (result.isOk()) {
-        // Commit 4: empty on-disk cache is a miss (init raced → poisoned file).
+        if (this->m_data.tracks.empty() && this->m_data.emptyComplete) {
+            EbAssistLog::debug(fmt::format(
+                "TRIGGER-WORLD: loaded empty-complete for {} (objects={} skipDyn={})",
+                this->m_data.levelKey, this->m_data.emptyObjectCount,
+                this->m_data.emptySkipDynamic ? 1 : 0));
+            this->m_dirty = false;
+            return;
+        }
+        // Commit 4: bare empty file without emptyComplete is a poisoned init race.
         if (this->m_data.tracks.empty()) {
             EbAssistLog::info(
                 fmt::format("TRIGGER-WORLD: empty cache for {} — treat as miss (rebuild)",
                             this->m_data.levelKey));
             this->discardCacheFile();
+            this->m_data.emptyComplete = false;
+            this->m_data.emptyObjectCount = 0;
             this->m_dirty = false;
             return;
         }
+        this->m_data.emptyComplete = false;
+        this->m_data.emptyObjectCount = 0;
         EbAssistLog::debug(fmt::format("TRIGGER-WORLD: loaded {} ({} tracks, {} ready)",
                                        this->m_data.levelKey, this->m_data.tracks.size(),
                                        this->readyTrackCount()));
@@ -182,6 +205,10 @@ void EbTriggerWorldStore::setData(EbTriggerWorldData data) {
         data.version = kFileVersion;
     if (data.tps <= 0.0)
         data.tps = 240.0;
+    if (!data.tracks.empty()) {
+        data.emptyComplete = false;
+        data.emptyObjectCount = 0;
+    }
     this->m_data = std::move(data);
     this->m_loaded = !this->m_data.levelKey.empty();
     this->m_dirty = true;
@@ -251,7 +278,23 @@ bool EbTriggerWorldStore::sampleTrackAtStoreTick(EbTriggerTrack const& track, in
     auto const after =
         std::upper_bound(track.keys.begin(), track.keys.end(), storeTick,
                          [](int tick, EbTriggerPose const& key) { return tick < key.tick; });
-    out = *std::prev(after);
+    auto const left = std::prev(after);
+    out = *left;
+    if (after == track.keys.end() || after->tick <= left->tick)
+        return true;
+    int const span = after->tick - left->tick;
+    if (span <= 0)
+        return true;
+    float const t =
+        static_cast<float>(storeTick - left->tick) / static_cast<float>(span);
+    float const u = std::clamp(t, 0.f, 1.f);
+    out.x = left->x + (after->x - left->x) * u;
+    out.y = left->y + (after->y - left->y) * u;
+    out.rotation = left->rotation + (after->rotation - left->rotation) * u;
+    out.scaleX = left->scaleX + (after->scaleX - left->scaleX) * u;
+    out.scaleY = left->scaleY + (after->scaleY - left->scaleY) * u;
+    // Hold visibility from the left key — toggles stay discrete.
+    out.active = left->active;
     return true;
 }
 
@@ -376,6 +419,10 @@ int EbTriggerWorldStore::applyAtTick(PlayLayer* layer, int absTick) {
 std::string EbTriggerWorldStore::statusLine() const {
     if (!this->m_loaded)
         return "trigger-world: off";
+    if (this->m_data.emptyComplete && this->m_data.tracks.empty()) {
+        return fmt::format("trigger-world: empty-complete (objects={})",
+                           this->m_data.emptyObjectCount);
+    }
     if (this->m_data.tracks.empty()) {
         return "trigger-world: empty";
     }

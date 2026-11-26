@@ -4,6 +4,7 @@
 #include <Geode/utils/file.hpp>
 #include <algorithm>
 #include <asp/fs/std.hpp>
+#include <cmath>
 #include <filesystem>
 #include <fmt/format.h>
 #include <vector>
@@ -16,6 +17,11 @@ geode::Result<> EbTriggerWorldCodec::writeFile(EbTriggerWorldStore const& owner)
     root["version"] = EbTriggerWorldStore::kFileVersion;
     root["key"] = owner.m_data.levelKey;
     root["tps"] = owner.m_data.tps;
+    if (owner.m_data.emptyComplete) {
+        root["emptyComplete"] = true;
+        root["emptyObjectCount"] = static_cast<int>(owner.m_data.emptyObjectCount);
+        root["emptySkipDynamic"] = owner.m_data.emptySkipDynamic;
+    }
 
     std::vector<matjson::Value> tracksArr;
     tracksArr.reserve(owner.m_data.tracks.size());
@@ -66,6 +72,18 @@ geode::Result<> EbTriggerWorldCodec::readFile(EbTriggerWorldStore& owner) {
     }
     if (owner.m_data.tps <= 0.0)
         owner.m_data.tps = 240.0;
+
+    owner.m_data.emptyComplete = root.contains("emptyComplete")
+                                     ? root["emptyComplete"].asBool().unwrapOr(false)
+                                     : false;
+    owner.m_data.emptyObjectCount =
+        root.contains("emptyObjectCount")
+            ? static_cast<size_t>(std::max(0, static_cast<int>(
+                                                 root["emptyObjectCount"].asInt().unwrapOr(0))))
+            : 0;
+    owner.m_data.emptySkipDynamic = root.contains("emptySkipDynamic")
+                                        ? root["emptySkipDynamic"].asBool().unwrapOr(false)
+                                        : false;
 
     owner.m_data.tracks.clear();
     if (!root.contains("tracks") || !root["tracks"].isArray()) {

@@ -31,6 +31,12 @@ public:
     double tps = 240.0;
     int version = 1;
     std::vector<EbTriggerTrack> tracks;
+    // Full collect produced zero static tracks (not an init race). Survives
+    // resetLevel pointer changes and is persisted so kickIfStaleEmpty cannot
+    // rebuild 20k+ objects every death / enter.
+    bool emptyComplete = false;
+    size_t emptyObjectCount = 0;
+    bool emptySkipDynamic = false;
 
 private:
 };
@@ -63,12 +69,30 @@ public:
     bool hasTracks() const {
         return !this->m_data.tracks.empty();
     }
+    // Tracks present OR a verified complete-empty bake for this level.
+    bool resolved() const {
+        return this->hasTracks() || this->m_data.emptyComplete;
+    }
+    // Like resolved(), but rebuild when skip-dynamic setting changed since bake.
+    bool resolvedForSkipDynamic(bool skipDynamic) const {
+        if (this->hasTracks())
+            return true;
+        return this->m_data.emptyComplete && this->m_data.emptySkipDynamic == skipDynamic;
+    }
+    bool emptyComplete() const {
+        return this->m_data.emptyComplete;
+    }
+    size_t emptyObjectCount() const {
+        return this->m_data.emptyObjectCount;
+    }
     bool dirty() const {
         return this->m_dirty;
     }
     void markDirty() {
         this->m_dirty = true;
     }
+    // Record a finished collect that yielded no static tracks.
+    void markEmptyComplete(size_t objectCount, bool skipDynamic);
     bool softcapHit() const {
         return this->m_softcapHit;
     }

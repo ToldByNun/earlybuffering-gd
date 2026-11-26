@@ -29,13 +29,19 @@ int CompletedTriggerCollectionRegression::run() {
     failures += cache.matches(&layer, &objects, 0, 0, 0, false);
     cache.remember(nullptr, &objects, 176, 176, 20, false, true);
     failures += cache.matches(nullptr, &objects, 176, 176, 20, false);
-    // GD 2.2091: 21,378 owned objects, but only 164 visual children. A fully
-    // visited empty world must stay cached instead of starting 20-30 bakes/s.
+    // GD 2.2091 Quantum Processing: 21,378 owned objects, but only 164 visual
+    // children. A fully visited empty world must stay cached instead of
+    // starting 20-30 bakes/s. Pointer-stable match alone is not enough after
+    // resetLevel — store.emptyComplete covers that; this cache covers same-pointer.
     bool const complete = EbCompletedTriggerCollection::isComplete(21378, 21378, 21378, false);
     failures += !complete;
     cache.remember(&layer, &objects, 21378, 164, 20, false, complete);
     for (int tick = 0; tick < 10000; ++tick)
         failures += !cache.matches(&layer, &objects, 21378, 164 + tick % 8, 20, false);
+    // Simulates resetLevel replacing the owning array pointer — old cache must
+    // miss so callers fall through to store.resolved()/emptyComplete.
+    int objectsAfterReset = 0;
+    failures += cache.matches(&layer, &objectsAfterReset, 21378, 164, 20, false);
     // Unvisited objects, a changed source, and cancelled collections stay retryable.
     failures += EbCompletedTriggerCollection::isComplete(21378, 164, 21378, false);
     failures += EbCompletedTriggerCollection::isComplete(21378, 21377, 21378, false);

@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
-#include <unordered_map>
 
 void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
     if (!owner.m_running)
@@ -112,21 +111,41 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
         if (owner.m_phase == EbTriggerWorldBaker::Phase::CollectSections) {
             // m_objects already owns the level objects, including objects absent
             // from the visible object layer. Never cast non-owning section slots.
-            owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
+            owner.buildGroupIndex();
+            owner.m_activationTicks.clear();
+            owner.m_activationFillIndex = 0;
+            owner.m_activationTicksReady = false;
+            owner.m_effectsSorted = false;
             owner.m_effectIndex = 0;
+            owner.m_phase = EbTriggerWorldBaker::Phase::Bake;
             continue;
         }
 
         if (owner.m_phase == EbTriggerWorldBaker::Phase::Bake) {
+            if (!owner.m_activationTicksReady) {
+                owner.m_activationTicks.reserve(owner.m_effects.size());
+                while (owner.m_activationFillIndex < owner.m_effects.size() && !budgetHit()) {
+                    auto* effect = owner.m_effects[owner.m_activationFillIndex];
+                    owner.m_activationTicks.emplace(
+                        effect, EbTriggerEffectBaker::activationTick(owner.m_layer, effect,
+                                                                     owner.m_tps));
+                    ++owner.m_activationFillIndex;
+                }
+                owner.m_progress =
+                    0.12f + 0.03f * (owner.m_effects.empty()
+                                         ? 1.f
+                                         : static_cast<float>(owner.m_activationFillIndex) /
+                                               static_cast<float>(owner.m_effects.size()));
+                if (owner.m_activationFillIndex < owner.m_effects.size())
+                    break; // yield; finish timeForPos next slice
+                owner.m_activationTicksReady = true;
+            }
+
             if (!owner.m_effectsSorted) {
-                std::unordered_map<EffectGameObject*, int> activationTicks;
-                activationTicks.reserve(owner.m_effects.size());
-                for (auto* effect : owner.m_effects)
-                    activationTicks.emplace(effect, EbTriggerEffectBaker::activationTick(
-                                                        owner.m_layer, effect, owner.m_tps));
                 std::stable_sort(owner.m_effects.begin(), owner.m_effects.end(),
                                  [&](EffectGameObject* left, EffectGameObject* right) {
-                                     return activationTicks.at(left) < activationTicks.at(right);
+                                     return owner.m_activationTicks.at(left) <
+                                            owner.m_activationTicks.at(right);
                                  });
                 owner.m_effectsSorted = true;
             }
@@ -145,9 +164,8 @@ void EbTriggerBakeJob::tickSlice(EbTriggerWorldBaker& owner) {
                                              static_cast<float>(owner.m_effects.size());
             owner.m_progress = 0.15f + 0.80f * bakeFrac;
 
-            if (count > 0) {
-                owner.publishPartial();
-            }
+            if (count > 0)
+                owner.maybePublishMilestone();
 
             if (owner.m_effectIndex >= owner.m_effects.size()) {
                 owner.m_phase = EbTriggerWorldBaker::Phase::Commit;

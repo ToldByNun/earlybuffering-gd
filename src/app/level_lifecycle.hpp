@@ -23,8 +23,21 @@ public:
     static void onCheckpointLoad(EbAssistController& controller, PlayLayer* playLayer);
     static void onLevelComplete(EbAssistController& controller, PlayLayer* playLayer);
     static void onLevelQuit(EbAssistController& controller, PlayLayer* playLayer);
+    // Profile / BakeMap / TriggerWorld JSON + object index — after loading screen.
+    static void drainDeferredEnterLoads(PlayLayer* playLayer);
 
 private:
+    enum class EnterLoadPhase {
+        Idle = 0,
+        Profile,
+        BakeMap,
+        TriggerWorld,
+        ObjectIndex,
+        Metrics,
+    };
+
+    static EnterLoadPhase s_enterLoadPhase;
+
     EbLevelLifecycle() = delete;
 };
 

@@ -37,6 +37,7 @@ std::array<EbModeParams, EbStageConfig::MODE_COUNT> EbStageConfigImplementation:
 bool EbStageConfigImplementation::s_cachedDebug = true;
 bool EbStageConfigImplementation::s_cachedPerfTrace = true;
 bool EbStageConfigImplementation::s_cachedLagProbe = true;
+bool EbStageConfigImplementation::s_cachedInteractionJournal = true;
 bool EbStageConfigImplementation::s_cachedSafeMode = false;
 bool EbStageConfigImplementation::s_cachedShowOverlay = true;
 bool EbStageConfigImplementation::s_cachedLagWarningToast = true;
@@ -405,6 +406,10 @@ bool EbStageConfig::perfTrace() {
 bool EbStageConfig::lagProbe() {
     EbStageConfigImplementation::ensureCache();
     return EbStageConfigImplementation::s_cachedLagProbe;
+}
+bool EbStageConfig::interactionJournal() {
+    EbStageConfigImplementation::ensureCache();
+    return EbStageConfigImplementation::s_cachedInteractionJournal;
 }
 bool EbStageConfig::safeMode() {
     // Critical for progress gates: always re-read so pause toggles apply mid-run.

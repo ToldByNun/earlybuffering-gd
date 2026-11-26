@@ -71,6 +71,8 @@ public:
     static bool perfTrace();
     // Death/reset/checkpoint episode timings → earlybuffer-lagprobe.log.
     static bool lagProbe();
+    // Always-on enter/quit/death/click/TW journal → earlybuffer-interactions.log.
+    static bool interactionJournal();
     static bool safeMode();
     // Live-reads safe-mode + enabled. false when Safe Mode is OFF (always allow progress).
     // When Safe Mode is ON: block if assist is enabled or this attempt was assist-touched.
@@ -335,6 +337,7 @@ private:
     static bool s_cachedDebug;
     static bool s_cachedPerfTrace;
     static bool s_cachedLagProbe;
+    static bool s_cachedInteractionJournal;
     static bool s_cachedSafeMode;
     static bool s_cachedShowOverlay;
     static bool s_cachedLagWarningToast;

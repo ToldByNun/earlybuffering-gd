@@ -191,6 +191,14 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
         auto* object = st.obj;
         if (!object || object->m_uniqueID != st.uniqueId)
             continue;
+        // Cheap X cull before sample/project — large TW lists stay O(near).
+        float const distNow = std::fabs(object->getPositionX() - gx);
+        float const distBase = std::fabs(st.x - gx);
+        float const distApplied =
+            st.hasAppliedPose ? std::fabs(st.appliedX - gx) : distBase;
+        float const cheapDist = std::min({distNow, distBase, distApplied});
+        if (cheapDist > kCullMarginX)
+            continue;
         EbTriggerPose pose{};
         bool const sampled =
             st.track ? EbTriggerWorldStore::sampleTrackAtStoreTick(*st.track, storeTick, pose)
@@ -207,8 +215,6 @@ void EbShadowWorldDynamics::applyTriggerWorldAtTick(EbShadowSimulator& simulator
             live.active = st.nodeVisible;
             pose = EbTriggerMotionAnchor::project(live, st.trackReference, pose);
         }
-        float const distNow = std::fabs(object->getPositionX() - gx);
-        float const distBase = std::fabs(st.x - gx);
         // Include incoming objects even when editor/capture positions are far.
         float const dist = std::min({distNow, distBase, std::fabs(pose.x - gx)});
         if (dist > kCullMarginX)

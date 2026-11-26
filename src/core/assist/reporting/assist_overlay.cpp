@@ -183,6 +183,8 @@ void EbAssistOverlay::updateOverlay(EbAssistController& controller) {
                 auto& tw = EbTriggerWorldStore::get();
                 if (!tw.loaded()) {
                     controller.m_overlayText += " | tw off";
+                } else if (tw.emptyComplete()) {
+                    controller.m_overlayText += " | tw empty-ok";
                 } else if (!tw.hasTracks()) {
                     controller.m_overlayText += " | tw empty";
                 } else if (tw.softcapHit()) {

@@ -3,16 +3,21 @@
 
 #include "../shadow_simulator.hpp"
 
+class EbGroupMemberIndex;
+
 class EbShadowWorldCapture {
 public:
     static void refreshObjectIndex(EbShadowSimulator& simulator, PlayLayer* layer);
     static void refreshTimeOrigin(EbShadowSimulator& simulator, PlayLayer* layer);
     static void captureTriggerTransforms(EbShadowSimulator& simulator, PlayLayer* layer);
-    static void captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer);
-    static void captureDynamicFollows(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void captureToggleUnknownTargets(EbShadowSimulator& simulator, PlayLayer* layer,
+                                            EbGroupMemberIndex const* sharedGroups = nullptr);
+    static void captureDynamicFollows(EbShadowSimulator& simulator, PlayLayer* layer,
+                                      EbGroupMemberIndex const* sharedGroups = nullptr);
     // Touch movers / follow-like static skips that TW does not bake → Hard Unknown
     // targets (otherwise editor pose is treated as Include and Live Delay lies).
-    static void captureUnmodeledMotionTargets(EbShadowSimulator& simulator, PlayLayer* layer);
+    static void captureUnmodeledMotionTargets(EbShadowSimulator& simulator, PlayLayer* layer,
+                                              EbGroupMemberIndex const* sharedGroups = nullptr);
     static void resetTriggerTransforms(EbShadowSimulator& simulator);
     static void restoreTriggerTransforms(EbShadowSimulator& simulator, GJBaseGameLayer* layer);
     static void beginCapture(EbShadowSimulator& simulator, PlayLayer* layer);

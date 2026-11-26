@@ -30,7 +30,9 @@ void EbStageSettingsCache::refreshCache() {
     EbStageConfigImplementation::s_cachedPerfTrace =
         EbStageConfigImplementation::readBool(mod, "perf-trace", false);
     EbStageConfigImplementation::s_cachedLagProbe =
-        EbStageConfigImplementation::readBool(mod, "lag-probe", false);
+        EbStageConfigImplementation::readBool(mod, "lag-probe", true);
+    EbStageConfigImplementation::s_cachedInteractionJournal =
+        EbStageConfigImplementation::readBool(mod, "interaction-journal", true);
     EbStageConfigImplementation::s_cachedSafeMode = mod->getSettingValue<bool>("safe-mode");
     EbStageConfigImplementation::s_cachedShowOverlay = mod->getSettingValue<bool>("show-overlay");
     EbStageConfigImplementation::s_cachedLagWarningToast =

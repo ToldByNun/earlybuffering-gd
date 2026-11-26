@@ -1417,7 +1417,13 @@
 			"type": "bool",
 			"name": "Lag Probe",
 			"description": "Records timed death / restart / checkpoint episodes to earlybuffer-lagprobe.log (with a legend). Leave on while reporting lag spikes. Off = no episode file. Does not change how assists play.",
-			"default": false
+			"default": true
+		},
+		"interaction-journal": {
+			"type": "bool",
+			"name": "Interaction Journal",
+			"description": "Always-on enter/quit/death/click/TW timings to earlybuffer-interactions.log (no Dev Lab). Leave on when reporting FPS or leave lag. Off = quieter disk.",
+			"default": true
 		},
 		"hotkey-desktop-menu": {
 			"type": "keybind",

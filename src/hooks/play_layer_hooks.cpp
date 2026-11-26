@@ -5,6 +5,7 @@
 #include "../core/bake/bake_scheduler.hpp"
 #include "../core/sim/shadow_simulator.hpp"
 #include "../debug/assist_log.hpp"
+#include "../debug/interaction_journal.hpp"
 #include "../debug/lag_probe.hpp"
 #include "../debug/perf_trace.hpp"
 #include "game_hook_simulation_guard.hpp"
@@ -111,12 +112,13 @@ auto EbPlayLayer::destroyPlayer(PlayerObject* player, GameObject* object) -> voi
 
     if (object != m_anticheatSpike) {
         auto const mode = player ? EbStageConfig::kindName(EbStageConfig::kindOf(player)) : "?";
-        EbLagProbe::get().beginEpisode(
-            "death", fmt::format("x={:.1f} y={:.1f} tick={} mode={} killer={} practice={}",
-                                 player ? player->getPositionX() : 0.f,
-                                 player ? player->getPositionY() : 0.f,
-                                 EbAssistController::get().attemptTick(), mode ? mode : "?",
-                                 object ? object->m_objectID : -1, this->m_isPracticeMode));
+        auto const deathDetail =
+            fmt::format("x={:.1f} y={:.1f} tick={} mode={} killer={} practice={}",
+                        player ? player->getPositionX() : 0.f, player ? player->getPositionY() : 0.f,
+                        EbAssistController::get().attemptTick(), mode ? mode : "?",
+                        object ? object->m_objectID : -1, this->m_isPracticeMode);
+        EbInteractionJournal::get().note("death", deathDetail);
+        EbLagProbe::get().beginEpisode("death", deathDetail);
         EbAssistController::get().onRealDeath(this, player, object);
         {
             EbLagProbe::Scope const state("vanilla.destroyPlayer");
