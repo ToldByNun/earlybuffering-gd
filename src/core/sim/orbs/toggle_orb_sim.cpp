@@ -133,25 +133,24 @@ bool EbToggleOrbSim::onToggleHit(PlayLayer* layer, PlayerObject* shadow, GameObj
     int const groupId = effect->m_targetGroupID;
     bool const activateGroup = effect->m_activateGroup;
 
-    auto* children = layer->m_objectLayer ? layer->m_objectLayer->getChildren() : nullptr;
-    if (!children)
+    // Prefer live getGroup — GameObject::belongsToGroup is unbound on iOS.
+    auto* liveGroup = layer->getGroup(groupId);
+    if (!liveGroup)
         return false;
 
     size_t flipped = 0;
-    for (unsigned index = 0; index < children->count(); ++index) {
+    for (unsigned index = 0; index < liveGroup->count(); ++index) {
         if (flipped >= kMaxFlipMembers)
             break;
         if (this->m_snaps.size() >= kMaxFlipMembers)
             break;
 
-        auto* object = geode::prelude::typeinfo_cast<GameObject*>(children->objectAtIndex(index));
+        auto* object = geode::prelude::typeinfo_cast<GameObject*>(liveGroup->objectAtIndex(index));
         if (!object)
             continue;
         if (geode::prelude::typeinfo_cast<PlayerObject*>(object))
             continue;
         if (object == hit)
-            continue;
-        if (!object->belongsToGroup(groupId))
             continue;
 
         // Commit 7 (a): never flip jump/dash rings (or ε-near rings) — stack keeps boost.

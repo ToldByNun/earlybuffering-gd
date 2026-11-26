@@ -146,11 +146,18 @@ std::vector<GameObject*> EbTriggerEffectBaker::objectsInGroup(EbTriggerWorldBake
     auto it = owner.m_groupIndex.find(groupId);
     if (it != owner.m_groupIndex.end() && !it->second.empty())
         return it->second;
-    // Safety fallback when getGroup was empty for this id.
-    for (auto* object : owner.m_objects) {
-        if (!object)
-            continue;
-        if (!object->belongsToGroup(groupId))
+    // Safety fallback when the sidetable missed this id. Prefer live getGroup —
+    // GameObject::belongsToGroup is unbound on iOS (link error).
+    if (!owner.m_layer)
+        return out;
+    auto* liveGroup = owner.m_layer->getGroup(groupId);
+    if (!liveGroup)
+        return out;
+    out.reserve(liveGroup->count());
+    for (unsigned index = 0; index < liveGroup->count(); ++index) {
+        auto* object =
+            geode::prelude::typeinfo_cast<GameObject*>(liveGroup->objectAtIndex(index));
+        if (!object || geode::prelude::typeinfo_cast<PlayerObject*>(object))
             continue;
         out.push_back(object);
     }
@@ -248,9 +255,11 @@ void EbTriggerEffectBaker::bakeOneEffect(EbTriggerWorldBaker& owner, EffectGameO
     float scaleTargetY = 1.f;
     bool relativeScale = false;
     if (kind == TriggerKind::StaticScale) {
-        auto* xf = geode::prelude::typeinfo_cast<TransformTriggerGameObject*>(effect);
-        if (!xf)
+        // typeinfo_cast<TransformTriggerGameObject*> needs RTTI that Apple LTO
+        // does not link from Geode bindings — classify by object id, then static.
+        if (!EbTriggerClassify::isScaleTriggerId(effect->m_objectID))
             return;
+        auto* xf = static_cast<TransformTriggerGameObject*>(effect);
         scaleTargetX = xf->m_objectScaleX;
         scaleTargetY = xf->m_objectScaleY;
         if (xf->m_divideX && std::fabs(scaleTargetX) > 1e-6f) {
